@@ -1559,6 +1559,22 @@
            (build/bridge (at (range 3 7)) stand))
         "a gap past the reach: onto the floor laid so far")))
 
+(deftest a-bridge-digs-a-cobweb-out-of-the-floor-before-it-lays-there
+  ;; real race 39781947117 runner 2 (issue #44, Clj_r14): a tunnel through an abandoned mineshaft
+  ;; laid a cobblestone into a cobweb in its floor three times, :rejected
+  (let [at (fn [id]
+             (assoc (standing-at (open-ground {[8 62 10] id}) feet-pos)
+                    :player/inventory
+                    {1 {:item (recipe/item-id :cobblestone) :count 8}}))
+        w (at (blocks/default-state :cobweb))
+        stand [3 63 10]]
+    (is (= [8 62 10] (build/floor-gap w stand)) "the web is no floor")
+    (is (= {:intent/kind :dig :intent/target [8 62 10] :intent/status :active :intent/drop-ok? true}
+           (build/bridge w stand))
+        "dug out first, never laid into")
+    (is (= :place (:intent/kind (build/bridge (at blocks/air) stand)))
+        "the cell laid once it is air")))
+
 (deftest the-lava-hunt-climbs-to-a-source-just-over-the-feet
   ;; real race 39408516353 (issue #392, Clj_r05): a tunnel at y -58 ended in the lava sea's edge
   ;; with every source level or below the feet roofed in lava, and the hunt waited :no-site with a
@@ -1605,3 +1621,15 @@
     (is (= [5 63 12] (:intent/target (child-at 1.3))))
     (is (build/near-enough? (standing-at (open-ground rock) [1.7 63.0 12.5]) [5 63 12]))
     (is (not (build/near-enough? (standing-at (open-ground rock) [1.3 63.0 12.5]) [5 63 12])))))
+
+(deftest a-cast-digs-the-vein-before-its-water-scoop
+  ;; issue #227, sim R2/15: a sculk vein in the cell before the cast's water stopped the bucket's
+  ;; ray; the scoop was sent three times unanswered and the build failed :no-scoop
+  (let [aim [5.5 63.6 8.5]
+        vein [5 64 7]
+        w (standing-at (open-ground {[5 63 8] blocks/water-base}) [5.5 63.0 5.5])
+        veined (assoc-in w [:world/blocks vein] (blocks/default-state :sculk_vein))
+        rocked (assoc-in w [:world/blocks vein] 1)]
+    (is (nil? (build/plant-in-sight w aim)) "a clear line needs no dig")
+    (is (= vein (build/plant-in-sight veined aim)) "the vein is the block to dig")
+    (is (nil? (build/plant-in-sight rocked aim)) "a solid wall is the cast's, never dug here")))

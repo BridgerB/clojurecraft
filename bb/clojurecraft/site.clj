@@ -306,6 +306,21 @@
                                               #(let [f (fs/file pages-dir %)]
                                                  (when (fs/exists? f) (slurp f))))))))
 
+(defn recount!
+  "Rebuild under out-dir every day file and the summary from the batches at pages-dir
+   (page/rebuilt), so the site counts each stored batch as main's code does (page/played: a dead
+   server's runs that never connected are no runs). Nothing when the branch has no batches."
+  [pages-dir out-dir]
+  (let [dir (fs/file pages-dir "data" "batches")
+        summary (fs/file pages-dir page/summary-file)]
+    (when (fs/exists? dir)
+      (page/apply-files!
+       out-dir
+       (page/rebuilt (into {}
+                           (for [f (fs/glob dir "*.ndjson")]
+                             [(str/replace (fs/file-name f) #"\.ndjson$" "") (slurp (fs/file f))]))
+                     (when (fs/exists? summary) (page/read-json (slurp summary))))))))
+
 (defn version
   "This checkout's commit, short: the workflow's, else git's, else dev."
   []
@@ -321,6 +336,7 @@
   (when (fs/exists? (fs/file pages-dir "data"))
     (fs/copy-tree (fs/file pages-dir "data") (fs/file out-dir "data") {:replace-existing true}))
   (legacy! pages-dir out-dir)
+  (recount! pages-dir out-dir)
   (when (fs/exists? (fs/file pages-dir "orchestrator.json"))
     (fs/copy (fs/file pages-dir "orchestrator.json")
              (fs/file out-dir "orchestrator.json")

@@ -2310,10 +2310,46 @@
     (and (<= (physics/distance pos (:sim/player-pos sim)) (:follow k))
          (or (not (:neutral k)) angry?))))
 
+(defn trail
+  "Mob eid of a kind that finds its way (:paths, the enderman) a tick on toward the player,
+   stopping stop short of it on the plane: along its route (:route) while it has one, a cell
+   dropped once its feet stand on that cell's centre and the route dropped when a step there
+   leaves it where it stood; with none, straight (mob/step-toward). A straight step that leaves
+   it where it stood with the player out of its reach (mob/in-reach?: a wall, a drop, the player
+   above or below) searches a route toward the player (mob/route), at most once every
+   mob/route-every ticks (:route-at), walked from the next tick."
+  [sim eid stop]
+  (let [{:keys [type pos route route-at]} (get-in sim [:sim/mobs eid])
+        speed (:speed (mob/kinds type))
+        n (mob/tall type)
+        free? (free-fn sim)
+        player (:sim/player-pos sim)
+        now (:sim/now sim)
+        [wx wy wz :as w] (first route)]
+    (cond w
+          (let [centre [(+ wx 0.5) (double wy) (+ wz 0.5)]
+                to (mob/step-toward free? pos centre speed 0.0 n)
+                left (cond (and (= w (mob/cell-of to)) (< (mob/flat-distance to centre) 1e-3))
+                           (subvec route 1)
+                           (= to pos) []
+                           :else route)]
+            (cond-> (move-mob sim eid to)
+              (seq left) (assoc-in [:sim/mobs eid :route] left)
+              (empty? left) (update-in [:sim/mobs eid] dissoc :route)))
+          :else
+          (let [to (mob/step-toward free? pos player speed stop n)
+                stuck? (and (= to pos)
+                            (not (mob/in-reach? type pos player))
+                            (>= now (+ (or route-at 0) (* mob/route-every physics/tick-ms))))
+                found (when stuck? (mob/route free? (mob/cell-of pos) player n))]
+            (cond-> (move-mob sim eid to)
+              stuck? (assoc-in [:sim/mobs eid :route-at] now)
+              (seq found) (assoc-in [:sim/mobs eid :route] found))))))
+
 (defn walk
   "Mob eid a tick on toward the player (mob/step-toward), stopping where its kind fights from: a
    melee mob inside its reach, a shooter at :keep, a creeper a block off; one that does not walk
-   (a blaze hovers) stays."
+   (a blaze hovers) stays; one that finds its way (:paths) walks round what stops it (trail)."
   [sim eid]
   (let [{:keys [type pos]} (get-in sim [:sim/mobs eid])
         k (mob/kinds type)
@@ -2322,11 +2358,64 @@
                    :else 1.0)]
     (cond
       (not (pos? (:speed k 0.0))) sim
+      (:paths k) (trail sim eid stop)
       :else
       (move-mob
        sim
        eid
        (mob/step-toward (free-fn sim) pos (:sim/player-pos sim) (:speed k) stop (mob/tall type))))))
+
+(defn teleport-rolls
+  "[sim' rs]: the next n rolls of the mobs' own stream (mob-roll), in order."
+  [sim n]
+  (reduce (fn [[sim rs] _] (let [[sim r] (mob-roll sim)] [sim (conj rs r)])) [sim []] (range n)))
+
+(defn teleport-mob
+  "[sim' landed?]: mob eid where its teleport aimed at point lands (mob/landing over the
+   dimension's height, a cell over its top air), its route dropped, the client told (tell-move:
+   a jump this long goes as entity-position-sync), and true; where it lands nowhere, the model
+   as it was and false."
+  [sim eid point]
+  (let [top (column-top sim)
+        at #(if (>= (second %) top) 0 (block-at sim %))
+        min-y (:dimension/min-y (dimension/by-name (:sim/dimension sim dimension/overworld)))
+        to (mob/landing at point min-y)]
+    (cond (nil? to) [sim false]
+          :else
+          [(-> sim
+               (move-mob eid to)
+               (update-in [:sim/mobs eid] dissoc :route)) true])))
+
+(defn blink
+  "Mob eid's teleports at the player it has as its target, for a kind that teleports
+   (:teleports, the enderman; EndermanLookForPlayerGoal.tick): stared at (mob/stared?) its far
+   count (:far-ticks) goes to zero, and within mob/teleport-near it teleports away (mob/away-aim,
+   EnderMan.teleport); not stared at and farther than mob/teleport-far, the count grows a tick,
+   and from mob/teleport-wait on it teleports toward the player (mob/toward-aim,
+   EnderMan.teleportTowards), the count back to zero where it lands and kept where it does not,
+   so it tries again the next tick; nearer, the count stays. Every aim takes three rolls of
+   mob-roll; any other kind, the model untouched."
+  [sim eid]
+  (let [{:keys [type pos far-ticks]} (get-in sim [:sim/mobs eid])
+        player (:sim/player-pos sim)
+        look (:sim/player-look sim)
+        far (or far-ticks 0)
+        stared? (and look
+                     (:teleports (mob/kinds type))
+                     (mob/stared? (solid-fn sim) (physics/eye player) look pos))
+        d (physics/distance pos player)]
+    (cond (not (:teleports (mob/kinds type))) sim
+          (and stared? (< d mob/teleport-near))
+          (let [[sim [r1 r2 r3]] (teleport-rolls (assoc-in sim [:sim/mobs eid :far-ticks] 0) 3)]
+            (first (teleport-mob sim eid (mob/away-aim pos r1 r2 r3))))
+          stared? (assoc-in sim [:sim/mobs eid :far-ticks] 0)
+          (<= d mob/teleport-far) sim
+          (< far mob/teleport-wait) (assoc-in sim [:sim/mobs eid :far-ticks] (inc far))
+          :else
+          (let [[sim [r1 r2 r3]] (teleport-rolls sim 3)
+                [sim landed?]
+                (teleport-mob sim eid (mob/toward-aim pos (physics/eye player) r1 r2 r3))]
+            (cond-> sim landed? (assoc-in [:sim/mobs eid :far-ticks] 0))))))
 
 (defn strike
   "A melee mob with the player in reach (on the plane within its :reach, feet within 1.5 in
@@ -2336,11 +2425,7 @@
         k (mob/kinds type)
         player (:sim/player-pos sim)
         now (:sim/now sim)]
-    (cond (not (and (:melee k)
-                    (<= (mob/flat-distance pos player) (:reach k))
-                    (< (abs (- (second pos) (second player))) 1.5)
-                    (>= now (or attack-at 0))))
-          sim
+    (cond (not (and (:melee k) (mob/in-reach? type pos player) (>= now (or attack-at 0)))) sim
           :else
           (-> sim
               (assoc-in [:sim/mobs eid :attack-at] (+ now (* (:every k) physics/tick-ms)))
@@ -2381,7 +2466,8 @@
 
 (defn chase
   "A hostile's turn at a living player: an enderman stared at turns (provoke); with the player as
-   its target (targets?) it walks, then hits, shoots or swells by its kind."
+   its target (targets?) it teleports by its kind (blink), walks, then hits, shoots or swells by
+   its kind."
   [sim eid]
   (let [player (:sim/player-pos sim)
         sim (if player (provoke sim eid) sim)
@@ -2390,7 +2476,7 @@
           :else
           (reduce (fn [sim f] (if (get-in sim [:sim/mobs eid]) (f sim eid) sim))
                   sim
-                  [walk strike shoot swell]))))
+                  [blink walk strike shoot swell]))))
 
 (defn act-mob
   "One game tick of mob eid: a dead one is removed once its death is over (mob/death-ticks, the

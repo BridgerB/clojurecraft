@@ -163,3 +163,38 @@
         "a bot that played long enough")
     (is (zero? (race/backoff-ms 8000 quick {:reason :no-site}))
         "a bot's own stop is play, not a dead server")))
+
+(def refused
+  "A bot whose server refused it (race 39817745908's server 2, gone 25 s in): play-one!'s
+   crashed RESULT, its plan never begun."
+  {:ok false :reason :crashed :error "Connection refused (connect failed)" :until "x" :plan {}})
+
+(deftest a-bot-that-never-got-into-play-is-infrastructure
+  (let [m (race/marked refused)]
+    (is (:run/infra? m) "bb failures files it under infrastructure stops, never as an issue")
+    (is (= [:wood :crashed] (take 2 (:run/signature (race/marked (assoc refused :until "nether")))))
+        "its signature is still kept"))
+  (is (:run/infra? (race/marked {:ok false :reason :closed :until "x"}))
+      "connected, but closed before its :go: main leaves :plan out")
+  (is (not (:run/infra? (race/marked (assoc refused :plan {:plan/status :failed}))))
+      "a bot that crashed once it played is a failure of its play"))
+
+(deftest a-server-whose-bots-never-play-is-down-until-it-accepts
+  (let [played {:ok false :reason :no-site :plan {:plan/status :failed}}
+        after (fn [rs] (reduce race/health race/recovered rs))]
+    (is (= {:race/unplayed 4 :race/down? false} (after (repeat 4 refused))))
+    (is (= {:race/unplayed race/dead-after :race/down? true}
+           (after (repeat race/dead-after refused)))
+        "dead-after in a row: down, and its slots start none")
+    (is (= {:race/unplayed 0 :race/down? false} (after (concat (repeat 4 refused) [played])))
+        "a bot that played resets the count")
+    (is (:race/down? (after (concat (repeat race/dead-after refused) [played])))
+        "down stays down until a probe finds it accepting (recovered), whatever ends meanwhile")
+    (is (= {:race/unplayed 0 :race/down? false} (after [{:ok true :reason :goal}])))))
+
+(deftest a-server-sees-at-most-one-new-bot-a-start-gap
+  (is (= 5000 (race/next-start 0 5000)) "long since the last start: now")
+  (is (= (+ 5000 race/start-gap-ms) (race/next-start 5000 5000)) "just started one: a gap on")
+  (is (= (+ 5000 (* 15 race/start-gap-ms))
+         (reduce (fn [last _] (race/next-start last 5000)) 5000 (range 15)))
+      "fifteen slots ending at once start one a gap apart"))
