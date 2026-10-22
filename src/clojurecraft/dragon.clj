@@ -302,6 +302,8 @@
           intent/done)
       (>= refusals max-refusals) (intent/fail world :rejected)
       (> (- now since) block-ms) (intent/fail world :stuck)
+      (and (not (held-item? world item)) (place/held-slot-of world (recipe/item-id item)))
+      (intent/assoc-intent world :intent/stage :equip)
       (not (held-item? world item)) (intent/fail world :not-held)
       (and under (place/solid-at? world under))
       (intent/dissoc-intent (intent/assoc-intent world :intent/since now)
@@ -330,6 +332,22 @@
           (intent/assoc-intent :intent/under feet))
       :else world)))
 
+(defn equipped
+  "world after an equip step of a :pillar: when it went on to the :climb, the window click's
+   leftovers cleared (:intent/awaiting, :intent/awaiting-window, :intent/clicks), and its send
+   time (:intent/sent-at) too while no placement is pending (no :intent/under), since the climb
+   reads a send time as a block put and unanswered. Sim snapshot R1-11-5 (issue #178): the swap
+   of a fresh stack into the hand left its send time, and three seconds on the climb failed
+   :no-answer with nothing placed, the shaft was given up and the climb cut stairs at twice the
+   time a level."
+  [world]
+  (let [i (:plan/intent world)]
+    (cond-> world
+      (= :climb (:intent/stage i))
+      (intent/dissoc-intent :intent/awaiting :intent/awaiting-window :intent/clicks)
+      (and (= :climb (:intent/stage i)) (nil? (:intent/under i)))
+      (intent/dissoc-intent :intent/sent-at))))
+
 (defmethod intent/run :pillar
   ;; {:intent/kind :pillar :intent/item :cobblestone :intent/top y}: the block in hand
   ;; (place/equip), then the climb, a block under the feet at the top of each jump
@@ -340,7 +358,7 @@
       :overdue (window/lost world i :equip)
       :waiting world
       (cond (:intent/resync i) (window/resync world (window/view world :inventory))
-            (= :equip (:intent/stage i)) (place/equip world (:intent/item i) :climb)
+            (= :equip (:intent/stage i)) (equipped (place/equip world (:intent/item i) :climb))
             :else (climb world i)))))
 
 (defmethod intent/run :dig-down
