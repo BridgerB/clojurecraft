@@ -57,7 +57,7 @@
       :wood-near (try (build/wood-near? world) (catch Exception e :err))
       :made @made
       :tunnel (when-let [e @entry]
-                (long (Math.hypot (- (nth (:player/pos world) 0) (nth e 0))
+                (long (math/hypot (- (nth (:player/pos world) 0) (nth e 0))
                                   (- (nth (:player/pos world) 2) (nth e 2)))))})))
 
 (let [[file seed until minutes every] *command-line-args*
