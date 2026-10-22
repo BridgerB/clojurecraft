@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-22T11:53:34.673Z",
+  "at" : "2026-10-22T11:57:56.241Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -38,6 +38,11 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
+    "number" : 502,
+    "title" : "Bot stops at blaze-rods: blocked",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : true
+  }, {
     "number" : 513,
     "title" : "Bot stops at portal: stair-not-taken",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
@@ -47,11 +52,6 @@
     "title" : "Bot stops at portal-kit: unreachable",
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
-  }, {
-    "number" : 502,
-    "title" : "Bot stops at blaze-rods: blocked",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : true
   }, {
     "number" : 349,
     "title" : "Bot stops at flint-and-steel: timeout",
@@ -88,11 +88,11 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 513,
+    "issue" : 502,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 502,
+    "issue" : 513,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
