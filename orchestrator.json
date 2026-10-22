@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-22T03:16:23.896Z",
+  "at" : "2026-10-22T03:17:29.222Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -25,7 +25,7 @@
   }, {
     "number" : 502,
     "title" : "Bot stops at blaze-rods: blocked",
-    "labels" : [ "bot-failure", "real", "sim" ],
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : true
   }, {
     "number" : 500,
@@ -51,8 +51,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 502,
-    "move" : "wait",
-    "why" : "session starting"
+    "move" : "leave",
+    "why" : "hands-off label"
   }, {
     "issue" : 500,
     "move" : "leave",
