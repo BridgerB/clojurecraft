@@ -4,11 +4,16 @@
   (:require [clojure.math :as math]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.capture :as capture]
+            [clojurecraft.game :as game]
+            [clojurecraft.intent :as intent]
             [clojurecraft.memory :as memory]
             [clojurecraft.sim :as sim]
             [clojurecraft.simrace :as simrace]
+            [clojurecraft.stairs :as stairs]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.wood :as wood]))
+
+(declare diag)
 
 (defn column
   [world [fx fy fz]]
@@ -74,6 +79,42 @@
     (println "ENDED"
              (pr-str (some-> r
                              :world
-                             :player/pos)))))
+                             :player/pos)))
+    (diag (:world r))))
 
 (defn -main [& paths] (doseq [p paths] (go p)) (shutdown-agents))
+
+(defn diag
+  "What climb-out and its neighbours see in world."
+  [world]
+  (let [feet (intent/feet world)
+        eye (game/eye world)
+        skip (wood/skipped world)
+        logs (->> (memory/positions-now world blocks/log-states)
+                  (memory/nearest-first eye wood/far-radius))
+        trunks (->> logs
+                    (remove skip)
+                    (filter #(wood/standing-trunk? world %))
+                    (take wood/far-candidates))]
+    (println "DIAG feet" feet
+             "eye" (mapv math/round eye)
+             "logs-within-256" (count logs)
+             "out?" (stairs/out? world feet)
+             "under-sky?" (terrain/under-sky? world feet)
+             "in-water?" (:player/in-water? world))
+    (doseq [p (take 6 logs)]
+      (println "  LOG" p
+               "dx" (- (first p) (first feet))
+               "dy" (- (second p) (second feet))
+               "dz" (- (nth p 2) (nth feet 2))
+               "skipped" (boolean (skip p))
+               "standing" (boolean (wood/standing-trunk? world p))
+               "routable" (boolean (intent/routable? world (wood/log-walk world p)))))
+    (println "  TRUNKS" (pr-str trunks))
+    (println "  hunt" (pr-str (brief (wood/hunt world)))
+             "crossing" (pr-str (brief (wood/crossing world)))
+             "trees-climb" (pr-str (brief (wood/trees-climb world trunks)))
+             "trees-bridge" (pr-str (brief (wood/trees-bridge world trunks)))
+             "trees-tunnel" (pr-str (brief (wood/trees-tunnel world)))
+             "trees-descend" (pr-str (brief (wood/trees-descend world trunks)))
+             "return-walk" (pr-str (brief (wood/return-walk world))))))
