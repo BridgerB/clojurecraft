@@ -653,6 +653,22 @@
         "at the feet")
     (is (= [8 65 8] (pearls/burning-at (standing {} {[8 65 8] fire}))) "at the head")))
 
+(deftest no-enderman-is-provoked-hurt
+  ;; sim-endermen3's probe 39847287615 (worlds R1, R2, R4): the first death each time came of a
+  ;; provoke 4 to 8 blocks off at 10.8 to 17.8 health just outside the burrow, three to five
+  ;; blows landing in five seconds
+  (let [sighted (enderman [3.5 64.0 0.5])
+        at-mouth (assoc (burrowed [3.5 64.0 8.5] {7 sighted}) :player/food 20)]
+    (is (= {:intent/kind :provoke :intent/target 7 :intent/for :pearls}
+           (plan/next-intent at-mouth row plan/goals))
+        "whole: provoked from the mouth")
+    (is (= {:intent/kind :walk :intent/target [8 61 8] :intent/for :shelter}
+           (plan/next-intent (assoc at-mouth :player/health 15.0) row plan/goals))
+        "hurt at the mouth: home first")
+    (is (=
+         {:intent/kind :provoke :intent/target 7 :intent/for :pearls}
+         (plan/next-intent (assoc at-mouth :player/health pearls/provoke-health) row plan/goals)))))
+
 (deftest no-sword-held-no-hunt
   ;; gym batch pearls-warped8-b (plan run 39775345028): runs 1 and 3 respawned with nothing held
   ;; after their first deaths and hunted on bare-handed, 39 and 26 deaths in five hours

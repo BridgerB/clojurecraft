@@ -978,6 +978,8 @@
 
 ;; ---------------------------------------------------------------- the plan
 
+(def provoke-health 18.0)             ; health under which no enderman is provoked, from the mouth or anywhere: the bot rests in its burrow first (sim-endermen3's probe 39847287615: in worlds R1, R2 and R4 the first death came of a provoke 4 to 8 blocks off at 10.8 to 17.8 health just outside the burrow, the enderman landing three to five blows in five seconds); away from the mouth (a vantage) only at full health
+
 (defn hunt
   "The hunt's next step with no kill to pick up, in order: out of the burrow (shelter) with one
    coming (creepy), one at hand (within strike-range, blacklisted or not: one a held fight gave
@@ -1023,7 +1025,9 @@
    shelter and was slain); in the burrow, one
    provokable from where it stands provoked from there, and with one at the mouth (crowded?,
    blacklisted or not), a walk to a vantage within the burrow's reach from which it can be
-   stared at (vantage), else a :lookout where it is; in the burrow with none coming, out to its mouth
+   stared at (vantage), else a :lookout where it is; no provoke under provoke-health (in the
+   burrow a :lookout, out of it the walk home, a meal first when the food will not heal), and one
+   from a vantage away from the mouth only at full health; in the burrow with none coming, out to its mouth
    to look round (an angry one given up on that stands off the mouth never comes: batch
    pearls-warped-d, plan run 39160760074, run 1 took three pearls in six minutes, then stood in
    its burrow thirty-four over such ones); one not yet coming and provokable? from here within
@@ -1069,7 +1073,8 @@
         in-reach? (and near?
                        (<= (physics/distance (game/eye world) (combat/aim e)) combat/attack-reach))
         hurt? (< (:player/health world 20.0) combat/retreat-health)
-        meal (when hurt? (blaze/meal world))
+        rested? (>= (:player/health world 20.0) provoke-health)
+        meal (when-not rested? (blaze/meal world))
         home (shelter world)
         in? (and home (= home (intent/feet world)))
         [tid _] (when home (threat world))
@@ -1105,16 +1110,19 @@
       (and in? aid) {:intent/kind :lookout :intent/for :pearls}
       digs? {:intent/kind :burrow :intent/dir dir :intent/for :pearls}
       site {:intent/kind :walk :intent/target site :intent/for :shelter}
-      (and in? qid) {:intent/kind :provoke :intent/target qid :intent/for :pearls}
+      (and in? qid rested?) {:intent/kind :provoke :intent/target qid :intent/for :pearls}
+      (and in? qid) {:intent/kind :lookout :intent/for :pearls}
       (and in? (crowded? world))
       (or (vantage world far) {:intent/kind :lookout :intent/for :pearls})
       (and in? mouth) {:intent/kind :walk :intent/target mouth :intent/for :shelter}
       (and qid
+           rested?
            (or (not (pickaxe? world))
                (= mouth (intent/feet world))
-               (and home (intent/routable? world way-home))))
+               (and home (>= (:player/health world 20.0) 20.0) (intent/routable? world way-home))))
       {:intent/kind :provoke :intent/target qid :intent/for :pearls}
-      (and qid home) {:intent/kind :walk :intent/target mouth :intent/for :shelter}
+      (and qid home rested?) {:intent/kind :walk :intent/target mouth :intent/for :shelter}
+      (and qid home (intent/routable? world way-home)) way-home
       ce {:intent/kind :fight :intent/target ceid :intent/for :pearls}
       home (or (vantage world far) {:intent/kind :lookout :intent/for :pearls})
       :else
