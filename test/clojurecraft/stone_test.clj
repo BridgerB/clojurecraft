@@ -867,6 +867,25 @@
     (is (= [] (stairs/wet-feet dry cells)))
     (is (stairs/up-dry? dry cells) "dry feet: cut as before")))
 
+(deftest a-descents-level-step-keeps-the-climbs-reserve
+  ;; issue #37 (real bot Clj_r16, snapshot real-7-s2; sim R3/15): a descent over a void floored
+  ;; fifteen level steps of a bridge past lay-reserve, to no filler, and every stair up from the
+  ;; bridge's end was :boxed with nothing to lay
+  (let [feet [5 64 5]
+        cells (stairs/level-cells feet [1 0])
+        at (fn [n]
+             (assoc (standing 64)
+                    :player/inventory {0 {:item (blocks/items :dirt) :count n}}
+                    :world/chunks {[0 0] (world/column {[6 63 5] blocks/air})}))
+        need (inc stairs/lay-reserve)]
+    (is (= [[6 63 5]] (stairs/level-lay (at 1) feet cells)) "the floor is laid from any filler")
+    (is (nil? (stairs/reserve-level-lay (at stairs/lay-reserve) :stairs-down cells feet))
+        "a descent never lays into the reserve")
+    (is (= [[6 63 5]] (stairs/reserve-level-lay (at need) :stairs-down cells feet))
+        "it lays what the reserve leaves")
+    (is (= [[6 63 5]] (stairs/reserve-level-lay (at 1) :stairs-up cells feet))
+        "a climb's step is what the reserve is for")))
+
 (deftest a-level-step-seals-the-water-beside-the-cells-it-digs
   ;; sim races 39081494214 R1/31 and 39074159590 R3/44 (issue #105): a climb up under a lake for
   ;; the water bucket stood in the flooded shaft with hundreds of cobblestone, water beside every

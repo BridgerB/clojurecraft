@@ -1559,6 +1559,22 @@
            (build/bridge (at (range 3 7)) stand))
         "a gap past the reach: onto the floor laid so far")))
 
+(deftest a-bridge-digs-a-cobweb-out-of-the-floor-before-it-lays-there
+  ;; real race 39781947117 runner 2 (issue #44, Clj_r14): a tunnel through an abandoned mineshaft
+  ;; laid a cobblestone into a cobweb in its floor three times, :rejected
+  (let [at (fn [id]
+             (assoc (standing-at (open-ground {[8 62 10] id}) feet-pos)
+                    :player/inventory
+                    {1 {:item (recipe/item-id :cobblestone) :count 8}}))
+        w (at (blocks/default-state :cobweb))
+        stand [3 63 10]]
+    (is (= [8 62 10] (build/floor-gap w stand)) "the web is no floor")
+    (is (= {:intent/kind :dig :intent/target [8 62 10] :intent/status :active :intent/drop-ok? true}
+           (build/bridge w stand))
+        "dug out first, never laid into")
+    (is (= :place (:intent/kind (build/bridge (at blocks/air) stand)))
+        "the cell laid once it is air")))
+
 (deftest the-lava-hunt-climbs-to-a-source-just-over-the-feet
   ;; real race 39408516353 (issue #392, Clj_r05): a tunnel at y -58 ended in the lava sea's edge
   ;; with every source level or below the feet roofed in lava, and the hunt waited :no-site with a
@@ -1605,3 +1621,53 @@
     (is (= [5 63 12] (:intent/target (child-at 1.3))))
     (is (build/near-enough? (standing-at (open-ground rock) [1.7 63.0 12.5]) [5 63 12]))
     (is (not (build/near-enough? (standing-at (open-ground rock) [1.3 63.0 12.5]) [5 63 12])))))
+
+(deftest a-cast-digs-the-vein-before-its-water-scoop
+  ;; issue #227, sim R2/15: a sculk vein in the cell before the cast's water stopped the bucket's
+  ;; ray; the scoop was sent three times unanswered and the build failed :no-scoop
+  (let [aim [5.5 63.6 8.5]
+        vein [5 64 7]
+        w (standing-at (open-ground {[5 63 8] blocks/water-base}) [5.5 63.0 5.5])
+        veined (assoc-in w [:world/blocks vein] (blocks/default-state :sculk_vein))
+        rocked (assoc-in w [:world/blocks vein] 1)]
+    (is (nil? (build/plant-in-sight w aim)) "a clear line needs no dig")
+    (is (= vein (build/plant-in-sight veined aim)) "the vein is the block to dig")
+    (is (nil? (build/plant-in-sight rocked aim)) "a solid wall is the cast's, never dug here")))
+
+(defn kit-of
+  "Inventory slots holding the items in kit, a vector of [item count]."
+  [kit]
+  (into {} (map-indexed (fn [slot [item n]] [slot {:item (recipe/item-id item) :count n}]) kit)))
+
+(deftest a-cleanup-scoop-never-takes-the-last-empty-bucket
+  ;; issue #518 (snapshots R4-8-1, real-2-s1-Clj_r24): one empty and one water bucket held, the
+  ;; first cell's water source scooped, two water buckets and no empty one for the lava refill
+  (let [at #(build/cell origin :south %)
+        over (at [1 1 0])
+        under (at [1 0 0])
+        w (-> (game/init fx/opts)
+              (assoc :world/chunks {})
+              (assoc :world/blocks
+                     {over (get-in scoop/fluids [:water :source])
+                      under (blocks/default-state :obsidian)}))
+        held (fn [kit] (assoc w :player/inventory (kit-of kit)))
+        i {:intent/kind :build :intent/origin origin :intent/facing :south}]
+    (testing "the scoop that would strand the last empty bucket"
+      (is (true? (build/last-bucket-scoop? (held [[:bucket 1] [:water_bucket 1]]))))
+      (is (false? (build/last-bucket-scoop? (held [[:bucket 2] [:water_bucket 1]]))) "a spare")
+      (is (false? (build/last-bucket-scoop? (held [[:bucket 1]]))) "no water bucket held"))
+    (testing "a filler is placed into the source instead"
+      (is (= {:intent/kind :place :intent/item :cobblestone :intent/cell over}
+             (build/seal-source (held [[:bucket 1] [:water_bucket 1] [:cobblestone 8]]) over)))
+      (is (nil? (build/seal-source (held [[:bucket 1] [:water_bucket 1]]) over)) "no filler"))
+    (testing "a bot already holding water buckets only pours one out where the cast has obsidian"
+      (let [full (assoc-in (held [[:water_bucket 2] [:cobblestone 8]])
+                  [:world/blocks over]
+                  (blocks/default-state :air))
+            none (update full :world/blocks dissoc under)
+            spare (build/spare-pour-op full i)]
+        (is (nil? (build/spare-pour-op none i)) "no cast cell, no safe place")
+        (is (= :water_bucket (:build/item spare)))
+        (is (= over (:build/into spare)))
+        (is (= [:water-source over] (:build/done spare)))
+        (is (nil? (build/spare-pour-op (held [[:water_bucket 2]]) i)) "no filler to seal it")))))

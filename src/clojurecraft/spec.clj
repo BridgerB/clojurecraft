@@ -192,6 +192,10 @@
 (s/def :search/leg nat-int?)
 (s/def :search/tunnels nat-int?)
 (s/def :fortress/search (s/keys :req [:search/from :search/heading :search/leg :search/tunnels]))
+(s/def :trail/target (s/coll-of number? :kind vector? :count 3))
+(s/def :trail/cells (s/coll-of ::block-pos :kind vector?))
+(s/def :trail/dead (s/coll-of ::block-pos :kind set?))
+(s/def :fortress/trail (s/keys :req [:trail/target :trail/cells :trail/dead]))
 
 ;; packets, effects, events
 (s/def :packet/name keyword?)
@@ -599,6 +603,8 @@
 (s/def :race/seed (s/nilable string?))
 (s/def :race/commit (s/nilable string?))
 (s/def :race/until string?)
+(s/def :race/unplayed nat-int?)
+(s/def :race/down? boolean?)
 (s/def :sample/runner (s/nilable int?))
 (s/def :sample/server (s/nilable int?))
 (s/def :race/server int?)
@@ -719,11 +725,15 @@
 (s/def :sim.mob/angry? boolean?)               ; a neutral one has turned on the player
 (s/def :sim.mob/persistent? boolean?)          ; never despawned: a fixture's, an animal
 (s/def :sim.mob/yaw double?)                   ; its body's yaw in degrees, told at add-entity: the dragon's says where its head is
+(s/def :sim.mob/route (s/coll-of (s/tuple int? int? int?) :kind vector? :min-count 1)) ; the cells it walks round a wall (sim/trail, issue #263)
+(s/def :sim.mob/route-at int?)                 ; when it last searched a route
+(s/def :sim.mob/far-ticks nat-int?)            ; ticks an angry enderman has stood far from its target (sim/blink)
 (s/def ::sim-mob
   (s/keys :req-un [:sim.mob/type :sim.mob/pos :sim.mob/health]
           :opt-un
           [:sim.mob/hit-at :sim.mob/last-hit :sim.mob/attack-at :sim.mob/fuse-at :sim.mob/dead-at
-           :sim.mob/angry? :sim.mob/persistent? :sim.mob/yaw]))
+           :sim.mob/angry? :sim.mob/persistent? :sim.mob/yaw :sim.mob/route :sim.mob/route-at
+           :sim.mob/far-ticks]))
 (s/def :sim/mobs (s/map-of int? ::sim-mob))
 (s/def :sim/fixture-mobs (s/coll-of (s/keys :req-un [:sim.mob/type :sim.mob/pos]) :kind vector?))
 (s/def :sim/mob-rng int?)                      ; the mobs' own roll stream (sim/mob-roll)
