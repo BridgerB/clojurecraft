@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-22T07:17:53.719Z",
+  "at" : "2026-10-22T07:22:15.667Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -32,6 +32,11 @@
     "title" : "Bot stops at cast-one: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
+  }, {
+    "number" : 513,
+    "title" : "Bot stops at portal: stair-not-taken",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
   } ],
   "moves" : [ {
     "issue" : 504,
@@ -57,12 +62,11 @@
     "issue" : 135,
     "move" : "leave",
     "why" : "hands-off label"
+  }, {
+    "issue" : 513,
+    "move" : "assign"
   } ],
   "log" : [ {
-    "issue" : 135,
-    "move" : "assign",
-    "at" : "2026-10-21T07:30:43.017Z"
-  }, {
     "issue" : 135,
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
@@ -1405,5 +1409,9 @@
     "issue" : 507,
     "move" : "assign",
     "at" : "2026-10-22T04:16:04.054Z"
+  }, {
+    "issue" : 513,
+    "move" : "assign",
+    "at" : "2026-10-22T07:22:15.667Z"
   } ]
 }
