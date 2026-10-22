@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-22T15:00:47.696Z",
+  "at" : "2026-10-22T15:02:00.780Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -11,7 +11,7 @@
     "number" : 524,
     "title" : "Bot stops at fortress: timeout",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
+    "copilot" : true
   }, {
     "number" : 338,
     "title" : "Bot stops at fortress: timeout",
@@ -79,7 +79,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 524,
-    "move" : "assign"
+    "move" : "wait",
+    "why" : "session starting"
   }, {
     "issue" : 338,
     "move" : "leave",
