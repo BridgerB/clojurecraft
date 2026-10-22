@@ -352,5 +352,6 @@
     (is (simrace/stranded? #{} sim))
     (is (not (simrace/stranded? #{[0 0]} sim)) "a bot holding chunks is not stranded")
     (is (not (simrace/stranded? #{} (assoc sim :sim/dimension dimension/nether))))
-    (is (not (contains? (:sim played) :sim/view-at)) "so the model sends its columns again")
+    (is (some #(= :level-chunk-with-light (:packet/name %)) (:sim/out (:sim played)))
+        "so the model sends its columns again")
     (is (= (:capture/columns bare) (get-in played [:sim :sim/columns])))))

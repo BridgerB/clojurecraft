@@ -288,7 +288,8 @@
                            :sim/decoded (:capture/decoded w))
                    (stranded? chunks sim)
                    (-> (assoc :sim/view #{})
-                       (dissoc :sim/view-at)))})))
+                       (dissoc :sim/view-at)
+                       sim/stream))})))
 
 (defn own-world
   "The world a self-contained snapshot is played in, prepared: the columns it carries
