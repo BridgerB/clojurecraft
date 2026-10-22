@@ -252,11 +252,14 @@
                      ".edn.gz"))))
 
 (defn stranded?
-  "Is a snapshot's player in the overworld holding none of its columns: a respawn from the Nether
-   written before issue #504, when the model left the Nether's columns over the overworld's, the
-   chunks the bot held none and the view streamed from them? Its view is streamed again."
-  [chunks sim]
-  (and (empty? chunks) (not= dimension/nether (:sim/dimension sim))))
+  "Is a snapshot's player in the overworld holding none of its columns after a death: a respawn
+   from the Nether written before issue #504, when the model left the Nether's columns over the
+   overworld's, the bot's chunks none and the view streamed from them? Its view is streamed
+   again. A bot that never died (a moment before it has loaded) is not."
+  [chunks world sim]
+  (boolean (and (empty? chunks)
+                (pos? (:stats/deaths world 0))
+                (not= dimension/nether (:sim/dimension sim)))))
 
 (defn moment-of
   "The moment a snapshot holds, ready to play on (sim/play-from): the captured world's chunks the
@@ -286,7 +289,7 @@
                    (update :sim/overworld assoc
                            :sim/columns (:capture/columns w)
                            :sim/decoded (:capture/decoded w))
-                   (stranded? chunks sim)
+                   (stranded? chunks world sim)
                    (-> (assoc :sim/view #{})
                        (dissoc :sim/view-at)
                        sim/stream))})))

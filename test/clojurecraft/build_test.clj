@@ -676,7 +676,9 @@
                        :intent/facing :south
                        :intent/status :active
                        :intent/op op}]
-                (build/work-op (assoc (standing-at (open-ground {}) [5.5 63.0 5.5])
+                (build/work-op (assoc (standing-at (open-ground {[5 62 6] (blocks/default-state
+                                                                           :stone)})
+                                                   [5.5 63.0 5.5])
                                       :plan/intent i
                                       :player/inventory {})
                                i

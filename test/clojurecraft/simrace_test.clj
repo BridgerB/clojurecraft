@@ -13,7 +13,8 @@
             [clojurecraft.sim :as sim]
             [clojurecraft.simrace :as simrace]
             [clojurecraft.wood]
-            [clojurecraft.world :as world]))
+            [clojurecraft.world :as world]
+            [datascript.core :as d]))
 
 (use-fixtures :once fx/instrumented)
 
@@ -346,12 +347,16 @@
 (deftest a-snapshot-after-an-old-nether-respawn-streams-the-overworld-again
   ;; issue #504: respawned over the Nether's columns the bot held none and its view stayed put
   (let [sim {:sim/dimension dimension/overworld :sim/view #{} :sim/view-at [237 123]}
-        w {:time/now 0 :world/chunks {} :world/facts (memory/empty-facts)}
+        w {:time/now 0
+           :stats/deaths 1
+           :world/chunks {}
+           :world/facts (d/serializable (memory/empty-facts))}
         snap {:snapshot/chunks #{} :snapshot/world w :snapshot/sim sim}
         played (simrace/moment-of snap bare)]
-    (is (simrace/stranded? #{} sim))
-    (is (not (simrace/stranded? #{[0 0]} sim)) "a bot holding chunks is not stranded")
-    (is (not (simrace/stranded? #{} (assoc sim :sim/dimension dimension/nether))))
+    (is (simrace/stranded? #{} w sim))
+    (is (not (simrace/stranded? #{[0 0]} w sim)) "a bot holding chunks is not stranded")
+    (is (not (simrace/stranded? #{} w (assoc sim :sim/dimension dimension/nether))))
+    (is (not (simrace/stranded? #{} (dissoc w :stats/deaths) sim)) "one that never died is not")
     (is (some #(= :level-chunk-with-light (:packet/name %)) (:sim/out (:sim played)))
         "so the model sends its columns again")
     (is (= (:capture/columns bare) (get-in played [:sim :sim/columns])))))
