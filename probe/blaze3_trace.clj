@@ -18,7 +18,7 @@
              (:player/health world)
              (pr-str es))))
 
-(let [path "cache/issues/502/R4-31-1.edn.gz"
+(let [path "test/issues/502/R4-31-1.edn.gz"
       snap (capture/read-world path)
       w (sr/world-for! snap)
       m (sr/moment-of snap w)
