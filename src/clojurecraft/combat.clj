@@ -386,11 +386,18 @@
   (clear? world (game/eye world) (aim e)))
 
 (defn floor-pos
-  "The bot's feet position with y at the floor of the cell they are in (a hair over a whole number
-   counts as that number): where the bot stands whatever its jump has lifted it, a stairs up's
-   shaft bobbing it 0.2 on every step."
+  "The bot's feet position with y at the floor it stands on or jumped from: the cell the feet are
+   in (a hair over a whole number counts as that number), or the one under it when nothing solid
+   is under that (a jump rises at most a block and a quarter, so one cell down is the floor it left).
+   Where the bot is whatever its jump has lifted it to, a stairs up's shaft lifting it to the next
+   level at the top of every step."
   [world]
-  (update (:player/pos world) 1 #(math/floor (+ (double %) 1.0e-3))))
+  (let [[x y z] (:player/pos world)
+        solid? (terrain/solid-fn world)
+        cx (long (math/floor x))
+        cz (long (math/floor z))
+        top (long (math/floor (+ (double y) 1.0e-3)))]
+    [x (if (or (solid? cx (dec top) cz) (not (solid? cx (- top 2) cz))) top (dec top)) z]))
 
 (defn hittable?
   "Can entity e be fought from where the bot stands: its feet no more than over-feet over the
