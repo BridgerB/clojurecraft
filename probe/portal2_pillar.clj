@@ -39,7 +39,7 @@
                (let [w (sr/step world ev)]
                  (show w)
                  w))
-        r (sim/play-from step m stop? 300000 (sr/go-of w (:snapshot/until snap)) nil)]
+        r (sim/play-from step m stop? 480000 (sr/go-of w (:snapshot/until snap)) nil)]
     (println "END" (:time/now (:world r)))
     (shutdown-agents)))
 
