@@ -1946,7 +1946,7 @@
        (nil? (make/take-table-along world))
        (or (table-at-hand? world) (wood-near? world))))
 
-(def kit-sticks 2)                    ; sticks a build carries: one pickaxe's worth, made again where the cast wore the last out
+(def kit-sticks 4)                    ; sticks a build carries: two pickaxes' handles, made again where the cast wore the last out and for the climb after it
 
 (defn sticks-at-hand?
   "Could kit-sticks be made without going out for anything: the needs planner's next step toward
