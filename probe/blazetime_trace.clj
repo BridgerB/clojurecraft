@@ -29,7 +29,7 @@
         t0 0
         line (fn [tag world]
                (let [i (:plan/intent world)
-                     sp (blaze/nearest-spawner world)]
+                     sp (when (:player/pos world) (blaze/nearest-spawner world))]
                  (println tag
                           (long (/ (- (:time/now world) t0) 1000))
                           "s"
@@ -48,10 +48,12 @@
                           "food" (:player/food world)
                           "edible" (hunt/edible-held world)
                           "rods" (blaze/rods world)
-                          "blazes" (count (blaze/blazes world))
-                          "watch" (count (blaze/watchers world))
+                          "blazes" (when (:player/pos world) (count (blaze/blazes world)))
+                          "watch" (when (:player/pos world) (count (blaze/watchers world)))
                           "sp" sp
-                          "pos" (r1 (:player/pos world)))))
+                          "pos"
+                          (some-> (:player/pos world)
+                                  r1))))
         stop? (fn [world]
                 (let [i (:plan/intent world)
                       id (:intent/id i)
