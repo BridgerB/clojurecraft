@@ -444,7 +444,21 @@
                                     #{7})
                              row
                              plan/goals))
-        "an angry one far below the mouth cannot come to it: out to the mouth")))
+        "an angry one far below the mouth cannot come to it: out to the mouth")
+    ;; batch pearls-warped6-a (plan run 39687964414, probe 39699149771) run 4: one a held fight
+    ;; gave up on stood 3 to 9 blocks off the mouth and 5 or 6 below it on the slope beside, and
+    ;; came the moment the bot stepped out, three times, the third its death at 597 s
+    (let [below (assoc angry :entity/pos [0.5 58.0 8.5])]
+      (is (= {:intent/kind :lookout :intent/for :pearls}
+             (plan/next-intent (assoc (burrowed [8.5 61.0 8.5] {7 below}) :plan/blacklist #{7})
+                               row
+                               plan/goals))
+          "an angry one six below the mouth and three off it, blacklisted: the bot stays in")
+      (is (= {:intent/kind :walk :intent/target [8 61 8] :intent/for :shelter}
+             (plan/next-intent (assoc (burrowed [3.5 64.0 8.5] {7 below}) :plan/blacklist #{7})
+                               row
+                               plan/goals))
+          "at the mouth with it there: home"))))
 
 (def ledge-wall
   "Stone three high (y 64 to 66) along x 4, the burrow's first stair left open: from the mouth at
@@ -476,6 +490,41 @@
       (is (= {:intent/kind :stairs-down :intent/to-y 56 :intent/dir [1 0] :intent/for :pearls}
              (plan/next-intent (looked-out (looked w 12)) row plan/goals))
           "a minute of them, the burrow given up: stairs down toward it from the mouth"))))
+
+(def slab
+  "Stone one thick over the whole column at y 80: it hides an enderman standing at y 90 from
+   the eye below, and no route reaches it."
+  (into {} (for [x (range 16) z (range 16)] [[x 80 z] stone])))
+
+(deftest one-far-above-no-route-reaches-is-climbed-to-by-stairs
+  ;; batch pearls-warped5-b (plan run 39671293287, probe 39683564524): run 5 took five pearls in
+  ;; 150 s on the forest floor, cut seven flights down to three endermen in a cave and killed
+  ;; them, then stood thirty-two minutes under the floor with every enderman 20 to 30 blocks
+  ;; over it; runs 2, 3 and 4 hunted under the floor the same way. The stairs down had no way back
+  (let [above (enderman [8.5 90.0 8.5])
+        w (assoc-in (standing {7 above} slab) [:player/inventory 1] (item :iron_pickaxe 1))]
+    (is (nil? (pearls/quarry w)) "hidden by the slab")
+    (is (= {:intent/kind :stairs-up
+            :intent/to-y 72
+            :intent/dir [-1 0]
+            :intent/to-height? true
+            :intent/for :pearls}
+           (plan/next-intent w row plan/goals))
+        "a flight of stairs toward it, descend-step up, ending at that height")
+    (is (= {:intent/kind :lookout :intent/for :pearls}
+           (plan/next-intent (assoc w :plan/boxed-at #{[8 64 8]}) row plan/goals))
+        "a staircase from here was boxed: not again from here")
+    (is (nil? (pearls/ascend (standing {7 above} slab) {7 above})) "no pickaxe: no stairs")
+    (is (nil? (pearls/ascend w {7 (enderman [8.5 69.0 8.5])}))
+        "five above is a slope's worth, not another level: the roam's")
+    (is (= :stairs-down
+           (:intent/kind (plan/next-intent
+                          (assoc-in w [:world/entities 9] (enderman [8.5 40.0 8.5]))
+                          row
+                          plan/goals)))
+        "one as far below too: the stairs down first, as before")
+    (is (nil? (pearls/ascend w {7 above 9 (enderman [8.5 65.0 30.5])}))
+        "one on this level too, hidden: no climb while the level still has one to hunt")))
 
 (deftest a-burrow-is-cut-where-it-would-shelter-and-the-provoke-goes-from-its-mouth
   ;; batch pearls-warped-e (plan run 39164914828) run 1: on broken ground :burrow failed
@@ -653,6 +702,8 @@
     (is (= [:walk :shelter] [kind (:intent/for i)]))
     (is (not= [3 64 20] target) "never to the enderman itself")
     (is (<= (physics/distance target [8 61 8]) pearls/shelter-reach) "within the burrow's reach")
+    (is (<= (physics/distance target [8 61 8]) (physics/distance target [3.5 64.0 20.5]))
+        "no farther from home than from the enderman: provoked, it comes at the bot's pace")
     (is (= 7 (first (pearls/quarry there))) "from there it can be stared at")
     (is (= {:intent/kind :provoke :intent/target 7 :intent/for :pearls}
            (plan/next-intent there row plan/goals))
@@ -675,6 +726,20 @@
             row
             plan/goals))
         "a wall no route rounds, no vantage: a lookout at the mouth, not a walk out")))
+
+(deftest a-vantage-farther-from-home-than-from-the-enderman-is-no-vantage
+  ;; batch pearls-warped5-b (plan run 39671293287, probe 39683564524): run 1 provoked one 7.6
+  ;; blocks off from a vantage 12 from its burrow's end and was slain on the walk home at 106 s;
+  ;; run 5 lost eleven health on the walk home from one provoked 15 off. An enderman comes at the
+  ;; bot's pace and more: the bot must be home first
+  (let [far (enderman [3.5 64.0 30.5])
+        w (-> (burrowed [3.5 64.0 8.5] {7 far} north-wall)
+              (assoc-in [:world/chunks [0 1]] (world/column {})))]
+    (is (nil? (pearls/quarry w)) "hidden from the mouth")
+    (is (nil? (pearls/vantage w (pearls/endermen w pearls/seek-radius)))
+        "every cell within ten of it is more than ten from home: none")
+    (is (= {:intent/kind :lookout :intent/for :pearls} (plan/next-intent w row plan/goals))
+        "a lookout at the mouth; a minute of them gives the burrow up for one cut beside it")))
 
 (deftest another-hostile-near-the-burrow-is-met-from-it-not-fought-in-the-open
   ;; gym batch pearls-warped4-a (plan run 39544677155): runs 3 and 4 were slain by other mobs the
