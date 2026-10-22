@@ -21,6 +21,8 @@ sourceRefs:
   - src/clojurecraft/path.clj#def templates
   - src/clojurecraft/path.clj#defn landing
   - src/clojurecraft/path.clj#defn start-cell
+  - src/clojurecraft/path.clj#defn rests
+  - test/clojurecraft/path_test.clj#a-box-over-a-ledge-starts-on-the-block-it-rests-on-not-one-across-a-gap
   - test/clojurecraft/path_test.clj#a-route-leaves-occupied-awkward-footing-without-entering-it
   - src/clojurecraft/path.clj#defn lava-near?
   - src/clojurecraft/path.clj#defmulti goal-done?
@@ -72,6 +74,7 @@ The `:surface` goal is registered in `stairs`: `out?` requires usable open groun
 ## Gotchas
 - **Departure is not entry.** Issue #284's R1/6 snapshot repaired the next tunnel step but stood on soul sand. Snapping its start to gravel beside the feet chose an isolated cell with no route to the repaired step. Searches now depart from the actual supported, clear feet cell; every entered waypoint still needs an ordinary walkable floor, so this does not permit crossing a soul-sand field.
 - **A start on a block edge floors into the wrong column.** Gym landing 21280,18720 (batch path-a1 run 5): the fixture teleports to the column's `~0.5`, which on a steep hillside put the feet at x 21281.0 exactly, on the edge of a stone step; `feet-cell` floored into the step, every plan was `:none` from inside solid rock, and three `:no-path` failures in half a second killed the plan. The player's box rests on the cell beside it, which is standable; `start-cell` searches from there. The old straight-line walk never noticed because it never asked where it stood.
+- **The neighbour the search starts from must be the one the box rests on.** Issue #284's R1-26-1 (sim race 39718481292) stood at x 401.73 on a one-block ledge: the feet cell's floor was air, the box lay over the east block's edge, and `start-cell` took the first standable neighbour in its scan order, a block across a one-wide gap to the west, from which no route led east. Every walk to the recentring cell failed `:no-path` three times in 400 ms. `plan` now asks `rests` (the cells at the feet's height whose columns the box overlaps, the one under most of it first, only when `from` is the feet cell of `:player/pos`) and `start-cell` tries those before the scan. A walk from a position far from any edge is unchanged.
 - Water is a wall, never a floor: the bot can swim ([[fluid-physics]]) but a route never asks it to; getting out is the escape's job ([[water-escape]]).
 - The lava rule is applied by `clear?`, so every move kind has it; ruststeve's diagonal lacked one and put a bot over lava ([[sib-pathfinder-movements]]).
 - No parkour, no digging through, no scaffolding: a one-wide gap with no ramp is `:none`, by design.

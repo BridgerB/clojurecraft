@@ -17,7 +17,6 @@
             [clojurecraft.fixtures :as fx]
             [clojurecraft.fortress :as fortress]
             [clojurecraft.game :as game]
-            [clojurecraft.gym :as gym]
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
             [clojurecraft.main :as main]
@@ -465,6 +464,9 @@
   [trees]
   (apply merge (map tree-blocks trees)))
 
+(def wood-ms 150000) ; simulated ms a forest run may take: the wood gym row's old cap, kept here when
+                     ; the gym's trials went to the job's length (one forest property runs many)
+
 (deftest the-wood-goal-holds-in-generated-forests
   ;; the bot against the model in 2,000 worlds test.check builds (docs/RICH-HICKEY.md: "thousands of
   ;; generated worlds in the time one real run takes"): 1-3 trees of mixed species and heights
@@ -485,7 +487,7 @@
                                                   (game/init fx/opts)
                                                   sim0
                                                   #(or (plan/done? %) (plan/failed? %))
-                                                  (:gym/timeout-ms (gym/gym "wood"))
+                                                  wood-ms
                                                   {:event/kind :go :go/goals [:wood]})]
                              (and (if (some #(<= (:mound %) 1) trees)
                                     (and (plan/done? w) (= 1 (inventory/logs-held w)))
@@ -519,7 +521,7 @@
                          (sim/init {:column (world/column-bytes (forest trees))
                                     :spawn [0.5 64.0 0.5]})
                          #(or (plan/done? %) (plan/failed? %))
-                         (:gym/timeout-ms (gym/gym "wood"))
+                         wood-ms
                          {:event/kind :go :go/goals [:wood]})]
     (is (plan/done? w) (pr-str (plan/summary w)))
     (is (= 1 (inventory/logs-held w)) "one log, no second dug for a drop left on the mound")

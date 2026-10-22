@@ -366,8 +366,8 @@
 (deftest the-plan-is-goals-by-runs
   (let [m (gym/plan-matrix ["wood" "pickaxe"] 2)]
     (is (= 4 (count (re-seq #"\"run\"" m))))
-    (is (str/includes? m "{\"goal\":\"wood\",\"run\":2,\"minutes\":10}"))
-    (is (str/includes? m "{\"goal\":\"pickaxe\",\"run\":1,\"minutes\":13}"))))
+    (is (str/includes? m "{\"goal\":\"wood\",\"run\":2,\"minutes\":308}"))
+    (is (str/includes? m "{\"goal\":\"pickaxe\",\"run\":1,\"minutes\":308}"))))
 
 (deftest landings-are-paired-and-checked
   (let [g (landings/grid [20000 20000] 20 640)]

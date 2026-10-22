@@ -73,6 +73,7 @@
 (def fortress-offset 48)              ; blocks west of a located fortress the Nether pad is carved
 (def pad-y 72)                        ; the Nether pad's feet height: over the lava sea (y 31), under the roof
 (def arena-half 5)                    ; the nether arena's half-width: rock two thick round a room seven square
+(def trial-ms 18000000)                 ; every trial's cap: 5 hours, a plan job's whole run less setup. A trial ends when the bot finishes or its plan fails; a cap shorter than the job only hides how slow a stage is
 (def end-at [8 0])                    ; [x z] of the End landing: the main island's end stone 8 east of the fountain, as ruststeve's End gyms start
 (def end-reach 64)                    ; blocks round the fountain loaded for the End landing: the towers stand at radius 42
 (def dimension-wait-ms 30000)         ; how long the kit waits for the server to say the bot is in its row's dimension
@@ -356,24 +357,24 @@
   [{:gym/goal :wood
     :gym/until "wood"
     :gym/prereqs []
-    :gym/timeout-ms 150000
+    :gym/timeout-ms trial-ms
     :gym/truth [{:truth/cmd "clear {name} #minecraft:logs 0" :truth/re "Found [1-9]"}]}
    {:gym/goal :kit
     :gym/until "table"
     :gym/prereqs []
-    :gym/timeout-ms 240000
+    :gym/timeout-ms trial-ms
     :gym/truth [{:truth/cmd "clear {name} minecraft:crafting_table 0" :truth/re "Found [1-9]"}
                 {:truth/cmd "clear {name} minecraft:stick 0" :truth/re "Found ([4-9]|[1-9][0-9])"}]}
    {:gym/goal :pickaxe
     :gym/until "pickaxe"
     :gym/prereqs []
-    :gym/timeout-ms 300000
+    :gym/timeout-ms trial-ms
     :gym/truth [{:truth/cmd "clear {name} minecraft:wooden_pickaxe 0" :truth/re "Found [1-9]"}]}
    ;; the pickaxe is given, so the row measures stone, not the wood and crafting it already measures
    {:gym/goal :cobblestone
     :gym/until "cobblestone"
     :gym/prereqs ["minecraft:wooden_pickaxe 1"]
-    :gym/timeout-ms 300000
+    :gym/timeout-ms trial-ms
     :gym/truth [{:truth/cmd "clear {name} minecraft:cobblestone 0"
                  :truth/re "Found ([3-9]|[1-9][0-9])"}
                 {:truth/cmd "clear {name} minecraft:wooden_pickaxe 0" :truth/re "Found [1-9]"}]}
@@ -381,7 +382,7 @@
    {:gym/goal :stone-pickaxe
     :gym/until "stone-pickaxe"
     :gym/prereqs ["minecraft:wooden_pickaxe 1" "minecraft:stick 2" "minecraft:crafting_table 1"]
-    :gym/timeout-ms 300000
+    :gym/timeout-ms trial-ms
     :gym/truth [{:truth/cmd "clear {name} minecraft:stone_pickaxe 0" :truth/re "Found [1-9]"}]}
    ;; issue #6, one row per stage of the iron kit, each given what the stages before it make.
    ;; The furnace: a placed block is not in the inventory, so the server's word is that the
@@ -389,30 +390,30 @@
    {:gym/goal :furnace
     :gym/until "furnace"
     :gym/prereqs ["minecraft:cobblestone 8" "minecraft:crafting_table 1"]
-    :gym/timeout-ms 180000
+    :gym/timeout-ms trial-ms
     :gym/truth [{:truth/cmd "clear {name} minecraft:cobblestone 0" :truth/re "No items were found"}
                 {:truth/cmd "clear {name} minecraft:furnace 0" :truth/re "No items were found"}]}
    {:gym/goal :ingots
     :gym/until "ingots"
     :gym/prereqs ["minecraft:furnace 1" "minecraft:raw_iron 4" "minecraft:coal 1"]
-    :gym/timeout-ms 240000
+    :gym/timeout-ms trial-ms
     :gym/truth [{:truth/cmd "clear {name} minecraft:iron_ingot 0"
                  :truth/re "Found ([4-9]|[1-9][0-9])"}]}
    {:gym/goal :bucket
     :gym/until "bucket"
     :gym/prereqs ["minecraft:iron_ingot 3" "minecraft:crafting_table 1"]
-    :gym/timeout-ms 180000
+    :gym/timeout-ms trial-ms
     :gym/truth [{:truth/cmd "clear {name} minecraft:bucket 0" :truth/re "Found [1-9]"}]}
    {:gym/goal :water-bucket
     :gym/until "water-bucket"
     :gym/prereqs ["minecraft:bucket 1" "minecraft:stone_pickaxe 2"]
-    :gym/timeout-ms 300000
+    :gym/timeout-ms trial-ms
     :gym/truth [{:truth/cmd "clear {name} minecraft:water_bucket 0" :truth/re "Found [1-9]"}]}
    ;; a gravel is given, so the row measures digging it again for flint, not finding gravel
    {:gym/goal :flint-and-steel
     :gym/until "flint-and-steel"
     :gym/prereqs ["minecraft:iron_ingot 1" "minecraft:gravel 1"]
-    :gym/timeout-ms 300000
+    :gym/timeout-ms trial-ms
     :gym/truth [{:truth/cmd "clear {name} minecraft:flint_and_steel 0" :truth/re "Found [1-9]"}]}
    ;; the whole stage from what #9 ends with, as the sim's end-to-end run starts. Forty minutes:
    ;; down to y 16, iron, coal, gravel and the smelts there, then the stairs back up to water; batch
@@ -421,7 +422,7 @@
     :gym/until "iron-kit"
     :gym/prereqs ["minecraft:stone_pickaxe 1" "minecraft:crafting_table 1" "minecraft:cobblestone 8"
                   "minecraft:oak_log 4"]
-    :gym/timeout-ms 2400000
+    :gym/timeout-ms trial-ms
     :gym/truth [{:truth/cmd "clear {name} minecraft:water_bucket 0" :truth/re "Found [1-9]"}
                 {:truth/cmd "clear {name} minecraft:flint_and_steel 0" :truth/re "Found [1-9]"}]}
    ;; issue #8: the portal cast in an arena built round the landing, from the kit
@@ -429,20 +430,20 @@
     :gym/until "cast-one"
     :gym/prereqs portal-kit
     :gym/setup portal-arena
-    :gym/timeout-ms 600000
+    :gym/timeout-ms trial-ms
     :gym/truth [(block-count "minecraft:obsidian" "cloned [1-9]")]}
    {:gym/goal :portal
     :gym/until "portal"
     :gym/prereqs portal-kit
     :gym/setup portal-arena
-    :gym/timeout-ms 2400000
+    :gym/timeout-ms trial-ms
     :gym/truth [(block-count "minecraft:obsidian" "cloned (1[0-9]|[2-9][0-9]) block")
                 (block-count "minecraft:nether_portal" "cloned [1-9]")]}
    {:gym/goal :nether
     :gym/until "nether"
     :gym/prereqs portal-kit
     :gym/setup portal-arena
-    :gym/timeout-ms 2400000
+    :gym/timeout-ms trial-ms
     :gym/truth [{:truth/cmd "data get entity {name} Dimension" :truth/re "the_nether"}]}
    ;; issue #5: wade in, get out; the server must see the bot on dry land (steve's onDryLand judge)
    ;; issue #11: from a pad carved in the Nether 48 blocks west of a located fortress, tunnel to
@@ -452,7 +453,7 @@
     :gym/until "fortress"
     :gym/land :nether-fortress
     :gym/prereqs ["minecraft:iron_pickaxe 1" "minecraft:cobblestone 64"]
-    :gym/timeout-ms 900000
+    :gym/timeout-ms trial-ms
     :gym/truth
     [{:truth/cmd "execute as {name} at @s if dimension minecraft:the_nether"
       :truth/re "Test passed"}
@@ -467,7 +468,7 @@
     :gym/prereqs []
     :gym/setup
     ["summon minecraft:pig {x} {y+2} {z} {NoAI:1b,Invulnerable:1b,PersistenceRequired:1b,Health:7.5f}"]
-    :gym/timeout-ms 90000
+    :gym/timeout-ms trial-ms
     :gym/truth
     [{:truth/cmd
       "execute as {name} at @s run data get entity @e[type=minecraft:pig,limit=1,sort=nearest] Health"
@@ -483,7 +484,7 @@
     :gym/difficulty "normal"
     :gym/prereqs ["minecraft:iron_sword 1" "minecraft:cooked_beef 8"]
     :gym/summon [(no-ai-zombie [2 0 2])]
-    :gym/timeout-ms 120000
+    :gym/timeout-ms trial-ms
     :gym/truth [{:truth/cmd "execute as {name} at @s if dimension minecraft:the_nether"
                  :truth/re "Test passed"}
                 {:truth/cmd "clear {name} minecraft:iron_sword 0" :truth/re "Found 1"}
@@ -499,7 +500,7 @@
     :gym/difficulty "normal"
     :gym/prereqs ["minecraft:iron_sword 1" "minecraft:cooked_beef 8"]
     :gym/summon (into dragon (crystals [[3 0 3]]))
-    :gym/timeout-ms 120000
+    :gym/timeout-ms trial-ms
     :gym/truth
     [{:truth/cmd "execute as {name} at @s if dimension minecraft:the_end" :truth/re "Test passed"}
      {:truth/cmd "clear {name} minecraft:iron_sword 0" :truth/re "Found 1"}
@@ -512,7 +513,7 @@
    {:gym/goal :shore
     :gym/until "shore"
     :gym/prereqs []
-    :gym/timeout-ms 180000
+    :gym/timeout-ms trial-ms
     :gym/truth
     [{:truth/cmd
       "execute as {name} at @s unless block ~ ~ ~ minecraft:water unless block ~ ~1 ~ minecraft:water"
@@ -524,7 +525,7 @@
     :gym/until "eat"
     :gym/land :hungry
     :gym/prereqs ["minecraft:bread 4"]
-    :gym/timeout-ms 60000
+    :gym/timeout-ms trial-ms
     :gym/truth [{:truth/cmd "data get entity {name} foodLevel" :truth/re "data: (1[4-9]|20)$"}
                 {:truth/cmd "clear {name} minecraft:bread 0" :truth/re "Found [1-3] |No items"}]}
    ;; issue #259: the portal's iron held and thirteen ingots spare, a helmet and a chestplate made
@@ -533,7 +534,7 @@
     :gym/until "armour"
     :gym/prereqs ["minecraft:flint_and_steel 1" "minecraft:water_bucket 1" "minecraft:bucket 1"
                   "minecraft:crafting_table 1" "minecraft:iron_ingot 13"]
-    :gym/timeout-ms 180000
+    :gym/timeout-ms trial-ms
     :gym/truth [{:truth/cmd "execute if items entity {name} armor.head minecraft:iron_helmet"
                  :truth/re "Test passed"}
                 {:truth/cmd "execute if items entity {name} armor.chest minecraft:iron_chestplate"
@@ -546,7 +547,7 @@
     :gym/prereqs ["minecraft:stone_sword 1"]
     :gym/setup ["time set noon"
                 "summon minecraft:husk {x+3} {y} {z} {NoAI:1b,PersistenceRequired:1b}"]
-    :gym/timeout-ms 90000
+    :gym/timeout-ms trial-ms
     :gym/truth
     [{:truth/cmd
       "execute positioned {x} {y} {z} unless entity @e[type=minecraft:husk,distance=..24]"
@@ -571,7 +572,7 @@
                 "summon minecraft:zombie {x+2} {y} {z} {PersistenceRequired:1b}"
                 "summon minecraft:zombie {x-2} {y} {z+1} {PersistenceRequired:1b}"
                 "summon minecraft:zombie {x} {y} {z-2} {PersistenceRequired:1b}"]
-    :gym/timeout-ms 120000
+    :gym/timeout-ms trial-ms
     :gym/truth [{:truth/cmd "scoreboard players get {name} zkills" :truth/re "has [1-9]"}
                 {:truth/cmd "data get entity {name} Health" :truth/re "data: [1-9]"}]}
    ;; issue #262: blaze rods. blaze-1: the nether arena with a blaze spawner in its corner and a
@@ -586,7 +587,7 @@
     :gym/summon (into invulnerable
                       [no-fire (blaze-spawner [3 0 3])
                        (summon "blaze" [-2 1 -2] "{PersistenceRequired:1b}")])
-    :gym/timeout-ms 300000
+    :gym/timeout-ms trial-ms
     :gym/truth [(rods-held 7)]}
    ;; blaze-7: the same room, all seven rods from its blazes, the bot in iron armour and hurt by
    ;; their fireballs, so the break-off under 10 health and the meal after it are played. Fire
@@ -603,7 +604,7 @@
     :gym/summon (into iron-armour
                       [fire-resistance no-fire (slow-blaze-spawner [3 0 3])
                        (summon "blaze" [-2 1 -2] "{PersistenceRequired:1b}")])
-    :gym/timeout-ms 900000
+    :gym/timeout-ms trial-ms
     :gym/truth [(rods-held 7)]}
    ;; blaze-fortress: from the fortress row's pad 48 west of a located fortress, the spawner found
    ;; in the chunks loaded round it, tunnelled to, camped by, seven rods from its blazes. Fire
@@ -617,7 +618,7 @@
     :gym/prereqs ["minecraft:iron_pickaxe 1" "minecraft:cobblestone 64" "minecraft:iron_sword 1"
                   "minecraft:cooked_beef 16"]
     :gym/summon (conj iron-armour fire-resistance)
-    :gym/timeout-ms 1800000
+    :gym/timeout-ms trial-ms
     :gym/truth [(rods-held 7)]}
    ;; issue #263: endermen in the sealed Nether room (#261's arena), the pearl kit given there;
    ;; judged by a pearl held. Five that never move or teleport (NoAI), each within the hunt's
@@ -629,7 +630,7 @@
     :gym/difficulty "normal"
     :gym/prereqs pearl-kit
     :gym/summon (mapv no-ai-enderman [[2 0 0] [-2 0 0] [0 0 2] [0 0 -2] [2 0 2]])
-    :gym/timeout-ms 180000
+    :gym/timeout-ms trial-ms
     :gym/truth [(pearls-held "[1-9][0-9]*")]}
    ;; then live: three that fight back for 7 a hit at Normal, ten blocks off in a stone arena at
    ;; midnight (pearl-arena), the bot in the kit's iron helmet and chestplate; a pearl held, the
@@ -641,7 +642,7 @@
     :gym/prereqs pearl-kit
     :gym/setup pearl-arena
     :gym/summon (into [] (mapcat #(endermen 1 %)) [[10 0 0] [-10 0 2] [0 0 10]])
-    :gym/timeout-ms 300000
+    :gym/timeout-ms trial-ms
     :gym/truth [(pearls-held "[1-9][0-9]*")
                 {:truth/cmd "data get entity {name} Health" :truth/re "data: [1-9]"}]}
    ;; the stage: twelve pearls from the endermen of the warped forest nearest the landing's
@@ -651,7 +652,7 @@
     :gym/land :warped-forest
     :gym/difficulty "normal"
     :gym/prereqs (conj pearl-kit "minecraft:cooked_beef 32")
-    :gym/timeout-ms 2400000
+    :gym/timeout-ms trial-ms
     :gym/truth [(pearls-held "(1[2-9]|[2-9][0-9]|[1-9][0-9][0-9])")]}
    ;; issue #264: twelve eyes of ender crafted from what the two stages before make, given on a
    ;; surface landing: seven rods and twelve pearls. Nothing to fight or fetch, so the row measures
@@ -660,7 +661,7 @@
     :gym/until "eyes"
     :gym/difficulty "normal"
     :gym/prereqs ["minecraft:blaze_rod 7" "minecraft:ender_pearl 12"]
-    :gym/timeout-ms 180000
+    :gym/timeout-ms trial-ms
     :gym/truth [{:truth/cmd "clear {name} minecraft:ender_eye 0"
                  :truth/re "Found (1[2-9]|[2-9][0-9]) "}]}
    ;; issue #265: one eye thrown on a surface landing at noon (no night mobs on the bot), its line
@@ -672,7 +673,7 @@
     :gym/difficulty "normal"
     :gym/setup ["time set noon"]
     :gym/prereqs ["minecraft:ender_eye 2"]
-    :gym/timeout-ms 60000
+    :gym/timeout-ms trial-ms
     :gym/truth [{:truth/cmd
                  "execute positioned {x} {y} {z} run locate structure minecraft:stronghold"
                  :truth/re "\\[(-?\\d+), (?:~|-?\\d+), (-?\\d+)\\]"
@@ -690,7 +691,7 @@
     :gym/prereqs ["minecraft:ender_eye 6" "minecraft:iron_sword 1" "minecraft:iron_pickaxe 3"
                   "minecraft:iron_helmet 1" "minecraft:iron_chestplate 1"
                   "minecraft:cooked_beef 16"]
-    :gym/timeout-ms 1200000
+    :gym/timeout-ms trial-ms
     :gym/truth [{:truth/cmd "execute if block {at} minecraft:end_portal_frame"
                  :truth/re "Test passed"
                  :truth/at [:frame]}]}
@@ -705,7 +706,7 @@
     :gym/prereqs ["minecraft:ender_eye 6" "minecraft:iron_sword 1" "minecraft:iron_pickaxe 3"
                   "minecraft:iron_helmet 1" "minecraft:iron_chestplate 1" "minecraft:cooked_beef 16"
                   "minecraft:cobblestone 64"]
-    :gym/timeout-ms 1800000
+    :gym/timeout-ms trial-ms
     :gym/truth [{:truth/cmd "execute if block {at} minecraft:end_portal_frame"
                  :truth/re "Test passed"
                  :truth/at [:frame]}
@@ -721,7 +722,7 @@
     :gym/difficulty "normal"
     :gym/setup portal-room
     :gym/prereqs ["minecraft:ender_eye 14"]
-    :gym/timeout-ms 300000
+    :gym/timeout-ms trial-ms
     :gym/truth [{:truth/cmd "execute if block {at} minecraft:end_portal"
                  :truth/re "Test passed"
                  :truth/at [:portal]}]}
@@ -732,7 +733,7 @@
     :gym/difficulty "normal"
     :gym/setup portal-room
     :gym/prereqs ["minecraft:ender_eye 14"]
-    :gym/timeout-ms 300000
+    :gym/timeout-ms trial-ms
     :gym/truth [{:truth/cmd "execute as {name} at @s if dimension minecraft:the_end"
                  :truth/re "Test passed"}]}
    ;; issue #267: the main island, the ten spikes' cages taken off and a crystal on each one's
@@ -750,7 +751,7 @@
     :gym/prereqs ["minecraft:cobblestone 64" "minecraft:cobblestone 64" "minecraft:iron_pickaxe 1"
                   "minecraft:iron_sword 1" "minecraft:cooked_beef 16"]
     :gym/summon (into spike-crystals invulnerable)
-    :gym/timeout-ms 1500000
+    :gym/timeout-ms trial-ms
     :gym/truth [{:truth/cmd
                  "execute in minecraft:the_end unless entity @e[type=minecraft:end_crystal]"
                  :truth/re "Test passed"}]}
@@ -766,7 +767,7 @@
                   "minecraft:iron_leggings 1" "minecraft:iron_boots 1" "minecraft:cooked_beef 16"
                   "minecraft:cobblestone 64" "minecraft:iron_pickaxe 1"]
     :gym/summon (into [no-crystals] dragon)
-    :gym/timeout-ms 1500000
+    :gym/timeout-ms trial-ms
     :gym/truth [{:truth/cmd
                  "execute in minecraft:the_end unless entity @e[type=minecraft:ender_dragon]"
                  :truth/re "Test passed"}]}])

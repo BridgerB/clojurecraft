@@ -37,6 +37,7 @@
    descent is judged by the feet having actually gone down, never by a packet having been
    sent, since a dig the server refused leaves the bot where it stood."
   (:require [clojure.math :as math]
+            [clojure.string :as str]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.chunk :as chunk]
             [clojurecraft.dig :as dig]
@@ -141,11 +142,24 @@
   [:cobblestone :cobbled_deepslate :andesite :diorite :granite :tuff :dirt :netherrack :soul_soil
    :blackstone :basalt])
 
+(defn planks-of
+  "The first planks item among the held item counts that has n or more, or nil: a block that does
+   not fall, the last thing a floor or a seal is laid from."
+  [held n]
+  (->> held
+       (filter (fn [[item c]] (and (>= c n) (str/ends-with? (name item) "_planks"))))
+       (map first)
+       first))
+
 (defn filler
-  "The first of fillers the inventory holds n or more of, or nil."
+  "The first of fillers the inventory holds n or more of, else a planks item it holds n or more
+   of, or nil. Planks are the fallback only: carried-filler and so every stair down's reserve
+   count none, so a descent never spends them. Issue #37 (real bot Clj_r16, on a one-wide strip
+   over open air holding three planks, sticks and no other block): nothing to lay, and every
+   climb out was :boxed."
   [world n]
   (let [held (recipe/counts (:player/inventory world))]
-    (first (filter #(>= (get held % 0) n) fillers))))
+    (or (first (filter #(>= (get held % 0) n) fillers)) (planks-of held n))))
 
 (def lay-reserve 8)                    ; filler a staircase down never lays into floors: what the climb back seals and steps with
 
@@ -356,15 +370,40 @@
   [world cells]
   (and (up-sealed? world cells) (empty? (wet-feet world cells))))
 
+(defn neighbours
+  "The four horizontal neighbours of cell [x y z], as cells."
+  [[x y z]]
+  (for [[dx _ dz] path/around] [(+ x dx) y (+ z dz)]))
+
 (defn dry-feet
   "The water cells beside wet feet to lay a filler into before a stair up is cut (wet-feet), so
    the water under the feet is cut off and drains: when each has a solid neighbour to place
    against (place/support) and enough of a filler is carried; nil when none are wanted or can be
-   laid."
+   laid. A cell with no solid neighbour of its own (the mouth of a water-filled hole) is laid after
+   a water cell beside it that has one (the helpers come first, and the lay stage places in
+   order). Issue #130 (real bot Clj_r18, in a flooded pocket one block deep with the hole of the
+   water beside its feet): the climb south was allowed in every way but the feet in water, which
+   no filler was laid to dry because one of the three cells had no support, so it was :boxed
+   three times in 600 ms."
   [world _feet cells]
-  (let [cells (wet-feet world cells)]
-    (when (and (seq cells) (every? #(place/support world %) cells) (filler world (count cells)))
-      cells)))
+  (let [wet (wet-feet world cells)
+        [x y z] (first cells)
+        feet [x (- (long y) 2) z]
+        helper (fn [[ux uy uz :as u]]
+                 (when-not (place/support world u)
+                   (first (for [[dx _ dz] path/around
+                                :let [n [(+ ux dx) uy (+ uz dz)]]
+                                :when (and (not= n feet)
+                                           (not-any? #{n} wet)
+                                           (= :water (terrain/fluid-kind world n))
+                                           (place/support world n))]
+                            n))))
+        helpers (vec (distinct (keep helper wet)))
+        all (into helpers wet)]
+    (when (and (seq wet)
+               (every? #(or (place/support world %) (some (set helpers) (neighbours %))) wet)
+               (filler world (count all)))
+      all)))
 
 (defn up-lay
   "The cells to lay before a stair up from feet can be cut: the seal over the water beside its
