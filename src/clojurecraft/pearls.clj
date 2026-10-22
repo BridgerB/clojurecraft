@@ -869,7 +869,14 @@
    it in the open and died); hurt, a meal when the food is under hunger/heal-level (blaze/meal:
    health comes back only from there), and in the burrow a :lookout where it is, never out to
    the mouth (the same batch's run 3 went from the burrow's end to its mouth and back, hurt,
-   for twelve minutes); no burrow near and one to provoke, coming or at hand, one dug there
+   for twelve minutes), and with no burrow and none coming a :lookout too, never a walk or a
+   roam in the open (batch pearls-warped7-a, plan run 39714009099, probe 39723064504: run 5
+   roamed the floor at 7 health with its burrow given up and no enderman within 32, and was
+   slain at 36 minutes); in the burrow with an angry one near the mouth (angry-near) a
+   :lookout, and after lure-lookouts of them since the last walk (lure?) a walk to the mouth to
+   bring it, the angry one sending the bot straight back in from outside (batch
+   pearls-warped7-a's run 2 stood thirty-two minutes over two that never came); no burrow near
+   and one to provoke, coming or at hand, one dug there
    (:burrow, a pickaxe held) away from it, so the stare goes from its mouth, when one cut from
    the feet would end in a shelter (burrowable?), else a walk to the nearest cell one would
    (burrow-site; batch pearls-warped-e, plan run 39164914828, run 1: on broken ground the
@@ -951,7 +958,8 @@
                    (and (not (pickaxe? world)) (not (contains? (:plan/blacklist world #{}) eid)))))
           {:intent/kind :fight :intent/target eid :intent/for :pearls}
           meal meal
-          (and in? (or hurt? bid)) {:intent/kind :lookout :intent/for :pearls}
+          (or (and hurt? (nil? home) (nil? ce)) (and in? (or hurt? bid)))
+          {:intent/kind :lookout :intent/for :pearls}
           (and in? aid (lure? world)) {:intent/kind :walk :intent/target mouth :intent/for :shelter}
           (and in? aid) {:intent/kind :lookout :intent/for :pearls}
           digs? {:intent/kind :burrow :intent/dir dir :intent/for :pearls}

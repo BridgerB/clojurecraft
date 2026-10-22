@@ -414,6 +414,14 @@
                              row
                              plan/goals))
         "hurt in the burrow with none coming: it stays, not out to the mouth")
+    ;; batch pearls-warped7-a (plan run 39714009099, probe 39723064504) run 5: pearls from five
+    ;; kills, then, its burrow given up and its health at 7, roamed the floor with no enderman
+    ;; within 32 and was slain at 36 minutes
+    (is
+     (= {:intent/kind :lookout :intent/for :pearls}
+        (plan/next-intent (assoc (standing {7 far}) :player/health 6.0) row plan/goals))
+     "hurt with no burrow and none coming: it stands where it is till its health is back, no
+         walk or roam in the open")
     (is (= :eat
            (:intent/kind (plan/next-intent (-> (burrowed [8.5 61.0 8.5] {7 far})
                                                (assoc :player/health 6.0 :player/food 15)
