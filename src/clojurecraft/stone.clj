@@ -254,9 +254,11 @@
    did. A corridor or strip with nothing to lay was cut again from the cell next to the last
    one that died, a cell a lap, for the whole window (issues #37, #71 and #62's causeway and
    pillar cases); from there the order falls through to the walk home, the retreat and the
-   climb."
+   climb. The cells a boxed climb crossed (:plan/boxed-route) count as boxed too: the bot's own
+   stairs-up ends :boxed away from the cell that died, and the next stairs-down began from there
+   (issue #37, one-wide strips of floor over open air)."
   [world [x y z :as feet]]
-  (let [boxed (:plan/boxed-at world #{})]
+  (let [boxed (into (:plan/boxed-at world #{}) (:plan/boxed-route world))]
     (boolean (or (contains? boxed feet)
                  (some (fn [[dx dz]] (contains? boxed [(+ x dx) y (+ z dz)])) stairs/directions)))))
 
@@ -408,6 +410,42 @@
                (some cuttable? stairs/directions))
       {:intent/kind :stairs-down :intent/to-y to})))
 
+(def flow-exit-radius 5)              ; blocks on the plane within which the way out of a shallow flow looks for dry ground
+(def flow-exit-candidates 8)          ; the nearest dry cells a route is planned to before none counts as in reach
+
+(defn wet-feet?
+  "Is there water in the feet cell while the body is not afloat (:player/in-water? wants the
+   body deeper): a shallow flow over a floor."
+  [world]
+  (and (not (:player/in-water? world)) (= :water (terrain/fluid-kind world (intent/feet world)))))
+
+(defn flow-exit
+  "A walk to the nearest standable cell with no water in it within flow-exit-radius of the feet,
+   a block up or down too, a route reaches (never a cell of :plan/boxed-at or :plan/boxed-route),
+   tagged :retreat; nil when the feet are not in a shallow flow (wet-feet?). Issue #130 (real bot
+   Clj_r18, at the mouth of a flooded tunnel with air a few cells east): the feet stood in a flow
+   that is no :player/in-water?, so retreat had no swim to take and found no route from a wet
+   start, and the build's climb was :boxed three times in 600 ms; the swim-out is no way out
+   there (it is done at once on dry-land?)."
+  [world]
+  (when (wet-feet? world)
+    (let [[x y z] (intent/feet world)
+          [px _ pz] (:player/pos world)
+          boxed (into (:plan/boxed-at world #{}) (:plan/boxed-route world))
+          r flow-exit-radius]
+      (->> (for [dx (range (- r) (inc r))
+                 dz (range (- r) (inc r))
+                 dy [0 1 -1]]
+             [(+ x dx) (+ y dy) (+ z dz)])
+           (remove boxed)
+           (filter #(and (path/standable? world %) (not= :water (terrain/fluid-kind world %))))
+           (sort-by (fn [[cx _ cz]]
+                      (physics/horizontal-distance [px 0 pz] [(+ cx 0.5) 0 (+ cz 0.5)])))
+           (take flow-exit-candidates)
+           (map (fn [c] {:intent/kind :walk :intent/target c :intent/for :retreat}))
+           (filter #(intent/routable? world %))
+           first))))
+
 (defn retreat
   "Away from where nothing can be cut: out of water first when the feet are in it (a :swim-out for
    :retreat, done on dry land), else a walk to the end of a route at least retreat-distance
@@ -437,7 +475,9 @@
                        (and (= :none (:path/status r)) (contains? boxed feet))
                        (or (last (remove boxed (:path/waypoints r)))
                            (when-not (or (= feet start) (contains? boxed start)) start)))]
-      (when target {:intent/kind :walk :intent/target target :intent/for :retreat}))))
+      (if target
+        {:intent/kind :walk :intent/target target :intent/for :retreat}
+        (flow-exit world)))))
 
 (defn dead-end-retreat
   "retreat from where nothing could be cut, the feet cell it leaves named a dead end
