@@ -60,6 +60,27 @@
         "a chicken is not hunted")
     (is (plan/done-by (standing 8 {} {7 (animal :zombie [11.5 64.0 8.5])}) hunt-row))))
 
+(deftest with-the-portal-iron-in-hand-meals-are-hunted-for-the-nether
+  ;; sim race 39712220957 (issue #501): a bot at food 16 reached a fortress with nothing to eat,
+  ;; hurt, and no food under 18 heals: a rest failed :no-heal
+  (let [cow {5 (animal :cow [11.5 64.0 8.5])}
+        kit {0 (item :flint_and_steel 1) 1 (item :water_bucket 1)}]
+    (is (not (plan/done-by (standing 20 kit cow) hunt-row))
+        "fed, kit held, no food: a cow is hunted")
+    (is (= {:intent/kind :fight :intent/target 5 :intent/for :hunt}
+           (plan/next-intent (standing 20 kit cow) hunt-row plan/goals)))
+    (is (plan/done-by (standing 20 (assoc kit 2 (item :bread 3)) cow) hunt-row)
+        "provision-wanted foods held")
+    (is (not (plan/done-by (standing 20 (assoc kit 2 (item :bread 2)) cow) hunt-row))
+        "two is under it")
+    (is (plan/done-by (standing 20 {} cow) hunt-row) "no kit yet: no trip for food")
+    (is (plan/done-by (standing 20 {0 (item :flint_and_steel 1)} cow) hunt-row)
+        "the water bucket is the kit's too")
+    (is (plan/done-by (standing 20 kit {}) hunt-row) "no animal: the portal is not held up")
+    (is (plan/done-by (assoc (standing 20 kit cow) :player/dimension "minecraft:the_nether")
+                      hunt-row)
+        "the Nether has no game: only the overworld provisions")))
+
 (deftest a-hunt-running-is-never-done-under-it
   ;; the cow dies, game has none, but the fight is not over until it sees the death: the row
   ;; stays undone so the planner does not abandon it (feat/259-hunt 8ed7f50)

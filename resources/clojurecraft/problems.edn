@@ -289,6 +289,7 @@
    "A tunnel stands ringed with lava (an arrival portal cast into a lava lake) only by capping the lava beside the cells a step opens first, a block placed into it from the stand, when a solid neighbour holds each and a filler is carried; and a body held by the edge of a block with the cell under its centre air steps back onto a standable floor beside it before it chooses a step (issues #286, #284)"
    "A step that lays a block (a replaced floor, a lava floor) is safe only with a filler carried, and soul soil, blackstone and basalt count as fillers: R3-38-1 dug a soul sand floor with none left and failed :not-held (issue #410)"
    "The Nether's tunnel is paced by its pickaxe, not its route: a stone pickaxe digs 130 blocks and by hand a block of basalt takes 6 s, so the portal kit fills to 32 sticks while the trees are a short trip, the placed table is taken along once a replacement is made, and floors are laid from dirt and netherrack before the cobblestone, cobbled deepslate and blackstone a pickaxe head takes (issue #338, R2-6-3, R2-12-1, R3-24-2)"
+   "A route's start, when the feet cell has no floor (the box over a ledge's edge), is the standable cell the box rests on (path/rests), not the first neighbour in search order, which could lie across a gap with no way to the target (issue #284, R1-26-1)"
    "The model's natural Nether arrival needs room for a four-by-five portal frame in either horizontal axis, not just a standing cell: R4/12 and R4/4 arrived on isolated gravel above lava and correctly refused every tunnel step, blocked (issue #286)"]
   :problem/risks
   ["Stale overworld columns answer Nether lookups (a brick reported exactly 64 blocks off)"
@@ -374,6 +375,8 @@
    "A blaze hovering out of reach, never attacked"
    "A spawner's delay (natural ones 10 to 40 s) longer than a planner wait, failing a plan that only had to stand there"
    "A rod lying where no walk reaches it: on the spawner, in lava"
+   "A drop lying in a pit under the floor (a half block of pickup reach) or inside a block placed over it, stood over until the collect fails :not-picked-up (issue #500): the pit's cell is walked onto (fetch-walk), the one in stone left"
+   "Hurt in the Nether with no food held: health comes back only from food 18, and a rest fails :no-heal (issue #501): the hunt row stocks provision-wanted foods in the overworld once the portal's iron is held, and a rest that cannot heal (food under 18, nothing to eat) is held in cover, not failed"
    "Wither skeletons beside the spawner" "Peaceful: no blazes at all"]
   :problem/done
   "RCON: seven or more blaze rods in the bot's inventory (clear <bot> minecraft:blaze_rod 0), from the nether arena's spawner and from a fortress pad."
