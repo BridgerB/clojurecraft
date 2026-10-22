@@ -1136,3 +1136,13 @@
     (is (stairs/ahead-boxed? {:plan/boxed-at #{[6 60 8]}} feet [-1 0]) "the cell beyond boxed")
     (is (not (stairs/ahead-boxed? {:plan/boxed-at #{[6 60 8]}} feet [1 0])) "the other way is free")
     (is (not (stairs/ahead-boxed? {} feet [-1 0])) "nothing boxed")))
+
+(deftest a-cell-adjoining-a-boxed-one-is-boxed-for-the-descent
+  (let [w (assoc (standing 48) :plan/boxed-at #{[6 48 5]})
+        row {:goal/depth 16}]
+    (is (stone/adjoins-boxed? w [5 48 5]) "beside a boxed cell")
+    (is (stone/adjoins-boxed? w [6 48 5]) "on it")
+    (is (not (stone/adjoins-boxed? w [5 49 5])) "a level above is another cell")
+    (is (not (stone/adjoins-boxed? w [4 48 5])) "two away is free")
+    (is (nil? (stone/stairs w row)) "no stair from beside the cell a staircase died on")
+    (is (some? (stone/stairs (assoc w :plan/boxed-at #{}) row)))))

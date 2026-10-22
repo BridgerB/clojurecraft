@@ -248,6 +248,18 @@
          (filter #(intent/routable? world %))
          first)))
 
+(defn adjoins-boxed?
+  "Do the feet [x y z] stand in :plan/boxed-at or on a cell beside one on the plane, at the same
+   height: a staircase, tunnel or deeper stair started there ends :boxed as the one beside it
+   did. A corridor or strip with nothing to lay was cut again from the cell next to the last
+   one that died, a cell a lap, for the whole window (issues #37, #71 and #62's causeway and
+   pillar cases); from there the order falls through to the walk home, the retreat and the
+   climb."
+  [world [x y z :as feet]]
+  (let [boxed (:plan/boxed-at world #{})]
+    (boolean (or (contains? boxed feet)
+                 (some (fn [[dx dz]] (contains? boxed [(+ x dx) y (+ z dz)])) stairs/directions)))))
+
 (defn stairs
   "The staircase to cut when nothing is in sight: stair-depth down from the feet, never below
    the row's :goal/depth, which a mine row's staircase carries as :intent/floor-to (how far a
@@ -258,7 +270,7 @@
   [world {:goal/keys [depth act]}]
   (let [feet (long (math/floor (physics/y-of (:player/pos world))))
         to (cond-> (- feet stair-depth) depth (max depth))]
-    (when (and (< to feet) (not (contains? (:plan/boxed-at world #{}) (intent/feet world))))
+    (when (and (< to feet) (not (adjoins-boxed? world (intent/feet world))))
       (cond-> {:intent/kind :stairs-down :intent/to-y to}
         (and depth (= :mine act)) (assoc :intent/floor-to depth)))))
 
@@ -354,7 +366,7 @@
                                                                                home))
                                                0)])
                         stairs/directions)]
-    (when-not (contains? (:plan/boxed-at world #{}) feet)
+    (when-not (adjoins-boxed? world feet)
       (first (filter (fn [d]
                        (let [cells (stairs/level-cells feet d)]
                          (and (not= back d)
@@ -391,7 +403,7 @@
                     (let [cells (stairs/stair-cells feet d)]
                       (or (stairs/level-safe? world cells)
                           (and (stairs/level-clear? world cells) (stairs/lay world feet cells)))))]
-    (when (and (not (contains? (:plan/boxed-at world #{}) feet))
+    (when (and (not (adjoins-boxed? world feet))
                (> to (+ chunk/min-y floor-margin))
                (some cuttable? stairs/directions))
       {:intent/kind :stairs-down :intent/to-y to})))
@@ -481,7 +493,7 @@
     (when-let [[hx hy hz] (:plan/go-at world)]
       (let [home [(long (math/floor hx)) (long (math/floor hy)) (long (math/floor hz))]
             walk {:intent/kind :walk :intent/target home :intent/for :retreat}]
-        (when (and (contains? (:plan/boxed-at world #{}) feet)
+        (when (and (adjoins-boxed? world feet)
                    (> (physics/distance (physics/centre feet) (physics/centre home))
                       home-walk-distance)
                    (intent/routable? world walk))
