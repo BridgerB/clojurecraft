@@ -49,3 +49,17 @@
                "dist" (physics/distance (game/eye w) (physics/centre cell)))))
   (println "DBG bank-block" (swim/bank-block w feet surface)
            "obstacle" (swim/obstacle w feet [2 64 8])))
+
+(let [sea (into {} (for [x (range 3 16) z (range 16) y (range 56 63)] [[x y z] blocks/water-base]))
+      w (assoc (game/init fx/opts)
+               :player/pos [3.3 63.2 8.5]
+               :world/chunks {[0 0] (world/column sea)})]
+  (println "DBG2 solid 63" (swim/solid-cell? w [3 63 8])
+           "block" (terrain/block-at w [3 63 8])
+           "block62" (terrain/block-at w [3 62 8])
+           "fluid62" (terrain/fluid-kind w [3 62 8])
+           "fluid63" (terrain/fluid-kind w [3 63 8])
+           "round" (clojure.math/round 61.97)
+           "ft" (swim/float-top w [3 63 8] 63)
+           "ft64" (swim/float-top w [3 63 8] 64)
+           "depth" swim/float-depth))
