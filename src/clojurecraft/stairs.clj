@@ -1093,8 +1093,6 @@
                                    :intent/started-tick (:time/tick world))
               (game/say (str "stairs: up the step already there toward " up-open
                              " rather than one laid toward " dir)))
-          (and needed (pillar-up? world i feet))
-          (shaft-up world "stairs: a stair up would lay its step, a pillar a level instead")
           to-lay
           (-> world
               (intent/assoc-intent :intent/dir dir

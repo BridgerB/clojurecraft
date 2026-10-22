@@ -896,9 +896,9 @@
     (is (= [[6 63 5]] (stairs/reserve-level-lay (at 1) :stairs-up cells feet))
         "a climb's step is what the reserve is for")))
 
-(deftest a-stair-up-over-open-air-pillars-rather-than-laying-its-step
-  ;; issue #37 (real bot Clj_r16, snapshot real-7-s2): a climb over open air laid a holder and a
-  ;; step a level, two blocks a rise, and its eight were gone five levels up; a pillar is one
+(deftest a-climb-takes-the-step-already-there-before-laying-one
+  ;; issue #37 (real bot Clj_r16, snapshot real-7-s2): a climb laid a holder and a step a level,
+  ;; two blocks a rise, toward the heading it began with, a step standing toward another
   (let [i {:intent/kind :stairs-up
            :intent/to-y 70
            :intent/dir [1 0]
@@ -910,14 +910,13 @@
                     :plan/intent i))
         stage #(:intent/stage (:plan/intent
                                (stairs/stairs-stage % (:plan/intent %) {:event/kind :tick})))]
-    (is (= :shaft (stage (at i))) "the step is missing: the shaft")
+    (is (= :lay (stage (at i))) "no step anywhere: one is laid")
     (is (= :open (stage (assoc-in (at i) [:world/chunks [0 0]] (world/column {[4 64 5] 1}))))
         "a step already there to the west is climbed, and nothing laid")
     (is (= [-1 0]
            (let [w (assoc-in (at i) [:world/chunks [0 0]] (world/column {[4 64 5] 1}))]
              (:intent/dir (:plan/intent
-                           (stairs/stairs-stage w (:plan/intent w) {:event/kind :tick}))))))
-    (is (= :lay (stage (at (assoc i :intent/no-shaft :unsafe)))) "a shaft given up lays the step")))
+                           (stairs/stairs-stage w (:plan/intent w) {:event/kind :tick}))))))))
 
 (deftest a-boxed-climb-pillars-up-from-gravel
   ;; issue #37 (sim snapshots R3-15-1 and R3-15-2): a bot on mineshaft planks over open air holding
