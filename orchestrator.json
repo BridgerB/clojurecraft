@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-22T13:25:46.877Z",
+  "at" : "2026-10-22T13:26:57.559Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -40,8 +40,8 @@
   }, {
     "number" : 518,
     "title" : "Bot stops at portal: no-bucket",
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : true
   }, {
     "number" : 515,
     "title" : "Bot stops at portal-kit: unreachable",
@@ -93,7 +93,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 518,
-    "move" : "assign"
+    "move" : "leave",
+    "why" : "hands-off label"
   }, {
     "issue" : 515,
     "move" : "leave",
