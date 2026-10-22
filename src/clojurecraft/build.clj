@@ -960,18 +960,25 @@
    floor to stand on, failed :no-path three times. Sim race 39550827333 (issue #162, world R3/43
    seed 2): the bridge laid three cells from the end of the stairs up and the fourth lay past
    the reach of the place, so the plain walk to the stand over the gap was tried and failed
-   :no-path, three times in the plan."
+   :no-path, three times in the plan. A gap that holds a block the server will not place into (a
+   cobweb: not solid, not replaceable) is dug first, the floor laid after it: real race
+   39781947117 runner 2 (issue #44, Clj_r14) tunnelled west through an abandoned mineshaft at
+   y 1, laid a cobblestone into a cobweb in the floor three times, :rejected."
   [world stand]
   (when-let [gap (and (held? world :cobblestone) (floor-gap world stand))]
-    (if (<= (physics/distance (game/eye world) (physics/centre gap)) place/place-reach)
-      (when-let [c (foundation world gap)]
-        {:intent/kind :place :intent/item :cobblestone :intent/cell c})
-      (when-let [edge (before-gap world stand gap)]
-        (let [walk {:intent/kind :walk :intent/target edge :intent/for :build}]
-          (when (and (not (intent/centred? world edge))
-                     (path/standable? world edge)
-                     (intent/routable? world walk))
-            walk))))))
+    (cond (and (<= (physics/distance (game/eye world) (physics/centre gap)) place/place-reach)
+               (not (blocks/placeable-into? (terrain/block-at world gap))))
+          (assoc (intent/child-dig gap) :intent/drop-ok? true)
+          (<= (physics/distance (game/eye world) (physics/centre gap)) place/place-reach)
+          (when-let [c (foundation world gap)]
+            {:intent/kind :place :intent/item :cobblestone :intent/cell c})
+          :else
+          (when-let [edge (before-gap world stand gap)]
+            (let [walk {:intent/kind :walk :intent/target edge :intent/for :build}]
+              (when (and (not (intent/centred? world edge))
+                         (path/standable? world edge)
+                         (intent/routable? world walk))
+                walk))))))
 
 (defn stand-walk
   "A walk to stand, a cell of the build's way, when the feet can stand in it as it is
