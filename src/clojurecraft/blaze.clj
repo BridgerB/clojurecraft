@@ -125,9 +125,11 @@
 (defn fetchable?
   "Can the bot pick drop e up: its cell is not solid (a drop a block was placed over, no
    contact reaches), and it lies in reach of the pickup box from the floor, or a route walks
-   onto its cell (under-reach?)?"
+   onto its cell (under-reach?)? Never one hanging over a drop (drops/over-void?): a rod lost to
+   a lava sea, and a collect of it would be done at once, the planner choosing it again."
   [world e]
-  (and (not (some-> (terrain/block-at world (hunt/cell (:entity/pos e)))
+  (and (not (drops/over-void? world e))
+       (not (some-> (terrain/block-at world (hunt/cell (:entity/pos e)))
                     blocks/solid?))
        (or (not (drops/under-reach? world e)) (intent/routable? world (fetch-walk e)))))
 
