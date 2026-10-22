@@ -41,6 +41,9 @@
          "mouth" (pr-str (:pearls/mouth world))
          "shelter-fn" (pr-str (pearls/shelter world))
          "blacklist" (pr-str (:plan/blacklist world)))
+    (out "  pos" (pr-str pos) "on-ground" (:player/on-ground? world))
+    (let [[x y z] (intent/feet world)]
+      (doseq [dx [-1 0 1] dz [-1 0 1]] (out "  column" dx dz (column world [(+ x dx) y (+ z dz)]))))
     (when-let [m (:pearls/mouth world)] (out "  mouth column" (column world m)))
     (when-let [s (:pearls/shelter world)] (out "  end column" (column world s)))
     (doseq [[eid e] (sort-by (fn [[_ e]] (physics/distance pos (:entity/pos e)))
