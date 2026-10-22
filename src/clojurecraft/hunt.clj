@@ -178,15 +178,17 @@
    first route that reaches a forage-goal (walkable-end), along the heading the leg turns to
    (forage-headings, a quarter right of the last) and then the headings after it, at the leg's
    forage-reaches farthest first; nil when no heading has a route at any reach. leg is the one
-   after the leg that found one."
-  [world {:forage/keys [leg]}]
-  (let [feet (intent/feet world)
-        start (path/feet-cell (:player/pos world))]
-    (some (fn [[reach k]]
-            (let [heading (nth forage-headings (mod (+ (long leg) k) (count forage-headings)))
-                  r (path/plan world start (forage-goal feet heading reach) {})]
-              (when-let [to (walkable-end feet r)] [to (+ (long leg) k 1)])))
-          (for [reach (forage-reaches leg) k (range (count forage-headings))] [reach k]))))
+   after the leg that found one. plan is the route finder, path/plan unless given: [world start
+   goal opts] -> a route."
+  ([world state] (forage-leg path/plan world state))
+  ([plan world {:forage/keys [leg]}]
+   (let [feet (intent/feet world)
+         start (path/feet-cell (:player/pos world))]
+     (some (fn [[reach k]]
+             (let [heading (nth forage-headings (mod (+ (long leg) k) (count forage-headings)))
+                   r (plan world start (forage-goal feet heading reach) {})]
+               (when-let [to (walkable-end feet r)] [to (+ (long leg) k 1)])))
+           (for [reach (forage-reaches leg) k (range (count forage-headings))] [reach k])))))
 
 (defn foraging?
   "Does the bot go on looking for animals: provisioning?, forage-ms not past since its first leg, no look

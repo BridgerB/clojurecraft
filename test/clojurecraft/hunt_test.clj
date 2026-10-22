@@ -12,7 +12,6 @@
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.sim :as sim]
-            [clojurecraft.terrain :as terrain]
             [clojurecraft.world :as world]))
 
 (use-fixtures :once fx/instrumented)
@@ -187,11 +186,6 @@
   [now]
   (assoc (standing 20 kit-held {}) :time/now now :time/tick 0))
 
-(defn route-to
-  "A path/plan stand-in whose every route is found and ends at cell."
-  [cell]
-  (constantly {:path/status :found :path/waypoints [cell]}))
-
 (deftest with-no-animal-in-reach-the-portal-bot-searches-for-one
   ;; issue #501: herds are about one chunk in ten, and the Nether has no game
   (let [w (provisioning 1000)]
@@ -232,38 +226,44 @@
         "six foods held: enough")
     (is (not (hunt/foraging? (assoc w :player/dimension "minecraft:the_nether")))
         "the Nether has no game")
-    (with-redefs [terrain/under-sky? (constantly false)]
-      (is (not (hunt/foraging? w)) "deep in the ground there are no animals to find"))))
+    (is (not
+         (hunt/foraging?
+          (assoc w :world/chunks {[0 0] (world/column {[8 70 8] (blocks/default-state :stone)})})))
+        "under a roof: deep in the ground there are no animals to find")))
+
+(defn stub-plan
+  "A route finder for forage-leg: records [goal-pos range] of every goal asked in asked, answers
+   {:path/status :none} where none? holds of the goal's point, else found when found and the
+   status given (a :partial one) with the one waypoint [30 64 8] ending it."
+  [asked none? status]
+  (fn [_ _ goal _]
+    (swap! asked conj [(:goal/pos goal) (:goal/range goal)])
+    (if (none? (:goal/pos goal))
+      {:path/status :none :path/waypoints []}
+      {:path/status status :path/waypoints [[30 64 8]]})))
 
 (deftest a-forage-leg-turns-a-quarter-right-and-falls-back-to-the-next-way
   (let [w (provisioning 1000)
         asked (atom [])
-        plan-at (fn [none?]
-                  (fn [_ _ goal _]
-                    (swap! asked conj [(:goal/pos goal) (:goal/range goal)])
-                    (if (none? (:goal/pos goal))
-                      {:path/status :none :path/waypoints []}
-                      {:path/status :found :path/waypoints [[60 64 8]]})))
-        leg-from (fn [leg] (hunt/forage-leg w {:forage/since 0 :forage/leg leg}))]
-    (with-redefs [path/plan (plan-at (constantly false))]
-      (is (= [[60 64 8] 1] (leg-from 0)))
-      (is
-       (= [[-40 64 8] 95] (first @asked))
-       "leg 0 goes east: the goal's point is the reach behind the feet, the range twice it less one")
-      (is (= [[60 64 8] 3] (leg-from 2)) "leg 2 goes west")
-      (is (= [[60 64 8] 5] (leg-from 4)) "the way round starts again after four"))
-    (with-redefs [path/plan (plan-at (fn [[x _ _]] (< x 8)))]
-      (is
-       (= [[60 64 8] 2] (leg-from 0))
-       "no route east at 48: south, a quarter right, is taken, and the next leg turns on from it"))
-    (with-redefs [path/plan (plan-at (fn [[x _ _]] (> x 8)))]
-      (is (= [[60 64 8] 4] (leg-from 2)) "no route west at 48: north"))
-    (with-redefs [path/plan (constantly {:path/status :none :path/waypoints []})]
-      (is (nil? (leg-from 0)) "no way at all"))
-    (with-redefs [path/plan (constantly {:path/status :partial :path/waypoints [[30 64 8]]})]
-      (is (= [[30 64 8] 1] (leg-from 0)) "a route that spent its budget but goes on is walked"))
-    (with-redefs [path/plan (constantly {:path/status :partial :path/waypoints [[10 64 8]]})]
-      (is (nil? (leg-from 0)) "one that goes nowhere is not"))))
+        leg-from (fn [plan leg] (hunt/forage-leg plan w {:forage/since 0 :forage/leg leg}))
+        always (stub-plan asked (constantly false) :found)]
+    (is (= [[30 64 8] 1] (leg-from always 0)))
+    (is
+     (= [[-40 64 8] 95] (first @asked))
+     "leg 0 goes east: the goal's point is the reach behind the feet, the range twice it less one")
+    (is (= [[30 64 8] 3] (leg-from always 2)) "leg 2 goes west")
+    (is (= [[30 64 8] 5] (leg-from always 4)) "the way round starts again after four")
+    (is (= [[30 64 8] 2] (leg-from (stub-plan (atom []) (fn [[x _ _]] (< x 8)) :found) 0))
+        "no route east at 48: south, a quarter right, is taken, and the next leg turns on from it")
+    (is (= [[30 64 8] 4] (leg-from (stub-plan (atom []) (fn [[x _ _]] (> x 8)) :found) 2))
+        "no route west at 96: north")
+    (is (nil? (leg-from (stub-plan (atom []) (constantly true) :found) 0)) "no way at all")
+    (is (= [[30 64 8] 1] (leg-from (stub-plan (atom []) (constantly false) :partial) 0))
+        "a route that spent its budget but goes on is walked")
+    (is (nil? (hunt/forage-leg (fn [_ _ _ _] {:path/status :partial :path/waypoints [[10 64 8]]})
+                               w
+                               {:forage/since 0 :forage/leg 0}))
+        "one that goes nowhere is not")))
 
 (deftest the-legs-go-round-a-square-that-grows
   (is (= [48 32 16] (hunt/forage-reaches 0)))
@@ -272,22 +272,25 @@
   (is (= [96 48 32 16] (hunt/forage-reaches 40)) "never past what the server shows"))
 
 (deftest the-forage-intent-becomes-the-walk-it-chose-or-ends-the-search
-  (let [w (assoc (provisioning 1000)
-                 :plan/intent
-                 {:intent/kind :forage :intent/for :hunt :intent/status :active})]
-    (with-redefs [path/plan (route-to [60 64 8])]
-      (let [out (intent/run w (:plan/intent w) {:event/kind :tick :event/now 1000})]
-        (is (= :walk (get-in out [:plan/intent :intent/kind])))
-        (is (= [60 64 8] (get-in out [:plan/intent :intent/target])))
-        (is (= :hunt (get-in out [:plan/intent :intent/for])))
-        (is (= {:forage/since 1000 :forage/leg 1} (:hunt/forage out)))))
-    (with-redefs [path/plan (constantly {:path/status :none :path/waypoints []})]
-      (let [out (intent/run w (:plan/intent w) {:event/kind :tick :event/now 1000})]
-        (is (intent/done? (:plan/intent out)))
-        (is (= (+ 1000 hunt/forage-retry-ms) (get-in out [:hunt/forage :forage/retry-at])))
-        (is (not (hunt/foraging? out)) "it waits before it looks again")
-        (is (hunt/foraging? (assoc out :time/now (+ 1000 hunt/forage-retry-ms))))
-        (is (plan/done-by (dissoc out :plan/intent) hunt-row) "the portal goes on meanwhile")))))
+  ;; the real route finder: four columns east of the bot hold a cell 48 blocks on, one column
+  ;; none in any direction
+  (let [col (world/column {})
+        on (fn [chunks]
+             (assoc (provisioning 1000)
+                    :world/chunks chunks
+                    :plan/intent {:intent/kind :forage :intent/for :hunt :intent/status :active}))
+        run (fn [w] (intent/run w (:plan/intent w) {:event/kind :tick :event/now 1000}))
+        wide (run (on (zipmap [[0 0] [1 0] [2 0] [3 0]] (repeat col))))
+        alone (run (on {[0 0] col}))]
+    (is (= :walk (get-in wide [:plan/intent :intent/kind])))
+    (is (= :hunt (get-in wide [:plan/intent :intent/for])))
+    (is (< 55 (first (get-in wide [:plan/intent :intent/target]))) "east, past 48 blocks on")
+    (is (= {:forage/since 1000 :forage/leg 1} (:hunt/forage wide)))
+    (is (intent/done? (:plan/intent alone)))
+    (is (= (+ 1000 hunt/forage-retry-ms) (get-in alone [:hunt/forage :forage/retry-at])))
+    (is (not (hunt/foraging? alone)) "it waits before it looks again")
+    (is (hunt/foraging? (assoc alone :time/now (+ 1000 hunt/forage-retry-ms))))
+    (is (plan/done-by (dissoc alone :plan/intent) hunt-row) "the portal goes on meanwhile")))
 
 (deftest an-animal-whose-cell-a-walk-failed-at-is-not-hunted-again
   ;; issue #162 (snapshot R1-41-1): fail-intent blacklists the walk's cell, the hunt skipped
