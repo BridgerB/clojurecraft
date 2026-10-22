@@ -28,7 +28,7 @@
 (let [[file & t] *command-line-args*
       target (mapv parse-long t)
       snap (capture/read-world file)
-      w (simrace/own-world snap)
+      w (simrace/world-for! snap)
       {:keys [world] :as m} (simrace/moment-of snap w)
       stage (simrace/stage-of snap)
       stop? #(or (plan/done? %) (plan/failed? %) (contains? (:plan/reached %) stage))
