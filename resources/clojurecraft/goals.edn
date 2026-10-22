@@ -86,7 +86,8 @@
   :goal/target? true
   :goal/until "ingots"
   :goal/doc
-  "four iron ingots, the iron kit's: raw iron mined with a stone pickaxe and smelted with planned fuel"
+  "four iron ingots, the iron kit's: raw iron mined with a stone pickaxe and smelted with planned fuel; twenty-four sticks are kept too, twelve stone pickaxes' handles, cut at the trees where the ore is smelted, the last surface the bot passes before the descent to the lava: the Nether's tunnel wears a pickaxe out every 65 blocks, the fortress is 250 to 630 blocks off and the Nether has no wood (issue #338: sim traces came through the portal with one to five sticks and dug by hand at 11 s a step)"
+  :goal/spares {:item/stick 24}
   :goal/provides {:item/iron_ingot 4}
   :goal/done? :provided?}
  {:goal/id :bucket
@@ -123,8 +124,9 @@
   :goal/target? true
   :goal/until "portal-kit"
   :goal/doc
-  "what a portal cast spends that the iron kit does not hold: an empty bucket to carry lava from the pool to each hole, beside the filled water bucket poured over it and scooped back (issue #124). The few blocks a cast places where the rock is missing are asked for by the build itself, counted from the plan for the place chosen (build/held-first, blocks-needed), never a constant. The water bucket is counted here too: a chained run reaches a step once and never asks for it again, and race 38477665442 reached this one holding its only bucket still empty, then filled it, and the cast found no bucket for the lava (issue #49)"
+  "what a portal cast spends that the iron kit does not hold: an empty bucket to carry lava from the pool to each hole, beside the filled water bucket poured over it and scooped back (issue #124). The few blocks a cast places where the rock is missing are asked for by the build itself, counted from the plan for the place chosen (build/held-first, blocks-needed), never a constant. Twenty-four sticks are kept too, twelve stone pickaxes' handles cut once from the trees at the surface, the last place the bot passes before the descent: the Nether's tunnel wears a pickaxe out every 65 blocks, the fortress is 250 to 630 blocks off, and the Nether has no wood (issue #338: sim traces came through the portal with one to five sticks and dug by hand at 11 s a step). The water bucket is counted here too: a chained run reaches a step once and never asks for it again, and race 38477665442 reached this one holding its only bucket still empty, then filled it, and the cast found no bucket for the lava (issue #49)"
   :goal/provides {:item/water_bucket 1 :item/bucket 1}
+  :goal/spares {:item/stick 24}
   :goal/done? :provided?}
  {:goal/id :cast-one
   :goal/priority 14
@@ -224,9 +226,9 @@
  {:goal/id :mine-iron
   :goal/priority 10
   :goal/doc
-  "dig the nearest exposed iron ore with a stone pickaxe, or cut stairs down toward it and tunnel at y 16, where the game makes iron densest. A spare pickaxe is made before more ore is dug, gathering the wood when a walk to a trunk or stairs up to one can be started, so the last one is not worn out at the bottom. A walk back up the dug shaft is not that: it reaches the sky, not a tree. Four sticks are kept too, two more pickaxes' handles, gathered up at the trees before the descent: the stairs down, the tunnels and the climb out for the water dig some 390 blocks, three stone pickaxes' worth, and race 38477665442 bots Clj_r23 and Clj_r06 left the forest with three logs, made three pickaxes and broke the last on the climb (issue #39)"
+  "dig the nearest exposed iron ore with a stone pickaxe, or cut stairs down toward it and tunnel at y 16, where the game makes iron densest. A spare pickaxe is made before more ore is dug, gathering the wood when a walk to a trunk or stairs up to one can be started, so the last one is not worn out at the bottom. A walk back up the dug shaft is not that: it reaches the sky, not a tree. Four sticks are kept too, two more pickaxes' handles, gathered up at the trees before the descent: the stairs down, the tunnels and the climb out for the water dig some 390 blocks, three stone pickaxes' worth, and race 38477665442 bots Clj_r23 and Clj_r06 left the forest with three logs, made three pickaxes and broke the last on the climb (issue #39). Twenty-four sticks, a slot, twelve pickaxes' handles: the stairs down, the tunnels and the climb out wear three, and a stone pickaxe wears out in the Nether's tunnel in about 65 blocks, so the 250 to 630 blocks to the fortress take four to ten more, with no wood there (probes 39778484412 and 39846994607, issue #338: with four sticks the bots came through the portal with one to five and dug by hand; with 24, 17 to 23, and R2/12 made eight pickaxes in 36 minutes)"
   :goal/holds {:item/stone_pickaxe 1}
-  :goal/spares {:item/stone_pickaxe 1 :item/stick 4}
+  :goal/spares {:item/stone_pickaxe 1 :item/stick 24}
   :goal/provides {:item/raw_iron 1}
   :goal/act :mine
   :goal/blocks [:iron_ore :deepslate_iron_ore]

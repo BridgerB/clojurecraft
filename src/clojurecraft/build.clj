@@ -566,7 +566,8 @@
    the floor never runs up to it; the h given first), four to station-depth in front of the frame
    and up to station-span aside of the landing's column, that the feet can stand in once opened
    (a firm walking floor under it, it and the head openable, no fluid touching them, outside the
-   footprint) and from which lava sources are in reach (reach-sources), with safe sight lines
+   footprint, and open? true of it, default always: a way to it that can be walked or dug) and
+   from which lava sources are in reach (reach-sources), with safe sight lines
    (safe-source?).
    At a stand the feet already centre on, the sight lines use the actual eyes, not the cell's
    exact centre: issue #380's R3/32 refill reached a stand slightly off centre, where the ray
@@ -575,7 +576,8 @@
    next stand along it is the station; the way to one runs straight out from the landing, then
    aside (refill), never along the stair. nil when none."
   ([world sources origin facing] (station-among world sources origin facing nil))
-  ([world sources origin facing prefer]
+  ([world sources origin facing prefer] (station-among world sources origin facing prefer any?))
+  ([world sources origin facing prefer open?]
    (first
     (for [h (distinct (cons (or prefer 1) (range 1 (inc max-access))))
           :when (<= 1 h max-access)
@@ -589,7 +591,8 @@
                      (openable? world stand)
                      (openable? world head)
                      (dry? world (mapcat touching [stand head]))
-                     (not (contains? (footprint origin facing h) stand)))
+                     (not (contains? (footprint origin facing h) stand))
+                     (open? stand))
           :let [pos (assoc (physics/centre stand) 1 (double (second stand)))
                 at (if (intent/centred? world stand) world (assoc world :player/pos pos))
                 srcs (filter #(safe-source? at %) (reach-sources sources stand))]
@@ -698,17 +701,11 @@
        (concat (for [z (span fz sz)] [fx z]) (for [x (rest (span fx sx))] [x sz]))
        (concat (for [x (span fx sx)] [x fz]) (for [z (rest (span fz sz))] [sx z]))))))
 
-(defn stance-block
-  "The first solid cell in the way of standing at stand: from the feet toward it, one cell
-   at a time, the body at the stand's height or the head over that. nil when that line is
-   already clear. The line goes along x first, then z, unless a cell of it is solid and may not
-   be dug (the frame's rock, cobblestone the plan places, a cell beside lava) while the line along
-   z first has none: then that one, since a way a wall bars is not the way to dig. Full run
-   4e59246 stood at a pond and the pad's stand, four blocks east, was stone inside the hill; the
-   walk at it was :none. Real snapshot real-6-s2-Clj_r05 (issue #45): the lava's stand one block
-   aside and one on from the feet, the cell between them on the x-first line a stair's floor
-   the plan places, so the line was called clear, nothing was dug and the walk failed :no-path,
-   with stone on the z-first line to dig."
+(defn stance-way
+  "{:line :digs? :walled?} of the way to stand at the feet's height: :line the cells of the straight
+   way (body and head, from the feet, along x first, or along z first when a cell of the first is
+   solid and may not be dug while the second has none), :digs? true of a cell a build's dig may
+   take (diggable?), :walled? true of a solid cell it may not."
   [world stand build origin facing]
   (let [placed? (place-cells build origin facing)
         kept? (kept origin facing)
@@ -721,6 +718,21 @@
         cells (fn [cols] (mapcat (fn [[x z]] [[x sy z] [x (inc sy) z]]) cols))
         lines (map #(cells (way-columns feet stand %)) [false true])
         line (or (first (remove #(some walled? %) lines)) (first lines))]
+    {:line line :digs? digs? :walled? walled?}))
+
+(defn stance-block
+  "The first solid cell in the way of standing at stand: from the feet toward it, one cell
+   at a time, the body at the stand's height or the head over that. nil when that line is
+   already clear. The line goes along x first, then z, unless a cell of it is solid and may not
+   be dug (the frame's rock, cobblestone the plan places, a cell beside lava) while the line along
+   z first has none: then that one, since a way a wall bars is not the way to dig. Full run
+   4e59246 stood at a pond and the pad's stand, four blocks east, was stone inside the hill; the
+   walk at it was :none. Real snapshot real-6-s2-Clj_r05 (issue #45): the lava's stand one block
+   aside and one on from the feet, the cell between them on the x-first line a stair's floor
+   the plan places, so the line was called clear, nothing was dug and the walk failed :no-path,
+   with stone on the z-first line to dig."
+  [world stand build origin facing]
+  (let [{:keys [line digs?]} (stance-way world stand build origin facing)]
     (first (filter digs? line))))
 
 (defn within-reach?
@@ -992,6 +1004,19 @@
   (let [walk {:intent/kind :walk :intent/target stand :intent/for :build}]
     (when (and (path/standable? world stand) (intent/routable? world walk)) walk)))
 
+(defn way-open?
+  "Can the feet get to stand, a cell of the build's way: it can be stood in as it is and a route
+   reaches it (stand-walk), or the line stance-block digs along has no solid cell that may not be
+   dug (stance-way: the frame's rock, a cell beside lava). Real snapshot real-4-s1-Clj_r08 (issue
+   #162): the lava's stand lay in a cave's lava lake, every line to it crossed a cell beside lava,
+   nothing was dug and the walk at the stand failed :no-path three times, the build with it. A
+   stand at another height than the feet has no line to judge here (to-height), so it is open."
+  [world stand build origin facing]
+  (let [{:keys [line walled?]} (stance-way world stand build origin facing)]
+    (boolean (or (stand-walk world stand)
+                 (not= (second stand) (long (physics/y-of (intent/feet world))))
+                 (not-any? walled? line)))))
+
 (defn toward-stand
   "The child that brings the feet to stand, a cell of the build's way (a landing, the lava's
    stand): a walk when it can be stood in and a route reaches it (stand-walk), else at its height the first block in the way dug
@@ -1102,7 +1127,12 @@
    station's stand (toward-stand, from the room's landing at the lava's height when no route
    reaches it); there, the scoop or the dig that opens the line to a source (scoop-at-station)."
   [world {:intent/keys [origin facing build access]}]
-  (let [{:keys [stand sources h]} (station world origin facing access)]
+  (let [{:keys [stand sources h]} (station-among world
+                                                 (lava-sources world)
+                                                 origin
+                                                 facing
+                                                 access
+                                                 #(way-open? world % build origin facing))]
     (cond (nil? stand) :no-station
           (not (held? world :bucket)) :no-bucket
           (intent/centred? world stand) (scoop-at-station world sources)
@@ -2040,10 +2070,10 @@
     (boolean (and (map? row) (not (make/fetch? row))))))
 
 (defn carry-sticks?
-  "Should a build take kit-sticks into its kit beside the table: fewer held, a table held or placed
-   within reach already (the table first: carry-table?, so the planks a table needs are never
-   spent on sticks), and they can be made from what is held (sticks-at-hand?) or their wood is a
-   short trip (wood-near?). A table and
+  "Should a build take kit-sticks into its kit beside the table: fewer held, a table held or
+   placed within reach already (the table first: carry-table?, so the planks a table needs are
+   never spent on sticks), and they can be made from what is held (sticks-at-hand?) or their wood
+   is a short trip (wood-near?). A table and
    cobblestone make no pickaxe without sticks: a probe of world R3/12 seed 1 from spawn on main
    (Refs #178) wore out its pickaxes in the cast holding a table, 684 cobblestone and one plank,
    no sticks, and cut stairs up through deepslate by hand for a log, fifteen seconds a block,
@@ -2092,7 +2122,10 @@
   ;; build the row's plan (:goal/build) at the site remembered while its pool can finish it
   ;; (spent?), else at one chosen now (the :build intent remembers it), its access steps up to the
   ;; lava's height (station); with none, hunt for lava (lava-hunt), else wait :no-site.
-  ;; A reachable lit portal skips the kit and table collection: only entry remains (lit-entry)
+  ;; A reachable lit portal skips the kit but not the placed table, taken along on the way in: a
+  ;; pickaxe made at the portal leaves the table standing, and the Nether has no wood for another
+  ;; (sim race probe 39782256061, issue #338, R2/12 seed 2: table held at 15 minutes, gone at 16
+  ;; in the Nether, one stick, one plank; the tunnel dug by hand for the next hour)
   [world {:goal/keys [build] :as goal} table]
   (let [{:site/keys [origin facing]}
         (let [{:site/keys [origin facing] :as site} (memory/site world)]
@@ -2109,9 +2142,9 @@
     (or (when-not (and entry
                        (or (intent/centred? world (:build/stand entry))
                            (stand-walk world (:build/stand entry))))
-          (or (held-first world goal table ops)
-              (intent/chain-next (:plan/last world) :take-table make/table-drops {})
-              (make/take-table-along world)))
+          (held-first world goal table ops))
+        (intent/chain-next (:plan/last world) :take-table make/table-drops {})
+        (make/take-table-along world)
         (cond origin
               {:intent/kind :build
                :intent/build build
