@@ -622,6 +622,30 @@
                cells))
         "the air over a pond: a bridge, never laid")))
 
+(deftest a-descent-toward-the-trees-lays-its-floor-over-water
+  ;; sim snapshot R1-4-1 (issue #186): the bot stood on a pillar twenty over the sea, the trunk
+  ;; sixty off across it, and the descent toward the trunk was refused a floor over the water
+  ;; sixteen under it, :boxed in the air. The mine's stairs still never bridge
+  (let [pond (into {} (for [x (range 6 16) z (range 16)] [[x 63 z] 0]))
+        sea (into {} (for [x (range 6 16) z (range 16)] [[x 62 z] blocks/water-base]))
+        on (fn [intent]
+             (assoc (standing 64 :cobblestone)
+                    :world/chunks {[0 0] (world/column (merge pond sea))}
+                    :plan/intent intent))
+        cells (stairs/level-cells [5 64 5] [1 0])]
+    (is (= [[6 63 5]]
+           (stairs/floor-laying
+            (on {:intent/kind :stairs-down :intent/for :trees :intent/status :active})
+            [5 64 5]
+            cells))
+        "toward the trees: the floor is laid over the water")
+    (is (nil? (stairs/floor-laying
+               (on {:intent/kind :stairs-down :intent/for :mine :intent/status :active})
+               [5 64 5]
+               cells))
+        "the mine's stairs: a bridge, never laid")
+    (is (nil? (stairs/floor-laying (on nil) [5 64 5] cells)) "no intent: never laid")))
+
 (deftest a-stair-down-turns-into-the-rock-before-it-lays-a-floor
   ;; race 38842339863 runner 4 (issue #37) bots Clj_r01 and Clj_r08: the mine's stairs down ran
   ;; along a cliff's face and a cave's wall, laying a floor before every stair with the rock a turn

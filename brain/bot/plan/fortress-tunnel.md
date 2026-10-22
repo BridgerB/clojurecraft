@@ -26,6 +26,8 @@ sourceRefs:
   - test/clojurecraft/fortress_test.clj#a-tunnel-turns-onto-ground-instead-of-pacing-in-the-portal
   - test/clojurecraft/fortress_test.clj#a-tunnel-climbs-out-of-a-dead-end-on-a-block-laid-beside-the-feet
   - test/clojurecraft/fortress_test.clj#a-tunnel-pacing-two-cells-is-blocked
+  - test/clojurecraft/fortress_test.clj#a-tunnel-waits-in-the-air-for-the-ground-before-it-fails
+  - src/clojurecraft/fortress.clj#def air-grace
   - src/clojurecraft/fortress.clj#def brick-states
   - src/clojurecraft/fortress.clj#defn bricks
   - test/clojurecraft/fortress_test.clj#fortress-bricks-use-the-indexed-current-sightings
@@ -70,7 +72,7 @@ related:
 
 # Fortress tunnel
 
-The `:fortress` target (`goals.edn`, `:goal/dimension "minecraft:the_nether"`) is done when a fortress block on record (`nether_bricks`, its fence or stairs, at y 32 or more, so never one under the lava sea) is within 6 blocks of the feet. Its planner (`plan/next-intent :fortress`) starts a `:tunnel-to` (not stone's `:tunnel`, which digs along a direction for ore) to the nearest one on record, or, with none, the next leg of a spiral search (below).
+The `:fortress` target (`goals.edn`, `:goal/dimension "minecraft:the_nether"`) is done when a fortress block on record (`nether_bricks`, its fence or stairs, at y 32 or more, so never one under the lava sea) is within 6 blocks of the feet. A `:tunnel-to` started with the feet off the ground waits up to `air-grace` 40 ticks (`:intent/airborne`) for them to land before it may fail `:blocked`: no step is safe from the air, and a bot knocked off a ledge failed three tunnels in three ticks (issue #502, R4-31-1). Its planner (`plan/next-intent :fortress`) starts a `:tunnel-to` (not stone's `:tunnel`, which digs along a direction for ore) to the nearest one on record, or, with none, the next leg of a spiral search (below).
 
 `bricks` asks `memory/positions-now` for `brick-states`, the indexed current sightings remembered by the facts' identity, before filtering the height; it never scans all sightings with `memory/latest`. Issue #328's snapshot, once streamed chunks restored its dug room ([[server-model]]), could tunnel but exhausted the judge's four-minute budget in that full scan on every tick. The indexed query preserves the dimension and recency rules without repeating the whole-memory query.
 

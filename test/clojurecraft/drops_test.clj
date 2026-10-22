@@ -87,3 +87,13 @@
                        (standing {40 (drop-of [12.5 64.0 8.5])})
                        (map tick (range 50 (+ 200 intent/collect-timeout) 50)))]
     (is (= [:failed :not-picked-up] ((juxt :intent/status :intent/reason) (:plan/intent w))))))
+
+(deftest a-drop-over-a-drop-is-left-without-a-step-toward-it
+  (let [pit (world/column (into {} (for [y (range 20 64)] [[12 y 8] 0])))
+        w (assoc (standing {40 (drop-of [12.5 64.0 8.5] :blaze_rod)}) :world/chunks {[0 0] pit})]
+    (is (drops/over-void? w (drop-of [12.5 64.0 8.5])) "no floor under it, none within a fall")
+    (is (not (drops/over-void? (standing {}) (drop-of [12.5 64.0 8.5])))
+        "on the stone floor it is no drop")
+    (let [[w _] (fx/fold intent-step w [(tick 50)])]
+      (is (= :done (:intent/status (:plan/intent w))) "left, not failed")
+      (is (= {} (:player/controls w)) "not a step taken toward it"))))
