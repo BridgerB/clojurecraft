@@ -302,6 +302,16 @@
   (let [o (intent/opening world)]
     (when (and o (not (mouth-below? (intent/feet world) (:intent/target o)))) o)))
 
+(defn far-trunks
+  "The far-candidates nearest standing trunks remembered within far-radius of the eye that are
+   not given up (skipped): the trunks the way out and the last resorts head for."
+  [world]
+  (->> (memory/positions-now world blocks/log-states)
+       (memory/nearest-first (game/eye world) far-radius)
+       (remove (skipped world))
+       (filter #(standing-trunk? world %))
+       (take far-candidates)))
+
 (defn climb-out
   "No trunk in the near band, and a standing trunk remembered further off: walk to the nearest one
    a route reaches (intent/routable?), under the open sky or not. Not out of the ground
@@ -327,11 +337,7 @@
    broke."
   [world]
   (let [feet (intent/feet world)
-        trunks (->> (memory/positions-now world blocks/log-states)
-                    (memory/nearest-first (game/eye world) far-radius)
-                    (remove (skipped world))
-                    (filter #(standing-trunk? world %))
-                    (take far-candidates))]
+        trunks (far-trunks world)]
     (when (seq trunks)
       (or (some (fn [bottom] (let [i (log-walk world bottom)] (when (intent/routable? world i) i)))
                 trunks)
@@ -550,9 +556,35 @@
         (when (and (scoop/boxed-here? world) (not (terrain/under-sky? world (intent/feet world))))
           (or (stone/retreat world) (stone/climb world))))))
 
-(defn gather-or-out
-  "The :gather act: gather-next, or when it waits :no-log the way out (way-out) before the wait.
-   Kept apart from gather-next, which make/spare-worth? asks whether a log can be started now: a
-   spare never sends the bot out of a pit for wood."
+(defn valley
+  "The last resort before the wait, out of the ground (stairs/out?) and never from a cell where
+   a climb died :boxed: a length of stairs down toward the nearest trunk (far-trunks, within
+   descend-reach on the plane), stone/stair-depth deep whatever the trunk's height, from a perch
+   no walk, hunt or crossing leaves. Sim snapshot real-2-s2-Clj_r15 (issue #186) stood on the
+   top of an ice spike with the nearest trunk thirty-five blocks off at its own height across a
+   valley no route crosses: the trunk is no lower than the eye, so trees-descend never cut, and
+   nothing else applied. From the foot the trunk is above the eye and trees-climb cuts the way
+   up toward it; each leg closes on the trunk. nil with no trunk in reach."
   [world]
-  (let [n (gather-next world)] (or (when (= {:plan/wait :no-log} n) (way-out world)) n)))
+  (let [feet (intent/feet world)
+        [_ fy _] feet]
+    (when (and (stairs/out? world feet) (not (contains? (:plan/boxed-at world #{}) feet)))
+      (when-let [trunk (first (filter (fn [[tx _ tz]]
+                                        (<= (physics/horizontal-distance (:player/pos world)
+                                                                         [tx 0 tz])
+                                            descend-reach))
+                                      (far-trunks world)))]
+        {:intent/kind :stairs-down
+         :intent/trunk trunk
+         :intent/to-y (- fy stone/stair-depth)
+         :intent/dir (toward feet trunk)
+         :intent/for :trees}))))
+
+(defn gather-or-out
+  "The :gather act: gather-next, or when it waits :no-log the way out (way-out), else the valley
+   (a perch's way down toward the trees), before the wait. Kept apart from gather-next, which
+   make/spare-worth? asks whether a log can be started now: a spare never sends the bot out of a
+   pit, or down a valley, for wood."
+  [world]
+  (let [n (gather-next world)]
+    (or (when (= {:plan/wait :no-log} n) (or (way-out world) (valley world))) n)))

@@ -76,7 +76,10 @@
         r (sim/play-from simrace/step
                          m
                          stop?
-                         (simrace/window-of snap)
+                         (* (or (some-> (System/getenv "WOOD3_X")
+                                        parse-long)
+                                1)
+                            (simrace/window-of snap))
                          (simrace/go-of w (:snapshot/until snap))
                          nil)]
     (println "ENDED"

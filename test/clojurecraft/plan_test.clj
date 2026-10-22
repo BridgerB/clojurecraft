@@ -252,6 +252,29 @@
     (is (nil? (wood/trees-bridge far [[15 64 8]]))
         "a trunk past bridge-reach is not climbed toward")))
 
+(deftest a-perch-across-a-valley-is-descended-for-the-trees
+  ;; sim snapshot real-2-s2-Clj_r15 (issue #186): the bot stood on the top of an ice spike with the
+  ;; nearest trunk thirty-five blocks off at its own height across a valley no route crosses; no
+  ;; walk, climb, hunt or crossing applied, and the plan waited :no-log. The gather act cuts a
+  ;; length of stairs down toward the trunk; a spare never does
+  (let [chasm (into {} (for [x (range 16) y (range 40 64) z (range 16)] [[x y z] blocks/air]))
+        platforms (fn [y & boxes]
+                    (into {}
+                          (for [[x0 x1] boxes x (range x0 (inc x1)) z (range 6 11)] [[x y z] 1])))
+        perch (remembered (merge chasm (platforms 63 [0 2] [13 15]) {[15 64 8] 136 [15 65 8] 136})
+                          [1.5 64.0 8.5])
+        down {:intent/kind :stairs-down
+              :intent/trunk [15 64 8]
+              :intent/to-y (- 64 stone/stair-depth)
+              :intent/dir [1 0]
+              :intent/for :trees}]
+    (is (stairs/out? perch (intent/feet perch)) "on open ground")
+    (is (= {:plan/wait :no-log} (wood/gather-next perch)) "no walk, climb, hunt or crossing")
+    (is (= down (wood/valley perch)) "down toward the trunk, whatever its height")
+    (is (= down (wood/gather-or-out perch)) "the gather act takes it before the wait")
+    (is (nil? (wood/valley (assoc perch :plan/boxed-at #{(intent/feet perch)})))
+        "never from a cell where a climb died boxed")))
+
 (deftest a-mouth-below-the-feet-is-the-way-down-not-out
   ;; sim world R2/16 (issue #87): stairs cut up from the mouth at y 83 toward trees on a cliff
   ;; ended on a ledge at y 99 that was not out of the ground; the opening walked the bot back
