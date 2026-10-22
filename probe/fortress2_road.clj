@@ -32,6 +32,9 @@
                   "tables" (get c :crafting_table 0)
                   "picks" (total c "_pickaxe")
                   "cobble" (get c :cobblestone 0)
+                  "search" (:intent/search i)
+                  "target" (:intent/target i)
+                  "taken" (:intent/taken i)
                   "op" (select-keys (:intent/op i) [:build/step :build/op :build/cell :build/item])
                   "child"
                   (select-keys (:intent/child i)
