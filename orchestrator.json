@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-22T16:53:55.117Z",
+  "at" : "2026-10-22T16:55:05.883Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -16,7 +16,7 @@
     "number" : 535,
     "title" : "Bot stops at blaze-rods: timeout",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : true
+    "copilot" : false
   }, {
     "number" : 534,
     "title" : "Bot stops at blaze-rods: timeout",
@@ -70,7 +70,7 @@
   }, {
     "number" : 538,
     "title" : "Bot stops at fortress: blocked",
-    "labels" : [ "bot-failure", "sim" ],
+    "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
     "number" : 286,
@@ -144,9 +144,8 @@
     "copilot" : true
   } ],
   "moves" : [ {
-    "issue" : 535,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment"
+    "issue" : 537,
+    "move" : "assign"
   }, {
     "issue" : 527,
     "move" : "leave",
@@ -221,11 +220,6 @@
     "why" : "hands-off label"
   } ],
   "log" : [ {
-    "issue" : 135,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment",
-    "at" : "2026-10-21T08:15:54.993Z"
-  }, {
     "issue" : 135,
     "move" : "assign",
     "at" : "2026-10-21T08:17:03.964Z"
@@ -1566,5 +1560,9 @@
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
     "at" : "2026-10-22T16:53:55.117Z"
+  }, {
+    "issue" : 537,
+    "move" : "assign",
+    "at" : "2026-10-22T16:55:05.883Z"
   } ]
 }
