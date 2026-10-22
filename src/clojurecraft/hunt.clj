@@ -39,6 +39,8 @@
 (def provision-wanted 6)              ; edible items held before the portal is lit: the Nether has no animals, and health comes back there only from food held (issue #501: three raw meats were eaten to the bar's 18 before the portal, and the Nether leg began with none)
 (def forage-ms 360000)                ; ms the search for animals goes on, from its first leg, however many legs: then the bot goes on with what it holds, never holding the portal up
 (def forage-reaches [48 32 16])       ; blocks a forage leg walks from the feet, farthest first: a server shows animals this far (starving-radius)
+(def forage-wary 32)                  ; blocks round the bot within which a hostile stops the search: sim run R1/5 (issue #501) searched at night through creepers, zombies and skeletons, the defence backing it off a hundred times, until it died
+(def forage-health 14)                ; health under which the bot does not go looking: hurt, it stays where it is
 (def forage-headings [[1 0] [0 1] [-1 0] [0 -1]]) ; the four ways a forage leg goes, a quarter turn right of the last
 
 (defn cell "The block cell a point is in." [p] (mapv #(long (math/floor %)) p))
@@ -158,9 +160,11 @@
 (defn foraging?
   "Does the bot go on looking for animals: provisioning?, the search not spent (:forage/spent: no
    heading had a route), forage-ms not past since its first leg, no failed intent in a row
-   (:plan/attempts: a leg that failed ends the search for the moment, as any plan's third failure
-   in a row would end the plan), no :build running (a cast is never left half made) and the feet
-   under the open sky (animals live on the surface: a bot deep in its mine has none to find). Issue #501: bots went into the Nether with no food because
+   (:plan/attempts, and :plan/unwalkable for a walk that failed :no-path, which counts apart: a
+   leg that failed ends the search for the moment, as twelve such walks in a row would end the
+   plan), no :build running (a cast is never left half made), the feet under
+   the open sky (animals live on the surface: a bot deep in its mine has none to find), health
+   at least forage-health and no hostile within forage-wary. Issue #501: bots went into the Nether with no food because
    nothing looked for animals past the 48 blocks the server shows, and herds are about one chunk
    in ten."
   [world]
@@ -168,7 +172,10 @@
     (boolean (and (provisioning? world)
                   (not spent)
                   (zero? (:plan/attempts world 0))
+                  (zero? (:plan/unwalkable world 0))
                   (not= :build (:intent/kind (:plan/intent world)))
+                  (>= (:player/health world 20.0) forage-health)
+                  (nil? (entity/nearest (entity/hostiles world) (:player/pos world) forage-wary))
                   (or (nil? since) (< (- (:time/now world 0) since) forage-ms))
                   (terrain/under-sky? world (intent/feet world))))))
 
