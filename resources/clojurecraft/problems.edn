@@ -159,6 +159,7 @@
    "Race 39181272601 bot Clj_r23 (issue #40) walked over a glacier to a landing in chunks not loaded and failed :no-path where it stood twelve times; a walk off the ice that failed is not chosen again"
    "Race 39070889905 runner 1 (issue #342) spent its escape filler on descent seals and could not seal the climb out; descent seals must keep the same lay-reserve as floors, while climbs may spend it"
    "Sim R3/15 (issue #37) stood on mineshaft planks over open air holding only gravel and was :boxed; a boxed stair up with a block to pillar from (gravel last) goes up as a shaft, and a bridge over a void keeps a block a block of the air over it"
+   "Real bot Clj_r16 (issue #37, snapshot real-7-s2) floored eleven levels and a bridge of a cave with sixteen dirt, `lay` keeping eight whatever hung over the floor, and was :boxed on the bridge with none: the way back is a block a level and a block a cell; every floor a descent lays keeps the bridge-reserve (`floor-reserve`), so a descent over a deep void with too little filler turns to the rock"
    "Items in the furnace or grid are invisible to the inventory count, so steps flicker"
    "Closing the window with a loaded cursor drops the item on the ground"
    "No reachable surface water in a dry biome; the bot hangs at fill-water"
