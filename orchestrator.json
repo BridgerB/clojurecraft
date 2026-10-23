@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-23T23:02:08.272Z",
+  "at" : "2026-10-23T23:08:52.449Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -23,14 +23,14 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 531,
-    "title" : "Bot stops at ingots: boxed",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 231,
     "title" : "Bot stops at cast-one: no-footing",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 531,
+    "title" : "Bot stops at ingots: boxed",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 62,
@@ -75,7 +75,7 @@
   }, {
     "number" : 69,
     "title" : "Bot stops at water-bucket: timeout",
-    "labels" : [ "bot-failure", "sim" ],
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : true
   }, {
     "number" : 574,
@@ -125,11 +125,11 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 531,
+    "issue" : 231,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 231,
+    "issue" : 531,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -166,8 +166,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 69,
-    "move" : "wait",
-    "why" : "session starting"
+    "move" : "leave",
+    "why" : "hands-off label"
   }, {
     "issue" : 574,
     "move" : "leave",
