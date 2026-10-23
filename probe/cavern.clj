@@ -240,7 +240,13 @@
                                  (pr-str (:intent/search p))
                                  (count (:intent/tunnel-visited p))
                                  (pr-str (:plan/waiting world))
-                                 (pr-str (:intent/op p)))))
+                                 (pr-str (:intent/op p))
+                                 "HP"
+                                 (:player/health world)
+                                 (pr-str (for [[_ e] (clojurecraft.entity/hostiles world)]
+                                           [(:entity/type e)
+                                            (mapv #(long (math/round (double %)))
+                                                  (:entity/pos e))])))))
                     (println file (quot (:time/now world) 60000) "min" (inv-line world)))
                   (flush)))
               (or (plan/done? world) (plan/failed? world)))
