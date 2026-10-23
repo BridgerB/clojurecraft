@@ -794,7 +794,19 @@
   (let [w (standing {7 (enderman [8.5 64.0 20.5])})]
     (is (not= {:plan/wait :no-sword} (plan/next-intent w row plan/goals)))
     (is (= {:plan/wait :no-sword}
-           (plan/next-intent (update w :player/inventory dissoc 0) row plan/goals)))))
+           (plan/next-intent (update w :player/inventory dissoc 0) row plan/goals)))
+    ;; sim race 39909643851 (issue #563, world R3/13): its stone sword wore out with 93
+    ;; cobblestone and a stick held, and the plan failed :no-sword
+    (let [kit (update
+               w
+               :player/inventory
+               #(-> (dissoc % 0)
+                    (assoc 1 (item :cobblestone 2) 2 (item :stick 1) 3 (item :crafting_table 1))))
+          i (plan/next-intent kit row plan/goals)]
+      (is (some? (:intent/kind i)) "the blade paid for: the sword made, not a wait")
+      (is (nil? (:plan/wait i)))
+      (is (nil? (pearls/arming (update kit :player/inventory dissoc 1) row plan/goals))
+          "no blade paid for: nothing to make"))))
 
 (def ledge-wall
   "Stone three high (y 64 to 66) along x 4, the burrow's first stair left open: from the mouth at

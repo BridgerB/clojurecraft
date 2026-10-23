@@ -28,6 +28,7 @@
    rain and water: the trap rows already keep the bot from fighting while it stands in water."
   (:require [clojure.math :as math]
             [clojure.string :as str]
+            [clojurecraft.armour :as armour]
             [clojurecraft.blaze :as blaze]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.combat :as combat]
@@ -35,6 +36,7 @@
             [clojurecraft.entity :as entity]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
+            [clojurecraft.make :as make]
             [clojurecraft.memory :as memory]
             [clojurecraft.mob :as mob]
             [clojurecraft.path :as path]
@@ -43,6 +45,7 @@
             [clojurecraft.recipe :as recipe]
             [clojurecraft.stairs :as stairs]
             [clojurecraft.stone :as stone]
+            [clojurecraft.sword :as sword]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.window :as window]))
 
@@ -1313,17 +1316,36 @@
     (shelter world)
     (into (comp (map (comp entity/kind val)) (remove shunned)) (entity/hostiles world))))
 
+(defn arming
+  "The next intent toward a sword when none is held: the needs planner's (make/decide) toward the
+   best of sword/made whose blade the held items pay for (sword/blade?; the handle, the planks and
+   the table are the planner's to make, a trip for wood if need be), the first that is not a
+   wait; nil when none can be made. The :sword row makes one only without a trip, and a hunt with
+   no sword is no hunt: sim race 39909643851 (issue #563, world R3/13) wore its stone sword out
+   holding 93 cobblestone and a stick, no table at hand, and the plan failed :no-sword."
+  [world goal table]
+  (let [c (armour/counts world)]
+    (some (fn [[k mat n]]
+            (when (sword/blade? world c mat n)
+              (let [i (make/decide world
+                                   (assoc goal :goal/provides {(keyword "item" (name k)) 1})
+                                   table)]
+                (when (and i (not (:plan/wait i))) i))))
+          sword/made)))
+
 (defmethod plan/next-intent :pearls
   ;; a fire the bot stands in put out first (a :dig: the server breaks fire on the first click,
   ;; as blaze/put-out does); then the kill's drop, unless another angry one is near (menaced?);
-  ;; with no sword held no hunt at all, a wait that fails the plan
-  ;; (:no-sword): gym batch pearls-warped8-b (plan run 39775345028) runs 1 and 3 respawned with
-  ;; nothing held after their first deaths and hunted on bare-handed, 39 and 26 deaths in five hours
-  ;; with the pickaxe worn out (worn-out?), no burrow near and none angry near, no hunt either
+  ;; with no sword held, the best sword the held items pay for a blade of made through the needs
+  ;; planner (arming), and only with none a wait that fails the plan (:no-sword): gym batch
+  ;; pearls-warped8-b (plan run 39775345028) runs 1 and 3 respawned with nothing held after their
+  ;; first deaths and hunted on bare-handed, 39 and 26 deaths in five hours; sim race 39909643851
+  ;; (issue #563, R3/13) wore its stone sword out holding 93 cobblestone and a stick, and failed
+  ;; :no-sword; with the pickaxe worn out (worn-out?), no burrow near and none angry near, no hunt either
   ;; (:no-pickaxe): no burrow can be cut, and
   ;; sim probe 39890964793 (seed 5) wore its pickaxe out on burrows, then struck calm endermen in
   ;; the open in worlds R2 and R3 and was slain, R2 nine times
-  [world _ _]
+  [world goal table]
   (let [k (when-not (menaced? world) (fresh-kill world))
         [_ d] (when k (drop-of world k))
         fire (burning-at world)]
@@ -1334,7 +1356,7 @@
            :intent/target (cell (:entity/pos d))
            :intent/for :pearls}
           (and k (body? world k)) {:plan/wait :drop}
-          (nil? (combat/sword world)) {:plan/wait :no-sword}
+          (nil? (combat/sword world)) (or (arming world goal table) {:plan/wait :no-sword})
           (and (worn-out? world) (nil? (shelter world)) (not (menaced? world)))
           {:plan/wait :no-pickaxe}
           :else (hunt world))))
