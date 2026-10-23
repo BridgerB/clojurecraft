@@ -580,7 +580,7 @@
    lo to hi; :batch [lo hi] the blazes one spawn tries for; :cap the blazes of its kind that may
    stand within :near blocks of it before it makes no more; :box [x y z] the cells round it a
    blaze is placed in; :light the greatest light level a blaze spawns in."
-  {:kind :blaze :wake 16.0 :delay [200 800] :batch [2 4] :cap 6 :near 4 :box [9 3 9] :light 11})
+  {:kind :blaze :wake 16.0 :delay [200 800] :batch [4 4] :cap 6 :near 4 :box [9 3 9] :light 11})
 
 (def interior-light
   "The light level the model gives every cell of a fortress: none is lit, no torch being modelled."
@@ -603,7 +603,8 @@
   (spawner-between (:delay spawner) r))
 
 (defn spawner-batch
-  "How many blazes one spawn tries for, for a roll r in [0, 1): 2 to 4, evenly."
+  "How many blazes one spawn tries for, for a roll r in [0, 1): four, vanilla's SpawnCount (the
+   roll is still taken, so the stream runs as it did when the batch was two to four)."
   [r]
   (spawner-between (:batch spawner) r))
 
@@ -626,12 +627,14 @@
   (<= l (:light spawner)))
 
 (defn spawner-spot
-  "The cell of the spawner's :box round the spawner at cell [x y z] that rolls rx, ry, rz in
-   [0, 1) land on: across the box's width and depth, and its height from one under the spawner."
-  [[x y z] rx ry rz]
-  (let [[w h d] (:box spawner)]
-    [(+ x (long (math/floor (* rx w))) (- (quot w 2))) (+ y (long (math/floor (* ry h))) -1)
-     (+ z (long (math/floor (* rz d))) (- (quot d 2)))]))
+  "The cell a try of the spawner at cell [x y z] lands on for rolls rx1 rx2 ry rz1 rz2 in [0, 1),
+   as BaseSpawner picks it: x and z each (r1 - r2) times the spawn range (4) from the spawner's
+   cell plus a half, floored, so a triangle over nine cells with its peak on the spawner; y a
+   uniform one of the cell under, level and over (nextInt(3) - 1)."
+  [[x y z] rx1 rx2 ry rz1 rz2]
+  (let [range (quot (first (:box spawner)) 2)]
+    [(long (math/floor (+ x (* (- rx1 rx2) range) 0.5))) (+ y (long (math/floor (* ry 3))) -1)
+     (long (math/floor (+ z (* (- rz1 rz2) range) 0.5)))]))
 
 (defn spawner-fits?
   "May a blaze be placed at cell c: its body free there (stands-in? of its tall cells), dark
@@ -641,11 +644,11 @@
 
 (defn spawner-spawns
   "The cells a spawner at cell sp places blazes in for one spawn: one try for each of tries, each
-   try three rolls of rolls ([rx ry rz] each, in order), a try whose cell does not fit
+   try five rolls of rolls ([rx1 rx2 ry rz1 rz2] each, in order), a try whose cell does not fit
    (spawner-fits?) making none. Distinct cells, in the order tried."
   [free? sp tries rolls]
-  (reduce (fn [cells [rx ry rz]]
-            (let [c (spawner-spot sp rx ry rz)]
+  (reduce (fn [cells rs]
+            (let [c (apply spawner-spot sp rs)]
               (cond-> cells (spawner-fits? free? c (set cells)) (conj c))))
           []
           (take tries rolls)))
