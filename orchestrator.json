@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-23T08:59:48.849Z",
+  "at" : "2026-10-23T09:00:57.151Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -78,6 +78,11 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
+    "number" : 560,
+    "title" : "Bot stops at blaze-rods: no-spot",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
     "number" : 162,
     "title" : "Bot stops at portal: no-path",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
@@ -98,10 +103,10 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 560,
-    "title" : "Bot stops at blaze-rods: no-spot",
+    "number" : 562,
+    "title" : "Bot stops at blaze-rods: not-held",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : false
+    "copilot" : true
   }, {
     "number" : 89,
     "title" : "Bot stops at portal-kit: no-log",
@@ -122,11 +127,6 @@
     "title" : "Bot stops at cast-one: boxed",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
-  }, {
-    "number" : 562,
-    "title" : "Bot stops at blaze-rods: not-held",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : true
   }, {
     "number" : 526,
     "title" : "Bot stops at blaze-rods: blocked",
@@ -209,6 +209,10 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 560,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
     "issue" : 162,
     "move" : "leave",
     "why" : "hands-off label"
@@ -225,7 +229,7 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 560,
+    "issue" : 562,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -242,10 +246,6 @@
     "why" : "hands-off label"
   }, {
     "issue" : 130,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
-    "issue" : 562,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
