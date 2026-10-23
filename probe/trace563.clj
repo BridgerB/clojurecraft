@@ -1,3 +1,4 @@
+(println "TRACE-START")
 (require '[clojurecraft.capture :as capture]
          '[clojurecraft.simrace :as sr]
          '[clojurecraft.sim :as sim]
