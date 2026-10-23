@@ -50,8 +50,10 @@
   :goal/priority 2
   :goal/target? true
   :goal/until "table"
-  :goal/doc "a crafting table and four sticks, from logs"
-  :goal/provides {:item/crafting_table 1 :item/stick 4}
+  :goal/doc "four sticks, then a crafting table, from logs"
+  ;; sticks first: one log is four planks, and the table used to spend all four before the
+  ;; sticks, so the climb back to the next log had nothing to pillar (issue #104, R3-9-1)
+  :goal/provides {:item/stick 4 :item/crafting_table 1}
   :goal/done? :provided?}
  {:goal/id :pickaxe
   :goal/priority 3
