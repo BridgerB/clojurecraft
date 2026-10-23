@@ -225,29 +225,32 @@
          first)))
 
 (defn lay-candidates
-  "The water cells at the float-top a filler would make a bank of, nearest first, including a
-   cell the player's box intersects: within radius on the plane and reach of the eye, a solid
-   neighbour to place against, two clear cells over it in the open. nil unless the feet are
-   under the sky."
+  "The water cells a filler would make a bank of, nearest first, the higher one first at a
+   tie, including a cell the player's box intersects: at the float-top, and one under it
+   (the body lifted into the air over the water sits a cell above the surface block), within
+   radius on the plane and reach of the eye, a solid neighbour to place against, two clear
+   cells over it in the open. nil unless the feet are under the sky."
   [world [fx _ fz :as feet] surface radius reach]
   (when (terrain/under-sky? world feet)
     (let [top (float-top world feet surface)
           eye (game/eye world)]
       (->> (for [dx (range (- radius) (inc radius))
                  dz (range (- radius) (inc radius))
+                 y [top (dec top)]
                  :let [x (+ fx dx)
                        z (+ fz dz)
-                       cell [x top z]
-                       bank [x (inc top) z]]
+                       cell [x y z]
+                       above [x (inc y) z]]
                  :when (and (= :water (terrain/fluid-kind world cell))
-                            (path/clear? world bank)
-                            (path/clear? world [x (+ top 2) z])
-                            (in-the-open? world bank)
+                            (path/clear? world above)
+                            (path/clear? world [x (+ y 2) z])
+                            (in-the-open? world above)
                             (place/support world cell)
                             (<= (physics/distance eye (physics/centre cell)) reach))]
              cell)
-           (sort-by (fn [cell] [(physics/horizontal-distance (physics/centre feet)
-                                                             (physics/centre cell)) cell]))))))
+           (sort-by (fn [[_ y _ :as cell]] [(physics/horizontal-distance (physics/centre feet)
+                                                                         (physics/centre cell))
+                                            (- y) cell]))))))
 
 (defn bank-cells
   "The water cells at the float-top level to lay a filler into that makes a bank (see

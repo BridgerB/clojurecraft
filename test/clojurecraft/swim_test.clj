@@ -683,6 +683,46 @@
     (is (= :stuck (:intent/reason bare)) "no filler still fails")
     (is (= :stuck (:intent/reason gave-up)) "a stall past the backoff is still :stuck")))
 
+(defn- over-lip-world
+  "A world: a one-block shore (stone through y 63) and water only at y 62, air at y 63, so a
+   body lifted to pos (feet in the air cell over the water) has its float-top a cell above the
+   surface block. count cobblestone when positive."
+  [pos stone]
+  (assoc (game/init fx/opts)
+         :bot/phase :play
+         :player/pos pos
+         :player/loaded? true
+         :player/on-ground? false
+         :player/in-water? true
+         :player/eye-in-water? false
+         :player/inventory (if (pos? stone) {0 {:item (blocks/items :cobblestone) :count stone}} {})
+         :time/tick 200
+         :world/chunks
+         {[0 0] (world/column {[2 62 8] (blocks/default-state :stone)
+                               [2 63 8] (blocks/default-state :stone)
+                               [3 62 8] blocks/water-base
+                               [3 63 8] blocks/air})}))
+
+(deftest a-swim-lifted-over-the-water-lays-into-the-cell-below
+  ;; issue #351: the feet are in the air cell over the water, so the float-top is a cell above
+  ;; the surface block and the only supported water is one under it
+  (let [swim {:intent/kind :swim-out
+              :intent/status :active
+              :intent/bank [2 64 8]
+              :intent/started 100
+              :intent/best-tick 100
+              :intent/best-dist 0.5}
+        tick {:event/kind :tick :event/now 1000 :event/rand 0.5}
+        w (assoc (over-lip-world [3.3 63.9 8.5] 20) :plan/intent swim)
+        feet (intent/feet w)
+        surface (swim/surface-y w :water feet)
+        laid (:intent/child (:plan/intent (intent/run w swim tick)))]
+    (is (= 64 surface))
+    (is (= 63 (swim/float-top w feet surface)) "the float-top is the air over the water")
+    (is (= [3 62 8] (swim/bank-block w feet surface)) "the surface block, one under it")
+    (is (= :place (:intent/kind laid)))
+    (is (= [3 62 8] (:intent/cell laid)))))
+
 (deftest a-body-bobbing-at-a-bank-is-trapped-but-a-swimmer-is-not
   (let [at (fn [kind ground? ticks]
              (-> (bank-world [3.3 63.2 8.5] {:intent/kind kind :intent/status :active} 0)
