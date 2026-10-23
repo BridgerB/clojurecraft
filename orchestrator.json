@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-23T20:05:28.798Z",
+  "at" : "2026-10-23T20:10:07.037Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -50,6 +50,11 @@
   }, {
     "number" : 504,
     "title" : "Bot stops at blaze-rods: timeout",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 539,
+    "title" : "Bot stops at fortress: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
@@ -191,6 +196,10 @@
     "why" : "hands-off label"
   }, {
     "issue" : 504,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 539,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
