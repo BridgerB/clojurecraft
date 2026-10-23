@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-23T22:06:37.550Z",
+  "at" : "2026-10-23T22:07:49.159Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -91,7 +91,7 @@
     "number" : 68,
     "title" : "Bot stops at ingots: no-spot",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
+    "copilot" : true
   }, {
     "number" : 65,
     "title" : "Bot stops at cobblestone: boxed",
@@ -193,7 +193,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 68,
-    "move" : "assign"
+    "move" : "wait",
+    "why" : "session starting"
   }, {
     "issue" : 65,
     "move" : "leave",
