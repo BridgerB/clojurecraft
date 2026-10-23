@@ -249,6 +249,11 @@
                                  (pr-str (for [c [[476 49 315] [476 50 315] [476 48 315]]]
                                            (some-> (clojurecraft.terrain/block-at world c)
                                                    clojurecraft.blocks/name-of)))
+                                 "ITEMS"
+                                 (pr-str (for [[_ e] (:world/entities world)
+                                               :when (= clojurecraft.blocks/item-entity-type
+                                                        (:entity/type e))]
+                                           (:entity/pos e)))
                                  "HP"
                                  (:player/health world)
                                  (pr-str (for [[_ e] (clojurecraft.entity/hostiles world)]
