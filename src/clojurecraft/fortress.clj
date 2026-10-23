@@ -34,7 +34,10 @@
 (def air-grace 40)                    ; ticks a tunnel waits for the feet to land before it may fail :blocked: no step is safe from the air (issue #502, R4/31)
 (def look-ahead 2)                    ; blocks ahead that must be loaded for a leg to go on: the world's edge turns it
 (def climb-past 3)                    ; a target more than this above or below makes a step go up or down
-(def retreats-allowed 1)              ; retreats in a row a tunnel takes before it is blocked: a second one paces two cells
+(def stall-tunnels 3)                 ; tunnels in a row that gain no stall-gain toward a leg's end before the leg is given up
+(def stall-gain 8)                    ; blocks a tunnel must bring the feet nearer a leg's end to count as progress (rock gives about 32)
+(def rock-look 24)                    ; cells along a heading a new leg looks for rock in
+(def retreats-allowed 1)            ; retreats in a row a tunnel takes before it is blocked: a second one paces two cells
 
 (def fortress-kinds
   "The blocks that are a fortress's, not a bastion's."
@@ -550,16 +553,54 @@
             (when (and (open-ahead? world feet h) (choose-move world feet (leg-target s))) s)))
         headings))
 
+(defn rock-run
+  "Cells along heading [dx dz] from feet, at most rock-look, that a tunnel keeps solid under, in
+   and over its way: every cell's floor, feet and head blocks solid, the run ending at the first
+   cell that is air or not loaded. A cavern's open air ahead is 0; a rock mass is rock-look."
+  [world [x y z] [dx dz]]
+  (count (take-while (fn [k]
+                       (every? #(some-> (terrain/block-at world
+                                                          [(+ x (* k (long dx))) (+ y (long %))
+                                                           (+ z (* k (long dz)))])
+                                        blocks/solid?)
+                               [-1 0 1]))
+                     (range 1 (inc rock-look)))))
+
+(defn turns-by-rock
+  "The headings a leg that ended may turn to, best first: a quarter turn right or left of heading,
+   the one with the longer rock-run first (right when equal), then back and heading again. A leg
+   that stalled at a cavern turns to the rock it can dig, not to the air it cannot."
+  [world feet heading]
+  (let [right (turn-right heading)
+        back (turn-right right)
+        left (turn-right back)]
+    (concat (sort-by #(- (long (rock-run world feet %))) [right left]) [back heading])))
+
+(defn leg-progress
+  "The search with its progress toward the leg's end kept: :search/best, the least horizontal
+   distance the feet have been from it at a look, and :search/stalled, the looks in a row that
+   brought them no stall-gain nearer than that. A tunnel through a cavern's rim wanders at a wall
+   it cannot cross (sim world R2/12, issue #338: fourteen minutes inside x 507-534, z 340-362 on
+   a leg to x 620, eight pickaxes of sticks spent for 13 blocks), and counts as stalled."
+  [world {:search/keys [best] :as search}]
+  (let [d (physics/horizontal-distance (physics/centre (intent/feet world))
+                                       (physics/centre (leg-target search)))]
+    (cond (or (nil? best) (<= d (- (double best) stall-gain)))
+          (assoc search :search/best d :search/stalled 0)
+          :else (update search :search/stalled (fnil inc 0)))))
+
 (defn leg-over?
   "Is the leg of search finished: its end within reach (by the ground, a tunnel's height may stay
    short of it), the world ending ahead, more tunnels spent on it than its length asks (a wall it
-   cannot go round), or the feet so far from where it began that it is another trip's?"
-  [world {:search/keys [from heading leg tunnels] :as search}]
+   cannot go round), stall-tunnels in a row without stall-gain of progress (leg-progress), or the
+   feet so far from where it began that it is another trip's?"
+  [world {:search/keys [from heading leg tunnels stalled] :as search}]
   (let [feet (intent/feet world)
         at (physics/centre feet)]
     (or (<= (physics/horizontal-distance at (physics/centre (leg-target search))) reach)
         (not (open-ahead? world feet heading))
         (> tunnels (+ 2 (* 2 (quot (leg-length leg) steps-per-tunnel))))
+        (>= (long (or stalled 0)) stall-tunnels)
         (> (physics/horizontal-distance at (physics/centre from)) (+ (leg-length leg) 64)))))
 
 (defn exploring
@@ -576,8 +617,10 @@
         headings #(take 4 (iterate turn-right %))]
     (cond (nil? search) (new-leg world feet 0 (headings [1 0]))
           (leg-over? world search)
-          (new-leg world feet (inc (long leg)) (headings (turn-right heading)))
-          :else (update search :search/tunnels inc))))
+          (new-leg world feet (inc (long leg)) (turns-by-rock world feet heading))
+          :else
+          (-> (leg-progress world search)
+              (update :search/tunnels inc)))))
 
 (defmethod plan/done-by :at-fortress?
   [world _]
