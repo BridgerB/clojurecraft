@@ -1030,32 +1030,43 @@
            (:intent/search (plan/next-intent out goal plan/goals)))
         "and the next look goes on along it")))
 
-(defn cavern-band
-  "The field with no block east of the feet for z in zs: an open cavern the leg runs into."
-  [zs]
-  (update (field -20 40)
-          :world/blocks
-          #(into {} (remove (fn [[[x _ z] _]] (and (pos? x) (contains? zs z))) %))))
+(defn void-east
+  "Rock at x -3..0 (y 60..70), open air east of it down to the ground at y 40 (z -3..3): the Nether's
+   cavern with a thirty block drop, the bot at [0 64 0] with 64 cobblestone and full health."
+  []
+  {:world/chunks {}
+   :world/blocks
+   (merge (into {} (for [x (range -3 1) y (range 60 71) z (range -3 4)] [[x y z] netherrack]))
+          (into {} (for [x (range 1 13) y (range 41 71) z (range -3 4)] [[x y z] air]))
+          (into {} (for [x (range 1 13) z (range -3 4)] [[x 40 z] netherrack]))
+          {[0 64 0] air [0 65 0] air})
+   :player/pos [0.5 64.0 0.5]
+   :player/health 20.0
+   :player/inventory {0 {:item (recipe/item-id :cobblestone) :count 64}}})
 
-(deftest a-stalled-leg-aims-at-a-lane-of-rock-beside-the-cavern
-  ;; issue #338, sim world R2/12: the rock mass north of the cavern, thirty blocks off the line
-  (let [south-side (cavern-band (set (range -3 4)))
-        north-side (cavern-band (set (range -10 8)))]
-    (is (= 4 (fortress/lane-by-rock south-side [0 64 0] [1 0])) "right of east is south: z 4")
-    (is (= 8 (fortress/lane-by-rock north-side [0 64 0] [1 0]))
-        "the cavern runs to z 7: the first rock is z 8, on the right")
-    (is (= -4 (fortress/lane-by-rock (cavern-band (set (range -3 21))) [0 64 0] [1 0]))
-        "south open as far as the world goes: the left")
-    (is (nil? (fortress/lane-by-rock (cavern-band (set (range -30 30))) [0 64 0] [1 0]))
-        "no lane within lane-reach")
-    (is (= [160 64 8] (fortress/leg-target (assoc east-leg :search/offset 8))) "south of east")
-    (is (= [160 64 -8] (fortress/leg-target (assoc east-leg :search/offset -8))))
-    (let [s (fortress/leg-progress south-side
-                                   (assoc east-leg :search/best 160.0 :search/stalled 1))]
-      (is (= 4 (:search/offset s)))
-      (is (zero? (:search/stalled s)) "a fresh chance on the lane"))
-    (is (= 2
-           (:search/stalled (fortress/leg-progress
-                             (field -20 40)
-                             (assoc east-leg :search/best 160.0 :search/stalled 1))))
-        "no lane in rock all round: counts as stalled")))
+(deftest a-leg-that-stalled-bridges-a-cavern-over-ground
+  ;; issue #338, sim world R2/12: a cavern 60 blocks across and 30 deep over basalt
+  (let [w (void-east)]
+    (is (not (fortress/safe? w [0 64 0] [1 0 0])) "an air floor is no step")
+    (is (fortress/ground-below? w [1 63 0]))
+    (is (not (fortress/ground-below? (update w :world/blocks dissoc [1 40 0]) [1 63 0]))
+        "the world ending under it is no ground")
+    (is (fortress/bridge-over-void? w [0 64 0] [1 0 0]))
+    (is (not (fortress/bridge-over-void? (assoc w :player/health 10.0) [0 64 0] [1 0 0]))
+        "never hurt")
+    (is (not (fortress/bridge-over-void? (assoc w :player/inventory {}) [0 64 0] [1 0 0]))
+        "never short of blocks")
+    (is (not (fortress/bridge-over-void?
+              (assoc w :player/inventory {0 {:item (recipe/item-id :cobblestone) :count 15}})
+              [0 64 0]
+              [1 0 0]))
+        "a reserve of sixteen")
+    (is (not (fortress/bridge-over-void?
+              (assoc-in w [:world/blocks [1 40 0]] (first (blocks/states-of :lava)))
+              [0 64 0]
+              [1 0 0]))
+        "never over lava")
+    (is (not= [1 0 0] (fortress/next-move w [0 64 0] [8 64 0] 3 false #{}))
+        "a leg that has not stalled goes round")
+    (is (= [1 0 0] (fortress/next-move w [0 64 0] [8 64 0] 3 false #{} true))
+        "a stalled leg lays the floor and crosses")))

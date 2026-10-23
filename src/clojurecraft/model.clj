@@ -269,9 +269,6 @@
    [:forage/retry-at
     "ms before which the search looks for no leg: set when no heading had a route at any reach (hunt/forage-retry-ms on)"
     "inside :hunt/forage, after such a look"]
-   [:search/offset
-    "the signed blocks to the right of the leg's heading its end was moved to when it stalled at a cavern and a lane of rock lay that far aside (fortress/lane-by-rock)"
-    "inside :fortress/search, after a stalled look"]
    [:fortress/trail
     "the way back a :tunnel-to to a target keeps across its tunnels: {:trail/target :trail/cells :trail/dead}; a cell no fresh step leaves is stepped back from to the last cell, never entered again (fortress/step-back, issue #502); another target starts a new one"
     "after a :tunnel-to chose a fresh step or a step back"]
@@ -366,6 +363,9 @@
    [:intent/search
     "the fortress search leg an exploring :tunnel-to works for (fortress/exploring): the executor keeps it as :fortress/search"
     "a :tunnel-to with no brick on record to go to"]
+   [:intent/bridge?
+    "a :tunnel-to that may floor a level step across a cavern (fortress/bridge-over-void?): the spiral's leg has stalled (issue #338)"
+    "a :tunnel-to with a search whose leg has stalled"]
    [:intent/taken "steps a :tunnel-to has taken" ":tunnel-to, after its first step"]
    [:intent/tunnel-visited
     "the feet cells this tunnel-to has started steps from; fresh steps and short floored turns precede a retreat"
