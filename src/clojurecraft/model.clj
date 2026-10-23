@@ -227,8 +227,8 @@
     "per hostile entity id {:pos where it stood the first time :times back-offs from it there}: a mob that stands within a block of :pos through shun-after of them is shunned, a threat only within shunned-radius (combat/reach)"
     "after a back-off from a hostile began"]
    [:plan/cornered
-    "entity ids a back-off could not get away from: it ended on its clock with the target still nearer than back-off-to, the bot in a dead end; :defend fights them to the end (combat/cornered, issue #161)"
-    "after a back-off ended on its clock"]
+    "entity ids a back-off could not get away from: it ended on its clock, or the way away was a drop no landing survives, with the target still nearer than back-off-to; :defend fights them to the end (combat/cornered, issues #161 and #514)"
+    "after a back-off ended on its clock or at a drop"]
    [:pearls/shelter
     "the feet cell of the pearl hunt's burrow, where no enderman can stand within reach of the bot (pearls/shelter?), set when a :burrow ends (issue #263)"
     "after the hunt dug one"]
