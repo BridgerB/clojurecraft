@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-23T07:25:55.287Z",
+  "at" : "2026-10-23T07:27:03.238Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -86,6 +86,11 @@
     "number" : 162,
     "title" : "Bot stops at portal: no-path",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 562,
+    "title" : "Bot stops at blaze-rods: not-held",
+    "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
     "number" : 560,
