@@ -1396,3 +1396,14 @@
     (is (= [[6 64 5]] (stairs/wet-feet w cells)) "the one water cell beside the feet")
     (is (nil? (place/support w [6 64 5])) "no solid neighbour of its own")
     (is (= [[7 64 5] [6 64 5]] (stairs/dry-feet w [5 64 5] cells)) "the supported one first")))
+
+(deftest a-shaft-through-open-air-is-safe-beside-water
+  ;; sim race 39912745526 world R1/26 (issue #130): on a block over a cave's lake, the air over the
+  ;; head open and water beside it, the shaft was refused for the water its dig could let in, and
+  ;; the climb failed :boxed. An open cell is no dig; a solid one beside water still is refused
+  (let [feet [5 64 5]
+        beside {[6 66 5] blocks/water-base}
+        in (fn [extra] (assoc (standing 64) :world/chunks {[0 0] (world/column extra)}))]
+    (is (true? (stairs/shaft-safe? (in beside) feet)) "open cells, water beside: only blocks laid")
+    (is (false? (stairs/shaft-safe? (in (assoc beside [5 66 5] 1)) feet))
+        "a solid cell beside water would let it in when dug")))
