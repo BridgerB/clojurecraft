@@ -723,6 +723,74 @@
     (is (= :place (:intent/kind laid)))
     (is (= [3 62 8] (:intent/cell laid)))))
 
+(deftest a-swim-sinks-to-a-bank-below-the-feet
+  ;; issue #222 (real-1-s1-Clj_r02, R1-2-1): the only bank is a dry floor under the water the
+  ;; body floats on; holding jump bobs over it until :stuck, so the swim lets go and sinks
+  (let [w (assoc (game/init fx/opts)
+                 :bot/phase :play
+                 :player/pos [5.5 64.0 5.5]
+                 :player/loaded? true
+                 :player/in-water? true
+                 :world/chunks {[0 0] (world/column {})})]
+    (is (not (:control/jump? (swim/swim-controls w [5 62 5]))) "a bank below: no jump, sink")
+    (is (:control/forward? (swim/swim-controls w [5 62 5])) "still toward the bank")
+    (is (:control/jump? (swim/swim-controls w [5 65 5])) "a bank above: jump, as before")))
+
+(deftest a-stuck-swim-under-a-roof-carves-a-bank
+  ;; issue #222 (world R1/2): pressed under a roof toward a bank the lift cannot reach, with
+  ;; nothing to dig toward it and no block a lay could use (a lay wants the open sky), the
+  ;; swim carves a notch at its own level instead of failing :stuck, and drops the kept bank
+  ;; so the next search can pick the notch
+  (let [swim {:intent/kind :swim-out
+              :intent/status :active
+              :intent/bank [5 64 3]
+              :intent/target [5 64 3]
+              :intent/started 0
+              :intent/best-tick 0
+              :intent/best-dist 0.5}
+        cells {[5 64 5] blocks/water-base
+               [5 64 4] blocks/water-base
+               [5 63 3] (blocks/default-state :stone)
+               [5 70 5] (blocks/default-state :stone)
+               [7 64 5] (blocks/default-state :stone)
+               [7 65 5] (blocks/default-state :stone)}
+        w (assoc (game/init fx/opts)
+                 :bot/phase :play
+                 :player/pos [5.5 64.0 5.5]
+                 :player/loaded? true
+                 :player/in-water? true
+                 :time/tick 200
+                 :world/chunks {[0 0] (world/column cells)}
+                 :plan/intent swim)
+        tick {:event/kind :tick :event/now 10000 :event/rand 0.5}
+        out (:plan/intent (intent/run w swim tick))]
+    (is (= :active (:intent/status out)))
+    (is (= :dig (:intent/kind (:intent/child out))))
+    (is (= [7 65 5] (:intent/target (:intent/child out))) "the notch's lower cell")
+    (is (nil? (:intent/bank out)) "the kept bank is dropped for the search to come")))
+
+(deftest a-flee-with-no-footing-in-reach-rises-and-looks-again
+  ;; issue #231 (world R1/3): sunk a cell below the floor it fell from, footing (one up or
+  ;; down) finds nothing; the flee rises in the lava and looks again instead of failing
+  ;; :no-footing on the spot, and only its timeout gives up
+  (let [flee {:intent/kind :flee :intent/status :active}
+        lava
+        (into {} (for [dx (range -2 3) dz (range -2 3)] [[(+ 5 dx) 64 (+ 5 dz)] blocks/lava-base]))
+        w (assoc (game/init fx/opts)
+                 :bot/phase :play
+                 :player/pos [5.5 64.0 5.5]
+                 :player/loaded? true
+                 :player/in-lava? true
+                 :time/tick 100
+                 :world/chunks {[0 0] (world/column lava)}
+                 :plan/intent flee)
+        tick {:event/kind :tick :event/now 5000 :event/rand 0.5}
+        out (intent/run w flee tick)
+        i (:plan/intent out)]
+    (is (nil? (swim/footing w [5 64 5])) "nothing standable in reach")
+    (is (= :active (:intent/status i)) "still fleeing, not failed :no-footing")
+    (is (:control/jump? (:player/controls out)) "rising toward a footing")))
+
 (deftest a-body-bobbing-at-a-bank-is-trapped-but-a-swimmer-is-not
   (let [at (fn [kind ground? ticks]
              (-> (bank-world [3.3 63.2 8.5] {:intent/kind kind :intent/status :active} 0)

@@ -478,11 +478,16 @@
   "Toward the bank's centre: in the water, forward with jump held (the swim-up and, pressed
    into the bank, the impulse); out of it, a plain walk, and on dry land nothing at all, so the
    planner can see the land held still (a bot that kept jumping on the bank never counted as
-   out)."
+   out). A bank below the feet (a dry pocket under a thin sheet of water, the floor of a
+   flooded room) is sunk to, not swum over: jump is let go so the body drops onto it. Sim
+   race 40014095820 (issue #222, world R1/2) and the real snapshot real-1-s1-Clj_r02 bobbed
+   at the surface over such a bank three blocks down and failed :stuck three times."
   [world bank]
   (cond (trap/dry-land? world) {}
         (:player/in-water? world)
-        (assoc (intent/toward world (physics/centre bank) 0.0) :control/jump? true)
+        (if (< (second bank) (second (intent/feet world)))
+          (intent/toward world (physics/centre bank) 0.0)
+          (assoc (intent/toward world (physics/centre bank) 0.0) :control/jump? true))
         :else (intent/toward world (physics/centre bank) 0.0)))
 
 (defmethod intent/run :swim-out
@@ -497,7 +502,10 @@
         feet (intent/feet world)
         surface (surface-y world (if (:player/in-lava? world) :lava :water) feet)
         world (intent/assoc-intent world :intent/started started)
-        dist (when bank (physics/horizontal-distance (:player/pos world) (physics/centre bank)))
+        dist (when bank
+               (if (< (second bank) (second feet))
+                 (physics/distance (:player/pos world) (physics/centre bank))
+                 (physics/horizontal-distance (:player/pos world) (physics/centre bank))))
         nearer? (and dist (< dist (- (or best-dist Double/MAX_VALUE) progress)))
         best-tick (if (or nearer? (nil? best-tick)) tick best-tick)]
     (cond
@@ -591,6 +599,12 @@
             laid (when-not cell (lift-bank world feet surface no-lay))
             blocked (when (and (nil? cell) (nil? laid) (not no-lay) (stairs/filler world 1))
                       (occupied-bank world feet surface))
+            ;; under a roof a block cannot be laid (bank-block wants the open sky), so a bank
+            ;; the lift cannot reach is made the notch's way instead: carve a stand at the
+            ;; body's own level and let the next search pick it (issue #222, world R1/2)
+            carve
+            (when (and (nil? cell) (nil? laid) (nil? blocked) (not (terrain/under-sky? world feet)))
+              (notch world feet surface))
             stall (- tick best-tick)]
         (cond cell (dig-or-sink world feet cell "stuck")
               ;; nothing to dig and the lift peaks under the bank's top: a block laid into the water
@@ -602,6 +616,11 @@
               (-> world
                   (assoc :player/controls (off-bank world bank))
                   (game/say (str "swim-out: lay cell " blocked " is inside the body, backing off")))
+              carve
+              (-> world
+                  (intent/dissoc-intent :intent/bank :intent/target
+                                        :intent/best-dist :intent/best-tick)
+                  (start-dig carve "stuck, carving a bank"))
               :else
               (-> world
                   (assoc :player/controls {})
@@ -745,9 +764,13 @@
             (-> world
                 (intent/assoc-intent :intent/target cell)
                 (game/say (str "flee: to " cell)))
-            (-> world
-                (assoc :player/controls {})
-                (intent/fail :no-footing)))
+            ;; no footing from where the body is now: it may have sunk past the level the
+            ;; footing stands at (footing looks one up or down), so rise in the lava and
+            ;; look again next tick; only the timeout gives up. Sim race 40023362147
+            ;; (issue #231, world R1/3): the body fell into the lava under its tunnel,
+            ;; sank a cell below the tunnel's floor, and three flees failed :no-footing
+            ;; in three ticks without moving.
+            (assoc world :player/controls {:control/jump? true}))
           :else (assoc world :player/controls (flee-controls world target)))))
 
 ;; ---------------------------------------------------------------- the goals' rules

@@ -1482,6 +1482,8 @@
     (is (not (build/lost-way? again i (assoc child :intent/reason :stuck))) "only :no-path")
     (is (not (build/lost-way? again (assoc i :intent/build :portal) child))
         "a portal's site holds a cast: not given up for a walk")
+    (is (build/lost-way? (assoc w :plan/attempts 2) (assoc i :intent/build :portal) child)
+        "but a third plain walk in a row gives a portal's site up too (issue #162)")
     (is (build/lost-way? again (assoc i :intent/build :nether) child)
         "a nether build gives its site up the same way a cast-one does")))
 

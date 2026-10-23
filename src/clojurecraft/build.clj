@@ -1229,7 +1229,10 @@
    three times; issue #561, sim snapshots R1-12-2 and R1-24-1: the return portal stood on
    deepslate with lava beside the stand, a route never steps a cell beside lava, and the plain
    walk failed :no-path three times). A :portal build holds a cast already made and is not given
-   up for a walk.
+   up for a walk until the third failure in a row (:plan/attempts 2): the first two may be a way
+   not yet dug, but a plain walk left that no route follows three times is a site no way reaches
+   (issue #162, sim snapshot R3-19-1: the feet stood in water three blocks from the next stand,
+   the walk to it failed :no-path three times in three ticks, and the planner kept the site).
    Any walk or dig of a :build that fails :no-path, :stuck or :out-of-reach while water stands in
    its room (flooded-room?) gives it up too: sim race 39610239818 (issue #461, world R1/17): the
    room's digs let an aquifer in, the walk to a stand over the water stalled and failed
@@ -1249,6 +1252,11 @@
                           (= :no-path reason)
                           (not (:intent/pickup? child))
                           (pos? (:plan/attempts world 0)))
+                     (and (= :portal build)
+                          (= :walk (:intent/kind child))
+                          (= :no-path reason)
+                          (not (:intent/pickup? child))
+                          (>= (:plan/attempts world 0) 2))
                      (and (= :walk (:intent/kind child))
                           (not (:intent/pickup? child))
                           target
