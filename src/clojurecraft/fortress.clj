@@ -36,10 +36,9 @@
 (def climb-past 3)                    ; a target more than this above or below makes a step go up or down
 (def stall-tunnels 3)                 ; tunnels in a row that gain no stall-gain toward a leg's end before the leg is given up
 (def stall-gain 8)                    ; blocks a tunnel must bring the feet nearer a leg's end to count as progress (rock gives about 32)
-(def lane-reach 48)                   ; blocks to either side a stalled leg looks for a lane of rock ahead
-(def lane-step 4)                     ; blocks between the lanes it looks at
-(def lane-min-run 20)                 ; cells of rock ahead a lane must have
-(def lane-stalled 2)                  ; looks without progress before a leg tries a lane
+(def bridge-ground-depth 48)           ; blocks under a floor to be laid over a cavern looked down through for ground: the fall of a body knocked off
+(def bridge-min-filler 16)            ; filler a bridge over a cavern keeps in hand: it stops when fewer are left
+(def bridge-min-health 14)            ; health a bridge over a cavern is begun and carried on with
 (def rock-look 24)                    ; cells along a heading a new leg looks for rock in
 (def retreats-allowed 1)            ; retreats in a row a tunnel takes before it is blocked: a second one paces two cells
 
@@ -247,6 +246,33 @@
                 feet
                 move))))
 
+(defn ground-below?
+  "Is the first block under the floor cell [x y z] (within bridge-ground-depth) solid, with
+   nothing but clear cells over it: ground a body would land on, never a fluid, never the end of
+   the loaded world? A floor laid where it is false is a bridge over lava, water or the unknown."
+  [world [x y z]]
+  (= :ground
+     (reduce (fn [_ k]
+               (case (path/classify world [x (- y k) z])
+                 :clear nil
+                 :solid (reduced :ground)
+                 (reduced false)))
+             nil
+             (range 1 (inc bridge-ground-depth)))))
+
+(defn bridge-over-void?
+  "May the level move from feet be floored across a cavern in the Nether, bridge? holding (the
+   floor laid from the block under the feet, which the body stands on while it is laid and
+   leaves only for the laid block) and, under that floor, ground-below?, a filler reserve of
+   bridge-min-filler and bridge-min-health: never over lava, never hurt, never short of blocks.
+   Sim world R2/12 (issue #338) met a cavern sixty blocks across, thirty deep over basalt, that
+   no step round its rim crossed in an hour."
+  [world feet move]
+  (and (>= (double (or (:player/health world) 20.0)) bridge-min-health)
+       (bridge? world feet move)
+       (ground-below? world (plus (plus feet move) [0 -1 0]))
+       (some? (stairs/filler world bridge-min-filler))))
+
 (defn climb-out?
   "May the up move from feet stand on a block laid beside the feet at their own height: the
    step's floor (the cell beside the feet, under the cell stepped into) air that a solid
@@ -279,37 +305,41 @@
    portal room staired down through a cave to the frame's height, 126 blocks from it, every step
    toward it over the cave's air, and walked its own stairs 32 steps a tunnel for 23 minutes to
    the timeout."
-  [world feet target climb dry-only? visited]
-  (let [ways (moves feet target climb)
-        fresh (remove #(contains? visited (plus feet %)) ways)
-        allowed? #(and (safe? world feet %) (or (not dry-only?) (dry? world feet %)))
-        first-way? (if dry-only? #(or (allowed? %) (bridge? world feet %)) allowed?)
-        turn? (fn [move]
-                (let [floor (plus (plus feet move) [0 -1 0])
-                      own-floor (plus feet [0 -1 0])]
-                  (and (zero? (second move))
-                       (build/holds? world [:solid own-floor])
-                       (contains? #{:air :cave_air :void_air}
-                                  (blocks/name-of (terrain/block-at world floor)))
-                       (not (stairs/over-fluid? world floor))
-                       (= floor (build/foundation world floor))
-                       (some #(and (not= own-floor %)
-                                   (= (second floor) (second %))
-                                   (build/holds? world [:solid %]))
-                             (neighbours floor))
-                       (or (not dry-only?) (dry? world feet move)))))]
-    (or (first (filter first-way? fresh))
-        (first (filter (fn [move]
-                         (let [floor (plus (plus feet move) [0 -1 0])
-                               filled (assoc-in world
-                                       [:world/blocks floor]
-                                       (blocks/default-state :cobblestone))]
-                           (and (turn? move) (safe? filled feet move))))
-                       fresh))
-        (first (filter #(climb-out? world feet % dry-only?) fresh))
-        (first (filter #(and (sealed? world feet %) (or (not dry-only?) (dry? world feet %)))
-                       fresh))
-        (first (filter allowed? ways)))))
+  ([world feet target climb dry-only? visited]
+   (next-move world feet target climb dry-only? visited false))
+  ([world feet target climb dry-only? visited bridge-ok?]
+   (let [ways (moves feet target climb)
+         fresh (remove #(contains? visited (plus feet %)) ways)
+         allowed? #(and (safe? world feet %) (or (not dry-only?) (dry? world feet %)))
+         first-way? (cond dry-only? #(or (allowed? %) (bridge? world feet %))
+                          bridge-ok? #(or (allowed? %) (bridge-over-void? world feet %))
+                          :else allowed?)
+         turn? (fn [move]
+                 (let [floor (plus (plus feet move) [0 -1 0])
+                       own-floor (plus feet [0 -1 0])]
+                   (and (zero? (second move))
+                        (build/holds? world [:solid own-floor])
+                        (contains? #{:air :cave_air :void_air}
+                                   (blocks/name-of (terrain/block-at world floor)))
+                        (not (stairs/over-fluid? world floor))
+                        (= floor (build/foundation world floor))
+                        (some #(and (not= own-floor %)
+                                    (= (second floor) (second %))
+                                    (build/holds? world [:solid %]))
+                              (neighbours floor))
+                        (or (not dry-only?) (dry? world feet move)))))]
+     (or (first (filter first-way? fresh))
+         (first (filter (fn [move]
+                          (let [floor (plus (plus feet move) [0 -1 0])
+                                filled (assoc-in world
+                                        [:world/blocks floor]
+                                        (blocks/default-state :cobblestone))]
+                            (and (turn? move) (safe? filled feet move))))
+                        fresh))
+         (first (filter #(climb-out? world feet % dry-only?) fresh))
+         (first (filter #(and (sealed? world feet %) (or (not dry-only?) (dry? world feet %)))
+                        fresh))
+         (first (filter allowed? ways))))))
 
 (defn retreat?
   "Does move from feet step into a cell visited already stood in: next-move's last resort, a
@@ -449,7 +479,8 @@
                 seen (-> tunnel-visited
                          (into (:trail/cells trail))
                          (into (:trail/dead trail)))
-                ahead (when-not back (next-move world feet target climb (boolean dry?) seen))
+                ahead (when-not back
+                        (next-move world feet target climb (boolean dry?) seen (:intent/bridge? i)))
                 fresh? (and ahead (not (retreat? feet ahead seen)))
                 undo (when-not (or back fresh?) (step-back world feet trail (boolean dry?)))
                 m (or back undo ahead)
@@ -535,13 +566,11 @@
 (defn leg-target
   "The cell the leg of search ({:search/from :search/heading :search/leg :search/tunnels}) aims
    at: its length along its heading from where it began, at that cell's explore-y."
-  [{:search/keys [from heading leg offset]}]
+  [{:search/keys [from heading leg]}]
   (let [[x _ z] from
         [dx dz] heading
-        n (leg-length leg)
-        [px pz] (turn-right heading)
-        o (long (or offset 0))]
-    [(+ x (* n dx) (* o px)) (explore-y from) (+ z (* n dz) (* o pz))]))
+        n (leg-length leg)]
+    [(+ x (* n dx)) (explore-y from) (+ z (* n dz))]))
 
 (defn open-ahead?
   "Is the cell look-ahead blocks from feet along heading [dx dz] loaded? A real server shows 96
@@ -582,41 +611,17 @@
         left (turn-right back)]
     (concat (sort-by #(- (long (rock-run world feet %))) [right left]) [back heading])))
 
-(defn lane-by-rock
-  "The signed blocks to the right of heading (negative: left) of the nearest lane, within
-   lane-reach, whose rock-run along heading from the feet's depth is at least lane-min-run, the
-   lanes a lane-step apart, right before left at the same distance; nil when none. A leg that
-   stalled at a cavern's wall aims at a lane past it and its tunnel follows the wall toward
-   that side: sim world R2/12 (issue #338) has a rock mass north of the cavern, thirty blocks off
-   the leg's line, its target's z flipping the side steps at the line itself."
-  [world [x y z] heading]
-  (let [[px pz] (turn-right heading)]
-    (first (for [d (range lane-step (inc lane-reach) lane-step)
-                 s [1 -1]
-                 :when (>= (long (rock-run world [(+ x (* s d px)) y (+ z (* s d pz))] heading))
-                           lane-min-run)]
-             (* s d)))))
-
 (defn leg-progress
   "The search with its progress toward the leg's end kept: :search/best, the least horizontal
    distance the feet have been from it at a look, and :search/stalled, the looks in a row that
    brought them no stall-gain nearer than that. A tunnel through a cavern's rim wanders at a wall
    it cannot cross (sim world R2/12, issue #338: fourteen minutes inside x 507-534, z 340-362 on
    a leg to x 620, eight pickaxes of sticks spent for 13 blocks), and counts as stalled."
-  [world {:search/keys [best stalled offset heading] :as search}]
-  (let [feet (intent/feet world)
-        d (physics/horizontal-distance (physics/centre feet) (physics/centre (leg-target search)))
-        lane (when (and (nil? offset) (= (dec lane-stalled) (long (or stalled 0))))
-               (lane-by-rock world feet heading))]
+  [world {:search/keys [best] :as search}]
+  (let [d (physics/horizontal-distance (physics/centre (intent/feet world))
+                                       (physics/centre (leg-target search)))]
     (cond (or (nil? best) (<= d (- (double best) stall-gain)))
           (assoc search :search/best d :search/stalled 0)
-          lane
-          (-> search
-              (assoc :search/offset lane :search/stalled 0)
-              (assoc :search/best
-                     (physics/horizontal-distance
-                      (physics/centre feet)
-                      (physics/centre (leg-target (assoc search :search/offset lane))))))
           :else (update search :search/stalled (fnil inc 0)))))
 
 (defn leg-over?
@@ -691,5 +696,6 @@
                 {:intent/kind :tunnel-to
                  :intent/target (leg-target search)
                  :intent/steps steps-per-tunnel
+                 :intent/bridge? (pos? (long (or (:search/stalled search) 0)))
                  :intent/search search})
               {:plan/wait :no-way}))))
