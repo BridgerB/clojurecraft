@@ -202,7 +202,11 @@
   "The steps to try from feet toward target, best first: along the axis with the farther way to go,
    then the other, then sideways and back (aside, when target is straight over or under); each
    up or down first when target is more than climb (climb-past when not given) above or below,
-   then level, then the other way."
+   then level, then the other way. A target farther above or below than it is aside (a fortress
+   brick overhead) takes the height first of every direction, then the level, so a safe step up
+   in a lesser direction beats a step level or down in the first: the bot dug a zigzag down to
+   the bedrock under bricks 37 and 47 blocks over its head (sim snapshots R2-25-2 and R2-6-2,
+   issues #538 and #338)."
   ([feet target] (moves feet target climb-past))
   ([[fx fy fz] [tx ty tz] climb]
    (let [ddx (- tx fx)
@@ -217,7 +221,9 @@
          [a b] (if (>= (abs ddx) (abs ddz)) [x z] [z x])
          side (fn [[p q]] [[q p] [(- q) (- p)]])
          dirs (distinct (remove #(= [0 0] %) (concat [a b] (side (if (= [0 0] a) b a)) aside)))]
-     (for [[dx dz] dirs dy ys] [dx dy dz]))))
+     (if (and (not (zero? dy)) (> (abs ddy) (+ (abs ddx) (abs ddz))))
+       (for [dy ys [dx dz] dirs] [dx dy dz])
+       (for [[dx dz] dirs dy ys] [dx dy dz])))))
 
 (defn choose-move
   "The first of moves from feet toward target (climbing past climb, climb-past when not given)
@@ -530,6 +536,15 @@
                step-keys)
               (and (#{:floor-clear :open :enter} (:build/step next)) (not (safe? world from move)))
               (reduce intent/dissoc-intent (assoc world :player/controls {}) step-keys)
+              ;; nothing to lay (the last block went into an earlier cell of this step): the
+              ;; step is given up and its cell counts as visited, never placed with a block
+              ;; that is not held (sim snapshots R2-17-1 and R2-12-1, issue #410)
+              (and (= :place (:build/op next)) (nil? (stairs/filler world 1)))
+              (reduce intent/dissoc-intent
+                      (intent/assoc-intent (assoc world :player/controls {})
+                                           :intent/tunnel-visited
+                                           (conj tunnel-visited (plus from move)))
+                      step-keys)
               (and (= :enter (:build/step next))
                    (= :walk (:intent/kind child))
                    (intent/failed? child)
@@ -712,7 +727,10 @@
               (intent/chain-next (:plan/last world) :take-table make/table-drops {})
               (make/take-table-along world)
               (when brick
-                {:intent/kind :tunnel-to :intent/target brick :intent/steps steps-per-tunnel})
+                {:intent/kind :tunnel-to
+                 :intent/target brick
+                 :intent/steps steps-per-tunnel
+                 :intent/bridge? true})
               (when search
                 {:intent/kind :tunnel-to
                  :intent/target (leg-target search)

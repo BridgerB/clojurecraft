@@ -1080,3 +1080,55 @@
         "a leg that has not stalled goes round")
     (is (= [1 0 0] (fortress/next-move w [0 64 0] [8 64 0] 3 false #{} true))
         "a stalled leg lays the floor and crosses")))
+
+(deftest a-step-over-a-floor-with-nothing-to-lay-is-given-up-not-failed-not-held
+  ;; Issue #410's R2-17-1 and R2-12-1: the floor of a step was to be placed and no block was
+  ;; held, the :cobblestone it fell back to failed :not-held three times.
+  (let [feet [0 64 0]
+        move [1 0 0]
+        w (assoc (rock {[1 63 0] air [1 64 0] air [1 65 0] air})
+                 :bot/phase :play
+                 :bot/effects []
+                 :time/now 0
+                 :time/tick 0)
+        placing (build/next-op w (fortress/step-plan feet move))
+        i {:intent/kind :tunnel-to
+           :intent/target [10 64 0]
+           :intent/steps 32
+           :intent/status :active
+           :intent/from feet
+           :intent/move move
+           :intent/op placing}
+        tick {:event/kind :tick :event/now 0}
+        out (intent/run (assoc w :plan/intent i) i tick)
+        laid (intent/run (assoc w
+                                :plan/intent i
+                                :player/inventory
+                                {0 {:item (recipe/item-id :cobblestone) :count 4}})
+                         i
+                         tick)]
+    (is (= :place (:build/op placing)))
+    (is (= :active (get-in out [:plan/intent :intent/status])))
+    (is (nil? (get-in out [:plan/intent :intent/move])) "the step is dropped")
+    (is (contains? (get-in out [:plan/intent :intent/tunnel-visited]) [1 64 0])
+        "its cell counts as visited, so it is not chosen again")
+    (is (= move (get-in laid [:plan/intent :intent/move])) "with a block held the step goes on")))
+
+(deftest a-floor-is-laid-from-bricks-or-soul-sand-when-nothing-else-is-held
+  (let [w (rock {[1 63 0] (blocks/default-state :soul_sand) [1 64 0] air [1 65 0] air})
+        carry (fn [item] (assoc w :player/inventory {0 {:item (recipe/item-id item) :count 4}}))]
+    (doseq [item [:polished_blackstone_bricks :cracked_polished_blackstone_bricks :soul_sand]]
+      (is (fortress/safe? (carry item) [0 64 0] [1 0 0]) (str item)))
+    (is (not (fortress/safe? (carry :gravel) [0 64 0] [1 0 0]))
+        "gravel still falls out of a floor")))
+
+(deftest a-target-far-overhead-is-climbed-to-before-it-is-gone-round
+  ;; Issues #538 and #338: bricks 37 and 47 blocks over the feet and a few aside, the first
+  ;; direction's level or down step beat a step up in the next, and the tunnel zigzagged down to
+  ;; the bedrock.
+  (let [ms (fortress/moves [0 18 0] [4 55 -3])
+        ups (take-while #(= 1 (second %)) ms)]
+    (is (= 4 (count ups)) "every direction's step up comes first")
+    (is (every? #(<= (second %) 0) (drop (count ups) ms)) "then level, then down"))
+  (is (= [1 0 0] (first (fortress/moves [0 64 0] [60 70 50])))
+      "a far way aside keeps its direction"))
