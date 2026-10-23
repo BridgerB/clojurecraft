@@ -247,18 +247,21 @@
                 move))))
 
 (defn ground-below?
-  "Is the first block under the floor cell [x y z] (within bridge-ground-depth) solid, with
-   nothing but clear cells over it: ground a body would land on, never a fluid, never the end of
-   the loaded world? A floor laid where it is false is a bridge over lava, water or the unknown."
+  "Is the first block under the floor cell [x y z] (within bridge-ground-depth) that is not air
+   a solid block (any shape, basalt's among them), nothing but air over it: ground a body would
+   land on, never a fluid, never the end of the loaded world? A floor laid where it is false is
+   a bridge over lava, water or the unknown."
   [world [x y z]]
   (= :ground
-     (reduce (fn [_ k]
-               (case (path/classify world [x (- y k) z])
-                 :clear nil
-                 :solid (reduced :ground)
-                 (reduced false)))
-             nil
-             (range 1 (inc bridge-ground-depth)))))
+     (reduce
+      (fn [_ k]
+        (let [id (terrain/block-at world [x (- y k) z])]
+          (cond (or (nil? id) (contains? blocks/lava-states id) (contains? blocks/water-states id))
+                (reduced false)
+                (blocks/solid? id) (reduced :ground)
+                :else nil)))
+      nil
+      (range 1 (inc bridge-ground-depth)))))
 
 (defn bridge-over-void?
   "May the level move from feet be floored across a cavern in the Nether, bridge? holding (the
