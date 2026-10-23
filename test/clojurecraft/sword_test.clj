@@ -4,6 +4,7 @@
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
+            [clojurecraft.make :as make]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.sword :as sword]
@@ -67,7 +68,13 @@
   (let [worn (assoc (item :stone_sword 1) :durability 9)
         w (standing {3 (item :cobblestone 5) 4 (item :stick 1) 5 worn})]
     (is (nil? (sword/serviceable w)) "nine swings left is not a sword to keep")
-    (is (= :stone_sword (sword/wanted w)) "the table is held: a new stone sword"))
+    (is (= :stone_sword (sword/wanted w)) "the table is held: a new stone sword")
+    (let [row (first (filter #(= :sword (:goal/id %)) plan/goals))
+          chained (assoc w :plan/chain? true)]
+      (is (nil? (make/decide chained (assoc row :goal/provides {:item/stone_sword 1}) plan/goals))
+          "the worn sword still sits in the inventory, so the need looks met")
+      (is (= :place (:intent/kind (plan/next-intent chained row plan/goals)))
+          "hidden from the count, the held table goes down")))
   (let [grid (-> (game/init fx/opts)
                  (assoc :bot/phase :play
                         :player/pos [8.5 64.0 8.5]

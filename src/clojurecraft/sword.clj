@@ -94,6 +94,26 @@
   [world]
   (boolean (or (make/near world :crafting_table) (pieces? world))))
 
+(defn worn-sword?
+  "Is this hotbar or main-inventory stack a sword under window/spare-uses swings
+   (window/swings-left)?"
+  [p item]
+  (let [n (recipe/item-name (:item item))
+        left (window/swings-left item)]
+    (boolean
+     (and (< -1 p combat/store-slots) (some #{n} combat/swords) left (< left window/spare-uses)))))
+
+(defn drop-worn
+  "A world whose worn swords (worn-sword?) keep their slots but are not swords. make/counts
+   treats any stone sword as the one a row provides, worn or fresh, and would make nothing;
+   clearing the slot would look like room in a full inventory. The stack stays, without an item."
+  [world]
+  (update
+   world
+   :player/inventory
+   (fn [inv]
+     (into {} (map (fn [[p item]] [p (if (worn-sword? p item) (dissoc item :item) item)])) inv))))
+
 (defn with-laid
   "A world whose empty inventory slots also hold the crafting grid and the cursor (never the
    result), so make/counts sees a log laid down mid-craft. The intent decided from it names a
@@ -108,10 +128,11 @@
     (assoc world :player/inventory (into inv (map vector free extra)))))
 
 (defn for-decide
-  "The world a sword's needs are decided on: with-laid, and a finished log chain not continued
-   once pieces? holds, so the craft starts instead of the next trunk."
+  "The world a sword's needs are decided on: worn swords hidden (drop-worn), the grid visible
+   (with-laid), and a finished log chain not continued once pieces? holds, so the craft starts
+   instead of the next trunk."
   [world]
-  (cond-> (with-laid world)
+  (cond-> (with-laid (drop-worn world))
     (and (pieces? world) (= :log (:intent/for (:plan/last world)))) (dissoc :plan/last)))
 
 (defn wanted
