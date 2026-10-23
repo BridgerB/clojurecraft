@@ -20,7 +20,7 @@
           nether (simrace/with-nether nether nether-path))
       next-at (atom 0)
       stop? (fn [world]
-              (when (>= (:time/now world 0) @next-at)
+              (when (and (:player/pos world) (>= (:time/now world 0) @next-at))
                 (reset! next-at (+ (:time/now world 0) every-ms))
                 (println "WHY"
                          (quot (long (:time/now world 0)) 60000)
@@ -38,20 +38,28 @@
                                   :forage (:hunt/forage world)}))
                 (flush))
               (or (plan/done? world) (plan/failed? world)))
-      {:keys [world]} (sim/run+ simrace/step
-                                (game/init {:host "sim" :port 0 :name "Clj_sim"})
-                                (sim/init (cond-> {:columns (:capture/columns w)
-                                                   :decoded (:capture/decoded w)
-                                                   :spawn (simrace/spawn-of w)
-                                                   :seed seed
-                                                   :tick-seed seed
-                                                   :difficulty simrace/difficulty
-                                                   :day-time (simrace/day-time-of seed)}
-                                            (:capture/nether w)
-                                            (assoc :nether (:capture/nether w))))
-                                stop?
-                                (* 330 60000)
-                                (simrace/go-of w "nether"))]
-  (println "END" set-name n seed (:time/now world) (:plan/status world) (:plan/reason world))
+      {:keys [world crashed]} (sim/run+ simrace/step
+                                        (game/init {:host "sim" :port 0 :name "Clj_sim"})
+                                        (sim/init (cond-> {:columns (:capture/columns w)
+                                                           :decoded (:capture/decoded w)
+                                                           :spawn (simrace/spawn-of w)
+                                                           :seed seed
+                                                           :tick-seed seed
+                                                           :difficulty simrace/difficulty
+                                                           :day-time (simrace/day-time-of seed)}
+                                                    (:capture/nether w)
+                                                    (assoc :nether (:capture/nether w))))
+                                        stop?
+                                        (* 330 60000)
+                                        (simrace/go-of w "nether"))]
+  (println "END"
+           set-name
+           n
+           seed
+           (:time/now world)
+           (:plan/status world)
+           (:plan/reason world)
+           (some-> crashed
+                   str))
   (flush))
 (shutdown-agents)
