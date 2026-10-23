@@ -363,6 +363,9 @@
    [:intent/search
     "the fortress search leg an exploring :tunnel-to works for (fortress/exploring): the executor keeps it as :fortress/search"
     "a :tunnel-to with no brick on record to go to"]
+   [:intent/bridge?
+    "a :tunnel-to that may floor a level step across a cavern (fortress/bridge-over-void?): the spiral's leg has stalled (issue #338)"
+    "a :tunnel-to with a search whose leg has stalled"]
    [:intent/taken "steps a :tunnel-to has taken" ":tunnel-to, after its first step"]
    [:intent/tunnel-visited
     "the feet cells this tunnel-to has started steps from; fresh steps and short floored turns precede a retreat"

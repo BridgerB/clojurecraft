@@ -481,6 +481,7 @@
 (s/def :intent/climb nat-int?)
 (s/def :intent/dry? boolean?)
 (s/def :intent/search :fortress/search)
+(s/def :intent/bridge? boolean?)
 (s/def :intent/trunk ::block-pos)
 (s/def :intent/stage keyword?)
 (s/def :intent/since int?)
@@ -934,7 +935,8 @@
          :target ::block-pos
          :climb nat-int?
          :dry-only? boolean?
-         :visited :intent/tunnel-visited)
+         :visited :intent/tunnel-visited
+         :bridge-ok? (s/? boolean?))
   :ret (s/nilable :intent/move))
 
 (s/fdef end-portal/next-op
