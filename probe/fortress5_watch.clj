@@ -38,6 +38,26 @@
          " cells " (pr-str (mapv #(nm world %) cells))
          " floor " (nm world floor))))
 
+(defn why-level
+  "A line per level move from feet: the parts of bridge-over-void?."
+  [world feet]
+  (for [dx [-1 0 1]
+        dz [-1 0 1]
+        :when (not= 0 dx dz)
+        :when (or (zero? dx) (zero? dz))
+        :let [move [dx 0 dz]
+              floor (fortress/plus (fortress/plus feet move) [0 -1 0])]]
+    (str "  LEVEL " move
+         " safe " (fortress/safe? world feet move)
+         " floor " (nm world floor)
+         " under-feet " (nm world (fortress/plus feet [0 -1 0]))
+         " bridge? " (fortress/bridge? world feet move true)
+         " ground " (fortress/ground-below? world floor)
+         " ground-lava " (fortress/ground-below? world floor true)
+         " over-void " (fortress/bridge-over-void? world feet move)
+         " filler16 " (stairs/filler world 16)
+         " cells " (pr-str (mapv #(nm world %) (fortress/opens feet move))))))
+
 (defn run!*
   [period path]
   (println "== " path)
@@ -81,7 +101,19 @@
                            (<= (second (:intent/move i)) 0))
                   (vswap! n inc)
                   (println "CHOSE" t feet (:intent/move i) "target" tgt)
-                  (run! println (why w' feet tgt)))))
+                  (run! println (why w' feet tgt)))
+                (when (and feet
+                           tgt
+                           (pos? (second (:intent/move i)))
+                           (<= (- (second tgt) (second feet)) 3))
+                  (vswap! n inc)
+                  (println "CLIMBED"
+                           t
+                           feet
+                           (:intent/move i)
+                           "target" tgt
+                           "health" (:player/health w'))
+                  (run! println (why-level w' feet)))))
             (when (and (< @n 300) (> (- t @last-t) period))
               (vreset! last-t t)
               (vswap! n inc)
