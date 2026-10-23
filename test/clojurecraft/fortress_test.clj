@@ -1156,11 +1156,15 @@
         "its cell counts as visited, so it is not chosen again")
     (is (= move (get-in laid [:plan/intent :intent/move])) "with a block held the step goes on")))
 
-(deftest a-floor-is-laid-from-bricks-or-soul-sand-when-nothing-else-is-held
+(deftest a-floor-is-laid-from-bricks-when-nothing-else-is-held
   (let [w (rock {[1 63 0] (blocks/default-state :soul_sand) [1 64 0] air [1 65 0] air})
         carry (fn [item] (assoc w :player/inventory {0 {:item (recipe/item-id item) :count 4}}))]
-    (doseq [item [:polished_blackstone_bricks :cracked_polished_blackstone_bricks :soul_sand]]
+    (doseq [item [:polished_blackstone_bricks :cracked_polished_blackstone_bricks]]
       (is (fortress/safe? (carry item) [0 64 0] [1 0 0]) (str item)))
+    ;; Soul sand stays a filler for a seal, but laid in a floor it stands as no walk
+    ;; floor, so the step dug it out and laid it again for ever (issue #537, R1-20-1).
+    (is (not (fortress/safe? (carry :soul_sand) [0 64 0] [1 0 0]))
+        "soul sand laid in a floor is no replacement")
     (is (not (fortress/safe? (carry :gravel) [0 64 0] [1 0 0]))
         "gravel still falls out of a floor")))
 
