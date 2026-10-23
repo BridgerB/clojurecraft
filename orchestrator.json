@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-23T09:24:30.469Z",
+  "at" : "2026-10-23T09:29:01.799Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -140,12 +140,12 @@
   }, {
     "number" : 171,
     "title" : "Bot stops at flint-and-steel: unsafe",
-    "labels" : [ "bot-failure", "real", "sim" ],
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : true
   }, {
     "number" : 563,
     "title" : "Bot stops at ender-pearls: no-sword",
-    "labels" : [ "bot-failure", "sim" ],
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 104,
@@ -263,8 +263,12 @@
     "why" : "hands-off label"
   }, {
     "issue" : 171,
-    "move" : "wait",
-    "why" : "session starting"
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 563,
+    "move" : "leave",
+    "why" : "hands-off label"
   }, {
     "issue" : 104,
     "move" : "leave",
