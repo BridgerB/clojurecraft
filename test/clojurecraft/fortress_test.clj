@@ -663,6 +663,14 @@
         "the step lays it first")
     (is (= [1 0 0] (fortress/next-move (dissoc w :player/inventory) feet target 3 false visited))
         "nothing to lay: the retreat as before")
+    ;; Issue #537's R1-20-1: only soul sand carried; laid beside the feet it is dug out
+    ;; again as no walk floor, so the climb was offered and given up for ever.
+    (is (not (fortress/climb-out?
+              (assoc w :player/inventory {0 {:item (recipe/item-id :soul_sand) :count 64}})
+              feet
+              move
+              false))
+        "soul sand laid is no floor to climb onto")
     (is (nil?
          (fortress/next-move (assoc-in w [:world/blocks [1 63 0]] air) feet target 3 false visited))
         "a block needs a face to lay against")
@@ -934,7 +942,9 @@
   ;; past a fortress 150 blocks north; the legs now sweep strips a spacing apart
   (is (= [[1 0] [0 1] [-1 0] [0 -1] [1 0]] (take 5 (iterate fortress/turn-right [1 0]))))
   (is (= [160 160 320 320 480] (map fortress/leg-length (range 5))))
-  (is (= [480 480] (map fortress/leg-length [10 200])) "no leg longer than leg-max")
+  (is (= [480 64 0]
+         (fortress/leg-target {:search/from [0 64 0] :search/heading [1 0] :search/leg 200}))
+      "no leg's target farther than leg-max from where it began")
   (is (= [160 64 0] (fortress/leg-target east-leg)))
   (is (= [0 64 -320]
          (fortress/leg-target {:search/from [0 64 0] :search/heading [0 -1] :search/leg 2}))))
@@ -992,7 +1002,12 @@
                                                     :search/heading [1 0]
                                                     :search/leg 0
                                                     :search/tunnels 3}))))
-        "a travelled leg still grows the spiral")))
+        "a travelled leg still grows the spiral")
+    (is (= east-leg
+           (fortress/exploring (assoc (field -20 40)
+                                      :fortress/search
+                                      (assoc east-leg :search/leg 200 :search/tunnels 900))))
+        "a leg grown untravelled past leg-max starts again along its heading")))
 
 (deftest a-leg-looks-for-rock-ahead
   ;; issue #338, sim world R2/12: a leg east ran into a cavern sixty blocks across and its rim

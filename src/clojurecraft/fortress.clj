@@ -309,7 +309,9 @@
   "May the up move from feet stand on a block laid beside the feet at their own height: the
    step's floor (the cell beside the feet, under the cell stepped into) air that a solid
    neighbour holds up (build/foundation: a ledge's rock, a wall, a block laid before), the
-   block under the feet solid, a filler carried, the step dry? when dry-only?, and with that
+   block under the feet solid, a filler carried that stands as a floor once laid
+   (walk-filler: soul sand laid is dug out again, and the climb offered for ever, sim
+   snapshot R1-20-1, issue #537), the step dry? when dry-only?, and with that
    floor laid, safe?. The way out of a dead end over a drop, where no level step has a floor and
    no turn may floor over the lava sea: the body stays on its stand while the block is laid
    against the ledge, then climbs onto it, so it is never a causeway. Sim snapshot R3-6-1 (issue
@@ -321,7 +323,7 @@
          (build/holds? world [:solid (plus feet [0 -1 0])])
          (contains? #{:air :cave_air :void_air} (blocks/name-of (terrain/block-at world floor)))
          (= floor (build/foundation world floor))
-         (some? (stairs/filler world 1))
+         (some? (walk-filler world floor))
          (or (not dry-only?) (dry? world feet move))
          (safe? (assoc-in world [:world/blocks floor] (blocks/default-state :cobblestone))
                 feet
@@ -698,12 +700,13 @@
 
 (defn leg-length
   "Blocks of the leg-th leg (from 0) of an exploring spiral: explore-spacing for the first two, then
-   each pair one spacing longer, so the strips the legs sweep lie a spacing apart, and never
-   more than leg-max: legs given up untravelled once grew the count without the feet ever
-   walking them, and a search found its target 16,896 blocks south (sim snapshot R4-26-1,
-   issue #527), one strip swept for the whole window."
+   each pair one spacing longer, so the strips the legs sweep lie a spacing apart. A leg's
+   target is never more than leg-max from where it began (leg-target): legs given up
+   untravelled once grew the count without the feet ever walking them, and a search found
+   its target 16,896 blocks south (sim snapshot R4-26-1, issue #527), one strip swept for
+   the whole window."
   [leg]
-  (min leg-max (* explore-spacing (inc (quot (long leg) 2)))))
+  (* explore-spacing (inc (quot (long leg) 2))))
 
 (defn turn-right
   "The horizontal direction [dx dz] a quarter turn clockwise from heading: east, south, west, north."
@@ -721,11 +724,12 @@
 
 (defn leg-target
   "The cell the leg of search ({:search/from :search/heading :search/leg :search/tunnels}) aims
-   at: its length along its heading from where it began, at that cell's explore-y."
+   at: its length (leg-length, capped at leg-max) along its heading from where it began, at
+   that cell's explore-y."
   [{:search/keys [from heading leg]}]
   (let [[x _ z] from
         [dx dz] heading
-        n (leg-length leg)]
+        n (min leg-max (leg-length leg))]
     [(+ x (* n dx)) (explore-y from) (+ z (* n dz))]))
 
 (defn open-ahead?
@@ -805,7 +809,9 @@
   "The search an exploring tunnel carries, with no brick on record: the world's :fortress/search
    while its leg goes on (one more tunnel spent), else the next leg, a quarter turn right from the
    last one's heading and, when that leg was travelled (leg-done?), a longer one; a leg given up
-   untravelled turns at the same length, from the feet; the first leg, east when it can go, with no
+   untravelled turns at the same length, from the feet; a leg longer than leg-max (grown
+   untravelled before this rule, its target thousands of blocks away) starts again as the
+   first leg along its own heading; the first leg, east when it can go, with no
    search. A leg that cannot go the way it turns tries the next heading, so the model's edge
    turns the tunnel. nil when no heading has a way to go. Replaces the tunnel that aimed 48 blocks
    east for ever: sim race 39095704051 runner 4 (issue #338) went 630 blocks east along the
@@ -815,6 +821,7 @@
         {:search/keys [heading leg] :as search} (:fortress/search world)
         headings #(take 4 (iterate turn-right %))]
     (cond (nil? search) (new-leg world feet 0 (headings [1 0]))
+          (> (leg-length (long leg)) leg-max) (new-leg world feet 0 (headings heading))
           (leg-done? world search)
           (new-leg world feet (inc (long leg)) (turns-by-rock world feet heading))
           (leg-over? world search) (new-leg world feet leg (turns-by-rock world feet heading))
