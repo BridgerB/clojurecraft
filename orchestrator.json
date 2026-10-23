@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-23T10:38:04.731Z",
+  "at" : "2026-10-23T10:48:07.422Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -148,6 +148,11 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : true
   }, {
+    "number" : 65,
+    "title" : "Bot stops at cobblestone: boxed",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
     "number" : 564,
     "title" : "Bot stops at blaze-rods: unreachable",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
@@ -277,6 +282,10 @@
     "why" : "hands-off label"
   }, {
     "issue" : 171,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 65,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
