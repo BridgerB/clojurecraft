@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-23T22:26:02.957Z",
+  "at" : "2026-10-23T22:27:12.500Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -23,14 +23,14 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 231,
-    "title" : "Bot stops at cast-one: no-footing",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 531,
     "title" : "Bot stops at ingots: boxed",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 231,
+    "title" : "Bot stops at cast-one: no-footing",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 507,
@@ -145,11 +145,11 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 231,
+    "issue" : 531,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 531,
+    "issue" : 231,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -198,8 +198,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 68,
-    "move" : "wait",
-    "why" : "session starting"
+    "move" : "unassign",
+    "why" : "no pull request and no session since the assignment"
   }, {
     "issue" : 65,
     "move" : "leave",
@@ -226,10 +226,6 @@
     "why" : "hands-off label"
   } ],
   "log" : [ {
-    "issue" : 135,
-    "move" : "assign",
-    "at" : "2026-10-21T09:15:34.680Z"
-  }, {
     "issue" : 135,
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
@@ -1566,5 +1562,10 @@
     "issue" : 68,
     "move" : "assign",
     "at" : "2026-10-23T22:06:37.550Z"
+  }, {
+    "issue" : 68,
+    "move" : "unassign",
+    "why" : "no pull request and no session since the assignment",
+    "at" : "2026-10-23T22:27:12.500Z"
   } ]
 }
