@@ -13,6 +13,8 @@ sourceRefs:
   - test/clojurecraft/place_test.clj#a-spot-is-found-on-an-uneven-floor
   - test/clojurecraft/place_test.clj#a-placement-spot-is-never-inside-the-player
   - src/clojurecraft/sim.clj#defn overlaps-player?
+  - src/clojurecraft/place.clj#defn drop-beyond?
+  - test/clojurecraft/place_test.clj#a-spot-along-a-bridge
 related:
   - "[[bot/decisions/_moc|Decisions]]"
   - "[[place-intent]]"
@@ -30,6 +32,9 @@ related:
 
 ## What would change the answer
 Terrain where no cell within three blocks and one up or down works (a one-wide tunnel, a pillar top). Then the bot would need to dig a spot, or place above its head, which needs the pathfinder and digging work (issues #4 and #9).
+
+## A drop beside every cell
+`place/spot` refuses a cell with a drop beside it (`drop-beside?`, issue #338: a table on a pillar over a cavern, dug again, and the bot walked off after its drop). On a one-block bridge in a fortress every cell has one, and the place failed `:no-spot` (issues #559, #560). When no plain spot and no wall niche exists, `:spot` takes a cell with a drop beside it only if the cell past it on the line from the feet has a floor (`drop-beyond?`): the pickup walks on along the floor instead of over the drop. A cell at the end of a bridge is still refused.
 
 ## See also
 - [[placement-judged-by-server]]
