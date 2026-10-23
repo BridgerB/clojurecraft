@@ -57,8 +57,6 @@ sourceRefs:
   - src/clojurecraft/combat.clj#defmethod fight-stage :retreat
   - src/clojurecraft/combat.clj#defmethod intent/run :fight
   - src/clojurecraft/combat.clj#defmethod intent/run :back-off
-  - src/clojurecraft/combat.clj#defn safe-away-point
-  - test/clojurecraft/combat_test.clj#a-retreat-never-steps-toward-lava-or-a-drop
   - src/clojurecraft/combat.clj#defn threats
   - src/clojurecraft/combat.clj#defmulti answers
   - src/clojurecraft/combat.clj#defn answered-kinds
@@ -188,8 +186,6 @@ With none in reach while provisioning, the bot looks for animals on foot (`hunt/
 
 ## The sword (sword.clj)
 `:sword` is an always row at the portal kit's priority after the armour, so a chained run comes to it once the portal's iron is in hand and the wood-hungry mining is behind it; only a chained run makes one (a gym stage measures its own target: with the row in play the kit stage placed its held table for a wooden sword, undid the kit, and dug the table back until it timed out). Done by `:armed?`: nothing `wanted`, the first of an iron, stone and wooden sword better than the best held (`combat/swords` order) whose blade the held items pay for (`blade?`: iron only from ingots spare once the armour wants nothing, cobblestone, planks; never a log) with a handle (a stick, or two planks for sticks) and a table at hand. Planned through the needs planner. Until it is made, fights are by hand: `:defend` never stops to make a sword with a zombie at hand.
-
-A retreat (`:back-off`, a fight's `:retreat` stage) steps only where the next two cells on the level are safe (`safe-away-point`, `retreat-safe?`: a cell to stand in, a drop that lands within `path/max-fall`, or a wall; never a drop into lava or water, a cell beside lava or an unloaded one), turning up to 90 degrees from straight away, and stands when no heading is safe (`retreat-controls`): a bot cornered at a lip is `:cornered` and fights. Sim snapshots R4-14-1 and R4-7-1 (issue #231, `[:cast-one :no-footing]`): a staircase down at y -52 in deepslate, health under ten, the back-off walked blind over the lip of a cavern into its lava lake and the flee had no footing (`a-retreat-never-steps-toward-lava-or-a-drop`).
 
 ## See also
 - [[water-escape]] - the other always rows, and the preemption they share.

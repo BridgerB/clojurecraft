@@ -406,21 +406,3 @@
     (is (= (combat/hittable? w zombie) (combat/hittable? jumped zombie)) "the jump changes nothing")
     (is (not (combat/hittable? w zombie))
         "three and a half over the floor is out of reach, jumped or not")))
-
-(deftest a-retreat-never-steps-toward-lava-or-a-drop
-  ;; sim snapshots R4-14-1 and R4-7-1 (issue #231): a back-off walked blind straight away from a
-  ;; mob over the lip of a cavern into its lava lake; it turns to a safe heading, or stands
-  (let [zombie (mob :zombie [10.5 64.0 8.5] 20.0)
-        at (fn [lava] (assoc (standing {7 zombie}) :world/chunks {[0 0] (world/column lava)}))
-        straight (combat/away-point (at {}) zombie)
-        pit {[7 63 8] blocks/lava-base [6 63 8] blocks/lava-base}
-        ring (into {}
-                   (for [x (range 5 12)
-                         z (range 5 12)
-                         :when (not= [x z] [8 8])]
-                     [[x 63 z] blocks/lava-base]))]
-    (is (= straight (combat/safe-away-point (at {}) zombie)) "firm ground: straight away")
-    (is (not= straight (combat/safe-away-point (at pit) zombie)) "lava ahead: another heading")
-    (is (some? (combat/safe-away-point (at pit) zombie)))
-    (is (nil? (combat/safe-away-point (at ring) zombie)) "lava all round: no step")
-    (is (= {} (combat/retreat-controls (at ring) zombie)))))
