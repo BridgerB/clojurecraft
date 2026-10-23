@@ -184,6 +184,9 @@
    one stair up: sim race 39934917165 (issue #89, world R1/23) finished a descent at the trunk's
    own height, walked the opening, and the lip was not out, so the next choice was stairs up to
    the top of the world. The filler ran out at y 95 and the stairs down back were :boxed.
+   Real race Clj_r07 (the same issue) was already in the shaft: each length's rim was the stair's
+   own block a few above the feet, so it was a pit, and the climb went on to y 124. Under the sky
+   with that rim and the trunk more than twelve under the eye, the next length is down.
    Sim race 39593219246
    (issue #135, world R4/4) went up and down five blocks of its own stairs for fifteen minutes
    with the trunks forty below and the food at zero. Real race
@@ -203,7 +206,12 @@
         continuing? (descended? world)
         perched? (perched? world feet)
         drop-over (if (or continuing? perched?) continue-drop 12)]
-    (when (and (or continuing? perched? (stairs/out? world feet))
+    (when (and (or continuing?
+                   perched?
+                   (stairs/out? world feet)
+                   ;; a rim a stair above the feet is the block the climb just laid, not ground to
+                   ;; get out to. the trunk well below is the way down (issue #89, real-6)
+                   (and (terrain/under-sky? world feet) (some? (stairs/pit-rim world feet))))
                (not (contains? (:plan/boxed-at world #{}) feet)))
       (when-let [[_ ty _ :as trunk]
                  (let [near (filter (fn [[tx ty tz]]
@@ -398,6 +406,10 @@
                 ;; up to the top of the world from here spends the filler and boxes (issue #89)
                 (when (perched? world feet)
                   (or (trees-descend world trunks) (perch-down world trunks)))
+                ;; the shaft's rim climbs with the stair. once the sky is open and the trunk is
+                ;; more than the near band under the eye, go down (issue #89, real-6)
+                (when (and (terrain/under-sky? world feet) (stairs/pit-rim world feet))
+                  (trees-descend world trunks))
                 (opening-up world)
                 {:intent/kind :stairs-up
                  :intent/to-y (stairs/climb-to world terrain/top-y)
