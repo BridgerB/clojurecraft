@@ -252,6 +252,16 @@
   (or (>= (:player/food world hunger/heal-level) hunger/heal-level)
       (some? (or (eat/food-held world) (eat/scrap-held world)))))
 
+(defn rested?
+  "Is the bot as healed as a rest can make it: the health at rested, or, when nothing can bring it
+   back (heals? false: food under 18 and nothing to eat), at eat-under, where it is no longer wary
+   and a rest has nothing left to wait for. Sim snapshots R2-29-1, R1-28-1 and R1-44-1 (issues
+   #525, #532, #536) rested for hours at 15.8, 17.1 and 16.2 health: the food fell under 18 on the
+   way up, health stopped there, and a rest that ends only at rested never ended."
+  [world]
+  (let [health (:player/health world 20.0)]
+    (or (>= health rested) (and (not (heals? world)) (>= health eat-under)))))
+
 (defn watchers
   "{eid entity} of the blazes alive within cover-range of the feet that have the bot in sight
    (combat/seen?: a clear line from the eye to each): what shoots at it, and what a bot in
@@ -511,8 +521,8 @@
 ;; ---------------------------------------------------------------- the :rest intent
 
 (defmethod intent/run :rest
-  ;; {:intent/kind :rest}: stand still out of sight until the health is back to rested, or a
-  ;; blaze watches the bot that did not when the rest began (:intent/blazes), or the health
+  ;; {:intent/kind :rest}: stand still out of sight until the health is back to rested (rested?:
+  ;; eat-under when nothing can heal it), or a blaze watches the bot that did not when the rest began (:intent/blazes), or the health
   ;; falls under what it was then (:intent/health: shot from somewhere unseen) (done, and the
   ;; act looks again), failed :no-heal after rest-ms (no food in the bar, nothing comes back).
   ;; An intent, not a planner wait: the slow heal brings a point every four seconds, and a wait
@@ -528,7 +538,6 @@
         (-> world
             (assoc :player/controls {})
             (intent/assoc-intent :intent/since since :intent/blazes seen :intent/health health))]
-    (cond (or (>= now-health rested) (< now-health health) (seq (remove seen here)))
-          (intent/done world)
+    (cond (or (rested? world) (< now-health health) (seq (remove seen here))) (intent/done world)
           (and (> (- now since) rest-ms) (heals? world)) (intent/fail world :no-heal)
           :else world)))

@@ -5,7 +5,7 @@ type: reference
 tags: [bot, plan, combat, nether, blaze, goals]
 aliases: [:blaze-rods, :rods-held?, :camp, :rest, :no-blaze, :no-heal, :healing, rods-wanted, blaze-1, blaze-7, blaze-fortress, spawner, cover, volley]
 status: verified
-lastUpdated: 2026-10-18
+lastUpdated: 2026-10-22
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/blaze.clj#def rods-wanted 7
@@ -73,6 +73,9 @@ sourceRefs:
   - src/clojurecraft/intent.clj#def standing-walks
   - src/clojurecraft/combat.clj#defn clear?
   - test/clojurecraft/blaze_test.clj#the-seventh-rod-from-the-models-blazes
+  - src/clojurecraft/blaze.clj#defn rested?
+  - src/clojurecraft/blaze.clj#defn heals?
+  - test/clojurecraft/blaze_test.clj#a-rest-that-cannot-heal-ends-where-the-bot-is-no-longer-wary
 related:
   - "[[bot/plan/_moc|Plan]]"
   - "[[survival]]"
@@ -126,8 +129,12 @@ Three rows play this one goal from three starts, each named by `:gym/name` (the 
 ## Against the model
 `the-seventh-rod-from-the-models-blazes`: five of the model's blazes (`mob/kinds`: 20 health, they hover still and shoot 5 a hit on Normal every three seconds with a clear line) round a Nether landing at Easy with a full bar, six rods and an iron sword given; the plan is done with seven rods held and the bot alive. The model has no spawner: the rods come from the five, each dropping one in two by the model's seed. `watched-by-three-of-the-models-blazes-the-bot-hides` (sim_test): three blazes east of a Nether landing by the end of a wall three high; the bot walks round the wall into a cell none of them sees (`:intent/for :cover`), alive, with no watcher.
 
-## Food for the Nether (issue #501)
-Health comes back only from food 18 (`hunger/heal-level`), and the Nether has no game to hunt, so a bot that reaches the fortress hurt with nothing edible held fails the rest `:no-heal`. The overworld's `:hunt` row therefore also stocks `hunt/provision-wanted` 3 edible items (`hunt/provisioning?`: in the overworld, flint and steel and a water bucket held, the portal kit's goods) before the portal is lit; `meal` eats from them under 18. A bot already in the Nether without food cannot heal by resting: `heals?` (food at 18 or more, or edible food held) decides, and a `:rest` that cannot heal is held in cover (it fails `:no-heal` only when it could have healed), never ended by going back out to fight at that health: a death is no part of any plan.
+## Food for the Nether (issues #501, #525 to #537)
+Health comes back only from food 18 (`hunger/heal-level`), and the Nether has no game to hunt, so a bot that reaches the fortress hurt with nothing edible held fails the rest `:no-heal`. The overworld's `:hunt` row therefore also stocks `hunt/provision-wanted` edible items once the portal's kit is held, searching on foot when no animal is in sight (`hunt/foraging?`); `meal` eats from them under 18. Fifteen sim snapshots of the blaze-rods stall (issues #525 to #537) held no food at all: twelve rested hours at food 17 or less, three tunnelled a spiral search (two of them with no pickaxe, fixed by #541). The model, like a server, shows about three animals within 48 of a landing (85 of 185 captured worlds show one by two minutes, 11 within the hunt's 24), so a stock is a handful of meats, and a healed point of health costs about a point and a half of food: R1-14-1 went from 20 to 6 health in one volley at the spawner, healed to 8 on its last food and held at 17.
+
+A bot already in the Nether without food cannot heal by resting: `heals?` (food at 18 or more, or edible food held) decides, and a `:rest` that cannot heal is held in cover (it fails `:no-heal` only when it could have healed), never ended by going back out to fight at that health: a death is no part of any plan. `rested?` ends a rest at `rested` 18, or, when nothing can heal the bot, at `eat-under` 14, where it is no longer wary: R2-29-1, R1-28-1 and R1-44-1 rested at 15.8, 17.1 and 16.2 for hours, the food having fallen under 18 on the way up. Under 14 with no food it is held: the model's Nether has nothing to eat and no portal back, so no snapshot of the stall can recover there.
+
+A stall of this stage is judged over fifteen minutes (`simrace/recurs?`: the stage reached), and seven rods are some fourteen kills at a spawner's pace (a batch of two to four blazes every ten to forty seconds, a rod one kill in two): a snapshot taken before the bot is at a healthy spawner recurs whatever the fix, so the evidence for this stage is whole runs (`--until blaze-rods`), not the moments.
 
 ## Limits
 - Fireballs are not dodged; the damage-event log is where to look when they kill.
