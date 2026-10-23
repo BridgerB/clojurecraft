@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-23T18:32:58.717Z",
+  "at" : "2026-10-23T18:35:17.790Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -141,6 +141,11 @@
     "number" : 563,
     "title" : "Bot stops at ender-pearls: no-sword",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 351,
+    "title" : "Bot stops at fortress: stuck",
+    "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
     "number" : 342,
@@ -286,6 +291,9 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 351,
+    "move" : "assign"
+  }, {
     "issue" : 342,
     "move" : "leave",
     "why" : "hands-off label"
@@ -311,11 +319,6 @@
     "why" : "hands-off label"
   } ],
   "log" : [ {
-    "issue" : 135,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment",
-    "at" : "2026-10-21T09:02:45.041Z"
-  }, {
     "issue" : 135,
     "move" : "assign",
     "at" : "2026-10-21T09:03:56.353Z"
@@ -1653,5 +1656,9 @@
     "issue" : 564,
     "move" : "assign",
     "at" : "2026-10-23T09:51:42.594Z"
+  }, {
+    "issue" : 351,
+    "move" : "assign",
+    "at" : "2026-10-23T18:35:17.790Z"
   } ]
 }
