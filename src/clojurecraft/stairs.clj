@@ -1441,19 +1441,32 @@
    two allowed and, once taken, the only one (:intent/side), so it never steps back and forth;
    :boxed when neither the heading nor that side allows a step. It never turns back down itself:
    the eighth live run, refused east at y 16, turned and tunnelled west beside the tunnel it had
-   cut, and batch iron-a2 run 4 walked its own tunnel back and forth for eight minutes."
+   cut, and batch iron-a2 run 4 walked its own tunnel back and forth for eight minutes.
+   A step whose only fault is the floor it lacks is taken once that floor is laid (lay, as a
+   staircase's level step in step-aside is): race 40010178668 (issue #60) stood on one
+   cobblestone at y 63 with air round it, every level step refused for its floor, every tunnel
+   toward a remembered pool :boxed in a tick and that pool blacklisted, until no pool was left
+   and it waited :no-water with 156 cobblestone in hand."
   [world {:intent/keys [dir side level-steps] :or {level-steps 0}}]
   (let [dir (or dir (first directions))
         feet (intent/feet world)
         sides (if side [side] [(turn dir) (turn (turn (turn dir)))])
-        d (first (filter #(level-safe? world (level-cells feet %)) (cons dir sides)))]
+        ways (cons dir sides)
+        laid (fn [d]
+               (let [cells (level-cells feet d)]
+                 (or (and (level-clear? world cells) (lay world feet cells))
+                     (reserve-level-lay world :tunnel cells feet))))
+        d (or (first (filter #(level-safe? world (level-cells feet %)) ways))
+              (first (filter laid ways)))
+        to-lay (when (and d (not (level-safe? world (level-cells feet d)))) (laid d))]
     (if d
       (cond-> (intent/assoc-intent world
                                    :intent/dir dir
                                    :intent/level-cells (level-cells feet d)
                                    :intent/level-steps (inc level-steps)
-                                   :intent/stage :level
+                                   :intent/stage (if to-lay :lay :level)
                                    :intent/started-tick (:time/tick world))
+        to-lay (intent/assoc-intent :intent/lay to-lay)
         (not= d dir)
         (-> (intent/assoc-intent :intent/side d)
             (game/say (str "tunnel: refused toward " dir ", a step toward " d))))
@@ -1498,14 +1511,14 @@
 
 (defmethod intent/run :tunnel
   [world {:intent/keys [length level-steps stage target] :or {level-steps 0} :as i} event]
-  (cond (and (>= level-steps length) (not= :level stage))
+  (cond (and (>= level-steps length) (not (contains? #{:level :lay} stage)))
         (cond-> (-> world
                     (assoc :player/controls {})
                     intent/done)
           (no-nearer? world i)
           (-> (update :plan/blacklist (fnil into #{}) (cons target (pond-sources world target)))
               (game/say (str "tunnel: no nearer the bank of " target ", other water next"))))
-        (= :level stage) (stairs-stage world i event)
+        (contains? #{:level :lay} stage) (stairs-stage world i event)
         :else (tunnel-plan world i)))
 
 (defn open-step?
