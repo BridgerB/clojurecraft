@@ -528,3 +528,14 @@
              (select-keys (:intent/child i) [:intent/kind :intent/target]))
           "the hand breaks it first"))
     (is (= :settle (:intent/stage (:plan/intent (run (at 0))))) "air: placed as before")))
+
+(deftest no-spot-beside-a-drop
+  ;; issue #338, sim world R2/12: a table placed on a pillar over a cavern, dug to carry on, and
+  ;; the bot walked off after the drop
+  (let [air (blocks/default-state :air)
+        stone (blocks/default-state :stone)
+        cliff (into {[0 64 0] air [0 63 0] stone} (for [y (range 40 65)] [[1 y 0] air]))
+        ledge (assoc cliff [1 63 0] stone)
+        w #(assoc (standing [0.5 64.0 0.5]) :world/blocks %)]
+    (is (place/drop-beside? (w cliff) [0 64 0]) "air east with nothing under it for twenty blocks")
+    (is (not (place/drop-beside? (w ledge) [0 64 0])) "a floor beside it")))
