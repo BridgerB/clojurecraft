@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-23T13:41:15.860Z",
+  "at" : "2026-10-23T13:47:08.820Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -53,14 +53,14 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 338,
-    "title" : "Bot stops at fortress: timeout",
-    "labels" : [ "bot-failure", "sim", "no-agent", "agent-stuck" ],
-    "copilot" : false
-  }, {
     "number" : 538,
     "title" : "Bot stops at fortress: blocked",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 338,
+    "title" : "Bot stops at fortress: timeout",
+    "labels" : [ "bot-failure", "sim", "no-agent", "agent-stuck" ],
     "copilot" : false
   }, {
     "number" : 514,
@@ -209,11 +209,11 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 338,
+    "issue" : 538,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 538,
+    "issue" : 338,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
