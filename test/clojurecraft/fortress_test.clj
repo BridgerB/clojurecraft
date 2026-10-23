@@ -1061,11 +1061,21 @@
               [0 64 0]
               [1 0 0]))
         "a reserve of sixteen")
-    (is (not (fortress/bridge-over-void?
-              (assoc-in w [:world/blocks [1 40 0]] (first (blocks/states-of :lava)))
-              [0 64 0]
-              [1 0 0]))
-        "never over lava")
+    (let [lava (first (blocks/states-of :lava))
+          over-lava (assoc-in (assoc w :player/health 20.0) [:world/blocks [1 50 0]] lava)]
+      (is (fortress/bridge-over-void? over-lava [0 64 0] [1 0 0]) "over lava at full health")
+      (is (not (fortress/bridge-over-void? (assoc over-lava :player/health 16.0) [0 64 0] [1 0 0]))
+          "never over lava hurt")
+      (is (not (fortress/bridge-over-void?
+                (assoc-in over-lava [:world/blocks [1 50 0]] (first (blocks/states-of :water)))
+                [0 64 0]
+                [1 0 0]))
+          "never over water"))
+    (is (not (fortress/on-bridge? w)) "on rock")
+    (is (fortress/on-bridge? (-> w
+                                 (assoc-in [:world/blocks [0 63 0]] netherrack)
+                                 (assoc-in [:world/blocks [0 62 0]] air)))
+        "on a block over air")
     (is (not= [1 0 0] (fortress/next-move w [0 64 0] [8 64 0] 3 false #{}))
         "a leg that has not stalled goes round")
     (is (= [1 0 0] (fortress/next-move w [0 64 0] [8 64 0] 3 false #{} true))
