@@ -290,6 +290,27 @@
             :intent/for :water-hunt}
            (scoop/scoop-next w)))))
 
+(deftest a-tunnel-to-a-bank-from-a-perch-lays-its-floor
+  ;; race 40010178668 (issue #60): the bot stood on one cobblestone at y 63 with air round it,
+  ;; every level step of its tunnel toward a remembered pool refused for the floor it lacked,
+  ;; each tunnel :boxed in a tick and that pool blacklisted, until it waited :no-water
+  (let [perch {[9 63 8] blocks/air [7 63 8] blocks/air [8 63 9] blocks/air [8 63 7] blocks/air}
+        i {:intent/kind :tunnel
+           :intent/dir [1 0]
+           :intent/length 8
+           :intent/for :bank
+           :intent/target [40 63 8]
+           :intent/status :active}
+        w (assoc (standing perch [8.5 8.5])
+                 :player/inventory
+                 {0 {:item (recipe/item-id :bucket) :count 1}
+                  1 {:item (recipe/item-id :cobblestone) :count 20}}
+                 :plan/intent i)
+        planned (:plan/intent (stairs/tunnel-plan w i))]
+    (is (= :lay (:intent/stage planned)) "the step is taken once its floor is laid")
+    (is (= [[9 63 8]] (:intent/lay planned)) "the floor under the new feet, east toward the pool")
+    (is (= [[9 65 8] [9 64 8]] (:intent/level-cells planned)))))
+
 (deftest deep-in-a-pit-under-the-sky-the-bot-climbs-to-the-landings-height
   ;; race 38477665442 (issue #60): four bots stood at y 6 at the bottom of one ravine, sixty
   ;; under their landing, the sky open over them; the climb out applies only under the ground,
