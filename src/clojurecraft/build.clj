@@ -1017,18 +1017,31 @@
                  (not= (second stand) (long (physics/y-of (intent/feet world))))
                  (not-any? walled? line)))))
 
+(defn surface-climb?
+  "Would the stairs up to height y (to-height) end the tick they start: the feet below y on the
+   ground and already out of the ground (stairs/out?: a slope's open sky and a level step), so
+   there is nothing to climb through? Sim snapshot R2-39-2 (issue #135): the bot stood on a
+   snowy slope at y 95, the landing's stand a block higher sixty blocks off, and the build chose
+   the stairs up, done at once, again and again, for the whole window."
+  [world y]
+  (let [feet (intent/feet world)]
+    (boolean
+     (and (< (long (physics/y-of feet)) y) (:player/on-ground? world) (stairs/out? world feet)))))
+
 (defn toward-stand
   "The child that brings the feet to stand, a cell of the build's way (a landing, the lava's
    stand): a walk when it can be stood in and a route reaches it (stand-walk), else at its height the first block in the way dug
    (clear-stand), going round the frame's rock by a corner when the straight way crosses it
    (round-corner), or the missing floor laid (bridge), else the way to its height (to-height);
-   nil when the feet are there."
+   nil when the feet are there. Out of the ground below the stand's height (surface-climb?)
+   the way is the level one, as at its height: stairs up from the open sky climb nothing."
   [world stand build origin facing]
   (let [walk {:intent/kind :walk :intent/target stand :intent/for :build}]
     (cond (intent/centred? world stand) nil
           :else
           (or (stand-walk world stand)
-              (if (= (long (physics/y-of (intent/feet world))) (second stand))
+              (if (or (= (long (physics/y-of (intent/feet world))) (second stand))
+                      (surface-climb? world (second stand)))
                 (or (when-let [c (and origin (round-corner world stand origin facing))]
                       (toward-stand world c build origin facing))
                     (clear-stand world stand build origin facing)
