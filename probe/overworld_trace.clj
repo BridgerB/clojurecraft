@@ -23,7 +23,7 @@
 
 (defn line
   [t0 world]
-  (let [f (intent/feet world)
+  (let [f (when (:player/pos world) (intent/feet world))
         held (recipe/counts (:player/inventory world))]
     (println "T"
              (quot (- (:time/now world) t0) 1000)
