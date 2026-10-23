@@ -33,6 +33,7 @@
 (def tags (atom {}))                   ; thread → set name, for the wrapped model functions
 
 (defn tag [] (get @tags (.getId (Thread/currentThread)) "?"))
+(def prev (atom {}))                   ; set name → [attempts intent] as of the last tick
 (def worlds (atom {}))                 ; set name → the bot's world as of the last tick
 (defn bot-now
   []
@@ -239,6 +240,18 @@
                                  #(select-keys (:plan/last %)
                                                [:intent/kind :intent/status :intent/reason])]]]
                            [k (try (f w) (catch Exception e (str "THREW " (ex-message e))))])))))
+                (let [a (:plan/attempts w 0)
+                      [pa pi] (get @prev set-name [0 nil])]
+                  (when (> a pa)
+                    (out set-name
+                         "FAILED t" (quot (:time/now w 0) 1000)
+                         "attempt" a
+                         "intent"
+                         (pr-str (select-keys pi
+                                              [:intent/kind :intent/for :intent/target :intent/hold?
+                                               :intent/stage :intent/reason]))
+                         "feet" (pr-str (mapv long (:player/pos w)))))
+                  (swap! prev assoc set-name [a (:plan/intent w)]))
                 (when (not= d @deaths)
                   (out set-name "DEATH t" (quot (:time/now w 0) 1000) "deaths" d)
                   (reset! deaths d))))
