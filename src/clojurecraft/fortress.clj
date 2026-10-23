@@ -512,16 +512,19 @@
   (memory/nearest-of (physics/centre (intent/feet world)) sight-radius (bricks world)))
 
 (defn chosen-brick
-  "The brick a tunnel goes to: the one :fortress/brick names while it is still on record and
-   within sight-radius, else nearest-brick. Two bricks a few blocks apart took turns as the
-   nearest as the feet moved, each turn a new target and an empty trail: sim snapshot R3-28-1
-   (issue #338) alternated [571 54 939] and [567 56 941] for fifteen minutes."
+  "The brick a tunnel goes to: the one :fortress/brick names while it is not seen to be gone (its
+   cell loaded and no longer a fortress block) and is within sight-radius, else nearest-brick.
+   Two bricks a few blocks apart took turns as the nearest as the feet moved, each turn a new
+   target and an empty trail: sim snapshot R3-28-1 (issue #338) alternated [571 54 939] and
+   [567 56 941] for fifteen minutes. No query of the sightings while one is kept (issue #328:
+   the judge's budget)."
   [world]
   (let [kept (:fortress/brick world)
-        at (physics/centre (intent/feet world))]
+        at (physics/centre (intent/feet world))
+        here (when kept (terrain/block-at world kept))]
     (if (and kept
              (<= (physics/distance at (physics/centre kept)) sight-radius)
-             (some #{kept} (bricks world)))
+             (or (nil? here) (brick? here)))
       kept
       (nearest-brick world))))
 
