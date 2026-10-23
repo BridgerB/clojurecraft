@@ -729,6 +729,41 @@
     (is (nil? (stairs/step-to-lay (assoc-in w [:world/blocks [5 65 5]] blocks/air) cells))
         "no unsupported holder")))
 
+(deftest a-stair-lays-nothing-that-steps-the-body-off-an-edge
+  ;; gym batch pearls-warped8-c run 2 (probe 39854206523): on a ledge's edge, its feet cell open
+  ;; down to a lava lake, a stair up laid its step where the body stood, and the place's nudge
+  ;; toward the feet cell's middle walked it off into the lava
+  (let [feet [5 64 5]
+        air (into {} (for [x (range 1 10) z (range 1 10) y (range 50 75)] [[x y z] blocks/air]))
+        w (->
+            (standing 64 :stone_pickaxe)
+            (carrying 20)
+            (assoc
+             :player/pos [5.2 64.0 5.5]
+             :world/blocks
+             (assoc air [4 63 5] (blocks/default-state :warped_nylium) [5 54 5] blocks/lava-base)))
+        cells (stairs/up-cells feet [-1 0])
+        step [[4 64 5]]
+        up {:intent/kind :stairs-up :intent/to-y 70 :intent/dir [-1 0] :intent/status :active}
+        planned #(:plan/intent
+                  (intent/run (assoc % :plan/intent up) up {:event/kind :tick :event/now 0}))
+        floored (assoc-in w [:world/blocks [5 63 5]] 1)]
+    (is (= step (stairs/step-lay w feet cells)) "the step is wanted")
+    (is (stairs/unfooted? w feet))
+    (is (stairs/backs-off? w feet step) "it clips the body, over the drop")
+    (is (not= :lay (:intent/stage (planned w))) "no lay from the edge")
+    (is (= [0 -1] (:intent/dir (planned w))) "the stair turns instead")
+    (is (stairs/unfooted? (assoc-in w [:world/blocks [5 61 5]] 1) feet)
+        "a floor three down is still a drop")
+    (is (stairs/unfooted? (assoc-in w [:world/blocks [5 63 5]] blocks/lava-base) feet)
+        "lava under the feet is no footing")
+    (is (not (stairs/unfooted? (assoc-in w [:world/blocks [5 62 5]] 1) feet))
+        "a floor two down is a step, not a drop")
+    (is (not (stairs/backs-off? floored feet step)) "with a floor under the feet")
+    (is (= :lay (:intent/stage (planned floored))) "the step is laid")
+    (is (not (stairs/backs-off? (assoc w :player/pos [5.5 64.0 5.5]) feet step))
+        "nor one the body does not clip")))
+
 (deftest a-climb-regains-a-higher-step-instead-of-digging-it-away
   (let [feet [5 66 5]
         cells (stairs/up-cells feet [1 0])

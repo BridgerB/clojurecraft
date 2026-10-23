@@ -476,6 +476,26 @@
                    (if sealed (climb-reserve world feet) lay-reserve)))
       laid)))
 
+(def edge-drop 2)                     ; cells under the feet cell a floor is looked for in before a lay the body clips is refused
+
+(defn unfooted?
+  "Is the feet cell [x y z] over a drop: no floor (path/floor?) in the edge-drop cells under it,
+   or water or lava the first thing under it (over-fluid?)? The body then stands on a
+   neighbour's edge, its middle over the drop."
+  [world [x y z]]
+  (or (not-any? #(path/floor? world [x (- y %) z]) (range 1 (inc edge-drop)))
+      (over-fluid? world [x y z])))
+
+(defn backs-off?
+  "Would laying cells from feet step the body off its footing: a cell the body clips
+   (place/inside-player?), which the place steps clear of toward the feet cell's middle
+   (place/nudge-off), while that cell is unfooted?. Gym batch pearls-warped8-c (plan run
+   39845223845, probe 39854206523) run 2 stood at x 2541.24 on the edge of a nylium ledge, its
+   feet cell open eleven blocks down to a lava lake; a stair up toward -x laid its step at x 2540,
+   the step clipped the body, the nudge walked it over the edge, and the plan failed :no-footing."
+  [world feet cells]
+  (boolean (and (some #(place/inside-player? world %) cells) (unfooted? world feet))))
+
 (def shapes
   "How each kind of staircase is cut: the cells a stair opens (top first, the new feet last), the
    rule that lets it be cut, which way the feet go when it is taken, and what to lay before it
@@ -1066,7 +1086,10 @@
         cells (cells-of feet dir)
         needed (when (and lay (fresh? cells) (not (fresh-safe? world cells)))
                  (lay world feet cells))
-        to-lay (when (and needed (or (safe? world cells) (floors-affordable? world i feet needed)))
+        edge? (when needed (backs-off? world feet needed))
+        to-lay (when (and needed
+                          (not edge?)
+                          (or (safe? world cells) (floors-affordable? world i feet needed)))
                  needed)
         rock (when needed (rock-heading i #(fresh-safe? world (cells-of feet %))))
         up-open (when (and needed (= :stairs-up kind))
@@ -1113,6 +1136,8 @@
                                    :intent/started-tick (:time/tick world))
               (game/say (str "stairs: laying " to-lay " before the stair toward " dir)))
           (boxed? turns) (step-aside world (assoc i :intent/dir dir))
+          edge?
+          (turned world dir turns (str "stairs: laying toward " dir " steps off the edge, turning"))
           needed
           (turned world
                   dir
