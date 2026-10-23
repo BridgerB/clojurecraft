@@ -79,6 +79,25 @@
            :search (some-> (:intent/search p)
                            (select-keys [:search/leg :search/heading]))})))))
 
+(defn local-map
+  "Prints the blocks within 4 of the feet by name's first letter (. air, T table, L lava)."
+  [world]
+  (let [[px py pz] (mapv #(long (math/floor %)) (:player/pos world))]
+    (println "LOCALCENTRE" px py pz)
+    (doseq [y (range (+ py 2) (- py 6) -1)]
+      (println "LOCAL y" y "rows z" (- pz 4) "to" (+ pz 4) "columns x" (- px 4) "to" (+ px 4))
+      (doseq [z (range (- pz 4) (+ pz 5))]
+        (println "L"
+                 z
+                 (str/join (for [x (range (- px 4) (+ px 5))
+                                 :let [b (clojurecraft.terrain/block-at world [x y z])
+                                       n (when b (name (clojurecraft.blocks/name-of b)))]]
+                             (cond (nil? b) \?
+                                   (#{"air" "cave_air" "void_air"} n) \.
+                                   (= n "crafting_table") \T
+                                   (= n "lava") \L
+                                   :else (first n)))))))))
+
 (defn nether-map
   "Prints slices of the loaded blocks round the feet: # solid, . air, L lava, ? unloaded."
   [world]
@@ -241,6 +260,7 @@
                                 (simrace/go-of w until))]
   (step-report)
   (when (System/getenv "MAP") (nether-map world))
+  (when (System/getenv "LOCAL") (local-map world))
   (println file
            "END"
            (quot (:time/now world) 60000)
