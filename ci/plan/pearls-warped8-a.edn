@@ -1,0 +1,18 @@
+;; Issue #263, branch feat/263-warped8, first batch: main as merged from round 7 (#510), with no
+;; code change, measured for the first time with the row's full 5-hour cap (#503, #505): every
+;; pearls-12 batch before this was cut off at 40 minutes. One pearls-12 trial a job.
+{:plans/label "pearls-warped8-a"
+ :plans/jobs 4
+ :plans/issue 263
+ :plans/experiments [{:exp/name "pearls-12"
+                      :exp/kind :gym
+                      :exp/goal "pearls-12"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 18000}
+                     {:exp/name "pearls-1-live"
+                      :exp/kind :gym
+                      :exp/goal "pearls-1-live"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 300}]}

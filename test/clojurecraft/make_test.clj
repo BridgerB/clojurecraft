@@ -84,8 +84,8 @@
       :throw-eye (pos? (get counts :ender_eye 0)) ; an eye thrown only when one is held (issue #265)
       nil
       (contains? #{:no-log :no-water :in-water :no-site :other-dimension :no-mob :looking :no-pearls
-                   :no-rods :no-eye :no-frames}
-                 (:plan/wait i)) ; gathering with no tree known, wading with no water or from inside it, a build with no lava near, the fortress from the overworld, the entities trial before any health is known, the attack trial looking round, the eyes with no pearls or rods (issue #264, each its own stage), a throw with no eye (issue #265), the end portal with no frame remembered (issue #266): wait
+                   :no-rods :no-eye :no-frames :no-sword}
+                 (:plan/wait i)) ; gathering with no tree known, wading with no water or from inside it, a build with no lava near, the fortress from the overworld, the entities trial before any health is known, the attack trial looking round, the eyes with no pearls or rods (issue #264, each its own stage), a throw with no eye (issue #265), the end portal with no frame remembered (issue #266), the pearl hunt with no sword held (issue #263): wait
       false)))
 
 (deftest the-planner-only-picks-executable-intents

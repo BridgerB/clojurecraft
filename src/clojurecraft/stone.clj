@@ -630,7 +630,10 @@
    tool. The live runs that waited at the depth with nothing in sight failed there; a tunnel's
    walls are where the ore shows. Beside a lava trap still in force (path/near-lava-trap?) the
    retreat comes before any stair or tunnel: sim race 38844683780 (issue #230) cut its stairs down
-   where the lava had just caught it, and the flow followed it down."
+   where the lava had just caught it, and the flow followed it down. So does a swim out of water
+   the feet are in: sim race 39878751984 (issue #105, R1/11 seed 1) chased a mob into a lake, and
+   from the water, twice, planned stairs down that every water cell refused, each :boxed in a
+   tick, which with the failed redig before them used the plan's attempts."
   [world row]
   (or (continue-mine world row)
       (intent/chain-next (:plan/last world) :filler filler-drops {})
@@ -647,6 +650,7 @@
               walk walk
               :else
               (or (when (path/near-lava-trap? world (intent/feet world)) (retreat world))
+                  (when (:player/in-water? world) (retreat world))
                   (off-ice world)
                   (seal-stone world row)
                   (over-stone world row)

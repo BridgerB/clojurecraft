@@ -173,6 +173,13 @@
   (is (= :stairs-down (:intent/kind (stone/mine-next (standing 64) (row :dig-gravel))))
       "gravel drops to a hand"))
 
+(deftest a-mine-afloat-swims-out-before-it-cuts-stairs
+  (let [w (standing 64 :stone_pickaxe)]
+    (is (= :stairs-down (:intent/kind (stone/mine-next w (row :dig-gravel)))) "dry: stairs")
+    (is (= {:intent/kind :swim-out :intent/for :retreat}
+           (stone/mine-next (assoc w :player/in-water? true) (row :dig-gravel)))
+        "in a lake every stair is refused for its water and :boxed in a tick: out first")))
+
 (deftest with-nothing-in-sight-the-stairs-stop-at-the-rows-depth
   (testing "stairs: six down at a time"
     (is (= {:intent/kind :stairs-down :intent/to-y 58 :intent/floor-to 16}

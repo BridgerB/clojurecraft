@@ -1,0 +1,19 @@
+;; Issue #263, branch feat/263-warped8, second batch: the burrow's mouth dug to an enderman's
+;; height before its stairs (mouth-cells). Batch pearls-warped7-b's run 3 (probe 39732372050) cut
+;; its burrow under a fungus cap, the mouth two high, and the enderman the lure brought never came
+;; down: six held fights :unreachable. One pearls-12 trial a job, the row's full 5-hour cap.
+{:plans/label "pearls-warped8-b"
+ :plans/jobs 4
+ :plans/issue 263
+ :plans/experiments [{:exp/name "pearls-12"
+                      :exp/kind :gym
+                      :exp/goal "pearls-12"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 18000}
+                     {:exp/name "pearls-1-live"
+                      :exp/kind :gym
+                      :exp/goal "pearls-1-live"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 300}]}
