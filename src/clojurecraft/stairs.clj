@@ -151,15 +151,23 @@
        (map first)
        first))
 
+(def last-resorts
+  "Blocks that do not fall and are laid when nothing in fillers is held: the bricks a bastion's
+   loot gives and the soul sand a floor of the Nether is dug out as. A tunnel dug by hand drops
+   nothing, so these were all some bots held (sim snapshots R2-17-1 and R2-12-1, issue #410)."
+  [:polished_blackstone_bricks :cracked_polished_blackstone_bricks :soul_sand])
+
 (defn filler
   "The first of fillers the inventory holds n or more of, else a planks item it holds n or more
-   of, or nil. Planks are the fallback only: carried-filler and so every stair down's reserve
-   count none, so a descent never spends them. Issue #37 (real bot Clj_r16, on a one-wide strip
-   over open air holding three planks, sticks and no other block): nothing to lay, and every
-   climb out was :boxed."
+   of, else the first of last-resorts it holds n or more of, or nil. Planks and last-resorts are
+   the fallbacks only: carried-filler and so every stair down's reserve count none, so a descent
+   never spends them. Issue #37 (real bot Clj_r16, on a one-wide strip over open air holding
+   three planks, sticks and no other block): nothing to lay, and every climb out was :boxed."
   [world n]
   (let [held (recipe/counts (:player/inventory world))]
-    (or (first (filter #(>= (get held % 0) n) fillers)) (planks-of held n))))
+    (or (first (filter #(>= (get held % 0) n) fillers))
+        (planks-of held n)
+        (first (filter #(>= (get held % 0) n) last-resorts)))))
 
 (def lay-reserve 8)                    ; filler a staircase down never lays into floors: what the climb back seals and steps with
 

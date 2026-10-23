@@ -4,7 +4,7 @@
 
    Requiring this namespace registers the :hunt row's rules: an always row at priority 0, after
    the meal in the table. Done by :provisioned?: no meat wanted (wants-meat?: hungry with nothing
-   edible held, or in the overworld with the portal's iron and under provision-wanted foods, for
+   edible held, or in the overworld with a stone pickaxe or the portal's iron and under provision-wanted foods, for
    the Nether's sake), or no animal to hunt and no kill to pick up. Planned by :hunt: the drop of a kill just made (the
    last intent a :fight for :hunt, done, where its target was last seen) is collected; else a
    walk to the nearest animal a route reaches, and from beside it a :fight; and with none, while
@@ -37,6 +37,7 @@
 (def strike-range 4.5)                ; blocks on the plane from which a hunt fights instead of walking: past a walk's reach (intent/reach 4), so a walk that arrived is never asked again
 (def candidates 3)                    ; nearest animals asked for a route, as the other acts ask
 (def provision-wanted 6)              ; edible items held before the portal is lit: the Nether has no animals, and health comes back there only from food held (issue #501: three raw meats were eaten to the bar's 18 before the portal, and the Nether leg began with none)
+(def early-forage-ms 120000)          ; ms the search goes on before the descent, from its first leg: the stone pickaxe is made on the surface among animals, and the iron kit's search still has its own forage-ms
 (def forage-ms 360000)                ; ms the search for animals goes on, from its first leg, however many legs: then the bot goes on with what it holds, never holding the portal up
 (def forage-reach 48)                 ; blocks the first two forage legs walk from the feet: a server shows animals this far (starving-radius)
 (def forage-far 96)                   ; blocks the farthest leg walks: a server loads six chunks round the bot
@@ -58,16 +59,27 @@
                 :when (and (< -1 p eat/store-slots) (eat/edible (recipe/item-name item)))]
             count)))
 
-(defn provisioning?
-  "Is the bot in the overworld with the portal's iron in hand (flint and steel and a water
-   bucket, the portal kit's goods) and fewer than provision-wanted edible items held? Sim race
-   39712220957 (issue #501, world R1/2) reached a fortress hurt at food 16 with nothing to eat:
-   health comes back only from food 18, and a rest in the Nether failed :no-heal."
+(defn provision-phase
+  "Which provisioning the bot is in, as the overworld bot's goods say: :kit with the portal's iron
+   in hand (flint and steel and a water bucket), else :early with a stone pickaxe held (the
+   descent for coal and iron is next, and the surface, where the animals are, is left behind
+   for hours); nil in any other dimension or before the pickaxe. Sim race 39869307990 (issue
+   #504): the kit was finished at y -29 and the bot never surfaced again, so the Nether leg began
+   with no food."
   [world]
-  (and (= dimension/overworld (dimension/of world))
-       (pos? (inventory/item-count world (recipe/item-id :flint_and_steel)))
-       (pos? (inventory/item-count world (recipe/item-id :water_bucket)))
-       (< (edible-held world) provision-wanted)))
+  (when (= dimension/overworld (dimension/of world))
+    (cond (and (pos? (inventory/item-count world (recipe/item-id :flint_and_steel)))
+               (pos? (inventory/item-count world (recipe/item-id :water_bucket))))
+          :kit
+          (pos? (inventory/item-count world (recipe/item-id :stone_pickaxe))) :early)))
+
+(defn provisioning?
+  "Is the bot in a provision-phase (:early with the stone pickaxe, :kit with the portal's iron in
+   hand) and fewer than provision-wanted edible items held? Sim race 39712220957 (issue #501,
+   world R1/2) reached a fortress hurt at food 16 with nothing to eat: health comes back only
+   from food 18, and a rest in the Nether failed :no-heal."
+  [world]
+  (and (some? (provision-phase world)) (< (edible-held world) provision-wanted)))
 
 (defn reach
   "Blocks from the feet within which an animal is hunted: hunt-radius, and starving-radius once the
@@ -190,26 +202,52 @@
                (when-let [to (walkable-end feet r)] [to (+ (long leg) k 1)])))
            (for [reach (forage-reaches leg) k (range (count forage-headings))] [reach k])))))
 
+(defn forage-state
+  "The :hunt/forage state of the provision-phase the bot is in now, nil when it is another's (or
+   none yet): each phase has its own search and its own budget, so the surface search before the
+   descent leaves the iron kit's whole forage-ms, hours of mining later."
+  [world]
+  (let [s (:hunt/forage world)] (when (and s (= (provision-phase world) (:forage/phase s))) s)))
+
+(defn forage-budget
+  "The ms a search of provision-phase p goes on from its first leg."
+  [p]
+  (if (= :early p) early-forage-ms forage-ms))
+
+(defn afloat?
+  "Is the body in water: :player/in-water?, or the box at :player/pos overlapping water
+   (physics/touching-water?). The flag is written on a tick; a plan chooses on :go before any
+   tick, and a pond's first intent was a forage ahead of the swim out (issue #504)."
+  [world]
+  (boolean (or (:player/in-water? world)
+               (when-let [pos (:player/pos world)]
+                 (physics/touching-water? (terrain/fluid-fn world) pos)))))
+
 (defn foraging?
-  "Does the bot go on looking for animals: provisioning?, forage-ms not past since its first leg, no look
+  "Does the bot go on looking for animals: provisioning?, the phase's forage-budget not past since its first leg, no look
    for a route lately that found none (:forage/retry-at), no failed intent in a row
    (:plan/attempts, and :plan/unwalkable for a walk that failed :no-path, which counts apart: a
    leg that failed ends the search for the moment, as twelve such walks in a row would end the
-   plan), no :build running (a cast is never left half made), the feet under
+   plan), no :build running (a cast is never left half made), no :dig already begun (it is
+   finished; a stairs or a tunnel is the descent and is not paused) and no :swim-out or :flee
+   already begun (an escape is finished: the box leaves the water before the swim is done, and
+   a forage there preempted it), not afloat? (in water the swim out comes first), the feet under
    the open sky (animals live on the surface: a bot deep in its mine has none to find), health
    at least forage-health and no hostile within forage-wary. Issue #501: bots went into the Nether with no food because
    nothing looked for animals past the 48 blocks the server shows, and herds are about one chunk
    in ten."
   [world]
-  (let [{:forage/keys [since retry-at]} (:hunt/forage world)]
+  (let [{:forage/keys [since retry-at]} (forage-state world)]
     (boolean (and (provisioning? world)
                   (or (nil? retry-at) (>= (:time/now world 0) retry-at))
                   (zero? (:plan/attempts world 0))
                   (zero? (:plan/unwalkable world 0))
-                  (not= :build (:intent/kind (:plan/intent world)))
+                  (not (#{:build :dig :swim-out :flee} (:intent/kind (:plan/intent world))))
+                  (not (afloat? world))
                   (>= (:player/health world 20.0) forage-health)
                   (nil? (entity/nearest (entity/hostiles world) (:player/pos world) forage-wary))
-                  (or (nil? since) (< (- (:time/now world 0) since) forage-ms))
+                  (or (nil? since)
+                      (< (- (:time/now world 0) since) (forage-budget (provision-phase world))))
                   (terrain/under-sky? world (intent/feet world))))))
 
 (defn hunting?
@@ -257,7 +295,9 @@
   ;; nothing walked, and the next look comes forage-retry-ms on (:forage/retry-at): the bot may
   ;; stand in a pit or a thicket a few blocks from open ground
   [world i event]
-  (let [state (or (:hunt/forage world) {:forage/since (:time/now world) :forage/leg 0})
+  (let [state
+        (or (forage-state world)
+            {:forage/since (:time/now world) :forage/leg 0 :forage/phase (provision-phase world)})
         found (forage-leg world state)]
     (cond (nil? found)
           (-> world

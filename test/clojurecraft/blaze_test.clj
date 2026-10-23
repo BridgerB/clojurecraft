@@ -265,6 +265,13 @@
                 (hurt (assoc (standing {7 near}) :world/chunks {[0 0] (world/column pillar)})))))
         (is (= {:intent/kind :back-off :intent/target 7} (next-intent (hurt (standing {7 near}))))
             "in the open nothing hides: backed away from")))
+    (testing "a retreat off a lip into a drop no landing survives is a rest (issue #514)"
+      (let [air (blocks/default-state :air)
+            lip (blocks/default-state :nether_bricks)
+            void (into {[7 64 8] lip} (for [x [5 6] y (range 60 64)] [[x y 8] air]))
+            w (assoc (hurt (standing {7 near})) :world/chunks {[0 0] (world/column void)})]
+        (is (combat/void-retreat? w (get-in w [:world/entities 7])))
+        (is (= blaze/rest-intent (next-intent w)))))
     (is (= blaze/rest-intent
            (next-intent (assoc (standing {1 (item :cooked_beef 4)} {}) :player/health 12.0)))
         "out of sight under 14: a rest")

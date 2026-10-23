@@ -159,16 +159,6 @@
           (or (nil? to) (= to (intent/feet world))) :here
           :else {:intent/kind :walk :intent/target to :intent/for :fight})))
 
-(defn approachable?
-  "Can a fight's approach come to entity e: within approach-range on the plane, or by a route
-   (route-walk: a walk, or :here)? An act that chooses a target asks this, so it never starts a
-   fight the approach can only fail :unreachable: gym blaze-fire-a (run 39131023637) runs 2 and
-   4 chose blazes a walk's route came within three of, from the end of a tunnel not yet into the
-   spawner's room, and failed three fights in a row :unreachable in four seconds, the approach's
-   own route, within two, finding none."
-  [world e]
-  (or (<= (horizontal world e) approach-range) (some? (route-walk world e))))
-
 (defmethod fight-stage :approach
   ;; toward the target until approach-range: straight at it while that brings it nearer, and once
   ;; it has not for stall-ticks, along a route (route-walk, a child :walk the :fight runs), failed
@@ -233,6 +223,91 @@
   (and (> (physics/distance (game/eye world) (aim e)) attack-reach)
        (>= (horizontal world e) press-within)))
 
+(defn floor-pos
+  "The bot's feet position with y at the floor it stands on or jumped from: the cell the feet are
+   in (a hair over a whole number counts as that number), or the one under it when nothing solid
+   is under that (a jump rises at most a block and a quarter, so one cell down is the floor it left).
+   Where the bot is whatever its jump has lifted it to, a stairs up's shaft lifting it to the next
+   level at the top of every step."
+  [world]
+  (let [[x y z] (:player/pos world)
+        solid? (terrain/solid-fn world)
+        cx (long (math/floor x))
+        cz (long (math/floor z))
+        top (long (math/floor (+ (double y) 1.0e-3)))]
+    [x (double (if (or (solid? cx (dec top) cz) (not (solid? cx (- top 2) cz))) top (dec top))) z]))
+
+(defn floor-eye
+  "The eye of a bot standing on its floor (floor-pos). A jump lifts :player/pos, and a reach
+   judged from the top of it says a blaze one floor down is out of reach on the way up and in
+   reach on the way down."
+  [world]
+  (physics/eye (floor-pos world)))
+
+(defn in-reach?
+  "Is entity e's aim within attack-reach of the eye standing on the floor?"
+  [world e]
+  (<= (physics/distance (floor-eye world) (aim e)) attack-reach))
+
+(defn press-reaches?
+  "Would closing to press-within on the plane put entity e's aim within attack-reach of the
+   floor eye? The vertical gap stays; only the horizontal closes. A target at the same height,
+   and a blaze two over the floor (issue #262), are true. One whose aim stays past attack-reach
+   even there is false."
+  [world e]
+  (let [dy (- (physics/y-of (aim e)) (physics/y-of (floor-eye world)))
+        h (min (horizontal world e) press-within)]
+    (<= (math/sqrt (+ (* h h) (* dy dy))) attack-reach)))
+
+(defn press-cell
+  "The cell the feet would occupy after walking in to press-within toward entity e, at the
+   floor's height."
+  [world e]
+  (let [[px py pz] (floor-pos world)
+        [ax _ az] (aim e)
+        dx (- ax px)
+        dz (- az pz)
+        h (math/sqrt (+ (* dx dx) (* dz dz)))
+        step (if (pos? h) (max 0.0 (- h press-within)) 0.0)
+        scale (if (pos? h) (/ step h) 0.0)
+        fy (long (math/floor (+ (double py) 0.5)))]
+    [(long (math/floor (+ px (* dx scale)))) fy (long (math/floor (+ pz (* dz scale))))]))
+
+(defn press-stands?
+  "Can the feet stand where a press in to press-within toward entity e would put them
+   (press-cell): the floor's own cell, or one path/standable?? Issue #564 (sim R2-17-2): a
+   blaze within approach-range on the plane stood below a soul-sand wall, so the cell the
+   press would occupy was solid and no route went down to it."
+  [world e]
+  (let [c (press-cell world e)
+        [px py pz] (floor-pos world)
+        here [(long (math/floor px)) (long (math/floor (+ (double py) 0.5)))
+              (long (math/floor pz))]]
+    (or (= c here) (path/standable? world c))))
+
+(defn strikable?
+  "Can the sword reach entity e from here (in-reach?), or by pressing in to press-within onto
+   a cell the feet can stand (press-reaches? and press-stands?) while it is still within
+   approach-range on the plane?"
+  [world e]
+  (or
+   (in-reach? world e)
+   (and (<= (horizontal world e) approach-range) (press-reaches? world e) (press-stands? world e))))
+
+(defn approachable?
+  "Can a fight's approach come to entity e: the sword reaches from here or from a press that
+   has a place to stand (strikable?), or a route walks there (route-walk a walk, not :here and
+   not nil)? An act that chooses a target asks this, so it never starts a fight the approach
+   can only fail :unreachable: gym blaze-fire-a (run 39131023637) runs 2 and 4 chose blazes a
+   walk's route came within three of, from the end of a tunnel not yet into the spawner's room,
+   and failed three fights in a row :unreachable in four seconds, the approach's own route,
+   within two, finding none. A blaze within approach-range on the plane, the press's cell solid
+   and no route down, is not (issue #564, sim R2-17-2): the shortcut used to be the horizontal
+   alone, the engage pressed into the wall for twenty seconds, and the tunnel down was
+   interrupted by the next one."
+  [world e]
+  (or (strikable? world e) (map? (route-walk world e))))
+
 (defmethod fight-stage :engage
   ;; face the target every tick, walking on toward it while it is out of reach (pressing?);
   ;; attack when the deadline has passed, the eyes face it (the look went out a tick before, with
@@ -251,6 +326,22 @@
                        {:control/look look}))]
     (cond (> (horizontal world e) (inc approach-range))
           (intent/assoc-intent world :intent/stage :approach :intent/since now)
+          ;; already engaged on a blaze the sword cannot reach and cannot walk under, with no
+          ;; route down: end done, so the blaze is not blacklisted and the tunnel starts. Issue
+          ;; #564 starts here, :engage :to-the-end?, and three :unreachable failures end the plan.
+          (and (not hold?) (not (strikable? world e)))
+          (let [w (route-walk world e)]
+            (cond (map? w)
+                  (-> world
+                      (assoc :player/controls {})
+                      (intent/dissoc-intent :intent/best-dist :intent/best-tick)
+                      (intent/assoc-intent :intent/stage :approach
+                                           :intent/since now
+                                           :intent/child (assoc w :intent/status :active)))
+                  :else
+                  (-> world
+                      (assoc :player/controls {})
+                      intent/done)))
           (>= swings max-swings) (intent/fail world :ghost)
           (and since
                (> (- now (if (pos? next-swing) (- next-swing swing-every) since))
@@ -336,16 +427,48 @@
                  {:pos (:entity/pos e) :times 1}))))
 
 (defn cornered
-  "The world with entity eid kept in :plan/cornered: a back-off from it ended on its clock, the
-   target still nearer than back-off-to, so there was nowhere to back off to."
+  "The world with entity eid kept in :plan/cornered: a back-off from it ended on its clock, or
+   the way away was a drop no landing survives, the target still nearer than back-off-to, so
+   there was nowhere to back off to."
   [world eid]
   (update world :plan/cornered (fnil conj #{}) eid))
+
+(def void-look 3)                     ; blocks along a retreat looked at for a drop no landing survives
+
+(defn void-step?
+  "Is cell a clear drop with no floor under it and no landing within path/max-fall?"
+  [world cell]
+  (and (= :clear (path/classify world cell))
+       (not (path/floor? world (update cell 1 dec)))
+       (nil? (path/landing world cell))))
+
+(defn void-retreat?
+  "Does backing straight away from entity e step off a drop landing cannot survive: a cell one,
+   two or three blocks along that line, at the feet or one up (where a jump onto a lip comes
+   down), clear, with no floor and no landing within max-fall? ledge-look 0.6 sees only the lip.
+   Issue #514 (sim R3-5-1): the cell one north was nether brick, the jump cleared it, and the
+   bot fell 31 into the lava sea."
+  [world e]
+  (let [[px _ pz] (:player/pos world)
+        [ax _ az] (away-point world e)
+        d (physics/horizontal-distance [px 0.0 pz] [ax 0.0 az])
+        [_ fy _] (intent/feet world)]
+    (boolean (when (pos? d)
+               (let [ux (/ (- ax px) d)
+                     uz (/ (- az pz) d)]
+                 (some (fn [n]
+                         (let [x (long (math/floor (+ px (* (double n) ux))))
+                               z (long (math/floor (+ pz (* (double n) uz))))]
+                           (or (void-step? world [x fy z]) (void-step? world [x (inc fy) z]))))
+                       (range 1 (inc void-look))))))))
 
 (defmethod intent/run :back-off
   ;; {:intent/kind :back-off :intent/target eid}: straight away from it, done once back-off-to
   ;; is between them, it is gone, or back-off-timeout-ms has passed (a cornered bot plans again,
   ;; and has the target kept in :plan/cornered: :defend fights what it could not get away from).
-  ;; The first tick notes a creeper (noted), so :defend can tell one that stands still
+  ;; The same when the way away is a drop no landing survives (void-retreat?): the lip one cell
+  ;; out hides the void from ledge-look, and the jump clears it. The first tick notes a creeper
+  ;; (noted), so :defend can tell one that stands still
   [world i _]
   (let [now (:time/now world)
         e (get-in world [:world/entities (:intent/target i)])
@@ -356,7 +479,7 @@
           (-> world
               (assoc :player/controls {})
               intent/done)
-          (> (- now (:intent/since i)) back-off-timeout-ms)
+          (or (> (- now (:intent/since i)) back-off-timeout-ms) (and e (void-retreat? world e)))
           (-> world
               (assoc :player/controls {})
               (cornered (:intent/target i))
@@ -391,19 +514,6 @@
   [world e]
   (clear? world (game/eye world) (aim e)))
 
-(defn floor-pos
-  "The bot's feet position with y at the floor it stands on or jumped from: the cell the feet are
-   in (a hair over a whole number counts as that number), or the one under it when nothing solid
-   is under that (a jump rises at most a block and a quarter, so one cell down is the floor it left).
-   Where the bot is whatever its jump has lifted it to, a stairs up's shaft lifting it to the next
-   level at the top of every step."
-  [world]
-  (let [[x y z] (:player/pos world)
-        solid? (terrain/solid-fn world)
-        cx (long (math/floor x))
-        cz (long (math/floor z))
-        top (long (math/floor (+ (double y) 1.0e-3)))]
-    [x (double (if (or (solid? cx (dec top) cz) (not (solid? cx (- top 2) cz))) top (dec top))) z]))
 
 (defn hittable?
   "Can entity e be fought from where the bot stands: its feet no more than over-feet over the

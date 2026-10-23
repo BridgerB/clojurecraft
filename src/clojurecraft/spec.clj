@@ -200,7 +200,8 @@
 (s/def :forage/since int?)
 (s/def :forage/leg nat-int?)
 (s/def :forage/retry-at int?)
-(s/def :hunt/forage (s/keys :req [:forage/since :forage/leg] :opt [:forage/retry-at]))
+(s/def :forage/phase #{:early :kit})
+(s/def :hunt/forage (s/keys :req [:forage/since :forage/leg] :opt [:forage/retry-at :forage/phase]))
 (s/def :trail/target (s/coll-of number? :kind vector? :count 3))
 (s/def :trail/cells (s/coll-of ::block-pos :kind vector?))
 (s/def :trail/dead (s/coll-of ::block-pos :kind set?))
@@ -849,7 +850,8 @@
   :args
   (s/cat :world (requires :player/pos :world/chunks)
          :passage-ok? (s/? boolean?)
-         :refused (s/? :intent/refused)))
+         :refused (s/? :intent/refused)
+         :along? (s/? boolean?)))
 (s/fdef place/ashore
   :args
   (s/cat :world (requires) ; reads :player/in-water?, absent before the first physics tick: dry

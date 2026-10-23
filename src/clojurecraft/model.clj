@@ -227,8 +227,8 @@
     "per hostile entity id {:pos where it stood the first time :times back-offs from it there}: a mob that stands within a block of :pos through shun-after of them is shunned, a threat only within shunned-radius (combat/reach)"
     "after a back-off from a hostile began"]
    [:plan/cornered
-    "entity ids a back-off could not get away from: it ended on its clock with the target still nearer than back-off-to, the bot in a dead end; :defend fights them to the end (combat/cornered, issue #161)"
-    "after a back-off ended on its clock"]
+    "entity ids a back-off could not get away from: it ended on its clock, or the way away was a drop no landing survives, with the target still nearer than back-off-to; :defend fights them to the end (combat/cornered, issues #161 and #514)"
+    "after a back-off ended on its clock or at a drop"]
    [:pearls/shelter
     "the feet cell of the pearl hunt's burrow, where no enderman can stand within reach of the bot (pearls/shelter?), set when a :burrow ends (issue #263)"
     "after the hunt dug one"]
@@ -260,11 +260,14 @@
     "the looks in a row that brought the feet no stall-gain nearer than :search/best; stall-tunnels end the leg (issue #338)"
     "inside :fortress/search, from the leg's second look"]
    [:hunt/forage
-    "the search for animals a bot about to light its portal makes with fewer than hunt/provision-wanted foods held: {:forage/since :forage/leg :forage/retry-at}; the :forage intent keeps it, and hunt/foraging? ends the search forage-ms after its first leg (issue #501)"
+    "the search for animals a bot makes with fewer than hunt/provision-wanted foods held, with the stone pickaxe (before the descent) or the portal kit: {:forage/since :forage/leg :forage/retry-at :forage/phase}; the :forage intent keeps it, and hunt/foraging? ends the search hunt/forage-budget after its first leg (issues #501, #504)"
     "after a :forage intent chose its first leg"]
    [:forage/since "ms the search's first leg was chosen" "inside :hunt/forage"]
    [:forage/leg
     "the leg the next :forage turns to, from 0: its heading is a quarter turn right of the last (hunt/forage-headings)"
+    "inside :hunt/forage"]
+   [:forage/phase
+    "the hunt/provision-phase the search began in (:early with the stone pickaxe, :kit with the portal's iron): a search of another phase is not this one's, and starts afresh"
     "inside :hunt/forage"]
    [:forage/retry-at
     "ms before which the search looks for no leg: set when no heading had a route at any reach (hunt/forage-retry-ms on)"
