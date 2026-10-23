@@ -764,6 +764,26 @@
                                {:intent/kind :tunnel}))
         "a calm one at hand: the tunnel goes on")))
 
+(deftest a-pickaxe-worn-out-on-burrows-ends-the-hunt-in-the-open
+  ;; sim probe 39890964793 (seed 5): its pickaxe broke on burrows, and it struck calm endermen in
+  ;; the open in worlds R2 and R3 and was slain, R2 nine times
+  (let [w (standing {7 (enderman [11.5 64.0 8.5])})
+        spent
+        (memory/remember-intention (assoc w :time/now 0) {:intent/id 1 :intent/kind :burrow} :done)]
+    (is (= {:intent/kind :fight :intent/target 7 :intent/for :pearls}
+           (plan/next-intent w row plan/goals))
+        "never held one: the hunt in the open, as before")
+    (is (pearls/worn-out? spent))
+    (is (= {:plan/wait :no-pickaxe} (plan/next-intent spent row plan/goals))
+        "spent on burrows: no calm one struck in the open")
+    (is (= :fight
+           (:intent/kind (plan/next-intent (assoc-in spent [:world/entities 7 :entity/creepy?] true)
+                                           row
+                                           plan/goals)))
+        "one coming is still met")
+    (is (not (pearls/worn-out? (assoc-in spent [:player/inventory 1] (item :iron_pickaxe 1))))
+        "a pickaxe held")))
+
 (deftest no-sword-held-no-hunt
   ;; gym batch pearls-warped8-b (plan run 39775345028): runs 1 and 3 respawned with nothing held
   ;; after their first deaths and hunted on bare-handed, 39 and 26 deaths in five hours

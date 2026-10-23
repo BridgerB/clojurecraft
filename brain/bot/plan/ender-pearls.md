@@ -100,6 +100,8 @@ sourceRefs:
   - src/clojurecraft/pearls.clj#defn look-off
   - src/clojurecraft/pearls.clj#defmethod plan/steer :pearls
   - src/clojurecraft/pearls.clj#defn beset?
+  - src/clojurecraft/pearls.clj#defn worn-out?
+  - test/clojurecraft/pearls_test.clj#a-pickaxe-worn-out-on-burrows-ends-the-hunt-in-the-open
   - src/clojurecraft/pearls.clj#def answers-to-hand
   - src/clojurecraft/pearls.clj#defmethod plan/interrupts? :pearls
   - test/clojurecraft/pearls_test.clj#out-of-the-burrow-no-look-stares-at-a-calm-one-and-one-angry-at-hand-ends-the-intent
@@ -161,7 +163,7 @@ Twelve eyes of ender need twelve pearls. The roadmap (#10) first chose bartering
 `:ender-pearls` (`--until pearls-12`, provides 12 `ender_pearl`) and `:ender-pearl` (`--until pearls-1`, the gym's first trial, one pearl), both done by `:provided?` and planned by `:pearls`, priority 19. Both are asides for now (`plan/aside?`): no chained run takes them and `plan/current-until` stays at the fortress until the stages before them are proven; raising the chain is its own change.
 
 ## The :pearls plan (pearls.clj)
-Out of the burrow's end every look but a provoke's is turned from a calm enderman's eyes (`plan/steer :pearls`, `look-off`: straight down at the same yaw, as the dragon row does; a walk steers by yaw and a dig or a place is judged by distance), and any running intent but an answer (`answers-to-hand`: a fight, a back-off, a meal, a fire dug out) or the walk home ends with an angry enderman, blacklisted or not, within `strike-range` (`beset?`, `plan/interrupts? :pearls`), so the hunt plans again: home, the fight held there, or the fight where it stands. Sim probes 39887735653 and 39887752302 (seeds 4 and 5): four bots stared at one two or three blocks off on a walk or a tunnel out of the burrow, and the intent went on while it struck them from 20 health to none in six to ten seconds.
+Out of the burrow's end every look but a provoke's is turned from a calm enderman's eyes (`plan/steer :pearls`, `look-off`: straight down at the same yaw, as the dragon row does; a walk steers by yaw and a dig or a place is judged by distance), and any running intent but an answer (`answers-to-hand`: a fight, a back-off, a meal, a fire dug out) or the walk home ends with an angry enderman, blacklisted or not, within `strike-range` (`beset?`, `plan/interrupts? :pearls`), so the hunt plans again: home, the fight held there, or the fight where it stands. Sim probes 39887735653 and 39887752302 (seeds 4 and 5): four bots stared at one two or three blocks off on a walk or a tunnel out of the burrow, and the intent went on while it struck them from 20 health to none in six to ten seconds. With its pickaxe spent on burrows (`worn-out?`: a `:burrow` done this run, `memory/last-done`, and none held), no burrow near and no angry one near (`menaced?`), the plan waits `:no-pickaxe`, which fails it: no burrow can be cut, and sim probe 39890964793 (seed 5) struck calm endermen in the open in worlds R2 and R3 after its pickaxe broke and was slain, R2 nine times; a bot that never held one hunts in the open as before. Held fights skip one given up on (blacklisted) unless it is within the sword's reach, and no unheld fight starts inside the burrow: sim probe 39890029962 (worlds R1 and R4, seed 3) held three fights in a row on one by the mouth that never came, each `:unreachable`, and the plan failed.
 
 In order:
 

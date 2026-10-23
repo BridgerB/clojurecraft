@@ -552,6 +552,15 @@
   (boolean (some (fn [[n c]] (and (pos? c) (str/ends-with? (name n) "_pickaxe")))
                  (recipe/counts (:player/inventory world)))))
 
+(defn worn-out?
+  "Has the hunt spent its pickaxe: a burrow cut this run (memory/last-done) and no pickaxe held
+   now? A bot that never held one hunts in the open as it always has; one that wore its pickaxe
+   out on burrows does not: sim probe 39890964793 (seed 5) struck calm endermen in the open in
+   worlds R2 and R3 after its pickaxe broke and was slain, R2 nine times."
+  [world]
+  (boolean (and (not (pickaxe? world)) (memory/last-done world :burrow))))
+
+
 (defn digs-left
   "The most digs any held pickaxe has left (window/uses-left: its tier's durability less the
    :damage the server sends on a worn one), or nil with none held."
@@ -1090,7 +1099,7 @@
    the burrow a :lookout and out of it the walk home, and the burrow never goes stale (batch
    pearls-warped5-a's run 4 gave its burrow up with one standing seven blocks off and was
    slain walking out); with no burrow, one at hand backed away
-   from under 10 health, fought when it is coming or no pickaxe is held (a calm one given up on,
+   from under 10 health, fought when it is coming or no pickaxe was ever held (worn-out?: with one spent on burrows, none struck) (a calm one given up on,
    a ghost, is left) (batch
    pearls-warped-a, plan run 39131478416: two landings in three walked up to a calm one, struck
    it in the open and died); hurt, a meal when the food is under hunger/heal-level (blaze/meal:
@@ -1118,8 +1127,8 @@
    pearls-warped-d, plan run 39160760074, run 1 took three pearls in six minutes, then stood in
    its burrow thirty-four over such ones); one not yet coming and provokable? from here within
    stare-range (quarry), provoked from the burrow's mouth, from anywhere within the burrow's
-   reach with a route home (intent/routable?), or from anywhere with no pickaxe to dig one
-   (never one already coming: a provoke of it ends at once, and batch pearls-263b's bot, its
+   reach with a route home (intent/routable?), or from anywhere with no pickaxe ever held to dig one
+   (one worn out on burrows: next-intent waits :no-pickaxe instead; never one already coming: a provoke of it ends at once, and batch pearls-263b's bot, its
    pickaxe lost, provoked one 26 times in a row; with a burrow but no route home, a walk to the
    mouth first: the same run 1 provoked fifteen blocks from its burrow, and the walk home found
    no path); one coming and no burrow to meet it in, fought; with a burrow near and none
@@ -1195,7 +1204,9 @@
       (and near?
            (not in?)
            (or (entity/creepy? e)
-               (and (not (pickaxe? world)) (not (contains? (:plan/blacklist world #{}) eid)))))
+               (and (not (pickaxe? world))
+                    (not (worn-out? world))
+                    (not (contains? (:plan/blacklist world #{}) eid)))))
       {:intent/kind :fight :intent/target eid :intent/for :pearls}
       meal meal
       (or (and hurt? (nil? home) (nil? ce)) (and in? (or hurt? bid)))
@@ -1212,7 +1223,7 @@
       (and in? mouth) {:intent/kind :walk :intent/target mouth :intent/for :shelter}
       (and qid
            rested?
-           (or (not (pickaxe? world))
+           (or (and (not (pickaxe? world)) (not (worn-out? world)))
                (= mouth (intent/feet world))
                (and home (>= (:player/health world 20.0) 20.0) (intent/routable? world way-home))))
       {:intent/kind :provoke :intent/target qid :intent/for :pearls}
@@ -1305,6 +1316,10 @@
   ;; with no sword held no hunt at all, a wait that fails the plan
   ;; (:no-sword): gym batch pearls-warped8-b (plan run 39775345028) runs 1 and 3 respawned with
   ;; nothing held after their first deaths and hunted on bare-handed, 39 and 26 deaths in five hours
+  ;; with the pickaxe worn out (worn-out?), no burrow near and none angry near, no hunt either
+  ;; (:no-pickaxe): no burrow can be cut, and
+  ;; sim probe 39890964793 (seed 5) wore its pickaxe out on burrows, then struck calm endermen in
+  ;; the open in worlds R2 and R3 and was slain, R2 nine times
   [world _ _]
   (let [k (when-not (menaced? world) (fresh-kill world))
         [_ d] (when k (drop-of world k))
@@ -1317,4 +1332,6 @@
            :intent/for :pearls}
           (and k (body? world k)) {:plan/wait :drop}
           (nil? (combat/sword world)) {:plan/wait :no-sword}
+          (and (worn-out? world) (nil? (shelter world)) (not (menaced? world)))
+          {:plan/wait :no-pickaxe}
           :else (hunt world))))
