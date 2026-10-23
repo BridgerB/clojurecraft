@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-23T05:10:53.494Z",
+  "at" : "2026-10-23T05:12:01.662Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -60,6 +60,11 @@
   }, {
     "number" : 531,
     "title" : "Bot stops at ingots: boxed",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 538,
+    "title" : "Bot stops at fortress: blocked",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
@@ -134,6 +139,10 @@
     "why" : "hands-off label"
   }, {
     "issue" : 531,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 538,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
