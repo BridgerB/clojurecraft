@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-23T07:02:30.516Z",
+  "at" : "2026-10-23T07:03:40.410Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -101,7 +101,7 @@
     "number" : 561,
     "title" : "Bot stops at blaze-rods: no-path",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
+    "copilot" : true
   }, {
     "number" : 560,
     "title" : "Bot stops at blaze-rods: no-spot",
@@ -201,7 +201,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 561,
-    "move" : "assign"
+    "move" : "wait",
+    "why" : "session starting"
   }, {
     "issue" : 560,
     "move" : "leave",
