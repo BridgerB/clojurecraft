@@ -29,7 +29,7 @@
     (println "BLOCK" c (terrain/block-at world c)))
   (let [t0 (:t m)
         last-print (atom t0)
-        brief (fn [x]
+        brief (fn brief [x]
                 (when x
                   {:kind (:intent/kind x)
                    :stage (:intent/stage x)
