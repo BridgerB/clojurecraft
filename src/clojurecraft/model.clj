@@ -253,6 +253,12 @@
    [:search/tunnels
     "the tunnels the leg has taken, one more at each look of the planner; too many end the leg"
     "inside :fortress/search"]
+   [:search/best
+    "the least horizontal distance from the feet to the leg's end at a look of the planner (fortress/leg-progress)"
+    "inside :fortress/search, from the leg's second look"]
+   [:search/stalled
+    "the looks in a row that brought the feet no stall-gain nearer than :search/best; stall-tunnels end the leg (issue #338)"
+    "inside :fortress/search, from the leg's second look"]
    [:hunt/forage
     "the search for animals a bot about to light its portal makes with fewer than hunt/provision-wanted foods held: {:forage/since :forage/leg :forage/retry-at}; the :forage intent keeps it, and hunt/foraging? ends the search forage-ms after its first leg (issue #501)"
     "after a :forage intent chose its first leg"]

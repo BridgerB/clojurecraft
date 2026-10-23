@@ -948,7 +948,9 @@
 (deftest a-leg-goes-on-until-its-end-then-the-spiral-turns
   (let [w (assoc (field -20 40) :fortress/search east-leg)
         ending {:search/from [-160 64 0] :search/heading [1 0] :search/leg 0 :search/tunnels 3}]
-    (is (= (assoc east-leg :search/tunnels 1) (fortress/exploring w)) "one more tunnel on the leg")
+    (is (= (assoc east-leg :search/tunnels 1 :search/best 160.0 :search/stalled 0)
+           (fortress/exploring w))
+        "one more tunnel on the leg, its distance to the end kept")
     (is (not (fortress/leg-over? w east-leg)))
     (is (fortress/leg-over? w ending) "its end within reach of the feet")
     (is (= {:search/from [0 64 0] :search/heading [0 1] :search/leg 1 :search/tunnels 0}
@@ -959,6 +961,55 @@
     (is (fortress/leg-over? w (assoc east-leg :search/from [-700 64 0]))
         "far from where it began: another trip's")
     (is (fortress/leg-over? (field -20 1) east-leg) "the world ending ahead")))
+
+(defn cavern
+  "The field with no block south of z 0: a cavern's open air, as far as the leg can see."
+  []
+  (update (field -20 40) :world/blocks #(into {} (remove (fn [[[_ _ z] _]] (pos? z)) %))))
+
+(deftest a-leg-looks-for-rock-ahead
+  ;; issue #338, sim world R2/12: a leg east ran into a cavern sixty blocks across and its rim
+  (let [w (field -20 40)]
+    (is (= fortress/rock-look (fortress/rock-run w [0 64 0] [1 0])) "rock all the way ahead")
+    (is (= 20 (fortress/rock-run w [0 64 0] [-1 0])) "the world ends after 20 cells")
+    (is (zero? (fortress/rock-run (cavern) [0 64 0] [0 1])) "open air ahead is no rock")
+    (is (= 20 (fortress/rock-run (cavern) [0 64 0] [0 -1])))))
+
+(deftest a-leg-that-ended-turns-to-the-rock-it-can-dig
+  (is (= [[0 1] [0 -1] [-1 0] [1 0]] (fortress/turns-by-rock (field -20 40) [0 64 0] [1 0]))
+      "right first when the rock is equal")
+  (is (= [[0 -1] [0 1] [-1 0] [1 0]] (fortress/turns-by-rock (cavern) [0 64 0] [1 0]))
+      "left first when the cavern lies to the right")
+  (is (= [0 -1]
+         (:search/heading
+          (fortress/exploring
+           (assoc (cavern) :fortress/search (assoc east-leg :search/tunnels 3 :search/stalled 3)))))
+      "the next leg goes north, away from the open air"))
+
+(deftest a-leg-that-gains-no-ground-is-given-up
+  ;; issue #338: the tunnel stayed inside x 507-534 for an hour, 130 digs for 13 blocks
+  (let [w (field -20 40)]
+    (is (= {:search/best 160.0 :search/stalled 0}
+           (select-keys (fortress/leg-progress w east-leg) [:search/best :search/stalled]))
+        "the first look sets the distance")
+    (is (= 1 (:search/stalled (fortress/leg-progress w (assoc east-leg :search/best 160.0))))
+        "no nearer: stalled")
+    (is (= 1 (:search/stalled (fortress/leg-progress w (assoc east-leg :search/best 165.0))))
+        "five blocks nearer is under stall-gain")
+    (is (= {:search/best 160.0 :search/stalled 0}
+           (select-keys
+            (fortress/leg-progress w (assoc east-leg :search/best 170.0 :search/stalled 2))
+            [:search/best :search/stalled]))
+        "ten blocks nearer is progress and clears the count")
+    (is (not (fortress/leg-over? w (assoc east-leg :search/stalled 2))))
+    (is (fortress/leg-over? w (assoc east-leg :search/stalled 3)) "three tunnels in a row")
+    (is (= 3
+           (:search/stalled
+            (fortress/exploring
+             (assoc w
+                    :fortress/search
+                    (assoc east-leg :search/tunnels 2 :search/best 160.0 :search/stalled 2)))))
+        "the look that brings no ground is the third")))
 
 (deftest an-exploring-tunnel-keeps-its-leg-for-the-planner
   (let [goal (first (filter #(= :fortress (:goal/id %)) plan/goals))
@@ -975,6 +1026,6 @@
     (is (= east-leg (:intent/search i)))
     (is (= [160 64 0] (:intent/target i)))
     (is (= east-leg (:fortress/search out)) "the executor keeps the leg the planner chose")
-    (is (= (assoc east-leg :search/tunnels 1)
+    (is (= (assoc east-leg :search/tunnels 1 :search/best 160.0 :search/stalled 0)
            (:intent/search (plan/next-intent out goal plan/goals)))
         "and the next look goes on along it")))
