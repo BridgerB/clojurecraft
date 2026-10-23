@@ -30,6 +30,7 @@
 (def sight-radius 512)                ; how far a remembered brick may be and still be the target
 (def steps-per-tunnel 32)             ; steps a :tunnel-to takes before the planner looks again
 (def explore-spacing 160)             ; blocks between the strips an exploring tunnel sweeps: a server shows 96 either side of the feet
+(def leg-max (* 3 explore-spacing))   ; the longest leg of the spiral: a leg longer than a judge window's walk only ever sweeps one strip
 (def explore-band [52 90])            ; the heights an exploring tunnel keeps to: over the lava sea (y 31) and its lakes, under the roof
 (def air-grace 40)                    ; ticks a tunnel waits for the feet to land before it may fail :blocked: no step is safe from the air (issue #502, R4/31)
 (def look-ahead 2)                    ; blocks ahead that must be loaded for a leg to go on: the world's edge turns it
@@ -123,30 +124,42 @@
        (some? (stairs/filler world (count lava)))
        (every? #(= % (build/foundation world %)) lava)))
 
+(defn walk-filler
+  "The filler a step's floor at cell is laid from: stairs/filler's item when a block of it laid
+   at cell stands as a floor (path/floor?), else nil. Soul sand, the last resort a hand-dug
+   tunnel carries, is no floor to a route (path treats it as awkward), so a step that laid it
+   in its floor dug it out and laid it again for ever (sim snapshot R1-20-1, issue #537: one
+   step's dig and place on the same cell for the whole window)."
+  [world cell]
+  (let [item (stairs/filler world 1)]
+    (when (and item
+               (path/floor? (assoc-in world [:world/blocks cell] (blocks/default-state item)) cell))
+      item)))
+
 (defn safe-but-lava?
   "Can the step from feet by move be taken but for the lava beside the cells it opens (safe?
    with that one clause left out): every cell it opens and the floor loaded, none of them lava or
    something it never opens, and a floor that is solid, or lava a block placed against a solid
    neighbour fills, or a solid floor the route cannot walk on, replaced only with a filler
-   carried to replace it with."
+   carried that stands as a floor once laid (walk-filler)."
   [world feet move]
   (let [cells (opens feet move)
         floor (plus (plus feet move) [0 -1 0])
         at #(terrain/block-at world %)
         lava? #(contains? blocks/lava-states (at %))
-        filler? (some? (stairs/filler world 1))]
+        filler (walk-filler world floor)]
     (and
      (every? some? (map at (conj cells floor)))
      (not-any? lava? cells)
      (not-any? #(and (blocks/solid? (at %)) (contains? unbreakable (blocks/name-of (at %)))) cells)
      (not-any? #(or (intent/fluid-over-falling? world %) (intent/bed-over-fluid? world %)) cells)
      (or (path/floor? world floor)
-         (and filler?
+         (and filler
               (build/holds? world [:solid floor])
               (not (contains? unbreakable (blocks/name-of (at floor))))
               (not (intent/exposes-fluid? world floor))
               (= floor (build/foundation world floor)))
-         (and filler? (lava? floor) (= floor (build/foundation world floor)))))))
+         (and filler (lava? floor) (= floor (build/foundation world floor)))))))
 
 (defn safe?
   "Can the step from feet by move be taken: every cell it opens and the floor loaded, none of them
@@ -296,7 +309,9 @@
   "May the up move from feet stand on a block laid beside the feet at their own height: the
    step's floor (the cell beside the feet, under the cell stepped into) air that a solid
    neighbour holds up (build/foundation: a ledge's rock, a wall, a block laid before), the
-   block under the feet solid, a filler carried, the step dry? when dry-only?, and with that
+   block under the feet solid, a filler carried that stands as a floor once laid
+   (walk-filler: soul sand laid is dug out again, and the climb offered for ever, sim
+   snapshot R1-20-1, issue #537), the step dry? when dry-only?, and with that
    floor laid, safe?. The way out of a dead end over a drop, where no level step has a floor and
    no turn may floor over the lava sea: the body stays on its stand while the block is laid
    against the ledge, then climbs onto it, so it is never a causeway. Sim snapshot R3-6-1 (issue
@@ -308,7 +323,7 @@
          (build/holds? world [:solid (plus feet [0 -1 0])])
          (contains? #{:air :cave_air :void_air} (blocks/name-of (terrain/block-at world floor)))
          (= floor (build/foundation world floor))
-         (some? (stairs/filler world 1))
+         (some? (walk-filler world floor))
          (or (not dry-only?) (dry? world feet move))
          (safe? (assoc-in world [:world/blocks floor] (blocks/default-state :cobblestone))
                 feet
@@ -634,10 +649,16 @@
                step-keys)
               (and (#{:floor-clear :open :enter} (:build/step next)) (not (safe? world from move)))
               (reduce intent/dissoc-intent (assoc world :player/controls {}) step-keys)
-              ;; nothing to lay (the last block went into an earlier cell of this step): the
-              ;; step is given up and its cell counts as visited, never placed with a block
-              ;; that is not held (sim snapshots R2-17-1 and R2-12-1, issue #410)
-              (and (= :place (:build/op next)) (nil? (stairs/filler world 1)))
+              ;; nothing to lay (the last block went into an earlier cell of this step), or
+              ;; nothing that stands as a floor to lay in this step's floor (only soul sand
+              ;; carried: laid, it is dug out again as no walk floor, for ever, sim snapshot
+              ;; R1-20-1, issue #537): the step is given up and its cell counts as visited,
+              ;; never placed with a block that is not held (sim snapshots R2-17-1 and
+              ;; R2-12-1, issue #410)
+              (and (= :place (:build/op next))
+                   (or (nil? (stairs/filler world 1))
+                       (and (= :floor (:build/step next))
+                            (nil? (walk-filler world (:build/pos next))))))
               (reduce intent/dissoc-intent
                       (intent/assoc-intent (assoc world :player/controls {})
                                            :intent/tunnel-visited
@@ -679,7 +700,11 @@
 
 (defn leg-length
   "Blocks of the leg-th leg (from 0) of an exploring spiral: explore-spacing for the first two, then
-   each pair one spacing longer, so the strips the legs sweep lie a spacing apart."
+   each pair one spacing longer, so the strips the legs sweep lie a spacing apart. A leg's
+   target is never more than leg-max from where it began (leg-target): legs given up
+   untravelled once grew the count without the feet ever walking them, and a search found
+   its target 16,896 blocks south (sim snapshot R4-26-1, issue #527), one strip swept for
+   the whole window."
   [leg]
   (* explore-spacing (inc (quot (long leg) 2))))
 
@@ -699,11 +724,12 @@
 
 (defn leg-target
   "The cell the leg of search ({:search/from :search/heading :search/leg :search/tunnels}) aims
-   at: its length along its heading from where it began, at that cell's explore-y."
+   at: its length (leg-length, capped at leg-max) along its heading from where it began, at
+   that cell's explore-y."
   [{:search/keys [from heading leg]}]
   (let [[x _ z] from
         [dx dz] heading
-        n (leg-length leg)]
+        n (min leg-max (leg-length leg))]
     [(+ x (* n dx)) (explore-y from) (+ z (* n dz))]))
 
 (defn open-ahead?
@@ -758,24 +784,34 @@
           (assoc search :search/best d :search/stalled 0)
           :else (update search :search/stalled (fnil inc 0)))))
 
-(defn leg-over?
-  "Is the leg of search finished: its end within reach (by the ground, a tunnel's height may stay
-   short of it), the world ending ahead, more tunnels spent on it than its length asks (a wall it
-   cannot go round), stall-tunnels in a row without stall-gain of progress (leg-progress), or the
-   feet so far from where it began that it is another trip's?"
-  [world {:search/keys [from heading leg tunnels stalled] :as search}]
-  (let [feet (intent/feet world)
-        at (physics/centre feet)]
+(defn leg-done?
+  "Was the leg of search travelled: its end within reach (by the ground, a tunnel's height may
+   stay short of it), or the feet farther from where it began than its length and 64 (another
+   trip's)? Only a travelled leg grows the spiral (exploring): a leg given up untravelled that
+   still grew the count sent the next legs thousands of blocks past the captured Nether (sim
+   snapshots R4-26-1 and R4-46-1, issues #527 and #537)."
+  [world {:search/keys [from leg] :as search}]
+  (let [at (physics/centre (intent/feet world))]
     (or (<= (physics/horizontal-distance at (physics/centre (leg-target search))) reach)
-        (not (open-ahead? world feet heading))
-        (> tunnels (+ 2 (* 2 (quot (leg-length leg) steps-per-tunnel))))
-        (>= (long (or stalled 0)) stall-tunnels)
         (> (physics/horizontal-distance at (physics/centre from)) (+ (leg-length leg) 64)))))
+
+(defn leg-over?
+  "Is the leg of search finished: travelled (leg-done?), the world ending ahead, more tunnels
+   spent on it than its length asks (a wall it cannot go round), or stall-tunnels in a row
+   without stall-gain of progress (leg-progress)?"
+  [world {:search/keys [heading leg tunnels stalled] :as search}]
+  (or (leg-done? world search)
+      (not (open-ahead? world (intent/feet world) heading))
+      (> tunnels (+ 2 (* 2 (quot (leg-length leg) steps-per-tunnel))))
+      (>= (long (or stalled 0)) stall-tunnels)))
 
 (defn exploring
   "The search an exploring tunnel carries, with no brick on record: the world's :fortress/search
    while its leg goes on (one more tunnel spent), else the next leg, a quarter turn right from the
-   last one's heading and a longer one, from the feet; the first leg, east when it can go, with no
+   last one's heading and, when that leg was travelled (leg-done?), a longer one; a leg given up
+   untravelled turns at the same length, from the feet; a leg longer than leg-max (grown
+   untravelled before this rule, its target thousands of blocks away) starts again as the
+   first leg along its own heading; the first leg, east when it can go, with no
    search. A leg that cannot go the way it turns tries the next heading, so the model's edge
    turns the tunnel. nil when no heading has a way to go. Replaces the tunnel that aimed 48 blocks
    east for ever: sim race 39095704051 runner 4 (issue #338) went 630 blocks east along the
@@ -785,8 +821,10 @@
         {:search/keys [heading leg] :as search} (:fortress/search world)
         headings #(take 4 (iterate turn-right %))]
     (cond (nil? search) (new-leg world feet 0 (headings [1 0]))
-          (leg-over? world search)
+          (> (leg-length (long leg)) leg-max) (new-leg world feet 0 (headings heading))
+          (leg-done? world search)
           (new-leg world feet (inc (long leg)) (turns-by-rock world feet heading))
+          (leg-over? world search) (new-leg world feet leg (turns-by-rock world feet heading))
           :else
           (-> (leg-progress world search)
               (update :search/tunnels inc)))))
