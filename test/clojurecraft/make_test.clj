@@ -170,7 +170,9 @@
 (deftest the-needs-planner-walks-the-recipes
   (is (= :no-log (intent-for {} kit)) "nothing held and no tree known: wait for a log")
   (is (= :oak_planks (intent-for {:oak_log 1} kit)))
-  (is (= :crafting_table (intent-for {:oak_planks 4} kit)))
+  (is (= :stick (intent-for {:oak_planks 4} kit))
+      "one log's planks make the sticks and leave two to climb for the table")
+  (is (= :crafting_table (intent-for {:oak_planks 4 :stick 4} kit)))
   (is (= :stick (intent-for {:crafting_table 1 :oak_planks 2} kit)))
   (is (= :no-log (intent-for {:crafting_table 1} kit)) "the table is kept; sticks need another log")
   (is (nil? (intent-for {:crafting_table 1 :stick 4} kit)))
