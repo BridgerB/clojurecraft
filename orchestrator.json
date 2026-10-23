@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-23T12:37:29.835Z",
+  "at" : "2026-10-23T12:38:39.749Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -98,13 +98,13 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 222,
-    "title" : "Bot stops at cast-one: stuck",
+    "number" : 104,
+    "title" : "Bot stops at kit: no-log",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 104,
-    "title" : "Bot stops at kit: no-log",
+    "number" : 222,
+    "title" : "Bot stops at cast-one: stuck",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
@@ -235,11 +235,11 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 222,
+    "issue" : 104,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 104,
+    "issue" : 222,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
