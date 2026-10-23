@@ -80,7 +80,7 @@
     (is (plan/done-by (standing 20 {0 (item :flint_and_steel 1)} cow) hunt-row)
         "the water bucket is the kit's too")
     (is (plan/done-by (assoc (standing 20 kit {})
-                             :hunt/forage {:forage/since 0 :forage/leg 4}
+                             :hunt/forage {:forage/since 0 :forage/leg 4 :forage/phase :kit}
                              :time/now hunt/forage-ms)
                       hunt-row)
         "no animal and the search's time spent: the portal is not held up")
@@ -200,13 +200,16 @@
 
 (deftest the-search-is-bounded-and-never-held-against-a-build-or-the-mine
   (let [w (provisioning 1000)
-        began (assoc w :hunt/forage {:forage/since 1000 :forage/leg 2})]
+        began (assoc w :hunt/forage {:forage/since 1000 :forage/leg 2 :forage/phase :kit})]
     (is (hunt/foraging? (assoc began :time/now (+ 1000 (dec hunt/forage-ms)))))
     (is (not (hunt/foraging? (assoc began :time/now (+ 1000 hunt/forage-ms))))
         "forage-ms after its first leg it is over, however many legs")
     (is (plan/done-by (assoc began :time/now (+ 1000 hunt/forage-ms)) hunt-row)
         "and the row is done, the portal goes on with what is held")
-    (let [looked (assoc w :hunt/forage {:forage/since 1000 :forage/leg 0 :forage/retry-at 5000})]
+    (let [looked (assoc
+                  w
+                  :hunt/forage
+                  {:forage/since 1000 :forage/leg 0 :forage/retry-at 5000 :forage/phase :kit})]
       (is (not (hunt/foraging? (assoc looked :time/now 4999))) "no route lately: it waits")
       (is (hunt/foraging? (assoc looked :time/now 5000)) "then it looks again"))
     (is (not (hunt/foraging? (assoc w :plan/attempts 1))) "a failed leg ends it for the moment")
@@ -285,7 +288,7 @@
     (is (= :walk (get-in wide [:plan/intent :intent/kind])))
     (is (= :hunt (get-in wide [:plan/intent :intent/for])))
     (is (< 40 (first (get-in wide [:plan/intent :intent/target]))) "east, far past the bot at 8")
-    (is (= {:forage/since 1000 :forage/leg 1} (:hunt/forage wide)))
+    (is (= {:forage/since 1000 :forage/leg 1 :forage/phase :kit} (:hunt/forage wide)))
     (is (intent/done? (:plan/intent alone)))
     (is (= (+ 1000 hunt/forage-retry-ms) (get-in alone [:hunt/forage :forage/retry-at])))
     (is (not (hunt/foraging? alone)) "it waits before it looks again")
@@ -300,3 +303,52 @@
     (is (some? (hunt/game w)))
     (is (nil? (hunt/game (assoc w :plan/blacklist #{[14 64 8]}))) "the cell it stands in")
     (is (nil? (hunt/game (assoc w :player/in-water? true))) "no walk is routed from the water")))
+
+(def pick-held {0 (item :stone_pickaxe 1)})
+
+(defn early
+  "A bot in play at ms with the stone pickaxe and no food, no animal in sight, on the open surface:
+   the descent for coal and iron is next."
+  [now]
+  (assoc (standing 20 pick-held {}) :time/now now :time/tick 0))
+
+(deftest with-the-stone-pickaxe-food-is-provisioned-before-the-descent
+  ;; issue #504: the portal kit was finished at y -29 and the bot never surfaced again, so the
+  ;; Nether leg began with no food: the surface is where the animals are, and it is left after
+  ;; the stone pickaxe
+  (let [cow {5 (animal :cow [11.5 64.0 8.5])}
+        w (early 1000)]
+    (is (= :early (hunt/provision-phase w)))
+    (is (= :kit (hunt/provision-phase (standing 20 (merge pick-held kit-held) {})))
+        "the kit's phase wins")
+    (is (nil? (hunt/provision-phase (standing 20 {} {}))) "no pickaxe yet")
+    (is (nil? (hunt/provision-phase (assoc w :player/dimension "minecraft:the_nether"))))
+    (is (= {:intent/kind :fight :intent/target 5 :intent/for :hunt}
+           (plan/next-intent (standing 20 pick-held cow) hunt-row plan/goals))
+        "an animal in reach is hunted")
+    (is (= {:intent/kind :forage :intent/for :hunt} (plan/next-intent w hunt-row plan/goals))
+        "none in reach: searched for")
+    (is (plan/done-by (standing 20 (assoc pick-held 2 (item :bread hunt/provision-wanted)) cow)
+                      hunt-row)
+        "provision-wanted foods held")))
+
+(deftest the-early-search-is-short-and-leaves-the-kits-its-own-budget
+  (let [w (early 1000)
+        began (assoc w :hunt/forage {:forage/since 1000 :forage/leg 2 :forage/phase :early})]
+    (is (< hunt/early-forage-ms hunt/forage-ms))
+    (is (hunt/foraging? (assoc began :time/now (+ 1000 (dec hunt/early-forage-ms)))))
+    (is (not (hunt/foraging? (assoc began :time/now (+ 1000 hunt/early-forage-ms))))
+        "early-forage-ms after its first leg it is over")
+    (is (plan/done-by (assoc began :time/now (+ 1000 hunt/early-forage-ms)) hunt-row)
+        "and the row is done: the descent goes on with what is held")
+    (let [kit (assoc (standing 20 (merge pick-held kit-held) {})
+                     :time/now (+ 1000 hunt/forage-ms 1)
+                     :time/tick 0
+                     :hunt/forage (:hunt/forage began))]
+      (is (nil? (hunt/forage-state kit)) "the early search is not the kit's")
+      (is (hunt/foraging? kit)
+          "the kit's search starts afresh, however long ago the early one began"))
+    (is (not
+         (hunt/foraging?
+          (assoc w :world/chunks {[0 0] (world/column {[8 70 8] (blocks/default-state :stone)})})))
+        "under a roof, in the mine: none")))
