@@ -159,16 +159,35 @@
   (let [{:intent/keys [kind for] :as l} (:plan/last world)]
     (boolean (and l (= :stairs-down kind) (= :trees for) (intent/done? l)))))
 
+(defn perched?
+  "Under the open sky (terrain/under-sky?) and not out of the ground (stairs/out?), and not in a
+   pit (stairs/pit-rim): a pillar, a stair's lip or a ledge over a drop. A sky-lit mine and a
+   quarry are not: the one has rock over it, the other a wall every way, and both still climb
+   out. nil's false when the feet are boxed, where a climb already died."
+  [world feet]
+  (boolean (and (terrain/under-sky? world feet)
+                (not (stairs/out? world feet))
+                (nil? (stairs/pit-rim world feet))
+                (not (contains? (:plan/boxed-at world #{}) feet)))))
+
 (defn trees-descend
-  "Out of the ground (stairs/out?) with a remembered trunk no walk reaches and the trunk below
-   the eye by more than the near band's twelve: stairs down toward it, one length
-   (stone/stair-depth, never below the trunk's feet) at a time, the planner looking again
-   between. The way down from a height is a cut one: trees-climb's mirror. Only a trunk within
-   descend-reach on the plane, and never from a cell where a climb died :boxed. Once a length is
-   cut (descended?) the next goes on from its end, in the ground, toward a trunk more than
-   continue-drop under the eye: out? is true only at the
+  "Out of the ground (stairs/out?), or perched on a pillar or a lip under the sky (perched?),
+   with a remembered trunk no walk reaches and the trunk below the eye by more than the near
+   band's twelve (continue-drop when the descent is already going, or from a perch): stairs down
+   toward it, one length (stone/stair-depth, never below the trunk's feet) at a time, the planner
+   looking again between. The way down from a height is a cut one: trees-climb's mirror. Only a
+   trunk within descend-reach on the plane, and never from a cell where a climb died :boxed.
+   Once a length is cut (descended?) the next goes on from its end, in the ground, toward a trunk
+   more than continue-drop under the eye: out? is true only at the
    mouth, and from the length's foot the walk up the air already dug (intent/opening) took the
-   bot back to it, every seven seconds, to cut the same length again. Sim race 39593219246
+   bot back to it, every seven seconds, to cut the same length again. A perch is the same trap
+   one stair up: sim race 39934917165 (issue #89, world R1/23) finished a descent at the trunk's
+   own height, walked the opening, and the lip was not out, so the next choice was stairs up to
+   the top of the world. The filler ran out at y 95 and the stairs down back were :boxed.
+   Real race Clj_r07 (the same issue) was already in the shaft: each length's rim was the stair's
+   own block a few above the feet, so it was a pit, and the climb went on to y 124. Under the sky
+   with that rim and the trunk more than twelve under the eye, the next length is down.
+   Sim race 39593219246
    (issue #135, world R4/4) went up and down five blocks of its own stairs for fifteen minutes
    with the trunks forty below and the food at zero. Real race
    (issue #57, snapshot real-4-s2-Clj_r07): bot Clj_r07 cut stairs up out of a stone pocket
@@ -185,8 +204,14 @@
   (let [feet (intent/feet world)
         fy (physics/y-of feet)
         continuing? (descended? world)
-        drop-over (if continuing? continue-drop 12)]
-    (when (and (or continuing? (stairs/out? world feet))
+        perched? (perched? world feet)
+        drop-over (if (or continuing? perched?) continue-drop 12)]
+    (when (and (or continuing?
+                   perched?
+                   (stairs/out? world feet)
+                   ;; a rim a stair above the feet is the block the climb just laid, not ground to
+                   ;; get out to. the trunk well below is the way down (issue #89, real-6)
+                   (and (terrain/under-sky? world feet) (some? (stairs/pit-rim world feet))))
                (not (contains? (:plan/boxed-at world #{}) feet)))
       (when-let [[_ ty _ :as trunk]
                  (let [near (filter (fn [[tx ty tz]]
@@ -310,6 +335,28 @@
   (let [o (intent/opening world)]
     (when (and o (not (mouth-below? (intent/feet world) (:intent/target o)))) o)))
 
+(defn perch-down
+  "Stairs down one length (stone/stair-depth) toward the nearest remembered trunk at or below
+   the feet, from a perch (perched?). trees-descend does not cut when the trunk is within
+   continue-drop of the eye, and from the lip the only other choice was stairs up to the top of
+   the world. nil when the feet are not perched, or no trunk within descend-reach is at or below
+   them: a trunk above is still a climb out."
+  [world trunks]
+  (let [feet (intent/feet world)
+        fy (physics/y-of feet)]
+    (when (perched? world feet)
+      (when-let [trunk (first (filter (fn [[tx ty tz]]
+                                        (and (<= ty fy)
+                                             (<= (physics/horizontal-distance (:player/pos world)
+                                                                              [tx 0 tz])
+                                                 descend-reach)))
+                                      trunks))]
+        {:intent/kind :stairs-down
+         :intent/trunk trunk
+         :intent/to-y (- fy stone/stair-depth)
+         :intent/dir (toward feet trunk)
+         :intent/for :trees}))))
+
 (defn far-trunks
   "The far-candidates nearest standing trunks remembered within far-radius of the eye that are
    not given up (skipped): the trunks the way out and the last resorts head for."
@@ -355,6 +402,14 @@
             (trees-tunnel world))
           (when-not (or (stairs/out? world feet) (contains? (:plan/boxed-at world #{}) feet))
             (or (when (:player/in-water? world) (crossing world))
+                ;; a perch under the sky goes down toward a trunk at or below the feet. stairs
+                ;; up to the top of the world from here spends the filler and boxes (issue #89)
+                (when (perched? world feet)
+                  (or (trees-descend world trunks) (perch-down world trunks)))
+                ;; the shaft's rim climbs with the stair. once the sky is open and the trunk is
+                ;; more than the near band under the eye, go down (issue #89, real-6)
+                (when (and (terrain/under-sky? world feet) (stairs/pit-rim world feet))
+                  (trees-descend world trunks))
                 (opening-up world)
                 {:intent/kind :stairs-up
                  :intent/to-y (stairs/climb-to world terrain/top-y)
