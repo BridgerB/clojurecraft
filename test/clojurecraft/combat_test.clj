@@ -174,6 +174,37 @@
     (is (= [12 63 8] (combat/under-cell (standing {}) (mob :blaze [12.5 63.0 8.5] 20.0)))
         "one under the feet stays where it is")))
 
+(deftest a-blaze-the-press-cannot-stand-under-is-not-approachable
+  ;; issue #564, sim R2-17-2: within approach-range on the plane, the sword out of reach from any
+  ;; cell the press can stand in, route-walk nil. An engage already running ends done, not
+  ;; :unreachable, so the blaze is not blacklisted.
+  (let [stone (blocks/default-state :stone)
+        low (mob :blaze [10.5 62.0 8.5] 20.0)
+        w (assoc (standing {7 low})
+                 :world/chunks
+                 {[0 0] (world/column
+                         {[9 64 8] stone [9 65 8] stone [10 64 8] stone [10 65 8] stone})})
+        buried (mob :blaze [10.5 58.0 8.5] 20.0)]
+    (is (combat/press-reaches? w low) "at press-within the aim would be in reach")
+    (is (not (combat/press-stands? w low)) "the press's cell is stone")
+    (is (not (combat/approachable? w low)))
+    (is (not (combat/press-reaches? w buried)) "four under: the sword misses even stood over it")
+    (is (not (combat/approachable? w buried)))
+    (is (combat/approachable? w (mob :blaze [11.0 64.0 8.5] 20.0))
+        "a level blaze the sword already reaches")
+    (let [engaged (assoc w
+                         :plan/intent
+                         {:intent/kind :fight
+                          :intent/target 7
+                          :intent/status :active
+                          :intent/stage :engage
+                          :intent/since 0
+                          :intent/to-the-end? true})
+          [done _] (fx/fold intent-step engaged (map tick (range 50 2000 50)))]
+      (is (= :done (:intent/status (:plan/intent done))))
+      (is (nil? (:intent/reason (:plan/intent done))))
+      (is (empty? (:player/controls done))))))
+
 (deftest a-zombie-at-hand-is-fought-a-creeper-backed-away-from
   (let [zombie (standing {7 (mob :zombie [11.0 64.0 8.5] 20.0)})
         creeper (standing {8 (mob :creeper [13.0 64.0 8.5] 20.0)})
@@ -222,6 +253,21 @@
         [w _] (fx/fold intent-step w (map tick (range 50 4000 50)))]
     (is (= :done (:intent/status (:plan/intent w))))
     (is (>= (physics/horizontal-distance (:player/pos w) [10.5 64.0 8.5]) combat/back-off-to))))
+
+(deftest a-back-off-stops-at-a-drop-it-cannot-land
+  ;; issue #514, sim R3-5-1: the cell one north was a nether-brick lip, so a look of 0.6 never
+  ;; saw the void. The jump cleared the lip and the bot fell 31 into lava.
+  (let [air (blocks/default-state :air)
+        lip (blocks/default-state :nether_bricks)
+        blocks (into {[8 64 7] lip} (for [z [5 6] y (range 60 64)] [[8 y z] air]))
+        w (assoc (standing {8 (mob :creeper [8.5 64.0 10.5] 20.0)})
+                 :world/chunks {[0 0] (world/column blocks)}
+                 :plan/intent {:intent/kind :back-off :intent/target 8 :intent/status :active})
+        [gone _] (fx/fold intent-step w [(tick 50)])]
+    (is (combat/void-retreat? w (get-in w [:world/entities 8])))
+    (is (= :done (:intent/status (:plan/intent gone))))
+    (is (contains? (:plan/cornered gone) 8))
+    (is (= [8.5 64.0 8.5] (:player/pos gone)) "it never steps onto the lip")))
 
 (deftest a-creeper-that-stands-still-is-shunned-not-fled-from-for-ever
   ;; issues #69, #62, #161: a starving bot at one health backed away from a creeper five blocks
