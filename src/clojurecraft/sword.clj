@@ -45,17 +45,23 @@
   [c]
   (or (pos? (get c :stick 0)) (>= (recipe/have c (recipe/tags :planks)) stick-planks)))
 
-(defn wanted
+(defn payable
   "The name of the best sword of made that the held items pay for and that is better than the
-   best held (combat/sword), with a handle and a table at hand (armour/table-at-hand?); nil
-   otherwise."
+   best held (combat/sword), with a handle (handle?). Nil when none is. A table is not asked:
+   wanted adds one at hand, and a hunt whose sword broke asks the needs planner for this one."
   [world]
   (let [c (armour/counts world)
-        held (second (combat/sword world))
-        k (some (fn [[k mat n]]
-                  (when (and (or (nil? held) (< (rank k) (rank held))) (blade? world c mat n)) k))
-                made)]
-    (when (and k (handle? c) (armour/table-at-hand? world)) k)))
+        held (second (combat/sword world))]
+    (some (fn [[k mat n]]
+            (when (and (or (nil? held) (< (rank k) (rank held))) (blade? world c mat n) (handle? c))
+              k))
+          made)))
+
+(defn wanted
+  "The name payable returns when a table is at hand (armour/table-at-hand?); nil otherwise, so
+   the always row never goes looking for a tree."
+  [world]
+  (when (armour/table-at-hand? world) (payable world)))
 
 (defmethod plan/done-by :armed?
   ;; only a chained run makes a sword: a gym stage measures its own target, and with the row in

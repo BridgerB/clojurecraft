@@ -35,6 +35,7 @@
             [clojurecraft.entity :as entity]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
+            [clojurecraft.make :as make]
             [clojurecraft.memory :as memory]
             [clojurecraft.mob :as mob]
             [clojurecraft.path :as path]
@@ -43,6 +44,7 @@
             [clojurecraft.recipe :as recipe]
             [clojurecraft.stairs :as stairs]
             [clojurecraft.stone :as stone]
+            [clojurecraft.sword :as sword]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.window :as window]))
 
@@ -1313,17 +1315,37 @@
     (shelter world)
     (into (comp (map (comp entity/kind val)) (remove shunned)) (entity/hostiles world))))
 
+(def sword-acts
+  "Intents that make a sword from what is already held: placing or opening a table, the craft,
+   a dig that takes the table along, a toss that makes room for it."
+  #{:place :craft :open-container :dig :toss})
+
+(defn make-sword
+  "The intent that makes the best sword the held items pay for (sword/payable) through the needs
+   planner, when that craft can start from here: one of sword-acts, or the log chain to a
+   remembered trunk (:intent/for :log). Nil when nothing is payable, or the planner would only
+   wait or go looking for a tree. The Nether has no oak, and a wait there fails the plan."
+  [world goal table]
+  (when-let [k (sword/payable world)]
+    (let [i (make/decide world (assoc goal :goal/provides {(keyword "item" (name k)) 1}) table)]
+      (when (and (:intent/kind i)
+                 (or (= :log (:intent/for i)) (contains? sword-acts (:intent/kind i))))
+        i))))
+
 (defmethod plan/next-intent :pearls
   ;; a fire the bot stands in put out first (a :dig: the server breaks fire on the first click,
   ;; as blaze/put-out does); then the kill's drop, unless another angry one is near (menaced?);
-  ;; with no sword held no hunt at all, a wait that fails the plan
+  ;; with no sword held, make the one the held items pay for when that craft can start
+  ;; (make-sword), else a wait that fails the plan, never a bare-hand hunt
   ;; (:no-sword): gym batch pearls-warped8-b (plan run 39775345028) runs 1 and 3 respawned with
-  ;; nothing held after their first deaths and hunted on bare-handed, 39 and 26 deaths in five hours
-  ;; with the pickaxe worn out (worn-out?), no burrow near and none angry near, no hunt either
+  ;; nothing held after their first deaths and hunted on bare-handed, 39 and 26 deaths in five
+  ;; hours. Sim race 39909643851 (issue #563, world R3/13 seed 2) broke its stone sword with
+  ;; cobblestone, a stick and a trunk two blocks off, and the same wait failed the plan.
+  ;; With the pickaxe worn out (worn-out?), no burrow near and none angry near, no hunt either
   ;; (:no-pickaxe): no burrow can be cut, and
   ;; sim probe 39890964793 (seed 5) wore its pickaxe out on burrows, then struck calm endermen in
   ;; the open in worlds R2 and R3 and was slain, R2 nine times
-  [world _ _]
+  [world goal table]
   (let [k (when-not (menaced? world) (fresh-kill world))
         [_ d] (when k (drop-of world k))
         fire (burning-at world)]
@@ -1334,7 +1356,7 @@
            :intent/target (cell (:entity/pos d))
            :intent/for :pearls}
           (and k (body? world k)) {:plan/wait :drop}
-          (nil? (combat/sword world)) {:plan/wait :no-sword}
+          (nil? (combat/sword world)) (or (make-sword world goal table) {:plan/wait :no-sword})
           (and (worn-out? world) (nil? (shelter world)) (not (menaced? world)))
           {:plan/wait :no-pickaxe}
           :else (hunt world))))

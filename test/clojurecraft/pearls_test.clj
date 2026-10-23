@@ -796,6 +796,26 @@
     (is (= {:plan/wait :no-sword}
            (plan/next-intent (update w :player/inventory dissoc 0) row plan/goals)))))
 
+(deftest a-broken-sword-is-made-when-the-craft-can-start
+  ;; sim race 39909643851 (issue #563) world R3/13 seed 2: the stone sword broke with cobblestone
+  ;; and a stick held and a trunk two blocks off, and the plan failed :no-sword
+  (let [held {1 (item :cobblestone 5) 2 (item :stick 1)}
+        bare (assoc (standing {}) :player/inventory held)
+        table (assoc bare :player/inventory (assoc held 3 (item :crafting_table 1)))
+        trunk {[12 64 8] 136 [12 65 8] 136 [12 66 8] 136 [12 67 8] 252}
+        col (world/column trunk)
+        forest (-> bare
+                   (assoc :world/chunks {[0 0] col})
+                   (memory/remember-column [0 0] col))
+        placed (plan/next-intent table row plan/goals)
+        walked (plan/next-intent forest row plan/goals)]
+    (is (= {:plan/wait :no-sword} (plan/next-intent bare row plan/goals))
+        "cobblestone and a stick, no table and no trunk: still no bare-hand hunt")
+    (is (= :place (:intent/kind placed)))
+    (is (= :crafting_table (:intent/item placed)) "a held table goes down for the stone sword")
+    (is (= :walk (:intent/kind walked)))
+    (is (= :log (:intent/for walked)) "a remembered trunk is the log the table takes")))
+
 (def ledge-wall
   "Stone three high (y 64 to 66) along x 4, the burrow's first stair left open: from the mouth at
    x 3 the only way east is down through the burrow."

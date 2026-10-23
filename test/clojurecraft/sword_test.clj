@@ -40,10 +40,12 @@
          (sword/wanted (standing
                         {3 (item :cobblestone 5) 4 (item :stick 1) 5 (item :wooden_sword 1)})))
       "a wooden one is not")
-  (testing "no table at hand: nothing"
-    (is (nil? (sword/wanted (assoc (standing {3 (item :cobblestone 5) 4 (item :stick 1)})
-                                   :player/inventory
-                                   {3 (item :cobblestone 5) 4 (item :stick 1)}))))))
+  (testing "no table at hand: nothing the always row starts"
+    (let [w (assoc (standing {3 (item :cobblestone 5) 4 (item :stick 1)})
+                   :player/inventory
+                   {3 (item :cobblestone 5) 4 (item :stick 1)})]
+      (is (nil? (sword/wanted w)))
+      (is (= :stone_sword (sword/payable w)) "the blade and the handle are held"))))
 
 (deftest iron-only-from-ingots-the-armour-leaves
   (testing "the armour still wants a helmet: the ingots are its"
