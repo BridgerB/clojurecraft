@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-23T23:19:00.529Z",
+  "at" : "2026-10-23T23:24:43.304Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -23,11 +23,6 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 231,
-    "title" : "Bot stops at cast-one: no-footing",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 531,
     "title" : "Bot stops at ingots: boxed",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
@@ -43,18 +38,13 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 222,
-    "title" : "Bot stops at cast-one: stuck",
+    "number" : 71,
+    "title" : "Bot stops at portal-kit: boxed",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 559,
     "title" : "Bot stops at fortress: no-spot",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
-    "number" : 71,
-    "title" : "Bot stops at portal-kit: boxed",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
@@ -66,11 +56,6 @@
     "number" : 573,
     "title" : "Bot stops at fortress: no-way",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
-    "number" : 162,
-    "title" : "Bot stops at portal: no-path",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 69,
@@ -120,10 +105,6 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 231,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
     "issue" : 531,
     "move" : "leave",
     "why" : "hands-off label"
@@ -136,15 +117,11 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 222,
+    "issue" : 71,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
     "issue" : 559,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
-    "issue" : 71,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -153,10 +130,6 @@
     "why" : "hands-off label"
   }, {
     "issue" : 573,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
-    "issue" : 162,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
