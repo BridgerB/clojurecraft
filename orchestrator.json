@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-23T23:08:52.449Z",
+  "at" : "2026-10-23T23:12:15.566Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -51,11 +51,6 @@
     "number" : 559,
     "title" : "Bot stops at fortress: no-spot",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
-    "number" : 563,
-    "title" : "Bot stops at ender-pearls: no-sword",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 71,
@@ -146,10 +141,6 @@
     "why" : "hands-off label"
   }, {
     "issue" : 559,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
-    "issue" : 563,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
