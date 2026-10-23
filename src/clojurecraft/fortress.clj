@@ -477,13 +477,11 @@
   ;; steps that open no cell by water (dry?: the overworld's, issue #265)
   [world
    {:intent/keys [target steps taken move from climb dry? tunnel-visited child search retreats
-                  airborne brick]
+                  airborne]
     r :intent/reach
     :or {taken 0 r reach climb climb-past tunnel-visited #{} retreats 0 airborne 0}
     :as i} event]
-  (let [world (cond-> world
-                search (assoc :fortress/search search) ; the spiral's leg, kept for the planner's next look
-                brick (assoc :fortress/brick brick)) ; the brick chosen, kept for the planner's next look
+  (let [world (cond-> world search (assoc :fortress/search search)) ; the spiral's leg, kept for the planner's next look
         feet (intent/feet world)]
     (cond (or (arrived? world target r) (>= taken steps))
           (-> world
@@ -562,23 +560,6 @@
   "The fortress block on record nearest the feet (within sight-radius), or nil."
   [world]
   (memory/nearest-of (physics/centre (intent/feet world)) sight-radius (bricks world)))
-
-(defn chosen-brick
-  "The brick a tunnel goes to: the one :fortress/brick names while it is not seen to be gone (its
-   cell loaded and no longer a fortress block) and is within sight-radius, else nearest-brick.
-   Two bricks a few blocks apart took turns as the nearest as the feet moved, each turn a new
-   target and an empty trail: sim snapshot R3-28-1 (issue #338) alternated [571 54 939] and
-   [567 56 941] for fifteen minutes, its distance flat at 85 to 91 blocks. No query of the
-   sightings while one is kept (issue #328: the judge's budget)."
-  [world]
-  (let [kept (:fortress/brick world)
-        at (physics/centre (intent/feet world))
-        here (when kept (terrain/block-at world kept))]
-    (if (and kept
-             (<= (physics/distance at (physics/centre kept)) sight-radius)
-             (or (nil? here) (brick? here)))
-      kept
-      (nearest-brick world))))
 
 ;; ---------------------------------------------------------------- exploring: a spiral
 
@@ -721,7 +702,7 @@
   ;; Nether, wait
   [world goal table]
   (let [nether? (= dimension/nether (dimension/of world))
-        brick (when nether? (chosen-brick world))
+        brick (when nether? (nearest-brick world))
         search (when (and nether? (not brick)) (exploring world))]
     (cond (not nether?) {:plan/wait :other-dimension}
           :else
@@ -730,10 +711,7 @@
               (intent/chain-next (:plan/last world) :take-table make/table-drops {})
               (make/take-table-along world)
               (when brick
-                {:intent/kind :tunnel-to
-                 :intent/target brick
-                 :intent/brick brick
-                 :intent/steps steps-per-tunnel})
+                {:intent/kind :tunnel-to :intent/target brick :intent/steps steps-per-tunnel})
               (when search
                 {:intent/kind :tunnel-to
                  :intent/target (leg-target search)

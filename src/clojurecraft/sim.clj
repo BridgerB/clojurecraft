@@ -2664,17 +2664,17 @@
 
 (defn spawn-batch
   "The model after the spawner at cell sp spawns: a batch rolled (mob/spawner-batch), cut to the
-   room it has (mob/spawner-room), each try three rolls of the mobs' stream, each blaze placed
+   room it has (mob/spawner-room), each try five rolls of the mobs' stream, each blaze placed
    where one fits (mob/spawner-spawns)."
   [sim sp]
   (let [[sim rb] (mob-roll sim)
         tries (min (mob/spawner-batch rb) (mob/spawner-room (spawner-nearby sim sp)))
         [sim rolls] (reduce (fn [[sim acc] _] (let [[sim r] (mob-roll sim)] [sim (conj acc r)]))
                             [sim []]
-                            (range (* 3 tries)))]
+                            (range (* 5 tries)))]
     (reduce (fn [sim [x y z]] (add-mob sim (:kind mob/spawner) [(+ x 0.5) (double y) (+ z 0.5)] {}))
             sim
-            (mob/spawner-spawns (free-fn sim) sp tries (partition 3 rolls)))))
+            (mob/spawner-spawns (free-fn sim) sp tries (partition 5 rolls)))))
 
 (defn due-at
   "The time in ms of the spawner's next spawn, a delay rolled (mob/spawner-delay) from now:

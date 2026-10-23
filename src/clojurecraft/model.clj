@@ -366,12 +366,6 @@
    [:intent/bridge?
     "a :tunnel-to that may floor a level step across a cavern (fortress/bridge-over-void?): the spiral's leg has stalled (issue #338)"
     "a :tunnel-to with a search whose leg has stalled"]
-   [:intent/brick
-    "the fortress brick a :tunnel-to goes to (fortress/chosen-brick): the executor keeps it as :fortress/brick"
-    "a :tunnel-to to a brick on record"]
-   [:fortress/brick
-    "the brick the last tunnel went to, kept while it stays on record so a nearer one does not take the target (fortress/chosen-brick, issue #338)"
-    "after a :tunnel-to to a brick began"]
    [:intent/taken "steps a :tunnel-to has taken" ":tunnel-to, after its first step"]
    [:intent/tunnel-visited
     "the feet cells this tunnel-to has started steps from; fresh steps and short floored turns precede a retreat"
