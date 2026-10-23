@@ -789,6 +789,12 @@
         carry (fn [item] (assoc w :player/inventory {0 {:item (recipe/item-id item) :count 4}}))]
     (is (not (fortress/safe? w [0 64 0] [1 0 0])) "nothing to replace it with")
     (is (not (fortress/safe? (carry :gravel) [0 64 0] [1 0 0])) "gravel falls out of a floor")
+    ;; Issue #537's R1-20-1: soul sand is a filler, but laid in a floor it stands as no
+    ;; walk floor, so the step dug it out and laid it again for the whole window.
+    (is (nil? (fortress/walk-filler (carry :soul_sand) floor)) "soul sand laid is no walk floor")
+    (is (= :cobblestone (fortress/walk-filler (carry :cobblestone) floor)))
+    (is (not (fortress/safe? (carry :soul_sand) [0 64 0] [1 0 0]))
+        "a floor only soul sand could replace is not replaced")
     (doseq [item [:cobblestone :soul_soil :basalt :blackstone]]
       (is (fortress/safe? (carry item) [0 64 0] [1 0 0]) (str item)))
     (is (not (fortress/safe? (assoc-in w [:world/blocks floor] blocks/lava-base) [0 64 0] [1 0 0]))
@@ -928,6 +934,7 @@
   ;; past a fortress 150 blocks north; the legs now sweep strips a spacing apart
   (is (= [[1 0] [0 1] [-1 0] [0 -1] [1 0]] (take 5 (iterate fortress/turn-right [1 0]))))
   (is (= [160 160 320 320 480] (map fortress/leg-length (range 5))))
+  (is (= [480 480] (map fortress/leg-length [10 200])) "no leg longer than leg-max")
   (is (= [160 64 0] (fortress/leg-target east-leg)))
   (is (= [0 64 -320]
          (fortress/leg-target {:search/from [0 64 0] :search/heading [0 -1] :search/leg 2}))))
@@ -967,6 +974,25 @@
   "The field with no block south of z 0: a cavern's open air, as far as the leg can see."
   []
   (update (field -20 40) :world/blocks #(into {} (remove (fn [[[_ _ z] _]] (pos? z)) %))))
+
+(deftest a-leg-given-up-untravelled-turns-at-the-same-length
+  ;; Issues #527 and #537: legs stalled at caverns grew the spiral's count untravelled, and
+  ;; the search's target ended 16,896 blocks away; only a travelled leg grows the next one.
+  (let [w
+        (assoc (field -20 40) :fortress/search (assoc east-leg :search/tunnels 3 :search/stalled 3))
+        next (fortress/exploring w)]
+    (is (fortress/leg-over? w (:fortress/search w)) "stalled: over")
+    (is (not (fortress/leg-done? w (:fortress/search w))) "but not travelled")
+    (is (= 0 (:search/leg next)) "the next leg keeps the length")
+    (is (= [0 1] (:search/heading next)) "and turns")
+    (is (= 1
+           (:search/leg (fortress/exploring (assoc (field -20 40)
+                                                   :fortress/search
+                                                   {:search/from [-160 64 0]
+                                                    :search/heading [1 0]
+                                                    :search/leg 0
+                                                    :search/tunnels 3}))))
+        "a travelled leg still grows the spiral")))
 
 (deftest a-leg-looks-for-rock-ahead
   ;; issue #338, sim world R2/12: a leg east ran into a cavern sixty blocks across and its rim
