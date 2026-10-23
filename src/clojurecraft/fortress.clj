@@ -307,17 +307,6 @@
                 feet
                 move))))
 
-(defn away-vertically?
-  "Does move [dx dy dz] go the other way up or down from the target than the target lies: the
-   target more than climb above the feet and the move down, or more than climb under them and
-   the move up? A target a level away has none. Sim world R2/12 (issue #338) went down from y 48
-   to y 14 toward a brick at y 55 and sat under the lava sea; snapshot R3-28-1 went up from y 73
-   to 110 toward one at y 54."
-  [[_ fy _] [_ ty _] climb [_ dy _]]
-  (let [ddy (- (long ty) (long fy))]
-    (or (and (> ddy (long climb)) (neg? (long dy)))
-        (and (< ddy (- (long climb))) (pos? (long dy))))))
-
 (defn next-move
   "The next tunnel move: a safe unvisited cell first (in the dry tunnel, one floored across a cave
    as soon, bridge?, in the order of moves), then a short floored turn onto adjoining ground, then
@@ -327,15 +316,12 @@
    never bridges over fluid. Gym batch stronghold-room-b (plan run 39132210882) run 3 of the
    portal room staired down through a cave to the frame's height, 126 blocks from it, every step
    toward it over the cave's air, and walked its own stairs 32 steps a tunnel for 23 minutes to
-   the timeout. A step away from the target vertically (away-vertically?) is taken only as the last resort
-   with the retreats, never before a step toward it, a turn, a climb or a seal."
+   the timeout."
   ([world feet target climb dry-only? visited]
    (next-move world feet target climb dry-only? visited false))
   ([world feet target climb dry-only? visited bridge-ok?]
    (let [ways (moves feet target climb)
          fresh (remove #(contains? visited (plus feet %)) ways)
-         onward (remove #(away-vertically? feet target climb %) fresh)
-         up? (> (- (long (second target)) (long (second feet))) (long climb))
          allowed? #(and (safe? world feet %) (or (not dry-only?) (dry? world feet %)))
          first-way? (cond dry-only? #(or (allowed? %) (bridge? world feet %))
                           bridge-ok? #(or (allowed? %) (bridge-over-void? world feet %))
@@ -354,19 +340,17 @@
                                     (build/holds? world [:solid %]))
                               (neighbours floor))
                         (or (not dry-only?) (dry? world feet move)))))]
-     (or (first (filter first-way? onward))
-         (let [turned (fn []
-                        (first (filter (fn [move]
-                                         (let [floor (plus (plus feet move) [0 -1 0])
-                                               filled (assoc-in world
-                                                       [:world/blocks floor]
-                                                       (blocks/default-state :cobblestone))]
-                                           (and (turn? move) (safe? filled feet move))))
-                                       onward)))
-               climbed (fn [] (first (filter #(climb-out? world feet % dry-only?) onward)))]
-           (if up? (or (climbed) (turned)) (or (turned) (climbed))))
+     (or (first (filter first-way? fresh))
+         (first (filter (fn [move]
+                          (let [floor (plus (plus feet move) [0 -1 0])
+                                filled (assoc-in world
+                                        [:world/blocks floor]
+                                        (blocks/default-state :cobblestone))]
+                            (and (turn? move) (safe? filled feet move))))
+                        fresh))
+         (first (filter #(climb-out? world feet % dry-only?) fresh))
          (first (filter #(and (sealed? world feet %) (or (not dry-only?) (dry? world feet %)))
-                        onward))
+                        fresh))
          (first (filter allowed? ways))))))
 
 (defn on-bridge?
