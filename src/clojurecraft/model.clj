@@ -260,11 +260,14 @@
     "the looks in a row that brought the feet no stall-gain nearer than :search/best; stall-tunnels end the leg (issue #338)"
     "inside :fortress/search, from the leg's second look"]
    [:hunt/forage
-    "the search for animals a bot about to light its portal makes with fewer than hunt/provision-wanted foods held: {:forage/since :forage/leg :forage/retry-at}; the :forage intent keeps it, and hunt/foraging? ends the search forage-ms after its first leg (issue #501)"
+    "the search for animals a bot makes with fewer than hunt/provision-wanted foods held, with the stone pickaxe (before the descent) or the portal kit: {:forage/since :forage/leg :forage/retry-at :forage/phase}; the :forage intent keeps it, and hunt/foraging? ends the search hunt/forage-budget after its first leg (issues #501, #504)"
     "after a :forage intent chose its first leg"]
    [:forage/since "ms the search's first leg was chosen" "inside :hunt/forage"]
    [:forage/leg
     "the leg the next :forage turns to, from 0: its heading is a quarter turn right of the last (hunt/forage-headings)"
+    "inside :hunt/forage"]
+   [:forage/phase
+    "the hunt/provision-phase the search began in (:early with the stone pickaxe, :kit with the portal's iron): a search of another phase is not this one's, and starts afresh"
     "inside :hunt/forage"]
    [:forage/retry-at
     "ms before which the search looks for no leg: set when no heading had a route at any reach (hunt/forage-retry-ms on)"
