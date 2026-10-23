@@ -1221,11 +1221,15 @@
    out of the water let in dug down a staircase it flooded until :stuck, and the escape from
    that water failed :stuck too: three failures, all toward the one site the planner kept. Only
    a :build has a site: a :tunnel-to (fortress) works its steps through work-op too. A cast-one's
-   walk to a stand that failed :no-path anywhere gives its site up too, from the second failure
-   on (:plan/attempts): what the build offers before it, a way dug, a corner, a bridge, is
-   exhausted when it is the plain walk left, and a site no way reaches is better left than
-   failed (issue #45: real snapshot real-3-s2-Clj_r05 stood in the rock behind its frame, the
-   frame's rock all round a way to the landing four blocks off, and failed :no-path three times).
+   or a :nether build's walk to a stand that failed :no-path anywhere gives its site up too, from
+   the second failure on (:plan/attempts): what the build offers before it, a way dug, a corner,
+   a bridge, is exhausted when it is the plain walk left, and a site no way reaches is better
+   left than failed (issue #45: real snapshot real-3-s2-Clj_r05 stood in the rock behind its
+   frame, the frame's rock all round a way to the landing four blocks off, and failed :no-path
+   three times; issue #561, sim snapshots R1-12-2 and R1-24-1: the return portal stood on
+   deepslate with lava beside the stand, a route never steps a cell beside lava, and the plain
+   walk failed :no-path three times). A :portal build holds a cast already made and is not given
+   up for a walk.
    Any walk or dig of a :build that fails :no-path, :stuck or :out-of-reach while water stands in
    its room (flooded-room?) gives it up too: sim race 39610239818 (issue #461, world R1/17): the
    room's digs let an aquifer in, the walk to a stand over the water stalled and failed
@@ -1240,7 +1244,7 @@
                                           (physics/centre
                                            (cell origin facing (landing (or access 0)))))
                         site-reach)
-                     (and (= :cast-one build)
+                     (and (#{:cast-one :nether} build)
                           (= :walk (:intent/kind child))
                           (= :no-path reason)
                           (not (:intent/pickup? child))

@@ -1481,7 +1481,9 @@
         "a walk to pick something up")
     (is (not (build/lost-way? again i (assoc child :intent/reason :stuck))) "only :no-path")
     (is (not (build/lost-way? again (assoc i :intent/build :portal) child))
-        "a portal's site holds a cast: not given up for a walk")))
+        "a portal's site holds a cast: not given up for a walk")
+    (is (build/lost-way? again (assoc i :intent/build :nether) child)
+        "a nether build gives its site up the same way a cast-one does")))
 
 (deftest a-cast-one-with-no-stand-gives-its-site-up
   ;; sim races 39076911005 and 39070979444 (issue #74): no cell reached the op and none could be
