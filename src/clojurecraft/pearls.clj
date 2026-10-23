@@ -1289,10 +1289,13 @@
   ;; enderman at hand (beset?), and the hunt plans again: home, the fight held there, or the
   ;; fight where the bot stands. Nothing else ends a running intent: sim probes 39887735653 and
   ;; 39887752302 had a walk and a tunnel go on while one struck the bot from 20 health to none in
-  ;; six to ten seconds, the bot carried on away from it
+  ;; six to ten seconds, the bot carried on away from it. Never in the burrow's end, where none
+  ;; reaches: sim probe 39892490709 (worlds R1 and R4, seed 3) cut its lookout there every tick
+  ;; for twenty minutes over one given up on by the mouth, and the lure never counted a lookout
   [world _ i]
   (and (not (contains? answers-to-hand (:intent/kind i)))
        (not (and (= :walk (:intent/kind i)) (= (:intent/target i) (:pearls/shelter world))))
+       (not= (:pearls/shelter world) (intent/feet world))
        (beset? world)))
 
 (defmethod combat/answers :pearls

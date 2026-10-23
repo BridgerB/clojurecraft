@@ -762,7 +762,11 @@
     (is (not (plan/interrupts? (assoc-in w [:world/entities 7 :entity/creepy?] false)
                                row
                                {:intent/kind :tunnel}))
-        "a calm one at hand: the tunnel goes on")))
+        "a calm one at hand: the tunnel goes on")
+    ;; sim probe 39892490709 (worlds R1 and R4, seed 3): the lookout in the end cut every tick for
+    ;; twenty minutes over one given up on by the mouth
+    (is (not (plan/interrupts? (assoc w :pearls/shelter [8 64 8]) row {:intent/kind :lookout}))
+        "in the burrow's end, where none reaches: the lookout goes on")))
 
 (deftest a-pickaxe-worn-out-on-burrows-ends-the-hunt-in-the-open
   ;; sim probe 39890964793 (seed 5): its pickaxe broke on burrows, and it struck calm endermen in
