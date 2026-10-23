@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-23T22:42:01.034Z",
+  "at" : "2026-10-23T22:45:24.472Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -52,11 +52,6 @@
     "title" : "Bot stops at ender-pearls: no-sword",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
-  }, {
-    "number" : 60,
-    "title" : "Bot stops at water-bucket: no-water",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : true
   }, {
     "number" : 71,
     "title" : "Bot stops at portal-kit: boxed",
@@ -146,10 +141,6 @@
     "why" : "hands-off label"
   }, {
     "issue" : 563,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
-    "issue" : 60,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
