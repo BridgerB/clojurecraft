@@ -467,10 +467,11 @@
                      :player/inventory
                      {0 {:item (recipe/item-id :gravel) :count 64}
                       1 {:item (recipe/item-id :sand) :count 64}})
-            started (intent/run (assoc w :plan/intent i) i tick)
-            out (intent/run started (:plan/intent started) tick)]
-        (is (= :cobblestone (get-in started [:plan/intent :intent/op :build/item])))
-        (is (= :not-held (get-in out [:plan/intent :intent/child :intent/reason])))
+            out (intent/run (assoc w :plan/intent i) i tick)]
+        (is (= :active (get-in out [:plan/intent :intent/status])) "given up, not failed")
+        (is (nil? (get-in out [:plan/intent :intent/move])) "the step is dropped")
+        (is (contains? (get-in out [:plan/intent :intent/tunnel-visited]) [1 64 0]))
+        (is (nil? (get-in out [:plan/intent :intent/child])) "never placed, so never :not-held")
         (is (empty? (:bot/effects out)))))))
 
 (deftest a-tunnel-resumes-a-reachable-entry-after-a-no-path
@@ -1130,8 +1131,10 @@
         ups (take-while #(= 1 (second %)) ms)]
     (is (= 4 (count ups)) "every direction's step up comes first")
     (is (every? #(<= (second %) 0) (drop (count ups) ms)) "then level, then down"))
-  (is (= [1 0 0] (first (fortress/moves [0 64 0] [60 70 50])))
-      "a far way aside keeps its direction"))
+  (is (= [1 0 0] (first (fortress/moves [0 64 0] [60 66 50])))
+      "a far way aside, within climb-past of level, keeps its direction")
+  (is (= [1 1 0] (first (fortress/moves [0 64 0] [60 70 50])))
+      "a far way aside and six up still climbs in that direction"))
 
 (deftest ground-is-looked-for-the-depth-of-the-lava-sea-and-more
   ;; Issues #538 and #338: R2-2-1 stood on a floor 80 over a sea whose lava began 49 under it, and
@@ -1143,3 +1146,54 @@
     (is (fortress/ground-below? (cavern 20) [0 80 0]) "60 under the floor")
     (is (fortress/ground-below? (cavern 5) [0 100 0]) "95 under it")
     (is (not (fortress/ground-below? (cavern 2) [0 100 0])) "98 under it: not looked for")))
+
+(deftest a-brick-overhead-is-climbed-as-a-shaft
+  ;; Issue #338, R2-6-2: y 9 under a brick at y 56, no pickaxe, a stair of three digs a level
+  ;; by hand ended at y 43. A shaft is one dig a level.
+  (let [w (assoc (rock {})
+                 :player/on-ground? true
+                 :player/inventory {0 {:item (recipe/item-id :cobblestone) :count 64}}
+                 :bot/phase :play
+                 :bot/effects []
+                 :time/now 0
+                 :time/tick 0)
+        feet [0 64 0]
+        tick {:event/kind :tick :event/now 0}
+        i {:intent/kind :tunnel-to :intent/target [1 80 0] :intent/steps 32 :intent/status :active}
+        out (intent/run (assoc w :plan/intent i) i tick)]
+    (is (fortress/overhead? [981 9 481] [983 56 480]) "R2-6-2's brick")
+    (is (not (fortress/overhead? [918 65 384] [984 72 455])) "R2-22-2's brick is across a cavern")
+    (is (fortress/shaft-ready? w feet))
+    (is (= :shaft (get-in out [:plan/intent :intent/stage])))
+    (is (= [0 66 0] (get-in out [:plan/intent :intent/child :intent/target])))
+    (is (get-in out [:plan/intent :intent/child :intent/drop-ok?])
+        "basalt by hand, the drop unneeded")
+    (is (nil? (fortress/shaft-tick w feet [1 80 0] (assoc i :intent/no-shaft :unsafe) tick))
+        "a shaft that failed is not begun again")))
+
+(deftest a-target-above-is-climbed-before-the-stair-down
+  ;; Issue #526, R2-29-1 and R2-36-1: the level tread beside the feet was already stood in, so
+  ;; the only fresh safe step was down the cobble stair onto the obsidian pad.
+  (let [cobble (blocks/default-state :cobblestone)
+        obsidian (blocks/default-state :obsidian)
+        box (into {} (for [x (range -3 4) y (range 58 71) z (range -3 4)] [[x y z] air]))
+        w {:world/chunks {}
+           :world/blocks (merge box {[0 63 0] obsidian [-1 63 0] cobble [-1 62 0] obsidian})
+           :player/pos [0.5 64.0 0.5]
+           :player/inventory {0 {:item (recipe/item-id :cobblestone) :count 64}}}
+        feet [0 64 0]
+        down [-1 -1 0]
+        climb [-1 1 0]
+        stood #{[-1 64 0]}]
+    (is (fortress/safe? w feet down) "the stair down is safe")
+    (is (fortress/safe? w feet [-1 0 0]) "the tread beside is safe too, once stood in")
+    (is (not (fortress/safe? w feet climb)) "the climb is not safe until its block is laid")
+    (is (fortress/climb-out? w feet climb false))
+    (is (= climb (fortress/next-move w feet [-40 80 0] 3 false stood))
+        "a target above is climbed, not ridden down the stair")
+    (is (= climb (fortress/next-move w feet [-40 80 0] 3 false (conj stood [-1 65 0])))
+        "the cell above, already stood in on the way down, is still climbed")
+    (is (fortress/gaining? feet climb [-40 80 0]))
+    (is (not (fortress/gaining? feet down [-40 80 0])))
+    (is (= down (fortress/next-move w feet [-40 50 0] 3 false stood))
+        "a target below still takes the stair down")))
