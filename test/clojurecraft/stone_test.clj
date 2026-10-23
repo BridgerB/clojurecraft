@@ -744,7 +744,11 @@
              (assoc air [4 63 5] (blocks/default-state :warped_nylium) [5 54 5] blocks/lava-base)))
         cells (stairs/up-cells feet [-1 0])
         step [[4 64 5]]
-        up {:intent/kind :stairs-up :intent/to-y 70 :intent/dir [-1 0] :intent/status :active}
+        up {:intent/kind :stairs-up
+            :intent/to-y 70
+            :intent/to-height? true
+            :intent/dir [-1 0]
+            :intent/status :active}
         planned #(:plan/intent
                   (intent/run (assoc % :plan/intent up) up {:event/kind :tick :event/now 0}))
         floored (assoc-in w [:world/blocks [5 63 5]] 1)]

@@ -198,7 +198,21 @@
              (endermen (if (lured-out? world) world (dissoc world :plan/blacklist)) stare-range))
        (:player/pos world)))))
 
-(def stale-lookouts 12)               ; lookouts (five seconds each, a minute) stood with the burrow and nothing to do from it before it is given up for one cut beside the next enderman
+(defn menaced?
+  "Does an angry enderman (entity/creepy?), blacklisted or not, stand within danger-radius of the
+   feet and danger-rise of their height? Then no drop is walked to or waited for: the hunt meets
+   it first. Sim probe 39885574495 (world R2, seed 5): two provoked at once, one killed, and the
+   walk to its pearl, out of the burrow, was slain in five seconds by the other, beside it."
+  [world]
+  (let [p (:player/pos world)]
+    (boolean (some (fn [[_ e]]
+                     (let [q (:entity/pos e)]
+                       (and (entity/creepy? e)
+                            (<= (physics/distance p q) danger-radius)
+                            (<= (abs (- (physics/y-of q) (physics/y-of p))) danger-rise))))
+                   (endermen (dissoc world :plan/blacklist) stare-range)))))
+
+(def stale-lookouts 12)              ; lookouts (five seconds each, a minute) stood with the burrow and nothing to do from it before it is given up for one cut beside the next enderman
 (def lure-lookouts 6)                 ; lookouts (half a minute) stood in the burrow over an angry enderman near its mouth that has not come before the bot shows itself at the mouth to bring it
 
 (defn lure?
@@ -810,51 +824,55 @@
      (into {} (remove (fn [[eid e]] (or (contains? bl eid) (entity/creepy? e)))) (crowd world))
      (:player/pos world))))
 
+(defn stare-site
+  "The cell to cut a burrow at for enderman e, from whose mouth the stare at it goes: within
+   crowd-reach of it on the plane and vantage-rise of its height, its head stare-from and
+   crowd-margin or more from the eye standing there and provokable? from it, a cell the bot could
+   stand in (standable?) and cut a burrow from heading from it (burrowable?, along away), past a
+   walk's reach of the eye, not one a walk failed toward (:plan/blacklist), and of those, nearest
+   the feet first and vantage-tries at most, the first a route reaches (intent/routable?); nil
+   when there is none. A walk to the enderman itself ends beside it, the burrow is cut there,
+   and a look while digging stares at it point blank: sim probe 39885559223 (world R2, seed 4)
+   walked to a calm one with its burrow given up, was provoked two blocks off as it began the
+   burrow beside it, and was slain in the open in six seconds."
+  [world e]
+  (let [feet (intent/feet world)
+        eye (game/eye world)
+        bl (:plan/blacklist world #{})
+        [ex ey ez] (cell (:entity/pos e))
+        from (fn [c] (assoc world :player/pos (feet-at c)))]
+    (->> (for [dx (range (- crowd-reach) (inc crowd-reach))
+               dz (range (- crowd-reach) (inc crowd-reach))
+               dy (range (- vantage-rise) (inc vantage-rise))]
+           [(+ ex dx) (+ ey dy) (+ ez dz)])
+         (filter (fn [c]
+                   (and (not (contains? bl c))
+                        (> (physics/distance eye (physics/centre c)) intent/reach)
+                        (standable? world c))))
+         (sort-by #(physics/distance feet %))
+         (filter (fn [c]
+                   (let [at (from c)]
+                     (and (>= (physics/distance (game/eye at) (head e)) (+ stare-from crowd-margin))
+                          (provokable? at e)
+                          (burrowable? world c (away at e))))))
+         (take vantage-tries)
+         (some (fn [c]
+                 (when (intent/routable? world
+                                         {:intent/kind :walk :intent/target c :intent/for :shelter})
+                   c))))))
+
 (defn crowd-site
-  "The cell to cut a new burrow at when the burrow is given up (stale?) over a calm enderman
-   crowding its mouth (crowder): within crowd-reach of it on the plane and vantage-rise of its
-   height, its head stare-from and crowd-margin or more from the eye standing there and
-   provokable? from it, a cell the bot could stand in (standable?) and cut a burrow from heading
-   from it (burrowable?, along away), past a walk's reach of the eye, not one a walk failed
-   toward (:plan/blacklist), and of those, nearest the feet first and vantage-tries at most, the
-   first a route reaches (intent/routable?); nil when there is none, or no crowder. Cut there, the
-   burrow's mouth is where the stare goes from, as for any quarry. Sim probe 39883402083 (world
-   R1, seed 4): a calm enderman stood by the mouth from the eighth minute to the end, too near
-   to stare at from the mouth and hidden from the end; every minute of lookouts gave the burrow
-   up, the walk toward the nearest enderman went to that one, and the burrow cut beside it was
-   the same burrow again, its end and mouth the cells they had been. Worlds R1, R2 and R4 stood
-   28 to 49 of their 60 minutes so over seeds 3 to 5; gym batch pearls-warped4-a's runs 1 and 5
-   stood 35 and 21 minutes over such ones (plan run 39544677155)."
+  "The stare-site of the calm enderman crowding the burrow's mouth (crowder), where a new burrow
+   is cut when the old one is given up (stale?) over it; nil when there is none, or no crowder.
+   Sim probe 39883402083 (world R1, seed 4): a calm enderman stood by the mouth from the eighth
+   minute to the end, too near to stare at from the mouth and hidden from the end; every minute
+   of lookouts gave the burrow up, the walk toward the nearest enderman went to that one, and the
+   burrow cut beside it was the same burrow again, its end and mouth the cells they had been.
+   Worlds R1, R2 and R4 stood 28 to 49 of their 60 minutes so over seeds 3 to 5; gym batch
+   pearls-warped4-a's runs 1 and 5 stood 35 and 21 minutes over such ones (plan run
+   39544677155)."
   [world]
-  (when-let [[_ e] (crowder world)]
-    (let [feet (intent/feet world)
-          eye (game/eye world)
-          bl (:plan/blacklist world #{})
-          [ex ey ez] (cell (:entity/pos e))
-          from (fn [c] (assoc world :player/pos (feet-at c)))]
-      (->> (for [dx (range (- crowd-reach) (inc crowd-reach))
-                 dz (range (- crowd-reach) (inc crowd-reach))
-                 dy (range (- vantage-rise) (inc vantage-rise))]
-             [(+ ex dx) (+ ey dy) (+ ez dz)])
-           (filter (fn [c]
-                     (and (not (contains? bl c))
-                          (> (physics/distance eye (physics/centre c)) intent/reach)
-                          (standable? world c))))
-           (sort-by #(physics/distance feet %))
-           (filter (fn [c]
-                     (let [at (from c)]
-                       (and (>= (physics/distance (game/eye at) (head e))
-                                (+ stare-from crowd-margin))
-                            (provokable? at e)
-                            (burrowable? world c (away at e))))))
-           (take vantage-tries)
-           (some (fn [c]
-                   (when (intent/routable? world
-                                           {:intent/kind :walk
-                                            :intent/target c
-                                            :intent/for :shelter
-                                            :intent/max-nodes vantage-nodes})
-                     c)))))))
+  (when-let [[_ e] (crowder world)] (stare-site world e)))
 
 (defn bore
   "A tunnel (:tunnel, stairs.clj: level steps, turning where one is refused) bore-length long
@@ -1114,7 +1132,7 @@
    new burrow cut from would stare at it from its mouth (crowd-site), before any burrow cut
    where the bot stands: the one cut from the old end, or beside the crowder after the walk
    toward it, was the old burrow again (sim probe 39883402083); with no burrow, a walk to the nearest within seek-radius a
-   route reaches, or toward one as far as a route goes (toward); else a :lookout, standing where
+   route reaches (to a cell a burrow cut from would stare at it, stare-site, when a pickaxe is held and there is one: never up to it, where the burrow beside it provokes it point blank), or toward one as far as a route goes (toward); else a :lookout, standing where
    it is: no enderman yet is no failure (batch pearls-263c's warped forest landings failed
    :no-enderman and :no-route in 40 s); before the walk toward one, stairs down toward one far
    below within descend-radius (descend: batch pearls-warped-c's landings stood on ledges over
@@ -1202,14 +1220,18 @@
       ce {:intent/kind :fight :intent/target ceid :intent/for :pearls}
       home (or (vantage world far) {:intent/kind :lookout :intent/for :pearls})
       :else
-      (or (when-let [[_ e] (routable world far)]
-            {:intent/kind :walk :intent/target (cell (:entity/pos e)) :intent/for :pearls})
-          (descend world (endermen world descend-radius))
-          (ascend world (endermen world descend-radius))
-          (toward world far)
-          (bore world (endermen world descend-radius))
-          (when (= :lookout (:intent/kind (:plan/last world))) (or (roam world) (dig-out world)))
-          {:intent/kind :lookout :intent/for :pearls}))))
+      (or
+       (when-let [[_ e] (routable world far)]
+         (let [c (when (pickaxe? world) (stare-site world e))]
+           (cond c {:intent/kind :walk :intent/target c :intent/for :shelter}
+                 :else
+                 {:intent/kind :walk :intent/target (cell (:entity/pos e)) :intent/for :pearls})))
+       (descend world (endermen world descend-radius))
+       (ascend world (endermen world descend-radius))
+       (toward world far)
+       (bore world (endermen world descend-radius))
+       (when (= :lookout (:intent/kind (:plan/last world))) (or (roam world) (dig-out world)))
+       {:intent/kind :lookout :intent/for :pearls}))))
 
 (defmethod combat/answers :pearls
   ;; the hunt provokes endermen and fights them from its burrow; an angry one (entity/creepy?)
@@ -1228,11 +1250,12 @@
 
 (defmethod plan/next-intent :pearls
   ;; a fire the bot stands in put out first (a :dig: the server breaks fire on the first click,
-  ;; as blaze/put-out does); then the kill's drop; with no sword held no hunt at all, a wait that fails the plan
+  ;; as blaze/put-out does); then the kill's drop, unless another angry one is near (menaced?);
+  ;; with no sword held no hunt at all, a wait that fails the plan
   ;; (:no-sword): gym batch pearls-warped8-b (plan run 39775345028) runs 1 and 3 respawned with
   ;; nothing held after their first deaths and hunted on bare-handed, 39 and 26 deaths in five hours
   [world _ _]
-  (let [k (fresh-kill world)
+  (let [k (when-not (menaced? world) (fresh-kill world))
         [_ d] (when k (drop-of world k))
         fire (burning-at world)]
     (cond fire {:intent/kind :dig :intent/target fire}
