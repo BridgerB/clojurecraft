@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-23T08:13:43.470Z",
+  "at" : "2026-10-23T08:14:53.191Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -136,7 +136,7 @@
     "number" : 171,
     "title" : "Bot stops at flint-and-steel: unsafe",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
+    "copilot" : true
   }, {
     "number" : 135,
     "title" : "Bot stops at cast-one: timeout",
@@ -254,7 +254,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 171,
-    "move" : "assign"
+    "move" : "wait",
+    "why" : "session starting"
   }, {
     "issue" : 135,
     "move" : "leave",
