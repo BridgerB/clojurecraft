@@ -777,8 +777,8 @@
                          (carrying n)
                          (assoc :world/chunks {[0 0] (world/column air)} :plan/intent down))]
                (:plan/intent (intent/run w down tick))))
-        need (+ stairs/lay-reserve 6)]
-    (is (= :lay (:intent/stage (at need))) "enough to floor six stairs and keep the reserve: laid")
+        need (inc stairs/max-void-reserve)] ; open air all the way up: the reserve is the most, sixteen
+    (is (= :lay (:intent/stage (at need))) "enough to floor a stair and keep the reserve: laid")
     (is (not= :lay (:intent/stage (at (dec need)))) "one short: no floor, the staircase turns")
     (is (= 1 (:intent/turns (at (dec need)))))
     (is
@@ -894,7 +894,20 @@
     (is (nil? (stairs/reserve-level-lay (roofed 12 77) :stairs-down cells feet))
         "under a roof twelve up, the floor leaves eleven, short of twelve")
     (is (= [[6 63 5]] (stairs/reserve-level-lay (at 1) :stairs-up cells feet))
-        "a climb's step is what the reserve is for")))
+        "a climb's step is what the reserve is for")
+    ;; `lay`, which every descent's floor and level step passes first, keeps the same reserve
+    (is (nil? (stairs/lay (at stairs/max-void-reserve) feet cells))
+        "a floor over open air leaves the way back out of it")
+    (is (= [[6 63 5]] (stairs/lay (at need) feet cells)) "and lays what the reserve leaves")
+    (is (= [[6 63 5]] (stairs/lay (roofed (inc stairs/lay-reserve) 68) feet cells))
+        "under a low roof the reserve is lay-reserve")
+    (is (= [[6 63 5]]
+           (stairs/lay (assoc (at (inc stairs/lay-reserve))
+                              :plan/intent
+                              {:intent/kind :stairs-up :intent/status :active})
+                       feet
+                       cells))
+        "a climb's own floor keeps lay-reserve")))
 
 (deftest a-climb-takes-the-step-already-there-before-laying-one
   ;; issue #37 (real bot Clj_r16, snapshot real-7-s2): a climb laid a holder and a step a level,
