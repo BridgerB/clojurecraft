@@ -25,7 +25,8 @@
                 (println "WHY"
                          (quot (long (:time/now world 0)) 60000)
                          (mapv #(long (clojure.math/floor %)) (:player/pos world))
-                         (pr-str {:food (:player/food world)
+                         (pr-str {:wall (quot (System/currentTimeMillis) 1000)
+                                  :food (:player/food world)
                                   :hp (:player/health world)
                                   :phase (hunt/provision-phase world)
                                   :edible (hunt/edible-held world)
