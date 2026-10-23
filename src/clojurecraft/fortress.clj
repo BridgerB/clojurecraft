@@ -483,69 +483,70 @@
     :as i} event]
   (let [world (cond-> world search (assoc :fortress/search search)) ; the spiral's leg, kept for the planner's next look
         feet (intent/feet world)]
-    (cond (or (arrived? world target r) (>= taken steps))
-          (-> world
-              (assoc :player/controls {})
-              intent/done)
-          (and move (or (off-step? feet from move) (lost-way? i)))
-          (reduce intent/dissoc-intent (assoc world :player/controls {}) step-keys)
-          (buried world feet)
-          (build/work-op (assoc world :player/controls {}) i (buried world feet) event)
-          (and (nil? move) (false? (:player/on-ground? world)) (< airborne air-grace))
-          (intent/assoc-intent (assoc world :player/controls {}) :intent/airborne (inc airborne))
-          (nil? move)
-          (let [back (recentre world feet)
-                trail (trail-of world target)
-                seen (-> tunnel-visited
-                         (into (:trail/cells trail))
-                         (into (:trail/dead trail)))
-                ahead (when-not back
-                        (next-move world feet target climb (boolean dry?) seen (:intent/bridge? i)))
-                fresh? (and ahead (not (retreat? feet ahead seen)))
-                undo (when-not (or back fresh?) (step-back world feet trail (boolean dry?)))
-                m (or back undo ahead)
-                retreated (if (and ahead (not fresh?) (not undo)) (inc (long retreats)) 0)]
-            (cond (or (nil? m) (> retreated retreats-allowed))
-                  (-> world
-                      (assoc :player/controls {})
-                      (intent/fail :blocked))
-                  :else
-                  (cond-> (intent/assoc-intent (assoc world :player/controls {})
-                                               :intent/move m
-                                               :intent/from feet
-                                               :intent/retreats retreated
-                                               :intent/tunnel-visited (conj tunnel-visited feet))
-                    (or undo fresh?) (assoc :fortress/trail (leave-cell trail feet (some? undo))))))
-          :else
-          (let [next (build/next-op world (into (seal-ops world from move) (step-plan from move)))
-                next (cond-> next
-                       (= :place (:build/op next))
-                       (assoc :build/item (or (stairs/filler world 1) :cobblestone)))]
-            (cond (nil? next)
-                  (reduce
-                   intent/dissoc-intent
-                   (intent/assoc-intent (assoc world :player/controls {}) :intent/taken (inc taken))
-                   step-keys)
-                  (and (#{:floor-clear :open :enter} (:build/step next))
-                       (not (safe? world from move)))
-                  (reduce intent/dissoc-intent (assoc world :player/controls {}) step-keys)
-                  (and (= :enter (:build/step next))
-                       (= :walk (:intent/kind child))
-                       (intent/failed? child)
-                       (= :no-path (:intent/reason child))
-                       (= :none (:intent/route child))
-                       (empty? (:intent/waypoints child))
-                       (intent/routable? world child))
-                  (intent/dissoc-intent (assoc world :player/controls {}) :intent/child)
-                  :else
-                  (let [world (build/work-op world i next event)
-                        i (:plan/intent world)]
-                    (cond (and (intent/failed? i) (= :no-pickaxe (:intent/reason i)))
-                          (-> world
-                              (assoc :player/controls {})
-                              (intent/dissoc-intent :intent/reason)
-                              intent/done)
-                          :else world)))))))
+    (cond
+      (or (arrived? world target r) (>= taken steps))
+      (-> world
+          (assoc :player/controls {})
+          intent/done)
+      (and move (or (off-step? feet from move) (lost-way? i)))
+      (reduce intent/dissoc-intent (assoc world :player/controls {}) step-keys)
+      (buried world feet)
+      (build/work-op (assoc world :player/controls {}) i (buried world feet) event)
+      (and (nil? move) (false? (:player/on-ground? world)) (< airborne air-grace))
+      (intent/assoc-intent (assoc world :player/controls {}) :intent/airborne (inc airborne))
+      (nil? move)
+      (let [back (recentre world feet)
+            trail (trail-of world target)
+            seen (-> tunnel-visited
+                     (into (:trail/cells trail))
+                     (into (:trail/dead trail)))
+            ahead
+            (when-not back
+              (next-move world feet target climb (boolean dry?) seen (boolean (:intent/bridge? i))))
+            fresh? (and ahead (not (retreat? feet ahead seen)))
+            undo (when-not (or back fresh?) (step-back world feet trail (boolean dry?)))
+            m (or back undo ahead)
+            retreated (if (and ahead (not fresh?) (not undo)) (inc (long retreats)) 0)]
+        (cond (or (nil? m) (> retreated retreats-allowed))
+              (-> world
+                  (assoc :player/controls {})
+                  (intent/fail :blocked))
+              :else
+              (cond-> (intent/assoc-intent (assoc world :player/controls {})
+                                           :intent/move m
+                                           :intent/from feet
+                                           :intent/retreats retreated
+                                           :intent/tunnel-visited (conj tunnel-visited feet))
+                (or undo fresh?) (assoc :fortress/trail (leave-cell trail feet (some? undo))))))
+      :else
+      (let [next (build/next-op world (into (seal-ops world from move) (step-plan from move)))
+            next (cond-> next
+                   (= :place (:build/op next))
+                   (assoc :build/item (or (stairs/filler world 1) :cobblestone)))]
+        (cond (nil? next)
+              (reduce
+               intent/dissoc-intent
+               (intent/assoc-intent (assoc world :player/controls {}) :intent/taken (inc taken))
+               step-keys)
+              (and (#{:floor-clear :open :enter} (:build/step next)) (not (safe? world from move)))
+              (reduce intent/dissoc-intent (assoc world :player/controls {}) step-keys)
+              (and (= :enter (:build/step next))
+                   (= :walk (:intent/kind child))
+                   (intent/failed? child)
+                   (= :no-path (:intent/reason child))
+                   (= :none (:intent/route child))
+                   (empty? (:intent/waypoints child))
+                   (intent/routable? world child))
+              (intent/dissoc-intent (assoc world :player/controls {}) :intent/child)
+              :else
+              (let [world (build/work-op world i next event)
+                    i (:plan/intent world)]
+                (cond (and (intent/failed? i) (= :no-pickaxe (:intent/reason i)))
+                      (-> world
+                          (assoc :player/controls {})
+                          (intent/dissoc-intent :intent/reason)
+                          intent/done)
+                      :else world)))))))
 
 ;; ---------------------------------------------------------------- the goal
 
