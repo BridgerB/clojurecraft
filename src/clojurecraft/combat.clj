@@ -58,15 +58,21 @@
 (def store-slots 36)                  ; player slots 0-35, the hotbar and the main inventory
 
 (defn sword
-  "[player-slot name] of the best sword held in the hotbar or the main inventory, or nil."
+  "[player-slot name] of the best sword held in the hotbar or the main inventory, or nil.
+   Two of one name: the one with more swings left (window/swings-left), the higher slot when
+   they are equal, so a fresh stone sword is armed beside the worn one it replaces."
   [world]
-  (let [held (into {}
-                   (for [[p {:keys [item]}] (sort-by key (:player/inventory world))
-                         :when (< -1 p store-slots)
-                         :let [n (recipe/item-name item)]
-                         :when (some #{n} swords)]
-                     [n p]))]
-    (some (fn [n] (when-let [p (held n)] [p n])) swords)))
+  (let [rows (sort-by :slot
+                      >
+                      (for [[p stack] (:player/inventory world)
+                            :when (and (< -1 p store-slots) stack)
+                            :let [n (recipe/item-name (:item stack))]
+                            :when (some #{n} swords)]
+                        {:slot p :name n :left (or (window/swings-left stack) 0)}))]
+    (some (fn [n]
+            (when-let [of (seq (filter #(= n (:name %)) rows))]
+              (let [best (apply max-key :left of)] [(:slot best) n])))
+          swords)))
 
 (defn aim
   "The point an attack on entity e looks at: aim-height over its feet."

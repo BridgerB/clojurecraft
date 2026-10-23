@@ -1323,24 +1323,31 @@
 (defn make-sword
   "The intent that makes the best sword the held items pay for (sword/payable) through the needs
    planner, when that craft can start from here: one of sword-acts, or the log chain to a
-   remembered trunk (:intent/for :log). Nil when nothing is payable, or the planner would only
-   wait or go looking for a tree. The Nether has no oak, and a wait there fails the plan."
+   remembered trunk (:intent/for :log) while the table's pieces are not already held
+   (sword/pieces?). Nil when nothing is payable, or the planner would only wait, go looking for
+   a tree, or chop another trunk with a log already in the grid. The Nether has no oak, and a
+   wait there fails the plan."
   [world goal table]
   (when-let [k (sword/payable world)]
-    (let [i (make/decide world (assoc goal :goal/provides {(keyword "item" (name k)) 1}) table)]
+    (let [i (make/decide (sword/for-decide world)
+                         (assoc goal :goal/provides {(keyword "item" (name k)) 1})
+                         table)]
       (when (and (:intent/kind i)
+                 (not (and (sword/pieces? world) (= :log (:intent/for i))))
                  (or (= :log (:intent/for i)) (contains? sword-acts (:intent/kind i))))
         i))))
 
 (defmethod plan/next-intent :pearls
   ;; a fire the bot stands in put out first (a :dig: the server breaks fire on the first click,
   ;; as blaze/put-out does); then the kill's drop, unless another angry one is near (menaced?);
-  ;; with no sword held, make the one the held items pay for when that craft can start
-  ;; (make-sword), else a wait that fails the plan, never a bare-hand hunt
+  ;; with no serviceable sword (none, or one under window/spare-uses swings), make the one the
+  ;; held items pay for when that craft can start (make-sword). With none at all and no craft,
+  ;; a wait that fails the plan, never a bare-hand hunt
   ;; (:no-sword): gym batch pearls-warped8-b (plan run 39775345028) runs 1 and 3 respawned with
   ;; nothing held after their first deaths and hunted on bare-handed, 39 and 26 deaths in five
-  ;; hours. Sim race 39909643851 (issue #563, world R3/13 seed 2) broke its stone sword with
-  ;; cobblestone, a stick and a trunk two blocks off, and the same wait failed the plan.
+  ;; hours. Sim race 39909643851 (issue #563, world R3/13 seed 2) held a stone sword with nine
+  ;; swings left, fought until it broke, and the same wait failed the plan. A worn sword that
+  ;; cannot be replaced yet is still hunted with.
   ;; With the pickaxe worn out (worn-out?), no burrow near and none angry near, no hunt either
   ;; (:no-pickaxe): no burrow can be cut, and
   ;; sim probe 39890964793 (seed 5) wore its pickaxe out on burrows, then struck calm endermen in
@@ -1348,7 +1355,8 @@
   [world goal table]
   (let [k (when-not (menaced? world) (fresh-kill world))
         [_ d] (when k (drop-of world k))
-        fire (burning-at world)]
+        fire (burning-at world)
+        replacing (when-not (sword/serviceable world) (make-sword world goal table))]
     (cond fire {:intent/kind :dig :intent/target fire}
           d
           {:intent/kind :collect-drops
@@ -1356,7 +1364,8 @@
            :intent/target (cell (:entity/pos d))
            :intent/for :pearls}
           (and k (body? world k)) {:plan/wait :drop}
-          (nil? (combat/sword world)) (or (make-sword world goal table) {:plan/wait :no-sword})
+          replacing replacing
+          (nil? (combat/sword world)) {:plan/wait :no-sword}
           (and (worn-out? world) (nil? (shelter world)) (not (menaced? world)))
           {:plan/wait :no-pickaxe}
           :else (hunt world))))

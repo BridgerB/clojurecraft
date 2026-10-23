@@ -340,7 +340,7 @@
   :goal/target? true
   :goal/always? true
   :goal/doc
-  "the best sword the held items make without a trip, better than the best held: iron from ingots the armour leaves spare, else stone from cobblestone, else wood from planks, never from a log (issue #259); an always row at the portal kit's priority after the armour in this table, so a chained run makes it once the portal's iron is in hand"
+  "the best sword the held items make without a trip, better than the best held that still has spare-uses swings left: iron from ingots the armour leaves spare, else stone from cobblestone, else wood from planks, never from a log (issue #259); an always row at the portal kit's priority after the armour in this table, so a chained run makes it once the portal's iron is in hand"
   :goal/done? :armed?
   :goal/plan :sword}
  {:goal/id :blaze-rods

@@ -816,6 +816,26 @@
     (is (= :walk (:intent/kind walked)))
     (is (= :log (:intent/for walked)) "a remembered trunk is the log the table takes")))
 
+(deftest a-worn-sword-is-replaced-before-the-hunt
+  ;; the same race held the stone sword with nine swings left and fought until it broke
+  (let [worn (assoc (item :stone_sword 1) :durability 9)
+        held {0 worn 1 (item :cobblestone 5) 2 (item :stick 1)}
+        bare (assoc (standing {}) :player/inventory held)
+        trunk {[12 64 8] 136 [12 65 8] 136 [12 66 8] 136 [12 67 8] 252}
+        col (world/column trunk)
+        forest (-> bare
+                   (assoc :world/chunks {[0 0] col})
+                   (memory/remember-column [0 0] col))
+        laid (-> forest
+                 (assoc :window/grid {1 (item :oak_log 1)})
+                 (update :player/inventory dissoc 0))
+        walked (plan/next-intent forest row plan/goals)
+        crafted (plan/next-intent laid row plan/goals)]
+    (is (= :walk (:intent/kind walked)))
+    (is (= :log (:intent/for walked)) "nine swings left: the trunk, before the fight")
+    (is (= :craft (:intent/kind crafted)) "a log in the grid is crafted, not another trunk")
+    (is (not= :log (:intent/for crafted)))))
+
 (def ledge-wall
   "Stone three high (y 64 to 66) along x 4, the burrow's first stair left open: from the mouth at
    x 3 the only way east is down through the burrow."
