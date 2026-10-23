@@ -707,7 +707,7 @@
                 (= :no-spot (:intent/reason child))
                 (:player/in-water? world))))
 
-(def foothold-limit 4)                ; filler blocks a redig lays so that one cell beside the feet is a spot
+(def foothold-limit 6)                ; filler blocks a redig lays so that one cell beside the feet is a spot
 
 (defn floor-fill
   "The cell under cell [x y z] when a filler is to be laid into it for a floor: loaded, not solid,
