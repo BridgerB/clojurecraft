@@ -66,6 +66,31 @@
       (is (nil? (get-in next [:plan/intent :intent/child]))
           "a foothold laid is not the placed block: the redig goes on to place the gravel"))))
 
+(deftest redig-places-the-gravel-on-the-foothold
+  ;; issue #349, R4/2: four footholds laid, then a stairs up done at once for fifteen minutes.
+  ;; place/spot will not choose the cell over the foothold when the sea is past it
+  (let [w (assoc-in (on-a-stub) [:world/blocks [6 63 5]] (blocks/default-state :cobblestone))]
+    (is (= {:intent/kind :place :intent/item :gravel :intent/cell [6 64 5]}
+           (stone/redig-place w :gravel))
+        "the gravel goes on the foothold already laid")))
+
+(deftest a-redig-the-dig-refuses-as-unsafe-places-again-elsewhere
+  ;; issue #171, real-8: three redigs beside the water just scooped failed :unsafe and ended
+  ;; the plan. The cell is refused and the redig places again. real-5's one :unsafe still gathers
+  (let [cell [4 64 5]
+        i {:intent/kind :redig
+           :intent/item :gravel
+           :intent/status :active
+           :intent/stage :dig
+           :intent/target cell
+           :intent/child
+           {:intent/kind :dig :intent/status :failed :intent/reason :unsafe :intent/target cell}}
+        next (stone/redig-stage (assoc (standing 64 :gravel) :plan/intent i) i {:event/kind :tick})]
+    (is (= :place (get-in next [:plan/intent :intent/stage])))
+    (is (contains? (get-in next [:plan/intent :intent/refused]) cell))
+    (is (nil? (get-in next [:plan/intent :intent/child]))
+        "the refused dig is not the redig's failure")))
+
 (deftest redig-places-on-the-neighbouring-stair
   (doseq [dy [-1 1]]
     (let [cell [4 (+ 64 dy) 5]
