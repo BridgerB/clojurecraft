@@ -24,7 +24,9 @@
                           (:intent/goal i)
                           "hold" (:intent/hold? i)
                           "end" (:intent/to-the-end? i)
-                          "for" (:intent/for i)))
+                          "for" (:intent/for i)
+                          "etype" (get-in ww' [:world/entities (:intent/target i) :entity/type])
+                          "cornered" (:plan/cornered ww')))
                (when (< h (- @last-h 1.0))
                  (reset! last-h h)
                  (println "HEALTH"
