@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-23T23:00:57.839Z",
+  "at" : "2026-10-23T23:02:08.272Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -76,7 +76,7 @@
     "number" : 69,
     "title" : "Bot stops at water-bucket: timeout",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
+    "copilot" : true
   }, {
     "number" : 574,
     "title" : "Bot stops at furnace: no-spot",
@@ -166,7 +166,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 69,
-    "move" : "assign"
+    "move" : "wait",
+    "why" : "session starting"
   }, {
     "issue" : 574,
     "move" : "leave",
