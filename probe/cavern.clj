@@ -9,6 +9,7 @@
          '[clojurecraft.window :as window]
          '[clojure.math :as math]
          '[clojurecraft.fortress]
+         '[clojurecraft.stairs]
          '[clojurecraft.blocks]
          '[clojurecraft.terrain]
          '[clojure.string :as str])
@@ -75,7 +76,11 @@
                                    :else (recur (inc n) (mapv + c [(first m) 0 (last m)]))))]
                   [m :safe (boolean (clojurecraft.fortress/safe? world from m)) :cells
                    (mapv at [(mapv + to [0 1 0]) to (mapv + to [0 -1 0])]) :span span :drop
-                   (drop-of (mapv + to [0 -1 0]))])
+                   (drop-of (mapv + to [0 -1 0])) :bridge
+                   (boolean (clojurecraft.fortress/bridge? world from m)) :ground
+                   (boolean (clojurecraft.fortress/ground-below? world (mapv + to [0 -1 0]))) :hp
+                   (:player/health world) :filler (clojurecraft.stairs/filler world 16) :flag
+                   (:intent/bridge? p)])
            :search (some-> (:intent/search p)
                            (select-keys [:search/leg :search/heading]))})))))
 
