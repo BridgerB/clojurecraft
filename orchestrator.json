@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-23T22:55:24.230Z",
+  "at" : "2026-10-23T23:00:57.839Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -48,6 +48,11 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
+    "number" : 559,
+    "title" : "Bot stops at fortress: no-spot",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
     "number" : 563,
     "title" : "Bot stops at ender-pearls: no-sword",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
@@ -68,9 +73,9 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 559,
-    "title" : "Bot stops at fortress: no-spot",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "number" : 69,
+    "title" : "Bot stops at water-bucket: timeout",
+    "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
     "number" : 574,
@@ -140,6 +145,10 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 559,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
     "issue" : 563,
     "move" : "leave",
     "why" : "hands-off label"
@@ -156,9 +165,8 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 559,
-    "move" : "leave",
-    "why" : "hands-off label"
+    "issue" : 69,
+    "move" : "assign"
   }, {
     "issue" : 574,
     "move" : "leave",
@@ -185,10 +193,6 @@
     "why" : "hands-off label"
   } ],
   "log" : [ {
-    "issue" : 135,
-    "move" : "assign",
-    "at" : "2026-10-21T09:17:54.188Z"
-  }, {
     "issue" : 135,
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
@@ -1525,5 +1529,9 @@
     "issue" : 575,
     "move" : "assign",
     "at" : "2026-10-23T22:28:23.548Z"
+  }, {
+    "issue" : 69,
+    "move" : "assign",
+    "at" : "2026-10-23T23:00:57.839Z"
   } ]
 }
