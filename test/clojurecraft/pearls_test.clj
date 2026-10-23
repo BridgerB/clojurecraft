@@ -296,6 +296,99 @@
             plan/goals))
         "the burrow is what the digs are kept for")))
 
+(defn rock
+  "Four chunk columns (x 0 to 31, z 0 to 31) of stone from the floor up to y 79, with the cells of
+   open (world coordinates) left as air, under the floor too: a pocket deep in the rock, open to
+   the sky from y 80."
+  [open]
+  (into {}
+        (for [cx [0 1]
+              cz [0 1]]
+          [[cx cz]
+           (world/column (into (into {}
+                                     (for [[x y z] open
+                                           :when (and (< y 64)
+                                                      (= [cx cz] [(quot x 16) (quot z 16)]))]
+                                       [[(mod x 16) y (mod z 16)] 0]))
+                               (for [lx (range 16)
+                                     lz (range 16)
+                                     y (range 64 80)
+                                     :let [x (+ (* 16 cx) lx)
+                                           z (+ (* 16 cz) lz)]
+                                     :when (not (contains? open [x y z]))]
+                                 [[lx y lz] stone])))])))
+
+(defn walled-in
+  "A bot in a pocket of the rock (rock open) with an iron pickaxe 21 digs from worn out, as
+   batch pearls-warped8-a's run 2 stood, and an enderman at pos."
+  [open pos]
+  (-> (standing {7 (enderman pos)})
+      (assoc :world/chunks (rock open))
+      (assoc-in [:player/inventory 1] (assoc (item :iron_pickaxe 1) :components {:damage 229}))))
+
+(def feet-cells #{[8 64 8] [8 65 8]})
+
+(deftest a-hunt-walled-in-with-no-end-to-roam-to-cuts-its-way-out
+  ;; gym batch pearls-warped8-a (plan run 39731473452, probes 39776762205, 39776787768,
+  ;; 39778589970 and 39780802996): runs 2 and 3 held 3 and 4 pearls by their 21st and 31st
+  ;; minutes, then stood in lookouts for four and a half hours, every route from the feet ending
+  ;; within a few blocks, the roam finding no end and every enderman past cut-reach; run 2 at y 45
+  ;; in its own stairs and tunnels with 21 digs left, its second flight down having taken a stair
+  ;; of its first
+  (let [above [8.5 80.0 20.5]
+        w (walled-in feet-cells above)]
+    (is (= 21 (pearls/digs-left w)))
+    (is (nil? (pearls/roam w)) "no end for a roam in the pocket")
+    (is (nil? (pearls/ascend w (pearls/endermen w pearls/descend-radius)))
+        "and no digs to spare for the stairs up toward one")
+    (is (= {:intent/kind :lookout :intent/for :pearls} (plan/next-intent w row plan/goals)))
+    (is (= {:intent/kind :stairs-up
+            :intent/to-y 72
+            :intent/dir [0 1]
+            :intent/to-height? true
+            :intent/for :pearls}
+           (plan/next-intent (looked-out w) row plan/goals))
+        "after a lookout that found nothing, stairs up toward it, descend-step up")
+    (is (= {:intent/kind :stairs-down :intent/to-y 56 :intent/dir [0 1] :intent/for :pearls}
+           (pearls/dig-out (walled-in feet-cells [8.5 50.0 20.5])))
+        "down toward one below")
+    (is
+     (=
+      {:intent/kind :tunnel :intent/dir [0 1] :intent/length pearls/bore-length :intent/for :pearls}
+      (pearls/dig-out (walled-in feet-cells [8.5 65.0 20.5])))
+     "a tunnel toward one on this level")
+    (is (= {:intent/kind :walk :intent/target [8 64 14] :intent/for :pearls}
+           (pearls/dig-out (walled-in (passage 14 8) [8.5 80.0 24.5])))
+        "from the end of the pocket nearest it first")
+    (is (nil? (pearls/dig-out (assoc w :plan/boxed-at #{[8 64 8]}))) "boxed here: not again")
+    (is (nil? (pearls/dig-out (update w :player/inventory dissoc 1))) "no pickaxe: no cut")
+    (is (nil? (pearls/dig-out (assoc w :world/entities {}))) "no enderman: nowhere to cut to")))
+
+(deftest no-way-out-is-cut-from-the-brink-of-a-drop
+  ;; gym batch pearls-warped8-c (plan run 39845223845, probe 39854206523) run 2: dig-out's stairs
+  ;; up from a ledge over a lava lake, the stair's lay backing the bot off the edge into the lava
+  (let [shaft (into feet-cells (for [y (range 61 66)] [9 y 8]))
+        w (walled-in shaft [8.5 80.0 20.5])]
+    (is (pearls/brink? w [8 64 8]) "open beside the feet down to y 61")
+    (is (not (pearls/brink? (walled-in (into feet-cells [[9 64 8] [9 65 8] [9 63 8]])
+                                       [8.5 80.0 20.5])
+                            [8 64 8]))
+        "a step down beside the feet is no brink")
+    (is (nil? (pearls/dig-out w)) "no cut from it")))
+
+(deftest a-way-out-is-cut-where-the-rock-is-already-cut
+  ;; the same run 2: its second flight down took the floor of its first flight's third stair, and
+  ;; the way back up lay two stairs north, open, one block to lay and no dig
+  (let [open (into feet-cells [[8 66 8] [7 66 8] [7 65 8]])
+        w (walled-in open [8.5 80.0 20.5])]
+    (is (=
+         [0 1]
+         (pearls/cheapest-heading (walled-in feet-cells [8.5 80.0 20.5]) :stairs-up [8 64 8] [0 1]))
+        "every heading as dear: toward it")
+    (is (= [-1 0] (pearls/cheapest-heading w :stairs-up [8 64 8] [0 1]))
+        "the heading whose stair is open")
+    (is (= [-1 0] (:intent/dir (pearls/dig-out w))))))
+
 (deftest the-provoke-stares-at-the-head-until-the-server-says-it-has-a-target
   (let [pos [8.5 64.0 15.5]
         w (assoc (standing {7 (enderman pos)})
@@ -509,6 +602,94 @@
                                plan/goals))
           "at the mouth with it there: home"))))
 
+(defn lured
+  "w with its burrow cut at time 0 and n lures walked since (a walk out to the mouth and one back
+   in, two :walk intentions done each)."
+  [w n]
+  (reduce
+   #(memory/remember-intention %1 {:intent/id (+ 10 %2) :intent/kind :walk} :done)
+   (memory/remember-intention (assoc w :time/now 0) {:intent/id 1 :intent/kind :burrow} :done)
+   (range (* 2 n))))
+
+(deftest an-angry-one-blacklisted-that-never-comes-to-the-lure-holds-the-burrow-no-longer
+  ;; gym batch pearls-warped8-a (plan run 39731473452, probe 39776733945) run 1: from the 49th
+  ;; minute to the end it walked from its burrow to the mouth and back every 34 s over one angry,
+  ;; blacklisted after a held fight timed out :unreachable, 4.2 blocks from the mouth, that never
+  ;; moved; the burrow never went stale
+  (let [angry (assoc (enderman [3.5 64.0 12.5]) :entity/creepy? true)
+        given-up (assoc (burrowed [8.5 61.0 8.5] {7 angry}) :plan/blacklist #{7})]
+    (is (= 7 (first (pearls/angry-near (lured given-up 2)))) "two lures: still held")
+    (is (not (pearls/lured-out? (lured given-up 2))))
+    (is (pearls/lured-out? (lured given-up pearls/lure-tries)))
+    (is (nil? (pearls/angry-near (lured given-up pearls/lure-tries)))
+        "lure-tries lures it never came to: no longer held")
+    (is (= 7
+           (first (pearls/angry-near (lured (dissoc given-up :plan/blacklist) pearls/lure-tries))))
+        "one not given up on still holds the bot in")))
+
+(deftest one-coming-with-no-way-home-is-fought-not-stood-under
+  ;; gym batch pearls-warped8-b (plan run 39775345028, probe 39848848462) run 3: out at its
+  ;; burrow's first stair, the walk home failed :no-path, and the bot stood in :lookout while the
+  ;; angry enderman beside it took its health from 19.4 to nothing in three seconds
+  (let [angry (assoc (enderman [5.5 64.0 10.5]) :entity/creepy? true)
+        cut-off {[7 62 8] stone [7 61 8] stone}
+        w (assoc (burrowed [3.5 64.0 8.5] {7 angry} cut-off) :plan/blacklist #{7})]
+    (is (= {:intent/kind :walk :intent/target [8 61 8] :intent/for :shelter}
+           (plan/next-intent (assoc (burrowed [3.5 64.0 8.5] {7 angry}) :plan/blacklist #{7})
+                             row
+                             plan/goals))
+        "a way home: home")
+    (is (= {:intent/kind :fight :intent/target 7 :intent/for :pearls}
+           (plan/next-intent w row plan/goals))
+        "none: fought where it stands")))
+
+(deftest a-fire-the-bot-stands-in-is-put-out-first
+  ;; gym batch pearls-warped8-b (plan run 39775345028, probe 39849820209) run 1: its walk ended in
+  ;; a fire lit on gravel in its path, and it stood there in :lookout until it died
+  (let [fire (blocks/default-state :fire)]
+    (is (nil? (pearls/burning-at (standing {}))))
+    (is (= {:intent/kind :dig :intent/target [8 64 8]}
+           (plan/next-intent (standing {} {[8 64 8] fire}) row plan/goals))
+        "at the feet")
+    (is (= [8 65 8] (pearls/burning-at (standing {} {[8 65 8] fire}))) "at the head")))
+
+(deftest no-enderman-is-provoked-hurt
+  ;; sim-endermen3's probe 39847287615 (worlds R1, R2, R4): the first death each time came of a
+  ;; provoke 4 to 8 blocks off at 10.8 to 17.8 health just outside the burrow, three to five
+  ;; blows landing in five seconds
+  (let [sighted (enderman [3.5 64.0 0.5])
+        at-mouth (assoc (burrowed [3.5 64.0 8.5] {7 sighted}) :player/food 20)]
+    (is (= {:intent/kind :provoke :intent/target 7 :intent/for :pearls}
+           (plan/next-intent at-mouth row plan/goals))
+        "whole: provoked from the mouth")
+    (is (= {:intent/kind :walk :intent/target [8 61 8] :intent/for :shelter}
+           (plan/next-intent (assoc at-mouth :player/health 15.0) row plan/goals))
+        "hurt at the mouth: home first")
+    (is (=
+         {:intent/kind :provoke :intent/target 7 :intent/for :pearls}
+         (plan/next-intent (assoc at-mouth :player/health pearls/provoke-health) row plan/goals)))))
+
+(deftest at-a-burrow-site-the-burrow-is-cut-with-the-quarry-hidden
+  ;; sim probe 39861051222 (world R4): fifty-seven minutes between a site, from which the quarry
+  ;; was hidden, and the walk toward it, from which it showed again
+  (let [w (assoc-in (standing {7 (enderman [8.5 64.0 15.5])} wall)
+           [:player/inventory 1]
+           (item :iron_pickaxe 1))
+        arrived (assoc w :plan/last {:intent/kind :walk :intent/for :shelter :intent/status :done})]
+    (is (nil? (pearls/quarry w)) "hidden by the wall")
+    (is (not= :burrow (:intent/kind (plan/next-intent w row plan/goals))))
+    (is (= {:intent/kind :burrow :intent/dir [0 -1] :intent/for :pearls}
+           (plan/next-intent arrived row plan/goals))
+        "walked to a site: the burrow, away from the nearest")))
+
+(deftest no-sword-held-no-hunt
+  ;; gym batch pearls-warped8-b (plan run 39775345028): runs 1 and 3 respawned with nothing held
+  ;; after their first deaths and hunted on bare-handed, 39 and 26 deaths in five hours
+  (let [w (standing {7 (enderman [8.5 64.0 20.5])})]
+    (is (not= {:plan/wait :no-sword} (plan/next-intent w row plan/goals)))
+    (is (= {:plan/wait :no-sword}
+           (plan/next-intent (update w :player/inventory dissoc 0) row plan/goals)))))
+
 (def ledge-wall
   "Stone three high (y 64 to 66) along x 4, the burrow's first stair left open: from the mouth at
    x 3 the only way east is down through the burrow."
@@ -666,6 +847,48 @@
     (is (= 3 (mob/tall :enderman)))
     (is (= [6 61 8] (walk (set (apply concat steps)))) "down to the last stair")
     (is (= [3 64 8] (walk three-high)) "three high: it stands at the mouth")))
+
+(deftest a-burrows-mouth-is-opened-to-an-endermans-height-first
+  ;; batch pearls-warped7-b (plan run 39725964182, probe 39732372050) run 3: the burrow was cut
+  ;; under a huge fungus's cap, a warped wart block two over the mouth's feet, its stairs four
+  ;; high below it; the bot stands in two cells and an enderman needs three, so the enderman the
+  ;; lure brought stood in the hollows beside the mouth, and six held fights in six timed out
+  ;; :unreachable. The model's enderman (mob/step-toward, three tall) stops outside the mouth
+  ;; under the cap and walks down to the last stair once the cap is dug
+  (let [mouth [3 64 8]
+        roof [3 66 8]
+        cap (blocks/default-state :warped_wart_block)
+        rock? (fn [[x y z]] (or (<= y 63) (= [x y z] roof))) ; flat ground, the cap over the mouth
+        walk (fn [opened]
+               (let [free? (fn [c] (or (contains? opened c) (not (rock? c))))]
+                 (mob/cell-of (nth (iterate #(mob/step-toward free? % [8.5 61.0 8.5] 0.3 0.0 3)
+                                            [0.5 64.0 8.5])
+                                   200))))
+        steps (set (apply concat (pearls/burrow-steps mouth [1 0])))
+        seen {7 (enderman [0.5 64.0 8.5])} ; calm, at hand, west of the mouth
+        capped (-> (standing seen {roof cap})
+                   (assoc :player/pos [3.5 64.0 8.5])
+                   (assoc-in [:player/inventory 1] (item :iron_pickaxe 1)))
+        open (assoc capped :world/chunks (:world/chunks (standing seen)))
+        burrow {:intent/kind :burrow :intent/dir [1 0] :intent/for :pearls :intent/status :active}
+        first-child (fn [w]
+                      (let [i (:plan/intent (intent-step (assoc w :plan/intent burrow) (tick 1)))]
+                        [(:intent/stage i)
+                         (select-keys (:intent/child i) [:intent/kind :intent/target])]))]
+    (is (= [roof] (pearls/mouth-cells mouth)) "one cell, the third over the feet, for 2.9")
+    (is (not (pearls/stand? capped mouth)) "under the cap no enderman stands in the mouth")
+    (is (= [2 64 8] (walk steps))
+        "the stairs four high and the cap over the mouth: it stays outside")
+    (is (= [6 61 8] (walk (conj steps roof))) "the cap dug: down to the last stair")
+    (is (= {:intent/kind :burrow :intent/dir [1 0] :intent/for :pearls}
+           (plan/next-intent capped row plan/goals))
+        "a burrow is cut where the bot stands under the cap: the cap is dug first")
+    (is (not (pearls/burrowable? (standing seen {roof (blocks/default-state :lava)}) mouth [1 0]))
+        "lava over the mouth: no burrow here")
+    (is (= [:roof {:intent/kind :dig :intent/target roof}] (first-child capped))
+        "the burrow's first child digs the cap")
+    (is (= [:down {:intent/kind :stairs-down}] (first-child open))
+        "nothing over the mouth: the stairs at once")))
 
 (deftest a-burrow-crowded-by-a-calm-one-for-a-minute-is-given-up-for-one-beside-it
   ;; gym batch pearls-warped4-a (plan run 39544677155): run 1 stood in its burrow from 308 s to
