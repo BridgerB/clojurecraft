@@ -1077,6 +1077,8 @@
 
 (def provoke-health 18.0)             ; health under which no enderman is provoked, from the mouth or anywhere: the bot rests in its burrow first (sim-endermen3's probe 39847287615: in worlds R1, R2 and R4 the first death came of a provoke 4 to 8 blocks off at 10.8 to 17.8 health just outside the burrow, the enderman landing three to five blows in five seconds); away from the mouth (a vantage) only at full health
 
+(def danger-health combat/retreat-health) ; health under which the hunt never fights, provokes or goes toward an enderman: one enderman hit (7 on Normal, ns doc) plus a margin, the same line combat breaks a fight off at. At or under it the bot backs off, walks home, eats or rests where it stands until its health is back over it (issue #563, probe 40022662598: after the second stone sword was crafted the hunt re-fought an angry enderman it had just backed away from, again and again down to 1.3 health, one hit from death)
+
 (defn hunt
   "The hunt's next step with no kill to pick up, in order: out of the burrow (shelter) with one
    coming (creepy), one at hand (within strike-range, blacklisted or not: one a held fight gave
@@ -1172,7 +1174,7 @@
         angry? (and near? (entity/creepy? e) (not (contains? (:plan/blacklist world #{}) eid)))
         in-reach? (and near?
                        (<= (physics/distance (game/eye world) (combat/aim e)) combat/attack-reach))
-        hurt? (< (:player/health world 20.0) combat/retreat-health)
+        hurt? (< (:player/health world 20.0) danger-health)
         rested? (>= (:player/health world 20.0) provoke-health)
         meal (when-not rested? (blaze/meal world))
         home (shelter world)
@@ -1195,14 +1197,16 @@
         far (endermen world seek-radius)]
     (cond
       (and home (not in?) (or ce near? hurt? tid aid) (intent/routable? world way-home)) way-home
+      (and hurt? in?) (or meal {:intent/kind :lookout :intent/for :pearls})
+      (and near? hurt? (not in?)) {:intent/kind :back-off :intent/target eid :intent/for :pearls}
       (and in? (or ce angry? in-reach? tid))
       {:intent/kind :fight
        :intent/target (cond ce ceid
                             (or angry? in-reach?) eid
                             :else tid)
        :intent/hold? true
+       :intent/yield? true
        :intent/for :pearls}
-      (and near? hurt? (not in?)) {:intent/kind :back-off :intent/target eid :intent/for :pearls}
       (and near?
            (not in?)
            (or (entity/creepy? e)
@@ -1211,8 +1215,7 @@
                     (not (contains? (:plan/blacklist world #{}) eid)))))
       {:intent/kind :fight :intent/target eid :intent/for :pearls}
       meal meal
-      (or (and hurt? (nil? home) (nil? ce)) (and in? (or hurt? bid)))
-      {:intent/kind :lookout :intent/for :pearls}
+      (or hurt? (and in? bid)) {:intent/kind :lookout :intent/for :pearls}
       (and in? aid (lure? world)) {:intent/kind :walk :intent/target mouth :intent/for :shelter}
       (and in? aid) {:intent/kind :lookout :intent/for :pearls}
       csite {:intent/kind :walk :intent/target csite :intent/for :shelter}
@@ -1364,6 +1367,7 @@
            :intent/target (cell (:entity/pos d))
            :intent/for :pearls}
           (and k (body? world k)) {:plan/wait :drop}
+          (< (:player/health world 20.0) danger-health) (hunt world)
           replacing replacing
           (nil? (combat/sword world)) {:plan/wait :no-sword}
           (and (worn-out? world) (nil? (shelter world)) (not (menaced? world)))
