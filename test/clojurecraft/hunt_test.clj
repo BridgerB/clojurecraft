@@ -225,6 +225,11 @@
         "a cast is never left half made")
     (is (not (hunt/foraging? (assoc w :plan/intent {:intent/kind :dig :intent/status :active})))
         "a dig already begun is finished")
+    (is (not (hunt/foraging?
+              (assoc w :plan/intent {:intent/kind :swim-out :intent/status :active})))
+        "a swim already begun is finished")
+    (is (not (hunt/foraging? (assoc w :plan/intent {:intent/kind :flee :intent/status :active})))
+        "so is a flee")
     (is (not (hunt/foraging? (assoc w :player/in-water? true)))
         "in the water: the swim out comes first")
     (is (not (hunt/foraging?

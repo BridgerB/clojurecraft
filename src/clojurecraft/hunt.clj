@@ -228,9 +228,10 @@
    for a route lately that found none (:forage/retry-at), no failed intent in a row
    (:plan/attempts, and :plan/unwalkable for a walk that failed :no-path, which counts apart: a
    leg that failed ends the search for the moment, as twelve such walks in a row would end the
-   plan), no :build running (a cast is never left half made) and no :dig already begun (it is
-   finished; a stairs or a tunnel is the descent and is not paused), not afloat? (in water the
-   swim out comes first), the feet under
+   plan), no :build running (a cast is never left half made), no :dig already begun (it is
+   finished; a stairs or a tunnel is the descent and is not paused) and no :swim-out or :flee
+   already begun (an escape is finished: the box leaves the water before the swim is done, and
+   a forage there preempted it), not afloat? (in water the swim out comes first), the feet under
    the open sky (animals live on the surface: a bot deep in its mine has none to find), health
    at least forage-health and no hostile within forage-wary. Issue #501: bots went into the Nether with no food because
    nothing looked for animals past the 48 blocks the server shows, and herds are about one chunk
@@ -241,7 +242,7 @@
                   (or (nil? retry-at) (>= (:time/now world 0) retry-at))
                   (zero? (:plan/attempts world 0))
                   (zero? (:plan/unwalkable world 0))
-                  (not (#{:build :dig} (:intent/kind (:plan/intent world))))
+                  (not (#{:build :dig :swim-out :flee} (:intent/kind (:plan/intent world))))
                   (not (afloat? world))
                   (>= (:player/health world 20.0) forage-health)
                   (nil? (entity/nearest (entity/hostiles world) (:player/pos world) forage-wary))
