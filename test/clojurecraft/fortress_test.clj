@@ -1080,3 +1080,18 @@
         "a leg that has not stalled goes round")
     (is (= [1 0 0] (fortress/next-move w [0 64 0] [8 64 0] 3 false #{} true))
         "a stalled leg lays the floor and crosses")))
+
+(deftest a-step-away-from-the-target-vertically-is-a-last-resort
+  ;; issue #338: R2/12 went down from y 48 to y 14 toward a brick at y 55, R3-28-1 up from 73 to
+  ;; 110 toward one at y 54
+  (is (fortress/away-vertically? [0 48 0] [9 55 9] 3 [1 -1 0]) "down toward a target above")
+  (is (not (fortress/away-vertically? [0 48 0] [9 55 9] 3 [1 1 0])) "up toward it")
+  (is (not (fortress/away-vertically? [0 48 0] [9 55 9] 3 [1 0 0])) "level")
+  (is (fortress/away-vertically? [0 73 0] [9 54 9] 3 [1 1 0]) "up toward a target under")
+  (is (not (fortress/away-vertically? [0 50 0] [9 52 9] 3 [1 -1 0]))
+      "a target within climb has no away")
+  (let [w (rock {})]
+    (is (some? (fortress/next-move w [0 64 0] [8 80 0] 3 false #{}))
+        "rock all round, a target above: an up step is taken")
+    (is (pos? (second (fortress/next-move w [0 64 0] [8 80 0] 3 false #{}))))
+    (is (neg? (second (fortress/next-move w [0 64 0] [8 40 0] 3 false #{}))))))
