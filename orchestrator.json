@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-23T09:52:52.088Z",
+  "at" : "2026-10-23T09:54:00.549Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -155,7 +155,7 @@
   }, {
     "number" : 564,
     "title" : "Bot stops at blaze-rods: unreachable",
-    "labels" : [ "bot-failure", "sim" ],
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : true
   }, {
     "number" : 563,
@@ -285,8 +285,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 564,
-    "move" : "wait",
-    "why" : "session starting"
+    "move" : "leave",
+    "why" : "hands-off label"
   }, {
     "issue" : 563,
     "move" : "leave",
