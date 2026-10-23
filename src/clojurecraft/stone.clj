@@ -728,6 +728,7 @@
                                        o
                                        (blocks/replaceable? t)
                                        (blocks/replaceable? o)
+                                       (not (intent/exposes-fluid? world over))
                                        (terrain/confirmed? world c)
                                        (place/support world c)
                                        (not (place/inside-player? world c))
@@ -736,22 +737,58 @@
                         c))]
       (when cell {:intent/kind :place :intent/item item :intent/cell cell :intent/for :foothold}))))
 
+(defn hold-top
+  "The cell over a block already laid beside the feet column, one below the feet, where the
+   redig's own block goes: replaceable, in reach, with a face to click (place/support), not in
+   refused and not a dig that would let fluid in (intent/exposes-fluid?). nil when none is there.
+   place/spot will not choose it when a drop lies past it (a stub over the sea, issue #349): the
+   foothold (foothold) is the laying, and this is the gravel on it."
+  [world refused]
+  (let [[fx fy fz] (intent/feet world)
+        eye (game/eye world)]
+    (first (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
+                 :let [under [(+ fx dx) (dec fy) (+ fz dz)]
+                       over [(+ fx dx) fy (+ fz dz)]
+                       t (terrain/block-at world under)
+                       o (terrain/block-at world over)]
+                 :when (and t
+                            o
+                            (blocks/solid? t)
+                            (blocks/replaceable? o)
+                            (not (contains? refused over))
+                            (not (intent/exposes-fluid? world over))
+                            (place/support world over)
+                            (not (place/inside-player? world over))
+                            (<= (physics/distance eye (physics/centre over)) place/place-reach))]
+             over))))
+
 (defn redig-place
   "The child placement in a neighbouring cell the feet can stand in, level or one step up or
    down, or a retreat to fresh ground when none is there; under the open sky, where a stairs up
-   would be done before it began, a foothold (foothold) laid for the placement instead. Issue
+   would be done before it began, a foothold (foothold) laid for the placement instead, and once
+   that block is there the gravel goes on it (hold-top) rather than another stairs up.
+   A cell a dig would let fluid into (intent/exposes-fluid?), and any the redig has already
+   refused (:intent/refused), is passed over. A floor that has a drop beside it but not past it
+   is still a spot (place/spot's along?): the strict spot refuses it and the stairs up that
+   followed was done the same tick, for the whole window (issue #349, R2/44). Issue
    #151's R3/14 and real runner 8 snapshots placed gravel through a wall or round a corner:
    within click reach, but not within pickup reach."
   [world item]
   (let [[fx fy fz] (intent/feet world)
-        refused (set (for [[dx dy dz] place/around
-                           :let [cell [(+ fx dx) (+ fy dy) (+ fz dz)]]
-                           :when (not (and (= 1 (+ (abs dx) (abs dz)))
-                                           (path/standable? world cell)))]
-                       cell))
-        [cell] (place/spot world true refused)
-        retreat (when-not cell (place/fresh-rock world))]
+        held-off (:intent/refused (:plan/intent world) #{})
+        refused (into held-off
+                      (for [[dx dy dz] place/around
+                            :let [cell [(+ fx dx) (+ fy dy) (+ fz dz)]]
+                            :when (or (intent/exposes-fluid? world cell)
+                                      (not (and (= 1 (+ (abs dx) (abs dz)))
+                                                (path/standable? world cell))))]
+                        cell))
+        cell (or (first (place/spot world true refused))
+                 (first (place/spot world true refused true)))
+        top (when-not cell (hold-top world held-off))
+        retreat (when-not (or cell top) (place/fresh-rock world))]
     (cond cell {:intent/kind :place :intent/item item :intent/cell cell}
+          top {:intent/kind :place :intent/item item :intent/cell top}
           (and (= :stairs-up (:intent/kind retreat)) (stairs/out? world [fx fy fz]))
           (or (foothold world) retreat)
           :else retreat)))
@@ -779,12 +816,20 @@
            (intent/assoc-intent w :intent/stage :dig :intent/target (:intent/target placed))))))
 
 (defmethod redig-stage :dig
-  [world {:intent/keys [target] :as i} event]
-  (link world
-        i
-        event
-        (intent/child-dig target)
-        (fn [w _] (intent/assoc-intent w :intent/stage :collect))))
+  ;; a dig the stair rules refuse (:unsafe, fluid beside the cell) is not the redig's failure:
+  ;; back to :place with that cell in :intent/refused. Three such digs in a row ended the plan
+  ;; (issue #171, real-8). One, recovered from, still gathers (real-5).
+  [world {:intent/keys [target child refused] :as i} event]
+  (if (and (intent/failed? child) (= :unsafe (:intent/reason child)))
+    (-> world
+        (assoc :player/controls {})
+        (intent/assoc-intent :intent/stage :place :intent/refused (conj (set refused) target))
+        (intent/dissoc-intent :intent/child :intent/target))
+    (link world
+          i
+          event
+          (intent/child-dig target)
+          (fn [w _] (intent/assoc-intent w :intent/stage :collect)))))
 
 (defmethod redig-stage :collect
   [world {:intent/keys [target drops] :as i} event]

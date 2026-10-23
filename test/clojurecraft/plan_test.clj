@@ -252,6 +252,38 @@
     (is (nil? (wood/trees-bridge far [[15 64 8]]))
         "a trunk past bridge-reach is not climbed toward")))
 
+(deftest a-perch-under-the-sky-descends-toward-a-lower-trunk
+  ;; sim race 39934917165 (issue #89, world R1/23): a descent ended at the trunk's height, the
+  ;; opening was walked, and the lip was not out, so stairs up to the top of the world spent the
+  ;; filler and the stairs down back were :boxed. A pillar under the sky goes down toward the trunk
+  (let [w (remembered {[1 80 2] 1 [14 69 2] 1 [14 70 2] 136} [1.5 81.0 2.5])]
+    (is (wood/perched? w (intent/feet w)) "a pillar under the sky, no pit and not out")
+    (is (= {:intent/kind :stairs-down
+            :intent/trunk [14 70 2]
+            :intent/to-y (- 81 stone/stair-depth)
+            :intent/dir [1 0]
+            :intent/for :trees}
+           (wood/gather-next w))
+        "down toward the trunk, not up to the top of the world")))
+
+(deftest a-shaft-under-the-sky-descends-toward-a-lower-trunk
+  ;; real-6 s1 Clj_r07 (issue #89): already in the shaft, each length's pit-rim was the stair's
+  ;; own block a few above the feet, so perched? was false and stairs up continued to y 124.
+  ;; Under the sky, with the trunk more than twelve under the eye, the next length is down
+  (let [w (remembered {[1 80 2] 1 [2 84 2] 1 [14 60 2] 1 [14 61 2] 136} [1.5 81.0 2.5])
+        feet (intent/feet w)]
+    (is (terrain/under-sky? w feet) "the sky is over the shaft")
+    (is (not (stairs/out? w feet)) "a pillar is not out of the ground")
+    (is (some? (stairs/pit-rim w feet)) "the block beside the shaft reads as a rim")
+    (is (not (wood/perched? w feet)) "a rim is set, so this is not the ledge")
+    (is (= {:intent/kind :stairs-down
+            :intent/trunk [14 61 2]
+            :intent/to-y (- 81 stone/stair-depth)
+            :intent/dir [1 0]
+            :intent/for :trees}
+           (wood/gather-next w))
+        "down toward the trunk, not another length to the top of the world")))
+
 (deftest a-perch-across-a-valley-is-descended-for-the-trees
   ;; sim snapshot real-2-s2-Clj_r15 (issue #186): the bot stood on the top of an ice spike with the
   ;; nearest trunk thirty-five blocks off at its own height across a valley no route crosses; no
