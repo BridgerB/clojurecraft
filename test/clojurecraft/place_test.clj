@@ -546,7 +546,7 @@
   ;; refuses it where the bridge ends
   (let [air (blocks/default-state :air)
         stone (blocks/default-state :stone)
-        sky (fn [zs] (into {} (for [x [-1 0 1] y (range 50 66) z zs] [[x y z] air])))
+        sky (fn [zs] (into {} (for [x (range -4 5) y (range 50 66) z zs] [[x y z] air])))
         bridge (fn [zs] (into (sky (range -3 4)) (for [z zs] [[0 63 z] stone])))
         w #(assoc (standing [0.5 64.0 0.5]) :world/blocks %)
         long-bridge (w (bridge (range -3 4)))
