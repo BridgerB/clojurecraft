@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-23T12:45:34.308Z",
+  "at" : "2026-10-23T12:53:38.087Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -133,6 +133,11 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
+    "number" : 342,
+    "title" : "Bot stops at furnace: boxed",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
     "number" : 171,
     "title" : "Bot stops at flint-and-steel: unsafe",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
@@ -260,6 +265,10 @@
     "why" : "hands-off label"
   }, {
     "issue" : 450,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 342,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
