@@ -1029,3 +1029,43 @@
     (is (= (assoc east-leg :search/tunnels 1 :search/best 160.0 :search/stalled 0)
            (:intent/search (plan/next-intent out goal plan/goals)))
         "and the next look goes on along it")))
+
+(deftest a-brick-once-chosen-is-kept-while-it-is-on-record
+  ;; issue #338, R3-28-1: two bricks four blocks apart took turns as the nearest, each turn an
+  ;; empty trail
+  (let [brick (blocks/default-state :nether_bricks)
+        w (-> (reduce (fn [w p] (memory/observe w p brick))
+                      {:world/facts (memory/empty-facts)
+                       :player/dimension dimension/nether
+                       :time/now 0
+                       :player/pos [0.5 64.0 0.5]}
+                      [[10 64 0] [14 64 0]])
+              (assoc :world/blocks {}))]
+    (is (= [10 64 0] (fortress/chosen-brick w)) "the nearest with none chosen")
+    (is (= [14 64 0] (fortress/chosen-brick (assoc w :fortress/brick [14 64 0])))
+        "the chosen one although another is nearer")
+    (is (= [10 64 0] (fortress/chosen-brick (assoc w :fortress/brick [30 64 0])))
+        "a chosen cell no longer on record is dropped")))
+
+(defn cavern-wall
+  "The field with the air of a cavern east of the feet at y 62 to 66, rock above and under it."
+  []
+  (update (field -20 40)
+          :world/blocks
+          #(into {} (remove (fn [[[x y _] _]] (and (pos? x) (<= 62 y 66))) %))))
+
+(deftest a-stalled-leg-moves-to-the-level-with-rock-ahead
+  ;; issue #338, sim world R2/12: the leg east met a cavern; rock lay over it
+  (let [w (cavern-wall)
+        lvl (fortress/level-by-rock w [0 64 0] [1 0])]
+    (is (<= 68 lvl 69) "a level whose floor, feet and head are rock for 24 cells")
+    (is (nil? (fortress/level-by-rock (field -20 40) [0 64 0] [1 0])) "no better level in rock")
+    (let [s (fortress/leg-progress w (assoc east-leg :search/best 160.0 :search/stalled 1))]
+      (is (= lvl (:search/level s)))
+      (is (zero? (:search/stalled s)) "a fresh chance on the new level")
+      (is (= lvl (second (fortress/leg-target s))) "its end is aimed at the level"))
+    (is (= 2
+           (:search/stalled (fortress/leg-progress
+                             (field -20 40)
+                             (assoc east-leg :search/best 160.0 :search/stalled 1))))
+        "with no level to go to it counts as stalled")))

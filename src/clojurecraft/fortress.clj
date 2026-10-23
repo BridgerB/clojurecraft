@@ -36,6 +36,9 @@
 (def climb-past 3)                    ; a target more than this above or below makes a step go up or down
 (def stall-tunnels 3)                 ; tunnels in a row that gain no stall-gain toward a leg's end before the leg is given up
 (def stall-gain 8)                    ; blocks a tunnel must bring the feet nearer a leg's end to count as progress (rock gives about 32)
+(def level-reach 16)                  ; blocks up or down a stalled leg looks for a level with rock ahead
+(def level-min-run 12)                ; cells of rock ahead a level must have to be worth the climb
+(def level-stalled 2)                 ; looks without progress before a leg tries another level
 (def rock-look 24)                    ; cells along a heading a new leg looks for rock in
 (def retreats-allowed 1)            ; retreats in a row a tunnel takes before it is blocked: a second one paces two cells
 
@@ -423,11 +426,13 @@
   ;; steps that open no cell by water (dry?: the overworld's, issue #265)
   [world
    {:intent/keys [target steps taken move from climb dry? tunnel-visited child search retreats
-                  airborne]
+                  airborne brick]
     r :intent/reach
     :or {taken 0 r reach climb climb-past tunnel-visited #{} retreats 0 airborne 0}
     :as i} event]
-  (let [world (cond-> world search (assoc :fortress/search search)) ; the spiral's leg, kept for the planner's next look
+  (let [world (cond-> world
+                search (assoc :fortress/search search) ; the spiral's leg, kept for the planner's next look
+                brick (assoc :fortress/brick brick)) ; the brick chosen, kept for the planner's next look
         feet (intent/feet world)]
     (cond (or (arrived? world target r) (>= taken steps))
           (-> world
@@ -506,6 +511,20 @@
   [world]
   (memory/nearest-of (physics/centre (intent/feet world)) sight-radius (bricks world)))
 
+(defn chosen-brick
+  "The brick a tunnel goes to: the one :fortress/brick names while it is still on record and
+   within sight-radius, else nearest-brick. Two bricks a few blocks apart took turns as the
+   nearest as the feet moved, each turn a new target and an empty trail: sim snapshot R3-28-1
+   (issue #338) alternated [571 54 939] and [567 56 941] for fifteen minutes."
+  [world]
+  (let [kept (:fortress/brick world)
+        at (physics/centre (intent/feet world))]
+    (if (and kept
+             (<= (physics/distance at (physics/centre kept)) sight-radius)
+             (some #{kept} (bricks world)))
+      kept
+      (nearest-brick world))))
+
 ;; ---------------------------------------------------------------- exploring: a spiral
 
 (defn leg-length
@@ -530,12 +549,13 @@
 
 (defn leg-target
   "The cell the leg of search ({:search/from :search/heading :search/leg :search/tunnels}) aims
-   at: its length along its heading from where it began, at that cell's explore-y."
-  [{:search/keys [from heading leg]}]
+   at: its length along its heading from where it began, at that cell's explore-y, or at the
+   :search/level the leg moved to when it met a cavern (level-by-rock)."
+  [{:search/keys [from heading leg level]}]
   (let [[x _ z] from
         [dx dz] heading
         n (leg-length leg)]
-    [(+ x (* n dx)) (explore-y from) (+ z (* n dz))]))
+    [(+ x (* n dx)) (or level (explore-y from)) (+ z (* n dz))]))
 
 (defn open-ahead?
   "Is the cell look-ahead blocks from feet along heading [dx dz] loaded? A real server shows 96
@@ -576,17 +596,41 @@
         left (turn-right back)]
     (concat (sort-by #(- (long (rock-run world feet %))) [right left]) [back heading])))
 
+(defn level-by-rock
+  "The height within level-reach of the feet and explore-band, other than the feet's own, whose
+   rock-run along heading from the feet's column is longest and at least level-min-run, and at
+   least 8 cells longer than the feet's own level's; nil when none is. A leg that stalled at a
+   cavern's wall climbs or descends to the rock above or under it (sim world R2/12, issue #338)
+   and goes on there with digs: a step onto air is never taken (safe?)."
+  [world [x y z :as feet] heading]
+  (let [[lo hi] explore-band
+        own (rock-run world feet heading)
+        best (apply max-key
+                    (fn [[_ run]] run)
+                    [nil 0]
+                    (for [y' (range (max (long lo) (- (long y) level-reach))
+                                    (inc (min (long hi) (+ (long y) level-reach))))
+                          :when (not= y' y)]
+                      [y' (rock-run world [x y' z] heading)]))]
+    (when (and (first best)
+               (>= (long (second best)) level-min-run)
+               (>= (long (second best)) (+ own 8)))
+      (first best))))
+
 (defn leg-progress
   "The search with its progress toward the leg's end kept: :search/best, the least horizontal
    distance the feet have been from it at a look, and :search/stalled, the looks in a row that
    brought them no stall-gain nearer than that. A tunnel through a cavern's rim wanders at a wall
    it cannot cross (sim world R2/12, issue #338: fourteen minutes inside x 507-534, z 340-362 on
    a leg to x 620, eight pickaxes of sticks spent for 13 blocks), and counts as stalled."
-  [world {:search/keys [best] :as search}]
-  (let [d (physics/horizontal-distance (physics/centre (intent/feet world))
-                                       (physics/centre (leg-target search)))]
+  [world {:search/keys [best stalled level heading] :as search}]
+  (let [feet (intent/feet world)
+        d (physics/horizontal-distance (physics/centre feet) (physics/centre (leg-target search)))
+        lvl (when (and (nil? level) (= (dec level-stalled) (long (or stalled 0))))
+              (level-by-rock world feet heading))]
     (cond (or (nil? best) (<= d (- (double best) stall-gain)))
           (assoc search :search/best d :search/stalled 0)
+          lvl (assoc search :search/level lvl :search/best d :search/stalled 0)
           :else (update search :search/stalled (fnil inc 0)))))
 
 (defn leg-over?
@@ -647,7 +691,7 @@
   ;; Nether, wait
   [world goal table]
   (let [nether? (= dimension/nether (dimension/of world))
-        brick (when nether? (nearest-brick world))
+        brick (when nether? (chosen-brick world))
         search (when (and nether? (not brick)) (exploring world))]
     (cond (not nether?) {:plan/wait :other-dimension}
           :else
@@ -656,7 +700,10 @@
               (intent/chain-next (:plan/last world) :take-table make/table-drops {})
               (make/take-table-along world)
               (when brick
-                {:intent/kind :tunnel-to :intent/target brick :intent/steps steps-per-tunnel})
+                {:intent/kind :tunnel-to
+                 :intent/target brick
+                 :intent/brick brick
+                 :intent/steps steps-per-tunnel})
               (when search
                 {:intent/kind :tunnel-to
                  :intent/target (leg-target search)

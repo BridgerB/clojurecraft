@@ -269,6 +269,9 @@
    [:forage/retry-at
     "ms before which the search looks for no leg: set when no heading had a route at any reach (hunt/forage-retry-ms on)"
     "inside :hunt/forage, after such a look"]
+   [:search/level
+    "the height the leg moved to when it stalled at a cavern and a level within reach had rock ahead (fortress/level-by-rock); the leg's end is aimed at it"
+    "inside :fortress/search, after a stalled look"]
    [:fortress/trail
     "the way back a :tunnel-to to a target keeps across its tunnels: {:trail/target :trail/cells :trail/dead}; a cell no fresh step leaves is stepped back from to the last cell, never entered again (fortress/step-back, issue #502); another target starts a new one"
     "after a :tunnel-to chose a fresh step or a step back"]
@@ -363,6 +366,12 @@
    [:intent/search
     "the fortress search leg an exploring :tunnel-to works for (fortress/exploring): the executor keeps it as :fortress/search"
     "a :tunnel-to with no brick on record to go to"]
+   [:intent/brick
+    "the fortress brick a :tunnel-to goes to (fortress/chosen-brick): the executor keeps it as :fortress/brick"
+    "a :tunnel-to to a brick on record"]
+   [:fortress/brick
+    "the brick the last tunnel went to, kept while it stays on record so a nearer one does not take the target (fortress/chosen-brick, issue #338)"
+    "after a :tunnel-to to a brick began"]
    [:intent/taken "steps a :tunnel-to has taken" ":tunnel-to, after its first step"]
    [:intent/tunnel-visited
     "the feet cells this tunnel-to has started steps from; fresh steps and short floored turns precede a retreat"

@@ -194,9 +194,10 @@
 (s/def :search/tunnels nat-int?)
 (s/def :search/best number?)
 (s/def :search/stalled nat-int?)
+(s/def :search/level nat-int?)
 (s/def :fortress/search
   (s/keys :req [:search/from :search/heading :search/leg :search/tunnels]
-          :opt [:search/best :search/stalled]))
+          :opt [:search/best :search/stalled :search/level]))
 (s/def :forage/since int?)
 (s/def :forage/leg nat-int?)
 (s/def :forage/retry-at int?)
@@ -481,6 +482,8 @@
 (s/def :intent/climb nat-int?)
 (s/def :intent/dry? boolean?)
 (s/def :intent/search :fortress/search)
+(s/def :intent/brick ::block-pos)
+(s/def :fortress/brick ::block-pos)
 (s/def :intent/trunk ::block-pos)
 (s/def :intent/stage keyword?)
 (s/def :intent/since int?)
