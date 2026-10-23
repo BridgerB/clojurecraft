@@ -775,7 +775,7 @@
   ;; :no-footing on the spot, and only its timeout gives up
   (let [flee {:intent/kind :flee :intent/status :active}
         lava
-        (into {} (for [dx (range -2 3) dz (range -2 3)] [[(+ 5 dx) 64 (+ 5 dz)] blocks/lava-base]))
+        (into {} (for [dx (range -7 8) dz (range -7 8)] [[(+ 5 dx) 64 (+ 5 dz)] blocks/lava-base]))
         w (assoc (game/init fx/opts)
                  :bot/phase :play
                  :player/pos [5.5 64.0 5.5]
