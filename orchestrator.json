@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-23T08:51:52.732Z",
+  "at" : "2026-10-23T08:53:00.201Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -88,6 +88,11 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
+    "number" : 135,
+    "title" : "Bot stops at cast-one: timeout",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
     "number" : 561,
     "title" : "Bot stops at blaze-rods: no-path",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
@@ -100,11 +105,6 @@
   }, {
     "number" : 349,
     "title" : "Bot stops at flint-and-steel: timeout",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
-    "number" : 135,
-    "title" : "Bot stops at cast-one: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
@@ -217,6 +217,10 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 135,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
     "issue" : 561,
     "move" : "leave",
     "why" : "hands-off label"
@@ -226,10 +230,6 @@
     "why" : "hands-off label"
   }, {
     "issue" : 349,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
-    "issue" : 135,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
