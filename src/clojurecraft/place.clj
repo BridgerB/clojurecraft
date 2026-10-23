@@ -68,19 +68,34 @@
   (and (path/standable? world cell)
        (<= 2 (count (filter (fn [[dx dz]] (solid-at? world [(+ x dx) y (+ z dz)])) sides)))))
 
+(defn open-drop?
+  "Is cell n clear over a drop: no floor under it and no landing within path/max-fall? Pure."
+  [world n]
+  (and (= :clear (path/classify world n))
+       (not (path/floor? world (update n 1 dec)))
+       (nil? (path/landing world n))))
+
 (defn drop-beside?
-  "Is a cell beside cell [x y z] at its height open over a drop: clear, no floor under it and no
-   landing within path/max-fall? A block placed at cell and dug again drops its item there to
-   roll off. Sim world R2/12 (issue #338) placed the table on a one-block pillar over a cavern,
-   dug it to carry it on, and the bot walked off the pillar after the drop: thirty blocks, the
-   plan failed :no-footing."
+  "Is a cell beside cell [x y z] at its height open over a drop (open-drop?)? A block placed at
+   cell and dug again drops its item there to roll off. Sim world R2/12 (issue #338) placed the
+   table on a one-block pillar over a cavern, dug it to carry it on, and the bot walked off the
+   pillar after the drop: thirty blocks, the plan failed :no-footing."
   [world [x y z]]
-  (boolean (some (fn [[dx dz]]
-                   (let [n [(+ x dx) y (+ z dz)]]
-                     (and (= :clear (path/classify world n))
-                          (not (path/floor? world (update n 1 dec)))
-                          (nil? (path/landing world n)))))
-                 sides)))
+  (boolean (some (fn [[dx dz]] (open-drop? world [(+ x dx) y (+ z dz)])) sides)))
+
+(defn drop-beyond?
+  "Is the cell past [x y z] on the line from the feet [fx fy fz] through it open over a drop
+   (open-drop?): where a body that walks onto the cell to pick up what is dug there carries on.
+   A cell beside a drop only at its sides is safe to pick up from along a floor that goes on: a
+   one-block bridge over lava in a fortress's tunnel had a drop beside every cell of it, and with
+   drop-beside? alone a table, a furnace or a gravel found no spot on it (issues #559, #560:
+   :no-spot at the stage that crafts the pickaxe). Pure; false for a cell straight over or
+   under the feet."
+  [world [fx _ fz] [x y z]]
+  (let [sx (Long/signum (long (- x fx)))
+        sz (Long/signum (long (- z fz)))]
+    (boolean (or (and (not (zero? sx)) (open-drop? world [(+ x sx) y z]))
+                 (and (not (zero? sz)) (open-drop? world [x y (+ z sz)]))))))
 
 (defn spot
   "[target support] for placing a block near the player: target replaceable (air or a grass
@@ -94,11 +109,13 @@
    which leaves the way open: gym batch iron-a6 run 1, at the foot of its stairs between its
    table and furnace, found no spot for a gravel but the stair behind it). A cell in refused is
    passed over: the server answered a placement there with the cell still empty, a body
-   standing in it (give-up), and a cell with a drop beside it (drop-beside?). Pure; nil when there
-   is none."
+   standing in it (give-up), and a cell with a drop beside it (drop-beside?; with along? only
+   one with a drop past it on the line from the feet, drop-beyond?: the fallback when every
+   cell has a drop beside it). Pure; nil when there is none."
   ([world] (spot world false))
   ([world passage-ok?] (spot world passage-ok? #{}))
-  ([world passage-ok? refused]
+  ([world passage-ok? refused] (spot world passage-ok? refused false))
+  ([world passage-ok? refused along?]
    (let [[px py pz] (:player/pos world)
          fx (long (math/floor px))
          fy (long (math/floor py))
@@ -119,7 +136,9 @@
                        (not (contains? memory/placed-kinds (blocks/name-of s)))
                        (or passage-ok? (not (passage? world target)))
                        (not (inside-player? world target))
-                       (not (drop-beside? world target))
+                       (not (if along?
+                              (drop-beyond? world [fx fy fz] target)
+                              (drop-beside? world target)))
                        (<= (physics/distance eye (physics/centre target)) place-reach))]
         [target support])))))
 
@@ -397,7 +416,8 @@
   ;; a given cell (:intent/cell, a build's) against a solid neighbour (dug first when it holds powder
   ;; snow or the like, unplaceable-in?); else the niche already cut
   ;; (:intent/niche, dug-spot), else a plain spot, else a niche cut in the wall, else (passage-ok?)
-  ;; a spot in the passage: a table or a gravel to dig again leaves the way open when the bot goes on
+  ;; a spot in the passage: a table or a gravel to dig again leaves the way open when the bot goes on;
+  ;; last, a spot with a drop beside it but none past it on the line from the feet (drop-beyond?)
   [world
    {:intent/keys [passage-ok? refused retreated? nudges]
     at :intent/cell
@@ -408,7 +428,10 @@
         n (when-not (or at found) (niche world))
         [_ stowed-item :as stowed] (when n (intent/stowed-tool world (terrain/block-at world n)))
         [target from] (or found
-                          (when (and (nil? at) (nil? n) passage-ok?) (spot world true refused)))
+                          (when (and (nil? at) (nil? n) passage-ok?) (spot world true refused))
+                          ;; every cell has a drop beside it and no wall to cut: along a floor
+                          (when (and (nil? at) (nil? n))
+                            (spot world (boolean passage-ok?) refused true)))
         wet (when (and retreated? (nil? at) (nil? n) (nil? target)) (water-spot world refused))
         [wet-against wet-face] (when wet (support world wet))]
     (cond (and at

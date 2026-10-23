@@ -308,7 +308,8 @@
    "A step that lays a block (a replaced floor, a lava floor) is safe only with a filler carried, and soul soil, blackstone and basalt count as fillers: R3-38-1 dug a soul sand floor with none left and failed :not-held (issue #410)"
    "A route's start, when the feet cell has no floor (the box over a ledge's edge), is the standable cell the box rests on (path/rests), not the first neighbour in search order, which could lie across a gap with no way to the target (issue #284, R1-26-1)"
    "The model's natural Nether arrival needs room for a four-by-five portal frame in either horizontal axis, not just a standing cell: R4/12 and R4/4 arrived on isolated gravel above lava and correctly refused every tunnel step, blocked (issue #286)"
-   "A placement into a cell the build names that holds powder snow, a flower or the like (not solid, nothing placed into it) digs it first, in reach: the server refused the cobblestone into powder snow three times and failed the build :rejected (issue #279, real race 39807290314 bot Clj_r18)"]
+   "A placement into a cell the build names that holds powder snow, a flower or the like (not solid, nothing placed into it) digs it first, in reach: the server refused the cobblestone into powder snow three times and failed the build :rejected (issue #279, real race 39807290314 bot Clj_r18)"
+   "A place with a drop beside every cell (a one-block bridge over lava or a cavern) takes, when no plain spot and no wall niche exists, a cell along the floor whose far side on the line from the feet has a floor too (place/drop-beyond?), never one at the end of it, where the pickup carries on over the drop: Nether fortress tunnels failed :no-spot at the pickaxe stage on every bridge after the table was refused beside a drop (issues #559, #560)"]
   :problem/risks
   ["Stale overworld columns answer Nether lookups (a brick reported exactly 64 blocks off)"
    "Parsing a Nether chunk as 24 sections runs off the buffer"
