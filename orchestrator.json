@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-23T20:55:53.628Z",
+  "at" : "2026-10-23T20:57:03.232Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -73,6 +73,11 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
+    "number" : 231,
+    "title" : "Bot stops at cast-one: no-footing",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
     "number" : 222,
     "title" : "Bot stops at cast-one: stuck",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
@@ -80,16 +85,6 @@
   }, {
     "number" : 71,
     "title" : "Bot stops at portal-kit: boxed",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
-    "number" : 231,
-    "title" : "Bot stops at cast-one: no-footing",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
-    "number" : 104,
-    "title" : "Bot stops at kit: no-log",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
@@ -115,6 +110,11 @@
   }, {
     "number" : 130,
     "title" : "Bot stops at cast-one: boxed",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 104,
+    "title" : "Bot stops at kit: no-log",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
@@ -215,19 +215,15 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 231,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
     "issue" : 222,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
     "issue" : 71,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
-    "issue" : 231,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
-    "issue" : 104,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -248,6 +244,10 @@
     "why" : "hands-off label"
   }, {
     "issue" : 130,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 104,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
