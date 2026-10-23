@@ -96,6 +96,52 @@
         far (+ retreat-distance 2.0)]
     [(+ px (* far ux)) py (+ pz (* far uz))]))
 
+(def retreat-turns
+  "Radians a retreat may turn from straight away from its target, in the order tried."
+  [0.0 0.7854 -0.7854 1.5708 -1.5708])
+
+(defn retreat-safe?
+  "May the feet step into cell, on the level they stand at: a cell they could stand in, one whose
+   drop lands within path/max-fall (path/landing), or a wall (solid, the walk stops against it);
+   never a drop into lava or water, a cell beside lava or one in an unloaded chunk."
+  [world cell]
+  (boolean (or (path/standable? world cell)
+               (path/landing world cell)
+               (= :solid (path/classify world cell)))))
+
+(defn safe-away-point
+  "away-point turned the least (retreat-turns) whose next two cells on the level are safe to step
+   into (retreat-safe?); nil when every heading tried is not. Sim snapshots R4-14-1 and R4-7-1
+   (issue #231): a staircase down in deepslate at y -52, health under ten, and a :back-off (and
+   a fight's retreat) walking blind straight away from a mob, over the lip of a cavern into its
+   lava lake; the flee had no footing to reach."
+  [world e]
+  (let [[px py pz] (:player/pos world)
+        [ax _ az] (away-point world e)
+        [_ fy _] (intent/feet world)
+        dx (- ax px)
+        dz (- az pz)
+        d (math/sqrt (+ (* dx dx) (* dz dz)))
+        far (+ retreat-distance 2.0)]
+    (some (fn [turn]
+            (let [c (math/cos turn)
+                  s (math/sin turn)
+                  vx (/ (- (* dx c) (* dz s)) d)
+                  vz (/ (+ (* dx s) (* dz c)) d)
+                  ahead (fn [k] [(long (math/floor (+ px (* k vx)))) fy
+                                 (long (math/floor (+ pz (* k vz))))])]
+              (when (every? #(retreat-safe? world (ahead %)) [1.0 2.0])
+                [(+ px (* far vx)) py (+ pz (* far vz))])))
+          retreat-turns)))
+
+(defn retreat-controls
+  "The controls of a step away from entity e: toward the safe-away-point, or none (stand) when no
+   heading is safe: a bot cornered at a lip is :cornered and fights, never walks off it."
+  [world e]
+  (if-let [point (safe-away-point world e)]
+    (intent/toward world point 0.0)
+    {}))
+
 (defn attack
   "Send one attack on eid, then the arm's swing, as the vanilla client sends them
    (MultiPlayerGameMode.attack, then the swing); the next swing swing-every from now, the swing
@@ -264,7 +310,7 @@
         (-> world
             (assoc :player/controls {})
             intent/done)
-        :else (assoc world :player/controls (intent/toward world (away-point world e) 0.0))))
+        :else (assoc world :player/controls (retreat-controls world e))))
 
 (defmethod intent/run :fight
   ;; {:intent/kind :fight :intent/target eid}: done when the target is gone (a kill); below
@@ -355,7 +401,7 @@
               (assoc :player/controls {})
               (cornered (:intent/target i))
               intent/done)
-          :else (assoc world :player/controls (intent/toward world (away-point world e) 0.0)))))
+          :else (assoc world :player/controls (retreat-controls world e)))))
 
 ;; ---------------------------------------------------------------- the rows
 
