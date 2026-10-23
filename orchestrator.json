@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-23T23:37:20.550Z",
+  "at" : "2026-10-23T23:39:36.353Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -35,7 +35,7 @@
   }, {
     "number" : 580,
     "title" : "Bot stops at blaze-rods: inventory-full",
-    "labels" : [ "bot-failure", "sim" ],
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : true
   }, {
     "number" : 507,
@@ -50,7 +50,7 @@
   }, {
     "number" : 579,
     "title" : "Bot stops at ender-pearls: timeout",
-    "labels" : [ "bot-failure", "sim" ],
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 559,
@@ -124,14 +124,18 @@
     "why" : "hands-off label"
   }, {
     "issue" : 580,
-    "move" : "wait",
-    "why" : "session starting"
+    "move" : "leave",
+    "why" : "hands-off label"
   }, {
     "issue" : 507,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
     "issue" : 71,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 579,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
