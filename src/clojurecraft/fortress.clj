@@ -38,6 +38,7 @@
 (def stall-gain 8)                    ; blocks a tunnel must bring the feet nearer a leg's end to count as progress (rock gives about 32)
 (def bridge-ground-depth 48)           ; blocks under a floor to be laid over a cavern looked down through for ground: the fall of a body knocked off
 (def bridge-min-filler 16)            ; filler a bridge over a cavern keeps in hand: it stops when fewer are left
+(def bridge-lava-health 18)           ; health a bridge over lava is begun and carried on with: never hurt
 (def bridge-min-health 14)            ; health a bridge over a cavern is begun and carried on with
 (def rock-look 24)                    ; cells along a heading a new leg looks for rock in
 (def retreats-allowed 1)            ; retreats in a row a tunnel takes before it is blocked: a second one paces two cells
@@ -231,50 +232,58 @@
   "May the level move from feet be floored across a cave, the overworld's dry tunnel only: the
    floor it steps onto air that the block under the feet holds (build/foundation), no water or
    lava under it within stairs/bridge-depth (stairs/over-fluid?: a causeway over a lake is no
-   cave's floor), a filler carried, the step dry? and, with that floor laid, safe?. The fortress's
-   tunnel never bridges (the lava sea under the Nether's caves)."
-  [world feet move]
-  (let [floor (plus (plus feet move) [0 -1 0])]
-    (and (zero? (second move))
-         (build/holds? world [:solid (plus feet [0 -1 0])])
-         (contains? #{:air :cave_air :void_air} (blocks/name-of (terrain/block-at world floor)))
-         (= floor (build/foundation world floor))
-         (not (stairs/over-fluid? world floor))
-         (some? (stairs/filler world 1))
-         (dry? world feet move)
-         (safe? (assoc-in world [:world/blocks floor] (blocks/default-state :cobblestone))
-                feet
-                move))))
+   cave's floor, unless fluid-ok?: bridge-over-void? asks for ground itself), a filler carried,
+   the step dry? and, with that floor laid, safe?. The fortress's tunnel bridges only by
+   bridge-over-void?."
+  ([world feet move] (bridge? world feet move false))
+  ([world feet move fluid-ok?]
+   (let [floor (plus (plus feet move) [0 -1 0])]
+     (and (zero? (second move))
+          (build/holds? world [:solid (plus feet [0 -1 0])])
+          (contains? #{:air :cave_air :void_air} (blocks/name-of (terrain/block-at world floor)))
+          (= floor (build/foundation world floor))
+          (or fluid-ok? (not (stairs/over-fluid? world floor)))
+          (some? (stairs/filler world 1))
+          (dry? world feet move)
+          (safe? (assoc-in world [:world/blocks floor] (blocks/default-state :cobblestone))
+                 feet
+                 move)))))
 
 (defn ground-below?
   "Is the first block under the floor cell [x y z] (within bridge-ground-depth) that is not air
-   a solid block (any shape, basalt's among them), nothing but air over it: ground a body would
-   land on, never a fluid, never the end of the loaded world? A floor laid where it is false is
-   a bridge over lava, water or the unknown."
-  [world [x y z]]
-  (= :ground
-     (reduce
-      (fn [_ k]
-        (let [id (terrain/block-at world [x (- y k) z])]
-          (cond (or (nil? id) (contains? blocks/lava-states id) (contains? blocks/water-states id))
-                (reduced false)
-                (blocks/solid? id) (reduced :ground)
-                :else nil)))
-      nil
-      (range 1 (inc bridge-ground-depth)))))
+   a solid block (any shape, basalt's among them), nothing but air over it, or with lava-ok? air
+   and lava: ground a body would land on, never water, never the end of the loaded world? A
+   floor laid where it is false is a bridge over water or the unknown, or over lava."
+  ([world cell] (ground-below? world cell false))
+  ([world [x y z] lava-ok?]
+   (= :ground
+      (reduce (fn [_ k]
+                (let [id (terrain/block-at world [x (- y k) z])]
+                  (cond (or (nil? id)
+                            (contains? blocks/water-states id)
+                            (and (not lava-ok?) (contains? blocks/lava-states id)))
+                        (reduced false)
+                        (blocks/solid? id) (reduced :ground)
+                        :else nil)))
+              nil
+              (range 1 (inc bridge-ground-depth))))))
 
 (defn bridge-over-void?
   "May the level move from feet be floored across a cavern in the Nether, bridge? holding (the
    floor laid from the block under the feet, which the body stands on while it is laid and
-   leaves only for the laid block) and, under that floor, ground-below?, a filler reserve of
-   bridge-min-filler and bridge-min-health: never over lava, never hurt, never short of blocks.
-   Sim world R2/12 (issue #338) met a cavern sixty blocks across, thirty deep over basalt, that
-   no step round its rim crossed in an hour."
+   leaves only for the laid block) and, under that floor, ground-below? (over lava too only at
+   bridge-lava-health, the sea under the Nether's caves: never bridged hurt), a filler reserve
+   of bridge-min-filler and bridge-min-health: never over water, never hurt, never short of
+   blocks. Sim world R2/12 (issue #338) met a cavern sixty blocks across over the lava sea, the
+   basalt 26 blocks under its floor, that no step round its rim crossed in an hour."
   [world feet move]
-  (and (>= (double (or (:player/health world) 20.0)) bridge-min-health)
-       (bridge? world feet move)
-       (ground-below? world (plus (plus feet move) [0 -1 0]))
-       (some? (stairs/filler world bridge-min-filler))))
+  (let [health (double (or (:player/health world) 20.0))
+        floor (plus (plus feet move) [0 -1 0])]
+    (and (>= health bridge-min-health)
+         (bridge? world feet move true)
+         (or (ground-below? world floor)
+             (and (>= health bridge-lava-health) (ground-below? world floor true)))
+         (some? (stairs/filler world bridge-min-filler)))))
 
 (defn climb-out?
   "May the up move from feet stand on a block laid beside the feet at their own height: the
@@ -343,6 +352,14 @@
          (first (filter #(and (sealed? world feet %) (or (not dry-only?) (dry? world feet %)))
                         fresh))
          (first (filter allowed? ways))))))
+
+(defn on-bridge?
+  "Do the feet stand on a block with air under it, a bridge being crossed: the block under the
+   feet solid and the one under that clear? A bridge stays a bridge-over-void? candidate when the
+   leg's progress ends its stall in the middle of the span."
+  [world]
+  (let [[x y z] (intent/feet world)]
+    (and (path/floor? world [x (dec y) z]) (= :clear (path/classify world [x (- y 2) z])))))
 
 (defn retreat?
   "Does move from feet step into a cell visited already stood in: next-move's last resort, a
@@ -699,6 +716,7 @@
                 {:intent/kind :tunnel-to
                  :intent/target (leg-target search)
                  :intent/steps steps-per-tunnel
-                 :intent/bridge? (pos? (long (or (:search/stalled search) 0)))
+                 :intent/bridge? (or (pos? (long (or (:search/stalled search) 0)))
+                                     (on-bridge? world))
                  :intent/search search})
               {:plan/wait :no-way}))))
