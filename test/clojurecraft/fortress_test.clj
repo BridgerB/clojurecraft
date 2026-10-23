@@ -1044,8 +1044,11 @@
     (is (= [10 64 0] (fortress/chosen-brick w)) "the nearest with none chosen")
     (is (= [14 64 0] (fortress/chosen-brick (assoc w :fortress/brick [14 64 0])))
         "the chosen one although another is nearer")
-    (is (= [10 64 0] (fortress/chosen-brick (assoc w :fortress/brick [30 64 0])))
-        "a chosen cell no longer on record is dropped")))
+    (is (= [10 64 0]
+           (fortress/chosen-brick (-> w
+                                      (assoc :fortress/brick [30 64 0])
+                                      (assoc-in [:world/blocks [30 64 0]] air))))
+        "a chosen cell seen to be air is dropped")))
 
 (defn cavern-wall
   "The field with the air of a cavern east of the feet at y 62 to 66, rock above and under it."
