@@ -1233,6 +1233,56 @@
        (when (= :lookout (:intent/kind (:plan/last world))) (or (roam world) (dig-out world)))
        {:intent/kind :lookout :intent/for :pearls}))))
 
+(defn look-off
+  "The look [yaw pitch], unless from the eye it stares at a calm enderman (not entity/creepy?;
+   mob/stared?, the server's own cone and line test), then straight down at the same yaw."
+  [world look]
+  (let [eye (game/eye world)
+        solid? (sight-fn world)]
+    (if (some (fn [[_ e]]
+                (and (not (entity/creepy? e)) (mob/stared? solid? eye look (:entity/pos e))))
+              (endermen (dissoc world :plan/blacklist) stare-range))
+      [(first look) 90.0]
+      look)))
+
+(defmethod plan/steer :pearls
+  ;; out of the burrow's end, every look but a provoke's turned from a calm enderman's eyes
+  ;; (look-off): a walk steers by :control/yaw and a dig or a place is judged by distance, so the
+  ;; pitch is free. Sim probes 39887735653 and 39887752302 (seeds 4 and 5): four bots stared at
+  ;; one two or three blocks off on a walk or a tunnel, out of the burrow, and were slain in the
+  ;; open. In the end a stare by chance is what the hunt wants: the enderman comes to the sword
+  [world _]
+  (let [look (:control/look (:player/controls world))
+        home (:pearls/shelter world)]
+    (cond (or (nil? look)
+              (= :provoke (:intent/kind (:plan/intent world)))
+              (and home (= home (intent/feet world))))
+          world
+          :else (assoc-in world [:player/controls :control/look] (look-off world look)))))
+
+(defn beset?
+  "Does an angry enderman (entity/creepy?), blacklisted or not, stand within strike-range of the
+   feet, height counted?"
+  [world]
+  (let [p (:player/pos world)]
+    (boolean (some (fn [[_ e]]
+                     (and (entity/creepy? e)
+                          (<= (physics/distance p (:entity/pos e)) strike-range)))
+                   (endermen (dissoc world :plan/blacklist) stare-range)))))
+
+(def answers-to-hand #{:fight :back-off :eat :dig}) ; intents a running hunt keeps with an angry enderman at hand: the answers to it, a meal, a fire put out
+
+(defmethod plan/interrupts? :pearls
+  ;; any running intent but an answer (answers-to-hand) or the walk home ends with an angry
+  ;; enderman at hand (beset?), and the hunt plans again: home, the fight held there, or the
+  ;; fight where the bot stands. Nothing else ends a running intent: sim probes 39887735653 and
+  ;; 39887752302 had a walk and a tunnel go on while one struck the bot from 20 health to none in
+  ;; six to ten seconds, the bot carried on away from it
+  [world _ i]
+  (and (not (contains? answers-to-hand (:intent/kind i)))
+       (not (and (= :walk (:intent/kind i)) (= (:intent/target i) (:pearls/shelter world))))
+       (beset? world)))
+
 (defmethod combat/answers :pearls
   ;; the hunt provokes endermen and fights them from its burrow; an angry one (entity/creepy?)
   ;; is a hostile the :defend row would otherwise walk out of the burrow after

@@ -97,6 +97,12 @@ sourceRefs:
   - src/clojurecraft/pearls.clj#defn crowd-site
   - src/clojurecraft/pearls.clj#defn stare-site
   - src/clojurecraft/pearls.clj#defn menaced?
+  - src/clojurecraft/pearls.clj#defn look-off
+  - src/clojurecraft/pearls.clj#defmethod plan/steer :pearls
+  - src/clojurecraft/pearls.clj#defn beset?
+  - src/clojurecraft/pearls.clj#def answers-to-hand
+  - src/clojurecraft/pearls.clj#defmethod plan/interrupts? :pearls
+  - test/clojurecraft/pearls_test.clj#out-of-the-burrow-no-look-stares-at-a-calm-one-and-one-angry-at-hand-ends-the-intent
   - test/clojurecraft/pearls_test.clj#one-hidden-is-walked-to-a-site-it-is-stared-at-from-never-up-to
   - src/clojurecraft/pearls.clj#defmethod combat/answering :pearls
   - src/clojurecraft/gym.clj#defn warped-origins
@@ -155,7 +161,10 @@ Twelve eyes of ender need twelve pearls. The roadmap (#10) first chose bartering
 `:ender-pearls` (`--until pearls-12`, provides 12 `ender_pearl`) and `:ender-pearl` (`--until pearls-1`, the gym's first trial, one pearl), both done by `:provided?` and planned by `:pearls`, priority 19. Both are asides for now (`plan/aside?`): no chained run takes them and `plan/current-until` stays at the fortress until the stages before them are proven; raising the chain is its own change.
 
 ## The :pearls plan (pearls.clj)
+Out of the burrow's end every look but a provoke's is turned from a calm enderman's eyes (`plan/steer :pearls`, `look-off`: straight down at the same yaw, as the dragon row does; a walk steers by yaw and a dig or a place is judged by distance), and any running intent but an answer (`answers-to-hand`: a fight, a back-off, a meal, a fire dug out) or the walk home ends with an angry enderman, blacklisted or not, within `strike-range` (`beset?`, `plan/interrupts? :pearls`), so the hunt plans again: home, the fight held there, or the fight where it stands. Sim probes 39887735653 and 39887752302 (seeds 4 and 5): four bots stared at one two or three blocks off on a walk or a tunnel out of the burrow, and the intent went on while it struck them from 20 health to none in six to ten seconds.
+
 In order:
+
 1. **The kill's drop.** Never with another angry enderman (blacklisted or not) within `danger-radius` of the feet and `danger-rise` of their height (`menaced?`): the hunt meets it first (sim probe 39885574495, world R2 seed 5: two provoked at once, one killed, and the walk to its pearl was slain beside it by the other). `fresh-kill`: the last intent a `:fight` for `:pearls`, done, with `:intent/target-pos`, its target gone (dead or removed; a fight broken off under 10 health is done too, with its enderman alive, and is no kill). A pearl lying round where it was last seen (`drop-of`: `drops/nearest`, a drop holding a pearl or not yet saying what it holds) is picked up by #262's `:collect-drops`; the block an enderman carried drops beside its pearl and is left, since a drop now says what it holds.
 2. **The drop still to come.** While the body still lies there (`body?`: the entity still tracked, dead), `{:plan/wait :drop}`: the server drops the loot as it dies and removes the body a second later.
 3. **The hunt** (`hunt`), over the nearest enderman within `hunt-radius` 32 (`at-hand`: the nearest not blacklisted when one is within `strike-range`, else the nearest of all, blacklisted or not: one a held fight gave up on is still angry, and batch pearls-warped-b's bots walked out to it and were slain, while batch pearls-warped7-a's run 4 had three in one spot 3.8 off, two blacklisted, and cut no burrow for the third; at hand when within `strike-range` 4.5 by the distance in three, never on the plane alone: batch pearls-warped-b's run 3 held a fight twenty minutes on one two blocks off on the plane and fourteen below, batch pearls-warped-c's run 1 stood over one fourteen below for forty) and the nearest of them that is coming (`entity/creepy?`: the server's creepy flag, metadata index 17, set while it has a target):

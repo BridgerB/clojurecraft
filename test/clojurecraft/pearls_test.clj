@@ -713,6 +713,43 @@
            (plan/next-intent (update w :player/inventory dissoc 1) row plan/goals))
         "with no pickaxe to cut one, up to it as before")))
 
+(deftest out-of-the-burrow-no-look-stares-at-a-calm-one-and-one-angry-at-hand-ends-the-intent
+  ;; sim probes 39887735653 and 39887752302 (seeds 4 and 5): four bots stared at one two or three
+  ;; blocks off on a walk or a tunnel and were slain in the open, the intent going on
+  (let [e (enderman [8.5 64.0 14.5])
+        w (standing {7 e})
+        look (physics/look-at (game/eye w) (pearls/head e))
+        steered #(get-in (plan/steer (assoc-in % [:player/controls :control/look] look) row)
+                         [:player/controls :control/look])]
+    (is (= [(first look) 90.0] (steered w)) "a look into a calm one's eyes: turned down")
+    (is (= look (steered (assoc-in w [:world/entities 7 :entity/creepy?] true)))
+        "an angry one's: as it was")
+    (is (= look (steered (assoc w :plan/intent {:intent/kind :provoke :intent/target 7})))
+        "a provoke stares")
+    (is (= look (steered (assoc w :pearls/shelter [8 64 8])))
+        "in the burrow's end a stare by chance brings it to the sword"))
+  (let [angry (assoc (enderman [10.5 64.0 8.5]) :entity/creepy? true)
+        w (standing {7 angry})]
+    (is (pearls/beset? w))
+    (is (plan/interrupts? w row {:intent/kind :tunnel}) "a tunnel with one at hand: ended")
+    (is (plan/interrupts? (assoc w :plan/blacklist #{7})
+                          row
+                          {:intent/kind :walk :intent/target [0 64 0]})
+        "blacklisted or not")
+    (is (not (plan/interrupts? w row {:intent/kind :fight :intent/target 7})) "the fight goes on")
+    (is (not (plan/interrupts? (assoc w :pearls/shelter [3 61 8])
+                               row
+                               {:intent/kind :walk :intent/target [3 61 8]}))
+        "and the walk home")
+    (is (not (plan/interrupts? (assoc-in w [:world/entities 7 :entity/pos] [20.5 64.0 8.5])
+                               row
+                               {:intent/kind :tunnel}))
+        "one past strike-range: the tunnel goes on")
+    (is (not (plan/interrupts? (assoc-in w [:world/entities 7 :entity/creepy?] false)
+                               row
+                               {:intent/kind :tunnel}))
+        "a calm one at hand: the tunnel goes on")))
+
 (deftest no-sword-held-no-hunt
   ;; gym batch pearls-warped8-b (plan run 39775345028): runs 1 and 3 respawned with nothing held
   ;; after their first deaths and hunted on bare-handed, 39 and 26 deaths in five hours
