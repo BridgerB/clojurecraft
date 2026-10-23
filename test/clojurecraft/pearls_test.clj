@@ -319,12 +319,12 @@
                                  [[lx y lz] stone])))])))
 
 (defn walled-in
-  "A bot in a pocket of the rock (rock open) with an iron pickaxe 21 digs from worn out, as
-   batch pearls-warped8-a's run 2 stood, and an enderman at pos."
+  "A bot in a pocket of the rock (rock open) with an iron pickaxe 40 digs from worn out (spare
+   digs and more), and an enderman at pos."
   [open pos]
   (-> (standing {7 (enderman pos)})
       (assoc :world/chunks (rock open))
-      (assoc-in [:player/inventory 1] (assoc (item :iron_pickaxe 1) :components {:damage 229}))))
+      (assoc-in [:player/inventory 1] (assoc (item :iron_pickaxe 1) :components {:damage 210}))))
 
 (def feet-cells #{[8 64 8] [8 65 8]})
 
@@ -335,12 +335,12 @@
   ;; within a few blocks, the roam finding no end and every enderman past cut-reach; run 2 at y 45
   ;; in its own stairs and tunnels with 21 digs left, its second flight down having taken a stair
   ;; of its first
-  (let [above [8.5 80.0 20.5]
+  (let [above [8.5 80.0 48.5]
         w (walled-in feet-cells above)]
-    (is (= 21 (pearls/digs-left w)))
+    (is (= 40 (pearls/digs-left w)))
     (is (nil? (pearls/roam w)) "no end for a roam in the pocket")
     (is (nil? (pearls/ascend w (pearls/endermen w pearls/descend-radius)))
-        "and no digs to spare for the stairs up toward one")
+        "and none within cut-reach for the stairs up toward one")
     (is (= {:intent/kind :lookout :intent/for :pearls} (plan/next-intent w row plan/goals)))
     (is (= {:intent/kind :stairs-up
             :intent/to-y 72
@@ -362,6 +362,11 @@
         "from the end of the pocket nearest it first")
     (is (nil? (pearls/dig-out (assoc w :plan/boxed-at #{[8 64 8]}))) "boxed here: not again")
     (is (nil? (pearls/dig-out (update w :player/inventory dissoc 1))) "no pickaxe: no cut")
+    ;; sim probes 39889965974 and 39889946639 (world R3, seeds 4 and 5): cuts out of pockets wore
+    ;; the pickaxe out, and with none to dig a burrow the hunt fought calm ones in the open and
+    ;; was slain
+    (is (nil? (pearls/dig-out (assoc-in w [:player/inventory 1 :components :damage] 229)))
+        "21 digs left: kept for a burrow")
     (is (nil? (pearls/dig-out (assoc w :world/entities {}))) "no enderman: nowhere to cut to")))
 
 (deftest no-way-out-is-cut-from-the-brink-of-a-drop
@@ -560,6 +565,15 @@
                              row
                              plan/goals))
         "at the end with it on the stairs: fought")
+    ;; sim probe 39890029962 (worlds R1 and R4, seed 3): three held fights in a row on one by the
+    ;; mouth that never came, each :unreachable, and the plan failed
+    (let [by-mouth (burrowed [8.5 61.0 8.5] {7 (assoc angry :entity/pos [5.5 64.0 8.5])})]
+      (is (= {:intent/kind :fight :intent/target 7 :intent/hold? true :intent/for :pearls}
+             (plan/next-intent by-mouth row plan/goals))
+          "at hand by the mouth, not given up on: the fight held")
+      (is (= {:intent/kind :lookout :intent/for :pearls}
+             (plan/next-intent (assoc by-mouth :plan/blacklist #{7}) row plan/goals))
+          "given up on, out of the sword's reach: no fight held again, the bot stays in"))
     (is (= {:intent/kind :lookout :intent/for :pearls}
            (plan/next-intent (assoc (burrowed [8.5 61.0 8.5]
                                               {7 (assoc angry :entity/pos [1.5 64.0 8.5])})
@@ -681,6 +695,98 @@
     (is (= {:intent/kind :burrow :intent/dir [0 -1] :intent/for :pearls}
            (plan/next-intent arrived row plan/goals))
         "walked to a site: the burrow, away from the nearest")))
+
+(deftest one-hidden-is-walked-to-a-site-it-is-stared-at-from-never-up-to
+  ;; sim probe 39885559223 (world R2, seed 4): the walk to a calm one ended beside it, and the
+  ;; burrow begun there provoked it two blocks off; the bot was slain in the open in six seconds
+  (let [e (enderman [8.5 64.0 15.5])
+        w (-> (standing {7 e} wall)
+              (assoc-in [:player/inventory 1] (item :iron_pickaxe 1))
+              (update :world/chunks
+                      into
+                      (for [cx [-1 0 1]
+                            cz [-1 0 1]
+                            :when (not= [0 0] [cx cz])]
+                        [[cx cz] (world/column {})])))
+        c (pearls/stare-site w e)
+        at #(assoc w :player/pos (pearls/feet-at c) :plan/last %)]
+    (is (nil? (pearls/quarry w)) "hidden by the wall")
+    (is (some? c))
+    (is (= {:intent/kind :walk :intent/target c :intent/for :shelter}
+           (plan/next-intent w row plan/goals))
+        "a walk to a site, not to its cell")
+    (is (>= (physics/distance (game/eye (at nil)) (pearls/head e)) (+ pearls/stare-from 1.0)))
+    (is (pearls/provokable? (at nil) e) "from which it is stared at")
+    (is (= :burrow
+           (:intent/kind (plan/next-intent
+                          (at {:intent/kind :walk :intent/for :shelter :intent/status :done})
+                          row
+                          plan/goals)))
+        "where the burrow is cut")
+    (is (= {:intent/kind :walk :intent/target [8 64 15] :intent/for :pearls}
+           (plan/next-intent (update w :player/inventory dissoc 1) row plan/goals))
+        "with no pickaxe to cut one, up to it as before")))
+
+(deftest out-of-the-burrow-no-look-stares-at-a-calm-one-and-one-angry-at-hand-ends-the-intent
+  ;; sim probes 39887735653 and 39887752302 (seeds 4 and 5): four bots stared at one two or three
+  ;; blocks off on a walk or a tunnel and were slain in the open, the intent going on
+  (let [e (enderman [8.5 64.0 14.5])
+        w (standing {7 e})
+        look (physics/look-at (game/eye w) (pearls/head e))
+        steered #(get-in (plan/steer (assoc-in % [:player/controls :control/look] look) row)
+                         [:player/controls :control/look])]
+    (is (= [(first look) 90.0] (steered w)) "a look into a calm one's eyes: turned down")
+    (is (= look (steered (assoc-in w [:world/entities 7 :entity/creepy?] true)))
+        "an angry one's: as it was")
+    (is (= look (steered (assoc w :plan/intent {:intent/kind :provoke :intent/target 7})))
+        "a provoke stares")
+    (is (= look (steered (assoc w :pearls/shelter [8 64 8])))
+        "in the burrow's end a stare by chance brings it to the sword"))
+  (let [angry (assoc (enderman [10.5 64.0 8.5]) :entity/creepy? true)
+        w (standing {7 angry})]
+    (is (pearls/beset? w))
+    (is (plan/interrupts? w row {:intent/kind :tunnel}) "a tunnel with one at hand: ended")
+    (is (plan/interrupts? (assoc w :plan/blacklist #{7})
+                          row
+                          {:intent/kind :walk :intent/target [0 64 0]})
+        "blacklisted or not")
+    (is (not (plan/interrupts? w row {:intent/kind :fight :intent/target 7})) "the fight goes on")
+    (is (not (plan/interrupts? (assoc w :pearls/shelter [3 61 8])
+                               row
+                               {:intent/kind :walk :intent/target [3 61 8]}))
+        "and the walk home")
+    (is (not (plan/interrupts? (assoc-in w [:world/entities 7 :entity/pos] [20.5 64.0 8.5])
+                               row
+                               {:intent/kind :tunnel}))
+        "one past strike-range: the tunnel goes on")
+    (is (not (plan/interrupts? (assoc-in w [:world/entities 7 :entity/creepy?] false)
+                               row
+                               {:intent/kind :tunnel}))
+        "a calm one at hand: the tunnel goes on")
+    ;; sim probe 39892490709 (worlds R1 and R4, seed 3): the lookout in the end cut every tick for
+    ;; twenty minutes over one given up on by the mouth
+    (is (not (plan/interrupts? (assoc w :pearls/shelter [8 64 8]) row {:intent/kind :lookout}))
+        "in the burrow's end, where none reaches: the lookout goes on")))
+
+(deftest a-pickaxe-worn-out-on-burrows-ends-the-hunt-in-the-open
+  ;; sim probe 39890964793 (seed 5): its pickaxe broke on burrows, and it struck calm endermen in
+  ;; the open in worlds R2 and R3 and was slain, R2 nine times
+  (let [w (standing {7 (enderman [11.5 64.0 8.5])})
+        spent
+        (memory/remember-intention (assoc w :time/now 0) {:intent/id 1 :intent/kind :burrow} :done)]
+    (is (= {:intent/kind :fight :intent/target 7 :intent/for :pearls}
+           (plan/next-intent w row plan/goals))
+        "never held one: the hunt in the open, as before")
+    (is (pearls/worn-out? spent))
+    (is (= {:plan/wait :no-pickaxe} (plan/next-intent spent row plan/goals))
+        "spent on burrows: no calm one struck in the open")
+    (is (= :fight
+           (:intent/kind (plan/next-intent (assoc-in spent [:world/entities 7 :entity/creepy?] true)
+                                           row
+                                           plan/goals)))
+        "one coming is still met")
+    (is (not (pearls/worn-out? (assoc-in spent [:player/inventory 1] (item :iron_pickaxe 1))))
+        "a pickaxe held")))
 
 (deftest no-sword-held-no-hunt
   ;; gym batch pearls-warped8-b (plan run 39775345028): runs 1 and 3 respawned with nothing held
@@ -910,8 +1016,21 @@
           "from which it can be stared at: no nearer than stare-from, with a clear line"))
     (is (pearls/stale? stale) "a minute of them: the burrow is given up")
     (is (nil? (pearls/shelter stale)))
-    (is (and (= :walk kind) (= :pearls for) (not= [8 61 8] target) (not= [3 64 8] target))
-        "the hunt walks out toward it, to cut a burrow beside it")
+    (is (and (= :walk kind) (= :shelter for) (not= [8 61 8] target) (not= [3 64 8] target))
+        "the hunt walks out to a new burrow's site")
+    ;; sim probe 39883402083 (world R1, seed 4): the walk toward it and the burrow cut beside it
+    ;; were the old burrow again, every few minutes for fifty
+    (let [at (assoc stale
+                    :player/pos (pearls/feet-at target)
+                    :plan/last {:intent/kind :walk :intent/for :shelter :intent/status :done})]
+      (is (= target (pearls/crowd-site stale)))
+      (is (>= (physics/distance (game/eye at) (pearls/head calm)) (+ pearls/stare-from 1.0))
+          "past stare-from of it, so the stare from the new mouth runs its course")
+      (is (pearls/provokable? at calm) "with a clear line to its head")
+      (is (= :burrow (:intent/kind (plan/next-intent at row plan/goals))) "there, the new burrow"))
+    (is (nil? (pearls/crowd-site (assoc stale :plan/blacklist #{7})))
+        "one that would not provoke is no reason to move")
+    (is (nil? (pearls/crowd-site (looked (burrowed [8.5 61.0 8.5] {}) 12))) "no crowd, no site")
     (is (not (pearls/stale? (looked (assoc-in dug [:world/entities 7 :entity/creepy?] true) 12)))
         "one coming is no calm crowd")
     (is
@@ -1048,9 +1167,11 @@
      (= {:intent/kind :walk :intent/target [8 61 8] :intent/for :shelter}
         (plan/next-intent (assoc-in there [:world/entities 7 :entity/creepy?] true) row plan/goals))
      "coming: home, where it is met")
-    (is (= {:intent/kind :walk :intent/target [3 64 20] :intent/for :pearls}
+    (is (= {:intent/kind :walk
+            :intent/target (pearls/stare-site (dissoc w :pearls/shelter) far)
+            :intent/for :shelter}
            (plan/next-intent (dissoc w :pearls/shelter) row plan/goals))
-        "with no burrow, walked to as before")
+        "with no burrow, walked to a new burrow's site it is stared at from (stare-site)")
     (is (= {:intent/kind :lookout :intent/for :pearls}
            (plan/next-intent
             (assoc w
@@ -1139,7 +1260,21 @@
             (assoc (standing {7 (enderman [11.7 64.0 8.2]) 9 drop}) :plan/last kill)
             row
             plan/goals))
-        "a fight broken off left its enderman alive: no kill, and the fight goes on")))
+        "a fight broken off left its enderman alive: no kill, and the fight goes on")
+    ;; sim probe 39885574495 (world R2, seed 5): two provoked at once, one killed, and the walk
+    ;; to its pearl was slain beside it by the other
+    (let [angry (assoc (enderman [14.5 64.0 8.5]) :entity/creepy? true)
+          w #(assoc (standing {9 drop 8 %}) :plan/last kill)]
+      (is (pearls/menaced? (w angry)))
+      (is (= {:intent/kind :fight :intent/target 8 :intent/for :pearls}
+             (plan/next-intent (w angry) row plan/goals))
+          "another angry one six off: met first, the drop left")
+      (is (pearls/menaced? (assoc (w angry) :plan/blacklist #{8})) "blacklisted or not")
+      (is (not (pearls/menaced? (w (dissoc angry :entity/creepy?)))) "a calm one is no menace")
+      (is (= :collect-drops
+             (:intent/kind
+              (plan/next-intent (w (assoc angry :entity/pos [40.5 64.0 8.5])) row plan/goals)))
+          "one thirty-two off, past danger-radius: the drop is picked up"))))
 
 (deftest twelve-pearls-held-the-stage-is-done
   (is (plan/done-by (assoc (standing {}) :player/inventory {3 (item :ender_pearl 12)}) row))
