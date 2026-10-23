@@ -97,13 +97,3 @@
     (let [[w _] (fx/fold intent-step w [(tick 50)])]
       (is (= :done (:intent/status (:plan/intent w))) "left, not failed")
       (is (= {} (:player/controls w)) "not a step taken toward it"))))
-
-(deftest a-collect-leaves-a-drop-that-fell-far-under-the-feet
-  ;; issue #338, sim world R2/12: the table dug on a one-block pillar over a cavern fell thirty
-  ;; blocks and the collect jumped off the pillar after it: `:no-footing`, the plan failed
-  (let [w (assoc (standing {})
-                 :plan/intent
-                 {:intent/kind :collect :intent/target [8 50 8] :intent/status :active})
-        w (intent/run w (:plan/intent w) {:event/kind :tick :event/now 0})]
-    (is (= :done (:intent/status (:plan/intent w))))
-    (is (empty? (:player/controls w)) "no step toward it")))

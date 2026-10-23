@@ -118,7 +118,6 @@
 (def leaf-drop 0.7)                   ; blocks a drop may lie under the feet and still be in the pickup box (grown 0.5 down, the drop 0.25 tall)
 (def centre-tolerance 0.05)           ; horizontal distance from a drop below the feet at which a collect stops walking: over its cell, to fall in
 (def collect-stall-ticks 20)          ; blocked this long with no progress → name the blocker
-(def deep-drop 6)                     ; blocks under the feet a drop may lie before a collect leaves it: it fell into a void
 (def ledge-look 0.6)                  ; blocks ahead of the feet a collect looks for a floor before stepping
 
 (defn face-toward
@@ -803,11 +802,6 @@
           (-> world
               (assoc :player/controls {})
               (fail :not-picked-up))
-          (> (- (long (nth (:player/pos world) 1)) (long (nth goal 1))) deep-drop)
-          (-> world
-              (assoc :player/controls {})
-              (game/say (str "collect: the drop at " (mapv long goal) " fell too far to follow"))
-              done)
           (and (> d 0.4) (ledge-ahead? world goal))
           (-> world
               (assoc :player/controls {})
