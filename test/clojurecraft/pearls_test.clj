@@ -806,7 +806,22 @@
       (is (some? (:intent/kind i)) "the blade paid for: the sword made, not a wait")
       (is (nil? (:plan/wait i)))
       (is (nil? (pearls/arming (update kit :player/inventory dissoc 1) row plan/goals))
-          "no blade paid for: nothing to make"))))
+          "no blade paid for: nothing to make")
+      (is (= {:plan/wait :no-sword}
+             (plan/next-intent (assoc-in kit
+                                [:world/entities 9]
+                                (assoc (enderman [10.5 64.0 8.5]) :entity/creepy? true))
+                               row
+                               plan/goals))
+          "one angry near: no walk for wood under its blows (probe 39942515328)")
+      ;; the same run's sword broke mid-fight, nine uses left when the hunt provoked the enderman
+      (let [worn (assoc-in kit
+                  [:player/inventory 0]
+                  (assoc (item :stone_sword 1) :components {:damage 122}))]
+        (is (pearls/blunt? worn) "nine uses left")
+        (is (not (pearls/blunt? (assoc-in kit [:player/inventory 0] (item :stone_sword 1)))))
+        (is (= (:intent/kind i) (:intent/kind (plan/next-intent worn row plan/goals)))
+            "a worn sword is replaced before the next fight")))))
 
 (def ledge-wall
   "Stone three high (y 64 to 66) along x 4, the burrow's first stair left open: from the mouth at

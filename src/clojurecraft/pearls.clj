@@ -1316,20 +1316,34 @@
     (shelter world)
     (into (comp (map (comp entity/kind val)) (remove shunned)) (entity/hostiles world))))
 
+(def sword-reserve 16)                ; uses a held sword keeps for the next fight: an enderman's 40 health is eight blows of a stone sword, twice over
+
+(defn blunt?
+  "Is every sword held worn below sword-reserve uses (window/uses-left), so that the next fight
+   may break it mid-fight? false with none held."
+  [world]
+  (let [left (keep (fn [[_ s]]
+                     (when (= :sword (:kind (blocks/tool (:item s)))) (window/uses-left s)))
+                   (:player/inventory world))]
+    (boolean (and (seq left) (every? #(< % sword-reserve) left)))))
+
 (defn arming
-  "The next intent toward a sword when none is held: the needs planner's (make/decide) toward the
-   best of sword/made whose blade the held items pay for (sword/blade?; the handle, the planks and
-   the table are the planner's to make, a trip for wood if need be), the first that is not a
-   wait; nil when none can be made. The :sword row makes one only without a trip, and a hunt with
-   no sword is no hunt: sim race 39909643851 (issue #563, world R3/13) wore its stone sword out
-   holding 93 cobblestone and a stick, no table at hand, and the plan failed :no-sword."
+  "The next intent toward a sword: the needs planner's (make/decide) toward one more of the best
+   of sword/made whose blade the held items pay for (sword/blade?; the handle, the planks and the
+   table are the planner's to make, a trip for wood if need be), the first that is not a wait;
+   nil when none can be made. The :sword row makes one only without a trip, and a hunt with no
+   sword is no hunt: sim race 39909643851 (issue #563, world R3/13) broke its stone sword in a
+   fight with an angry enderman, 93 cobblestone and a stick held and no table at hand, and the
+   plan failed :no-sword; played on with a sword to make but the enderman at hand, the walks to
+   a log were struck down every four seconds (probe 39942515328)."
   [world goal table]
   (let [c (armour/counts world)]
     (some (fn [[k mat n]]
             (when (sword/blade? world c mat n)
-              (let [i (make/decide world
-                                   (assoc goal :goal/provides {(keyword "item" (name k)) 1})
-                                   table)]
+              (let [i (make/decide
+                       world
+                       (assoc goal :goal/provides {(keyword "item" (name k)) (inc (get c k 0))})
+                       table)]
                 (when (and i (not (:plan/wait i))) i))))
           sword/made)))
 
@@ -1337,7 +1351,9 @@
   ;; a fire the bot stands in put out first (a :dig: the server breaks fire on the first click,
   ;; as blaze/put-out does); then the kill's drop, unless another angry one is near (menaced?);
   ;; with no sword held, the best sword the held items pay for a blade of made through the needs
-  ;; planner (arming), and only with none a wait that fails the plan (:no-sword): gym batch
+  ;; planner (arming), never with an angry one near (menaced?: the walks for wood were struck down
+  ;; every four seconds), and only with none a wait that fails the plan (:no-sword); a sword worn
+  ;; under sword-reserve (blunt?) is replaced the same way before the next fight: gym batch
   ;; pearls-warped8-b (plan run 39775345028) runs 1 and 3 respawned with nothing held after their
   ;; first deaths and hunted on bare-handed, 39 and 26 deaths in five hours; sim race 39909643851
   ;; (issue #563, R3/13) wore its stone sword out holding 93 cobblestone and a stick, and failed
@@ -1348,7 +1364,8 @@
   [world goal table]
   (let [k (when-not (menaced? world) (fresh-kill world))
         [_ d] (when k (drop-of world k))
-        fire (burning-at world)]
+        fire (burning-at world)
+        arm (delay (arming world goal table))]
     (cond fire {:intent/kind :dig :intent/target fire}
           d
           {:intent/kind :collect-drops
@@ -1356,7 +1373,8 @@
            :intent/target (cell (:entity/pos d))
            :intent/for :pearls}
           (and k (body? world k)) {:plan/wait :drop}
-          (nil? (combat/sword world)) (or (arming world goal table) {:plan/wait :no-sword})
+          (nil? (combat/sword world)) (or (when-not (menaced? world) @arm) {:plan/wait :no-sword})
+          (and (blunt? world) (not (menaced? world)) @arm) @arm
           (and (worn-out? world) (nil? (shelter world)) (not (menaced? world)))
           {:plan/wait :no-pickaxe}
           :else (hunt world))))
