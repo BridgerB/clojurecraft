@@ -225,6 +225,7 @@
    "A reachable lit portal must be entered without reopening the casting room or gathering a replacement pickaxe and table: otherwise a completed portal can send the bot climbing through deepslate by hand for wood (issue #389, R2/38)."
    "Surplus deepslate and dirt can fill every slot while exactly 128 protected cobblestone remain: discard a surplus building-block stack while retaining 128 of its kind before gathering or crafting a replacement pickaxe (issue #382, R4/23)."
    "A broken pickaxe and no crafting table require wood below the feet: tree-directed stairs must be cut by hand, not repeatedly fail :no-pickaxe (issue #229, R4/5)"
+   "A swim ends pressed to a one-block bank its lift peaks 0.05 under (63.95 against 64.0), the eye in air and no pickaxe to dig a step: it bobs there and every walk to a trunk on the cliff fails :no-path twelve times (issue #45, R1-17-2). A body off the ground over water for three seconds is trapped (trap/afloat?, a deliberate :cross or :wade excepted), and a swim-out stuck with nothing to dig lays a block into the water beside it for the step."
    "Trees near an exposed mountain ledge can require a long detour down the mine stairs: before waiting :no-log, search a larger bounded route and retain its budget through execution and replans (issue #186, R2/17)."
    "Lava pour lands outside the hole: the ray enters the frame below the cell (a stand too low or too far aside)"
    "Water poured beside the lava instead of over it: the source flows into the water and leaves cobblestone"
