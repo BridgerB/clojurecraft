@@ -539,3 +539,22 @@
         w #(assoc (standing [0.5 64.0 0.5]) :world/blocks %)]
     (is (place/drop-beside? (w cliff) [0 64 0]) "air east with nothing under it for twenty blocks")
     (is (not (place/drop-beside? (w ledge) [0 64 0])) "a floor beside it")))
+
+(deftest a-spot-along-a-bridge
+  ;; issues #559, #560: a one-block bridge over a drop, every cell of it beside a drop. The plain
+  ;; spot refuses all; the fallback takes the cell ahead while the floor goes on past it, and
+  ;; refuses it where the bridge ends
+  (let [air (blocks/default-state :air)
+        stone (blocks/default-state :stone)
+        sky (fn [zs] (into {} (for [x [-1 0 1] y (range 50 66) z zs] [[x y z] air])))
+        bridge (fn [zs] (into (sky (range -3 4)) (for [z zs] [[0 63 z] stone])))
+        w #(assoc (standing [0.5 64.0 0.5]) :world/blocks %)
+        long-bridge (w (bridge (range -3 4)))
+        short-bridge (w (bridge (range -3 2)))]
+    (is (nil? (place/spot long-bridge)) "a drop beside every cell: no plain spot")
+    (is (not (place/drop-beyond? long-bridge [0 64 0] [0 64 1]))
+        "the floor goes on past the cell ahead")
+    (is (some? (place/spot long-bridge false #{} true)) "the fallback finds a cell along the floor")
+    (is (place/drop-beyond? short-bridge [0 64 0] [0 64 1]) "the bridge ends past the cell ahead")
+    (is (not= [0 64 1] (first (place/spot short-bridge false #{} true)))
+        "never the cell at the end of the bridge, where the pickup carries on over the drop")))
