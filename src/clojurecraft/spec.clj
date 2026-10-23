@@ -482,6 +482,8 @@
 (s/def :intent/dry? boolean?)
 (s/def :intent/search :fortress/search)
 (s/def :intent/bridge? boolean?)
+(s/def :intent/brick ::block-pos)
+(s/def :fortress/brick ::block-pos)
 (s/def :intent/trunk ::block-pos)
 (s/def :intent/stage keyword?)
 (s/def :intent/since int?)
