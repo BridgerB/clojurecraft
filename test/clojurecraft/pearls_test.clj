@@ -1163,9 +1163,11 @@
      (= {:intent/kind :walk :intent/target [8 61 8] :intent/for :shelter}
         (plan/next-intent (assoc-in there [:world/entities 7 :entity/creepy?] true) row plan/goals))
      "coming: home, where it is met")
-    (is (= {:intent/kind :walk :intent/target [3 64 20] :intent/for :pearls}
+    (is (= {:intent/kind :walk
+            :intent/target (pearls/stare-site (dissoc w :pearls/shelter) far)
+            :intent/for :shelter}
            (plan/next-intent (dissoc w :pearls/shelter) row plan/goals))
-        "with no burrow, walked to as before")
+        "with no burrow, walked to a new burrow's site it is stared at from (stare-site)")
     (is (= {:intent/kind :lookout :intent/for :pearls}
            (plan/next-intent
             (assoc w
