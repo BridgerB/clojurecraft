@@ -7,7 +7,9 @@
    edible held, or in the overworld with the portal's iron and under provision-wanted foods, for
    the Nether's sake), or no animal to hunt and no kill to pick up. Planned by :hunt: the drop of a kill just made (the
    last intent a :fight for :hunt, done, where its target was last seen) is collected; else a
-   walk to the nearest animal a route reaches, and from beside it a :fight."
+   walk to the nearest animal a route reaches, and from beside it a :fight; and with none, while
+   provisioning on the surface, a :forage: a bounded search (forage-ms) of walked legs, a quarter
+   turn right each, for animals past the 48 blocks the server shows (issue #501)."
   (:require [clojure.math :as math]
             [clojurecraft.dimension :as dimension]
             [clojurecraft.eat :as eat]
@@ -17,7 +19,8 @@
             [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
-            [clojurecraft.recipe :as recipe]))
+            [clojurecraft.recipe :as recipe]
+            [clojurecraft.terrain :as terrain]))
 
 (set! *warn-on-reflection* true)
 
@@ -33,7 +36,16 @@
 (def starving-radius 48)              ; blocks a starving bot hunts within (a server shows animals this far, and the model populates three chunks round the player)
 (def strike-range 4.5)                ; blocks on the plane from which a hunt fights instead of walking: past a walk's reach (intent/reach 4), so a walk that arrived is never asked again
 (def candidates 3)                    ; nearest animals asked for a route, as the other acts ask
-(def provision-wanted 3)              ; edible items held before the portal is lit: the Nether has no animals, and health comes back there only from food held
+(def provision-wanted 6)              ; edible items held before the portal is lit: the Nether has no animals, and health comes back there only from food held (issue #501: three raw meats were eaten to the bar's 18 before the portal, and the Nether leg began with none)
+(def forage-ms 360000)                ; ms the search for animals goes on, from its first leg, however many legs: then the bot goes on with what it holds, never holding the portal up
+(def forage-reach 48)                 ; blocks the first two forage legs walk from the feet: a server shows animals this far (starving-radius)
+(def forage-far 96)                   ; blocks the farthest leg walks: a server loads six chunks round the bot
+(def forage-near-reaches [48 32 16])  ; blocks a leg falls back to when none has a route farther, farthest first
+(def forage-partial-min 12)           ; blocks on the plane a route that spent its budget (:partial) must still go from the feet to be walked
+(def forage-retry-ms 10000)           ; ms after a look that found no route at any heading before the bot looks again
+(def forage-wary 32)                  ; blocks round the bot within which a hostile stops the search: sim run R1/5 (issue #501) searched at night through creepers, zombies and skeletons, the defence backing it off a hundred times, until it died
+(def forage-health 14)                ; health under which the bot does not go looking: hurt, it stays where it is
+(def forage-headings [[1 0] [0 1] [-1 0] [0 -1]]) ; the four ways a forage leg goes, a quarter turn right of the last
 
 (defn cell "The block cell a point is in." [p] (mapv #(long (math/floor %)) p))
 
@@ -130,6 +142,76 @@
                (entity/gone? world (:intent/target l)))
       l)))
 
+(defn forage-goal
+  "The path goal of a forage leg along heading [dx dz] from feet, reach blocks out: any cell more
+   than twice reach, less one, on the plane from the point reach behind the feet (path's :afar),
+   which the cells reach or more ahead satisfy at any height and the cells beside and behind do
+   not, so a route finds the way (a pass, a bridge of land, round a lake) and the goal never
+   names a cell in the air or the rock."
+  [[x y z] [dx dz] reach]
+  {:goal/kind :afar
+   :goal/pos [(- x (* dx reach)) y (- z (* dz reach))]
+   :goal/range (dec (* 2 reach))})
+
+(defn forage-reaches
+  "The reaches the leg-th leg tries, farthest first: forage-reach blocks for the first two legs and
+   forage-reach more for each two after, up to forage-far, then forage-near-reaches: the legs
+   go round a square that grows, as the fortress search's spiral does."
+  [leg]
+  (let [far (min forage-far (* forage-reach (inc (quot (long leg) 2))))]
+    (distinct (cons far forage-near-reaches))))
+
+(defn walkable-end
+  "The cell a route r from feet is walked to: the last waypoint of a :found route, or of a :partial
+   one (the budget spent) that still goes forage-partial-min blocks on the plane from the feet;
+   nil otherwise."
+  [feet {:path/keys [status waypoints]}]
+  (let [to (last waypoints)]
+    (when (and to
+               (or (= :found status)
+                   (and (= :partial status)
+                        (>= (physics/horizontal-distance feet to) forage-partial-min))))
+      to)))
+
+(defn forage-leg
+  "[to leg] of the next forage leg after state's ({:forage/since :forage/leg}): the end of the
+   first route that reaches a forage-goal (walkable-end), along the heading the leg turns to
+   (forage-headings, a quarter right of the last) and then the headings after it, at the leg's
+   forage-reaches farthest first; nil when no heading has a route at any reach. leg is the one
+   after the leg that found one. plan is the route finder, path/plan unless given: [world start
+   goal opts] -> a route."
+  ([world state] (forage-leg path/plan world state))
+  ([plan world {:forage/keys [leg]}]
+   (let [feet (intent/feet world)
+         start (path/feet-cell (:player/pos world))]
+     (some (fn [[reach k]]
+             (let [heading (nth forage-headings (mod (+ (long leg) k) (count forage-headings)))
+                   r (plan world start (forage-goal feet heading reach) {})]
+               (when-let [to (walkable-end feet r)] [to (+ (long leg) k 1)])))
+           (for [reach (forage-reaches leg) k (range (count forage-headings))] [reach k])))))
+
+(defn foraging?
+  "Does the bot go on looking for animals: provisioning?, forage-ms not past since its first leg, no look
+   for a route lately that found none (:forage/retry-at), no failed intent in a row
+   (:plan/attempts, and :plan/unwalkable for a walk that failed :no-path, which counts apart: a
+   leg that failed ends the search for the moment, as twelve such walks in a row would end the
+   plan), no :build running (a cast is never left half made), the feet under
+   the open sky (animals live on the surface: a bot deep in its mine has none to find), health
+   at least forage-health and no hostile within forage-wary. Issue #501: bots went into the Nether with no food because
+   nothing looked for animals past the 48 blocks the server shows, and herds are about one chunk
+   in ten."
+  [world]
+  (let [{:forage/keys [since retry-at]} (:hunt/forage world)]
+    (boolean (and (provisioning? world)
+                  (or (nil? retry-at) (>= (:time/now world 0) retry-at))
+                  (zero? (:plan/attempts world 0))
+                  (zero? (:plan/unwalkable world 0))
+                  (not= :build (:intent/kind (:plan/intent world)))
+                  (>= (:player/health world 20.0) forage-health)
+                  (nil? (entity/nearest (entity/hostiles world) (:player/pos world) forage-wary))
+                  (or (nil? since) (< (- (:time/now world 0) since) forage-ms))
+                  (terrain/under-sky? world (intent/feet world))))))
+
 (defn hunting?
   "Is the running intent the hunt's (:intent/for :hunt): a walk to an animal, its fight, the
    meat's collect?"
@@ -147,16 +229,50 @@
   ;; the tick the cow died, before the fight was done: no kill to collect, the beef left lying
   [world _]
   (or (not (wants-meat? world))
-      (and (not (hunting? world)) (nil? (fresh-kill world)) (nil? (game world)))))
+      (and (not (hunting? world))
+           (nil? (fresh-kill world))
+           (nil? (game world))
+           (not (foraging? world)))))
 
 (defmethod plan/next-intent :hunt
+  ;; the drop of a kill, else the nearest animal, else the next leg of the search for one
   [world _ _]
-  (if-let [k (fresh-kill world)]
-    {:intent/kind :collect
-     :intent/target (cell (:intent/target-pos k))
-     :intent/drops meats
-     :intent/for :hunt}
-    (when-let [[eid e] (game world)]
-      (if (<= (physics/horizontal-distance (:player/pos world) (:entity/pos e)) strike-range)
-        {:intent/kind :fight :intent/target eid :intent/for :hunt}
-        {:intent/kind :walk :intent/target (cell (:entity/pos e)) :intent/for :hunt}))))
+  (let [k (fresh-kill world)
+        [eid e] (when-not k (game world))]
+    (cond k
+          {:intent/kind :collect
+           :intent/target (cell (:intent/target-pos k))
+           :intent/drops meats
+           :intent/for :hunt}
+          e
+          (if (<= (physics/horizontal-distance (:player/pos world) (:entity/pos e)) strike-range)
+            {:intent/kind :fight :intent/target eid :intent/for :hunt}
+            {:intent/kind :walk :intent/target (cell (:entity/pos e)) :intent/for :hunt})
+          (foraging? world) {:intent/kind :forage :intent/for :hunt})))
+
+(defmethod intent/run :forage
+  ;; {:intent/kind :forage}: choose the next leg of the search, then walk it as a :walk (the
+  ;; intent becomes the walk, so its arrival is a walk's: memory/arrived). The leg and the time the
+  ;; search began are kept in :hunt/forage; none found at any heading and reach is done with
+  ;; nothing walked, and the next look comes forage-retry-ms on (:forage/retry-at): the bot may
+  ;; stand in a pit or a thicket a few blocks from open ground
+  [world i event]
+  (let [state (or (:hunt/forage world) {:forage/since (:time/now world) :forage/leg 0})
+        found (forage-leg world state)]
+    (cond (nil? found)
+          (-> world
+              (assoc :hunt/forage
+                     (assoc state :forage/retry-at (+ (:time/now world 0) forage-retry-ms))
+                     :player/controls {})
+              intent/done)
+          :else
+          (let [[to leg] found
+                walk (assoc i :intent/kind :walk :intent/target to)]
+            (intent/run (assoc world
+                               :hunt/forage
+                               (-> state
+                                   (assoc :forage/leg leg)
+                                   (dissoc :forage/retry-at))
+                               :plan/intent walk)
+                        walk
+                        event)))))
