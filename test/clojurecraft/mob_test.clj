@@ -546,11 +546,13 @@
            (mob/spawner-spawns free?
                                sp
                                3
-                               [[0.0 0.0 0.5 0.0 0.0] [0.0 0.0 0.5 0.0 0.0] [0.5 0.5 0.5 0.5 0.5]]))
+                               [[0.0 0.999 0.5 0.0 0.999] [0.0 0.999 0.5 0.0 0.999]
+                                [0.5 0.5 0.5 0.5 0.5]]))
         "the second try's cell is taken, the third is the spawner")
-    (is (= [] (mob/spawner-spawns free? sp 3 [[0.0 0.0 0.0 0.0 0.0]]))
+    (is (= [] (mob/spawner-spawns free? sp 3 [[0.0 0.999 0.0 0.0 0.999]]))
         "a try in the floor makes none")
-    (is (= [[8 64 8]] (mob/spawner-spawns free? sp 1 [[0.0 0.0 0.5 0.0 0.0] [0.9 0.0 0.5 0.9 0.0]]))
+    (is (= [[8 64 8]]
+           (mob/spawner-spawns free? sp 1 [[0.0 0.999 0.5 0.0 0.999] [0.9 0.0 0.5 0.9 0.0]]))
         "one try, one blaze at most")))
 
 (def fortress-floor
