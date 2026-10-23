@@ -164,7 +164,8 @@
    (memory/done-since: two :walk intentions done a lure, every walk since the burrow counted), so
    that a blacklisted angry enderman near the mouth that never came is no reason to stay?"
   [world]
-  (>= (or (memory/done-since world :walk :burrow) 0) (* 2 lure-tries)))
+  (and (not (System/getenv "P11_NOLURED"))
+       (>= (or (memory/done-since world :walk :burrow) 0) (* 2 lure-tries))))
 
 (defn angry-near
   "[eid entity] of the nearest angry enderman (entity/creepy?), blacklisted or not (not once
@@ -672,7 +673,8 @@
    stood in the hollows two to four blocks beside the mouth, and six held fights in six timed
    out :unreachable over twenty minutes."
   [[x y z]]
-  (mapv (fn [dy] [x (+ y dy) z]) (range 2 (mob/tall :enderman))))
+  (mapv (fn [dy] [x (+ y dy) z])
+        (range 2 (if (System/getenv "P11_NOMOUTH") 2 (mob/tall :enderman)))))
 
 (defn burrowable?
   "Would a burrow cut from feet along dir end in a shelter?: the cells over its mouth an
@@ -986,7 +988,7 @@
    three pearls held."
   [world]
   (let [{:intent/keys [kind for status]} (:plan/last world)]
-    (and (= :walk kind) (= :shelter for) (= :done status))))
+    (and (not (System/getenv "P11_NOATSITE")) (= :walk kind) (= :shelter for) (= :done status))))
 
 (def provoke-health 18.0)             ; health under which no enderman is provoked, from the mouth or anywhere: the bot rests in its burrow first (sim-endermen3's probe 39847287615: in worlds R1, R2 and R4 the first death came of a provoke 4 to 8 blocks off at 10.8 to 17.8 health just outside the burrow, the enderman landing three to five blows in five seconds); away from the mouth (a vantage) only at full health
 
@@ -1083,7 +1085,7 @@
         in-reach? (and near?
                        (<= (physics/distance (game/eye world) (combat/aim e)) combat/attack-reach))
         hurt? (< (:player/health world 20.0) combat/retreat-health)
-        rested? (>= (:player/health world 20.0) provoke-health)
+        rested? (or (System/getenv "P11_NOREST") (>= (:player/health world 20.0) provoke-health))
         meal (when-not rested? (blaze/meal world))
         home (shelter world)
         in? (and home (= home (intent/feet world)))
@@ -1178,5 +1180,6 @@
            :intent/target (cell (:entity/pos d))
            :intent/for :pearls}
           (and k (body? world k)) {:plan/wait :drop}
-          (nil? (combat/sword world)) {:plan/wait :no-sword}
+          (and (not (System/getenv "P11_NOSWORD")) (nil? (combat/sword world)))
+          {:plan/wait :no-sword}
           :else (hunt world))))
