@@ -942,10 +942,10 @@
    (path/plan's :partial or :none) while that end is past a walk's reach of the eye, and from
    there a :stairs-up to it or descend-step higher when it stands two or more above, a
    :stairs-down when two or more below, else a :tunnel bore-length long, along the heading whose
-   first cut digs least (cheapest-heading); nil with no enderman tracked, no pickaxe held, or a
-   staircase from these feet boxed (:plan/boxed-at), and no cut from a brink (brink?: batch
-   pearls-warped8-c's run 2 was backed off a ledge into lava). Neither cut-reach nor spare digs are asked,
-   as descend, ascend and bore ask: walled in, the digs buy nothing else. Gym batch
+   first cut digs least (cheapest-heading); nil with no enderman tracked, no pickaxe held with
+   spare digs (spare?), or a staircase from these feet boxed (:plan/boxed-at), and no cut from a brink (brink?: batch
+   pearls-warped8-c's run 2 was backed off a ledge into lava). Cut-reach is not asked, as descend,
+   ascend and bore ask it; the burrow's digs are kept: sim probes 39889946639 and 39889965974 (world R3, seeds 4 and 5) wore the pickaxe out on cuts out of pockets, and with no burrow to be cut fought calm ones in the open and were slain. Gym batch
    pearls-warped8-a (plan run 39731473452, probes 39776762205, 39776787768, 39778589970 and
    39780802996): runs 2 and 3 held 3 and 4 pearls by their 21st and 31st minutes and then stood
    in lookouts for four and a half hours, run 2 at y 45 in its own stairs and tunnels with 21
@@ -955,7 +955,7 @@
   (let [pos (:player/pos world)
         feet (path/feet-cell pos)
         [_ e] (entity/nearest (endermen world descend-radius) pos)]
-    (when (and e (pickaxe? world) (not (contains? (:plan/boxed-at world) (intent/feet world))))
+    (when (and e (spare? world) (not (contains? (:plan/boxed-at world) (intent/feet world))))
       (let [c (cell (:entity/pos e))
             i {:intent/kind :walk :intent/target c :intent/for :pearls}
             to (or (last (:path/waypoints (path/plan world feet (intent/goal-of i) {}))) feet)

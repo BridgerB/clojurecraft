@@ -319,12 +319,12 @@
                                  [[lx y lz] stone])))])))
 
 (defn walled-in
-  "A bot in a pocket of the rock (rock open) with an iron pickaxe 21 digs from worn out, as
-   batch pearls-warped8-a's run 2 stood, and an enderman at pos."
+  "A bot in a pocket of the rock (rock open) with an iron pickaxe 40 digs from worn out (spare
+   digs and more), and an enderman at pos."
   [open pos]
   (-> (standing {7 (enderman pos)})
       (assoc :world/chunks (rock open))
-      (assoc-in [:player/inventory 1] (assoc (item :iron_pickaxe 1) :components {:damage 229}))))
+      (assoc-in [:player/inventory 1] (assoc (item :iron_pickaxe 1) :components {:damage 210}))))
 
 (def feet-cells #{[8 64 8] [8 65 8]})
 
@@ -335,12 +335,12 @@
   ;; within a few blocks, the roam finding no end and every enderman past cut-reach; run 2 at y 45
   ;; in its own stairs and tunnels with 21 digs left, its second flight down having taken a stair
   ;; of its first
-  (let [above [8.5 80.0 20.5]
+  (let [above [8.5 80.0 48.5]
         w (walled-in feet-cells above)]
-    (is (= 21 (pearls/digs-left w)))
+    (is (= 40 (pearls/digs-left w)))
     (is (nil? (pearls/roam w)) "no end for a roam in the pocket")
     (is (nil? (pearls/ascend w (pearls/endermen w pearls/descend-radius)))
-        "and no digs to spare for the stairs up toward one")
+        "and none within cut-reach for the stairs up toward one")
     (is (= {:intent/kind :lookout :intent/for :pearls} (plan/next-intent w row plan/goals)))
     (is (= {:intent/kind :stairs-up
             :intent/to-y 72
@@ -362,6 +362,11 @@
         "from the end of the pocket nearest it first")
     (is (nil? (pearls/dig-out (assoc w :plan/boxed-at #{[8 64 8]}))) "boxed here: not again")
     (is (nil? (pearls/dig-out (update w :player/inventory dissoc 1))) "no pickaxe: no cut")
+    ;; sim probes 39889965974 and 39889946639 (world R3, seeds 4 and 5): cuts out of pockets wore
+    ;; the pickaxe out, and with none to dig a burrow the hunt fought calm ones in the open and
+    ;; was slain
+    (is (nil? (pearls/dig-out (assoc-in w [:player/inventory 1 :components :damage] 229)))
+        "21 digs left: kept for a burrow")
     (is (nil? (pearls/dig-out (assoc w :world/entities {}))) "no enderman: nowhere to cut to")))
 
 (deftest no-way-out-is-cut-from-the-brink-of-a-drop
