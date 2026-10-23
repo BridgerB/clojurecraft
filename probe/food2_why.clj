@@ -10,7 +10,7 @@
          '[clojurecraft.simrace :as simrace]
          '[clojurecraft.terrain :as terrain])
 
-(let [[set-name n seed every] *command-line-args*
+(let [[set-name n seed every cap] *command-line-args*
       seed (Long/parseLong seed)
       every-ms (* 60000 (Long/parseLong every))
       f (io/file (str "cache/sim-worlds/" set-name "/" n ".edn.gz"))
@@ -51,7 +51,7 @@
                                                     (:capture/nether w)
                                                     (assoc :nether (:capture/nether w))))
                                         stop?
-                                        (* 330 60000)
+                                        (* (Long/parseLong (or cap "330")) 60000)
                                         (simrace/go-of w "nether"))]
   (println "END"
            set-name
