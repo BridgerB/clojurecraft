@@ -30,6 +30,7 @@ sourceRefs:
   - src/clojurecraft/stairs.clj#defn filler
   - src/clojurecraft/stairs.clj#defn shaft?
   - src/clojurecraft/stairs.clj#defn shaft-safe?
+  - test/clojurecraft/stone_test.clj#a-shaft-through-open-air-is-safe-beside-water
   - test/clojurecraft/sim_test.clj#a-climb-out-with-no-pickaxe-is-a-shaft-of-one-dig-a-level
   - src/clojurecraft/stairs.clj#defn floor-laying
   - src/clojurecraft/stairs.clj#defn rock-heading
@@ -220,3 +221,4 @@ An ascent may regain a previously visited higher cell: height gained is progress
 ## See also
 - [[dig-timeline]] - the child.
 - [[sib-dig-down-safety]] - the rules' origin.
+- **A shaft through open air is no dig beside water.** `shaft-safe?` asks `intent/exposes-fluid?` only of the shaft's solid cells: an open cell is no dig, and water beside it is beside the feet too, the pillar only lays blocks. Sim race 39912745526 world R1/26 (issue #130): on a cobblestone block over a cave's lake, with a column of water beside the air over the head, the shaft was refused, every stair was refused for the floor it lacked, and the climb failed `:boxed` three times (`a-shaft-through-open-air-is-safe-beside-water`).

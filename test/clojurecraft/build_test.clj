@@ -1685,3 +1685,14 @@
     (is (true? (build/way-open? w stand :portal origin :south)) "stone to dig through")
     (is (false? (build/way-open? lava stand :portal origin :south))
         "a cell of the line beside lava is never dug")))
+
+(deftest out-of-the-ground-below-the-stand-the-way-is-not-the-stairs-up
+  ;; sim snapshot R2-39-2 (issue #135): the bot on a slope's open sky a block under the landing's
+  ;; stand, sixty blocks off, chose the stairs up, done the tick they started, for the whole window
+  (let [w (standing-at (open-ground {}) [5.5 63.0 5.5])
+        stand [5 64 12]
+        child #(build/toward-stand % stand :portal origin :south)]
+    (is (true? (build/surface-climb? w 64)) "open sky over the feet, nothing to climb through")
+    (is (false? (build/surface-climb? w 63)) "at the height already")
+    (is (false? (build/surface-climb? (assoc w :player/on-ground? false) 64)) "not on the ground")
+    (is (not= :stairs-up (:intent/kind (child w))))))

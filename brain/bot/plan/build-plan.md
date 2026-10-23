@@ -109,6 +109,8 @@ sourceRefs:
   - test/clojurecraft/build_test.clj#a-dig-the-server-did-not-do-is-dug-again-before-the-build-fails
   - test/clojurecraft/build_test.clj#a-block-is-never-placed-into-the-bot
   - src/clojurecraft/build.clj#defn toward-stand
+  - src/clojurecraft/build.clj#defn surface-climb?
+  - test/clojurecraft/build_test.clj#out-of-the-ground-below-the-stand-the-way-is-not-the-stairs-up
   - src/clojurecraft/build.clj#defn stand-walk
   - src/clojurecraft/build.clj#defn beside-stand?
   - src/clojurecraft/build.clj#defn out-first?
@@ -303,3 +305,4 @@ Entry walks directly into the portal when a route reaches it; otherwise `approac
 - **The row against the frame is five wide**: a diagonal ray from the stair's last step (x 4) crossed x 4 of that row when the eye was 0.07 off the step's middle; it met rock, the lava landed in the room, and the bot was trapped in it. A stand aside aims further across the cell (`side-aim`).
 - **Blocks counted are the walls the cast opens, not its holes**: a cell dug as a hole is obsidian after (`blocks-needed`); counting it as a missing wall made every sealed-pool site ten blocks and none was chosen.
 - **No lava loaded at the sea's depth: tunnel away.** With no source in the 160 blocks the server sent and the feet already at `lava-depth`, `toward-lava` has neither a stair nor a tunnel target; `explore-lava` cuts level steps (`stone/tunnel-length` a call) along the plane axis away from the landing, so the chunks ahead load and the hunt asks again, instead of waiting `:no-site` out. Real race 39318301246 (issue #41, Clj_r21) stood at y -54 in deepslate with no lava loaded (`the-lava-hunt-tunnels-away-from-the-landing-when-no-lava-is-loaded`). A boxed feet cell takes the way out first, as a tunnel toward a source does.
+- **Out of the ground below the stand, the way is level.** `surface-climb?`: the feet below the stand's height, on the ground and already out (`stairs/out?`), so stairs up end the tick they start; `toward-stand` then takes the way it takes at the stand's height (a corner, a dig, a floor, a walk), not `to-height`. Sim snapshot R2-39-2 (issue #135): on a snowy slope at y 95 with the landing's stand a block higher and sixty blocks off, the build chose the stairs up, done at once, every tick of the window (`out-of-the-ground-below-the-stand-the-way-is-not-the-stairs-up`).
