@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-23T19:19:45.646Z",
+  "at" : "2026-10-23T19:20:58.957Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -68,13 +68,13 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 531,
-    "title" : "Bot stops at ingots: boxed",
+    "number" : 410,
+    "title" : "Bot stops at fortress: not-held",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 410,
-    "title" : "Bot stops at fortress: not-held",
+    "number" : 531,
+    "title" : "Bot stops at ingots: boxed",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
@@ -126,7 +126,7 @@
     "number" : 351,
     "title" : "Bot stops at fortress: stuck",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
+    "copilot" : true
   }, {
     "number" : 564,
     "title" : "Bot stops at blaze-rods: unreachable",
@@ -231,11 +231,11 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 531,
+    "issue" : 410,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 410,
+    "issue" : 531,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -276,7 +276,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 351,
-    "move" : "assign"
+    "move" : "wait",
+    "why" : "session starting"
   }, {
     "issue" : 564,
     "move" : "leave",
