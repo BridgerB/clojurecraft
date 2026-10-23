@@ -125,6 +125,15 @@
   [[fx _ fz] [tx _ tz]]
   (if (>= (abs (- tx fx)) (abs (- tz fz))) [(if (< fx tx) 1 -1) 0] [0 (if (< fz tz) 1 -1)]))
 
+(defn on-top?
+  "Are the feet on top of the ground the trees are sought from: out of it (stairs/out?), or on a
+   perch of the bot's own blocks over a drop or the sea (stairs/perched?), where a climb goes
+   nowhere? Sim snapshot R1-23-1 and real-6-s1-Clj_r07 (issue #89): stubs over the sea with the
+   trees across it, not out, so the climb out went up thirty blocks of the sky in lengths of
+   stairs/climb-stairs, the dirt spent, and the stairs down were :boxed."
+  [world feet]
+  (or (stairs/out? world feet) (stairs/perched? world feet)))
+
 (defn trees-climb
   "Out of the ground (stairs/out?) with a remembered trunk no walk reaches and the trunk above
   the eye: stairs up toward it, to-height only (the open sky over the feet is not the trees),
@@ -186,7 +195,7 @@
         fy (physics/y-of feet)
         continuing? (descended? world)
         drop-over (if continuing? continue-drop 12)]
-    (when (and (or continuing? (stairs/out? world feet))
+    (when (and (or continuing? (on-top? world feet))
                (not (contains? (:plan/boxed-at world #{}) feet)))
       (when-let [[_ ty _ :as trunk]
                  (let [near (filter (fn [[tx ty tz]]
@@ -353,7 +362,7 @@
           (when (descended? world) (trees-descend world trunks))
           (when (or (tunneled? world) (descended? world) (descended-valley? world))
             (trees-tunnel world))
-          (when-not (or (stairs/out? world feet) (contains? (:plan/boxed-at world #{}) feet))
+          (when-not (or (on-top? world feet) (contains? (:plan/boxed-at world #{}) feet))
             (or (when (:player/in-water? world) (crossing world))
                 (opening-up world)
                 {:intent/kind :stairs-up
@@ -592,7 +601,7 @@
   (let [feet (intent/feet world)
         [_ fy _] feet
         continuing? (descended-valley? world)]
-    (when (and (if continuing? (not (stairs/out? world feet)) (stairs/out? world feet))
+    (when (and (if continuing? (not (stairs/out? world feet)) (on-top? world feet))
                (not (contains? (:plan/boxed-at world #{}) feet)))
       (when-let [[_ ty _ :as trunk]
                  (let [near (filter (fn [[tx _ tz]]

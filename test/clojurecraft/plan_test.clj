@@ -575,6 +575,32 @@
     (is (nil? (stairs/pit-rim ground feet)) "open ground is no pit")
     (is (stairs/out? ground feet))))
 
+(deftest on-a-perch-over-the-sea-the-bot-crosses-instead-of-climbing-the-sky
+  ;; sim snapshot R1-23-1 and real-6-s1-Clj_r07 (issue #89): a pillar of the bot's own dirt over
+  ;; the sea, the trees across the water. No level step was there to walk onto, so it was not
+  ;; out, and the climb out went on up in lengths of stairs/climb-stairs, a pillar of the last
+  ;; dirt thirty blocks into the sky, until the stairs down from there were boxed. On a perch
+  ;; (every heading a drop) nothing is climbed: it crosses
+  (let [lake (into {}
+                   (for [x (range 16)
+                         z (range 16)
+                         y (range 60 64)
+                         :when (not (>= x 13))]
+                     [[x y z] blocks/water-base]))
+        pillar {[4 63 4] (blocks/default-state :cobblestone)
+                [4 64 4] (blocks/default-state :cobblestone)}
+        w (remembered (merge lake pillar {[14 64 8] 136 [14 65 8] 136}) [4.5 65.0 4.5])
+        feet (intent/feet w)]
+    (is (terrain/under-sky? w feet) "the open sky is over the pillar")
+    (is (not (stairs/out? w feet)) "no floor beside it to step onto")
+    (is (stairs/perched? w feet) "every heading a drop: a perch")
+    (is (= {:intent/kind :cross :intent/target [14 64 8]} (wood/gather-next w))
+        "no climb: across the water to the trunk")
+    (let [ground (remembered {[12 64 8] 136 [12 65 8] 136} [8.5 64.0 8.5])]
+      (is (not (stairs/perched? ground (intent/feet ground))) "open ground is no perch")
+      (is (not (stairs/perched? (remembered quarry [8.5 62.0 8.5]) [8 62 8]))
+          "a quarry's floor has walls: a pit, not a perch"))))
+
 (def crevice
   "A crevice two deep in the stone under the canopy of a chopped tree, like the sim race's in world
    R2/45 at [2256 68 4598]: the floor at y 62 under [8 8] and [8 9], a notch one up at [8 63 7]

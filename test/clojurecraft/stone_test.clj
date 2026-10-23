@@ -66,6 +66,46 @@
       (is (nil? (get-in next [:plan/intent :intent/child]))
           "a foothold laid is not the placed block: the redig goes on to place the gravel"))))
 
+(deftest redig-lays-the-floors-that-make-a-spot-on-a-stub
+  ;; issue #349's R4/2 bot: footholds laid under the four cells beside the feet left every cell
+  ;; with a drop beside it (place/drop-beside?), so no spot, and the retreat done at once, again
+  ;; and again. The floors are laid under one cell's neighbours too, and then it is a spot
+  (let [w (on-a-stub)
+        laid (fn [w cells]
+               (update w
+                       :world/blocks
+                       into
+                       (map (fn [c] [c (blocks/default-state :cobblestone)]))
+                       cells))
+        floors [[6 63 5] [7 63 5] [6 63 6] [6 63 4]]]
+    (is
+     (= (set floors) (set (stone/spot-floors w [6 64 5])))
+     "a floor under the cell and under its three open neighbours: the fourth is the feet's, held")
+    (let [w' (laid w floors)]
+      (is (empty? (stone/spot-floors w' [6 64 5])) "nothing more to lay under it")
+      (is (= {:intent/kind :place :intent/item :gravel :intent/cell [6 64 5]}
+             (stone/redig-place w' :gravel))
+          "the cell is a spot now: the gravel goes down in it"))))
+
+(deftest redig-fills-the-water-beside-a-cell-and-never-places-beside-water
+  ;; sim world R2/44 (issue #349): a cave floor with a pool, every cell beside the feet with
+  ;; water under a neighbour, a drop for place/spot, and the retreat twelve blocks away found
+  ;; the same at the other end. Real snapshot real-8-s1-Clj_r12 (issue #171): the gravel placed
+  ;; beside the aquifer, its dig refused :unsafe three times in a second
+  (let [pool (into {} (for [c [[4 63 4] [6 63 4] [4 63 6] [6 63 6]]] [c blocks/water-base]))
+        w (assoc (standing 64 :gravel :cobblestone) :world/blocks pool)
+        child (stone/foothold w)]
+    (is (= :cobblestone (:intent/item child)) "a filler laid for the floor")
+    (is (= :foothold (:intent/for child)))
+    (is (contains? #{[6 63 4] [6 63 6] [4 63 4] [4 63 6]} (:intent/cell child))
+        "into the water under a neighbour of a cell beside the feet")
+    (is (= [5 64 6]
+           (:intent/cell (stone/redig-place (assoc-in (standing 64 :gravel)
+                                             [:world/blocks [4 64 4]]
+                                             blocks/water-base)
+                                            :gravel)))
+        "the cells beside water are passed over: the dig would let it in")))
+
 (deftest redig-places-on-the-neighbouring-stair
   (doseq [dy [-1 1]]
     (let [cell [4 (+ 64 dy) 5]

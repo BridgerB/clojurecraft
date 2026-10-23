@@ -1512,13 +1512,27 @@
               (inc gy))))
         (range (+ y climb-stairs -1) (dec y) -1)))
 
+(defn rim-edges
+  "The edge each heading (directions) meets from the feet: along it, the first column within
+   rim-reach the feet could not step into (steppable?) is a wall, the height of the ground over
+   the feet there (ground-over), or a drop, water or the unloaded (:drop); nil for a heading that
+   runs steppable rim-reach out (open ground)."
+  [world [x y z :as feet]]
+  (let [rises (step-rises world feet)]
+    (mapv (fn [[dx dz]]
+            (some (fn [k]
+                    (let [c [(+ x (* k dx)) y (+ z (* k dz))]]
+                      (when-not (steppable? world c rises) (or (ground-over world c) :drop))))
+                  (range 1 (inc rim-reach))))
+          directions)))
+
 (defn pit-rim
   "The feet height of the ground round the pit the feet are in, or nil when they are in none.
    Along each heading, the first column within rim-reach the feet could not step into
    (steppable?) is the pit's edge that way: a wall, with ground over the feet (ground-over), or
-   a drop, water or the unloaded (:drop). In a pit every heading has an edge, and the rim is the
-   lowest wall's ground. nil where a heading runs steppable rim-reach out (open ground: not a
-   pit, whatever a route found) or where no edge is a wall (a ledge over drops: nothing to
+   a drop, water or the unloaded (:drop) (rim-edges). In a pit every heading has an edge, and the
+   rim is the lowest wall's ground. nil where a heading runs steppable rim-reach out (open ground:
+   not a pit, whatever a route found) or where no edge is a wall (a ledge over drops: nothing to
    climb). A level step across a pit's floor is not the way out of it: race 38515209959 (issues
    #102, #103, 30 real bots) and the sim race in worlds R3/36 and R3/32 stood at the bottom of
    the quarry the stone mine had dug round their feet, two or three deep and a few cells wide,
@@ -1526,15 +1540,8 @@
    two deep, under the canopy of the tree just chopped. The sky was over the feet, a level step
    crossed the floor, no route reached a trunk or any ground a hunt could walk to, and each
    waited :no-log out."
-  [world [x y z :as feet]]
-  (let [rises (step-rises world feet)
-        edges (map (fn [[dx dz]]
-                     (some (fn [k]
-                             (let [c [(+ x (* k dx)) y (+ z (* k dz))]]
-                               (when-not (steppable? world c rises)
-                                 (or (ground-over world c) :drop))))
-                           (range 1 (inc rim-reach))))
-                   directions)
+  [world feet]
+  (let [edges (rim-edges world feet)
         walls (filter number? edges)]
     (when (and (every? some? edges) (seq walls)) (apply min walls))))
 
@@ -1551,6 +1558,19 @@
                           (and (open-step? world cells) (terrain/under-sky? world (last cells)))))
                       directions))
        (nil? (pit-rim world feet))))
+
+(defn perched?
+  "Are the feet on a perch: under the open sky, not out of the ground (out?: no level step onto
+   floor), and every heading meets a drop, water or the unloaded within rim-reach (rim-edges), no
+   wall to climb and no ground to walk? A pillar or a pier of the bot's own blocks over the sea or
+   a cliff. Sim snapshot R1-23-1 and the real race's real-6-s1-Clj_r07 (issue #89): out on a
+   stub over the sea with the trees across the water, not out, so the climb out went on up in
+   lengths of climb-stairs until the dirt was spent, thirty-two blocks over the sea, and the
+   stairs down from there were :boxed with nothing to lay."
+  [world feet]
+  (boolean (and (terrain/under-sky? world feet)
+                (not (out? world feet))
+                (every? #{:drop} (rim-edges world feet)))))
 
 (defmethod path/goal-done? :surface [world _ node] (out? world node))
 (defmethod path/heuristic :surface [_ node] (path/heuristic {:goal/kind :sky} node))

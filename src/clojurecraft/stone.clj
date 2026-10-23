@@ -707,54 +707,96 @@
                 (= :no-spot (:intent/reason child))
                 (:player/in-water? world))))
 
+(def foothold-limit 4)                ; filler blocks a redig lays so that one cell beside the feet is a spot
+
+(defn floor-fill
+  "The cell under cell [x y z] when a filler is to be laid into it for a floor: loaded, not solid,
+   and air, a plant or water (blocks/placeable-into?), never lava; nil otherwise."
+  [world [x y z]]
+  (let [c [x (dec y) z]
+        id (terrain/block-at world c)]
+    (when (and id
+               (not (blocks/solid? id))
+               (blocks/placeable-into? id)
+               (not= :lava (terrain/fluid-kind world c)))
+      c)))
+
+(defn spot-floors
+  "The cells to lay a filler into, nearest the feet first, so that target (a cell level with the
+   feet, one of the four beside them) becomes a spot (place/spot) for a block to be placed and dug
+   again: a floor under it and under each of its four neighbours that is open (path/classify
+   :clear), since a neighbour with nothing under it is a drop (place/drop-beside?) and the dug
+   block's drop could roll off. nil when target is no cell to place into (it and the cell over it
+   replaceable, confirmed, clear of the player, in click reach, no fluid beside it that the fills
+   leave), when a fill is out of click reach, or when more than foothold-limit are wanted; the
+   empty list when no floor is wanted."
+  [world [tx ty tz :as target]]
+  (let [eye (game/eye world)
+        sides (for [[dx dz] place/sides] [(+ tx dx) ty (+ tz dz)])
+        fills (->> (cons target (filter #(= :clear (path/classify world %)) sides))
+                   (keep #(floor-fill world %))
+                   distinct
+                   (sort-by #(physics/distance eye (physics/centre %)))
+                   vec)
+        beside (concat sides [[tx (inc ty) tz] [tx (dec ty) tz]])
+        reach? #(<= (physics/distance eye (physics/centre %)) place/place-reach)]
+    (when (and (some-> (terrain/block-at world target)
+                       blocks/replaceable?)
+               (some-> (terrain/block-at world [tx (inc ty) tz])
+                       blocks/replaceable?)
+               (terrain/confirmed? world target)
+               (not (place/inside-player? world target))
+               (reach? target)
+               (not-any? #(and (terrain/fluid-at world %) (not-any? #{%} fills)) beside)
+               (every? reach? fills)
+               (<= (count fills) foothold-limit))
+      fills)))
+
 (defn foothold
-  "The child :place of a filler block (stairs/filler) into a cell under the feet's level, one of
-   the four beside the feet column or the one under it, that a click can reach (place/support)
-   and that is no part of the player, so that the cell over it is a spot for a block to be
-   placed and dug again; nil when no filler is held or no such cell is there. Sim race
-   39768353246 (issue #349, R4/2): a bot out on a stub of cobblestone over the sea, no cell
-   beside it with a floor under it and no route off, had its redig answered by a stairs up that
-   was done at once under the open sky, again and again for fifteen minutes."
+  "The child :place of a filler (stairs/filler) into the first cell of the fewest floors that make
+   a cell beside the feet a spot (spot-floors), one that a click can reach (place/support) and
+   that is no part of the player, or nil when no filler is held or no such cell is there. A drop
+   beside a cell keeps place/spot from choosing it: sim race 39768353246 (issue #349, R4/2) stood
+   on a stub of cobblestone over the sea, no cell beside it with a floor under it and no route
+   off, and its redig was answered by a stairs up that was done at once under the open sky, again
+   and again for fifteen minutes; sim world R2/44 (issue #349) stood in a cave beside a pool, the
+   cell it could place on beside water over a drop, and walked twelve blocks away and back, each
+   end with no spot, for the whole window. The floors laid make the spot."
   [world]
   (when-let [item (stairs/filler world 1)]
     (let [[fx fy fz] (intent/feet world)
-          eye (game/eye world)
-          cell (first (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1] [0 0]]
-                            :let [c [(+ fx dx) (dec fy) (+ fz dz)]
-                                  over [(+ fx dx) fy (+ fz dz)]
-                                  t (terrain/block-at world c)
-                                  o (terrain/block-at world over)]
-                            :when (and t
-                                       o
-                                       (blocks/replaceable? t)
-                                       (blocks/replaceable? o)
-                                       (terrain/confirmed? world c)
-                                       (place/support world c)
-                                       (not (place/inside-player? world c))
-                                       (<= (physics/distance eye (physics/centre c))
-                                           place/place-reach))]
-                        c))]
+          cell (->> (for [[dx dz] place/sides
+                          :let [fills (spot-floors world [(+ fx dx) fy (+ fz dz)])]
+                          :when (seq fills)]
+                      fills)
+                    (sort-by count)
+                    first
+                    (filter #(and (place/support world %)
+                                  (terrain/confirmed? world %)
+                                  (not (place/inside-player? world %))))
+                    first)]
       (when cell {:intent/kind :place :intent/item item :intent/cell cell :intent/for :foothold}))))
 
 (defn redig-place
   "The child placement in a neighbouring cell the feet can stand in, level or one step up or
-   down, or a retreat to fresh ground when none is there; under the open sky, where a stairs up
-   would be done before it began, a foothold (foothold) laid for the placement instead. Issue
-   #151's R3/14 and real runner 8 snapshots placed gravel through a wall or round a corner:
-   within click reach, but not within pickup reach."
+   down, never one whose dig would let a fluid in (intent/exposes-fluid?: the dig is refused
+   :unsafe, and the redig with it); else the floors that make such a cell a spot (foothold); else
+   a retreat to fresh ground. Issue #151's R3/14 and real runner 8 snapshots placed gravel through
+   a wall or round a corner: within click reach, but not within pickup reach. Real race snapshot
+   real-8-s1-Clj_r12 (issue #171) placed the gravel beside the aquifer its climb had let in, and
+   each dig was refused :unsafe, three in a second."
   [world item]
   (let [[fx fy fz] (intent/feet world)
         refused (set (for [[dx dy dz] place/around
                            :let [cell [(+ fx dx) (+ fy dy) (+ fz dz)]]
                            :when (not (and (= 1 (+ (abs dx) (abs dz)))
-                                           (path/standable? world cell)))]
+                                           (path/standable? world cell)
+                                           (not (intent/exposes-fluid? world cell))))]
                        cell))
-        [cell] (place/spot world true refused)
-        retreat (when-not cell (place/fresh-rock world))]
-    (cond cell {:intent/kind :place :intent/item item :intent/cell cell}
-          (and (= :stairs-up (:intent/kind retreat)) (stairs/out? world [fx fy fz]))
-          (or (foothold world) retreat)
-          :else retreat)))
+        [cell] (place/spot world true refused)]
+    (if cell
+      {:intent/kind :place :intent/item item :intent/cell cell}
+      (or (foothold world) (place/fresh-rock world)))))
 
 (defmethod redig-stage :place
   ;; a place that found no spot afloat is not the redig's failure: a :swim-out for :retreat
