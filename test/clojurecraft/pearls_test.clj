@@ -560,7 +560,14 @@
     (is (= :fight
            (:intent/kind
             (plan/next-intent (assoc (standing {7 angry-far}) :player/health 20.0) row plan/goals)))
-        "at full health the angry one is still met")))
+        "at full health the angry one is still met")
+    (let [zombie {:entity/type (blocks/entity-types :zombie)
+                  :entity/pos [11.5 64.0 8.5]
+                  :entity/seen-at 0
+                  :entity/health 20.0}]
+      (is (= {:intent/kind :back-off :intent/target 8 :intent/for :pearls}
+             (plan/next-intent (assoc (standing {8 zombie}) :player/health 6.0) row plan/goals))
+          "a zombie at hand at 6 health: backed away from, not rested beside"))))
 
 (deftest an-angry-one-given-up-on-is-met-from-the-burrow-when-it-comes
   ;; gym batch pearls-warped-b (plan run 39135767198): a held fight timed out :unreachable, its

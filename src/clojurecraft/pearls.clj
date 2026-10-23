@@ -1179,7 +1179,7 @@
         meal (when-not rested? (blaze/meal world))
         home (shelter world)
         in? (and home (= home (intent/feet world)))
-        [tid _] (when home (threat world))
+        [tid _] (threat world)
         [bid _] (when in? (blocking world))
         [aid _] (when home (angry-near world))
         [qid q] (quarry world)
@@ -1199,6 +1199,7 @@
       (and home (not in?) (or ce near? hurt? tid aid) (intent/routable? world way-home)) way-home
       (and hurt? in?) (or meal {:intent/kind :lookout :intent/for :pearls})
       (and near? hurt? (not in?)) {:intent/kind :back-off :intent/target eid :intent/for :pearls}
+      (and hurt? (not in?) tid) {:intent/kind :back-off :intent/target tid :intent/for :pearls}
       (and in? (or ce angry? in-reach? tid))
       {:intent/kind :fight
        :intent/target (cond ce ceid
