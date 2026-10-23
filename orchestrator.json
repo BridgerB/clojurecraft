@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-23T17:58:10.761Z",
+  "at" : "2026-10-23T17:59:21.528Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -88,25 +88,20 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 162,
-    "title" : "Bot stops at portal: no-path",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 135,
     "title" : "Bot stops at cast-one: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 162,
+    "title" : "Bot stops at portal: no-path",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 562,
     "title" : "Bot stops at blaze-rods: not-held",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : true
-  }, {
-    "number" : 71,
-    "title" : "Bot stops at portal-kit: boxed",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
   }, {
     "number" : 231,
     "title" : "Bot stops at cast-one: no-footing",
@@ -123,6 +118,11 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
+    "number" : 71,
+    "title" : "Bot stops at portal-kit: boxed",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
     "number" : 222,
     "title" : "Bot stops at cast-one: stuck",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
@@ -131,6 +131,11 @@
     "number" : 130,
     "title" : "Bot stops at cast-one: boxed",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 349,
+    "title" : "Bot stops at flint-and-steel: timeout",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 563,
@@ -146,11 +151,6 @@
     "number" : 105,
     "title" : "Bot stops at flint-and-steel: boxed",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
-    "number" : 349,
-    "title" : "Bot stops at flint-and-steel: timeout",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 564,
@@ -242,19 +242,15 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 162,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
     "issue" : 135,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 562,
+    "issue" : 162,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 71,
+    "issue" : 562,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -270,11 +266,19 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 71,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
     "issue" : 222,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
     "issue" : 130,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 349,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -287,10 +291,6 @@
     "why" : "hands-off label"
   }, {
     "issue" : 105,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
-    "issue" : 349,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
