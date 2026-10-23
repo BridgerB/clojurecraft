@@ -669,13 +669,18 @@
 (defn shaft-safe?
   "May the shaft's cells (shaft-cells) be dug (clear-way?: no water, lava or unloaded chunk in or
    beside them), with no gravel or sand over them to fall on the bot, no fluid straight over
-   them and none beside them for the dig to let in?"
+   them and none beside a solid one for the dig to let in? A cell already open is no dig: water
+   beside it is beside the feet too, and the pillar only lays blocks. Sim race 39912745526 world
+   R1/26 (issue #130): on a cobblestone block over a cave's lake, the air over the head open and
+   a column of water beside it, the shaft was refused for the water, every stair was refused
+   for the floor it lacked, and the climb failed :boxed three times."
   [world feet]
   (let [cells (shaft-cells feet)]
     (and (clear-way? world cells)
          (not (falls-over? world [(second cells)]))
          (not (water-over? world cells))
-         (not-any? #(intent/exposes-fluid? world %) cells))))
+         (not-any? #(and (= :solid (path/classify world %)) (intent/exposes-fluid? world %))
+                   cells))))
 
 (def pillar-extras
   "What a pillar rises on when no filler is held: the blocks that fall out of a floor laid over
