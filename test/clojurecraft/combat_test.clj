@@ -304,9 +304,13 @@
     (is (= {:intent/kind :back-off :intent/target 7}
            (plan/next-intent hurt (row :defend) plan/goals))
         "before, hurt, the bot backs away")
+    (is
+     (= {:intent/kind :back-off :intent/target 7}
+        (plan/next-intent timed-out (row :defend) plan/goals))
+     "after, at 0.7 health it backs away again: under one hit plus a margin a cornered zombie is never fought on to death (issue #563)")
     (is (= {:intent/kind :fight :intent/target 7 :intent/to-the-end? true}
-           (plan/next-intent timed-out (row :defend) plan/goals))
-        "after, it fights what it could not get away from, to the end")
+           (plan/next-intent (assoc timed-out :player/health 20.0) (row :defend) plan/goals))
+        "at full health, it fights what it could not get away from, to the end")
     (let [[going _] (fx/fold intent-step backing [(tick 1000) (tick 2000)])]
       (is (not (contains? going :plan/cornered)) "a back-off still going has cornered nothing"))))
 

@@ -10,9 +10,11 @@
    the hand: :defend never stops to make a sword with a zombie at hand."
   (:require [clojurecraft.armour :as armour]
             [clojurecraft.combat :as combat]
+            [clojurecraft.inventory :as inventory]
             [clojurecraft.make :as make]
             [clojurecraft.plan :as plan]
-            [clojurecraft.recipe :as recipe]))
+            [clojurecraft.recipe :as recipe]
+            [clojurecraft.window :as window]))
 
 (set! *warn-on-reflection* true)
 
@@ -45,17 +47,99 @@
   [c]
   (or (pos? (get c :stick 0)) (>= (recipe/have c (recipe/tags :planks)) stick-planks)))
 
-(defn wanted
+(defn serviceable
+  "The name of the best sword in the hotbar or the main inventory that still has window/spare-uses
+   swings left (window/swings-left), or nil when every one is worn or none is held. A worn sword
+   breaks in the next fight, so payable does not count it as the one already held."
+  [world]
+  (reduce (fn [best [p item]]
+            (let [n (recipe/item-name (:item item))
+                  left (window/swings-left item)]
+              (if (and item
+                       (< -1 p combat/store-slots)
+                       (some #{n} combat/swords)
+                       (or (nil? left) (>= left window/spare-uses))
+                       (or (nil? best) (< (rank n) (rank best))))
+                n
+                best)))
+          nil
+          (:player/inventory world)))
+
+(defn payable
   "The name of the best sword of made that the held items pay for and that is better than the
-   best held (combat/sword), with a handle and a table at hand (armour/table-at-hand?); nil
-   otherwise."
+   best serviceable sword, with a handle (handle?). Nil when none is. A worn sword is not
+   serviceable, so another of its rank is paid for before it breaks. A table is not asked:
+   wanted adds one, and a hunt whose sword is worn or gone asks the needs planner for this one."
   [world]
   (let [c (armour/counts world)
-        held (second (combat/sword world))
-        k (some (fn [[k mat n]]
-                  (when (and (or (nil? held) (< (rank k) (rank held))) (blade? world c mat n)) k))
-                made)]
-    (when (and k (handle? c) (armour/table-at-hand? world)) k)))
+        held (serviceable world)]
+    (some (fn [[k mat n]]
+            (when (and (or (nil? held) (< (rank k) (rank held))) (blade? world c mat n) (handle? c))
+              k))
+          made)))
+
+(defn pieces?
+  "Are a crafting table, the planks one takes (armour/table-planks), or a log already counted
+   (armour/counts: the inventory, the crafting grid and the cursor)? make/counts sees the
+   inventory alone, so a log laid into the grid is still here."
+  [world]
+  (let [c (armour/counts world)]
+    (boolean (or (pos? (get c :crafting_table 0))
+                 (>= (recipe/have c (recipe/tags :planks)) armour/table-planks)
+                 (pos? (recipe/have c (recipe/tags :logs)))))))
+
+(defn table-ready?
+  "Can the sword be crafted without a trip for a tree: a table remembered near (make/near), or
+   pieces? True while a log sits in the grid, so the sword row stays on the craft."
+  [world]
+  (boolean (or (make/near world :crafting_table) (pieces? world))))
+
+(defn worn-sword?
+  "Is this hotbar or main-inventory stack a sword under window/spare-uses swings
+   (window/swings-left)?"
+  [p item]
+  (let [n (recipe/item-name (:item item))
+        left (window/swings-left item)]
+    (boolean
+     (and (< -1 p combat/store-slots) (some #{n} combat/swords) left (< left window/spare-uses)))))
+
+(defn drop-worn
+  "A world whose worn swords (worn-sword?) keep their slots but are not swords. make/counts
+   treats any stone sword as the one a row provides, worn or fresh, and would make nothing;
+   clearing the slot would look like room in a full inventory. The stack stays, without an item."
+  [world]
+  (update
+   world
+   :player/inventory
+   (fn [inv]
+     (into {} (map (fn [[p item]] [p (if (worn-sword? p item) (dissoc item :item) item)])) inv))))
+
+(defn with-laid
+  "A world whose empty inventory slots also hold the crafting grid and the cursor (never the
+   result), so make/counts sees a log laid down mid-craft. The intent decided from it names a
+   recipe, not a slot."
+  [world]
+  (let [inv (:player/inventory world)
+        extra (->> (concat (vals (dissoc (:window/grid world) inventory/result-slot))
+                           (some-> (:window/cursor world)
+                                   vector))
+                   (filter :item))
+        free (remove #(contains? inv %) (range combat/store-slots))]
+    (assoc world :player/inventory (into inv (map vector free extra)))))
+
+(defn for-decide
+  "The world a sword's needs are decided on: worn swords hidden (drop-worn), the grid visible
+   (with-laid), and a finished log chain not continued once pieces? holds, so the craft starts
+   instead of the next trunk."
+  [world]
+  (cond-> (with-laid (drop-worn world))
+    (and (pieces? world) (= :log (:intent/for (:plan/last world)))) (dissoc :plan/last)))
+
+(defn wanted
+  "The name payable returns when the sword can be crafted without a trip for a tree
+   (table-ready?); nil otherwise, so the always row never goes looking for a tree."
+  [world]
+  (when (table-ready? world) (payable world)))
 
 (defmethod plan/done-by :armed?
   ;; only a chained run makes a sword: a gym stage measures its own target, and with the row in
@@ -66,7 +150,10 @@
   (or (not (:plan/chain? world)) (nil? (wanted world))))
 
 (defmethod plan/next-intent :sword
-  ;; nothing outside a chained run, as :armed? says
+  ;; nothing outside a chained run, as :armed? says. for-decide so a log in the grid is crafted
+  ;; from, not walked away from to another trunk
   [world goal table]
   (when-let [k (and (:plan/chain? world) (wanted world))]
-    (make/decide world (assoc goal :goal/provides {(keyword "item" (name k)) 1}) table)))
+    (make/decide (for-decide world)
+                 (assoc goal :goal/provides {(keyword "item" (name k)) 1})
+                 table)))

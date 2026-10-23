@@ -467,7 +467,11 @@
                              row
                              plan/goals))
         "no burrow, a pickaxe held: one dug away from the enderman, its stairs opening toward it")
-    (is (= {:intent/kind :fight :intent/target 7 :intent/hold? true :intent/for :pearls}
+    (is (= {:intent/kind :fight
+            :intent/target 7
+            :intent/hold? true
+            :intent/yield? true
+            :intent/for :pearls}
            (plan/next-intent (burrowed [8.5 61.0 8.5] {7 coming}) row plan/goals))
         "in the burrow, the one coming is fought where the bot stands")
     (is (=
@@ -529,6 +533,42 @@
                                            plan/goals)))
         "hurt, its food under 18 (where health stops coming back): a meal")))
 
+(deftest a-bot-under-one-hit-plus-a-margin-never-fights-on
+  ;; issue #563, probe 40022662598: after the replacement stone sword was crafted, the hunt
+  ;; backed away from an angry enderman and then fought it again (the angry one within
+  ;; stare-range was fought wherever it stood), again and again down to 1.3 health: the next
+  ;; hit (7) would have killed. danger-health (10) is that hit plus a margin
+  (let [angry-far (assoc (enderman [8.5 64.0 20.5]) :entity/creepy? true)
+        angry-near (assoc (enderman [11.5 64.0 8.5]) :entity/creepy? true)]
+    (is (= {:intent/kind :lookout :intent/for :pearls}
+           (plan/next-intent (assoc (standing {7 angry-far}) :player/health 6.0) row plan/goals))
+        "an angry one twelve blocks off at 6 health: rested where it stands, not fought")
+    (is (= {:intent/kind :back-off :intent/target 7 :intent/for :pearls}
+           (plan/next-intent (assoc (standing {7 angry-near}) :player/health 6.0) row plan/goals))
+        "one at hand at 6 health: backed away from")
+    (is (= {:intent/kind :lookout :intent/for :pearls}
+           (plan/next-intent (assoc (burrowed [8.5 61.0 8.5]
+                                              {7 (assoc angry-far :entity/pos [5.5 61.0 8.5])})
+                                    :player/health
+                                    6.0)
+                             row
+                             plan/goals))
+        "in the burrow at 6 health: rest in cover, the held fight not started")
+    (is (= {:intent/kind :lookout :intent/for :pearls}
+           (plan/next-intent (assoc (standing {7 angry-far}) :player/health 9.9) row plan/goals))
+        "just under danger-health: still no fight")
+    (is (= :fight
+           (:intent/kind
+            (plan/next-intent (assoc (standing {7 angry-far}) :player/health 20.0) row plan/goals)))
+        "at full health the angry one is still met")
+    (let [zombie {:entity/type (blocks/entity-types :zombie)
+                  :entity/pos [11.5 64.0 8.5]
+                  :entity/seen-at 0
+                  :entity/health 20.0}]
+      (is (= {:intent/kind :back-off :intent/target 8 :intent/for :pearls}
+             (plan/next-intent (assoc (standing {8 zombie}) :player/health 6.0) row plan/goals))
+          "a zombie at hand at 6 health: backed away from, not rested beside"))))
+
 (deftest an-angry-one-given-up-on-is-met-from-the-burrow-when-it-comes
   ;; gym batch pearls-warped-b (plan run 39135767198): a held fight timed out :unreachable, its
   ;; enderman was blacklisted while still angry, and two bots in three walked out to the mouth
@@ -557,7 +597,11 @@
                              row
                              plan/goals))
         "at the mouth with it at hand: back in")
-    (is (= {:intent/kind :fight :intent/target 7 :intent/hold? true :intent/for :pearls}
+    (is (= {:intent/kind :fight
+            :intent/target 7
+            :intent/hold? true
+            :intent/yield? true
+            :intent/for :pearls}
            (plan/next-intent (assoc (burrowed [8.5 61.0 8.5]
                                               {7 (assoc angry :entity/pos [5.5 61.0 8.5])})
                                     :plan/blacklist
@@ -568,7 +612,11 @@
     ;; sim probe 39890029962 (worlds R1 and R4, seed 3): three held fights in a row on one by the
     ;; mouth that never came, each :unreachable, and the plan failed
     (let [by-mouth (burrowed [8.5 61.0 8.5] {7 (assoc angry :entity/pos [5.5 64.0 8.5])})]
-      (is (= {:intent/kind :fight :intent/target 7 :intent/hold? true :intent/for :pearls}
+      (is (= {:intent/kind :fight
+              :intent/target 7
+              :intent/hold? true
+              :intent/yield? true
+              :intent/for :pearls}
              (plan/next-intent by-mouth row plan/goals))
           "at hand by the mouth, not given up on: the fight held")
       (is (= {:intent/kind :lookout :intent/for :pearls}
@@ -795,6 +843,49 @@
     (is (not= {:plan/wait :no-sword} (plan/next-intent w row plan/goals)))
     (is (= {:plan/wait :no-sword}
            (plan/next-intent (update w :player/inventory dissoc 0) row plan/goals)))))
+
+(deftest a-broken-sword-is-made-when-the-craft-can-start
+  ;; sim race 39909643851 (issue #563) world R3/13 seed 2: the stone sword broke with cobblestone
+  ;; and a stick held and a trunk two blocks off, and the plan failed :no-sword
+  (let [held {1 (item :cobblestone 5) 2 (item :stick 1)}
+        bare (assoc (standing {}) :player/inventory held)
+        table (assoc bare :player/inventory (assoc held 3 (item :crafting_table 1)))
+        trunk {[12 64 8] 136 [12 65 8] 136 [12 66 8] 136 [12 67 8] 252}
+        col (world/column trunk)
+        forest (-> bare
+                   (assoc :world/chunks {[0 0] col})
+                   (memory/remember-column [0 0] col))
+        placed (plan/next-intent table row plan/goals)
+        walked (plan/next-intent forest row plan/goals)]
+    (is (= {:plan/wait :no-sword} (plan/next-intent bare row plan/goals))
+        "cobblestone and a stick, no table and no trunk: still no bare-hand hunt")
+    (is (= :place (:intent/kind placed)))
+    (is (= :crafting_table (:intent/item placed)) "a held table goes down for the stone sword")
+    (is (= :walk (:intent/kind walked)))
+    (is (= :log (:intent/for walked)) "a remembered trunk is the log the table takes")))
+
+(deftest a-worn-sword-is-replaced-before-the-hunt
+  ;; the same race held the stone sword with nine swings left and fought until it broke
+  (let [worn (assoc (item :stone_sword 1) :durability 9)
+        held {0 worn 1 (item :cobblestone 5) 2 (item :stick 1)}
+        bare (assoc (standing {}) :player/inventory held)
+        trunk {[12 64 8] 136 [12 65 8] 136 [12 66 8] 136 [12 67 8] 252}
+        col (world/column trunk)
+        forest (-> bare
+                   (assoc :world/chunks {[0 0] col})
+                   (memory/remember-column [0 0] col))
+        laid (-> forest
+                 (assoc :window/grid {1 (item :oak_log 1)})
+                 (update :player/inventory dissoc 0))
+        walked (plan/next-intent forest row plan/goals)
+        crafted (plan/next-intent laid row plan/goals)]
+    (is (= :walk (:intent/kind walked)))
+    (is (= :log (:intent/for walked)) "nine swings left: the trunk, before the fight")
+    (is (= :craft (:intent/kind crafted)) "a log in the grid is crafted, not another trunk")
+    (is (not= :log (:intent/for crafted)))
+    (is (= {:intent/kind :lookout :intent/for :pearls}
+           (plan/next-intent (assoc forest :player/health 6.0) row plan/goals))
+        "under danger-health the craft waits too: rest first, no fight on one hit")))
 
 (def ledge-wall
   "Stone three high (y 64 to 66) along x 4, the burrow's first stair left open: from the mouth at
@@ -1122,12 +1213,20 @@
     (is (= 7 (first (pearls/blocking w))) "a calm one two stairs up, 4.1 off: in the stairs")
     (is (= {:intent/kind :lookout :intent/for :pearls} (plan/next-intent w row plan/goals))
         "out of the sword's reach and in the only way out: waited for where the bot stands")
-    (is (= {:intent/kind :fight :intent/target 7 :intent/hold? true :intent/for :pearls}
+    (is (= {:intent/kind :fight
+            :intent/target 7
+            :intent/hold? true
+            :intent/yield? true
+            :intent/for :pearls}
            (plan/next-intent (assoc-in w [:world/entities 7 :entity/pos] [5.5 61.0 8.5])
                              row
                              plan/goals))
         "on the last stair, three off: within the sword's reach, struck, and the blow angers it")
-    (is (= {:intent/kind :fight :intent/target 7 :intent/hold? true :intent/for :pearls}
+    (is (= {:intent/kind :fight
+            :intent/target 7
+            :intent/hold? true
+            :intent/yield? true
+            :intent/for :pearls}
            (plan/next-intent (assoc-in w [:world/entities 7 :entity/creepy?] true) row plan/goals))
         "the same one coming: fought where the bot stands")
     (is (= {:intent/kind :lookout :intent/for :pearls}
@@ -1217,7 +1316,11 @@
     (is (= {:intent/kind :walk :intent/target [8 61 8] :intent/for :shelter}
            (plan/next-intent at-mouth row plan/goals))
         "at the mouth: back in")
-    (is (= {:intent/kind :fight :intent/target 9 :intent/hold? true :intent/for :pearls}
+    (is (= {:intent/kind :fight
+            :intent/target 9
+            :intent/hold? true
+            :intent/yield? true
+            :intent/for :pearls}
            (plan/next-intent at-end row plan/goals))
         "at the end with it on the stairs: fought where the bot stands")
     (is (nil? (pearls/threat

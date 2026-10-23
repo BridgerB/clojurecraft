@@ -4,6 +4,7 @@
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
+            [clojurecraft.make :as make]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.sword :as sword]
@@ -40,10 +41,12 @@
          (sword/wanted (standing
                         {3 (item :cobblestone 5) 4 (item :stick 1) 5 (item :wooden_sword 1)})))
       "a wooden one is not")
-  (testing "no table at hand: nothing"
-    (is (nil? (sword/wanted (assoc (standing {3 (item :cobblestone 5) 4 (item :stick 1)})
-                                   :player/inventory
-                                   {3 (item :cobblestone 5) 4 (item :stick 1)}))))))
+  (testing "no table at hand: nothing the always row starts"
+    (let [w (assoc (standing {3 (item :cobblestone 5) 4 (item :stick 1)})
+                   :player/inventory
+                   {3 (item :cobblestone 5) 4 (item :stick 1)})]
+      (is (nil? (sword/wanted w)))
+      (is (= :stone_sword (sword/payable w)) "the blade and the handle are held"))))
 
 (deftest iron-only-from-ingots-the-armour-leaves
   (testing "the armour still wants a helmet: the ingots are its"
@@ -58,6 +61,31 @@
                                            4 (item :stick 1)
                                            39 (item :iron_helmet 1)
                                            38 (item :iron_chestplate 1)})))))))
+
+(deftest a-worn-sword-is-made-again-and-a-log-in-the-grid-keeps-the-row
+  ;; sim race 39909643851 (issue #563): nine swings left, then the log laid into the grid dropped
+  ;; the sword row (make/counts sees the inventory alone) and the hunt walked to another trunk
+  (let [worn (assoc (item :stone_sword 1) :durability 9)
+        w (standing {3 (item :cobblestone 5) 4 (item :stick 1) 5 worn})]
+    (is (nil? (sword/serviceable w)) "nine swings left is not a sword to keep")
+    (is (= :stone_sword (sword/wanted w)) "the table is held: a new stone sword")
+    (let [row (first (filter #(= :sword (:goal/id %)) plan/goals))
+          chained (assoc w :plan/chain? true)]
+      (is (nil? (make/decide chained (assoc row :goal/provides {:item/stone_sword 1}) plan/goals))
+          "the worn sword still sits in the inventory, so the need looks met")
+      (is (= :place (:intent/kind (plan/next-intent chained row plan/goals)))
+          "hidden from the count, the held table goes down")))
+  (let [grid (-> (game/init fx/opts)
+                 (assoc :bot/phase :play
+                        :player/pos [8.5 64.0 8.5]
+                        :player/loaded? true
+                        :player/on-ground? true
+                        :world/chunks {[0 0] (world/column {})}
+                        :player/inventory {3 (item :cobblestone 5) 4 (item :stick 1)}
+                        :window/grid {1 (item :oak_log 1)}))]
+    (is (= :stone_sword (sword/wanted grid)) "the log is in the grid, not the inventory")
+    (is (nil? (sword/wanted (assoc grid :window/grid {})))
+        "no log and no table: the row stays done")))
 
 (deftest the-sword-row-is-a-needs-plan-for-the-piece
   (let [w (assoc (standing {3 (item :cobblestone 5) 4 (item :stick 1)}) :plan/chain? true)

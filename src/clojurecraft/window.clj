@@ -149,6 +149,12 @@
   (when-let [{:keys [tier]} (blocks/tool item)]
     (- (:durability (blocks/materials tier)) (get components :damage 0))))
 
+(defn swings-left
+  "How many swings or digs a stack has left: its :durability when the model has counted one
+   down (sim/wear), else uses-left. Nil when neither is known."
+  [item]
+  (if (contains? item :durability) (:durability item) (uses-left item)))
+
 (defn worn?
   "Is a slot's tool too worn to be a spare: fewer than spare-uses digs left?"
   [slot]

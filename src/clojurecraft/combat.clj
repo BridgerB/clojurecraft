@@ -58,15 +58,21 @@
 (def store-slots 36)                  ; player slots 0-35, the hotbar and the main inventory
 
 (defn sword
-  "[player-slot name] of the best sword held in the hotbar or the main inventory, or nil."
+  "[player-slot name] of the best sword held in the hotbar or the main inventory, or nil.
+   Two of one name: the one with more swings left (window/swings-left), the higher slot when
+   they are equal, so a fresh stone sword is armed beside the worn one it replaces."
   [world]
-  (let [held (into {}
-                   (for [[p {:keys [item]}] (sort-by key (:player/inventory world))
-                         :when (< -1 p store-slots)
-                         :let [n (recipe/item-name item)]
-                         :when (some #{n} swords)]
-                     [n p]))]
-    (some (fn [n] (when-let [p (held n)] [p n])) swords)))
+  (let [rows (sort-by :slot
+                      >
+                      (for [[p stack] (:player/inventory world)
+                            :when (and (< -1 p store-slots) stack)
+                            :let [n (recipe/item-name (:item stack))]
+                            :when (some #{n} swords)]
+                        {:slot p :name n :left (or (window/swings-left stack) 0)}))]
+    (some (fn [n]
+            (when-let [of (seq (filter #(= n (:name %)) rows))]
+              (let [best (apply max-key :left of)] [(:slot best) n])))
+          swords)))
 
 (defn aim
   "The point an attack on entity e looks at: aim-height over its feet."
@@ -601,11 +607,18 @@
   ;; teleports after it, so a back-off from it is only hits taken. Gym dragon-e run 1 struck one
   ;; five times (40 to 10) then backed away under 10 health and died in its hands. What a
   ;; back-off could not get away from (:plan/cornered: the bot was in a dead end) is fought to the
-  ;; end too: sim race 39593219246 (issue #161, world R3/41) backed away from a zombie two blocks
-  ;; off at under one health from the end of a one-wide tunnel, a quarter hour, never moving
+  ;; end too, unless the health is already under retreat-health (one hit plus a margin) and it is
+  ;; no neutral: then it is backed away from again, never fought on to death (issue #563, probe
+  ;; 40033104245: two zombies cornered by a void back-off were fought to the end at 7.3 health
+  ;; down to 1.3). Sim race 39593219246 (issue #161, world R3/41) backed away from a zombie two
+  ;; blocks off at under one health from the end of a one-wide tunnel, a quarter hour, never moving
   [world _ _]
   (when-let [[eid e] (entity/nearest (threats world) (:player/pos world))]
-    (cond (= :creeper (entity/kind e)) {:intent/kind :back-off :intent/target eid}
+    (cond (or (= :creeper (entity/kind e))
+              (and (< (:player/health world 20.0) retreat-health)
+                   (contains? (:plan/cornered world #{}) eid)
+                   (not (contains? entity/neutral (entity/kind e)))))
+          {:intent/kind :back-off :intent/target eid}
           (or (contains? entity/neutral (entity/kind e)) (contains? (:plan/cornered world #{}) eid))
           {:intent/kind :fight :intent/target eid :intent/to-the-end? true}
           (< (:player/health world 20.0) retreat-health) {:intent/kind :back-off :intent/target eid}

@@ -35,6 +35,7 @@
             [clojurecraft.entity :as entity]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
+            [clojurecraft.make :as make]
             [clojurecraft.memory :as memory]
             [clojurecraft.mob :as mob]
             [clojurecraft.path :as path]
@@ -43,6 +44,7 @@
             [clojurecraft.recipe :as recipe]
             [clojurecraft.stairs :as stairs]
             [clojurecraft.stone :as stone]
+            [clojurecraft.sword :as sword]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.window :as window]))
 
@@ -1075,6 +1077,8 @@
 
 (def provoke-health 18.0)             ; health under which no enderman is provoked, from the mouth or anywhere: the bot rests in its burrow first (sim-endermen3's probe 39847287615: in worlds R1, R2 and R4 the first death came of a provoke 4 to 8 blocks off at 10.8 to 17.8 health just outside the burrow, the enderman landing three to five blows in five seconds); away from the mouth (a vantage) only at full health
 
+(def danger-health combat/retreat-health) ; health under which the hunt never fights, provokes or goes toward an enderman: one enderman hit (7 on Normal, ns doc) plus a margin, the same line combat breaks a fight off at. At or under it the bot backs off, walks home, eats or rests where it stands until its health is back over it (issue #563, probe 40022662598: after the second stone sword was crafted the hunt re-fought an angry enderman it had just backed away from, again and again down to 1.3 health, one hit from death)
+
 (defn hunt
   "The hunt's next step with no kill to pick up, in order: out of the burrow (shelter) with one
    coming (creepy), one at hand (within strike-range, blacklisted or not: one a held fight gave
@@ -1170,12 +1174,12 @@
         angry? (and near? (entity/creepy? e) (not (contains? (:plan/blacklist world #{}) eid)))
         in-reach? (and near?
                        (<= (physics/distance (game/eye world) (combat/aim e)) combat/attack-reach))
-        hurt? (< (:player/health world 20.0) combat/retreat-health)
+        hurt? (< (:player/health world 20.0) danger-health)
         rested? (>= (:player/health world 20.0) provoke-health)
         meal (when-not rested? (blaze/meal world))
         home (shelter world)
         in? (and home (= home (intent/feet world)))
-        [tid _] (when home (threat world))
+        [tid _] (threat world)
         [bid _] (when in? (blocking world))
         [aid _] (when home (angry-near world))
         [qid q] (quarry world)
@@ -1193,14 +1197,17 @@
         far (endermen world seek-radius)]
     (cond
       (and home (not in?) (or ce near? hurt? tid aid) (intent/routable? world way-home)) way-home
+      (and hurt? in?) (or meal {:intent/kind :lookout :intent/for :pearls})
+      (and near? hurt? (not in?)) {:intent/kind :back-off :intent/target eid :intent/for :pearls}
+      (and hurt? (not in?) tid) {:intent/kind :back-off :intent/target tid :intent/for :pearls}
       (and in? (or ce angry? in-reach? tid))
       {:intent/kind :fight
        :intent/target (cond ce ceid
                             (or angry? in-reach?) eid
                             :else tid)
        :intent/hold? true
+       :intent/yield? true
        :intent/for :pearls}
-      (and near? hurt? (not in?)) {:intent/kind :back-off :intent/target eid :intent/for :pearls}
       (and near?
            (not in?)
            (or (entity/creepy? e)
@@ -1209,8 +1216,7 @@
                     (not (contains? (:plan/blacklist world #{}) eid)))))
       {:intent/kind :fight :intent/target eid :intent/for :pearls}
       meal meal
-      (or (and hurt? (nil? home) (nil? ce)) (and in? (or hurt? bid)))
-      {:intent/kind :lookout :intent/for :pearls}
+      (or hurt? (and in? bid)) {:intent/kind :lookout :intent/for :pearls}
       (and in? aid (lure? world)) {:intent/kind :walk :intent/target mouth :intent/for :shelter}
       (and in? aid) {:intent/kind :lookout :intent/for :pearls}
       csite {:intent/kind :walk :intent/target csite :intent/for :shelter}
@@ -1313,20 +1319,48 @@
     (shelter world)
     (into (comp (map (comp entity/kind val)) (remove shunned)) (entity/hostiles world))))
 
+(def sword-acts
+  "Intents that make a sword from what is already held: placing or opening a table, the craft,
+   a dig that takes the table along, a toss that makes room for it."
+  #{:place :craft :open-container :dig :toss})
+
+(defn make-sword
+  "The intent that makes the best sword the held items pay for (sword/payable) through the needs
+   planner, when that craft can start from here: one of sword-acts, or the log chain to a
+   remembered trunk (:intent/for :log) while the table's pieces are not already held
+   (sword/pieces?). Nil when nothing is payable, or the planner would only wait, go looking for
+   a tree, or chop another trunk with a log already in the grid. The Nether has no oak, and a
+   wait there fails the plan."
+  [world goal table]
+  (when-let [k (sword/payable world)]
+    (let [i (make/decide (sword/for-decide world)
+                         (assoc goal :goal/provides {(keyword "item" (name k)) 1})
+                         table)]
+      (when (and (:intent/kind i)
+                 (not (and (sword/pieces? world) (= :log (:intent/for i))))
+                 (or (= :log (:intent/for i)) (contains? sword-acts (:intent/kind i))))
+        i))))
+
 (defmethod plan/next-intent :pearls
   ;; a fire the bot stands in put out first (a :dig: the server breaks fire on the first click,
   ;; as blaze/put-out does); then the kill's drop, unless another angry one is near (menaced?);
-  ;; with no sword held no hunt at all, a wait that fails the plan
+  ;; with no serviceable sword (none, or one under window/spare-uses swings), make the one the
+  ;; held items pay for when that craft can start (make-sword). With none at all and no craft,
+  ;; a wait that fails the plan, never a bare-hand hunt
   ;; (:no-sword): gym batch pearls-warped8-b (plan run 39775345028) runs 1 and 3 respawned with
-  ;; nothing held after their first deaths and hunted on bare-handed, 39 and 26 deaths in five hours
-  ;; with the pickaxe worn out (worn-out?), no burrow near and none angry near, no hunt either
+  ;; nothing held after their first deaths and hunted on bare-handed, 39 and 26 deaths in five
+  ;; hours. Sim race 39909643851 (issue #563, world R3/13 seed 2) held a stone sword with nine
+  ;; swings left, fought until it broke, and the same wait failed the plan. A worn sword that
+  ;; cannot be replaced yet is still hunted with.
+  ;; With the pickaxe worn out (worn-out?), no burrow near and none angry near, no hunt either
   ;; (:no-pickaxe): no burrow can be cut, and
   ;; sim probe 39890964793 (seed 5) wore its pickaxe out on burrows, then struck calm endermen in
   ;; the open in worlds R2 and R3 and was slain, R2 nine times
-  [world _ _]
+  [world goal table]
   (let [k (when-not (menaced? world) (fresh-kill world))
         [_ d] (when k (drop-of world k))
-        fire (burning-at world)]
+        fire (burning-at world)
+        replacing (when-not (sword/serviceable world) (make-sword world goal table))]
     (cond fire {:intent/kind :dig :intent/target fire}
           d
           {:intent/kind :collect-drops
@@ -1334,6 +1368,8 @@
            :intent/target (cell (:entity/pos d))
            :intent/for :pearls}
           (and k (body? world k)) {:plan/wait :drop}
+          (< (:player/health world 20.0) danger-health) (hunt world)
+          replacing replacing
           (nil? (combat/sword world)) {:plan/wait :no-sword}
           (and (worn-out? world) (nil? (shelter world)) (not (menaced? world)))
           {:plan/wait :no-pickaxe}
