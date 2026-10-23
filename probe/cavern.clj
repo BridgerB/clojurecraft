@@ -212,8 +212,8 @@
 (let [[file seed until minutes every] *command-line-args*
       seed (Long/parseLong seed)
       minutes (Long/parseLong minutes)
-      every (if-let [e (System/getenv "EVERY_S")]
-              (* 1000 (Long/parseLong e))
+      every (if-let [e (or (System/getenv "EVERY_MS") (System/getenv "EVERY_S"))]
+              (* (if (System/getenv "EVERY_MS") 1 1000) (Long/parseLong e))
               (* 60000 (Long/parseLong every)))
       w0 (simrace/prepared (capture/read-world file))
       nether (simrace/nether-file (java.io.File. file))
@@ -241,6 +241,14 @@
                                  (count (:intent/tunnel-visited p))
                                  (pr-str (:plan/waiting world))
                                  (pr-str (:intent/op p))
+                                 "POS"
+                                 (pr-str (:player/pos world))
+                                 (:player/on-ground? world)
+                                 (pr-str (:player/controls world))
+                                 (pr-str (:intent/kind (:intent/child p)))
+                                 (pr-str (for [c [[476 49 315] [476 50 315] [476 48 315]]]
+                                           (some-> (clojurecraft.terrain/block-at world c)
+                                                   clojurecraft.blocks/name-of)))
                                  "HP"
                                  (:player/health world)
                                  (pr-str (for [[_ e] (clojurecraft.entity/hostiles world)]
