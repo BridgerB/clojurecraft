@@ -399,10 +399,19 @@
                 (when (perched? world feet)
                   (or (trees-descend world trunks) (perch-down world trunks)))
                 (opening-up world)
-                {:intent/kind :stairs-up
-                 :intent/to-y (stairs/climb-to world terrain/top-y)
-                 :intent/dir (toward feet (first trunks))
-                 :intent/for :surface}))
+                (let [sky {:intent/kind :stairs-up
+                           :intent/to-y (stairs/climb-to world terrain/top-y)
+                           :intent/dir (toward feet (first trunks))
+                           :intent/for :surface}]
+                  (println "SKY"
+                           (pr-str {:y (physics/y-of feet)
+                                    :sky? (terrain/under-sky? world feet)
+                                    :out? (stairs/out? world feet)
+                                    :rim (stairs/pit-rim world feet)
+                                    :perched? (perched? world feet)
+                                    :boxed? (contains? (:plan/boxed-at world #{}) feet)
+                                    :trunk (first trunks)}))
+                  sky)))
           (trees-climb world trunks)
           (when-not (tunneled? world) (trees-bridge world trunks))
           (trees-tunnel world)
