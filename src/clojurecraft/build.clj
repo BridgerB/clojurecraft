@@ -1017,18 +1017,31 @@
                  (not= (second stand) (long (physics/y-of (intent/feet world))))
                  (not-any? walled? line)))))
 
+(defn surface-climb?
+  "Would the stairs up to height y (to-height) end the tick they start: the feet below y on the
+   ground and already out of the ground (stairs/out?: a slope's open sky and a level step), so
+   there is nothing to climb through? Sim snapshot R2-39-2 (issue #135): the bot stood on a
+   snowy slope at y 95, the landing's stand a block higher sixty blocks off, and the build chose
+   the stairs up, done at once, again and again, for the whole window."
+  [world y]
+  (let [feet (intent/feet world)]
+    (boolean
+     (and (< (long (physics/y-of feet)) y) (:player/on-ground? world) (stairs/out? world feet)))))
+
 (defn toward-stand
   "The child that brings the feet to stand, a cell of the build's way (a landing, the lava's
    stand): a walk when it can be stood in and a route reaches it (stand-walk), else at its height the first block in the way dug
    (clear-stand), going round the frame's rock by a corner when the straight way crosses it
    (round-corner), or the missing floor laid (bridge), else the way to its height (to-height);
-   nil when the feet are there."
+   nil when the feet are there. Out of the ground below the stand's height (surface-climb?)
+   the way is the level one, as at its height: stairs up from the open sky climb nothing."
   [world stand build origin facing]
   (let [walk {:intent/kind :walk :intent/target stand :intent/for :build}]
     (cond (intent/centred? world stand) nil
           :else
           (or (stand-walk world stand)
-              (if (= (long (physics/y-of (intent/feet world))) (second stand))
+              (if (or (= (long (physics/y-of (intent/feet world))) (second stand))
+                      (surface-climb? world (second stand)))
                 (or (when-let [c (and origin (round-corner world stand origin facing))]
                       (toward-stand world c build origin facing))
                     (clear-stand world stand build origin facing)
@@ -1208,11 +1221,15 @@
    out of the water let in dug down a staircase it flooded until :stuck, and the escape from
    that water failed :stuck too: three failures, all toward the one site the planner kept. Only
    a :build has a site: a :tunnel-to (fortress) works its steps through work-op too. A cast-one's
-   walk to a stand that failed :no-path anywhere gives its site up too, from the second failure
-   on (:plan/attempts): what the build offers before it, a way dug, a corner, a bridge, is
-   exhausted when it is the plain walk left, and a site no way reaches is better left than
-   failed (issue #45: real snapshot real-3-s2-Clj_r05 stood in the rock behind its frame, the
-   frame's rock all round a way to the landing four blocks off, and failed :no-path three times).
+   or a :nether build's walk to a stand that failed :no-path anywhere gives its site up too, from
+   the second failure on (:plan/attempts): what the build offers before it, a way dug, a corner,
+   a bridge, is exhausted when it is the plain walk left, and a site no way reaches is better
+   left than failed (issue #45: real snapshot real-3-s2-Clj_r05 stood in the rock behind its
+   frame, the frame's rock all round a way to the landing four blocks off, and failed :no-path
+   three times; issue #561, sim snapshots R1-12-2 and R1-24-1: the return portal stood on
+   deepslate with lava beside the stand, a route never steps a cell beside lava, and the plain
+   walk failed :no-path three times). A :portal build holds a cast already made and is not given
+   up for a walk.
    Any walk or dig of a :build that fails :no-path, :stuck or :out-of-reach while water stands in
    its room (flooded-room?) gives it up too: sim race 39610239818 (issue #461, world R1/17): the
    room's digs let an aquifer in, the walk to a stand over the water stalled and failed
@@ -1227,7 +1244,7 @@
                                           (physics/centre
                                            (cell origin facing (landing (or access 0)))))
                         site-reach)
-                     (and (= :cast-one build)
+                     (and (#{:cast-one :nether} build)
                           (= :walk (:intent/kind child))
                           (= :no-path reason)
                           (not (:intent/pickup? child))

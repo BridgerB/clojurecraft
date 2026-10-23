@@ -1481,7 +1481,9 @@
         "a walk to pick something up")
     (is (not (build/lost-way? again i (assoc child :intent/reason :stuck))) "only :no-path")
     (is (not (build/lost-way? again (assoc i :intent/build :portal) child))
-        "a portal's site holds a cast: not given up for a walk")))
+        "a portal's site holds a cast: not given up for a walk")
+    (is (build/lost-way? again (assoc i :intent/build :nether) child)
+        "a nether build gives its site up the same way a cast-one does")))
 
 (deftest a-cast-one-with-no-stand-gives-its-site-up
   ;; sim races 39076911005 and 39070979444 (issue #74): no cell reached the op and none could be
@@ -1685,3 +1687,14 @@
     (is (true? (build/way-open? w stand :portal origin :south)) "stone to dig through")
     (is (false? (build/way-open? lava stand :portal origin :south))
         "a cell of the line beside lava is never dug")))
+
+(deftest out-of-the-ground-below-the-stand-the-way-is-not-the-stairs-up
+  ;; sim snapshot R2-39-2 (issue #135): the bot on a slope's open sky a block under the landing's
+  ;; stand, sixty blocks off, chose the stairs up, done the tick they started, for the whole window
+  (let [w (standing-at (open-ground {}) [5.5 63.0 5.5])
+        stand [5 64 12]
+        child #(build/toward-stand % stand :portal origin :south)]
+    (is (true? (build/surface-climb? w 64)) "open sky over the feet, nothing to climb through")
+    (is (false? (build/surface-climb? w 63)) "at the height already")
+    (is (false? (build/surface-climb? (assoc w :player/on-ground? false) 64)) "not on the ground")
+    (is (not= :stairs-up (:intent/kind (child w))))))
