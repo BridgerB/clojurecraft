@@ -33,6 +33,18 @@
 (def tags (atom {}))                   ; thread → set name, for the wrapped model functions
 
 (defn tag [] (get @tags (.getId (Thread/currentThread)) "?"))
+(def worlds (atom {}))                 ; set name → the bot's world as of the last tick
+(defn bot-now
+  []
+  (let [w (get @worlds (tag))]
+    (pr-str
+     {:intent (select-keys (:plan/intent w)
+                           [:intent/kind :intent/for :intent/stage :intent/target :intent/dir])
+      :child (select-keys (:intent/child (:plan/intent w))
+                          [:intent/kind :intent/stage :intent/target])
+      :controls (:player/controls w)
+      :last (select-keys (:plan/last w) [:intent/kind :intent/for :intent/status :intent/reason])
+      :health (:player/health w)})))
 (defn secs [s] (quot (:sim/now s 0) 1000))
 
 ;; the model's functions wrapped to log, by their vars (no direct linking)
@@ -57,6 +69,7 @@
                                          "health" (:sim/health s)
                                          "mob" (pr-str (mapv long (:pos m)))
                                          "player" (pr-str (mapv long (:sim/player-pos s)))
+                                         "bot" (bot-now)
                                          "angry-now"
                                          (count (filter #(and (:angry? %) (not (:dead-at %)))
                                                         (vals (:sim/mobs s)))))))
@@ -107,7 +120,8 @@
                "player" (pr-str (mapv #(/ (clojure.math/round (* 10.0 %)) 10.0) p))
                "sight" (mob/sight? (sim/solid-fn s) (mob/head (:type m) (:pos m)) (physics/eye p))
                "health" (:sim/health s)
-               "->" (:sim/health s')))
+               "->" (:sim/health s')
+               "bot" (bot-now)))
         s')))))
 (let [die sim/die-mob]
   (alter-var-root #'sim/die-mob
@@ -231,7 +245,8 @@
             [w s] (sim/run simrace/step
                            (game/init {:host "sim" :port 0 :name "Clj_sim"})
                            (sim/init (assoc base :spawn spawn))
-                           #(do (watch %)
+                           #(do (swap! worlds assoc set-name %)
+                                (watch %)
                                 (or (plan/done? %)
                                     (plan/failed? %)
                                     (> (System/currentTimeMillis) wall-end)))
