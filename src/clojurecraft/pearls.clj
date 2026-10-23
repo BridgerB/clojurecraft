@@ -687,7 +687,7 @@
   (let [roof (mouth-cells feet)
         steps (burrow-steps feet dir)
         open (fn [w cells] (reduce #(assoc-in %1 [:world/blocks %2] blocks/air) w cells))
-        dug (when (stairs/clear-way? world roof)
+        dug (when (or (empty? roof) (stairs/clear-way? world roof))
               (reduce (fn [w cells] (if (stairs/safe? w cells) (open w cells) (reduced nil)))
                       (open world roof)
                       steps))]
