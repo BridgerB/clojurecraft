@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-23T18:57:29.187Z",
+  "at" : "2026-10-23T18:58:41.640Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -93,13 +93,13 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 162,
-    "title" : "Bot stops at portal: no-path",
+    "number" : 71,
+    "title" : "Bot stops at portal-kit: boxed",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 71,
-    "title" : "Bot stops at portal-kit: boxed",
+    "number" : 162,
+    "title" : "Bot stops at portal: no-path",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
@@ -131,7 +131,7 @@
     "number" : 351,
     "title" : "Bot stops at fortress: stuck",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
+    "copilot" : true
   }, {
     "number" : 349,
     "title" : "Bot stops at flint-and-steel: timeout",
@@ -251,11 +251,11 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 162,
+    "issue" : 71,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 71,
+    "issue" : 162,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -280,7 +280,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 351,
-    "move" : "assign"
+    "move" : "wait",
+    "why" : "session starting"
   }, {
     "issue" : 349,
     "move" : "leave",
