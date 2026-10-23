@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-23T21:44:37.756Z",
+  "at" : "2026-10-23T21:48:06.846Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -73,9 +73,19 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
+    "number" : 507,
+    "title" : "Bot stops at blaze-rods: no-blaze",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
     "number" : 62,
     "title" : "Bot stops at ingots: timeout",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 563,
+    "title" : "Bot stops at ender-pearls: no-sword",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 162,
@@ -98,24 +108,19 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
+    "number" : 573,
+    "title" : "Bot stops at fortress: no-way",
+    "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
     "number" : 559,
     "title" : "Bot stops at fortress: no-spot",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 507,
-    "title" : "Bot stops at blaze-rods: no-blaze",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 104,
     "title" : "Bot stops at kit: no-log",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
-    "number" : 563,
-    "title" : "Bot stops at ender-pearls: no-sword",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 349,
@@ -205,7 +210,15 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 507,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
     "issue" : 62,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 563,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -229,15 +242,7 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 507,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
     "issue" : 104,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
-    "issue" : 563,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
