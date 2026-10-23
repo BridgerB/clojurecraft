@@ -21,7 +21,7 @@
 (defn line
   [w off]
   (str "+" (quot off 1000)
-       " feet " (pr-str (intent/feet w))
+       " feet " (pr-str (when (:player/pos w) (intent/feet w)))
        " health "
        (some-> (:player/health w)
                (* 10)
@@ -70,7 +70,8 @@
                ring (if (not= s sec) (vec (take-last 40 (conj ring (line w off)))) ring)
                d (:stats/deaths w 0)
                p (get (recipe/counts (:player/inventory w)) :ender_pearl 0)]
-           (when (not= (quot off 60000) minute) (out "MINUTE" (line w off) "why" (why w)))
+           (when (and (:player/pos w) (not= (quot off 60000) minute))
+             (out "MINUTE" (line w off) "why" (why w)))
            (when (not= p pearls) (out "PEARLS" (line w off)))
            (when (> d deaths) (out "DEATH" d "at +" s) (doseq [l ring] (out "  " l)) (near world))
            {:world w :t0 t0 :sec s :minute (quot off 60000) :ring ring :deaths d :pearls p})))
