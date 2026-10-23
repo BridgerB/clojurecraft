@@ -194,9 +194,10 @@
 (s/def :search/tunnels nat-int?)
 (s/def :search/best number?)
 (s/def :search/stalled nat-int?)
+(s/def :search/offset int?)
 (s/def :fortress/search
   (s/keys :req [:search/from :search/heading :search/leg :search/tunnels]
-          :opt [:search/best :search/stalled]))
+          :opt [:search/best :search/stalled :search/offset]))
 (s/def :forage/since int?)
 (s/def :forage/leg nat-int?)
 (s/def :forage/retry-at int?)

@@ -280,6 +280,7 @@
   :problem/decisions
   ["With no brick on record a fortress tunnel sweeps a square spiral, not a line: legs of 160, 160, 320, 320 ... blocks a quarter turn right each, at y 52 to 90, a leg over at its end, at the world's edge, or after too many tunnels (issue #338: a line east went 630 blocks along the bedrock past a fortress 150 blocks north)"
    "A spiral leg that gains no ground is given up: three tunnels in a row (about four minutes) that bring the feet no 8 blocks nearer its end end it, and the next leg turns right or left to the longer run of rock ahead (a cavern sixty blocks across stalled R2/12 for twenty-eight minutes, eight pickaxes, 3 blocks a minute of net progress; issue #338)"
+   "A stalled spiral leg moves its end up to 48 blocks aside, to a lane of rock ahead, before it counts as stalled: the side steps then follow a cavern's wall one way round (issue #338, R2/12)"
    "A placement into a given cell the body clips at the edge first walks toward the middle of the feet's cell: the server refuses a block into any player at any overlap, and the same refusal came back at every try (issue #430)"
    "Chunks stay a snapshot of the dimension the bot is in, emptied on a change, as the server streams them again; memory keeps every dimension, each fact saying which"
    "A column's height is the sections the server sent (16 or 24), looked up in dimensions.edn: the reader thread decodes without knowing the dimension"

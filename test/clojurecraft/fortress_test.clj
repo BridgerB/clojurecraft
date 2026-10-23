@@ -1029,3 +1029,33 @@
     (is (= (assoc east-leg :search/tunnels 1 :search/best 160.0 :search/stalled 0)
            (:intent/search (plan/next-intent out goal plan/goals)))
         "and the next look goes on along it")))
+
+(defn cavern-band
+  "The field with no block east of the feet for z in zs: an open cavern the leg runs into."
+  [zs]
+  (update (field -20 40)
+          :world/blocks
+          #(into {} (remove (fn [[[x _ z] _]] (and (pos? x) (contains? zs z))) %))))
+
+(deftest a-stalled-leg-aims-at-a-lane-of-rock-beside-the-cavern
+  ;; issue #338, sim world R2/12: the rock mass north of the cavern, thirty blocks off the line
+  (let [south-side (cavern-band (set (range -3 4)))
+        north-side (cavern-band (set (range -10 8)))]
+    (is (= 4 (fortress/lane-by-rock south-side [0 64 0] [1 0])) "right of east is south: z 4")
+    (is (= 8 (fortress/lane-by-rock north-side [0 64 0] [1 0]))
+        "the cavern runs to z 7: the first rock is z 8, on the right")
+    (is (= -4 (fortress/lane-by-rock (cavern-band (set (range -3 21))) [0 64 0] [1 0]))
+        "south open as far as the world goes: the left")
+    (is (nil? (fortress/lane-by-rock (cavern-band (set (range -30 30))) [0 64 0] [1 0]))
+        "no lane within lane-reach")
+    (is (= [160 64 8] (fortress/leg-target (assoc east-leg :search/offset 8))) "south of east")
+    (is (= [160 64 -8] (fortress/leg-target (assoc east-leg :search/offset -8))))
+    (let [s (fortress/leg-progress south-side
+                                   (assoc east-leg :search/best 160.0 :search/stalled 1))]
+      (is (= 4 (:search/offset s)))
+      (is (zero? (:search/stalled s)) "a fresh chance on the lane"))
+    (is (= 2
+           (:search/stalled (fortress/leg-progress
+                             (field -20 40)
+                             (assoc east-leg :search/best 160.0 :search/stalled 1))))
+        "no lane in rock all round: counts as stalled")))
