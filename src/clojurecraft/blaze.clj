@@ -87,11 +87,13 @@
 (defn reachable?
   "Can blaze e be fought from where the bot can walk: hittable from here (combat/hittable?: in
    sight, its feet no more than three over the bot's nor two under), and the fight's approach
-   comes to it (combat/approachable?: near on the plane, or the approach's own route). Gym
-   blaze-fortress-a (run 38892386220) tunnelled to its spawner and failed three fights in a row
-   :unreachable on blazes seen through the fortress's walls, every run; blaze-fire-a runs 2 and
-   4 (run 39131023637) did again on blazes a walk's route came within three of, the approach's
-   route, within two, finding none."
+   comes to it (combat/approachable?: the sword reaches from here or from a press that has a
+   place to stand, or the approach's own route walks there). Gym blaze-fortress-a (run
+   38892386220) tunnelled to its spawner and failed three fights in a row :unreachable on blazes
+   seen through the fortress's walls, every run; blaze-fire-a runs 2 and 4 (run 39131023637) did
+   again on blazes a walk's route came within three of, the approach's route, within two,
+   finding none. A blaze within approach-range below a wall the press would have to occupy, with
+   no route down, is not (issue #564)."
   [world e]
   (and (combat/hittable? world e) (combat/approachable? world e)))
 
@@ -326,19 +328,23 @@
 
 (defn healing
   "What a hurt bot does: out of the watching blazes' sight (hide); else the meal; else back away
-   from the nearest watcher; else, with none watching, a :rest (held in cover when it cannot heal,
-   heals?: a death is no plan, the bot stays alive). Cover before the meal where
-   there is cover: a meal takes a second and a half standing still, two hits from a burst, and
-   gym blazefort-k run 3 (run 38913023560) ate at 9.4 by its spawner and was dead before the
-   food came. The meal before the back-off where there is none: gym blaze-7 run 1 (run
-   38891910129) backed away three times round a room seven square with the food at 17, where no
-   back-off gets away, and burned to death without eating."
+   from the nearest watcher, unless that line steps off a drop no landing survives
+   (combat/void-retreat?); else a :rest (held in cover when it cannot heal, heals?: a death is
+   no plan, the bot stays alive). Cover before the meal where there is cover: a meal takes a
+   second and a half standing still, two hits from a burst, and gym blazefort-k run 3 (run
+   38913023560) ate at 9.4 by its spawner and was dead before the food came. The meal before the
+   back-off where there is none: gym blaze-7 run 1 (run 38891910129) backed away three times
+   round a room seven square with the food at 17, where no back-off gets away, and burned to
+   death without eating. The rest before a back-off off a lip: issue #514 (sim R3-5-1) jumped
+   the nether brick one cell north and fell 31 into lava, and a footing found down there is not
+   a survival."
   [world]
-  (let [[weid] (watcher world)
+  (let [[weid e] (watcher world)
         away (hide world)]
     (cond away away
           (meal world) (meal world)
-          weid {:intent/kind :back-off :intent/target weid}
+          (and weid (not (combat/void-retreat? world e)))
+          {:intent/kind :back-off :intent/target weid}
           :else rest-intent)))
 
 (defn wary?
