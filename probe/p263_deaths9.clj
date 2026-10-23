@@ -17,6 +17,7 @@
 (defn out [& xs] (println (str/join " " xs)))
 
 (def path-arg (first *command-line-args*))
+(def win (when (= 3 (count *command-line-args*)) (mapv parse-long (rest *command-line-args*)))) ; seconds from the start to print a line a second for
 
 (defn line
   [w off]
@@ -59,13 +60,13 @@
 (def world0 (game/init {:host "probe" :port 0 :name "C1"}))
 
 (record/reduce-entries
- (fn [{:keys [world t0 sec minute ring deaths pearls] :as acc} e]
+ (fn [{:keys [world t0 last-off sec minute ring deaths pearls] :as acc} e]
    (cond (not (:event/kind e)) acc
          :else
          (let [w (assoc (main/step world e) :bot/effects [])
                now (:event/now e)
                t0 (or t0 now)
-               off (if (and now t0) (- now t0) 0)
+               off (if (and now t0) (- now t0) (or last-off 0))
                s (quot off 1000)
                ring (if (not= s sec) (vec (take-last 40 (conj ring (line w off)))) ring)
                d (:stats/deaths w 0)
@@ -74,7 +75,16 @@
              (out "MINUTE" (line w off) "why" (why w)))
            (when (not= p pearls) (out "PEARLS" (line w off)))
            (when (> d deaths) (out "DEATH" d "at +" s) (doseq [l ring] (out "  " l)) (near world))
-           {:world w :t0 t0 :sec s :minute (quot off 60000) :ring ring :deaths d :pearls p})))
+           (when (and win (<= (first win) s (second win)) (not= s sec))
+             (out "SEC" (line w off) "why" (why w)))
+           {:world w
+            :t0 t0
+            :last-off off
+            :sec s
+            :minute (quot off 60000)
+            :ring ring
+            :deaths d
+            :pearls p})))
  {:world world0 :sec -1 :minute -1 :ring [] :deaths 0 :pearls 0}
  path-arg)
 (out "done")
