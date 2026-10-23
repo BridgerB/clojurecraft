@@ -812,7 +812,7 @@
   ;; refused for the drop under it, and nothing else could be cut from the lip: the plan waited
   ;; :boxed out (issue #37). A missing floor is laid first, and the stair is then cut as any other
   (let [pickaxe {:item (get blocks/items :wooden_pickaxe) :count 1}
-        cobblestone {:item (get blocks/items :cobblestone) :count 18} ; ten to lay, eight kept for the climb back (stairs/lay-reserve)
+        cobblestone {:item (get blocks/items :cobblestone) :count 26} ; ten to lay, sixteen kept for the climb back out of the open air (stairs/max-void-reserve)
         [w sim] (intent-run-holding {:intent/kind :stairs-down :intent/to-y 71}
                                     cave-lip
                                     76
@@ -825,7 +825,7 @@
     (is (= 10 (count (:sim/placed sim))) "a holder and a floor laid a stair, five stairs")
     (is (empty? (:sim/broken sim)) "nothing dug: the cave is open")
     (is (= 10
-           (- 18
+           (- 26
               (:count (some #(when (= (:item cobblestone) (:item %)) %)
                             (vals (:player/inventory w))))))
         "from the cobblestone carried")
@@ -2621,11 +2621,11 @@
 
 (def kit-start
   "What the kit starts from: the stone pickaxe, a crafting table, the furnace's eight
-   cobblestone and four logs."
+   cobblestone and eight logs (twenty-four sticks are three of them)."
   {[:hotbar 0] {:item (item :stone_pickaxe) :count 1}
    [:hotbar 1] {:item (item :crafting_table) :count 1}
    [:main 0] {:item (item :cobblestone) :count 8}
-   [:main 1] {:item (item :oak_log) :count 4}})
+   [:main 1] {:item (item :oak_log) :count 8}})
 
 (defn recording
   "step, with every event written to tap before it is applied and only the effects that event

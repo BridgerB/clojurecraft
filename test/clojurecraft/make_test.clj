@@ -497,8 +497,8 @@
 (deftest sticks-for-two-more-pickaxes-are-gathered-before-the-iron
   ;; issue #39: bots Clj_r23 and Clj_r06 left the forest with three logs' worth, made three
   ;; stone pickaxes between the stairs down, the tunnels and the climb out for the water, and
-  ;; broke the last on the climb. Four sticks go down with the spare pickaxe, gathered at the
-  ;; trees while a walk to one can be started
+  ;; broke the last on the climb; issue #338: the Nether's tunnel wears out about ten more. Twenty-four
+  ;; sticks go down with the spare pickaxe, gathered at the trees while a walk to one can be started
   (let [col (world/column {[8 64 8] 136 [8 65 8] 136})
         with-tree (fn [held]
                     (-> (with-furnace (world-holding held false))
@@ -510,7 +510,10 @@
         "a trunk in reach: the sticks' log, before the descent")
     (is (= :craft/stick (row (with-tree {:stone_pickaxe 2 :coal 1 :oak_planks 2})))
         "planks held: the sticks are made")
-    (is (= :mine-iron (row (with-tree {:stone_pickaxe 2 :coal 1 :stick 4}))) "four held: the iron")
+    (is (= :gather-log (row (with-tree {:stone_pickaxe 2 :coal 1 :stick 4})))
+        "four held: twenty are still wanted")
+    (is (= :mine-iron (row (with-tree {:stone_pickaxe 2 :coal 1 :stick 24})))
+        "twenty-four held: the iron")
     (is (= :mine-iron (row (with-furnace (world-holding {:stone_pickaxe 2 :coal 1} false))))
         "no tree to walk to: no trip for the sticks")))
 

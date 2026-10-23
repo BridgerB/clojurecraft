@@ -254,6 +254,35 @@
   (when (clear-way? world cells)
     (when-let [cells (seq laid)] (when (filler world (count cells)) (vec cells)))))
 
+(def max-void-reserve 16)              ; most filler a bridge over a deep void keeps, twice lay-reserve
+
+(defn void-rise
+  "How many cells straight up from cell [x y z] are not solid, at most max-void-reserve: the
+   height of open air over a bridge's end, a block of pillar each to climb out of it."
+  [world [x y z]]
+  (count (take max-void-reserve
+               (take-while #(not (some-> (terrain/block-at world [x % z])
+                                         blocks/solid?))
+                           (iterate inc (inc (long y)))))))
+
+(defn bridge-reserve
+  "The filler a level step of a stair down keeps after its floor is laid: lay-reserve, or the
+   open air over the step's feet cell (void-rise) when that is more, up to max-void-reserve,
+   since the climb back out of a void rises a block a block laid (the :pillar). Issue #37 (real
+   bot Clj_r16): a bridge kept eight and was :boxed ten blocks short of the roof it hung under."
+  [world cells]
+  (max lay-reserve (void-rise world (last cells))))
+
+(defn floor-reserve
+  "The filler a floor laid for cells (the last is the new feet cell) keeps for the way back: the
+   bridge-reserve for a descent, or for a row's deeper stairs, which start with no stairs intent;
+   lay-reserve for a climb, whose own steps are the way back. Issue #37 (real bot Clj_r16,
+   snapshot real-7-s2): `lay` kept eight whatever hung over the floor, and the descent floored
+   eleven levels and a bridge over a void with sixteen dirt, the way back a block a level and a
+   block a cell, and was :boxed on the bridge with none."
+  [world cells]
+  (if (= :stairs-up (:intent/kind (:plan/intent world))) lay-reserve (bridge-reserve world cells)))
+
 (defn lay
   "The cells to lay, in order, before a stair down (or a level step) from feet whose cells may
    be opened (clear-way?) can be cut: the floor and what holds it (floor-laying), when enough of
@@ -268,7 +297,7 @@
    other descents)."
   [world feet cells]
   (when-let [laid (cells-to-lay world cells (floor-laying world feet cells))]
-    (when (>= (- (carried-filler world) (count laid)) lay-reserve) laid)))
+    (when (>= (- (carried-filler world) (count laid)) (floor-reserve world cells)) laid)))
 
 #_{:splint/disable [naming/conversion-functions]} ; "the step to lay", not a conversion
 (defn step-to-lay
@@ -560,14 +589,15 @@
 
 (defn reserve-level-lay
   "The cells level-lay would lay before a level step of a staircase of kind from feet, nil for a
-   stair down when laying them would leave less than lay-reserve filler (a stair up's step is
+   stair down when laying them would leave less than bridge-reserve filler (a stair up's step is
    the climb the reserve is for). Issue #37 (real bot Clj_r16, snapshot real-7-s2, and sim
    R3/15): a descent over a void was refused its floors at the reserve (lay), then level-lay
    floored fifteen level steps of a bridge with the same dirt and the three planks, past the
    reserve, to none, and every stair up from the bridge's end was :boxed with nothing to lay."
   [world kind cells feet]
   (when-let [laid (level-lay world feet cells)]
-    (when (or (not= :stairs-down kind) (>= (- (carried-filler world) (count laid)) lay-reserve))
+    (when (or (not= :stairs-down kind)
+              (>= (- (carried-filler world) (count laid)) (bridge-reserve world cells)))
       laid)))
 
 #_{:splint/disable [naming/conversion-functions]} ; "the next cell to open", not a conversion
@@ -594,8 +624,72 @@
       (intent/assoc-intent :intent/dir (turn dir) :intent/turns (inc turns))
       (game/say why)))
 
+(defn shaft-cells
+  "The two cells a shaft up opens from feet [x y z], lowest first: the one over the head, which the
+   next block under the feet lifts the body into, and the one over that, which the :pillar's own
+   headroom check reads once the block is in and the body has risen. After the first level the
+   lower is open already, so a level digs one."
+  [[x y z]]
+  [[x (+ y 2) z] [x (+ y 3) z]])
+
+(defn pickaxe-held?
+  "Does the inventory hold a pickaxe of any material?"
+  [world]
+  (boolean (some (fn [[_ {:keys [item]}]] (= :pickaxe (:kind (blocks/tool item))))
+                 (:player/inventory world))))
+
+(defn shaft-safe?
+  "May the shaft's cells (shaft-cells) be dug (clear-way?: no water, lava or unloaded chunk in or
+   beside them), with no gravel or sand over them to fall on the bot, no fluid straight over
+   them and none beside them for the dig to let in?"
+  [world feet]
+  (let [cells (shaft-cells feet)]
+    (and (clear-way? world cells)
+         (not (falls-over? world [(second cells)]))
+         (not (water-over? world cells))
+         (not-any? #(intent/exposes-fluid? world %) cells))))
+
+(def pillar-extras
+  "What a pillar rises on when no filler is held: the blocks that fall out of a floor laid over
+   air but stay where they are put on a solid block, as a pillar's every block is."
+  [:gravel :sand :red_sand])
+
+(defn pillar-item
+  "The item a shaft's :pillar is laid from, or nil: a filler (filler), else planks, else one of
+   pillar-extras held. Gravel and sand are the last resort, never laid into a floor (fillers)."
+  [world]
+  (let [held (recipe/counts (:player/inventory world))]
+    (or (filler world 1) (first (filter #(pos? (get held % 0)) pillar-extras)))))
+
+(defn pillar-up?
+  "May a boxed stair up go up as a shaft of pillars from feet (a pillar-item held, a solid block
+   under the feet and the feet centred in it, the cells over the head safe to dig), the intent not
+   having given the shaft up (:intent/no-shaft)? Issue #37 (sim snapshots R3-15-1 and R3-15-2): on
+   mineshaft planks at y -1 over open air holding 39 gravel, every stair and level step was refused
+   for the floor it lacked, with a pillar of the gravel over the planks the way up."
+  [world {:intent/keys [kind no-shaft]} feet]
+  (boolean (and (= :stairs-up kind)
+                (not no-shaft)
+                (pillar-item world)
+                (= :solid (path/classify world (update feet 1 dec)))
+                (intent/centred? world feet)
+                (shaft-safe? world feet))))
+
+(defn shaft-up
+  "world with the intent in the :shaft stage from here, a child gone, saying why."
+  [world why]
+  (-> world
+      (assoc :player/controls {})
+      (intent/assoc-intent :intent/stage :shaft
+                           :intent/started-y (physics/y-of (:player/pos world))
+                           :intent/started-tick (:time/tick world))
+      (intent/dissoc-intent :intent/child :intent/cells :intent/lay :intent/level-cells)
+      (game/say why)))
+
 (defn box
-  "Every heading was refused: fail the staircase :boxed. A climb out to the surface (:intent/for
+  "Every heading was refused: a stair up with a block to pillar from goes up as a shaft instead
+   (pillar-up?, the :pillar intent dragon.clj defines, called as it is); else fail the staircase
+   :boxed. A climb out to the surface (:intent/for
    :surface, the water hunt's and the gather's) ends instead, its feet cell put in
    :plan/boxed-at: where a way out cannot be cut is a fact about the place, and the act that cut
    it chooses again from it (scoop/seen-source, scoop/from-below), never the same climb. Sim race
@@ -614,8 +708,11 @@
    and R1/25) had the tunnel :boxed three times in a tick toward the one source, and the plan
    failed."
   [world]
-  (let [{:intent/keys [kind for target]} (:plan/intent world)]
-    (cond (and (= :stairs-up kind) (= :surface for))
+  (let [{:intent/keys [kind for target] :as i} (:plan/intent world)
+        feet (intent/feet world)]
+    (cond (pillar-up? world i feet)
+          (shaft-up world "stairs: every way refused, a shaft of pillars up")
+          (and (= :stairs-up kind) (= :surface for))
           (-> world
               (assoc :player/controls {})
               (update :plan/boxed-at (fnil conj #{}) (intent/feet world))
@@ -936,31 +1033,6 @@
          (filter safe-toward?)
          first)))
 
-(defn shaft-cells
-  "The two cells a shaft up opens from feet [x y z], lowest first: the one over the head, which the
-   next block under the feet lifts the body into, and the one over that, which the :pillar's own
-   headroom check reads once the block is in and the body has risen. After the first level the
-   lower is open already, so a level digs one."
-  [[x y z]]
-  [[x (+ y 2) z] [x (+ y 3) z]])
-
-(defn pickaxe-held?
-  "Does the inventory hold a pickaxe of any material?"
-  [world]
-  (boolean (some (fn [[_ {:keys [item]}]] (= :pickaxe (:kind (blocks/tool item))))
-                 (:player/inventory world))))
-
-(defn shaft-safe?
-  "May the shaft's cells (shaft-cells) be dug (clear-way?: no water, lava or unloaded chunk in or
-   beside them), with no gravel or sand over them to fall on the bot, no fluid straight over
-   them and none beside them for the dig to let in?"
-  [world feet]
-  (let [cells (shaft-cells feet)]
-    (and (clear-way? world cells)
-         (not (falls-over? world [(second cells)]))
-         (not (water-over? world cells))
-         (not-any? #(intent/exposes-fluid? world %) cells))))
-
 (defn shaft?
   "Is a climb out to the surface from feet cut as a shaft, one block dug and one laid under the
    feet a level, rather than as stairs, three blocks dug a level? It is where no pickaxe is held
@@ -996,7 +1068,10 @@
                  (lay world feet cells))
         to-lay (when (and needed (or (safe? world cells) (floors-affordable? world i feet needed)))
                  needed)
-        rock (when needed (rock-heading i #(fresh-safe? world (cells-of feet %))))]
+        rock (when needed (rock-heading i #(fresh-safe? world (cells-of feet %))))
+        up-open (when (and needed (= :stairs-up kind))
+                  (first (filter #(fresh-safe? world (cells-of feet %))
+                                 (rest (take 4 (iterate turn dir))))))]
     (cond (airborne? world) (assoc world :player/controls {}) ; land first
           (shaft? world i feet)
           (intent/assoc-intent world
@@ -1019,6 +1094,15 @@
                                    :intent/started-tick (:time/tick world))
               (game/say (str "stairs: into the rock toward " rock
                              " rather than a floor laid toward " dir)))
+          up-open
+          (-> world
+              (intent/assoc-intent :intent/dir up-open
+                                   :intent/cells (cells-of feet up-open)
+                                   :intent/stage :open
+                                   :intent/started-y (physics/y-of (:player/pos world))
+                                   :intent/started-tick (:time/tick world))
+              (game/say (str "stairs: up the step already there toward " up-open
+                             " rather than one laid toward " dir)))
           to-lay
           (-> world
               (intent/assoc-intent :intent/dir dir
@@ -1103,7 +1187,7 @@
   [world {:intent/keys [child]} event]
   (let [feet (intent/feet world)
         cell (first (filter #(= :solid (path/classify world %)) (shaft-cells feet)))
-        item (filler world 1)]
+        item (pillar-item world)]
     (cond (and child (or (intent/done? child) (fell? child)))
           (intent/dissoc-intent world :intent/child)
           (and child (intent/failed? child))
