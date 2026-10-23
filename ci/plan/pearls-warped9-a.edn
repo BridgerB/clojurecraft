@@ -1,0 +1,23 @@
+;; Issue #263, branch feat/263-warped9, first batch: a burrow crowded by a calm enderman is cut
+;; anew where that one is stared at (crowd-site), a walk to a hidden one goes to such a site
+;; (stare-site), no drop is walked to with an angry one near (menaced?), no look out of the
+;; burrow's end stares at a calm one (plan/steer), an angry one at hand ends any other intent
+;; (plan/interrupts?), no hunt goes on in the open on a pickaxe worn out on burrows (:no-pickaxe),
+;; and stairs.clj lays nothing that steps the body off an edge (backs-off?). Sim gate, seeds 3 to
+;; 5: main 9e60102ea and this branch side by side. One pearls-12 trial a job, the row's full
+;; 5-hour cap.
+{:plans/label "pearls-warped9-a"
+ :plans/jobs 4
+ :plans/issue 263
+ :plans/experiments [{:exp/name "pearls-12"
+                      :exp/kind :gym
+                      :exp/goal "pearls-12"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 18000}
+                     {:exp/name "pearls-1-live"
+                      :exp/kind :gym
+                      :exp/goal "pearls-1-live"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 300}]}

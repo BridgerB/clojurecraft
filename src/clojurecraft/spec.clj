@@ -192,7 +192,11 @@
 (s/def :search/heading (s/tuple #{-1 0 1} #{-1 0 1}))
 (s/def :search/leg nat-int?)
 (s/def :search/tunnels nat-int?)
-(s/def :fortress/search (s/keys :req [:search/from :search/heading :search/leg :search/tunnels]))
+(s/def :search/best number?)
+(s/def :search/stalled nat-int?)
+(s/def :fortress/search
+  (s/keys :req [:search/from :search/heading :search/leg :search/tunnels]
+          :opt [:search/best :search/stalled]))
 (s/def :forage/since int?)
 (s/def :forage/leg nat-int?)
 (s/def :forage/retry-at int?)
@@ -478,6 +482,7 @@
 (s/def :intent/climb nat-int?)
 (s/def :intent/dry? boolean?)
 (s/def :intent/search :fortress/search)
+(s/def :intent/bridge? boolean?)
 (s/def :intent/trunk ::block-pos)
 (s/def :intent/stage keyword?)
 (s/def :intent/since int?)
@@ -931,7 +936,8 @@
          :target ::block-pos
          :climb nat-int?
          :dry-only? boolean?
-         :visited :intent/tunnel-visited)
+         :visited :intent/tunnel-visited
+         :bridge-ok? (s/? boolean?))
   :ret (s/nilable :intent/move))
 
 (s/fdef end-portal/next-op
