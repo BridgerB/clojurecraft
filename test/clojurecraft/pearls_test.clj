@@ -565,6 +565,15 @@
                              row
                              plan/goals))
         "at the end with it on the stairs: fought")
+    ;; sim probe 39890029962 (worlds R1 and R4, seed 3): three held fights in a row on one by the
+    ;; mouth that never came, each :unreachable, and the plan failed
+    (let [by-mouth (burrowed [8.5 61.0 8.5] {7 (assoc angry :entity/pos [5.5 64.0 8.5])})]
+      (is (= {:intent/kind :fight :intent/target 7 :intent/hold? true :intent/for :pearls}
+             (plan/next-intent by-mouth row plan/goals))
+          "at hand by the mouth, not given up on: the fight held")
+      (is (= {:intent/kind :lookout :intent/for :pearls}
+             (plan/next-intent (assoc by-mouth :plan/blacklist #{7}) row plan/goals))
+          "given up on, out of the sword's reach: no fight held again, the bot stays in"))
     (is (= {:intent/kind :lookout :intent/for :pearls}
            (plan/next-intent (assoc (burrowed [8.5 61.0 8.5]
                                               {7 (assoc angry :entity/pos [1.5 64.0 8.5])})

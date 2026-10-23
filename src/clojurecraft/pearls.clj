@@ -1077,7 +1077,7 @@
    with no burrow, so that one coming at hand is fought (batch pearls-warped8-b, plan run
    39775345028, probe 39848848462: run 3's walk home from its first stair failed :no-path and
    it stood in :lookout while the enderman beside it killed it in three seconds); in it, the one coming, one at hand
-   and angry, or the threat fought where the bot stands (:fight :intent/hold?; at hand by the
+   and angry (not one a held fight gave up on, blacklisted, unless within the sword's reach: sim probe 39890029962, worlds R1 and R4 seed 3, held three fights in a row on one by the mouth that never came, each timing out :unreachable, and the plan failed), or the threat fought where the bot stands (:fight :intent/hold?; at hand by the
    distance in three, never on the plane alone: batch pearls-warped-b's run 3 held a fight
    twenty minutes on one two blocks off on the plane and fourteen below, and batch
    pearls-warped-c's run 1 stood over one fourteen below for forty; a calm one at hand only
@@ -1158,7 +1158,7 @@
                    (into {} (filter (comp entity/creepy? val)) (endermen world stare-range))
                    pos)
         near? (and e (<= (physics/distance pos (:entity/pos e)) strike-range))
-        angry? (and near? (entity/creepy? e))
+        angry? (and near? (entity/creepy? e) (not (contains? (:plan/blacklist world #{}) eid)))
         in-reach? (and near?
                        (<= (physics/distance (game/eye world) (combat/aim e)) combat/attack-reach))
         hurt? (< (:player/health world 20.0) combat/retreat-health)
@@ -1193,6 +1193,7 @@
        :intent/for :pearls}
       (and near? hurt? (not in?)) {:intent/kind :back-off :intent/target eid :intent/for :pearls}
       (and near?
+           (not in?)
            (or (entity/creepy? e)
                (and (not (pickaxe? world)) (not (contains? (:plan/blacklist world #{}) eid)))))
       {:intent/kind :fight :intent/target eid :intent/for :pearls}
