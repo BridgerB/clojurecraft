@@ -299,6 +299,14 @@
       (intent/dissoc-intent :intent/dig-when-down)
       (game/say (str "swim-out: " why ", digging " cell))))
 
+(defn lift-bank
+  "[cell item] to lay for a bank (bank-block) with a filler carried, nil when none is carried, one
+   was refused (no-lay) or no cell does."
+  [world feet surface no-lay]
+  (when-not no-lay
+    (when-let [item (stairs/filler world 1)]
+      (when-let [cell (bank-block world feet surface)] [cell item]))))
+
 (defn start-lay
   "Lay item into cell as a child :place now."
   [world [cell item] why]
@@ -513,9 +521,7 @@
                     :else (banks world feet surface (:plan/blacklist world #{})))
             cap (when-not b
                   (let [c (obstacle world feet nil)] (when (or (not rise?) (iced? world c)) c)))
-            laid (when-not (or b cap rise? no-lay)
-                   (when-let [item (stairs/filler world 1)]
-                     (when-let [cell (bank-block world feet surface)] [cell item])))
+            laid (when-not (or b cap rise?) (lift-bank world feet surface no-lay))
             toward (when-not (or b cap laid rise? no-lay)
                      (when (stairs/filler world 1) (wall-toward world feet surface)))
             wall (when-not (or b cap laid toward rise?) (notch world feet surface))]
@@ -549,11 +555,16 @@
                     (cond-> shore (intent/assoc-intent :intent/shore shore))
                     (cond-> (nil? shore) (intent/dissoc-intent :intent/shore))))))
       (> (- tick best-tick) stuck-ticks)
-      (if-let [cell (obstacle world feet bank)]
-        (dig-or-sink world feet cell "stuck")
-        (-> world
-            (assoc :player/controls {})
-            (intent/fail :stuck)))
+      (let [cell (obstacle world feet bank)
+            laid (when-not cell (lift-bank world feet surface no-lay))]
+        (cond cell (dig-or-sink world feet cell "stuck")
+              ;; nothing to dig and the lift peaks under the bank's top: a block laid into the water
+              ;; beside the feet is a step the walk climbs from (issue #45 R1-17-2)
+              laid (start-lay world laid "lift short of the bank")
+              :else
+              (-> world
+                  (assoc :player/controls {})
+                  (intent/fail :stuck))))
       :else
       (-> world
           (assoc :player/controls (swim-controls world bank))
