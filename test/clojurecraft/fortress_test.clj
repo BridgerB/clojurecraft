@@ -1095,3 +1095,24 @@
         "rock all round, a target above: an up step is taken")
     (is (pos? (second (fortress/next-move w [0 64 0] [8 80 0] 3 false #{}))))
     (is (neg? (second (fortress/next-move w [0 64 0] [8 40 0] 3 false #{}))))))
+
+(deftest a-brick-once-chosen-is-kept-while-it-is-on-record
+  ;; issue #338, R3-28-1: two bricks four blocks apart took turns as the nearest, each turn an
+  ;; empty trail
+  (let [brick (blocks/default-state :nether_bricks)
+        w (reduce (fn [w p] (memory/observe w p brick))
+                  {:world/facts (memory/empty-facts)
+                   :player/dimension dimension/nether
+                   :time/now 0
+                   :player/pos [0.5 64.0 0.5]
+                   :world/chunks {}
+                   :world/blocks {}}
+                  [[10 64 0] [14 64 0]])]
+    (is (= [10 64 0] (fortress/chosen-brick w)) "the nearest with none chosen")
+    (is (= [14 64 0] (fortress/chosen-brick (assoc w :fortress/brick [14 64 0])))
+        "the chosen one although another is nearer")
+    (is (= [10 64 0]
+           (fortress/chosen-brick (-> w
+                                      (assoc :fortress/brick [30 64 0])
+                                      (assoc-in [:world/blocks [30 64 0]] air))))
+        "a chosen cell seen to be air is dropped")))
