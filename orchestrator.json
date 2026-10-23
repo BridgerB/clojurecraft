@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-23T22:05:26.516Z",
+  "at" : "2026-10-23T22:06:37.550Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -60,8 +60,8 @@
   }, {
     "number" : 60,
     "title" : "Bot stops at water-bucket: no-water",
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : true
   }, {
     "number" : 71,
     "title" : "Bot stops at portal-kit: boxed",
@@ -70,7 +70,7 @@
   }, {
     "number" : 573,
     "title" : "Bot stops at fortress: no-way",
-    "labels" : [ "bot-failure", "sim" ],
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 559,
@@ -85,6 +85,11 @@
   }, {
     "number" : 574,
     "title" : "Bot stops at furnace: no-spot",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 68,
+    "title" : "Bot stops at ingots: no-spot",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
@@ -116,11 +121,6 @@
     "number" : 89,
     "title" : "Bot stops at portal-kit: no-log",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
-    "number" : 68,
-    "title" : "Bot stops at ingots: no-spot",
-    "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   } ],
   "moves" : [ {
@@ -169,9 +169,14 @@
     "why" : "hands-off label"
   }, {
     "issue" : 60,
-    "move" : "assign"
+    "move" : "leave",
+    "why" : "hands-off label"
   }, {
     "issue" : 71,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 573,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -182,6 +187,13 @@
     "issue" : 104,
     "move" : "leave",
     "why" : "hands-off label"
+  }, {
+    "issue" : 574,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 68,
+    "move" : "assign"
   }, {
     "issue" : 65,
     "move" : "leave",
@@ -208,11 +220,6 @@
     "why" : "hands-off label"
   } ],
   "log" : [ {
-    "issue" : 135,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment",
-    "at" : "2026-10-21T09:14:25.369Z"
-  }, {
     "issue" : 135,
     "move" : "assign",
     "at" : "2026-10-21T09:15:34.680Z"
@@ -1549,5 +1556,9 @@
     "issue" : 60,
     "move" : "assign",
     "at" : "2026-10-23T22:05:26.516Z"
+  }, {
+    "issue" : 68,
+    "move" : "assign",
+    "at" : "2026-10-23T22:06:37.550Z"
   } ]
 }
