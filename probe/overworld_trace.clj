@@ -44,6 +44,8 @@
         w (simrace/world-for! snap)
         m (simrace/moment-of snap w)
         t0 (:time/now (:world m))
+        _ (doseq [[at ev kind target reason] (take-last 60 (simrace/story (:world m) 0))]
+            (println "HIST" (quot (- at t0) 1000) ev kind target reason))
         seen (atom nil)
         n (atom 0)
         key-of (fn [world]
@@ -53,7 +55,7 @@
         stop?
         (fn [world]
           (let [k (key-of world)]
-            (when (and (not= k @seen) (< @n 200)) (reset! seen k) (swap! n inc) (line t0 world)))
+            (when (and (not= k @seen) (< @n 120)) (reset! seen k) (swap! n inc) (line t0 world)))
           (or (plan/done? world) (plan/failed? world)))
         r (sim/play-from simrace/step
                          m
