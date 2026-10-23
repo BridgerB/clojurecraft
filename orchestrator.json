@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-23T20:21:34.463Z",
+  "at" : "2026-10-23T20:29:37.940Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -103,6 +103,11 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : true
   }, {
+    "number" : 507,
+    "title" : "Bot stops at blaze-rods: no-blaze",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
     "number" : 349,
     "title" : "Bot stops at flint-and-steel: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
@@ -110,11 +115,6 @@
   }, {
     "number" : 130,
     "title" : "Bot stops at cast-one: boxed",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
-    "number" : 89,
-    "title" : "Bot stops at portal-kit: no-log",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
@@ -140,6 +140,11 @@
   }, {
     "number" : 105,
     "title" : "Bot stops at flint-and-steel: boxed",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 89,
+    "title" : "Bot stops at portal-kit: no-log",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
@@ -229,15 +234,15 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 507,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
     "issue" : 349,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
     "issue" : 130,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
-    "issue" : 89,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -258,6 +263,10 @@
     "why" : "hands-off label"
   }, {
     "issue" : 105,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 89,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
