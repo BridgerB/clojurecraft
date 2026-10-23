@@ -1,6 +1,7 @@
 ;; The food a bot carries into the Nether: whole runs from empty hands to the Nether in the captured
 ;; worlds of one set, and the world each stops in. Usage: clojure -M probe/food_trace.clj <set> <count> [seed]
 (require '[clojure.java.io :as io]
+         '[clojure.string :as str]
          '[clojurecraft.capture :as capture]
          '[clojurecraft.dimension :as dimension]
          '[clojurecraft.hunt :as hunt]
@@ -32,10 +33,13 @@
                       :forage (:hunt/forage w)}))
     (flush)))
 
-(let [[set-name n seed] *command-line-args*
+(let [[set-name n seed only] *command-line-args*
       seed (Long/parseLong (or seed "1"))
       dir (str "cache/sim-worlds/" set-name)
-      files (take (Long/parseLong n) (simrace/world-files dir))
+      files (cond->> (take (Long/parseLong n) (simrace/world-files dir))
+              only
+              (filter #(contains? (set (str/split only #","))
+                                  (first (str/split (.getName (io/file %)) #"\.")))))
       nether-path (simrace/nether-file (first files))
       nether (when (.exists (io/file nether-path)) (simrace/read-nether nether-path))
       jobs (atom files)
