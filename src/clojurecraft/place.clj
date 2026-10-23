@@ -68,6 +68,20 @@
   (and (path/standable? world cell)
        (<= 2 (count (filter (fn [[dx dz]] (solid-at? world [(+ x dx) y (+ z dz)])) sides)))))
 
+(defn drop-beside?
+  "Is a cell beside cell [x y z] at its height open over a drop: clear, no floor under it and no
+   landing within path/max-fall? A block placed at cell and dug again drops its item there to
+   roll off. Sim world R2/12 (issue #338) placed the table on a one-block pillar over a cavern,
+   dug it to carry it on, and the bot walked off the pillar after the drop: thirty blocks, the
+   plan failed :no-footing."
+  [world [x y z]]
+  (boolean (some (fn [[dx dz]]
+                   (let [n [(+ x dx) y (+ z dz)]]
+                     (and (= :clear (path/classify world n))
+                          (not (path/floor? world (update n 1 dec)))
+                          (nil? (path/landing world n)))))
+                 sides)))
+
 (defn spot
   "[target support] for placing a block near the player: target replaceable (air or a grass
    the server lets a block take the place of, blocks/replaceable?: a flower is not, race
@@ -80,7 +94,8 @@
    which leaves the way open: gym batch iron-a6 run 1, at the foot of its stairs between its
    table and furnace, found no spot for a gravel but the stair behind it). A cell in refused is
    passed over: the server answered a placement there with the cell still empty, a body
-   standing in it (give-up). Pure; nil when there is none."
+   standing in it (give-up), and a cell with a drop beside it (drop-beside?). Pure; nil when there
+   is none."
   ([world] (spot world false))
   ([world passage-ok?] (spot world passage-ok? #{}))
   ([world passage-ok? refused]
@@ -89,22 +104,24 @@
          fy (long (math/floor py))
          fz (long (math/floor pz))
          eye (game/eye world)]
-     (first (for [[dx dy dz] around
-                  :let [target [(+ fx dx) (+ fy dy) (+ fz dz)]
-                        support [(+ fx dx) (+ fy dy -1) (+ fz dz)]
-                        t (terrain/block-at world target)
-                        s (terrain/block-at world support)]
-                  :when (and t
-                             s
-                             (not (contains? refused target))
-                             (blocks/replaceable? t)
-                             (terrain/confirmed? world target)
-                             (blocks/solid? s)
-                             (not (contains? memory/placed-kinds (blocks/name-of s)))
-                             (or passage-ok? (not (passage? world target)))
-                             (not (inside-player? world target))
-                             (<= (physics/distance eye (physics/centre target)) place-reach))]
-              [target support])))))
+     (first
+      (for [[dx dy dz] around
+            :let [target [(+ fx dx) (+ fy dy) (+ fz dz)]
+                  support [(+ fx dx) (+ fy dy -1) (+ fz dz)]
+                  t (terrain/block-at world target)
+                  s (terrain/block-at world support)]
+            :when (and t
+                       s
+                       (not (contains? refused target))
+                       (blocks/replaceable? t)
+                       (terrain/confirmed? world target)
+                       (blocks/solid? s)
+                       (not (contains? memory/placed-kinds (blocks/name-of s)))
+                       (or passage-ok? (not (passage? world target)))
+                       (not (inside-player? world target))
+                       (not (drop-beside? world target))
+                       (<= (physics/distance eye (physics/centre target)) place-reach))]
+        [target support])))))
 
 (defn ashore
   "intent, or, with the body in water, a :swim-out for :retreat first (done on dry land, swim):
@@ -202,6 +219,16 @@
   (= :powder_snow
      (some-> (terrain/block-at world pos)
              blocks/name-of)))
+
+(defn unplaceable-in?
+  "Does the loaded cell hold a block that is not solid and that no block is placed into
+   (blocks/placeable-into?): powder snow, a flower, a bush? The server refuses a placement into
+   it, the hand breaks it, and a given cell holding one is dug first. Real race 39807290314 bot
+   Clj_r18 (issue #279) stood on a mountainside to cast a portal; the cell of its first floor
+   held powder snow, and the cobblestone for it was refused three times, :rejected."
+  [world cell]
+  (let [id (terrain/block-at world cell)]
+    (boolean (and id (not (blocks/solid? id)) (not (blocks/placeable-into? id))))))
 
 (defn dug-spot
   "[target support] for the niche the bot has cut (the intent's :intent/niche) once it is empty:
@@ -367,7 +394,8 @@
          :intent/status :active}))))
 
 (defmethod place-stage :spot
-  ;; a given cell (:intent/cell, a build's) against a solid neighbour; else the niche already cut
+  ;; a given cell (:intent/cell, a build's) against a solid neighbour (dug first when it holds powder
+  ;; snow or the like, unplaceable-in?); else the niche already cut
   ;; (:intent/niche, dug-spot), else a plain spot, else a niche cut in the wall, else (passage-ok?)
   ;; a spot in the passage: a table or a gravel to dig again leaves the way open when the bot goes on
   [world
@@ -383,7 +411,14 @@
                           (when (and (nil? at) (nil? n) passage-ok?) (spot world true refused)))
         wet (when (and retreated? (nil? at) (nil? n) (nil? target)) (water-spot world refused))
         [wet-against wet-face] (when wet (support world wet))]
-    (cond (and given (inside-player? world at) (< nudges max-nudges)) (nudge-off world nudges)
+    (cond (and at
+               (unplaceable-in? world at)
+               (<= (physics/distance (game/eye world) (physics/centre at)) place-reach))
+          (intent/assoc-intent world
+                               :intent/stage :niche
+                               :intent/niche at
+                               :intent/child (intent/child-dig at))
+          (and given (inside-player? world at) (< nudges max-nudges)) (nudge-off world nudges)
           given (settle-at world at against face)
           at (intent/fail world :no-support)
           target (settle-at world target from :up)

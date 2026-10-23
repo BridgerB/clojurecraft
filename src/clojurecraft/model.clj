@@ -39,6 +39,9 @@
    [:player/eye-in-water? "the eye (y + 1.62) is inside water, by the physics this tick"
     "after the first physics tick"]
    [:plan/wet-ticks "consecutive ticks the eye has been under water" "while planning"]
+   [:plan/afloat-ticks
+    "consecutive ticks off the ground over water with no deliberate swim (trap/afloat?)"
+    "while planning"]
    [:plan/dry-ticks "consecutive ticks on dry land (trap/dry-land?)" "while planning"]
    [:plan/trap "the trap the player is in, :water or :lava, with hysteresis (trap/trapped-tick)"
     "while trapped"] [:plan/trap-at "the [x z] column where the current trap began" "while trapped"]
@@ -250,6 +253,22 @@
    [:search/tunnels
     "the tunnels the leg has taken, one more at each look of the planner; too many end the leg"
     "inside :fortress/search"]
+   [:search/best
+    "the least horizontal distance from the feet to the leg's end at a look of the planner (fortress/leg-progress)"
+    "inside :fortress/search, from the leg's second look"]
+   [:search/stalled
+    "the looks in a row that brought the feet no stall-gain nearer than :search/best; stall-tunnels end the leg (issue #338)"
+    "inside :fortress/search, from the leg's second look"]
+   [:hunt/forage
+    "the search for animals a bot about to light its portal makes with fewer than hunt/provision-wanted foods held: {:forage/since :forage/leg :forage/retry-at}; the :forage intent keeps it, and hunt/foraging? ends the search forage-ms after its first leg (issue #501)"
+    "after a :forage intent chose its first leg"]
+   [:forage/since "ms the search's first leg was chosen" "inside :hunt/forage"]
+   [:forage/leg
+    "the leg the next :forage turns to, from 0: its heading is a quarter turn right of the last (hunt/forage-headings)"
+    "inside :hunt/forage"]
+   [:forage/retry-at
+    "ms before which the search looks for no leg: set when no heading had a route at any reach (hunt/forage-retry-ms on)"
+    "inside :hunt/forage, after such a look"]
    [:fortress/trail
     "the way back a :tunnel-to to a target keeps across its tunnels: {:trail/target :trail/cells :trail/dead}; a cell no fresh step leaves is stepped back from to the last cell, never entered again (fortress/step-back, issue #502); another target starts a new one"
     "after a :tunnel-to chose a fresh step or a step back"]

@@ -506,8 +506,8 @@
 (deftest a-spawners-delay-and-batch-are-rolled-from-their-ranges
   (is (= 200 (mob/spawner-delay 0.0)))
   (is (= 800 (mob/spawner-delay 0.9999)))
-  (is (= 2 (mob/spawner-batch 0.0)))
-  (is (= 3 (mob/spawner-batch 0.5)))
+  (is (= 4 (mob/spawner-batch 0.0)) "vanilla's SpawnCount: four tries, whatever the roll")
+  (is (= 4 (mob/spawner-batch 0.5)))
   (is (= 4 (mob/spawner-batch 0.99))))
 
 (deftest a-spawner-makes-no-more-blazes-once-six-stand-about-it
@@ -520,10 +520,18 @@
   (is (not (mob/spawner-crowded? sp [7.9 64.0 12.0])))
   (is (not (mob/spawner-crowded? sp [17.1 64.0 12.0]))))
 
-(deftest a-spawners-box-is-nine-wide-three-high-nine-deep
-  (is (= [8 63 8] (mob/spawner-spot sp 0.0 0.0 0.0)) "the near, low corner")
-  (is (= [16 65 16] (mob/spawner-spot sp 0.999 0.999 0.999)) "the far, high corner")
-  (is (= [12 64 12] (mob/spawner-spot sp 0.5 0.5 0.5)) "the middle")
+(deftest a-spawners-try-lands-as-basespawner-picks-it
+  ;; x and z are (r1 - r2) * 4 from the cell plus a half, floored: a triangle over nine cells;
+  ;; y is one of the three cells under, level and over
+  (is (= [12 64 12] (mob/spawner-spot sp 0.5 0.5 0.5 0.5 0.5)) "equal rolls: on the spawner")
+  (is (= [8 63 8] (mob/spawner-spot sp 0.0 0.999 0.0 0.0 0.999)) "the near, low corner")
+  (is (= [16 65 16] (mob/spawner-spot sp 0.999 0.0 0.999 0.999 0.0)) "the far, high corner")
+  (is (= [12 64 13] (mob/spawner-spot sp 0.5 0.5 0.5 0.65 0.5)) "a small difference: a cell off")
+  (let [xs (frequencies (for [a (range 0 1 0.05)
+                              b (range 0 1 0.05)]
+                          (first (mob/spawner-spot sp a b 0.5 0.5 0.5))))]
+    (is (> (xs 12) (* 4 (get xs 16 0)))
+        "a triangle: the spawner's own column far likelier than the edge"))
   (is (mob/spawner-dark? 11) "a blaze spawns at 11")
   (is (not (mob/spawner-dark? 12)))
   (is (mob/spawner-dark? mob/interior-light) "the model's fortress is dark"))
@@ -534,10 +542,15 @@
     (is (not (mob/spawner-fits? free? [8 64 8] #{[8 64 8]})) "taken")
     (is (not (mob/spawner-fits? free? [8 63 8] #{})) "in the floor")
     (is (not (mob/spawner-fits? free? [8 64 9] #{})) "a roof over its head")
-    (is (= [[8 64 8]] (mob/spawner-spawns free? sp 3 [[0.0 0.5 0.0] [0.0 0.5 0.0] [0.5 0.5 0.5]]))
+    (is (= [[8 64 8]]
+           (mob/spawner-spawns free?
+                               sp
+                               3
+                               [[0.0 0.0 0.5 0.0 0.0] [0.0 0.0 0.5 0.0 0.0] [0.5 0.5 0.5 0.5 0.5]]))
         "the second try's cell is taken, the third is the spawner")
-    (is (= [] (mob/spawner-spawns free? sp 3 [[0.0 0.0 0.0]])) "a try in the floor makes none")
-    (is (= [[8 64 8]] (mob/spawner-spawns free? sp 1 [[0.0 0.5 0.0] [0.9 0.5 0.9]]))
+    (is (= [] (mob/spawner-spawns free? sp 3 [[0.0 0.0 0.0 0.0 0.0]]))
+        "a try in the floor makes none")
+    (is (= [[8 64 8]] (mob/spawner-spawns free? sp 1 [[0.0 0.0 0.5 0.0 0.0] [0.9 0.0 0.5 0.9 0.0]]))
         "one try, one blaze at most")))
 
 (def fortress-floor
@@ -565,7 +578,7 @@
     (is (empty? (blazes-of (ticks sim 100))) "none before its delay")
     (let [later (ticks sim 810)
           bs (blazes-of later)]
-      (is (<= 1 (count bs) 6) "a batch of two to four, never past the cap")
+      (is (<= 1 (count bs) 6) "a batch of four tries, never past the cap")
       (is (every? #(mob/spawner-crowded? sp (:pos %)) (vals bs)) "in the box about it")
       (is (= (count bs) (count (said later :add-entity))) "each told to the client"))))
 

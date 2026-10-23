@@ -6,6 +6,7 @@
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
             [clojurecraft.hunt :as hunt]
+            [clojurecraft.intent :as intent]
             [clojurecraft.memory :as memory]
             [clojurecraft.path :as path]
             [clojurecraft.plan :as plan]
@@ -70,14 +71,19 @@
         "fed, kit held, no food: a cow is hunted")
     (is (= {:intent/kind :fight :intent/target 5 :intent/for :hunt}
            (plan/next-intent (standing 20 kit cow) hunt-row plan/goals)))
-    (is (plan/done-by (standing 20 (assoc kit 2 (item :bread 3)) cow) hunt-row)
+    (is (plan/done-by (standing 20 (assoc kit 2 (item :bread hunt/provision-wanted)) cow) hunt-row)
         "provision-wanted foods held")
-    (is (not (plan/done-by (standing 20 (assoc kit 2 (item :bread 2)) cow) hunt-row))
-        "two is under it")
+    (is (not (plan/done-by (standing 20 (assoc kit 2 (item :bread (dec hunt/provision-wanted))) cow)
+                           hunt-row))
+        "one fewer is under it")
     (is (plan/done-by (standing 20 {} cow) hunt-row) "no kit yet: no trip for food")
     (is (plan/done-by (standing 20 {0 (item :flint_and_steel 1)} cow) hunt-row)
         "the water bucket is the kit's too")
-    (is (plan/done-by (standing 20 kit {}) hunt-row) "no animal: the portal is not held up")
+    (is (plan/done-by (assoc (standing 20 kit {})
+                             :hunt/forage {:forage/since 0 :forage/leg 4}
+                             :time/now hunt/forage-ms)
+                      hunt-row)
+        "no animal and the search's time spent: the portal is not held up")
     (is (plan/done-by (assoc (standing 20 kit cow) :player/dimension "minecraft:the_nether")
                       hunt-row)
         "the Nether has no game: only the overworld provisions")))
@@ -172,3 +178,125 @@
                   :intent/status :done})]
     (is (nil? (hunt/fresh-kill w)))
     (is (= :fight (:intent/kind (plan/next-intent w hunt-row plan/goals))))))
+
+(def kit-held {0 (item :flint_and_steel 1) 1 (item :water_bucket 1)})
+
+(defn provisioning
+  "A bot in play at ms, the portal kit held and no food, no animal in sight, on the open surface."
+  [now]
+  (assoc (standing 20 kit-held {}) :time/now now :time/tick 0))
+
+(deftest with-no-animal-in-reach-the-portal-bot-searches-for-one
+  ;; issue #501: herds are about one chunk in ten, and the Nether has no game
+  (let [w (provisioning 1000)]
+    (is (hunt/foraging? w))
+    (is (not (plan/done-by w hunt-row)) "the row is undone: a search is planned")
+    (is (= {:intent/kind :forage :intent/for :hunt} (plan/next-intent w hunt-row plan/goals)))
+    (is (= {:intent/kind :fight :intent/target 5 :intent/for :hunt}
+           (plan/next-intent (assoc-in w [:world/entities 5] (animal :cow [11.5 64.0 8.5]))
+                             hunt-row
+                             plan/goals))
+        "an animal in reach is hunted, not searched for")))
+
+(deftest the-search-is-bounded-and-never-held-against-a-build-or-the-mine
+  (let [w (provisioning 1000)
+        began (assoc w :hunt/forage {:forage/since 1000 :forage/leg 2})]
+    (is (hunt/foraging? (assoc began :time/now (+ 1000 (dec hunt/forage-ms)))))
+    (is (not (hunt/foraging? (assoc began :time/now (+ 1000 hunt/forage-ms))))
+        "forage-ms after its first leg it is over, however many legs")
+    (is (plan/done-by (assoc began :time/now (+ 1000 hunt/forage-ms)) hunt-row)
+        "and the row is done, the portal goes on with what is held")
+    (let [looked (assoc w :hunt/forage {:forage/since 1000 :forage/leg 0 :forage/retry-at 5000})]
+      (is (not (hunt/foraging? (assoc looked :time/now 4999))) "no route lately: it waits")
+      (is (hunt/foraging? (assoc looked :time/now 5000)) "then it looks again"))
+    (is (not (hunt/foraging? (assoc w :plan/attempts 1))) "a failed leg ends it for the moment")
+    (is (not (hunt/foraging? (assoc w :plan/unwalkable 1))) "so does a leg that found no path")
+    (is (not (hunt/foraging? (assoc w :player/health (dec hunt/forage-health)))) "hurt: it stays")
+    (is (not (hunt/foraging? (assoc-in w [:world/entities 9] (animal :zombie [30.5 64.0 8.5]))))
+        "a zombie within forage-wary: R1/5 searched at night through creepers and zombies and died")
+    (is (hunt/foraging? (assoc-in w [:world/entities 9] (animal :zombie [60.5 64.0 8.5])))
+        "one farther is no reason")
+    (is (hunt/foraging? (assoc-in w [:world/entities 9] (animal :cow [11.5 64.0 40.5])))
+        "an animal is no hazard")
+    (is (not (hunt/foraging? (assoc w :plan/intent {:intent/kind :build :intent/status :active})))
+        "a cast is never left half made")
+    (is (not (hunt/foraging? (assoc (standing 20 {} {}) :time/now 1000))) "no kit, no search")
+    (is (not (hunt/foraging?
+              (assoc (standing 20 (assoc kit-held 2 (item :bread 6)) {}) :time/now 1000)))
+        "six foods held: enough")
+    (is (not (hunt/foraging? (assoc w :player/dimension "minecraft:the_nether")))
+        "the Nether has no game")
+    (is (not
+         (hunt/foraging?
+          (assoc w :world/chunks {[0 0] (world/column {[8 70 8] (blocks/default-state :stone)})})))
+        "under a roof: deep in the ground there are no animals to find")))
+
+(defn stub-plan
+  "A route finder for forage-leg: records [goal-pos range] of every goal asked in asked, answers
+   {:path/status :none} where none? holds of the goal's point, else found when found and the
+   status given (a :partial one) with the one waypoint [30 64 8] ending it."
+  [asked none? status]
+  (fn [_ _ goal _]
+    (swap! asked conj [(:goal/pos goal) (:goal/range goal)])
+    (if (none? (:goal/pos goal))
+      {:path/status :none :path/waypoints []}
+      {:path/status status :path/waypoints [[30 64 8]]})))
+
+(deftest a-forage-leg-turns-a-quarter-right-and-falls-back-to-the-next-way
+  (let [w (provisioning 1000)
+        asked (atom [])
+        leg-from (fn [plan leg] (hunt/forage-leg plan w {:forage/since 0 :forage/leg leg}))
+        always (stub-plan asked (constantly false) :found)]
+    (is (= [[30 64 8] 1] (leg-from always 0)))
+    (is
+     (= [[-40 64 8] 95] (first @asked))
+     "leg 0 goes east: the goal's point is the reach behind the feet, the range twice it less one")
+    (is (= [[30 64 8] 3] (leg-from always 2)) "leg 2 goes west")
+    (is (= [[30 64 8] 5] (leg-from always 4)) "the way round starts again after four")
+    (is (= [[30 64 8] 2] (leg-from (stub-plan (atom []) (fn [[x _ _]] (< x 8)) :found) 0))
+        "no route east at 48: south, a quarter right, is taken, and the next leg turns on from it")
+    (is (= [[30 64 8] 4] (leg-from (stub-plan (atom []) (fn [[x _ _]] (> x 8)) :found) 2))
+        "no route west at 96: north")
+    (is (nil? (leg-from (stub-plan (atom []) (constantly true) :found) 0)) "no way at all")
+    (is (= [[30 64 8] 1] (leg-from (stub-plan (atom []) (constantly false) :partial) 0))
+        "a route that spent its budget but goes on is walked")
+    (is (nil? (hunt/forage-leg (fn [_ _ _ _] {:path/status :partial :path/waypoints [[10 64 8]]})
+                               w
+                               {:forage/since 0 :forage/leg 0}))
+        "one that goes nowhere is not")))
+
+(deftest the-legs-go-round-a-square-that-grows
+  (is (= [48 32 16] (hunt/forage-reaches 0)))
+  (is (= [48 32 16] (hunt/forage-reaches 1)))
+  (is (= [96 48 32 16] (hunt/forage-reaches 2)))
+  (is (= [96 48 32 16] (hunt/forage-reaches 40)) "never past what the server shows"))
+
+(deftest the-forage-intent-becomes-the-walk-it-chose-or-ends-the-search
+  ;; the real route finder: four columns east of the bot hold a cell 48 blocks on, one column
+  ;; none in any direction
+  (let [col (world/column {})
+        on (fn [chunks]
+             (assoc (provisioning 1000)
+                    :world/chunks chunks
+                    :plan/intent {:intent/kind :forage :intent/for :hunt :intent/status :active}))
+        run (fn [w] (intent/run w (:plan/intent w) {:event/kind :tick :event/now 1000}))
+        wide (run (on (zipmap [[0 0] [1 0] [2 0] [3 0]] (repeat col))))
+        alone (run (on {[0 0] col}))]
+    (is (= :walk (get-in wide [:plan/intent :intent/kind])))
+    (is (= :hunt (get-in wide [:plan/intent :intent/for])))
+    (is (< 40 (first (get-in wide [:plan/intent :intent/target]))) "east, far past the bot at 8")
+    (is (= {:forage/since 1000 :forage/leg 1} (:hunt/forage wide)))
+    (is (intent/done? (:plan/intent alone)))
+    (is (= (+ 1000 hunt/forage-retry-ms) (get-in alone [:hunt/forage :forage/retry-at])))
+    (is (not (hunt/foraging? alone)) "it waits before it looks again")
+    (is (hunt/foraging? (assoc alone :time/now (+ 1000 hunt/forage-retry-ms))))
+    (is (plan/done-by (dissoc alone :plan/intent) hunt-row) "the portal goes on meanwhile")))
+
+(deftest an-animal-whose-cell-a-walk-failed-at-is-not-hunted-again
+  ;; issue #162 (snapshot R1-41-1): fail-intent blacklists the walk's cell, the hunt skipped
+  ;; animals by id, so the same sheep was walked at every twelve seconds until twelve failed
+  (let [cow {5 (animal :cow [14.5 64.0 8.5])}
+        w (standing 8 {} cow)]
+    (is (some? (hunt/game w)))
+    (is (nil? (hunt/game (assoc w :plan/blacklist #{[14 64 8]}))) "the cell it stands in")
+    (is (nil? (hunt/game (assoc w :player/in-water? true))) "no walk is routed from the water")))
