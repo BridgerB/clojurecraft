@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-23T15:37:40.058Z",
+  "at" : "2026-10-23T15:43:27.978Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -78,15 +78,15 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 562,
-    "title" : "Bot stops at blaze-rods: not-held",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : true
-  }, {
     "number" : 410,
     "title" : "Bot stops at fortress: not-held",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
+  }, {
+    "number" : 562,
+    "title" : "Bot stops at blaze-rods: not-held",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : true
   }, {
     "number" : 526,
     "title" : "Bot stops at blaze-rods: blocked",
@@ -128,6 +128,11 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
+    "number" : 130,
+    "title" : "Bot stops at cast-one: boxed",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
     "number" : 450,
     "title" : "Bot stops at cast-one: no-spot",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
@@ -151,11 +156,6 @@
     "number" : 231,
     "title" : "Bot stops at cast-one: no-footing",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
-    "number" : 130,
-    "title" : "Bot stops at cast-one: boxed",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 564,
@@ -234,11 +234,11 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 562,
+    "issue" : 410,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 410,
+    "issue" : 562,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -274,6 +274,10 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 130,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
     "issue" : 450,
     "move" : "leave",
     "why" : "hands-off label"
@@ -291,10 +295,6 @@
     "why" : "hands-off label"
   }, {
     "issue" : 231,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
-    "issue" : 130,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
