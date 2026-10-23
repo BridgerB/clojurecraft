@@ -36,7 +36,8 @@
 (def climb-past 3)                    ; a target more than this above or below makes a step go up or down
 (def stall-tunnels 3)                 ; tunnels in a row that gain no stall-gain toward a leg's end before the leg is given up
 (def stall-gain 8)                    ; blocks a tunnel must bring the feet nearer a leg's end to count as progress (rock gives about 32)
-(def bridge-ground-depth 48)           ; blocks under a floor to be laid over a cavern looked down through for ground: the fall of a body knocked off
+(def bridge-ground-depth 96)           ; blocks under a floor to be laid over a cavern looked down through for ground: the fall of a body knocked off
+(def shaft-aside 8)                   ; blocks a brick may stand aside of the feet and still be climbed as a shaft, not a stair
 (def bridge-min-filler 16)            ; filler a bridge over a cavern keeps in hand: it stops when fewer are left
 (def bridge-lava-health 18)           ; health a bridge over lava is begun and carried on with: never hurt
 (def bridge-min-health 14)            ; health a bridge over a cavern is begun and carried on with
@@ -202,7 +203,11 @@
   "The steps to try from feet toward target, best first: along the axis with the farther way to go,
    then the other, then sideways and back (aside, when target is straight over or under); each
    up or down first when target is more than climb (climb-past when not given) above or below,
-   then level, then the other way."
+   then level, then the other way. A target farther above or below than it is aside (a fortress
+   brick overhead) takes the height first of every direction, then the level, so a safe step up
+   in a lesser direction beats a step level or down in the first: the bot dug a zigzag down to
+   the bedrock under bricks 37 and 47 blocks over its head (sim snapshots R2-25-2 and R2-6-2,
+   issues #538 and #338)."
   ([feet target] (moves feet target climb-past))
   ([[fx fy fz] [tx ty tz] climb]
    (let [ddx (- tx fx)
@@ -217,7 +222,9 @@
          [a b] (if (>= (abs ddx) (abs ddz)) [x z] [z x])
          side (fn [[p q]] [[q p] [(- q) (- p)]])
          dirs (distinct (remove #(= [0 0] %) (concat [a b] (side (if (= [0 0] a) b a)) aside)))]
-     (for [[dx dz] dirs dy ys] [dx dy dz]))))
+     (if (and (not (zero? dy)) (> (abs ddy) (+ (abs ddx) (abs ddz))))
+       (for [dy ys [dx dz] dirs] [dx dy dz])
+       (for [[dx dz] dirs dy ys] [dx dy dz])))))
 
 (defn choose-move
   "The first of moves from feet toward target (climbing past climb, climb-past when not given)
@@ -307,11 +314,25 @@
                 feet
                 move))))
 
+(defn gaining?
+  "Does move from feet lessen the vertical gap to target: a step up when the target is above, a
+   step down when it is below? A level step does not. The way back up a stair already stood in is
+   still progress, so it is not counted as a retreat (issue #526)."
+  [feet move target]
+  (let [dy (long (second move))
+        ddy (- (long (second target)) (long (second feet)))]
+    (and (not (zero? dy))
+         (not (zero? ddy))
+         (= (long (math/signum (double dy))) (long (math/signum (double ddy)))))))
+
 (defn next-move
   "The next tunnel move: a safe unvisited cell first (in the dry tunnel, one floored across a cave
    as soon, bridge?, in the order of moves), then a short floored turn onto adjoining ground, then
    a climb onto a block laid beside the feet (climb-out?), then a step once the lava beside it is
-   capped (sealed?), then a safe retreat. A turn fills one
+   capped (sealed?), then a safe retreat. While the target is more than climb above the feet, a
+   downward safe step waits until that climb, including one back into a cell already stood in: the
+   only safe step was down a cobble stair onto an obsidian pad, and the pad then refused every
+   fresh step (sim snapshots R2-29-1 and R2-36-1, issue #526). A turn fills one
    air floor from the current stand before entering; it needs support on another side too and
    never bridges over fluid. Gym batch stronghold-room-b (plan run 39132210882) run 3 of the
    portal room staired down through a cave to the frame's height, 126 blocks from it, every step
@@ -339,8 +360,11 @@
                                     (= (second floor) (second %))
                                     (build/holds? world [:solid %]))
                               (neighbours floor))
-                        (or (not dry-only?) (dry? world feet move)))))]
-     (or (first (filter first-way? fresh))
+                        (or (not dry-only?) (dry? world feet move)))))
+         up? (> (- (long (second target)) (long (second feet))) (long climb))
+         climb? #(climb-out? world feet % dry-only?)
+         down? #(neg? (long (second %)))]
+     (or (first (filter #(and (first-way? %) (or (not up?) (not (down? %)))) fresh))
          (first (filter (fn [move]
                           (let [floor (plus (plus feet move) [0 -1 0])
                                 filled (assoc-in world
@@ -348,7 +372,9 @@
                                         (blocks/default-state :cobblestone))]
                             (and (turn? move) (safe? filled feet move))))
                         fresh))
-         (first (filter #(climb-out? world feet % dry-only?) fresh))
+         (first (filter climb? fresh))
+         (when up? (first (filter climb? ways)))
+         (when up? (first (filter #(and (first-way? %) (down? %)) fresh)))
          (first (filter #(and (sealed? world feet %) (or (not dry-only?) (dry? world feet %)))
                         fresh))
          (first (filter allowed? ways))))))
@@ -363,7 +389,8 @@
 
 (defn retreat?
   "Does move from feet step into a cell visited already stood in: next-move's last resort, a
-   retreat (every fresh step, turn and climb goes to an unvisited cell)?"
+   retreat (a fresh step, turn or climb goes to an unvisited cell, and a climb that gains height
+   toward the target is taken even when the cell was stood in)?"
   [feet move visited]
   (contains? visited (plus feet move)))
 
@@ -465,6 +492,81 @@
   (some #(when (build/holds? world [:solid %]) (build/dig-op % feet nil :unbury))
         [(plus feet up) feet]))
 
+(defn overhead?
+  "Is target within shaft-aside blocks horizontally and more than climb-past above feet: a brick
+   over the head. A stair up to it digs three cells a level, about twenty seconds a level by
+   hand, and forty-seven of them outlast the window (sim snapshot R2-6-2, issue #338, y 9 under
+   a brick at y 56). A leg's end across a cavern is not overhead."
+  [[fx fy fz] [tx ty tz]]
+  (and (> (- ty fy) climb-past) (<= (+ (abs (- tx fx)) (abs (- tz fz))) shaft-aside)))
+
+(defn shaft-ready?
+  "May a shaft rise from feet: a block to lay (stairs/pillar-item), the feet centred on a solid
+   block, and the cells over the head safe to open (stairs/shaft-safe?). The stair's pillar-up?
+   without its :stairs-up kind."
+  [world feet]
+  (boolean (and (stairs/pillar-item world)
+                (intent/centred? world feet)
+                (= :solid (path/classify world (update feet 1 dec)))
+                (stairs/shaft-safe? world feet))))
+
+(defn shaft-tick
+  "One tick of a shaft toward a brick overhead, or nil when this tick is an ordinary step. While
+   :intent/stage is :shaft, or it may begin (overhead?, shaft-ready?, the shaft not given up,
+   the feet on the ground): dig the cell over the head by hand (the drop is not wanted), then a
+   child :pillar lays a block under the feet at the top of the jump, one dig a level. A child
+   that fails, or a cell that stops being safe, gives the shaft up for this tunnel
+   (:intent/no-shaft) and the steps resume. Reaching the brick's height leaves the shaft. A
+   level the pillar completes counts as a step."
+  [world feet target {:intent/keys [stage child no-shaft move taken] :or {taken 0}} event]
+  (let [shafting? (= :shaft stage)
+        begin? (and (nil? move)
+                    (not shafting?)
+                    (not no-shaft)
+                    (not (stairs/airborne? world))
+                    (overhead? feet target)
+                    (shaft-ready? world feet))]
+    (when (and (nil? move) (or shafting? begin?))
+      (let [cell (first (filter #(= :solid (path/classify world %)) (stairs/shaft-cells feet)))
+            item (stairs/pillar-item world)
+            open? (and item
+                       (stairs/shaft-safe? world feet)
+                       (intent/centred? world feet)
+                       (= :solid (path/classify world (update feet 1 dec))))]
+        (cond (and shafting? (nil? child) (not (overhead? feet target)))
+              (intent/dissoc-intent world :intent/stage)
+              (and child
+                   (or (intent/done? child)
+                       (and (intent/failed? child) (= :target-gone (:intent/reason child)))))
+              (cond-> (intent/dissoc-intent world :intent/child)
+                (= :pillar (:intent/kind child))
+                (intent/assoc-intent :intent/taken (inc (long taken))))
+              (and child (intent/failed? child))
+              (-> world
+                  (assoc :player/controls {})
+                  (intent/assoc-intent :intent/no-shaft (:intent/reason child))
+                  (intent/dissoc-intent :intent/child :intent/stage))
+              child (intent/run-child world event)
+              (stairs/airborne? world) (assoc world :player/controls {})
+              (not open?)
+              (-> world
+                  (assoc :player/controls {})
+                  (intent/assoc-intent :intent/no-shaft :unsafe)
+                  (intent/dissoc-intent :intent/stage))
+              cell
+              (intent/assoc-intent world
+                                   :intent/stage :shaft
+                                   :intent/child
+                                   (assoc (intent/child-dig cell) :intent/drop-ok? true))
+              :else
+              (intent/assoc-intent world
+                                   :intent/stage :shaft
+                                   :intent/child
+                                   {:intent/kind :pillar
+                                    :intent/item item
+                                    :intent/top (inc (long (second feet)))
+                                    :intent/status :active}))))))
+
 (defmethod intent/run :tunnel-to
   ;; one step at a time toward :intent/target: a step's move is chosen when it starts and its ops
   ;; worked until the bot stands in the cell stepped into; done at the target (within
@@ -482,7 +584,8 @@
     :or {taken 0 r reach climb climb-past tunnel-visited #{} retreats 0 airborne 0}
     :as i} event]
   (let [world (cond-> world search (assoc :fortress/search search)) ; the spiral's leg, kept for the planner's next look
-        feet (intent/feet world)]
+        feet (intent/feet world)
+        shaft (shaft-tick world feet target i event)] ; nil on an ordinary step, else that tick's world
     (cond
       (or (arrived? world target r) (>= taken steps))
       (-> world
@@ -492,6 +595,7 @@
       (reduce intent/dissoc-intent (assoc world :player/controls {}) step-keys)
       (buried world feet)
       (build/work-op (assoc world :player/controls {}) i (buried world feet) event)
+      shaft shaft
       (and (nil? move) (false? (:player/on-ground? world)) (< airborne air-grace))
       (intent/assoc-intent (assoc world :player/controls {}) :intent/airborne (inc airborne))
       (nil? move)
@@ -503,7 +607,7 @@
             ahead
             (when-not back
               (next-move world feet target climb (boolean dry?) seen (boolean (:intent/bridge? i))))
-            fresh? (and ahead (not (retreat? feet ahead seen)))
+            fresh? (and ahead (or (gaining? feet ahead target) (not (retreat? feet ahead seen))))
             undo (when-not (or back fresh?) (step-back world feet trail (boolean dry?)))
             m (or back undo ahead)
             retreated (if (and ahead (not fresh?) (not undo)) (inc (long retreats)) 0)]
@@ -530,6 +634,15 @@
                step-keys)
               (and (#{:floor-clear :open :enter} (:build/step next)) (not (safe? world from move)))
               (reduce intent/dissoc-intent (assoc world :player/controls {}) step-keys)
+              ;; nothing to lay (the last block went into an earlier cell of this step): the
+              ;; step is given up and its cell counts as visited, never placed with a block
+              ;; that is not held (sim snapshots R2-17-1 and R2-12-1, issue #410)
+              (and (= :place (:build/op next)) (nil? (stairs/filler world 1)))
+              (reduce intent/dissoc-intent
+                      (intent/assoc-intent (assoc world :player/controls {})
+                                           :intent/tunnel-visited
+                                           (conj tunnel-visited (plus from move)))
+                      step-keys)
               (and (= :enter (:build/step next))
                    (= :walk (:intent/kind child))
                    (intent/failed? child)
@@ -712,7 +825,10 @@
               (intent/chain-next (:plan/last world) :take-table make/table-drops {})
               (make/take-table-along world)
               (when brick
-                {:intent/kind :tunnel-to :intent/target brick :intent/steps steps-per-tunnel})
+                {:intent/kind :tunnel-to
+                 :intent/target brick
+                 :intent/steps steps-per-tunnel
+                 :intent/bridge? true})
               (when search
                 {:intent/kind :tunnel-to
                  :intent/target (leg-target search)
