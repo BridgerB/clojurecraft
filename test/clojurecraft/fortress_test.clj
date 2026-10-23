@@ -1040,7 +1040,7 @@
                        :time/now 0
                        :player/pos [0.5 64.0 0.5]}
                       [[10 64 0] [14 64 0]])
-              (assoc :world/blocks {}))]
+              (assoc :world/chunks {} :world/blocks {}))]
     (is (= [10 64 0] (fortress/chosen-brick w)) "the nearest with none chosen")
     (is (= [14 64 0] (fortress/chosen-brick (assoc w :fortress/brick [14 64 0])))
         "the chosen one although another is nearer")

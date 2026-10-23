@@ -1,0 +1,19 @@
+;; Issue #263, branch feat/263-warped8, third batch: a hunt walled in with no end for its roam cuts
+;; its way out toward the nearest enderman (dig-out, cheapest-heading). Batch pearls-warped8-a's
+;; runs 2 and 3 (probes 39778589970, 39780802996) stood four and a half hours in lookouts in a
+;; pocket no route left, 3 and 4 pearls held. One pearls-12 trial a job, the row's full 5-hour cap.
+{:plans/label "pearls-warped8-c"
+ :plans/jobs 4
+ :plans/issue 263
+ :plans/experiments [{:exp/name "pearls-12"
+                      :exp/kind :gym
+                      :exp/goal "pearls-12"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 18000}
+                     {:exp/name "pearls-1-live"
+                      :exp/kind :gym
+                      :exp/goal "pearls-1-live"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 300}]}
