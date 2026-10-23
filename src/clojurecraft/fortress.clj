@@ -36,7 +36,7 @@
 (def climb-past 3)                    ; a target more than this above or below makes a step go up or down
 (def stall-tunnels 3)                 ; tunnels in a row that gain no stall-gain toward a leg's end before the leg is given up
 (def stall-gain 8)                    ; blocks a tunnel must bring the feet nearer a leg's end to count as progress (rock gives about 32)
-(def bridge-ground-depth 48)           ; blocks under a floor to be laid over a cavern looked down through for ground: the fall of a body knocked off
+(def bridge-ground-depth 96)           ; blocks under a floor to be laid over a cavern looked down through for ground: the fall of a body knocked off
 (def bridge-min-filler 16)            ; filler a bridge over a cavern keeps in hand: it stops when fewer are left
 (def bridge-lava-health 18)           ; health a bridge over lava is begun and carried on with: never hurt
 (def bridge-min-health 14)            ; health a bridge over a cavern is begun and carried on with

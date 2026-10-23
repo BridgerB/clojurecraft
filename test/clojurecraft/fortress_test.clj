@@ -1132,3 +1132,14 @@
     (is (every? #(<= (second %) 0) (drop (count ups) ms)) "then level, then down"))
   (is (= [1 0 0] (first (fortress/moves [0 64 0] [60 70 50])))
       "a far way aside keeps its direction"))
+
+(deftest ground-is-looked-for-the-depth-of-the-lava-sea-and-more
+  ;; Issues #538 and #338: R2-2-1 stood on a floor 80 over a sea whose lava began 49 under it, and
+  ;; found no ground to bridge to within 48 blocks.
+  (let [cavern (fn [floor-y]
+                 {:world/chunks {}
+                  :world/blocks (merge (into {} (for [y (range 0 120)] [[0 y 0] air]))
+                                       {[0 floor-y 0] netherrack})})]
+    (is (fortress/ground-below? (cavern 20) [0 80 0]) "60 under the floor")
+    (is (fortress/ground-below? (cavern 5) [0 100 0]) "95 under it")
+    (is (not (fortress/ground-below? (cavern 2) [0 100 0])) "98 under it: not looked for")))
