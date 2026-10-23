@@ -214,12 +214,23 @@
   [p]
   (if (= :early p) early-forage-ms forage-ms))
 
+(defn afloat?
+  "Is the body in water: :player/in-water?, or the box at :player/pos overlapping water
+   (physics/touching-water?). The flag is written on a tick; a plan chooses on :go before any
+   tick, and a pond's first intent was a forage ahead of the swim out (issue #504)."
+  [world]
+  (boolean (or (:player/in-water? world)
+               (when-let [pos (:player/pos world)]
+                 (physics/touching-water? (terrain/fluid-fn world) pos)))))
+
 (defn foraging?
   "Does the bot go on looking for animals: provisioning?, the phase's forage-budget not past since its first leg, no look
    for a route lately that found none (:forage/retry-at), no failed intent in a row
    (:plan/attempts, and :plan/unwalkable for a walk that failed :no-path, which counts apart: a
    leg that failed ends the search for the moment, as twelve such walks in a row would end the
-   plan), no :build running (a cast is never left half made), the feet under
+   plan), no :build running (a cast is never left half made) and no :dig already begun (it is
+   finished; a stairs or a tunnel is the descent and is not paused), not afloat? (in water the
+   swim out comes first), the feet under
    the open sky (animals live on the surface: a bot deep in its mine has none to find), health
    at least forage-health and no hostile within forage-wary. Issue #501: bots went into the Nether with no food because
    nothing looked for animals past the 48 blocks the server shows, and herds are about one chunk
@@ -230,7 +241,8 @@
                   (or (nil? retry-at) (>= (:time/now world 0) retry-at))
                   (zero? (:plan/attempts world 0))
                   (zero? (:plan/unwalkable world 0))
-                  (not= :build (:intent/kind (:plan/intent world)))
+                  (not (#{:build :dig} (:intent/kind (:plan/intent world))))
+                  (not (afloat? world))
                   (>= (:player/health world 20.0) forage-health)
                   (nil? (entity/nearest (entity/hostiles world) (:player/pos world) forage-wary))
                   (or (nil? since)

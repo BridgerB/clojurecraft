@@ -223,6 +223,13 @@
         "an animal is no hazard")
     (is (not (hunt/foraging? (assoc w :plan/intent {:intent/kind :build :intent/status :active})))
         "a cast is never left half made")
+    (is (not (hunt/foraging? (assoc w :plan/intent {:intent/kind :dig :intent/status :active})))
+        "a dig already begun is finished")
+    (is (not (hunt/foraging? (assoc w :player/in-water? true)))
+        "in the water: the swim out comes first")
+    (is (not (hunt/foraging?
+              (assoc w :world/chunks {[0 0] (world/column {[8 64 8] blocks/water-base})})))
+        "afloat before the flag: a :go plans before any tick")
     (is (not (hunt/foraging? (assoc (standing 20 {} {}) :time/now 1000))) "no kit, no search")
     (is (not (hunt/foraging?
               (assoc (standing 20 (assoc kit-held 2 (item :bread 6)) {}) :time/now 1000)))
