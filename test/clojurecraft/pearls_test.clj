@@ -910,8 +910,21 @@
           "from which it can be stared at: no nearer than stare-from, with a clear line"))
     (is (pearls/stale? stale) "a minute of them: the burrow is given up")
     (is (nil? (pearls/shelter stale)))
-    (is (and (= :walk kind) (= :pearls for) (not= [8 61 8] target) (not= [3 64 8] target))
-        "the hunt walks out toward it, to cut a burrow beside it")
+    (is (and (= :walk kind) (= :shelter for) (not= [8 61 8] target) (not= [3 64 8] target))
+        "the hunt walks out to a new burrow's site")
+    ;; sim probe 39883402083 (world R1, seed 4): the walk toward it and the burrow cut beside it
+    ;; were the old burrow again, every few minutes for fifty
+    (let [at (assoc stale
+                    :player/pos (pearls/feet-at target)
+                    :plan/last {:intent/kind :walk :intent/for :shelter :intent/status :done})]
+      (is (= target (pearls/crowd-site stale)))
+      (is (>= (physics/distance (game/eye at) (pearls/head calm)) (+ pearls/stare-from 1.0))
+          "past stare-from of it, so the stare from the new mouth runs its course")
+      (is (pearls/provokable? at calm) "with a clear line to its head")
+      (is (= :burrow (:intent/kind (plan/next-intent at row plan/goals))) "there, the new burrow"))
+    (is (nil? (pearls/crowd-site (assoc stale :plan/blacklist #{7})))
+        "one that would not provoke is no reason to move")
+    (is (nil? (pearls/crowd-site (looked (burrowed [8.5 61.0 8.5] {}) 12))) "no crowd, no site")
     (is (not (pearls/stale? (looked (assoc-in dug [:world/entities 7 :entity/creepy?] true) 12)))
         "one coming is no calm crowd")
     (is

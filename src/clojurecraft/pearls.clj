@@ -798,6 +798,64 @@
                                 (when (and (intent/routable? world i) (way-home c))
                                   (dissoc i :intent/max-nodes)))))))))))
 
+(def crowd-reach 10)                  ; cells on the plane from a calm enderman crowding a given-up burrow's mouth, at most, a new burrow is cut within: the nearer its mouth, the surer the stare from it follows
+(def crowd-margin 1.0)                ; blocks past stare-from that a new burrow's mouth stands from that enderman's head, at the least, so that the stare from it is not cut short as one that came near (:provoke)
+
+(defn crowder
+  "[eid entity] of the nearest calm enderman (not entity/creepy?) crowding the burrow's mouth
+   (crowd) that is not blacklisted (one that would not provoke is no reason to move), or nil."
+  [world]
+  (let [bl (:plan/blacklist world #{})]
+    (entity/nearest
+     (into {} (remove (fn [[eid e]] (or (contains? bl eid) (entity/creepy? e)))) (crowd world))
+     (:player/pos world))))
+
+(defn crowd-site
+  "The cell to cut a new burrow at when the burrow is given up (stale?) over a calm enderman
+   crowding its mouth (crowder): within crowd-reach of it on the plane and vantage-rise of its
+   height, its head stare-from and crowd-margin or more from the eye standing there and
+   provokable? from it, a cell the bot could stand in (standable?) and cut a burrow from heading
+   from it (burrowable?, along away), past a walk's reach of the eye, not one a walk failed
+   toward (:plan/blacklist), and of those, nearest the feet first and vantage-tries at most, the
+   first a route reaches (intent/routable?); nil when there is none, or no crowder. Cut there, the
+   burrow's mouth is where the stare goes from, as for any quarry. Sim probe 39883402083 (world
+   R1, seed 4): a calm enderman stood by the mouth from the eighth minute to the end, too near
+   to stare at from the mouth and hidden from the end; every minute of lookouts gave the burrow
+   up, the walk toward the nearest enderman went to that one, and the burrow cut beside it was
+   the same burrow again, its end and mouth the cells they had been. Worlds R1, R2 and R4 stood
+   28 to 49 of their 60 minutes so over seeds 3 to 5; gym batch pearls-warped4-a's runs 1 and 5
+   stood 35 and 21 minutes over such ones (plan run 39544677155)."
+  [world]
+  (when-let [[_ e] (crowder world)]
+    (let [feet (intent/feet world)
+          eye (game/eye world)
+          bl (:plan/blacklist world #{})
+          [ex ey ez] (cell (:entity/pos e))
+          from (fn [c] (assoc world :player/pos (feet-at c)))]
+      (->> (for [dx (range (- crowd-reach) (inc crowd-reach))
+                 dz (range (- crowd-reach) (inc crowd-reach))
+                 dy (range (- vantage-rise) (inc vantage-rise))]
+             [(+ ex dx) (+ ey dy) (+ ez dz)])
+           (filter (fn [c]
+                     (and (not (contains? bl c))
+                          (> (physics/distance eye (physics/centre c)) intent/reach)
+                          (standable? world c))))
+           (sort-by #(physics/distance feet %))
+           (filter (fn [c]
+                     (let [at (from c)]
+                       (and (>= (physics/distance (game/eye at) (head e))
+                                (+ stare-from crowd-margin))
+                            (provokable? at e)
+                            (burrowable? world c (away at e))))))
+           (take vantage-tries)
+           (some (fn [c]
+                   (when (intent/routable? world
+                                           {:intent/kind :walk
+                                            :intent/target c
+                                            :intent/for :shelter
+                                            :intent/max-nodes vantage-nodes})
+                     c)))))))
+
 (defn bore
   "A tunnel (:tunnel, stairs.clj: level steps, turning where one is refused) bore-length long
    the straight way toward the nearest enderman in ms standing less than descend-drop above or
@@ -1052,7 +1110,10 @@
    given up (stale?): the hunt never walks out of its burrow's reach after an enderman (batch
    pearls-warped4-b's arena runs, plan run 39596287510, walked 16 and 55 blocks to ones hidden
    from the mouth, and run 2 met the dark's zombies, skeleton and creeper there with its burrow
-   out of reach); with no burrow, a walk to the nearest within seek-radius a
+   out of reach); given up over a calm enderman crowding its mouth (crowder), a walk to a cell a
+   new burrow cut from would stare at it from its mouth (crowd-site), before any burrow cut
+   where the bot stands: the one cut from the old end, or beside the crowder after the walk
+   toward it, was the old burrow again (sim probe 39883402083); with no burrow, a walk to the nearest within seek-radius a
    route reaches, or toward one as far as a route goes (toward); else a :lookout, standing where
    it is: no enderman yet is no failure (batch pearls-263c's warped forest landings failed
    :no-enderman and :no-route in 40 s); before the walk toward one, stairs down toward one far
@@ -1098,6 +1159,8 @@
               (away world (or q ce e)))
         digs? (and dir (burrowable? world (intent/feet world) dir))
         site (when (and dir (not digs?)) (burrow-site world dir))
+        csite (when (and (nil? home) (pickaxe? world) (not (at-site? world)) (stale? world))
+                (crowd-site world))
         mouth (:pearls/mouth world)
         way-home {:intent/kind :walk :intent/target home :intent/for :shelter}
         far (endermen world seek-radius)]
@@ -1120,6 +1183,7 @@
       {:intent/kind :lookout :intent/for :pearls}
       (and in? aid (lure? world)) {:intent/kind :walk :intent/target mouth :intent/for :shelter}
       (and in? aid) {:intent/kind :lookout :intent/for :pearls}
+      csite {:intent/kind :walk :intent/target csite :intent/for :shelter}
       digs? {:intent/kind :burrow :intent/dir dir :intent/for :pearls}
       site {:intent/kind :walk :intent/target site :intent/for :shelter}
       (and in? qid rested?) {:intent/kind :provoke :intent/target qid :intent/for :pearls}
