@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-23T22:27:12.500Z",
+  "at" : "2026-10-23T22:28:23.548Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -96,7 +96,7 @@
     "number" : 68,
     "title" : "Bot stops at ingots: no-spot",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : true
+    "copilot" : false
   }, {
     "number" : 65,
     "title" : "Bot stops at cobblestone: boxed",
@@ -177,6 +177,9 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 575,
+    "move" : "assign"
+  }, {
     "issue" : 573,
     "move" : "leave",
     "why" : "hands-off label"
@@ -196,10 +199,6 @@
     "issue" : 574,
     "move" : "leave",
     "why" : "hands-off label"
-  }, {
-    "issue" : 68,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment"
   }, {
     "issue" : 65,
     "move" : "leave",
@@ -226,11 +225,6 @@
     "why" : "hands-off label"
   } ],
   "log" : [ {
-    "issue" : 135,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment",
-    "at" : "2026-10-21T09:16:44.833Z"
-  }, {
     "issue" : 135,
     "move" : "assign",
     "at" : "2026-10-21T09:17:54.188Z"
@@ -1567,5 +1561,9 @@
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
     "at" : "2026-10-23T22:27:12.500Z"
+  }, {
+    "issue" : 575,
+    "move" : "assign",
+    "at" : "2026-10-23T22:28:23.548Z"
   } ]
 }
