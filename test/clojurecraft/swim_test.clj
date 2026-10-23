@@ -629,6 +629,60 @@
     (is (= :failed (:intent/status bare)))
     (is (= :stuck (:intent/reason bare)))))
 
+(defn- lip-world
+  "A one-block shore (stone at [2 63 8], air at [2 64 8]) and one water cell at [3 63 8], the
+   lip a body at pos stands in. stone blocks of cobblestone when positive, else an empty hand."
+  [pos stone]
+  (assoc (game/init fx/opts)
+         :bot/phase :play
+         :player/pos pos
+         :player/loaded? true
+         :player/on-ground? false
+         :player/in-water? true
+         :player/eye-in-water? false
+         :player/inventory (if (pos? stone) {0 {:item (blocks/items :cobblestone) :count stone}} {})
+         :time/tick 200
+         :world/chunks
+         {[0 0] (world/column {[2 63 8] (blocks/default-state :stone)
+                               [3 63 8] blocks/water-base})}))
+
+(deftest a-swim-stuck-in-the-only-lay-cell-backs-off-then-lays
+  ;; race 39991081881 runner 3 (issue #351): pressed into a one-block shore, the only water
+  ;; cell at the float-top was inside the body, a placement there would be refused, and three
+  ;; swims failed :stuck with cobblestone in hand. Back off the bank, then lay once it is free
+  (let [bank [2 64 8]
+        cell [3 63 8]
+        swim {:intent/kind :swim-out
+              :intent/status :active
+              :intent/bank bank
+              :intent/started 100
+              :intent/best-tick 100
+              :intent/best-dist 0.5}
+        tick {:event/kind :tick :event/now 1000 :event/rand 0.5}
+        w (assoc (lip-world [3.3 63.9 8.5] 20) :plan/intent swim)
+        feet (intent/feet w)
+        surface (swim/surface-y w :water feet)
+        backed (:plan/intent (intent/run w swim tick))
+        clear (assoc (lip-world [4.3 63.9 8.5] 20) :plan/intent swim)
+        laid (:intent/child (:plan/intent (intent/run clear swim tick)))
+        bare (:plan/intent
+              (intent/run (assoc (lip-world [3.3 63.9 8.5] 0) :plan/intent swim) swim tick))
+        late (assoc w :time/tick (+ 100 swim/stuck-ticks swim/backoff-ticks 1))
+        gave-up (:plan/intent (intent/run late swim tick))]
+    (is (= 64 surface) "the open air over the lip is the surface")
+    (is (nil? (swim/bank-block w feet surface)) "the lip intersects the body")
+    (is (= cell (swim/occupied-bank w feet surface)))
+    (is (= :active (:intent/status backed)) "backing off does not fail the swim")
+    (is (nil? (:intent/child backed)))
+    (is (= bank (:intent/bank backed)) "the bank stays, so the next tick can lay")
+    (is (= 100 (:intent/best-tick backed)) "the stall keeps running while it drifts")
+    (is (= (swim/off-bank w bank) (:player/controls (intent/run w swim tick)))
+        "jump held, away from the bank")
+    (is (= :place (:intent/kind laid)))
+    (is (= cell (:intent/cell laid)) "once the body has left the lip, the block goes there")
+    (is (= :stuck (:intent/reason bare)) "no filler still fails")
+    (is (= :stuck (:intent/reason gave-up)) "a stall past the backoff is still :stuck")))
+
 (deftest a-body-bobbing-at-a-bank-is-trapped-but-a-swimmer-is-not
   (let [at (fn [kind ground? ticks]
              (-> (bank-world [3.3 63.2 8.5] {:intent/kind kind :intent/status :active} 0)

@@ -13,7 +13,9 @@
    progress is made for stuck-ticks it digs what is in the way as a child :dig intent (a lid
    over the head first, a wall at head height, a cap when there is no bank at all), the dig
    penalties for the eyes in water and being off the ground slowing it as vanilla does. It never
-   digs the block at feet height ahead: that is the bank the impulse needs to collide with. With
+   digs the block at feet height ahead: that is the bank the impulse needs to collide with. When
+   the only water cell a block would make a bank of intersects the player's box, it backs off
+   the bank and lays once the box has left that cell, instead of failing :stuck (issue #351). With
    no bank at all and no cap, a flooded cave whose rock walls rise straight from the water, it
    carves one: a notch two high in the nearest wall just over the float level (issue #73).
 
@@ -40,6 +42,7 @@
 (def bank-drop 3)                     ; or this far below it: a roofed pool's air pocket is sideways and down
 (def float-depth 1.03)                ; feet below an open surface when afloat with jump held (vanilla's equilibrium)
 (def stuck-ticks 40)                  ; 2 s without progress toward the bank → dig what is in the way
+(def backoff-ticks 100)               ; 5 s to drift off a lay cell the body is covering before :stuck
 (def progress 0.05)                   ; blocks nearer the bank that count as progress
 (def escape-timeout-ticks 2400)       ; 120 s: an escape longer than this has failed
 (def dig-credit-ticks 6000)           ; 300 s: the most the escape's finished digs add to that, so a wall dug by hand is not timed out
@@ -221,10 +224,11 @@
                                                            (physics/centre cell)) cell]))
          first)))
 
-(defn bank-cells
-  "The water cells at the float-top level to lay a filler into that makes a bank (see
-   bank-block), within radius on the plane and reach of the eye, nearest first; none unless the
-   feet are under the sky."
+(defn lay-candidates
+  "The water cells at the float-top a filler would make a bank of, nearest first, including a
+   cell the player's box intersects: within radius on the plane and reach of the eye, a solid
+   neighbour to place against, two clear cells over it in the open. nil unless the feet are
+   under the sky."
   [world [fx _ fz :as feet] surface radius reach]
   (when (terrain/under-sky? world feet)
     (let [top (float-top world feet surface)
@@ -239,12 +243,28 @@
                             (path/clear? world bank)
                             (path/clear? world [x (+ top 2) z])
                             (in-the-open? world bank)
-                            (not (place/inside-player? world cell))
                             (place/support world cell)
                             (<= (physics/distance eye (physics/centre cell)) reach))]
              cell)
            (sort-by (fn [cell] [(physics/horizontal-distance (physics/centre feet)
                                                              (physics/centre cell)) cell]))))))
+
+(defn bank-cells
+  "The water cells at the float-top level to lay a filler into that makes a bank (see
+   bank-block), within radius on the plane and reach of the eye, nearest first; none unless the
+   feet are under the sky. A cell the player's box intersects is left out: the server refuses
+   a block placed there."
+  [world feet surface radius reach]
+  (some->> (lay-candidates world feet surface radius reach)
+           (remove #(place/inside-player? world %))))
+
+(defn off-bank
+  "Controls that carry the body back off bank: forward toward the point as far past the
+   position from the bank's centre, jump held so the body stays at the surface. The control map."
+  [world bank]
+  (let [pos (:player/pos world)
+        away (mapv (fn [p c] (- (* 2.0 p) c)) pos (physics/centre bank))]
+    (assoc (intent/toward world away 0.0) :control/jump? true)))
 
 (defn bank-block
   "With no bank in reach and the water open to the sky over the feet, the water cell at the
@@ -259,6 +279,15 @@
    and was :no-escape three times in six minutes."
   [world feet surface]
   (first (bank-cells world feet surface notch-radius place/place-reach)))
+
+(defn occupied-bank
+  "The water cell at the float-top bank-block would lay a filler into, except the player's box
+   intersects it so the server would refuse the block. nil when a free cell is in reach, or
+   when none of the lay cells is occupied."
+  [world feet surface]
+  (when-not (bank-block world feet surface)
+    (first (filter #(place/inside-player? world %)
+                   (or (lay-candidates world feet surface notch-radius place/place-reach) ())))))
 
 (defn wall-toward
   "With no bank-block in reach, the nearest cell of one within approach-radius on the plane out of
@@ -556,11 +585,20 @@
                     (cond-> (nil? shore) (intent/dissoc-intent :intent/shore))))))
       (> (- tick best-tick) stuck-ticks)
       (let [cell (obstacle world feet bank)
-            laid (when-not cell (lift-bank world feet surface no-lay))]
+            laid (when-not cell (lift-bank world feet surface no-lay))
+            blocked (when (and (nil? cell) (nil? laid) (not no-lay) (stairs/filler world 1))
+                      (occupied-bank world feet surface))
+            stall (- tick best-tick)]
         (cond cell (dig-or-sink world feet cell "stuck")
               ;; nothing to dig and the lift peaks under the bank's top: a block laid into the water
               ;; beside the feet is a step the walk climbs from (issue #45 R1-17-2)
               laid (start-lay world laid "lift short of the bank")
+              ;; the only such cell intersects the body, so a placement would be refused: drift
+              ;; back off the bank until the cell is free, then the same check lays (issue #351)
+              (and blocked (<= stall (+ stuck-ticks backoff-ticks)))
+              (-> world
+                  (assoc :player/controls (off-bank world bank))
+                  (game/say (str "swim-out: lay cell " blocked " is inside the body, backing off")))
               :else
               (-> world
                   (assoc :player/controls {})
