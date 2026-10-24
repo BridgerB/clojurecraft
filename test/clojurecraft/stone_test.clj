@@ -147,7 +147,9 @@
     (is (nil? (stairs/down-lay (assoc-in w [:world/blocks [6 66 5]] blocks/water-base) feet cells))
         "water overhead cannot be sealed from below")
     (is (nil? (stairs/down-lay (assoc w :world/blocks {[7 63 5] blocks/lava-base}) feet cells))
-        "lava is still refused")))
+        "lava is still refused")
+    (is (nil? (stairs/down-lay (assoc w :world/blocks {[5 64 5] blocks/water-base}) feet cells))
+        "water in the player's own cell is never sealed into the body")))
 
 (deftest a-descent-seal-keeps-filler-for-the-climb-out
   (let [feet [5 64 5]

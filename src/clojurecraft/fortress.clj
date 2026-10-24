@@ -702,6 +702,14 @@
                               (assoc :player/controls {})
                               (intent/dissoc-intent :intent/reason)
                               intent/done)
+                          (and (intent/failed? i) (= :rejected (:intent/reason i)))
+                          (reduce intent/dissoc-intent
+                                  (-> world
+                                      (assoc :player/controls {})
+                                      (intent/dissoc-intent :intent/reason :intent/status)
+                                      (intent/assoc-intent :intent/tunnel-visited
+                                                           (conj tunnel-visited (plus from move))))
+                                  step-keys)
                           :else world)))))))
 
 ;; ---------------------------------------------------------------- the goal

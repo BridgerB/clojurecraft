@@ -913,6 +913,33 @@
     (is (nil? (:intent/move (:plan/intent w))) "the step dropped, chosen again next tick")
     (is (= :active (:intent/status (:plan/intent w))))))
 
+(deftest a-tunnel-step-whose-op-fails-rejected-marks-cell-visited-and-continues
+  ;; when a child placement or dig in a tunnel step is rejected by the server, the step is given
+  ;; up and marked visited so the tunnel tries another move instead of failing the plan :rejected
+  (let [w (assoc (rock {})
+                 :bot/phase :play
+                 :bot/effects []
+                 :time/now 0
+                 :time/tick 0
+                 :player/pos [0.5 64.0 0.5]
+                 :plan/intent
+                 {:intent/kind :tunnel-to
+                  :intent/target [4 64 0]
+                  :intent/steps 8
+                  :intent/move [1 0 0]
+                  :intent/from [0 64 0]
+                  :intent/child {:intent/kind :place
+                                 :intent/cell [1 63 0]
+                                 :intent/status :failed
+                                 :intent/reason :rejected}
+                  :intent/status :active})
+        w' (intent/run w (:plan/intent w) {:event/kind :tick :event/now 0})
+        i' (:plan/intent w')]
+    (is (= :active (:intent/status i')) "tunnel remains active")
+    (is (nil? (:intent/reason i')) "no failure reason left")
+    (is (nil? (:intent/move i')) "move dropped to choose another")
+    (is (contains? (:intent/tunnel-visited i') [1 64 0]) "cell marked visited")))
+
 (deftest an-overworld-step-opens-no-cell-by-water
   ;; issue #265: the way to a stronghold's portal room runs through aquifers; a :tunnel-to with
   ;; :intent/dry? takes no step whose opened cells touch water, the Nether's rule (safe?) aside
