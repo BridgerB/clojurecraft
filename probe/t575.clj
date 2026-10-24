@@ -60,7 +60,7 @@
 (doseq [p *command-line-args*]
   (try
     (let [snap (capture/read-world p)
-          w0 (simrace/prepared (capture/read-world (:snapshot/file snap)))
+          w0 (simrace/world-for! snap)
           m (simrace/moment-of snap w0)
           world (:world m)
           prev (atom nil)]
