@@ -136,11 +136,12 @@
 (defn dig-exposes?
   "Would digging cell let a fluid in (intent/exposes-fluid?), when the cell is solid at all: an
    open cell is no dig, so water beside it lets nothing in and the body only wades. A stair down
-   has always asked this of its solid cells alone (down-safe?); a level step and a stair up asked
-   it of every cell, so a step onto an open cell with a floor under it, beside a lake, was
-   refused with nothing to dig and nothing to lay, and the staircase was :boxed on the shore
-   (issues #342, #71, #65: the bots stood on cobblestone or grass at a lake's edge, every level
-   step refused for the water beside its open cells)."
+   has always asked this of its solid cells alone (down-safe?); a level step asked it of every
+   cell, so a step onto an open cell with a floor under it, beside a lake, was refused with
+   nothing to dig and nothing to lay, and the staircase was :boxed on the shore (issues #342,
+   #71, #65: the bots stood on cobblestone or grass at a lake's edge, every level step refused
+   for the water beside its open cells). A stair up still asks it of every cell (up-sealed?):
+   water beside its new feet cell would flow into the cell the body steps up into."
   [world cell]
   (and (some-> (terrain/block-at world cell)
                blocks/solid?)
@@ -363,7 +364,7 @@
    no step under its new feet, and was :boxed at the level-step limit; a stair up now lays its
    step as a stair down lays its floor."
   [world _feet cells]
-  (when (and (not (falls-over? world cells)) (not-any? #(dig-exposes? world %) cells))
+  (when (and (not (falls-over? world cells)) (not-any? #(intent/exposes-fluid? world %) cells))
     (cells-to-lay world cells (step-to-lay world cells))))
 
 (defn water-beside
@@ -390,11 +391,11 @@
                  cells)))
 
 (defn up-sealed?
-  "May a stair up be cut as it stands: up-safe?, and no cell it digs (a solid one) borders water,
-   which the child dig would refuse to open (:unsafe, intent/exposes-fluid?). An open cell is
-   no dig (dig-exposes?), so water beside it alone does not refuse the stair."
+  "May a stair up be cut as it stands: up-safe?, and none of its cells borders water, which the
+   child dig would refuse to open (:unsafe, intent/exposes-fluid?) and which would flow into
+   the new feet cell the body steps up into."
   [world cells]
-  (and (up-safe? world cells) (not-any? #(dig-exposes? world %) cells)))
+  (and (up-safe? world cells) (not-any? #(intent/exposes-fluid? world %) cells)))
 
 (defn seal
   "The water cells beside a stair up's cells to lay a filler into (water-beside; a block placed

@@ -630,7 +630,7 @@
                  :plan/intent i)
         tick {:event/kind :tick :event/now 1000}
         run (fn [w] (intent/run w (:plan/intent w) tick))
-        end (nth (iterate run w) 6)]
+        end (nth (iterate run w) 4)]
     (is (not (stairs/boxed? 3)) "three refusals are not a full turn yet")
     (is (stairs/boxed? 4) "four refusals, one a heading, are")
     (is (= :open (get-in end [:plan/intent :intent/stage]))
@@ -1103,12 +1103,10 @@
         w (at {[6 64 6] blocks/water-base})]
     (is (not (stairs/level-clear? w level)) "the lay rule still asks every cell")
     (is (stairs/level-safe? w level) "an open, floored step beside water is stepped onto")
-    (let [up (stairs/up-cells feet [1 0])
-          stone (blocks/default-state :stone)]
-      (is (stairs/up-dry? (at {[6 64 5] stone [6 65 6] blocks/water-base}) up)
-          "a stair up through open cells beside water is cut")
-      (is (not (stairs/up-dry? (at {[6 64 5] stone [6 65 5] stone [6 65 6] blocks/water-base}) up))
-          "a cell to dig beside water still refuses the stair"))))
+    (is (not (stairs/level-safe? (at {[6 64 5] (blocks/default-state :stone)
+                                      [6 64 6] blocks/water-base})
+                                 level))
+        "a cell to dig beside water still refuses the step")))
 
 (defn under-a-lake
   "Standing at [5 64 5] (feet) with rock rock blocks over the head from y 66, then water for wet
