@@ -402,6 +402,18 @@
   (let [[x y z] (intent/feet world)]
     (and (path/floor? world [x (dec y) z]) (= :clear (path/classify world [x (- y 2) z])))))
 
+(defn ground-near?
+  "Is there ground within two cells of the feet: a walk floor (path/floor?) with a solid
+   block under it, not a bridge block over air? The end of a bridge against rock is ground
+   for making a pickaxe, though the feet still stand on the bridge (issue #559)."
+  [world]
+  (let [[fx fy fz] (intent/feet world)]
+    (boolean (some (fn [[dx dz]]
+                     (let [floor [(+ fx (long dx)) (dec (long fy)) (+ fz (long dz))]]
+                       (and (path/floor? world floor)
+                            (blocks/solid? (terrain/block-at world (update floor 1 dec))))))
+                   (for [dx (range -2 3) dz (range -2 3)] [dx dz])))))
+
 (defn retreat?
   "Does move from feet step into a cell visited already stood in: next-move's last resort, a
    retreat (a fresh step, turn or climb goes to an unvisited cell, and a climb that gains height
@@ -740,12 +752,16 @@
 
 (defn new-leg
   "The search whose leg-th leg begins at feet along the first of headings that has a way to go:
-   the world goes on ahead (open-ahead?) and a step toward the leg's end is safe (choose-move);
-   nil when none has."
+   the world goes on ahead (open-ahead?) and a tunnel step toward the leg's end can be taken
+   (next-move, bridging a cavern over ground as a stalled leg does); nil when none has. A leg
+   that ended on a bridge over a cavern found no safe? step in any heading and the search
+   waited :no-way with the fortress's bricks a few blocks past its end (issue #573)."
   [world feet leg headings]
   (some (fn [h]
           (let [s {:search/from feet :search/heading h :search/leg leg :search/tunnels 0}]
-            (when (and (open-ahead? world feet h) (choose-move world feet (leg-target s))) s)))
+            (when (and (open-ahead? world feet h)
+                       (next-move world feet (leg-target s) climb-past false #{} true))
+              s)))
         headings))
 
 (defn rock-run
@@ -845,6 +861,19 @@
   (when-not (plan/done-by world goal)
     (plan/next-intent world (assoc goal :goal/plan :build) table)))
 
+(defn back-target
+  "The cell to walk back to when a pickaxe must be remade and no ground is near: the oldest
+   cell of the trail kept for target (where this tunnel began, on ground), or, while a walk
+   back is running, that walk's own target (the trail then kept for it). nil when no trail
+   is kept or the feet are already there (issues #559, #328: a table on a bridge or a ledge
+   over a cavern finds no spot, and a tunnel that yields for the pickaxe is asked again for
+   ever)."
+  [world target]
+  (let [{:trail/keys [cells] t-target :trail/target} (:fortress/trail world)
+        back (cond (= target t-target) (first cells)
+                   (and t-target (not= target t-target)) t-target)]
+    (when (and back (not= back (intent/feet world))) back)))
+
 (defmethod plan/next-intent :fortress
   ;; replace a missing pickaxe from held supplies and take the placed table along (the next
   ;; pickaxe is made where the bot stands, not out of four more planks: probe 39782256061, issue
@@ -855,13 +884,24 @@
   [world goal table]
   (let [nether? (= dimension/nether (dimension/of world))
         brick (when nether? (nearest-brick world))
-        search (when (and nether? (not brick)) (exploring world))]
+        search (when (and nether? (not brick)) (exploring world))
+        ;; On a bridge over a cavern no cell beside the feet is a spot for the table (a drop
+        ;; past every cell of a diagonal bridge, issue #559 again): the pickaxe is remade once
+        ;; the tunnel reaches ground, and the tunnel goes on by hand until then.
+        grounded? (or (not (on-bridge? world)) (ground-near? world))
+        back (when (and (not grounded?) (build/pickaxe-at-hand? world))
+               (back-target world (or brick (when search (leg-target search)))))]
     (cond (not nether?) {:plan/wait :other-dimension}
           :else
-          (or (when (build/pickaxe-at-hand? world)
+          (or (when back
+                {:intent/kind :tunnel-to
+                 :intent/target back
+                 :intent/steps steps-per-tunnel
+                 :intent/bridge? true})
+              (when (and grounded? (build/pickaxe-at-hand? world))
                 (make/decide world (assoc goal :goal/provides {:tag/pickaxes 1}) table))
-              (intent/chain-next (:plan/last world) :take-table make/table-drops {})
-              (make/take-table-along world)
+              (and grounded? (intent/chain-next (:plan/last world) :take-table make/table-drops {}))
+              (and grounded? (make/take-table-along world))
               (when brick
                 {:intent/kind :tunnel-to
                  :intent/target brick
