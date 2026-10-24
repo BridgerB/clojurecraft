@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-24T02:40:17.935Z",
+  "at" : "2026-10-24T02:50:24.652Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -38,6 +38,11 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : true
   }, {
+    "number" : 575,
+    "title" : "Bot stops at blaze-rods: no-stand",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : true
+  }, {
     "number" : 559,
     "title" : "Bot stops at fortress: no-spot",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
@@ -52,11 +57,6 @@
     "title" : "Bot stops at ingots: timeout",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
-  }, {
-    "number" : 575,
-    "title" : "Bot stops at blaze-rods: no-stand",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : true
   }, {
     "number" : 71,
     "title" : "Bot stops at portal-kit: boxed",
@@ -138,6 +138,10 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 575,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
     "issue" : 559,
     "move" : "leave",
     "why" : "hands-off label"
@@ -147,10 +151,6 @@
     "why" : "hands-off label"
   }, {
     "issue" : 62,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
-    "issue" : 575,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
