@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-24T16:32:15.439Z",
+  "at" : "2026-10-24T16:35:32.242Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -30,6 +30,11 @@
   }, {
     "number" : 342,
     "title" : "Bot stops at furnace: boxed",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 538,
+    "title" : "Bot stops at fortress: blocked",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
@@ -100,6 +105,10 @@
     "why" : "hands-off label"
   }, {
     "issue" : 342,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 538,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
