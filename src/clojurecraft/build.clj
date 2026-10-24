@@ -1343,7 +1343,9 @@
               home home
               :else :no-stand))
       (or (intent/centred? world stand)
-          (and (= stand (intent/feet world)) (holds? world [:solid (update stand 1 dec)])))
+          (and (= :place op)
+               (= stand (intent/feet world))
+               (holds? world [:solid (update stand 1 dec)])))
       nil
       (and (= :enter step) build)
       (or
