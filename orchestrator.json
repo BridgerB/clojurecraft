@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-24T04:41:08.441Z",
+  "at" : "2026-10-24T04:47:54.145Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -23,15 +23,15 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 531,
-    "title" : "Bot stops at ingots: boxed",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 328,
     "title" : "Bot stops at fortress: no-stand",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : true
+  }, {
+    "number" : 531,
+    "title" : "Bot stops at ingots: boxed",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
   }, {
     "number" : 580,
     "title" : "Bot stops at blaze-rods: inventory-full",
@@ -135,11 +135,11 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 531,
+    "issue" : 328,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 328,
+    "issue" : 531,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
