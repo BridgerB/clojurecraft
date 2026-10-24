@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-24T02:19:44.827Z",
+  "at" : "2026-10-24T02:20:53.359Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -33,6 +33,11 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : true
   }, {
+    "number" : 71,
+    "title" : "Bot stops at portal-kit: boxed",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
     "number" : 575,
     "title" : "Bot stops at blaze-rods: no-stand",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
@@ -48,30 +53,15 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 71,
-    "title" : "Bot stops at portal-kit: boxed",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 62,
     "title" : "Bot stops at ingots: timeout",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
-    "number" : 579,
-    "title" : "Bot stops at ender-pearls: timeout",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 574,
     "title" : "Bot stops at furnace: no-spot",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
-  }, {
-    "number" : 69,
-    "title" : "Bot stops at water-bucket: timeout",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : true
   }, {
     "number" : 68,
     "title" : "Bot stops at ingots: no-spot",
@@ -82,6 +72,16 @@
     "title" : "Bot stops at cobblestone: boxed",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
+  }, {
+    "number" : 579,
+    "title" : "Bot stops at ender-pearls: timeout",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 69,
+    "title" : "Bot stops at water-bucket: timeout",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : true
   }, {
     "number" : 582,
     "title" : "Bot stops at furnace: timeout",
@@ -133,6 +133,10 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 71,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
     "issue" : 575,
     "move" : "leave",
     "why" : "hands-off label"
@@ -145,23 +149,11 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 71,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
     "issue" : 62,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 579,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
     "issue" : 574,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
-    "issue" : 69,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -170,6 +162,14 @@
     "why" : "hands-off label"
   }, {
     "issue" : 65,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 579,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 69,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
