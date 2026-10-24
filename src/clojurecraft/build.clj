@@ -1319,8 +1319,12 @@
    entry through the room's landing when no route reaches the portal from here (its back wall
    is kept, never cut through); any other op from its designated stand (toward), or, for a place
    or a dig whose stand cannot be occupied, a cell that already reaches the block. A keyword is why
-   no such cell exists. Ground in the way is dug only for a :build, whose plan says which rock to
-   keep; a :tunnel-to step (fortress) works the same ops with no build of its own."
+   no such cell exists. The feet are their own stand when they already stand in it on a block
+   that holds them, though a route cannot stand there (soul sand, mud: path treats them as
+   awkward): sim snapshot R4-8-1 (issue #575) fell into a soul sand valley and every tunnel
+   floor laid from its own feet failed :no-stand three times. Ground in the way is dug only
+   for a :build, whose plan says which rock to keep; a :tunnel-to step (fortress) works the
+   same ops with no build of its own."
   [world i {:build/keys [op stand pos step]}]
   (let [{:intent/keys [build origin facing]} i
         far (when build (far-way world i))]
@@ -1338,7 +1342,12 @@
               ;; no working stance here: back to the landing, including its height
               home home
               :else :no-stand))
-      (intent/centred? world stand) nil
+      (or (intent/centred? world stand)
+          (and (= :place op)
+               (= stand (intent/feet world))
+               (not (path/standable? world stand))
+               (holds? world [:solid (update stand 1 dec)])))
+      nil
       (and (= :enter step) build)
       (or
        (stand-walk world stand)

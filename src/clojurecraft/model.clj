@@ -229,6 +229,9 @@
    [:plan/cornered
     "entity ids a back-off could not get away from: it ended on its clock, or the way away was a drop no landing survives, with the target still nearer than back-off-to; :defend fights them to the end (combat/cornered, issues #161 and #514)"
     "after a back-off ended on its clock or at a drop"]
+   [:plan/given-up
+    "per entity id the ms a fight gave it up as unreachable (not strikable, no route): no act picks it again for combat/give-up-ms while its aim stays out of reach (combat/given-up, issues #69, #62, #582 and #161)"
+    "after a fight's engage gave its target up"]
    [:pearls/shelter
     "the feet cell of the pearl hunt's burrow, where no enderman can stand within reach of the bot (pearls/shelter?), set when a :burrow ends (issue #263)"
     "after the hunt dug one"]
