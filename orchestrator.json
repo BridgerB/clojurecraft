@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-24T09:12:37.015Z",
+  "at" : "2026-10-24T09:20:16.849Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -38,11 +38,6 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 328,
-    "title" : "Bot stops at fortress: no-stand",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : true
-  }, {
     "number" : 579,
     "title" : "Bot stops at ender-pearls: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
@@ -52,6 +47,11 @@
     "title" : "Bot stops at ingots: boxed",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
+  }, {
+    "number" : 328,
+    "title" : "Bot stops at fortress: no-stand",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : true
   }, {
     "number" : 575,
     "title" : "Bot stops at blaze-rods: no-stand",
@@ -152,15 +152,15 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 328,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
     "issue" : 579,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
     "issue" : 531,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 328,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
