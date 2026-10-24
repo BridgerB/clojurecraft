@@ -1426,9 +1426,18 @@
    remembered trunk (:intent/for :log) while the table's pieces are not already held
    (sword/pieces?). Nil when nothing is payable, or the planner would only wait, go looking for
    a tree, or chop another trunk with a log already in the grid. The Nether has no oak, and a
-   wait there fails the plan."
+   wait there fails the plan. With no blade payable from the planks or cobblestone held but a
+   log held, in the inventory or the grid (sword/with-laid: in the warped forest a stem, which
+   counts as a log), a wooden sword is asked for instead: its planks come from the log, as a
+   pickaxe's do (make-pickaxe). Gym batch pearls-m10-a (plan run 40106206590) run 2 held
+   twenty-five warped stems and six pearls when its iron sword broke and failed :no-sword:
+   sword/payable counts planks, and none were held."
   [world goal table]
-  (when-let [k (sword/payable world)]
+  (when-let [k (or (sword/payable world)
+                   (when (pos? (recipe/have (recipe/counts (:player/inventory (sword/with-laid
+                                                                               world)))
+                                            (recipe/tags :logs)))
+                     :wooden_sword))]
     (let [i (make/decide (sword/for-decide world)
                          (assoc goal :goal/provides {(keyword "item" (name k)) 1})
                          table)]

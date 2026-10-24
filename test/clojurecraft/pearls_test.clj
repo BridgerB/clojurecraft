@@ -959,6 +959,14 @@
     (is (= :walk (:intent/kind walked)))
     (is (= :log (:intent/for walked)) "a remembered trunk is the log the table takes")))
 
+(deftest a-broken-sword-is-made-of-warped-stems
+  ;; gym batch pearls-m10-a (plan run 40106206590) run 2: six pearls and twenty-five warped
+  ;; stems held when its iron sword broke, and the plan failed :no-sword: sword/payable
+  ;; counts planks, and none were held
+  (let [bare (assoc (standing {}) :player/inventory {1 (item :warped_stem 2)})]
+    (is (= :craft (:intent/kind (plan/next-intent bare row plan/goals)))
+        "stems held and no sword: a wooden one is crafted from them")))
+
 (deftest a-worn-sword-is-replaced-before-the-hunt
   ;; the same race held the stone sword with nine swings left and fought until it broke
   (let [worn (assoc (item :stone_sword 1) :durability 9)
