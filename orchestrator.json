@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-24T12:42:30.087Z",
+  "at" : "2026-10-24T12:43:38.823Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -93,6 +93,11 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
+    "number" : 45,
+    "title" : "Bot stops at cast-one: no-path",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
     "number" : 574,
     "title" : "Bot stops at furnace: no-spot",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
@@ -125,11 +130,6 @@
   }, {
     "number" : 62,
     "title" : "Bot stops at ingots: timeout",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
-    "number" : 45,
-    "title" : "Bot stops at cast-one: no-path",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   } ],
@@ -206,6 +206,10 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 45,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
     "issue" : 574,
     "move" : "leave",
     "why" : "hands-off label"
@@ -231,10 +235,6 @@
     "why" : "hands-off label"
   }, {
     "issue" : 62,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
-    "issue" : 45,
     "move" : "leave",
     "why" : "hands-off label"
   } ],
