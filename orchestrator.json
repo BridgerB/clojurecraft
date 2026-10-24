@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-24T20:50:27.666Z",
+  "at" : "2026-10-24T20:59:18.563Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -50,6 +50,11 @@
   }, {
     "number" : 579,
     "title" : "Bot stops at ender-pearls: timeout",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 135,
+    "title" : "Bot stops at cast-one: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
@@ -121,6 +126,10 @@
     "why" : "hands-off label"
   }, {
     "issue" : 579,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 135,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
