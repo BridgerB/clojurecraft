@@ -133,6 +133,19 @@
   (let [[fx fy fz] (last cells)]
     (and (clear-way? world cells) (= :solid (path/classify world [fx (dec fy) fz])))))
 
+(defn dig-exposes?
+  "Would digging cell let a fluid in (intent/exposes-fluid?), when the cell is solid at all: an
+   open cell is no dig, so water beside it lets nothing in and the body only wades. A stair down
+   has always asked this of its solid cells alone (down-safe?); a level step and a stair up asked
+   it of every cell, so a step onto an open cell with a floor under it, beside a lake, was
+   refused with nothing to dig and nothing to lay, and the staircase was :boxed on the shore
+   (issues #342, #71, #65: the bots stood on cobblestone or grass at a lake's edge, every level
+   step refused for the water beside its open cells)."
+  [world cell]
+  (and (some-> (terrain/block-at world cell)
+               blocks/solid?)
+       (intent/exposes-fluid? world cell)))
+
 (def fillers
   "The items a floor is laid from, what a mine carries most of first: cobblestone, the stones
    that drop themselves, then dirt, then netherrack (what a descent in the Nether digs: gym batch
@@ -350,7 +363,7 @@
    no step under its new feet, and was :boxed at the level-step limit; a stair up now lays its
    step as a stair down lays its floor."
   [world _feet cells]
-  (when (and (not (falls-over? world cells)) (not-any? #(intent/exposes-fluid? world %) cells))
+  (when (and (not (falls-over? world cells)) (not-any? #(dig-exposes? world %) cells))
     (cells-to-lay world cells (step-to-lay world cells))))
 
 (defn water-beside
@@ -377,10 +390,11 @@
                  cells)))
 
 (defn up-sealed?
-  "May a stair up be cut as it stands: up-safe?, and none of its cells borders water, which the
-   child dig would refuse to open (:unsafe, intent/exposes-fluid?)."
+  "May a stair up be cut as it stands: up-safe?, and no cell it digs (a solid one) borders water,
+   which the child dig would refuse to open (:unsafe, intent/exposes-fluid?). An open cell is
+   no dig (dig-exposes?), so water beside it alone does not refuse the stair."
   [world cells]
-  (and (up-safe? world cells) (not-any? #(intent/exposes-fluid? world %) cells)))
+  (and (up-safe? world cells) (not-any? #(dig-exposes? world %) cells)))
 
 (defn seal
   "The water cells beside a stair up's cells to lay a filler into (water-beside; a block placed
@@ -464,11 +478,7 @@
   "May a stair down be cut as it stands: safe?, and none of its solid cells exposes a fluid the
    child dig would refuse. Open cells need no dig, even beside water."
   [world cells]
-  (and (safe? world cells)
-       (not-any? #(and (some-> (terrain/block-at world %)
-                               blocks/solid?)
-                       (intent/exposes-fluid? world %))
-                 cells)))
+  (and (safe? world cells) (not-any? #(dig-exposes? world %) cells)))
 
 (defn down-lay
   "The cells to lay before a stair down: seal side water first, else lay its missing floor.
@@ -554,9 +564,15 @@
 
 (defn level-safe?
   "May a level step (or a stair whose cells are given) be cut: its cells may be opened
-   (level-clear?) and a floor lies under its feet cell (safe?)."
+   (clear-way?), a floor lies under its feet cell (safe?), and no cell it digs (a solid one)
+   borders a fluid (dig-exposes?) or is too hard for the held tools (too-hard?). level-clear?
+   asks the fluid question of every cell, which is the rule for laying a floor under a step;
+   a step that is already open and floored digs nothing, so water beside its open cells
+   refuses nothing (issues #342, #71, #65: :boxed on a lake shore with a floor underfoot)."
   [world cells]
-  (and (level-clear? world cells) (safe? world cells)))
+  (and (clear-way? world cells)
+       (safe? world cells)
+       (not-any? #(or (dig-exposes? world %) (too-hard? world %)) cells)))
 
 (def six-around
   "The six cells that share a face with a cell, as offsets."

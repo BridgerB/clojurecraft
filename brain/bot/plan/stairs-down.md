@@ -109,6 +109,8 @@ sourceRefs:
   - test/clojurecraft/stone_test.clj#a-stair-up-lays-a-holder-beside-its-floor
   - test/clojurecraft/stone_test.clj#a-climb-regains-a-higher-step-instead-of-digging-it-away
   - test/clojurecraft/sim_test.clj#stairs-up-build-supported-steps-from-a-ledge
+  - src/clojurecraft/stairs.clj#defn dig-exposes?
+  - test/clojurecraft/stone_test.clj#an-open-step-beside-water-is-stepped-not-boxed
   - src/clojurecraft/stairs.clj#defn level-safe?
   - src/clojurecraft/stairs.clj#defn level-refused
   - test/clojurecraft/stone_test.clj#a-tunnel-step-the-dig-refuses-is-planned-again
@@ -220,6 +222,7 @@ An ascent may regain a previously visited higher cell: height gained is progress
 - **Gravel falls into the stair.** The seventh live iron-kit run (local landing 2360,3000) cut its staircase through gravel at y 37-40: the gravel over the cells it opened fell into them, the walk onto the stair failed `:stair-not-taken`, then two digs found their cell already emptied and failed `:target-gone`, ending the plan. A cell refilled is dug again, a cell emptied counts as open, and the step goes back to digging; the server model drops gravel the way the game does ([[server-model]]), and `gravel-that-refills-a-stair-is-dug-again` cuts two stairs into a gravel cliff (it fails with the old stages). A falling block that lands on the bot's head is not handled.
 - **A seal keeps what the climb back needs, not always eight.** `down-lay` seals the water beside a stair with `climb-reserve` kept: a block for each block the feet are under the highest rock (not leaves) of their column, up to `lay-reserve`, so a bot at the surface seals with all it has and one eight stairs down keeps all eight; a floor laid through a cave still keeps `lay-reserve` whatever the depth. Real bot Clj_r15 at R1/30 (issue #65) was one stair down from a lake shore with two dirt and every stair was refused for the eight (`a-seal-at-the-surface-keeps-nothing-for-a-climb-it-does-not-need`); the deeper reserve is race 39070889905's (issue #342).
 
+- **An open step beside water is stepped onto, not boxed.** `level-safe?` and `up-sealed?` ask the fluid question (`dig-exposes?`) only of cells that will be dug (solid ones), as `down-safe?` always has: an open cell is no dig, so water beside it lets nothing in. `level-clear?` still asks it of every cell, which is the rule for laying a floor under a step. Real bots at a lake shore (issues #342, #71, #65) stood on cobblestone or grass with a floor under the next step and every step refused for the water beside its open cells, nothing to dig and nothing to lay, `:boxed` where they stood.
 - **A mine afloat swims out before it cuts stairs.** `stone/mine-next` asks `retreat` (a `:swim-out` for `:retreat` while `:player/in-water?`) before any stair or tunnel: sim race 39878751984 (issue #105, R1/11 seed 1) chased a mob into a lake and twice planned stairs down from the water, every one refused for its water cells and `:boxed` in a tick, which with a failed redig used the plan's three attempts and ended it at flint and steel (`a-mine-afloat-swims-out-before-it-cuts-stairs`).
 
 ## See also

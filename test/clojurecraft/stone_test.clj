@@ -1068,6 +1068,24 @@
     (testing "a step with nothing wrong has nothing to lay"
       (is (nil? (stairs/level-lay (at {} :cobblestone) feet cells))))))
 
+(deftest an-open-step-beside-water-is-stepped-not-boxed
+  ;; issues #342, #71 and #65 (real bots at a lake shore, on cobblestone or grass with a floor
+  ;; under the next step): every level step was refused for the water beside its open cells,
+  ;; though the step digs nothing and lays nothing, and each staircase failed :boxed where it
+  ;; stood. A cell that will be dug beside water still refuses, as before.
+  (let [feet [5 64 5]
+        at (fn [blocks] (assoc (standing 64) :world/chunks {[0 0] (world/column blocks)}))
+        level (stairs/level-cells feet [1 0])
+        w (at {[6 64 6] blocks/water-base})]
+    (is (not (stairs/level-clear? w level)) "the lay rule still asks every cell")
+    (is (stairs/level-safe? w level) "an open, floored step beside water is stepped onto")
+    (let [up (stairs/up-cells feet [1 0])
+          stone (blocks/default-state :stone)]
+      (is (stairs/up-dry? (at {[6 64 5] stone [6 65 6] blocks/water-base}) up)
+          "a stair up through open cells beside water is cut")
+      (is (not (stairs/up-dry? (at {[6 64 5] stone [6 65 5] stone [6 65 6] blocks/water-base}) up))
+          "a cell to dig beside water still refuses the stair"))))
+
 (defn under-a-lake
   "Standing at [5 64 5] (feet) with rock rock blocks over the head from y 66, then water for wet
    blocks, then air, holding items by name."
