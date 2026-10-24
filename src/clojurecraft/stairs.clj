@@ -657,9 +657,14 @@
                  cells)))
 
 (defn boxed?
-  "Has the staircase turned as often as it may: one more refusal fails it :boxed."
+  "Has the staircase turned as often as it may: max-turns refusals, one full turn of four
+   headings, have been counted (turns), so the next refusal steps aside instead of turning.
+   This once counted the turn it was about to take as well ((inc turns)), so only three
+   headings' stairs were ever tried and the fourth, often the way back up the bot came down
+   or the one dry heading in a pocket, was never cut: the staircase failed :boxed with a
+   stair standing open (issues #531, #342, #105, #71, #65)."
   [turns]
-  (>= (inc turns) max-turns))
+  (>= turns max-turns))
 
 (defn turned
   "The staircase a quarter turn from dir, the turn counted, and why said."

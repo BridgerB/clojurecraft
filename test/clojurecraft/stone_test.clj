@@ -613,6 +613,30 @@
       (is (= 1 (get-in next [:plan/intent :intent/turns])))
       (is (= [0 1] (get-in next [:plan/intent :intent/dir]))))))
 
+(deftest the-fourth-heading-of-a-staircase-is-tried
+  ;; issues #531, #342, #105, #71, #65: boxed? counted the turn it was about to take, so a
+  ;; staircase turned three times and stepped aside without ever trying the fourth heading's
+  ;; stair; where that heading was the only one cuttable (and no level step was), it failed
+  ;; :boxed with a stair standing open. Here only the north stair up can be cut (a stone step
+  ;; at [5 64 4]) and every level step lands on a cell in :plan/boxed-at.
+  (let [i {:intent/kind :stairs-up
+           :intent/to-y 70
+           :intent/to-height? true
+           :intent/status :active
+           :intent/dir [1 0]}
+        w (assoc (standing 64 :stone_pickaxe)
+                 :world/chunks {[0 0] (world/column {[5 64 4] (blocks/default-state :stone)})}
+                 :plan/boxed-at #{[6 64 5] [5 64 6] [4 64 5] [5 64 4]}
+                 :plan/intent i)
+        tick {:event/kind :tick :event/now 1000}
+        run (fn [w] (intent/run w (:plan/intent w) tick))
+        end (nth (iterate run w) 6)]
+    (is (not (stairs/boxed? 3)) "three refusals are not a full turn yet")
+    (is (stairs/boxed? 4) "four refusals, one a heading, are")
+    (is (= :open (get-in end [:plan/intent :intent/stage]))
+        "the fourth heading's stair is cut instead of :boxed")
+    (is (= [0 -1] (get-in end [:plan/intent :intent/dir])))))
+
 (deftest a-stair-up-replans-after-falling-below-its-launch-height
   (let [up {:intent/kind :stairs-up
             :intent/to-y 70
