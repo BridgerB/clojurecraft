@@ -564,12 +564,13 @@
 
 
 (defn digs-left
-  "The most digs any held pickaxe has left (window/uses-left: its tier's durability less the
-   :damage the server sends on a worn one), or nil with none held."
+  "The most digs any held pickaxe has left (window/swings-left: its tier's durability less the
+   :damage the server sends on a worn one, or the model's counted-down :durability), or nil
+   with none held."
   [world]
   (let [left (->> (vals (:player/inventory world))
                   (filter #(= :pickaxe (:kind (blocks/tool (:item %)))))
-                  (keep window/uses-left))]
+                  (keep window/swings-left))]
     (when (seq left) (apply max left))))
 
 (defn spare?
@@ -578,7 +579,8 @@
    three kills from a burrow, then stairs, tunnels and bores wore the iron pickaxe out at
    fourteen minutes (:stairs-down failed :no-pickaxe, 238 netherrack held), and with no burrow
    to be cut it stood in :lookout for the last twenty-five; run 3 ended with 25 digs left.
-   Netherrack makes no pickaxe, so in the Nether there is no spare to craft."
+   Netherrack makes no pickaxe, but a warped stem does (make-pickaxe): under spare-digs the
+   hunt makes the next one before this one breaks."
   [world]
   (boolean (some-> (digs-left world)
                    (>= spare-digs))))
@@ -1341,6 +1343,55 @@
                  (or (= :log (:intent/for i)) (contains? sword-acts (:intent/kind i))))
         i))))
 
+(def pick-acts
+  "Intents that make a pickaxe from what is already held: placing or opening a table, the craft,
+   a dig that takes the table along, a toss that makes room for it."
+  #{:place :craft :open-container :dig :toss})
+
+(defn worn-pick?
+  "Is this stack a pickaxe under spare-digs digs (window/swings-left)?"
+  [item]
+  (boolean (and (= :pickaxe (:kind (blocks/tool (:item item))))
+                (some-> (window/swings-left item)
+                        (< spare-digs)))))
+
+(defn drop-worn-picks
+  "A world whose worn pickaxes (worn-pick?) keep their slots but are not pickaxes, as
+   sword/drop-worn does for swords: make/counts treats any pickaxe as the one a row provides,
+   worn or fresh, and would make nothing while the worn one still counts."
+  [world]
+  (update
+   world
+   :player/inventory
+   (fn [inv]
+     (into {} (map (fn [[p item]] [p (if (worn-pick? item) (dissoc item :item) item)])) inv))))
+
+(defn for-pick-decide
+  "The world a pickaxe's needs are decided on: worn pickaxes hidden (drop-worn-picks), the
+   crafting grid visible (sword/with-laid), and a finished log chain not continued once the
+   table's pieces are held (sword/pieces?), as sword/for-decide does for a sword."
+  [world]
+  (cond-> (sword/with-laid (drop-worn-picks world))
+    (and (sword/pieces? world) (= :log (:intent/for (:plan/last world)))) (dissoc :plan/last)))
+
+(defn make-pickaxe
+  "The intent that makes a pickaxe through the needs planner (a goal providing
+   {:tag/pickaxes 1}, as blaze.clj's row asks), when that craft can start from here: one of
+   pick-acts, or the log chain to a remembered trunk (:intent/for :log) while the table's
+   pieces are not already held (sword/pieces?). Nil when the planner would only wait, or go
+   out by stairs, a swim or a search for the wood. In a warped forest the trunk is a warped
+   stem (blocks/log? counts stems, and the item tag :logs lists them beside the logs): stem to
+   planks to sticks and a crafting table, then the pickaxe the held items reach, a stone one
+   with cobblestone held, a wooden one without. Gym batch pearls-warped9-a (plan run
+   39898400239) run 2 spent 239 digs on five pearls, about sixteen a burrow, and with eleven
+   digs left stood in lookouts for four hours: no burrow could be cut, and no pickaxe remade."
+  [world goal table]
+  (let [i (make/decide (for-pick-decide world) (assoc goal :goal/provides {:tag/pickaxes 1}) table)]
+    (when (and (:intent/kind i)
+               (not (and (sword/pieces? world) (= :log (:intent/for i))))
+               (or (= :log (:intent/for i)) (contains? pick-acts (:intent/kind i))))
+      i)))
+
 (defmethod plan/next-intent :pearls
   ;; a fire the bot stands in put out first (a :dig: the server breaks fire on the first click,
   ;; as blaze/put-out does); then the kill's drop, unless another angry one is near (menaced?);
@@ -1352,15 +1403,20 @@
   ;; hours. Sim race 39909643851 (issue #563, world R3/13 seed 2) held a stone sword with nine
   ;; swings left, fought until it broke, and the same wait failed the plan. A worn sword that
   ;; cannot be replaced yet is still hunted with.
-  ;; With the pickaxe worn out (worn-out?), no burrow near and none angry near, no hunt either
-  ;; (:no-pickaxe): no burrow can be cut, and
+  ;; With no pickaxe over spare-digs (spare?) and none angry near (menaced?), a new one is made
+  ;; first when that craft can start (make-pickaxe): a burrow is about sixteen digs, and batch
+  ;; pearls-warped9-a's run 2 had eleven left at five pearls and stood in lookouts for four
+  ;; hours. With the pickaxe worn out (worn-out?) and no craft to start, no burrow near and
+  ;; none angry near, no hunt either (:no-pickaxe): no burrow can be cut, and
   ;; sim probe 39890964793 (seed 5) wore its pickaxe out on burrows, then struck calm endermen in
   ;; the open in worlds R2 and R3 and was slain, R2 nine times
   [world goal table]
   (let [k (when-not (menaced? world) (fresh-kill world))
         [_ d] (when k (drop-of world k))
         fire (burning-at world)
-        replacing (when-not (sword/serviceable world) (make-sword world goal table))]
+        replacing (when-not (sword/serviceable world) (make-sword world goal table))
+        remaking (when (and (not (spare? world)) (not (menaced? world)))
+                   (make-pickaxe world goal table))]
     (cond fire {:intent/kind :dig :intent/target fire}
           d
           {:intent/kind :collect-drops
@@ -1371,6 +1427,7 @@
           (< (:player/health world 20.0) danger-health) (hunt world)
           replacing replacing
           (nil? (combat/sword world)) {:plan/wait :no-sword}
+          remaking remaking
           (and (worn-out? world) (nil? (shelter world)) (not (menaced? world)))
           {:plan/wait :no-pickaxe}
           :else (hunt world))))

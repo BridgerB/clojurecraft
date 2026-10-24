@@ -836,6 +836,40 @@
     (is (not (pearls/worn-out? (assoc-in spent [:player/inventory 1] (item :iron_pickaxe 1))))
         "a pickaxe held")))
 
+(deftest a-spent-pickaxe-is-made-again-from-a-warped-stem
+  ;; gym batch pearls-warped9-a (plan run 39898400239) run 2: 239 digs spent on five pearls,
+  ;; eleven left, then four hours of lookouts with no burrow to cut: netherrack makes no
+  ;; pickaxe, but the warped forest's own stems craft to planks as a log does
+  (let [stem (first (blocks/states-of :warped_stem))
+        trunk {[12 64 8] stem
+               [12 65 8] stem
+               [12 66 8] stem
+               [12 67 8] (blocks/default-state :warped_wart_block)}
+        col (world/column trunk)
+        spent (memory/remember-intention (assoc (standing {}) :time/now 0)
+                                         {:intent/id 1 :intent/kind :burrow}
+                                         :done)
+        forest (-> spent
+                   (assoc :world/chunks {[0 0] col})
+                   (memory/remember-column [0 0] col))
+        worn (assoc-in forest [:player/inventory 1] (assoc (item :iron_pickaxe 1) :durability 11))
+        stems (assoc worn :player/inventory {0 (item :iron_sword 1) 1 (item :warped_stem 2)})
+        fresh (assoc-in forest [:player/inventory 1] (item :iron_pickaxe 1))
+        walked (plan/next-intent forest row plan/goals)]
+    (is (= {:plan/wait :no-pickaxe} (plan/next-intent spent row plan/goals))
+        "no trunk remembered and nothing held: the wait, as before")
+    (is (= :walk (:intent/kind walked)))
+    (is (= :log (:intent/for walked)) "a remembered stem is the trunk the new pickaxe takes")
+    (is (= :log (:intent/for (plan/next-intent worn row plan/goals)))
+        "eleven digs left: the next pickaxe is made before this one breaks")
+    (is (= :craft (:intent/kind (plan/next-intent stems row plan/goals)))
+        "stems held: crafted to planks, not another trunk walked to")
+    (is (= {:intent/kind :lookout :intent/for :pearls} (plan/next-intent fresh row plan/goals))
+        "a fresh pickaxe held: the hunt, no remake")
+    (is (= {:intent/kind :lookout :intent/for :pearls}
+           (plan/next-intent (assoc forest :player/health 6.0) row plan/goals))
+        "under danger-health the craft waits too: rest first")))
+
 (deftest no-sword-held-no-hunt
   ;; gym batch pearls-warped8-b (plan run 39775345028): runs 1 and 3 respawned with nothing held
   ;; after their first deaths and hunted on bare-handed, 39 and 26 deaths in five hours
