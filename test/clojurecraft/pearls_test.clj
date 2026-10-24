@@ -689,6 +689,40 @@
            (first (pearls/angry-near (lured (dissoc given-up :plan/blacklist) pearls/lure-tries))))
         "one not given up on still holds the bot in")))
 
+(deftest one-given-up-on-in-the-stairs-is-cut-out-past
+  ;; sim probe 40102602895 (world R3, seed 4): in its burrow from minute 26 to 60 over an
+  ;; angry one, blacklisted, standing in its stairs out of reach: blocking kept it in,
+  ;; angry-near kept the burrow fresh, and no lure walk was ever taken to count
+  (let [angry (assoc (enderman [4.5 63.0 8.5]) :entity/creepy? true)
+        dug (assoc (burrowed [8.5 61.0 8.5] {7 angry}) :plan/blacklist #{7})]
+    (is (= 7 (first (pearls/blocking dug))) "in the stairs, below the mouth")
+    (is (not (pearls/blocked-out? (looked dug 3))))
+    (is (= {:intent/kind :lookout :intent/for :pearls}
+           (plan/next-intent (looked dug 3) row plan/goals))
+        "three lookouts: waited for where it stands, as before")
+    (is (pearls/blocked-out? (looked dug 12)))
+    (is (pearls/stale? (looked dug 12)) "a minute of them: the burrow is given up")
+    (is (= {:intent/kind :stairs-up
+            :intent/to-y 64
+            :intent/dir [1 0]
+            :intent/to-height? true
+            :intent/for :pearls}
+           (plan/next-intent (looked dug 12) row plan/goals))
+        "and the way out is cut up the other way from the mouth, to its height")
+    (is (not (pearls/blocked-out? (looked (dissoc dug :plan/blacklist) 12)))
+        "one not given up on is still waited for")))
+
+(deftest a-tunnel-step-out-over-a-drop-is-refused
+  ;; gym batch pearls-warped9-a (plan run 39898400239) run 3: its tunnel toward an enderman
+  ;; broke into the cave it stood in, and the bot came down thirteen blocks into the open
+  ;; fight there, where it died
+  (is (= 8 (pearls/floored-length (standing {}) [8 64 8] [1 0] 8))
+      "stone all the way: every step floored")
+  (is (= 2 (pearls/floored-length (standing {} {[11 63 8] air}) [8 64 8] [1 0] 8))
+      "the third step's floor is the pit: two")
+  (is (= 0 (pearls/floored-length (standing {} {[9 63 8] air}) [8 64 8] [1 0] 8))
+      "the first step out over it: none"))
+
 (deftest one-coming-with-no-way-home-is-fought-not-stood-under
   ;; gym batch pearls-warped8-b (plan run 39775345028, probe 39848848462) run 3: out at its
   ;; burrow's first stair, the walk home failed :no-path, and the bot stood in :lookout while the
