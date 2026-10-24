@@ -716,7 +716,7 @@
   ;; gym batch pearls-warped9-a (plan run 39898400239) run 3: its tunnel toward an enderman
   ;; broke into the cave it stood in, and the bot came down thirteen blocks into the open
   ;; fight there, where it died
-  (is (= 8 (pearls/floored-length (standing {}) [8 64 8] [1 0] 8))
+  (is (= 6 (pearls/floored-length (standing {}) [8 64 8] [1 0] 6))
       "stone all the way: every step floored")
   (is (= 2 (pearls/floored-length (standing {} {[11 63 8] air}) [8 64 8] [1 0] 8))
       "the third step's floor is the pit: two")
