@@ -312,6 +312,40 @@
                                       (blocks/name-of (terrain/block-at world c)))))]
        c))))
 
+(defn covered-spot
+  "A cell round the feet to dig clear for a spot (the niche machinery digs it, dug-spot
+   places into it): a snow layer (:snow) or leaves over a solid support that is not a block
+   a click opens, not a passage, with no drop beside it, within reach, not refused and not
+   inside the player, where spot finds only the cover (neither is replaceable) and niche
+   finds no wall. Real race 40028266922 bot Clj_r04 (issue #68) stood on snow-covered
+   grass and its table found no spot; race 40029764849 bot Clj_r03 (issue #574) stood on a
+   birch crown, every cell round it leaves or air over air, and its furnace found none.
+   Pure; nil when there is none."
+  [world refused]
+  (let [[px py pz] (:player/pos world)
+        fx (long (math/floor px))
+        fy (long (math/floor py))
+        fz (long (math/floor pz))
+        eye (game/eye world)]
+    (first
+     (for [[dx dy dz] around
+           :let [target [(+ fx dx) (+ fy dy) (+ fz dz)]
+                 support [(+ fx dx) (+ fy dy -1) (+ fz dz)]
+                 t (terrain/block-at world target)
+                 s (terrain/block-at world support)]
+           :when (and t
+                      s
+                      (not (contains? refused target))
+                      (or (= :snow (blocks/name-of t)) (blocks/leaves? t))
+                      (blocks/solid? s)
+                      (not (contains? memory/placed-kinds (blocks/name-of s)))
+                      (not (passage? world target))
+                      (not (inside-player? world target))
+                      (not (drop-beside? world target))
+                      (droppable? world t)
+                      (<= (physics/distance eye (physics/centre target)) place-reach))]
+       target))))
+
 (def face-cursors
   "Where on each face of the clicked block a placement clicks: its middle."
   {:up [0.5 1.0 0.5]
@@ -417,7 +451,8 @@
   ;; snow or the like, unplaceable-in?); else the niche already cut
   ;; (:intent/niche, dug-spot), else a plain spot, else a niche cut in the wall, else (passage-ok?)
   ;; a spot in the passage: a table or a gravel to dig again leaves the way open when the bot goes on;
-  ;; last, a spot with a drop beside it but none past it on the line from the feet (drop-beyond?)
+  ;; a spot with a drop beside it but none past it on the line from the feet (drop-beyond?);
+  ;; else snow or leaves over solid ground dug clear (covered-spot, by the niche machinery)
   [world
    {:intent/keys [passage-ok? refused retreated? nudges]
     at :intent/cell
@@ -432,6 +467,7 @@
                           ;; every cell has a drop beside it and no wall to cut: along a floor
                           (when (and (nil? at) (nil? n))
                             (spot world (boolean passage-ok?) refused true)))
+        covered (when (and (nil? at) (nil? n) (nil? target)) (covered-spot world refused))
         wet (when (and retreated? (nil? at) (nil? n) (nil? target)) (water-spot world refused))
         [wet-against wet-face] (when wet (support world wet))]
     (cond (and at
@@ -459,6 +495,12 @@
                                :intent/stage :niche
                                :intent/niche n
                                :intent/child (intent/child-dig n))
+          ;; snow or leaves over solid ground, dug clear and placed into (covered-spot)
+          covered
+          (intent/assoc-intent world
+                               :intent/stage :niche
+                               :intent/niche covered
+                               :intent/child (intent/child-dig covered))
           ;; the water cell is a given cell from here: the server judges it, as it does a build's
           wet
           (-> world
