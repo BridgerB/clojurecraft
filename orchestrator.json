@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-24T11:20:07.367Z",
+  "at" : "2026-10-24T11:25:44.410Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -58,15 +58,15 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : true
   }, {
-    "number" : 575,
-    "title" : "Bot stops at blaze-rods: no-stand",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : true
-  }, {
     "number" : 573,
     "title" : "Bot stops at fortress: no-way",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
+  }, {
+    "number" : 575,
+    "title" : "Bot stops at blaze-rods: no-stand",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : true
   }, {
     "number" : 69,
     "title" : "Bot stops at water-bucket: timeout",
@@ -173,11 +173,11 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 575,
+    "issue" : 573,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 573,
+    "issue" : 575,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
