@@ -96,9 +96,10 @@
          ":reserve-lay"
          (try (stairs/reserve-level-lay world (:intent/kind i) lc feet)
               (catch Exception e (str "ERR" (.getMessage e))))
-         "}"))))
-  (println " shaft-cells" (mapv #(bname world %) (stairs/shaft-cells feet))
-           "under-feet" (bname world (update feet 1 dec))
-           "over-head"
-           (mapv #(bname world %) [(update feet 1 + 2) (update feet 1 + 3) (update feet 1 + 4)])))
+         "}")))
+    (println " shaft-cells" (mapv #(bname world %) (stairs/shaft-cells feet))
+             "under-feet" (bname world (update feet 1 dec))
+             "over-head"
+             (mapv #(bname world %)
+                   [(update feet 1 + 2) (update feet 1 + 3) (update feet 1 + 4)]))))
 (println "DONE")
