@@ -13,6 +13,9 @@ sourceRefs:
   - src/clojurecraft/dragon.clj#defn wall-gap
   - src/clojurecraft/dragon.clj#defn on-pillar?
   - src/clojurecraft/dragon.clj#defn on-spike?
+  - src/clojurecraft/dragon.clj#defn off-island?
+  - src/clojurecraft/dragon.clj#defn island-shore
+  - src/clojurecraft/dragon.clj#defn toward-island
   - src/clojurecraft/dragon.clj#defn pillar-top
   - src/clojurecraft/dragon.clj#defn toward-crystals
   - src/clojurecraft/dragon.clj#defn climb
@@ -77,6 +80,9 @@ sourceRefs:
   - src/clojurecraft/gym.clj#def spike-crystals
   - "src/clojurecraft/gym.clj#{:gym/goal :crystals"
   - "src/clojurecraft/gym.clj#{:gym/goal :dragon"
+  - "src/clojurecraft/gym.clj#:gym/goals [:eyes-of-ender"
+  - src/clojurecraft/gym.clj#defn go-event
+  - test/clojurecraft/dragon_test.clj#the-platform-in-the-end-bridges-to-the-island-before-crystals
   - test/clojurecraft/dragon_test.clj#the-approach-stands-three-out-behind-a-wall
   - test/clojurecraft/dragon_test.clj#the-planner-walks-pillars-walls-strikes-and-digs-down
   - test/clojurecraft/dragon_test.clj#a-breath-on-the-way-to-the-stand-is-waited-out-where-the-feet-are

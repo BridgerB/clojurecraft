@@ -482,19 +482,28 @@
           "beside it as it scans: no new stand")
       (is (= (dragon/standing-walk [2 64 0]) (at [0.5 64.0 2.5] (attacking 270.0)))
           "its yaw held: the stand behind"))
-    (testing ":defend leaves every hostile to the row while a breath reaches the feet"
+    (testing
+      ":defend leaves every hostile to the row while a breath reaches or the dragon is grounded"
       (let [angry {9 {:entity/type (mob/type-id :enderman)
                       :entity/pos [4.5 64.0 0.5]
                       :entity/creepy? true}}
+            circling {dragon-eid {:entity/type (mob/type-id :ender_dragon)
+                                  :entity/pos [20.5 80.0 0.5]
+                                  :entity/phase 0}}
             w (fn [es]
                 (assoc (round-fountain [2.5 64.0 0.5] es)
                        :player/dimension dimension/end
                        :plan/goals #{:dragon}))
-            breathed (w (merge (attacking 270.0) angry (cloud [2.5 64.0 3.4] 1.5)))
-            quiet (w (merge (attacking 270.0) angry))]
+            breathed (w (merge circling angry (cloud [2.5 64.0 3.4] 1.5)))
+            perched (w (merge (attacking 270.0) angry))
+            quiet (w (merge circling angry))]
         (is (contains? (combat/answering breathed :dragon) :enderman))
         (is (empty? (combat/threats breathed)) "the back-off from the breath comes first")
-        (is (= #{:ender_dragon} (combat/answering quiet :dragon)) "no breath: the dragon alone")
+        (is (contains? (combat/answering perched :dragon) :enderman)
+            "grounded dragon: stay in the basin")
+        (is (empty? (combat/threats perched)))
+        (is (= #{:ender_dragon} (combat/answering quiet :dragon))
+            "circling and no breath: the dragon alone")
         (is (= #{9} (set (keys (combat/threats quiet)))) "and the enderman is fought")))))
 
 (deftest every-look-of-the-dragon-row-is-away-from-an-endermans-eyes
@@ -651,3 +660,41 @@
            (:intent/reason (:plan/intent (dragon/climb (assoc packed :player/inventory {})
                                                        (:plan/intent packed)))))
         "none anywhere: failed")))
+
+(deftest the-platform-in-the-end-bridges-to-the-island-before-crystals
+  (let [obs (blocks/default-state :obsidian)
+        stone (blocks/default-state :end_stone)
+        plat (into {} (for [x (range 98 103) z (range -2 3)] [[x 48 z] obs]))
+        shore (into {} (for [x (range 60 73) z (range -2 3) y (range 48 53)] [[x y z] stone]))
+        cols (into {}
+                   (for [cx [3 4 5 6]]
+                     [[cx 0]
+                      (world/column (into {}
+                                          (for [[[x y z] id] (merge plat shore)
+                                                :when (= cx (math/floor-div x 16))]
+                                            [[(mod x 16) y (mod z 16)] id])))]))
+        base (-> (standing {} [100.5 49.0 0.5] cobblestone {})
+                 (assoc :player/dimension dimension/end
+                        :world/chunks cols
+                        :time/now 5000
+                        :plan/since 0
+                        :plan/reached-after {:enter-end 4000}))]
+    (is (dragon/off-island? base) "on the obsidian platform at x 100")
+    (is (not (dragon/off-island? (assoc base :player/pos [70.5 53.0 0.5]))) "on the island")
+    (is (= [72 53 0] (dragon/island-shore base)) "the easternmost island column")
+    (is (= {:intent/kind :pillar :intent/item :cobblestone :intent/top 53}
+           (dragon/toward-island base))
+        "below the shore's y: pillar up to it first")
+    (let [high (assoc base :player/pos [100.5 53.0 0.5])]
+      (is (= {:intent/kind :build
+              :intent/steps [{:build/op :place
+                              :build/item :cobblestone
+                              :build/pos [99 52 0]
+                              :build/against [100 52 0]
+                              :build/face :west
+                              :build/stand [100 53 0]
+                              :build/done [:solid [99 52 0]]}]}
+             (dragon/toward-island high))
+          "at the shore's y with air ahead: lays the floor west"))
+    (is (not (plan/done-by base {:goal/done? :crystals-gone?}))
+        "never done while still off the island or within 3s of entering the End")))

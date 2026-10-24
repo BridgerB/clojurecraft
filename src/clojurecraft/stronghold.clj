@@ -59,12 +59,12 @@
 (def answer-ms 3000)                  ; ms after the use-item, by the server's clock, the eye must be seen within
 (def follow-ms 2000)                  ; ms after it is seen, by the server's clock, its line is read: half its life, several blocks of flight
 (def life-ms 4000)                    ; ms an eye flies before it drops or shatters (EyeOfEnder: 80 ticks), by the server's clock
-(def drop-grace-ms 1000)              ; ms after the eye is removed its dropped item may take to be added, by the server's clock
+(def drop-grace-ms 2000)              ; ms after the eye is removed its dropped item may take to fall to the ground, by the server's clock
 (def min-flight 1.0)                  ; blocks on the plane an eye must have flown for its line to count
 (def travel 64)                       ; blocks from a throw the next is made, off its line
 (def travel-turn 60.0)                ; degrees off a throw's line the way to the next turns, either side: ahead and well aside
 (def min-offset 32.0)                 ; blocks off the last throw's line from which the next throw is made, wherever the way got to
-(def pickup-rise 2)                   ; blocks over or under the feet a dropped eye is picked up within
+(def pickup-rise 4)                   ; blocks over or under the feet a dropped eye is picked up within
 (def room-over 1)                     ; blocks over a frame a staircase down to it ends: the feet at the frames' standing level, the tunnel the rest of the way; a stand higher over the portal room's air has no tunnel step down
 (def deep 8)                          ; blocks over a frame past which the way down is stairs, not the tunnel: a tunnel steps down only onto a floor, the stairs lay one over a cave
 (def stair-leg 8)                     ; blocks a staircase toward the frame goes down before the planner looks again, so each leg turns toward the frame
@@ -223,10 +223,14 @@
             {:throw/from (mapv double from) :throw/dir dir :throw/at at})))
 
 (defn eye-drop
-  "[eid entity] of an eye lying within drops/drop-radius of pos, where a thrown eye ended, brought
-   down to the feet's height (it flew up, and its item fell to the ground), or nil."
+  "[eid entity] of an eye lying on a floor (path/floor?: the item spawns at the top of the
+   flight and falls for a second before landing) within drops/drop-radius of pos, where a
+   thrown eye ended, brought down to the feet's height, or nil."
   [world [ex _ ez]]
-  (let [[_ fy _] (:player/pos world)] (drops/nearest world eye [ex fy ez])))
+  (let [[_ fy _] (:player/pos world)
+        [_ d :as hit] (drops/nearest world eye [ex fy ez])]
+    (when (and d (path/floor? world (update (mapv #(long (math/floor %)) (:entity/pos d)) 1 dec)))
+      hit)))
 
 (defmethod throw-stage :follow
   ;; the eye's last place kept each tick; its line read follow-ms after it was seen (or at once
@@ -472,7 +476,9 @@
               (>= (off-line world t) min-offset) (throw-now world)
               :else (or (some #(way world % fy) (spots world t)) {:plan/wait :no-way})))))
 
-(defmethod plan/done-by :frames-seen? [world _] (boolean (seq (frames world))))
+(defmethod plan/done-by :frames-seen?
+  [world _]
+  (boolean (and (seq (frames world)) (not= :throw-eye (:intent/kind (:plan/intent world))))))
 
 (defmethod plan/next-intent :stronghold [world _ _] (stronghold-next world))
 
@@ -664,8 +670,11 @@
           :else {:plan/wait :no-way})))
 
 (defmethod plan/next-intent :portal-room
-  ;; a frame remembered: the way to it (to-room); none yet: the search (stronghold-next)
+  ;; the eye the last throw dropped first (picked-up: a frame seen during the throw moves the
+  ;; chain on to this row when the throw ends), then a frame remembered: the way to it (to-room);
+  ;; none yet: the search (stronghold-next)
   [world _ _]
-  (if-let [f (nearest-frame world)]
-    (to-room world f)
-    (stronghold-next world)))
+  (or (picked-up world)
+      (if-let [f (nearest-frame world)]
+        (to-room world f)
+        (stronghold-next world))))

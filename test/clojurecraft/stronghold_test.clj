@@ -193,6 +193,16 @@
                         [(fx/packet {:packet/name :remove-entities :ids [90]})]
                         (fx/ticks 2950 3100))
         [w _] (fx/fold intent-step throwing removed)
+        [mid-air _] (fx/fold intent-step
+                             w
+                             (concat [(fx/packet {:packet/name :add-entity
+                                                  :entity-id 91
+                                                  :uuid nil
+                                                  :type blocks/item-entity-type
+                                                  :x 14.5
+                                                  :y 70.0
+                                                  :z 14.5})]
+                                     (fx/ticks 3100 3200)))
         [w2 _] (fx/fold intent-step
                         w
                         (concat [(fx/packet {:packet/name :add-entity
@@ -204,6 +214,8 @@
                                              :z 14.5})]
                                 (fx/ticks 3100 3200)))]
     (is (= :active (:intent/status (:plan/intent w))) "the eye gone, its drop not yet come")
+    (is (= :active (:intent/status (:plan/intent mid-air)))
+        "falling through air: not yet on the floor")
     (is (= :done (:intent/status (:plan/intent w2))) "done once the drop lies there")
     (is (= {:intent/kind :collect-drops
             :intent/item :ender_eye

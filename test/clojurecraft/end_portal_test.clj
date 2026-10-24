@@ -168,6 +168,14 @@
         "the blocks not yet on record")
     (is (= {:intent/kind :end-portal :intent/enter? true} (end-portal/next-toward eyed true)))
     (is (nil? (end-portal/next-toward lit false)))
+    (testing "outside the room's wall within 6 of a frame: tunnels into the room first"
+      (let [outside (standing (room 0) [0.5 64.0 8.5] eyes)]
+        (is (= {:intent/kind :tunnel-to
+                :intent/target [3 68 9]
+                :intent/reach 1.5
+                :intent/climb 1
+                :intent/for :stronghold}
+               (end-portal/next-toward outside false)))))
     (testing "the rows' done predicates"
       (let [lit-row (first (filter #(= :end-portal (:goal/id %)) plan/goals))
             end-row (first (filter #(= :enter-end (:goal/id %)) plan/goals))]

@@ -17,7 +17,10 @@ sourceRefs:
   - src/clojurecraft/end_portal.clj#defn enter-op
   - src/clojurecraft/end_portal.clj#defn next-op
   - src/clojurecraft/end_portal.clj#defmethod intent/run :end-portal
+  - src/clojurecraft/end_portal.clj#defn toward-frame
   - src/clojurecraft/end_portal.clj#defn next-toward
+  - src/clojurecraft/end_portal.clj#defmethod plan/interrupts? :end-portal
+  - src/clojurecraft/end_portal.clj#defmethod plan/interrupts? :enter-end
   - src/clojurecraft/end_portal.clj#defmethod plan/done-by :portal-lit?
   - src/clojurecraft/end_portal.clj#defmethod plan/done-by :in-end?
   - src/clojurecraft/path.clj#def stood-on

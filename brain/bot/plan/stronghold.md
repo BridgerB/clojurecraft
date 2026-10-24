@@ -28,7 +28,7 @@ sourceRefs:
   - test/clojurecraft/stronghold_test.clj#an-eye-is-thrown-followed-and-its-line-kept
   - test/clojurecraft/stronghold_test.clj#no-eye-seen-fails-the-throw
   - test/clojurecraft/gym_test.clj#the-throw-trial-holds-the-throws-line-to-the-located-stronghold
-  - src/clojurecraft/stronghold.clj#def drop-grace-ms 1000
+  - src/clojurecraft/stronghold.clj#def drop-grace-ms 2000
   - src/clojurecraft/stronghold.clj#defn eye-drop
   - src/clojurecraft/stronghold.clj#defn frames
   - src/clojurecraft/stronghold.clj#defn second-spot
@@ -100,7 +100,7 @@ A throw is kept on the world as `{:throw/from [x y z] :throw/dir [dx dz] :throw/
 2. `:look` looks up to `throw-pitch` (-20 degrees) along the yaw it has and stands `look-ms` (300 ms), so the pose reaches the server before the use. Never down: a use-item looking at an end portal frame fills the frame instead of throwing.
 3. `:use` sends one `use-item` carrying the look.
 4. `:seek` waits for the eye: the next `eye_of_ender` entity added at or after the use within `seen-within` (3 blocks) of the bot's middle (`own-eye`). None within `answer-ms` (3000 ms, stretched by the server's slowdown) fails `:no-eye`: in the Nether or the End the server throws nothing.
-5. `:follow` keeps the eye's last place in `:intent/eye-pos` each tick; `follow-ms` (2000 ms) after it was seen, or at once if the server removes it sooner, the line from `:intent/eye-from` to there is recorded as a throw (`record-throw`; under `min-flight`, one block, it fails `:eye-unmoved`). Once the server removes the eye (it drops as an item four throws in five, or shatters, at 80 ticks) the intent keeps `:intent/gone-at` and is done when the dropped eye lies where it ended (`eye-drop`: within the drop radius of its last place brought down to the feet's height, since it flew up) or `drop-grace-ms` (1000 ms) later: the removal and the item's add need not come in one tick, and the planner picks the item up only if it is there when the intent ends.
+5. `:follow` keeps the eye's last place in `:intent/eye-pos` each tick; `follow-ms` (2000 ms) after it was seen, or at once if the server removes it sooner, the line from `:intent/eye-from` to there is recorded as a throw (`record-throw`; under `min-flight`, one block, it fails `:eye-unmoved`). Once the server removes the eye (it drops as an item four throws in five, or shatters, at 80 ticks) the intent keeps `:intent/gone-at` and is done when the dropped eye lies on a floor where it ended (`eye-drop`: within the drop radius of its last place brought down to the feet's height, once the item has fallen to the ground) or `drop-grace-ms` (2000 ms) later: the removal and the item's fall take about a second, and the planner picks the item up only if it is on the ground when the intent ends.
 
 ## The throw trial
 The `:eye-throw` row (`--until throw`, priority 21, an aside, overworld only) is done by `:thrown?` (a throw on record) and planned by `:throw`: a `:throw-eye` with an eye held, else wait `:no-eye`. The gym row `throw` gives two eyes on a surface landing at noon and judges with a new kind of truth: a `:truth/check` keyword picks a `gym/verdict` method instead of the pattern, and `:bearing` reads the located stronghold out of `locate structure minecraft:stronghold` run at the landing and passes when the RESULT's first throw (`:throws`, added to the RESULT once a throw is kept) is within `gym/bearing-within` (10 degrees) of the way there.
