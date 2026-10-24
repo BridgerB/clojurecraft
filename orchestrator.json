@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-24T01:10:29.266Z",
+  "at" : "2026-10-24T01:11:39.462Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -76,7 +76,7 @@
     "number" : 582,
     "title" : "Bot stops at furnace: timeout",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
+    "copilot" : true
   }, {
     "number" : 579,
     "title" : "Bot stops at ender-pearls: timeout",
@@ -166,7 +166,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 582,
-    "move" : "assign"
+    "move" : "wait",
+    "why" : "session starting"
   }, {
     "issue" : 579,
     "move" : "leave",
