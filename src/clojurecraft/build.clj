@@ -1338,7 +1338,10 @@
               ;; no working stance here: back to the landing, including its height
               home home
               :else :no-stand))
-      (intent/centred? world stand) nil
+      ;; a tunnel step (no build of its own) is worked from the feet it stands on, even at a
+      ;; cell's edge on a floor no route stands on (a soul sand valley, issue #328): the body
+      ;; is already there, and no other cell that reaches the op is standable either
+      (or (and (nil? build) (= stand (intent/feet world))) (intent/centred? world stand)) nil
       (and (= :enter step) build)
       (or
        (stand-walk world stand)

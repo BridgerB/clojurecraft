@@ -1123,6 +1123,50 @@
     (is (= [1 0 0] (fortress/next-move w [0 64 0] [8 64 0] 3 false #{} true))
         "a stalled leg lays the floor and crosses")))
 
+(defn bridge-stand
+  "One cobblestone block at [0 63 0] over ground at y 40, air all round it: the end of a
+   bridge over a cavern, with 64 cobblestone and full health."
+  []
+  {:world/chunks {}
+   :world/blocks (merge (into {}
+                              (for [x (range -6 7) y (range 41 71) z (range -6 7)] [[x y z] air]))
+                        (into {} (for [x (range -6 7) z (range -6 7)] [[x 40 z] netherrack]))
+                        {[0 63 0] (blocks/default-state :cobblestone)})
+   :player/pos [0.5 64.0 0.5]
+   :player/health 20.0
+   :player/dimension dimension/nether
+   :player/inventory {0 {:item (recipe/item-id :cobblestone) :count 64}}})
+
+(deftest a-new-leg-may-begin-with-a-bridge-step
+  ;; issue #573, R4-38-1: a leg ended on its bridge a few blocks short of the bricks, no
+  ;; safe? step left any heading, and the search waited :no-way
+  (let [w (bridge-stand)]
+    (is (fortress/on-bridge? w))
+    (is (nil? (fortress/choose-move w [0 64 0] [160 64 0])) "no plain step off the bridge")
+    (is (= [1 0] (:search/heading (fortress/exploring w))) "the next leg bridges east")))
+
+(deftest a-pickaxe-is-not-made-on-a-bridge
+  ;; issue #559 again, R2-44-2 and R3-2-1: the pickaxe broke over a diagonal bridge, every
+  ;; cell for the table had a drop past it, and the place failed :no-spot three times
+  (let [goal (first (filter #(= :fortress (:goal/id %)) plan/goals))
+        w (assoc (bridge-stand)
+                 :world/facts (memory/empty-facts)
+                 :player/inventory
+                 {0 {:item (recipe/item-id :stick) :count 2}
+                  1 {:item (recipe/item-id :cobblestone) :count 64}
+                  2 {:item (recipe/item-id :crafting_table) :count 1}})]
+    (is (= :tunnel-to (:intent/kind (plan/next-intent w goal plan/goals)))
+        "the tunnel goes on by hand to ground, and the pickaxe is made there")))
+
+(deftest a-tunnel-op-is-worked-from-the-feet-on-soul-sand
+  ;; issue #328, R3-36-2: at the edge of its cell on a soul sand floor, no stand that
+  ;; reached the step's floor place was standable, and the tunnel failed :no-stand
+  (let [w (assoc (rock {[0 63 0] (blocks/default-state :soul_sand)}) :player/pos [0.0 64.0 0.5])]
+    (is (nil? (build/approach-stand w
+                                    {:intent/kind :tunnel-to}
+                                    {:build/op :place :build/stand [0 64 0] :build/pos [1 63 0]}))
+        "no child: the op is worked from the feet themselves")))
+
 (deftest a-step-over-a-floor-with-nothing-to-lay-is-given-up-not-failed-not-held
   ;; Issue #410's R2-17-1 and R2-12-1: the floor of a step was to be placed and no block was
   ;; held, the :cobblestone it fell back to failed :not-held three times.

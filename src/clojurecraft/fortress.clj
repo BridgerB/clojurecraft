@@ -740,12 +740,16 @@
 
 (defn new-leg
   "The search whose leg-th leg begins at feet along the first of headings that has a way to go:
-   the world goes on ahead (open-ahead?) and a step toward the leg's end is safe (choose-move);
-   nil when none has."
+   the world goes on ahead (open-ahead?) and a tunnel step toward the leg's end can be taken
+   (next-move, bridging a cavern over ground as a stalled leg does); nil when none has. A leg
+   that ended on a bridge over a cavern found no safe? step in any heading and the search
+   waited :no-way with the fortress's bricks a few blocks past its end (issue #573)."
   [world feet leg headings]
   (some (fn [h]
           (let [s {:search/from feet :search/heading h :search/leg leg :search/tunnels 0}]
-            (when (and (open-ahead? world feet h) (choose-move world feet (leg-target s))) s)))
+            (when (and (open-ahead? world feet h)
+                       (next-move world feet (leg-target s) climb-past false #{} true))
+              s)))
         headings))
 
 (defn rock-run
@@ -855,13 +859,17 @@
   [world goal table]
   (let [nether? (= dimension/nether (dimension/of world))
         brick (when nether? (nearest-brick world))
-        search (when (and nether? (not brick)) (exploring world))]
+        search (when (and nether? (not brick)) (exploring world))
+        ;; On a bridge over a cavern no cell beside the feet is a spot for the table (a drop
+        ;; past every cell of a diagonal bridge, issue #559 again): the pickaxe is remade once
+        ;; the tunnel reaches ground, and the tunnel goes on by hand until then.
+        grounded? (not (on-bridge? world))]
     (cond (not nether?) {:plan/wait :other-dimension}
           :else
-          (or (when (build/pickaxe-at-hand? world)
+          (or (when (and grounded? (build/pickaxe-at-hand? world))
                 (make/decide world (assoc goal :goal/provides {:tag/pickaxes 1}) table))
-              (intent/chain-next (:plan/last world) :take-table make/table-drops {})
-              (make/take-table-along world)
+              (and grounded? (intent/chain-next (:plan/last world) :take-table make/table-drops {}))
+              (and grounded? (make/take-table-along world))
               (when brick
                 {:intent/kind :tunnel-to
                  :intent/target brick
