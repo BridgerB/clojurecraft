@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-24T07:42:15.071Z",
+  "at" : "2026-10-24T07:43:21.523Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -38,15 +38,15 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 575,
-    "title" : "Bot stops at blaze-rods: no-stand",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : true
-  }, {
     "number" : 582,
     "title" : "Bot stops at furnace: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
+  }, {
+    "number" : 575,
+    "title" : "Bot stops at blaze-rods: no-stand",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : true
   }, {
     "number" : 579,
     "title" : "Bot stops at ender-pearls: timeout",
@@ -61,6 +61,11 @@
     "number" : 507,
     "title" : "Bot stops at blaze-rods: no-blaze",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 348,
+    "title" : "Bot stops at flint-and-steel: stuck",
+    "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
     "number" : 342,
@@ -147,11 +152,11 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 575,
+    "issue" : 582,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 582,
+    "issue" : 575,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -166,6 +171,9 @@
     "issue" : 507,
     "move" : "leave",
     "why" : "hands-off label"
+  }, {
+    "issue" : 348,
+    "move" : "assign"
   }, {
     "issue" : 342,
     "move" : "leave",
@@ -212,10 +220,6 @@
     "why" : "hands-off label"
   } ],
   "log" : [ {
-    "issue" : 135,
-    "move" : "assign",
-    "at" : "2026-10-21T09:36:28.283Z"
-  }, {
     "issue" : 135,
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
@@ -1551,5 +1555,9 @@
     "issue" : 328,
     "move" : "assign",
     "at" : "2026-10-24T02:58:21.479Z"
+  }, {
+    "issue" : 348,
+    "move" : "assign",
+    "at" : "2026-10-24T07:43:21.523Z"
   } ]
 }
