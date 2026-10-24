@@ -439,7 +439,15 @@
         (is (= :stairs-down
                (:intent/kind
                 (plan/next-intent (assoc shore :player/pos [7.5 64.0 9.5]) room-row plan/goals)))
-            "standing dry: the stairs")))
+            "standing dry: the stairs")
+        (is (= :stairs-down
+               (:intent/kind (plan/next-intent
+                              (assoc shore
+                                     :player/pos [7.5 52.0 9.5]
+                                     :plan/last {:intent/kind :stairs-down :intent/status :done})
+                              room-row
+                              plan/goals)))
+            "after stairs have begun: continues stairs down, never retreats to the shore")))
     (testing "water everywhere round: no dry start, the stairs where the feet are"
       (let [wet (assoc seen
                        :world/chunks

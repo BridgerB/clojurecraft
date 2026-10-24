@@ -645,7 +645,11 @@
   [world [_ y _ :as f]]
   (let [[_ fy _ :as feet] (intent/feet world)
         high? (> fy (+ y deep))
-        start (when (and high? (not (:player/in-water? world))) (dry-start world f))
+        start (when (and high?
+                         (not (:player/in-water? world))
+                         (terrain/under-sky? world feet)
+                         (not (#{:stairs-down :tunnel-to} (:intent/kind (:plan/last world)))))
+                (dry-start world f))
         far (when (and high?
                        (not (:player/in-water? world))
                        (nil? start)

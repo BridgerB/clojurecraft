@@ -595,7 +595,8 @@
              (not (contains? left (entity/kind e)))
              (<= (physics/distance pos (:entity/pos e))
                  (reach world eid e (if (= :creeper (entity/kind e)) creeper-radius defend-radius)))
-             (hittable? world e))))
+             (hittable? world e)
+             (or (= :creeper (entity/kind e)) (approachable? world e)))))
      (entity/hostiles world))))
 
 (defmethod plan/done-by :safe? [world _] (or (nil? (:player/pos world)) (empty? (threats world))))

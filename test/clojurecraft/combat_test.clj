@@ -244,7 +244,11 @@
     (is (empty? (combat/threats walled)) "behind a wall, none")
     (is (plan/done-by walled (row :defend)))
     (is (empty? (combat/threats (standing {8 (mob :blaze [9.5 68.0 8.5] 20.0)})))
-        "a blaze four over the feet is out of reach from the floor")))
+        "a blaze four over the feet is out of reach from the floor")
+    (let [in-pit (standing {9 (mob :silverfish [8.5 62.0 11.0] 8.0)})]
+      (is
+       (empty? (combat/threats in-pit))
+       "a silverfish in a pit two below with no way down is not approachable and thus no threat"))))
 
 (deftest a-back-off-ends-eight-blocks-away
   (let [w (assoc (standing {8 (mob :creeper [10.5 64.0 8.5] 20.0)})
