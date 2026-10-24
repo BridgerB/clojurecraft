@@ -112,9 +112,23 @@
          "]")))
     (println " shaft-cells" (mapv #(bname world %) (stairs/shaft-cells feet))
              "under-feet" (bname world (update feet 1 dec)))
-    (doseq [e (:bot/effects world)
-            :when (and (= :log (:effect/kind e))
-                       (or (str/includes? (:effect/message e) "stairs")
-                           (str/includes? (:effect/message e) "tunnel")))]
-      (println " SAY" (:effect/message e)))))
+    (doseq [[label i0]
+            [["up"
+              {:intent/kind :stairs-up :intent/to-y (+ (second feet) 6) :intent/status :active}]
+             ["down"
+              {:intent/kind :stairs-down :intent/to-y (- (second feet) 6) :intent/status :active}]]]
+      (println " PLANLOOP" label)
+      (try (loop [w2 (assoc world :plan/intent i0 :bot/effects [])
+                  tick 0]
+             (let [i (:plan/intent w2)]
+               (doseq [e (:bot/effects w2)]
+                 (when (= :log (:effect/kind e)) (println "  SAY" (:effect/message e))))
+               (cond (>= tick 25)
+                     (println "  ...25 ticks"
+                              (pr-str [(:intent/stage i) (:intent/status i) (:intent/dir i)
+                                       (:intent/turns i)]))
+                     (not= :active (:intent/status i :active))
+                     (println "  end" (pr-str [(:intent/status i) (:intent/reason i)]))
+                     :else (recur (assoc (intent/run w2 i nil) :bot/effects []) (inc tick)))))
+           (catch Exception e (println "  ERR" (.getMessage e)))))))
 (println "DONE")
