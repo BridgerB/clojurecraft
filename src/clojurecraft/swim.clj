@@ -183,7 +183,9 @@
                 :let [cell [(+ fx dx) y (+ fz dz)]]
                 :when (and (not (blacklist cell)) (bank? world cell) (keep? cell))]
             cell)
-          (sort-by (fn [cell] [(if (contains? trail cell) 0 (if (obstacle world feet cell) 2 1))
+          (sort-by (fn [cell] [(cond (contains? trail cell) 0
+                                     (obstacle world feet cell) 2
+                                     :else 1)
                                (physics/horizontal-distance (physics/centre feet)
                                                             (physics/centre cell))
                                (- (physics/y-of cell))]))

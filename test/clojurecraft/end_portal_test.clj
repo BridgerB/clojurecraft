@@ -172,9 +172,11 @@
       (let [outside (standing (room 0) [-0.5 64.0 8.5] eyes)]
         (is (= {:intent/kind :tunnel-to
                 :intent/target [3 68 9]
+                :intent/steps 32
+                :intent/dry? true
+                :intent/from-feet [-1 64 8]
                 :intent/reach 1.5
-                :intent/climb 1
-                :intent/for :stronghold}
+                :intent/climb 1}
                (end-portal/next-toward outside false)))))
     (testing "the rows' done predicates"
       (let [lit-row (first (filter #(= :end-portal (:goal/id %)) plan/goals))
