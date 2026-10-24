@@ -261,6 +261,51 @@
     (is (nil? (place/spot w)) "no air round the feet")
     (is (#{[9 64 8] [7 64 8] [8 64 9] [8 64 7]} (place/niche w)) "a powder-snow cell on stone")))
 
+(deftest snow-or-leaves-over-the-ground-is-dug-clear-for-a-spot
+  ;; race 40028266922 bot Clj_r04 (issue #68): snow-covered grass, every cell round the
+  ;; feet snow or grass, no spot and no wall for a niche; race 40029764849 bot Clj_r03
+  ;; (issue #574): a birch crown, every cell leaves or air over air, and the furnace
+  ;; found no spot. The cover over solid ground is dug clear and placed into.
+  (let [snow (blocks/default-state :snow)
+        ground (merge
+                (into {} (for [x (range 16) y (range 60 64) z (range 16)] [[x y z] 1]))
+                (into {} (for [x (range 16) z (range 16) :when (not= [x z] [8 8])] [[x 64 z] snow]))
+                {[8 64 8] 0 [8 65 8] 0})
+        world-of (fn [g] (assoc (standing [8.5 64.0 8.5]) :world/chunks {[0 0] (world/column g)}))
+        w (world-of ground)
+        tick {:event/kind :tick :event/now 0 :event/rand 0.5}
+        spot (fn [w i]
+               (let [i (merge {:intent/kind :place
+                               :intent/item :crafting_table
+                               :intent/status :active
+                               :intent/stage :spot}
+                              i)]
+                 (:plan/intent (intent/run (assoc w :plan/intent i) i tick))))
+        cut (place/covered-spot w #{})]
+    (is (nil? (place/spot w)) "snow is no spot")
+    (is (nil? (place/niche w)) "and no wall to cut")
+    (is (some? cut) "but the snow over the ground is dug clear")
+    (is (= snow (terrain/block-at w cut)))
+    (let [started (spot w {})]
+      (is (= :niche (:intent/stage started)))
+      (is (= cut (:intent/niche started)) "the cell is kept for after the dig"))
+    (let [dug (world-of (assoc ground cut 0))
+          settled (spot dug {:intent/niche cut})]
+      (is (= :settle (:intent/stage settled)))
+      (is (= cut (:intent/target settled)) "the block goes where the snow was")))
+  (let [leaves (blocks/default-state :birch_leaves)
+        crown
+        (merge
+         (into {} (for [x (range 16) y (range 60 64) z (range 16)] [[x y z] 1]))
+         (into
+          {}
+          (for [x (range 16) y [64 65 66] z (range 16) :when (not= [x z] [8 8])] [[x y z] leaves]))
+         {[8 64 8] 0 [8 65 8] 0 [8 66 8] 0})
+        w (assoc (standing [8.5 64.0 8.5]) :world/chunks {[0 0] (world/column crown)})
+        cut (place/covered-spot w #{})]
+    (is (some? cut) "leaves over leaves are dug clear on a crown")
+    (is (blocks/leaves? (terrain/block-at w cut)))))
+
 (deftest a-block-is-never-placed-on-a-table
   ;; gym batch iron-a5 run 4: the only spot was on its crafting table, and a right-click on a
   ;; table opens it, so the gravel was never placed and the intent failed :rejected three times
