@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-24T13:09:39.428Z",
+  "at" : "2026-10-24T13:13:02.863Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -43,15 +43,15 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 580,
-    "title" : "Bot stops at blaze-rods: inventory-full",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : true
-  }, {
     "number" : 507,
     "title" : "Bot stops at blaze-rods: no-blaze",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
+  }, {
+    "number" : 580,
+    "title" : "Bot stops at blaze-rods: inventory-full",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : true
   }, {
     "number" : 575,
     "title" : "Bot stops at blaze-rods: no-stand",
@@ -166,11 +166,11 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 580,
+    "issue" : 507,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 507,
+    "issue" : 580,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
