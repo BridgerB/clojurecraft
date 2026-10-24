@@ -215,7 +215,7 @@
         w (assoc (standing {7 zombie}) :world/chunks {[0 0] (world/column pit)})
         given (combat/given-up (assoc w :time/now 1000) 7)]
     (is (combat/hittable? w zombie) "seen in the water below")
-    (is (= #{7} (set (keys (combat/threats w)))) "a threat before any fight")
+    (is (empty? (combat/threats w)) "no threat: no route walks to it (approachable?)")
     (is (combat/given-up? (assoc given :time/now 2000) 7 zombie))
     (is (empty? (combat/threats (assoc given :time/now 2000))) "not picked again a while")
     (is (not (combat/given-up? (assoc given :time/now (+ 1000 combat/give-up-ms)) 7 zombie))
