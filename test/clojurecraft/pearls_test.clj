@@ -712,6 +712,13 @@
     (is (pearls/lured-out? (lured given-up pearls/lure-tries)))
     (is (nil? (pearls/angry-near (lured given-up pearls/lure-tries)))
         "lure-tries lures it never came to: no longer held")
+    (is (= {:intent/kind :stairs-up
+            :intent/to-y 64
+            :intent/dir [1 0]
+            :intent/to-height? true
+            :intent/for :pearls}
+           (plan/next-intent (lured given-up pearls/lure-tries) row plan/goals))
+        "the way out is cut the other way from the mouth, never walked into the angry mob")
     (is (= 7
            (first (pearls/angry-near (lured (dissoc given-up :plan/blacklist) pearls/lure-tries))))
         "one not given up on still holds the bot in")))
@@ -835,6 +842,52 @@
     (is (= {:intent/kind :walk :intent/target [8 64 15] :intent/for :pearls}
            (plan/next-intent (update w :player/inventory dissoc 1) row plan/goals))
         "with no pickaxe to cut one, up to it as before")))
+
+(deftest with-a-pickaxe-held-no-walk-goes-to-an-endermans-feet-without-a-stare-site
+  ;; gym batch pearls-m10-a (plan run 40106206590) run 3: with stare-site nil, the bot walked straight
+  ;; to an enderman's feet with a pickaxe held and died in the open
+  (let [e (enderman [8.5 64.0 15.5])
+        w (-> (standing {7 e} wall)
+              (assoc-in [:player/inventory 1] (item :iron_pickaxe 1))
+              (update :world/chunks
+                      into
+                      (for [cx [-1 0 1]
+                            cz [-1 0 1]
+                            :when (not= [0 0] [cx cz])]
+                        [[cx cz] (world/column {})])))]
+    (with-redefs [pearls/stare-site (constantly nil)]
+      (is (nil? (pearls/stare-site w e)))
+      (is (not= [8 64 15] (:intent/target (plan/next-intent w row plan/goals)))
+          "never walks to the feet when holding a pickaxe"))))
+
+(deftest an-unreachable-enderman-under-16-blocks-is-no-quarry
+  ;; gym batch pearls-m10-a (plan run 40106206590) run 3: provoked an enderman 6 blocks off down
+  ;; a 2-block ledge with no path up; within 16 blocks it never teleports and could not reach
+  (let [low (enderman [8.5 62.0 15.5])
+        w (-> (burrowed [8.5 64.0 8.5] {7 low})
+              (assoc-in [:world/chunks [0 1]] (world/column {})))]
+    (is (pearls/provokable? w low) "clear sight line")
+    (is (not (pearls/reaches? w low (:pearls/mouth w))) "cannot climb 2 blocks up to the mouth")
+    (is (nil? (pearls/quarry w)) "skipped as quarry since it cannot reach")
+    (let [far (enderman [8.5 64.0 28.5])
+          w-far (assoc-in w [:world/entities 8] far)]
+      (is (pearls/reaches? w-far far (:pearls/mouth w-far)) "past 16 blocks it teleports")
+      (is (= 8 (first (pearls/quarry w-far))) "so the distant one is quarry"))))
+
+(deftest a-distant-angry-enderman-is-not-fought-in-the-open-with-a-pickaxe-held
+  ;; gym batch pearls-m10-a (plan run 40106206590) run 3: charged across the open world to fight an
+  ;; angry enderman 15 blocks off with no burrow shelter and fell into lava
+  (let [angry (assoc (enderman [8.5 64.0 20.5]) :entity/creepy? true)
+        w (-> (standing {7 angry})
+              (assoc-in [:player/inventory 1] (item :iron_pickaxe 1)))]
+    (with-redefs [pearls/burrowable? (constantly false)
+                  pearls/burrow-site (constantly nil)]
+      (is
+       (not= :fight (:intent/kind (plan/next-intent w row plan/goals)))
+       "never charges out into an open fight with a distant angry enderman while holding a pickaxe")
+      (is (= :fight
+             (:intent/kind (plan/next-intent (update w :player/inventory dissoc 1) row plan/goals)))
+          "without a pickaxe to cut shelter, fights in the open as fallback"))))
 
 (deftest out-of-the-burrow-no-look-stares-at-a-calm-one-and-one-angry-at-hand-ends-the-intent
   ;; sim probes 39887735653 and 39887752302 (seeds 4 and 5): four bots stared at one two or three

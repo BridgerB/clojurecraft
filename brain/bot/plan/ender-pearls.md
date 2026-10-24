@@ -3,11 +3,15 @@ title: Ender pearls
 description: How the bot gets twelve ender pearls (issue #263) - endermen hunted with the sword, never bartered; the loot table, the warped forest and the enderman's stare and teleport rules read from the jar; the :pearls plan (the kill's drop, the fight, a stare from range to provoke, a walk), the :provoke intent, the two goal rows, the sim test and the model's armour.
 type: reference
 tags: [bot, plan, combat, nether, goals, intents]
-aliases: [:pearls, :provoke, :burrow, :lookout, cut-reach, roam-reaches, at-hand, lure?, lure-lookouts, mouth-cells, :pearls/shelter, :entity/creepy?, :intent/hold?, :ender-pearls, :ender-pearl, pearls-12, pearls-1, :unprovoked, :no-enderman, stare-from, stare-range, :toward, roam-goal, descend, descend-radius, spare-digs, spare?, memory/arrived, vantage, threat, stale?, warped-origins, ascend, pearl-arena, dig-out, cheapest-heading, lured-out?, lure-tries, :no-sword, make-sword, sword/payable, sword/serviceable, burning-at, brink?, provoke-health, at-site?, make-pickaxe, worn-pick?, floored-length, blocked-out?, cut-out]
+aliases: [:pearls, :provoke, :burrow, :lookout, cut-reach, roam-reaches, at-hand, lure?, lure-lookouts, mouth-cells, :pearls/shelter, :entity/creepy?, :intent/hold?, :ender-pearls, :ender-pearl, pearls-12, pearls-1, :unprovoked, :no-enderman, stare-from, stare-range, :toward, roam-goal, descend, descend-radius, spare-digs, spare?, memory/arrived, vantage, threat, stale?, warped-origins, ascend, pearl-arena, dig-out, cheapest-heading, lured-out?, lure-tries, :no-sword, make-sword, sword/payable, sword/serviceable, burning-at, brink?, provoke-health, at-site?, make-pickaxe, worn-pick?, floored-length, blocked-out?, cut-out, reaches?]
 status: verified
-lastUpdated: 2026-10-22
+lastUpdated: 2026-10-24
 verifiedAgainst: HEAD
 sourceRefs:
+  - src/clojurecraft/pearls.clj#defn reaches?
+  - test/clojurecraft/pearls_test.clj#with-a-pickaxe-held-no-walk-goes-to-an-endermans-feet-without-a-stare-site
+  - test/clojurecraft/pearls_test.clj#an-unreachable-enderman-under-16-blocks-is-no-quarry
+  - test/clojurecraft/pearls_test.clj#a-distant-angry-enderman-is-not-fought-in-the-open-with-a-pickaxe-held
   - src/clojurecraft/pearls.clj#def hunt-radius 32.0
   - src/clojurecraft/pearls.clj#def cut-reach 32
   - src/clojurecraft/pearls.clj#defn within-cut-reach?

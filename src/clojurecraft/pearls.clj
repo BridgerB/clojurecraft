@@ -308,20 +308,35 @@
         d (physics/distance eye (head e))]
     (and (<= stare-from d stare-range) (mob/sight? (sight-fn world) eye (head e)))))
 
+(defn reaches?
+  "Can enderman e reach cell to on foot: within danger-radius (16 blocks: past 16 it teleports,
+   EndermanLookForPlayerGoal), a route from its cell to to is :found (path/plan). Nil or false
+   when no route reaches to within max nodes."
+  [world e to]
+  (if-not to
+    true
+    (let [ec (cell (:entity/pos e))
+          d (physics/distance (physics/centre to) (:entity/pos e))]
+      (or (> d danger-radius)
+          (= :found (:path/status (path/plan world ec to {:path/max-nodes 300})))))))
+
 (defn quarry
   "[eid entity] of the enderman a stare is for: the nearest within stare-range not yet coming
-   (entity/creepy?) that is provokable? from where the bot stands, or nil. Not only the nearest:
+   (entity/creepy?) that is provokable? from where the bot stands and can reach the mouth or feet
+   (reaches?: one within 16 blocks that cannot reach stands outside the mouth angry and never
+   teleports, EndermanLookForPlayerGoal), or nil. Not only the nearest:
    gym batch pearls-263d (plan run 38899294690, probe 38904622614) tracked seventeen endermen 30
    to 80 blocks round each warped forest landing, none within a route's reach, and stood looking
    round for forty minutes while the nearest, behind a ledge, could not be stared at. One stared
    at from past 16 blocks teleports toward the bot (EndermanLookForPlayerGoal): it need not be
    walked to."
   [world]
-  (let [pos (:player/pos world)]
+  (let [pos (:player/pos world)
+        to (or (:pearls/mouth world) (intent/feet world))]
     (->> (endermen world stare-range)
          (remove (comp entity/creepy? val))
          (sort-by (fn [[_ e]] (physics/distance pos (:entity/pos e))))
-         (some (fn [[_ e :as ee]] (when (provokable? world e) ee))))))
+         (some (fn [[_ e :as ee]] (when (and (provokable? world e) (reaches? world e to)) ee))))))
 
 (def roam-reaches [roam-reach (* 2 roam-reach) (* 3 roam-reach)]) ; how far a roam looks for an end not yet walked to, nearest first: sixteen blocks, then thirty-two, then forty-eight
 
@@ -915,8 +930,10 @@
                           (burrowable? world c (away at e))))))
          (take vantage-tries)
          (some (fn [c]
-                 (when (intent/routable? world
-                                         {:intent/kind :walk :intent/target c :intent/for :shelter})
+                 (when (and (intent/routable?
+                             world
+                             {:intent/kind :walk :intent/target c :intent/for :shelter})
+                            (reaches? world e c))
                    c))))))
 
 (defn crowd-site
@@ -1302,7 +1319,9 @@
        :intent/hold? true
        :intent/yield? true
        :intent/for :pearls}
-      (and at-end? bid (blocked-out? world))
+      (and at-end?
+           (or (and bid (blocked-out? world))
+               (and (lured-out? world) (angry-near (dissoc world :plan/blacklist)))))
       (or (cut-out world) {:intent/kind :lookout :intent/for :pearls})
       (and near?
            (not in?)
@@ -1331,21 +1350,26 @@
       {:intent/kind :provoke :intent/target qid :intent/for :pearls}
       (and qid home rested?) {:intent/kind :walk :intent/target mouth :intent/for :shelter}
       (and qid home (intent/routable? world way-home)) way-home
-      ce {:intent/kind :fight :intent/target ceid :intent/for :pearls}
+      (and ce (not (pickaxe? world))) {:intent/kind :fight :intent/target ceid :intent/for :pearls}
+      ce {:intent/kind :lookout :intent/for :pearls}
       home (or (vantage world far) {:intent/kind :lookout :intent/for :pearls})
       :else
-      (or
-       (when-let [[_ e] (routable world far)]
-         (let [c (when (pickaxe? world) (stare-site world e))]
-           (cond c {:intent/kind :walk :intent/target c :intent/for :shelter}
-                 :else
-                 {:intent/kind :walk :intent/target (cell (:entity/pos e)) :intent/for :pearls})))
-       (descend world (endermen world descend-radius))
-       (ascend world (endermen world descend-radius))
-       (toward world far)
-       (bore world (endermen world descend-radius))
-       (when (= :lookout (:intent/kind (:plan/last world))) (or (roam world) (dig-out world)))
-       {:intent/kind :lookout :intent/for :pearls}))))
+      (or (if (pickaxe? world)
+            (some (fn [[_ e]]
+                    (when-let [c (stare-site world e)]
+                      {:intent/kind :walk :intent/target c :intent/for :shelter}))
+                  (->> far
+                       (sort-by (fn [[_ e]] (physics/distance (:player/pos world) (:entity/pos e))))
+                       (take candidates)))
+            (when-not (worn-out? world)
+              (when-let [[_ e] (routable world far)]
+                {:intent/kind :walk :intent/target (cell (:entity/pos e)) :intent/for :pearls})))
+          (descend world (endermen world descend-radius))
+          (ascend world (endermen world descend-radius))
+          (toward world far)
+          (bore world (endermen world descend-radius))
+          (when (= :lookout (:intent/kind (:plan/last world))) (or (roam world) (dig-out world)))
+          {:intent/kind :lookout :intent/for :pearls}))))
 
 (defn look-off
   "The look [yaw pitch], unless from the eye it stares at a calm enderman (not entity/creepy?;
