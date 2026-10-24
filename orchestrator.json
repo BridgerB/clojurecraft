@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-24T16:20:15.183Z",
+  "at" : "2026-10-24T16:21:22.178Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -46,6 +46,11 @@
     "number" : 45,
     "title" : "Bot stops at cast-one: no-path",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 526,
+    "title" : "Bot stops at blaze-rods: blocked",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 178,
@@ -107,6 +112,10 @@
     "why" : "hands-off label"
   }, {
     "issue" : 45,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 526,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
