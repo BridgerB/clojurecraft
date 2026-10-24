@@ -120,15 +120,17 @@
       (println " PLANLOOP" label)
       (try (loop [w2 (assoc world :plan/intent i0 :bot/effects [])
                   tick 0]
-             (let [i (:plan/intent w2)]
-               (doseq [e (:bot/effects w2)]
-                 (when (= :log (:effect/kind e)) (println "  SAY" (:effect/message e))))
+             (let [i (:plan/intent w2)
+                   w3 (when (= :active (:intent/status i :active)) (intent/run w2 i nil))]
+               (when w3
+                 (doseq [e (:bot/effects w3)]
+                   (when (= :log (:effect/kind e)) (println "  SAY" (:effect/message e)))))
                (cond (>= tick 25)
                      (println "  ...25 ticks"
                               (pr-str [(:intent/stage i) (:intent/status i) (:intent/dir i)
                                        (:intent/turns i)]))
                      (not= :active (:intent/status i :active))
                      (println "  end" (pr-str [(:intent/status i) (:intent/reason i)]))
-                     :else (recur (assoc (intent/run w2 i nil) :bot/effects []) (inc tick)))))
+                     :else (recur (assoc w3 :bot/effects []) (inc tick)))))
            (catch Exception e (println "  ERR" (.getMessage e)))))))
 (println "DONE")
