@@ -861,6 +861,19 @@
   (when-not (plan/done-by world goal)
     (plan/next-intent world (assoc goal :goal/plan :build) table)))
 
+(defn back-target
+  "The cell to walk back to when a pickaxe must be remade and no ground is near: the oldest
+   cell of the trail kept for target (where this tunnel began, on ground), or, while a walk
+   back is running, that walk's own target (the trail then kept for it). nil when no trail
+   is kept or the feet are already there (issues #559, #328: a table on a bridge or a ledge
+   over a cavern finds no spot, and a tunnel that yields for the pickaxe is asked again for
+   ever)."
+  [world target]
+  (let [{:trail/keys [cells] t-target :trail/target} (:fortress/trail world)
+        back (cond (= target t-target) (first cells)
+                   (and t-target (not= target t-target)) t-target)]
+    (when (and back (not= back (intent/feet world))) back)))
+
 (defmethod plan/next-intent :fortress
   ;; replace a missing pickaxe from held supplies and take the placed table along (the next
   ;; pickaxe is made where the bot stands, not out of four more planks: probe 39782256061, issue
@@ -875,10 +888,17 @@
         ;; On a bridge over a cavern no cell beside the feet is a spot for the table (a drop
         ;; past every cell of a diagonal bridge, issue #559 again): the pickaxe is remade once
         ;; the tunnel reaches ground, and the tunnel goes on by hand until then.
-        grounded? (or (not (on-bridge? world)) (ground-near? world))]
+        grounded? (or (not (on-bridge? world)) (ground-near? world))
+        back (when (and (not grounded?) (build/pickaxe-at-hand? world))
+               (back-target world (or brick (when search (leg-target search)))))]
     (cond (not nether?) {:plan/wait :other-dimension}
           :else
-          (or (when (and grounded? (build/pickaxe-at-hand? world))
+          (or (when back
+                {:intent/kind :tunnel-to
+                 :intent/target back
+                 :intent/steps steps-per-tunnel
+                 :intent/bridge? true})
+              (when (and grounded? (build/pickaxe-at-hand? world))
                 (make/decide world (assoc goal :goal/provides {:tag/pickaxes 1}) table))
               (and grounded? (intent/chain-next (:plan/last world) :take-table make/table-drops {}))
               (and grounded? (make/take-table-along world))

@@ -1160,6 +1160,31 @@
     (is (not (fortress/ground-near? w)) "no ground within two cells of the bridge's end")
     (is (fortress/ground-near? (rock {})) "rock under a walk floor is ground")))
 
+(deftest a-pickaxe-broken-on-a-bridge-walks-back-to-ground
+  ;; issue #559, R3-2-1: on a ledge over a cavern with the rock ahead undiggable by hand,
+  ;; the tunnel yields for a pickaxe and is asked again for ever; the way back is the
+  ;; tunnel's own trail to the ground it began on
+  (let [goal (first (filter #(= :fortress (:goal/id %)) plan/goals))
+        w (assoc (bridge-stand)
+                 :world/facts (memory/empty-facts)
+                 :fortress/trail {:trail/target [160 64 0] :trail/cells [[-3 64 0] [-2 64 0]]}
+                 :player/inventory
+                 {0 {:item (recipe/item-id :stick) :count 2}
+                  1 {:item (recipe/item-id :cobblestone) :count 64}
+                  2 {:item (recipe/item-id :crafting_table) :count 1}})]
+    (is (= [-3 64 0] (fortress/back-target w [160 64 0])) "the oldest cell of the trail")
+    (is (= [-3 64 0]
+           (fortress/back-target (assoc w :fortress/trail {:trail/target [-3 64 0] :trail/cells []})
+                                 [160 64 0]))
+        "a walk back already running keeps its target")
+    (is (nil? (fortress/back-target
+               (assoc w :fortress/trail {:trail/target [160 64 0] :trail/cells [[0 64 0]]})
+               [160 64 0]))
+        "already there: no walk back")
+    (let [next (plan/next-intent w goal plan/goals)]
+      (is (= :tunnel-to (:intent/kind next)))
+      (is (= [-3 64 0] (:intent/target next)) "back along the bridge before any table"))))
+
 (deftest a-tunnel-op-is-worked-from-the-feet-on-soul-sand
   ;; issue #328, R3-36-2: at the edge of its cell on a soul sand floor, no stand that
   ;; reached the step's floor place was standable, and the tunnel failed :no-stand
