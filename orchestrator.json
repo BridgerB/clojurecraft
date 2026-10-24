@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-24T10:08:43.242Z",
+  "at" : "2026-10-24T10:09:50.516Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -38,6 +38,11 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
+    "number" : 531,
+    "title" : "Bot stops at ingots: boxed",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
     "number" : 328,
     "title" : "Bot stops at fortress: no-stand",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
@@ -48,23 +53,18 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 531,
-    "title" : "Bot stops at ingots: boxed",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 575,
     "title" : "Bot stops at blaze-rods: no-stand",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : true
   }, {
-    "number" : 507,
-    "title" : "Bot stops at blaze-rods: no-blaze",
+    "number" : 573,
+    "title" : "Bot stops at fortress: no-way",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 573,
-    "title" : "Bot stops at fortress: no-way",
+    "number" : 507,
+    "title" : "Bot stops at blaze-rods: no-blaze",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
@@ -152,6 +152,10 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 531,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
     "issue" : 328,
     "move" : "leave",
     "why" : "hands-off label"
@@ -160,19 +164,15 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 531,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
     "issue" : 575,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 507,
+    "issue" : 573,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 573,
+    "issue" : 507,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
