@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-24T04:26:27.191Z",
+  "at" : "2026-10-24T04:27:35.834Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -72,6 +72,11 @@
     "title" : "Bot stops at water-bucket: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : true
+  }, {
+    "number" : 45,
+    "title" : "Bot stops at cast-one: no-path",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
   }, {
     "number" : 161,
     "title" : "Bot stops at portal-kit: timeout",
@@ -167,6 +172,10 @@
     "why" : "hands-off label"
   }, {
     "issue" : 69,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 45,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
