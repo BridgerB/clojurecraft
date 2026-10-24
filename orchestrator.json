@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-24T03:05:12.352Z",
+  "at" : "2026-10-24T03:13:05.501Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -30,7 +30,7 @@
   }, {
     "number" : 328,
     "title" : "Bot stops at fortress: no-stand",
-    "labels" : [ "bot-failure", "real", "sim" ],
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : true
   }, {
     "number" : 580,
@@ -70,7 +70,7 @@
   }, {
     "number" : 582,
     "title" : "Bot stops at furnace: timeout",
-    "labels" : [ "bot-failure", "sim" ],
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 69,
@@ -135,8 +135,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 328,
-    "move" : "wait",
-    "why" : "session starting"
+    "move" : "leave",
+    "why" : "hands-off label"
   }, {
     "issue" : 580,
     "move" : "leave",
@@ -163,6 +163,10 @@
     "why" : "hands-off label"
   }, {
     "issue" : 62,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 582,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
