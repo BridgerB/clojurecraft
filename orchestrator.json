@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-24T01:52:28.163Z",
+  "at" : "2026-10-24T01:53:38.076Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -81,7 +81,7 @@
     "number" : 582,
     "title" : "Bot stops at furnace: timeout",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : true
+    "copilot" : false
   }, {
     "number" : 579,
     "title" : "Bot stops at ender-pearls: timeout",
@@ -170,8 +170,7 @@
     "why" : "hands-off label"
   }, {
     "issue" : 582,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment"
+    "move" : "assign"
   }, {
     "issue" : 579,
     "move" : "leave",
@@ -194,11 +193,6 @@
     "why" : "hands-off label"
   } ],
   "log" : [ {
-    "issue" : 135,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment",
-    "at" : "2026-10-21T09:28:22.338Z"
-  }, {
     "issue" : 135,
     "move" : "assign",
     "at" : "2026-10-21T09:29:31.855Z"
@@ -1534,5 +1528,9 @@
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
     "at" : "2026-10-24T01:52:28.163Z"
+  }, {
+    "issue" : 582,
+    "move" : "assign",
+    "at" : "2026-10-24T01:53:38.076Z"
   } ]
 }
