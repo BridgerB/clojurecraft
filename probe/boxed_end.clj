@@ -1,4 +1,5 @@
-(require '[clojurecraft.capture :as capture]
+(require '[clojure.string :as str]
+         '[clojurecraft.capture :as capture]
          '[clojurecraft.simrace :as simrace]
          '[clojurecraft.sim :as sim]
          '[clojurecraft.plan :as plan]
@@ -110,5 +111,10 @@
          (try (stairs/lay world feet lc) (catch Exception e :err))
          "]")))
     (println " shaft-cells" (mapv #(bname world %) (stairs/shaft-cells feet))
-             "under-feet" (bname world (update feet 1 dec)))))
+             "under-feet" (bname world (update feet 1 dec)))
+    (doseq [e (:bot/effects world)
+            :when (and (= :log (:effect/kind e))
+                       (or (str/includes? (:effect/message e) "stairs")
+                           (str/includes? (:effect/message e) "tunnel")))]
+      (println " SAY" (:effect/message e)))))
 (println "DONE")
