@@ -359,21 +359,50 @@
    eighty-six ends it had walked to lying within thirty blocks, and stood in lookouts from the
    twenty-seventh minute with the roam finding no end it had not seen; the forest spawns four
    endermen at a time and no more where the bot has thinned them, and somewhere else is
-   farther."
+   farther. With no route reaching any roam-goal (the search spends its expansions in the
+   caves and cliffs on the way: :partial, or its frontier: :none), the farthest end those
+   routes came to, roam-reach or more from the feet on the plane and not spent, is walked to
+   instead, as a walk toward an enderman goes as far as its route goes (toward): from there
+   the routes are planned again, so the search chains outward past one search's budget. And
+   with every end a route reaches spent, the farthest of those spent ends is walked to
+   again: from forty-eight blocks off the ends round there are unspent, and the forest there
+   has had the walk's minutes to spawn into; the ends near the feet are revisited only by
+   being walked past. Gym batch pearls-warped9-a (plan run 39898400239) run 1 took three
+   pearls by about minute forty and then stood in lookouts in one place for four hours with
+   no enderman tracked: nothing for the roam or dig-out to go after, and the forest it never
+   searched past its stretch of floor spawned endermen it never saw."
   [world]
   (let [feet (intent/feet world)
         start (mod (quot (:time/now world 0) roam-turn-ms) (count headings))
-        spent (memory/arrived world)]
-    (some (fn [[reach k]]
-            (let [heading (nth headings (mod (+ start k) (count headings)))
-                  r (path/plan world
-                               (path/feet-cell (:player/pos world))
-                               (roam-goal feet heading reach)
-                               {})
-                  to (last (:path/waypoints r))]
-              (when (and (= :found (:path/status r)) to (not (contains? spent to)))
-                {:intent/kind :walk :intent/target to :intent/for :pearls})))
-          (for [reach roam-reaches k (range (count headings))] [reach k]))))
+        spent (memory/arrived world)
+        tries (for [reach roam-reaches k (range (count headings))] [reach k])
+        plan-to (fn [[reach k]]
+                  (let [heading (nth headings (mod (+ start k) (count headings)))
+                        r (path/plan world
+                                     (path/feet-cell (:player/pos world))
+                                     (roam-goal feet heading reach)
+                                     {})]
+                    [(:path/status r) (last (:path/waypoints r))]))
+        walk (fn [to] {:intent/kind :walk :intent/target to :intent/for :pearls})]
+    (or (some (fn [t]
+                (let [[status to] (plan-to t)]
+                  (when (and (= :found status) to (not (contains? spent to))) (walk to))))
+              tries)
+        (let [[_ partial _ spent-end] (reduce (fn [[pg p sg s] t]
+                                                (let [[status to] (plan-to t)
+                                                      gain (when to (path/octile feet to))]
+                                                  (cond (and gain
+                                                             (not= :found status)
+                                                             (>= gain roam-reach)
+                                                             (not (contains? spent to))
+                                                             (> gain pg))
+                                                        [gain to sg s]
+                                                        (and gain (= :found status) (> gain sg))
+                                                        [pg p gain to]
+                                                        :else [pg p sg s])))
+                                              [0 nil 0 nil]
+                                              tries)]
+          (when-let [to (or partial spent-end)] (walk to))))))
 
 (defn routable
   "[eid entity] of the first of the candidates nearest endermen past a walk's reach of the eye
