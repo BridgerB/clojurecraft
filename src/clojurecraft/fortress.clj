@@ -402,6 +402,18 @@
   (let [[x y z] (intent/feet world)]
     (and (path/floor? world [x (dec y) z]) (= :clear (path/classify world [x (- y 2) z])))))
 
+(defn ground-near?
+  "Is there ground within two cells of the feet: a walk floor (path/floor?) with a solid
+   block under it, not a bridge block over air? The end of a bridge against rock is ground
+   for making a pickaxe, though the feet still stand on the bridge (issue #559)."
+  [world]
+  (let [[fx fy fz] (intent/feet world)]
+    (boolean (some (fn [[dx dz]]
+                     (let [floor [(+ fx (long dx)) (dec (long fy)) (+ fz (long dz))]]
+                       (and (path/floor? world floor)
+                            (blocks/solid? (terrain/block-at world (update floor 1 dec))))))
+                   (for [dx (range -2 3) dz (range -2 3)] [dx dz])))))
+
 (defn retreat?
   "Does move from feet step into a cell visited already stood in: next-move's last resort, a
    retreat (a fresh step, turn or climb goes to an unvisited cell, and a climb that gains height
@@ -863,7 +875,7 @@
         ;; On a bridge over a cavern no cell beside the feet is a spot for the table (a drop
         ;; past every cell of a diagonal bridge, issue #559 again): the pickaxe is remade once
         ;; the tunnel reaches ground, and the tunnel goes on by hand until then.
-        grounded? (not (on-bridge? world))]
+        grounded? (or (not (on-bridge? world)) (ground-near? world))]
     (cond (not nether?) {:plan/wait :other-dimension}
           :else
           (or (when (and grounded? (build/pickaxe-at-hand? world))

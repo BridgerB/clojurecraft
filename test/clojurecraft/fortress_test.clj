@@ -1156,7 +1156,9 @@
                   1 {:item (recipe/item-id :cobblestone) :count 64}
                   2 {:item (recipe/item-id :crafting_table) :count 1}})]
     (is (= :tunnel-to (:intent/kind (plan/next-intent w goal plan/goals)))
-        "the tunnel goes on by hand to ground, and the pickaxe is made there")))
+        "the tunnel goes on by hand to ground, and the pickaxe is made there")
+    (is (not (fortress/ground-near? w)) "no ground within two cells of the bridge's end")
+    (is (fortress/ground-near? (rock {})) "rock under a walk floor is ground")))
 
 (deftest a-tunnel-op-is-worked-from-the-feet-on-soul-sand
   ;; issue #328, R3-36-2: at the edge of its cell on a soul sand floor, no stand that

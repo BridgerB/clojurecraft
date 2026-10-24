@@ -1338,10 +1338,7 @@
               ;; no working stance here: back to the landing, including its height
               home home
               :else :no-stand))
-      ;; a tunnel step (no build of its own) is worked from the feet it stands on, even at a
-      ;; cell's edge on a floor no route stands on (a soul sand valley, issue #328): the body
-      ;; is already there, and no other cell that reaches the op is standable either
-      (or (and (nil? build) (= stand (intent/feet world))) (intent/centred? world stand)) nil
+      (intent/centred? world stand) nil
       (and (= :enter step) build)
       (or
        (stand-walk world stand)
@@ -1357,7 +1354,12 @@
               (let [work (cond (= :place op) (or (foundation world pos) pos)
                                :else pos)
                     alt (reachable-stand world stand work)]
-                (cond (nil? alt) (or (when build (way-back world i)) :no-stand)
+                (cond (nil? alt)
+                      ;; a tunnel step (no build of its own) whose stand is the feet is worked
+                      ;; from them when no standable cell reaches the op (a soul sand valley,
+                      ;; issue #328): the body is already there
+                      (when-not (and (= :tunnel-to (:intent/kind i)) (= stand (intent/feet world)))
+                        (or (when build (way-back world i)) :no-stand))
                       (intent/centred? world alt) nil
                       :else {:intent/kind :walk :intent/target alt :intent/for :build})))))))
 
