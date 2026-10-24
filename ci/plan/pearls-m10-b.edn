@@ -1,0 +1,21 @@
+;; Issue #263, branch feat/263-mpearls, second batch (round 10):
+;; 1. Roam as far as a route goes when no route reaches a roam-goal (df0d2ba41, 22815614b).
+;; 2. Make a wooden sword from warped stems when none is payable (9f32487a2).
+;; 3. Do not provoke an unreachable enderman under 16 blocks that cannot path to the mouth or feet (reaches?).
+;; 4. When lured-out, cut out past an angry enderman standing near the mouth rather than walking into it.
+;; 5. Holding a pickaxe, only walk to a stare-site (never to an enderman's feet) and never charge into open fights.
+{:plans/label "pearls-m10-b"
+ :plans/jobs 4
+ :plans/issue 263
+ :plans/experiments [{:exp/name "pearls-12"
+                      :exp/kind :gym
+                      :exp/goal "pearls-12"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 18000}
+                     {:exp/name "pearls-1-live"
+                      :exp/kind :gym
+                      :exp/goal "pearls-1-live"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 300}]}
