@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-24T12:25:29.955Z",
+  "at" : "2026-10-24T12:26:38.705Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -88,6 +88,11 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
+    "number" : 156,
+    "title" : "Bot stops at portal-kit: stuck",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
     "number" : 574,
     "title" : "Bot stops at furnace: no-spot",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
@@ -96,11 +101,6 @@
     "number" : 161,
     "title" : "Bot stops at portal-kit: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
-    "number" : 156,
-    "title" : "Bot stops at portal-kit: stuck",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 105,
@@ -202,15 +202,15 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 156,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
     "issue" : 574,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
     "issue" : 161,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
-    "issue" : 156,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
