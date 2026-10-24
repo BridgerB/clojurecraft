@@ -123,13 +123,16 @@
    server answered nothing, and the resync after it found no free slot: :inventory-full. The
    Nether adds what a tunnel to the fortress picks up (race 39337645053, issue #446: soul sand
    and soil, wart blocks, shroomlights, nuggets, quartz; magma blocks, which a tunnel through a
-   basalt delta digs by the stack, probe 39855333521, issue #338, R3-28-1)."
+   basalt delta digs by the stack, probe 39855333521, issue #338, R3-28-1). The fortress's
+   own bricks and fences are junk too: no floor is laid from them (stairs/fillers) and no
+   recipe the goals reach takes them, and a fortress dug through fills slots with them by
+   the hundred (issue #580: 705 nether bricks held, no slot for a craft's result)."
   #{:sand :red_sand :sandstone :red_sandstone :clay_ball :raw_copper :lapis_lazuli :redstone
     :calcite :tuff_bricks :dripstone_block :pointed_dripstone :amethyst_shard :leaf_litter
     :moss_block :moss_carpet :big_dripleaf :small_dripleaf :wildflowers :wheat_seeds :oak_sapling
     :birch_sapling :spruce_sapling :jungle_sapling :acacia_sapling :dark_oak_sapling :cherry_sapling
     :mangrove_propagule :soul_sand :soul_soil :nether_wart_block :warped_wart_block :shroomlight
-    :lantern :gold_nugget :quartz :magma_block})
+    :lantern :gold_nugget :quartz :magma_block :nether_bricks :nether_brick_fence})
 
 (def cobblestone-keep 128)            ; cobblestone a full inventory never throws below: a cast's walls, floors and seals
 

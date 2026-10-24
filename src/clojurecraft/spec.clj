@@ -287,6 +287,7 @@
 (s/def :plan/backed-off ; creeper entity id → where it stood when first backed away from, and how often
   (s/map-of int? (s/keys :req-un [:backed-off/pos :backed-off/times])))
 (s/def :plan/cornered (s/coll-of int? :kind set?)) ; entity ids a back-off ended on its clock beside
+(s/def :plan/given-up (s/map-of int? int?)) ; entity id → ms a fight gave it up as unreachable
 (s/def :plan/surfaced (s/tuple ::block-pos int?)) ; where and when the last climb out came out
 (s/def :plan/goals (s/coll-of keyword? :kind set?))
 (s/def :plan/chain? boolean?)
@@ -344,7 +345,7 @@
            :window/state-id :window/grid :window/cursor :window/open :player/held-slot :plan/intent
            :plan/status :plan/blacklist :plan/trunk-failures :plan/chain? :plan/reached
            :plan/boxed-at :plan/boxed-route :plan/retreat-unreachable :plan/unreached
-           :plan/unwalkable :plan/backed-off :plan/cornered]))
+           :plan/unwalkable :plan/backed-off :plan/cornered :plan/given-up]))
 
 (s/fdef game/step
   :args
