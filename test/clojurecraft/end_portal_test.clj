@@ -169,7 +169,7 @@
     (is (= {:intent/kind :end-portal :intent/enter? true} (end-portal/next-toward eyed true)))
     (is (nil? (end-portal/next-toward lit false)))
     (testing "outside the room's wall within 6 of a frame: tunnels into the room first"
-      (let [outside (standing (room 0) [0.5 64.0 8.5] eyes)]
+      (let [outside (standing (room 0) [-0.5 64.0 8.5] eyes)]
         (is (= {:intent/kind :tunnel-to
                 :intent/target [3 68 9]
                 :intent/reach 1.5

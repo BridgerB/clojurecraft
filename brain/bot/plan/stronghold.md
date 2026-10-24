@@ -28,7 +28,7 @@ sourceRefs:
   - test/clojurecraft/stronghold_test.clj#an-eye-is-thrown-followed-and-its-line-kept
   - test/clojurecraft/stronghold_test.clj#no-eye-seen-fails-the-throw
   - test/clojurecraft/gym_test.clj#the-throw-trial-holds-the-throws-line-to-the-located-stronghold
-  - src/clojurecraft/stronghold.clj#def drop-grace-ms 2000
+  - src/clojurecraft/stronghold.clj#def drop-grace-ms 1000
   - src/clojurecraft/stronghold.clj#defn eye-drop
   - src/clojurecraft/stronghold.clj#defn frames
   - src/clojurecraft/stronghold.clj#defn second-spot

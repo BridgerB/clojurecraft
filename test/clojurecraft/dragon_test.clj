@@ -664,15 +664,17 @@
 (deftest the-platform-in-the-end-bridges-to-the-island-before-crystals
   (let [obs (blocks/default-state :obsidian)
         stone (blocks/default-state :end_stone)
+        void (into {} (for [lx (range 16) lz (range 16) y (range 40 64)] [[lx y lz] blocks/air]))
         plat (into {} (for [x (range 98 103) z (range -2 3)] [[x 48 z] obs]))
         shore (into {} (for [x (range 60 73) z (range -2 3) y (range 48 53)] [[x y z] stone]))
         cols (into {}
                    (for [cx [3 4 5 6]]
                      [[cx 0]
-                      (world/column (into {}
-                                          (for [[[x y z] id] (merge plat shore)
-                                                :when (= cx (math/floor-div x 16))]
-                                            [[(mod x 16) y (mod z 16)] id])))]))
+                      (world/column (merge void
+                                           (into {}
+                                                 (for [[[x y z] id] (merge plat shore)
+                                                       :when (= cx (math/floor-div x 16))]
+                                                   [[(mod x 16) y (mod z 16)] id]))))]))
         base (-> (standing {} [100.5 49.0 0.5] cobblestone {})
                  (assoc :player/dimension dimension/end
                         :world/chunks cols
@@ -682,19 +684,16 @@
     (is (dragon/off-island? base) "on the obsidian platform at x 100")
     (is (not (dragon/off-island? (assoc base :player/pos [70.5 53.0 0.5]))) "on the island")
     (is (= [72 53 0] (dragon/island-shore base)) "the easternmost island column")
-    (is (= {:intent/kind :pillar :intent/item :cobblestone :intent/top 53}
+    (is (= {:intent/kind :walk :intent/target [98 49 0] :intent/for :build}
            (dragon/toward-island base))
-        "below the shore's y: pillar up to it first")
-    (let [high (assoc base :player/pos [100.5 53.0 0.5])]
-      (is (= {:intent/kind :build
-              :intent/steps [{:build/op :place
-                              :build/item :cobblestone
-                              :build/pos [99 52 0]
-                              :build/against [100 52 0]
-                              :build/face :west
-                              :build/stand [100 53 0]
-                              :build/done [:solid [99 52 0]]}]}
+        "walks to the platform's western edge first")
+    (let [edge (assoc base :player/pos [98.5 49.0 0.5])]
+      (is (= {:intent/kind :pillar :intent/item :cobblestone :intent/top 53}
+             (dragon/toward-island edge))
+          "below the shore's y: pillar up to it first"))
+    (let [high (assoc base :player/pos [98.5 53.0 0.5])]
+      (is (= {:intent/kind :place :intent/item :cobblestone :intent/cell [97 52 0]}
              (dragon/toward-island high))
-          "at the shore's y with air ahead: lays the floor west"))
+          "at the shore's y with air ahead: places floor west"))
     (is (not (plan/done-by base {:goal/done? :crystals-gone?}))
         "never done while still off the island or within 3s of entering the End")))

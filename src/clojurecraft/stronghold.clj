@@ -59,7 +59,7 @@
 (def answer-ms 3000)                  ; ms after the use-item, by the server's clock, the eye must be seen within
 (def follow-ms 2000)                  ; ms after it is seen, by the server's clock, its line is read: half its life, several blocks of flight
 (def life-ms 4000)                    ; ms an eye flies before it drops or shatters (EyeOfEnder: 80 ticks), by the server's clock
-(def drop-grace-ms 2000)              ; ms after the eye is removed its dropped item may take to fall to the ground, by the server's clock
+(def drop-grace-ms 1000)              ; ms after the eye is removed its dropped item may take to be added, by the server's clock
 (def min-flight 1.0)                  ; blocks on the plane an eye must have flown for its line to count
 (def travel 64)                       ; blocks from a throw the next is made, off its line
 (def travel-turn 60.0)                ; degrees off a throw's line the way to the next turns, either side: ahead and well aside
