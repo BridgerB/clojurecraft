@@ -1345,6 +1345,7 @@
       (or (intent/centred? world stand)
           (and (= :place op)
                (= stand (intent/feet world))
+               (not (path/standable? world stand))
                (holds? world [:solid (update stand 1 dec)])))
       nil
       (and (= :enter step) build)
