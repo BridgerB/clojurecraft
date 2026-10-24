@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-24T12:19:52.464Z",
+  "at" : "2026-10-24T12:25:29.955Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -96,6 +96,11 @@
     "number" : 161,
     "title" : "Bot stops at portal-kit: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 156,
+    "title" : "Bot stops at portal-kit: stuck",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 105,
@@ -202,6 +207,10 @@
     "why" : "hands-off label"
   }, {
     "issue" : 161,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 156,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
