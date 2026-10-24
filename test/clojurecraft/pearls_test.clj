@@ -152,6 +152,31 @@
   (set (concat (for [pz (range 8 (inc z)) y [64 65]] [8 y pz])
                (for [px (range 8 (inc x)) y [64 65]] [px y z]))))
 
+(deftest a-roam-with-every-end-spent-walks-to-the-farthest-again
+  ;; gym batch pearls-warped9-a (plan run 39898400239) run 1: three pearls by about minute
+  ;; forty, then four hours of lookouts in one place with no enderman tracked and nothing for
+  ;; the roam to go after
+  (let [col (world/column {})
+        w (-> (standing {})
+              (assoc :time/now 0 :world/chunks (zipmap [[0 0] [1 0] [0 1] [1 1]] (repeat col))))
+        spent (loop [w w
+                     n 0
+                     seen #{}]
+                (let [to (:intent/target (pearls/roam w))]
+                  (if (and to (not (contains? seen to)) (< n 40))
+                    (recur (memory/remember-intention
+                            w
+                            {:intent/id (+ 100 n) :intent/kind :walk :intent/target to}
+                            :done)
+                           (inc n)
+                           (conj seen to))
+                    [w to seen])))
+        [w* to seen] spent]
+    (is (seq seen) "ends to spend")
+    (is (contains? seen to) "every end a route reaches spent: the farthest is walked to again")
+    (is (= (apply max-key #(path/octile [8 64 8] %) seen) to) "the farthest of them")
+    (is (= {:intent/kind :walk :intent/target to :intent/for :pearls} (pearls/roam w*)))))
+
 (deftest a-roam-follows-a-caves-passage-to-where-it-can-look-from
   ;; gym batch pearls-263f (plan run 38918584959, probe 39130057525): a landing in a cave pocket
   ;; under the forest, netherrack sixteen blocks off in every heading at every height; the roam
