@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-24T02:15:08.518Z",
+  "at" : "2026-10-24T02:16:19.041Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -33,6 +33,11 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : true
   }, {
+    "number" : 559,
+    "title" : "Bot stops at fortress: no-spot",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
     "number" : 507,
     "title" : "Bot stops at blaze-rods: no-blaze",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
@@ -53,9 +58,9 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 559,
-    "title" : "Bot stops at fortress: no-spot",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "number" : 579,
+    "title" : "Bot stops at ender-pearls: timeout",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 69,
@@ -81,12 +86,7 @@
     "number" : 582,
     "title" : "Bot stops at furnace: timeout",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
-  }, {
-    "number" : 579,
-    "title" : "Bot stops at ender-pearls: timeout",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : false
+    "copilot" : true
   }, {
     "number" : 573,
     "title" : "Bot stops at fortress: no-way",
@@ -133,6 +133,10 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 559,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
     "issue" : 507,
     "move" : "leave",
     "why" : "hands-off label"
@@ -149,7 +153,7 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 559,
+    "issue" : 579,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -170,11 +174,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 582,
-    "move" : "assign"
-  }, {
-    "issue" : 579,
-    "move" : "leave",
-    "why" : "hands-off label"
+    "move" : "wait",
+    "why" : "session starting"
   }, {
     "issue" : 573,
     "move" : "leave",
