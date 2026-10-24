@@ -232,6 +232,20 @@
   (>= (or (memory/done-since world :lookout :walk) (memory/done-since world :lookout :burrow) 0)
       lure-lookouts))
 
+(defn blocked-out?
+  "Has the bot stood stale-lookouts in its burrow over an enderman given up on (blacklisted)
+   standing in its stairs (blocking), out of the sword's reach and never coming down to it?
+   Then that one holds the burrow no longer, as one lure-tries lures did not bring holds it no
+   longer (lured-out?): the lure's walks to the mouth are never taken past one standing in
+   the stairs, so the lookouts here are the count. Sim probe 40102602895 (world R3, seed 4)
+   stood in its burrow from minute 26 to 60 over such a one, ten pearls held: blocking kept
+   it in, angry-near kept the burrow fresh, and no walk ever counted toward lured-out?."
+  [world]
+  (let [[bid] (blocking world)]
+    (boolean (and bid
+                  (contains? (:plan/blacklist world #{}) bid)
+                  (>= (or (memory/done-since world :lookout :burrow) 0) stale-lookouts)))))
+
 (defn stale?
   "Is the hunt's burrow given up: stale-lookouts or more :lookout intents done since it was cut
    (memory/done-since), and no angry enderman near its mouth (angry-near: an angry one still
@@ -245,10 +259,12 @@
    twenty-one minutes over one 3.9 off), and every enderman hidden from the burrow's reach
    would hold it as long. Given up, the burrow is no shelter (shelter), so the hunt walks to
    the enderman and cuts a new burrow beside it, the way run 5 did at 1714 s by chance and
-   killed that enderman from the new burrow's end at 1731 s."
+   killed that enderman from the new burrow's end at 1731 s. One given up on standing in the
+   stairs (blocked-out?) no longer keeps it fresh either: the way out is then cut the other
+   way (cut-out), never walked through it."
   [world]
   (boolean (and (>= (or (memory/done-since world :lookout :burrow) 0) stale-lookouts)
-                (nil? (angry-near world)))))
+                (or (nil? (angry-near world)) (blocked-out? world)))))
 
 (def shunned #{:enderman :creeper})    ; hostile kinds no threat is: the enderman is the quarry, met its own way; a creeper is the :defend row's, backed away from, and a burrow is no place to back off in
 
@@ -887,9 +903,28 @@
   [world]
   (when-let [[_ e] (crowder world)] (stare-site world e)))
 
+(defn floored-length
+  "How many of the first n level steps from feet along dir stand on a floor once the steps
+   before them are open (stairs/level-safe? a step at a time on the block overlay, as
+   burrowable? opens a burrow's steps): the length a tunnel toward an enderman may cut before
+   a step out over a drop. Gym batch pearls-warped9-a (plan run 39898400239) run 3's tunnel
+   toward an enderman broke into the cave it stood in and the bot came down from y 51 to
+   y 38 into the fight in the open there, where it died: the step the tunnel would lay a
+   floor for over that drop is refused, as dig-out refuses a cut from a brink (brink?)."
+  [world feet dir n]
+  (let [steps (reductions (fn [cells _] (stairs/level-cells (last cells) dir))
+                          (stairs/level-cells feet dir)
+                          (range (dec n)))
+        open (fn [w cells] (reduce #(assoc-in %1 [:world/blocks %2] blocks/air) w cells))]
+    (second (reduce (fn [[w k] cells]
+                      (if (stairs/level-safe? w cells) [(open w cells) (inc k)] (reduced [w k])))
+                    [world 0]
+                    steps))))
+
 (defn bore
-  "A tunnel (:tunnel, stairs.clj: level steps, turning where one is refused) bore-length long
-   the straight way toward the nearest enderman in ms standing less than descend-drop above or
+  "A tunnel (:tunnel, stairs.clj: level steps, turning where one is refused) the straight way
+   toward the nearest enderman in ms, as far as its steps stand on a floor, bore-length at
+   most (floored-length), standing less than descend-drop above or
    below the feet and within cut-reach on the plane (within-cut-reach?), a pickaxe held with
    digs to spare past a burrow's (spare?) and no staircase boxed from these feet
    (:plan/boxed-at); nil
@@ -914,10 +949,10 @@
                (< (abs (- (physics/y-of (:entity/pos e)) (physics/y-of feet))) descend-drop)
                (within-cut-reach? world e)
                (>= (path/octile feet (cell (:entity/pos e))) bore-length))
-      {:intent/kind :tunnel
-       :intent/dir (mapv - (away world e))
-       :intent/length bore-length
-       :intent/for :pearls})))
+      (let [dir (mapv - (away world e))
+            n (floored-length world feet dir bore-length)]
+        (when (pos? n)
+          {:intent/kind :tunnel :intent/dir dir :intent/length n :intent/for :pearls})))))
 
 (def first-cut
   ;; the cells the first cut of each kind opens from the feet along a heading (stairs.clj)
@@ -954,7 +989,8 @@
    nearest enderman within descend-radius, a walk to the end of the route that comes nearest it
    (path/plan's :partial or :none) while that end is past a walk's reach of the eye, and from
    there a :stairs-up to it or descend-step higher when it stands two or more above, a
-   :stairs-down when two or more below, else a :tunnel bore-length long, along the heading whose
+   :stairs-down when two or more below, else a :tunnel as far as its steps stand on a floor
+   (floored-length), along the heading whose
    first cut digs least (cheapest-heading); nil with no enderman tracked, no pickaxe held with
    spare digs (spare?), or a staircase from these feet boxed (:plan/boxed-at), and no cut from a brink (brink?: batch
    pearls-warped8-c's run 2 was backed off a ledge into lava). Cut-reach is not asked, as descend,
@@ -989,10 +1025,34 @@
                :intent/dir (cheapest-heading world :stairs-down feet toward)
                :intent/for :pearls}
               :else
-              {:intent/kind :tunnel
-               :intent/dir (cheapest-heading world :tunnel feet toward)
-               :intent/length bore-length
-               :intent/for :pearls})))))
+              (let [dir (cheapest-heading world :tunnel feet toward)
+                    n (floored-length world feet dir bore-length)]
+                (when (pos? n)
+                  {:intent/kind :tunnel :intent/dir dir :intent/length n :intent/for :pearls})))))))
+
+(defn cut-out
+  "Stairs up out of the burrow's end, the other way from its mouth, for when the burrow is
+   given up over an enderman in its stairs (blocked-out?): up to the mouth's height, along
+   the heading from the mouth through the feet, on past the end (the way back along its own
+   tunnel is the cheapest cut and the wrong one: it surfaces over the stairs the enderman
+   stands in), with digs to spare past the next burrow's (spare?) and no staircase boxed
+   from these feet. The stairs it stands in are never walked through (blocking), and once
+   the burrow is stale the hunt out here cuts its next one where it stands. Nil with no
+   mouth, no spare digs, or boxed feet."
+  [world]
+  (let [feet (intent/feet world)
+        mouth (:pearls/mouth world)]
+    (when (and mouth (spare? world) (not (contains? (:plan/boxed-at world) feet)))
+      (let [[fx _ fz] feet
+            [mx _ mz] mouth
+            dx (- fx mx)
+            dz (- fz mz)
+            out (if (>= (abs dx) (abs dz)) [(if (neg? dx) -1 1) 0] [0 (if (neg? dz) -1 1)])]
+        {:intent/kind :stairs-up
+         :intent/to-y (physics/y-of mouth)
+         :intent/dir out
+         :intent/to-height? true
+         :intent/for :pearls}))))
 
 (defmethod intent/run :burrow
   ;; {:intent/kind :burrow :intent/dir [dx dz]}: stairs down burrow-depth (stairs.clj, refusing
@@ -1101,7 +1161,9 @@
    one 3.8 off for 107 s from 21 s on, blacklisted it, and found the others gone); in the
    burrow with one standing in its stairs out of reach (blocking), a :lookout where it is,
    never a walk out through its body (batch pearls-warped4-a's run 2 failed :no-path three
-   times to its mouth); with an angry one near the mouth, blacklisted or not (angry-near), in
+   times to its mouth), and one given up on stood over for stale-lookouts (blocked-out?)
+   gives the burrow up and the way out is cut up the other way from its end (cut-out: sim
+   probe 40102602895's world R3 stood so from minute 26 to 60); with an angry one near the mouth, blacklisted or not (angry-near), in
    the burrow a :lookout and out of it the walk home, and the burrow never goes stale (batch
    pearls-warped5-a's run 4 gave its burrow up with one standing seven blocks off and was
    slain walking out); with no burrow, one at hand backed away
@@ -1181,8 +1243,9 @@
         meal (when-not rested? (blaze/meal world))
         home (shelter world)
         in? (and home (= home (intent/feet world)))
+        at-end? (= (:pearls/shelter world) (intent/feet world))
         [tid _] (threat world)
-        [bid _] (when in? (blocking world))
+        [bid _] (when at-end? (blocking world))
         [aid _] (when home (angry-near world))
         [qid q] (quarry world)
         ghost? (and near? (not angry?) (contains? (:plan/blacklist world #{}) eid))
@@ -1210,6 +1273,8 @@
        :intent/hold? true
        :intent/yield? true
        :intent/for :pearls}
+      (and at-end? bid (blocked-out? world))
+      (or (cut-out world) {:intent/kind :lookout :intent/for :pearls})
       (and near?
            (not in?)
            (or (entity/creepy? e)
