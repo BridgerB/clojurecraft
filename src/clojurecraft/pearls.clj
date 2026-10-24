@@ -315,10 +315,12 @@
   [world e to]
   (if-not to
     true
-    (let [ec (cell (:entity/pos e))
-          d (physics/distance (physics/centre to) (:entity/pos e))]
+    (let [c (if (map? to) (:goal/pos to) to)
+          ec (cell (:entity/pos e))
+          d (physics/distance (physics/centre c) (:entity/pos e))
+          goal (if (map? to) to {:goal/kind :block :goal/pos c})]
       (or (> d danger-radius)
-          (= :found (:path/status (path/plan world ec to {:path/max-nodes 300})))))))
+          (= :found (:path/status (path/plan world ec goal {:path/max-nodes 300})))))))
 
 (defn quarry
   "[eid entity] of the enderman a stare is for: the nearest within stare-range not yet coming
