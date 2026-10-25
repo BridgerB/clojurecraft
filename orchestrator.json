@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-25T10:22:29.609Z",
+  "at" : "2026-10-25T10:27:55.737Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -43,14 +43,14 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 531,
-    "title" : "Bot stops at ingots: boxed",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 579,
     "title" : "Bot stops at ender-pearls: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 531,
+    "title" : "Bot stops at ingots: boxed",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 45,
@@ -121,11 +121,11 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 531,
+    "issue" : 579,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 579,
+    "issue" : 531,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
