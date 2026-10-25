@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-25T15:11:57.037Z",
+  "at" : "2026-10-25T15:19:36.541Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -33,13 +33,13 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 579,
-    "title" : "Bot stops at ender-pearls: timeout",
+    "number" : 526,
+    "title" : "Bot stops at blaze-rods: blocked",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 526,
-    "title" : "Bot stops at blaze-rods: blocked",
+    "number" : 579,
+    "title" : "Bot stops at ender-pearls: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
@@ -123,11 +123,11 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 579,
+    "issue" : 526,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 526,
+    "issue" : 579,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
