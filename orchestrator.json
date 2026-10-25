@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-25T20:14:43.608Z",
+  "at" : "2026-10-25T20:15:51.274Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -56,7 +56,7 @@
     "number" : 586,
     "title" : "Bot stops at furnace: stuck",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
+    "copilot" : true
   }, {
     "number" : 89,
     "title" : "Bot stops at portal-kit: no-log",
@@ -145,7 +145,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 586,
-    "move" : "assign"
+    "move" : "wait",
+    "why" : "session starting"
   }, {
     "issue" : 89,
     "move" : "leave",
