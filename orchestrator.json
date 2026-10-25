@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-25T04:21:54.670Z",
+  "at" : "2026-10-25T04:23:01.006Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -38,6 +38,11 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
+    "number" : 71,
+    "title" : "Bot stops at portal-kit: boxed",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
     "number" : 538,
     "title" : "Bot stops at fortress: blocked",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
@@ -51,11 +56,6 @@
     "number" : 135,
     "title" : "Bot stops at cast-one: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
-    "number" : 71,
-    "title" : "Bot stops at portal-kit: boxed",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 579,
@@ -117,6 +117,10 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 71,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
     "issue" : 538,
     "move" : "leave",
     "why" : "hands-off label"
@@ -126,10 +130,6 @@
     "why" : "hands-off label"
   }, {
     "issue" : 135,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
-    "issue" : 71,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
