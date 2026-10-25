@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-25T16:59:46.289Z",
+  "at" : "2026-10-25T17:00:54.095Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -61,7 +61,7 @@
     "number" : 586,
     "title" : "Bot stops at furnace: stuck",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
+    "copilot" : true
   }, {
     "number" : 348,
     "title" : "Bot stops at flint-and-steel: stuck",
@@ -144,7 +144,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 586,
-    "move" : "assign"
+    "move" : "wait",
+    "why" : "session starting"
   }, {
     "issue" : 348,
     "move" : "leave",
