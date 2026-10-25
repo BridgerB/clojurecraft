@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-25T17:22:36.602Z",
+  "at" : "2026-10-25T17:32:17.921Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -48,11 +48,6 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 135,
-    "title" : "Bot stops at cast-one: timeout",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 586,
     "title" : "Bot stops at furnace: stuck",
     "labels" : [ "bot-failure", "real", "sim" ],
@@ -81,6 +76,11 @@
     "number" : 156,
     "title" : "Bot stops at portal-kit: stuck",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 135,
+    "title" : "Bot stops at cast-one: timeout",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 71,
@@ -135,10 +135,6 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 135,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
     "issue" : 586,
     "move" : "wait",
     "why" : "session starting"
@@ -160,6 +156,10 @@
     "why" : "hands-off label"
   }, {
     "issue" : 156,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 135,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
