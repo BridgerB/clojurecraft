@@ -874,20 +874,23 @@
       (is (pearls/reaches? w-far far (:pearls/mouth w-far)) "past 16 blocks it teleports")
       (is (= 8 (first (pearls/quarry w-far))) "so the distant one is quarry"))))
 
-(deftest a-distant-angry-enderman-is-not-fought-in-the-open-with-a-pickaxe-held
-  ;; gym batch pearls-m10-a (plan run 40106206590) run 3: charged across the open world to fight an
-  ;; angry enderman 15 blocks off with no burrow shelter and fell into lava
+(deftest a-distant-angry-enderman-is-met-standing-not-charged-with-a-pickaxe-held
+  ;; gym batch pearls-m10-a (plan run 40106206590) run 3: charged across the open to fight an
+  ;; angry enderman 15 blocks off with no burrow shelter and fell into lava on the way; a
+  ;; lookout there instead stood the hunt still while any angry one was tracked, never
+  ;; given up on. A held fight stands on ground already stood on and times out instead.
   (let [angry (assoc (enderman [8.5 64.0 20.5]) :entity/creepy? true)
         w (-> (standing {7 angry})
               (assoc-in [:player/inventory 1] (item :iron_pickaxe 1)))]
     (with-redefs [pearls/burrowable? (constantly false)
                   pearls/burrow-site (constantly nil)]
-      (is
-       (not= :fight (:intent/kind (plan/next-intent w row plan/goals)))
-       "never charges out into an open fight with a distant angry enderman while holding a pickaxe")
-      (is (= :fight
-             (:intent/kind (plan/next-intent (update w :player/inventory dissoc 1) row plan/goals)))
-          "without a pickaxe to cut shelter, fights in the open as fallback"))))
+      (let [held (plan/next-intent w row plan/goals)
+            open (plan/next-intent (update w :player/inventory dissoc 1) row plan/goals)]
+        (is (= :fight (:intent/kind held)))
+        (is (:intent/hold? held) "with a pickaxe held, met standing, never charged")
+        (is (:intent/yield? held) "and broken off under danger-health, as in the burrow")
+        (is (= :fight (:intent/kind open)))
+        (is (not (:intent/hold? open)) "without one, fought in the open as the arena row does")))))
 
 (deftest out-of-the-burrow-no-look-stares-at-a-calm-one-and-one-angry-at-hand-ends-the-intent
   ;; sim probes 39887735653 and 39887752302 (seeds 4 and 5): four bots stared at one two or three
@@ -1011,6 +1014,19 @@
     (is (= :crafting_table (:intent/item placed)) "a held table goes down for the stone sword")
     (is (= :walk (:intent/kind walked)))
     (is (= :log (:intent/for walked)) "a remembered trunk is the log the table takes")))
+
+(deftest empty-hands-make-a-wooden-sword-from-a-remembered-trunk
+  ;; gym batches pearls-m10-a and pearls-m10-c (plan runs 40106206590, 40133706786): every
+  ;; death respawned with nothing held and the plan failed :no-sword at once, though the
+  ;; wood of a wooden sword stood remembered round the spawn
+  (let [trunk {[12 64 8] 136 [12 65 8] 136 [12 66 8] 136 [12 67 8] 252}
+        col (world/column trunk)
+        bare (-> (standing {})
+                 (assoc :player/inventory {} :world/chunks {[0 0] col})
+                 (memory/remember-column [0 0] col))
+        walked (plan/next-intent bare row plan/goals)]
+    (is (= :walk (:intent/kind walked)))
+    (is (= :log (:intent/for walked)) "nothing held: the trunk first, never the :no-sword wait")))
 
 (deftest a-broken-sword-is-made-of-warped-stems
   ;; gym batch pearls-m10-a (plan run 40106206590) run 2: six pearls and twenty-five warped

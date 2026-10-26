@@ -410,14 +410,16 @@
                                      (roam-goal feet heading reach)
                                      {})]
                     [(:path/status r) (last (:path/waypoints r))]))
-        walk (fn [to] {:intent/kind :walk :intent/target to :intent/for :pearls})]
-    (or (some (fn [t]
-                (let [[status to] (plan-to t)]
-                  (when (and (= :found status) to (not (contains? spent to))) (walk to))))
-              tries)
-        (let [[_ partial _ spent-end] (reduce (fn [[pg p sg s] t]
-                                                (let [[status to] (plan-to t)
-                                                      gain (when to (path/octile feet to))]
+        walk (fn [to] {:intent/kind :walk :intent/target to :intent/for :pearls})
+        ;; every route planned once: the first pass wanted the first unspent end a route
+        ;; reaches, the second the farthest ends of those same routes, and planning the
+        ;; twenty-four routes twice over spent the tick on searches already searched
+        planned (mapv plan-to tries)]
+    (or (some (fn [[status to]]
+                (when (and (= :found status) to (not (contains? spent to))) (walk to)))
+              planned)
+        (let [[_ partial _ spent-end] (reduce (fn [[pg p sg s] [status to]]
+                                                (let [gain (when to (path/octile feet to))]
                                                   (cond (and gain
                                                              (not= :found status)
                                                              (>= gain roam-reach)
@@ -428,7 +430,7 @@
                                                         [pg p gain to]
                                                         :else [pg p sg s])))
                                               [0 nil 0 nil]
-                                              tries)]
+                                              planned)]
           (when-let [to (or partial spent-end)] (walk to))))))
 
 (defn routable
@@ -1255,7 +1257,13 @@
    (one worn out on burrows: next-intent waits :no-pickaxe instead; never one already coming: a provoke of it ends at once, and batch pearls-263b's bot, its
    pickaxe lost, provoked one 26 times in a row; with a burrow but no route home, a walk to the
    mouth first: the same run 1 provoked fifteen blocks from its burrow, and the walk home found
-   no path); one coming and no burrow to meet it in, fought; with a burrow near and none
+   no path); one coming and no burrow to meet it in, fought where the bot stands while a
+   pickaxe is held (:fight :intent/hold?, as in the burrow: it teleports or rushes to ground
+   the bot already stands on, and one that never comes times out :unreachable and is given
+   up on; gym batch pearls-m10-a, plan run 40106206590, run 3 charged one across the open
+   and fell into lava on the way, and a :lookout there instead stood the hunt still for as
+   long as any angry one was tracked within stare-range, never given up on), charged only
+   with no pickaxe ever held, as the arena row fights; with a burrow near and none
    provokable from here, a walk to a vantage within the burrow's reach from which one is
    (vantage), else a :lookout where it stands, and after stale-lookouts of them the burrow is
    given up (stale?): the hunt never walks out of its burrow's reach after an enderman (batch
@@ -1302,7 +1310,7 @@
         at-end? (= (:pearls/shelter world) (intent/feet world))
         [tid _] (threat world)
         [bid _] (when at-end? (blocking world))
-        [aid _] (when home (angry-near (dissoc world :plan/blacklist)))
+        [aid _] (when home (angry-near world))
         [qid q] (quarry world)
         ghost? (and near? (not angry?) (contains? (:plan/blacklist world #{}) eid))
         dir (when (and (nil? home)
@@ -1329,9 +1337,7 @@
        :intent/hold? true
        :intent/yield? true
        :intent/for :pearls}
-      (and at-end?
-           (or (and bid (blocked-out? world))
-               (and (lured-out? world) (angry-near (dissoc world :plan/blacklist)))))
+      (and at-end? bid (blocked-out? world))
       (or (cut-out world) {:intent/kind :lookout :intent/for :pearls})
       (and near?
            (not in?)
@@ -1360,8 +1366,13 @@
       {:intent/kind :provoke :intent/target qid :intent/for :pearls}
       (and qid home rested?) {:intent/kind :walk :intent/target mouth :intent/for :shelter}
       (and qid home (intent/routable? world way-home)) way-home
-      (and ce (not (pickaxe? world))) {:intent/kind :fight :intent/target ceid :intent/for :pearls}
-      ce {:intent/kind :lookout :intent/for :pearls}
+      (and ce (pickaxe? world))
+      {:intent/kind :fight
+       :intent/target ceid
+       :intent/hold? true
+       :intent/yield? true
+       :intent/for :pearls}
+      ce {:intent/kind :fight :intent/target ceid :intent/for :pearls}
       home (or (vantage world far) {:intent/kind :lookout :intent/for :pearls})
       :else
       (or (if (pickaxe? world)
@@ -1465,20 +1476,30 @@
    counts as a log), a wooden sword is asked for instead: its planks come from the log, as a
    pickaxe's do (make-pickaxe). Gym batch pearls-m10-a (plan run 40106206590) run 2 held
    twenty-five warped stems and six pearls when its iron sword broke and failed :no-sword:
-   sword/payable counts planks, and none were held."
+   sword/payable counts planks, and none were held. With no sword at all (combat/sword nil:
+   the hands a death leaves empty), a wooden sword is asked for with nothing held either, and
+   the log hunt for a trunk (:intent/for :log-hunt, wood/hunt) may start it: the craft is
+   made where the bot stands rather than the plan failing :no-sword on the respawn (gym
+   batches pearls-m10-a and pearls-m10-c, plan runs 40106206590 and 40133706786: each death
+   was followed at once by the :no-sword wait). A worn sword still held is replaced only as
+   before, never by a hunt for wood."
   [world goal table]
-  (when-let [k (or (sword/payable world)
-                   (when (pos? (recipe/have (recipe/counts (:player/inventory (sword/with-laid
-                                                                               world)))
-                                            (recipe/tags :logs)))
-                     :wooden_sword))]
-    (let [i (make/decide (sword/for-decide world)
-                         (assoc goal :goal/provides {(keyword "item" (name k)) 1})
-                         table)]
-      (when (and (:intent/kind i)
-                 (not (and (sword/pieces? world) (= :log (:intent/for i))))
-                 (or (= :log (:intent/for i)) (contains? sword-acts (:intent/kind i))))
-        i))))
+  (let [bare? (nil? (combat/sword world))]
+    (when-let [k (or (sword/payable world)
+                     (when (pos? (recipe/have (recipe/counts (:player/inventory (sword/with-laid
+                                                                                 world)))
+                                              (recipe/tags :logs)))
+                       :wooden_sword)
+                     (when bare? :wooden_sword))]
+      (let [i (make/decide (sword/for-decide world)
+                           (assoc goal :goal/provides {(keyword "item" (name k)) 1})
+                           table)]
+        (when (and (:intent/kind i)
+                   (not (and (sword/pieces? world) (= :log (:intent/for i))))
+                   (or (= :log (:intent/for i))
+                       (and bare? (= :log-hunt (:intent/for i)))
+                       (contains? sword-acts (:intent/kind i))))
+          i)))))
 
 (def pick-acts
   "Intents that make a pickaxe from what is already held: placing or opening a table, the craft,
