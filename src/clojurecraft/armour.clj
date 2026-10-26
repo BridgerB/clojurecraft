@@ -173,9 +173,7 @@
           :else
           (-> world
               (window/click v (inventory/left-click ((:view/slot-of v) p)))
-              (intent/assoc-intent world
-                                   :intent/stage :put
-                                   :intent/since (or (:time/now world) 0))))))
+              (intent/assoc-intent :intent/stage :put :intent/since (or (:time/now world) 0))))))
 
 (defmethod wear-stage :put
   [world {:intent/keys [item since]}]
@@ -183,7 +181,7 @@
         (-> world
             (window/click (window/view world :inventory)
                           (inventory/left-click (inventory/slot [:armour (part item)])))
-            (intent/assoc-intent world :intent/stage :check :intent/since (or (:time/now world) 0)))
+            (intent/assoc-intent :intent/stage :check :intent/since (or (:time/now world) 0)))
         (> (- (or (:time/now world) 0) (or since 0)) stage-timeout)
         (intent/fail world :not-picked-up)
         :else world))
