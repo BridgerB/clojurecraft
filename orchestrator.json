@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-26T23:52:43.968Z",
+  "at" : "2026-10-26T23:53:52.100Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -23,14 +23,14 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 526,
-    "title" : "Bot stops at blaze-rods: blocked",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 531,
     "title" : "Bot stops at ingots: boxed",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 526,
+    "title" : "Bot stops at blaze-rods: blocked",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 178,
@@ -46,7 +46,7 @@
     "number" : 586,
     "title" : "Bot stops at furnace: stuck",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
+    "copilot" : true
   }, {
     "number" : 156,
     "title" : "Bot stops at portal-kit: stuck",
@@ -125,11 +125,11 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 526,
+    "issue" : 531,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 531,
+    "issue" : 526,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -142,7 +142,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 586,
-    "move" : "assign"
+    "move" : "unassign",
+    "why" : "no pull request and no session since the assignment"
   }, {
     "issue" : 156,
     "move" : "leave",
@@ -189,11 +190,6 @@
     "why" : "hands-off label"
   } ],
   "log" : [ {
-    "issue" : 586,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment",
-    "at" : "2026-10-26T17:52:53.164Z"
-  }, {
     "issue" : 586,
     "move" : "assign",
     "at" : "2026-10-26T17:54:03.836Z"
@@ -1538,5 +1534,10 @@
     "issue" : 586,
     "move" : "assign",
     "at" : "2026-10-26T23:52:43.968Z"
+  }, {
+    "issue" : 586,
+    "move" : "unassign",
+    "why" : "no pull request and no session since the assignment",
+    "at" : "2026-10-26T23:53:52.100Z"
   } ]
 }
