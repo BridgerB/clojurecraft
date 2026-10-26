@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-26T11:10:47.992Z",
+  "at" : "2026-10-26T11:11:56.574Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -23,13 +23,13 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 526,
-    "title" : "Bot stops at blaze-rods: blocked",
+    "number" : 178,
+    "title" : "Bot stops at portal: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 178,
-    "title" : "Bot stops at portal: timeout",
+    "number" : 526,
+    "title" : "Bot stops at blaze-rods: blocked",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
@@ -56,7 +56,7 @@
     "number" : 586,
     "title" : "Bot stops at furnace: stuck",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : true
+    "copilot" : false
   }, {
     "number" : 579,
     "title" : "Bot stops at ender-pearls: timeout",
@@ -120,11 +120,11 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 526,
+    "issue" : 178,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 178,
+    "issue" : 526,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -145,8 +145,7 @@
     "why" : "hands-off label"
   }, {
     "issue" : 586,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment"
+    "move" : "assign"
   }, {
     "issue" : 579,
     "move" : "leave",
@@ -185,11 +184,6 @@
     "why" : "hands-off label"
   } ],
   "log" : [ {
-    "issue" : 68,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment",
-    "at" : "2026-10-23T22:27:12.500Z"
-  }, {
     "issue" : 575,
     "move" : "assign",
     "at" : "2026-10-23T22:28:23.548Z"
@@ -1532,5 +1526,9 @@
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
     "at" : "2026-10-26T11:10:47.992Z"
+  }, {
+    "issue" : 586,
+    "move" : "assign",
+    "at" : "2026-10-26T11:11:56.574Z"
   } ]
 }
