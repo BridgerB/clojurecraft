@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-26T18:48:50.577Z",
+  "at" : "2026-10-26T18:50:01.561Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -43,6 +43,11 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
+    "number" : 538,
+    "title" : "Bot stops at fortress: blocked",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
     "number" : 579,
     "title" : "Bot stops at ender-pearls: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
@@ -51,12 +56,7 @@
     "number" : 586,
     "title" : "Bot stops at furnace: stuck",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
-  }, {
-    "number" : 538,
-    "title" : "Bot stops at fortress: blocked",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
+    "copilot" : true
   }, {
     "number" : 71,
     "title" : "Bot stops at portal-kit: boxed",
@@ -136,16 +136,17 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 538,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
     "issue" : 579,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
     "issue" : 586,
-    "move" : "assign"
-  }, {
-    "issue" : 538,
-    "move" : "leave",
-    "why" : "hands-off label"
+    "move" : "unassign",
+    "why" : "no pull request and no session since the assignment"
   }, {
     "issue" : 71,
     "move" : "leave",
@@ -184,11 +185,6 @@
     "why" : "hands-off label"
   } ],
   "log" : [ {
-    "issue" : 586,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment",
-    "at" : "2026-10-26T12:43:51.379Z"
-  }, {
     "issue" : 586,
     "move" : "assign",
     "at" : "2026-10-26T12:44:58.793Z"
@@ -1534,5 +1530,10 @@
     "issue" : 586,
     "move" : "assign",
     "at" : "2026-10-26T18:48:50.577Z"
+  }, {
+    "issue" : 586,
+    "move" : "unassign",
+    "why" : "no pull request and no session since the assignment",
+    "at" : "2026-10-26T18:50:01.561Z"
   } ]
 }
