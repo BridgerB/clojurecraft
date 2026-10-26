@@ -914,20 +914,26 @@
     (is (= :active (:intent/status (:plan/intent w))))))
 
 (deftest a-tunnel-step-whose-op-fails-rejected-marks-cell-visited-and-continues
-  ;; when a child placement or dig in a tunnel step is rejected by the server, the step is given
+  ;; when a child placement in a tunnel step is rejected by the server, the step is given
   ;; up and marked visited so the tunnel tries another move instead of failing the plan :rejected
-  (let [w (assoc (rock {})
+  (let [op (assoc (build/place-op [1 63 0] [0 64 0] nil :floor) :build/item :cobblestone)
+        w (assoc (rock {[1 63 0] air})
+                 :world/facts (memory/empty-facts)
                  :bot/phase :play
                  :bot/effects []
                  :time/now 0
                  :time/tick 0
                  :player/pos [0.5 64.0 0.5]
+                 :player/on-ground? true
+                 :player/vel [0.0 0.0 0.0]
+                 :player/inventory {0 {:item (recipe/item-id :cobblestone) :count 64}}
                  :plan/intent
                  {:intent/kind :tunnel-to
-                  :intent/target [4 64 0]
+                  :intent/target [10 64 0]
                   :intent/steps 8
                   :intent/move [1 0 0]
                   :intent/from [0 64 0]
+                  :intent/op op
                   :intent/child {:intent/kind :place
                                  :intent/cell [1 63 0]
                                  :intent/status :failed

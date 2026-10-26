@@ -205,6 +205,39 @@
       (is (nil? (:intent/reason (:plan/intent done))))
       (is (empty? (:player/controls done))))))
 
+(deftest a-mob-in-water-below-is-not-defended-again-once-given-up
+  ;; issues #69, #62, #582 and #161: a zombie in water two blocks below is hittable but
+  ;; never strikable with no route to it; its fight ends done at once and :defend picked
+  ;; it again every tick, so the stage's own task never ran
+  (let [water (blocks/default-state :water)
+        pit {[10 63 8] water [11 63 8] water [10 62 8] water [11 62 8] water}
+        zombie (mob :zombie [11.5 62.0 8.5] 20.0)
+        w (assoc (standing {7 zombie}) :world/chunks {[0 0] (world/column pit)})
+        given (combat/given-up (assoc w :time/now 1000) 7)]
+    (is (combat/hittable? w zombie) "seen in the water below")
+    (is (empty? (combat/threats w)) "no threat: no route walks to it (approachable?)")
+    (is (combat/given-up? (assoc given :time/now 2000) 7 zombie))
+    (is (empty? (combat/threats (assoc given :time/now 2000))) "not picked again a while")
+    (is (not (combat/given-up? (assoc given :time/now (+ 1000 combat/give-up-ms)) 7 zombie))
+        "picked again after give-up-ms")
+    (is (not (combat/given-up? (assoc given :time/now 2000) 7 (mob :zombie [9.5 64.0 8.5] 20.0)))
+        "fought at once once within reach")
+    (testing "an engage that can neither strike nor route records the give-up as it ends done"
+      (let [stone (blocks/default-state :stone)
+            buried (assoc (standing {7 (mob :zombie [10.5 62.0 8.5] 20.0)})
+                          :world/chunks
+                          {[0 0] (world/column
+                                  {[9 64 8] stone [9 65 8] stone [10 64 8] stone [10 65 8] stone})}
+                          :plan/intent
+                          {:intent/kind :fight
+                           :intent/target 7
+                           :intent/status :active
+                           :intent/stage :engage
+                           :intent/since 0})
+            [done _] (fx/fold intent-step buried (map tick (range 50 2000 50)))]
+        (is (= :done (:intent/status (:plan/intent done))))
+        (is (contains? (:plan/given-up done) 7))))))
+
 (deftest a-zombie-at-hand-is-fought-a-creeper-backed-away-from
   (let [zombie (standing {7 (mob :zombie [11.0 64.0 8.5] 20.0)})
         creeper (standing {8 (mob :creeper [13.0 64.0 8.5] 20.0)})

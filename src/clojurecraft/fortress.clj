@@ -702,7 +702,9 @@
                               (assoc :player/controls {})
                               (intent/dissoc-intent :intent/reason)
                               intent/done)
-                          (and (intent/failed? i) (= :rejected (:intent/reason i)))
+                          (and (intent/failed? i)
+                               (= :rejected (:intent/reason i))
+                               (= :place (:build/op next)))
                           (reduce intent/dissoc-intent
                                   (-> world
                                       (assoc :player/controls {})

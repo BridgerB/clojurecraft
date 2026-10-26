@@ -210,6 +210,13 @@
 (deftest every-junk-item-is-an-item-of-the-game
   (is (every? recipe/item-id window/junk) (pr-str (remove recipe/item-id window/junk))))
 
+(deftest fortress-bricks-are-junk-a-full-inventory-throws
+  ;; issue #580: 705 nether bricks from digging through the fortress, every slot full, and
+  ;; no stack a craft could throw to make room for its result
+  (let [bricks {:item (recipe/item-id :nether_bricks) :count 64}
+        w {:player/inventory {9 bricks 10 bricks}}]
+    (is (= 9 (window/junk-slot w)) "a stack of the fortress's bricks goes first")))
+
 (deftest surplus-building-blocks-make-room-without-spending-the-reserve
   (doseq [[item keep] window/filler-keep]
     (testing (name item)

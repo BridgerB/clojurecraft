@@ -268,6 +268,25 @@
         (is (= :no-stand (build/op-child boxed hill-intent boxed-op))
             "with no ground in reach the plan says so, and does not walk onto the water")))))
 
+(deftest a-floor-is-laid-from-feet-standing-on-soul-sand
+  ;; sim snapshot R4-8-1 (issue #575): the bot fell into a soul sand valley, and a tunnel
+  ;; step's floor place, worked from its own feet, failed :no-stand three times: soul sand
+  ;; holds the bot (blocks/solid?) but a route cannot stand on it (path awkward), so no
+  ;; stand counted standable, its own included, though it was already standing there
+  (let [w (standing-at (open-ground {[0 63 0] (blocks/default-state :soul_sand)}) [0.7 64.0 0.1])
+        i {:intent/kind :tunnel-to :intent/status :active}
+        op {:build/op :place
+            :build/item :cobblestone
+            :build/pos [1 63 0]
+            :build/stand [0 64 0]
+            :build/step :floor
+            :build/done [:solid [1 63 0]]}]
+    (is (not (path/standable? w [0 64 0])) "soul sand is no route stand")
+    (is (not (intent/centred? w [0 64 0])) "and the feet are off centre in it")
+    (is (= {:intent/kind :place :intent/item :cobblestone :intent/cell [1 63 0]}
+           (build/op-child w i op))
+        "the feet already stand at the stand, so the floor is laid from here")))
+
 (deftest a-stand-up-a-bank-is-passed-over-for-one-a-route-reaches
   ;; race 38477665442 Clj_r25 (issue #45): the water was scooped from a sand cell at the lake's
   ;; edge under a bank; the cell nearest the pad's stand was the bank's top, a step up that only

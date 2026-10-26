@@ -498,8 +498,11 @@
   ;; seconds, since nothing ends a running intent but itself) (done), failed :no-blaze after
   ;; camp-ms. A camp is an intent, not a planner wait: a wait fails the plan after
   ;; plan/wait-ticks (20 s), shorter than a natural spawner's delay. Its spawner is not its
-  ;; :intent/target, so a camp that saw nothing never blacklists it; three in a row fail the plan
-  [world {:intent/keys [since health] seen :intent/blazes} _]
+  ;; :intent/target, so plan/fail-intent blacklists nothing for it; a camp that saw nothing
+  ;; blacklists its spawner itself, so the act goes to another spawner or on the search
+  ;; instead of camping the same silent one until the plan fails (issue #507: two camps in a
+  ;; row at one spawner that made no blaze in two minutes, after two rests, failed the plan)
+  [world {:intent/keys [since health spawner] seen :intent/blazes} _]
   (let [now (:time/now world)
         here (set (keys (blazes world)))
         seen (or seen here)
@@ -511,7 +514,9 @@
             (intent/assoc-intent :intent/since since :intent/blazes seen :intent/health health))]
     (cond (or (seq (remove seen here)) (rod-lying world) (< (:player/health world 20.0) health))
           (intent/done world)
-          (> (- now since) camp-ms) (intent/fail world :no-blaze)
+          (> (- now since) camp-ms)
+          (intent/fail (cond-> world spawner (update :plan/blacklist (fnil conj #{}) spawner))
+                       :no-blaze)
           :else world)))
 
 ;; ---------------------------------------------------------------- the :rest intent
