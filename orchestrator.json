@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-26T04:35:07.444Z",
+  "at" : "2026-10-26T04:38:24.457Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -53,6 +53,11 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
+    "number" : 45,
+    "title" : "Bot stops at cast-one: no-path",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
     "number" : 586,
     "title" : "Bot stops at furnace: stuck",
     "labels" : [ "bot-failure", "real", "sim" ],
@@ -97,11 +102,6 @@
     "title" : "Bot stops at cobblestone: boxed",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
-  }, {
-    "number" : 45,
-    "title" : "Bot stops at cast-one: no-path",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
   } ],
   "moves" : [ {
     "issue" : 537,
@@ -144,6 +144,10 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 45,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
     "issue" : 586,
     "move" : "wait",
     "why" : "session starting"
@@ -177,10 +181,6 @@
     "why" : "hands-off label"
   }, {
     "issue" : 65,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
-    "issue" : 45,
     "move" : "leave",
     "why" : "hands-off label"
   } ],
