@@ -526,6 +526,34 @@
                                            table)))
         "another row's: as it was")))
 
+(deftest a-carved-pumpkin-held-is-worn-in-the-end-before-anything-else
+  ;; gym chain-a3's dragon row: three runs slain by endermen; a look through a worn carved
+  ;; pumpkin never provokes one, so the End's rows put a held one on before walking anywhere
+  (let [hood {:item (recipe/item-id :carved_pumpkin) :count 1}
+        helmet {:item (recipe/item-id :iron_helmet) :count 1}
+        end #(assoc (standing {} [0.5 64.0 0.5] % {}) :player/dimension dimension/end)]
+    (is (= {:intent/kind :wear :intent/item :carved_pumpkin}
+           (dragon/wear-pumpkin (end {5 hood 39 helmet})))
+        "held, a helmet worn: swapped on")
+    (is (nil? (dragon/wear-pumpkin (end {39 hood}))) "worn already: nothing")
+    (is (nil? (dragon/wear-pumpkin (end {39 helmet}))) "none held: nothing")
+    (is (= {:intent/kind :wear :intent/item :carved_pumpkin}
+           (plan/next-intent (end {5 hood}) {:goal/plan :crystals} plan/goals))
+        "the crystals row first")
+    (is (= {:intent/kind :wear :intent/item :carved_pumpkin}
+           (plan/next-intent (end {5 hood}) {:goal/plan :dragon} plan/goals))
+        "the dragon row first")
+    (is
+     (= {:plan/wait :other-dimension}
+        (plan/next-intent (standing {} [0.5 64.0 0.5] {5 hood} {}) {:goal/plan :dragon} plan/goals))
+     "outside the End: never worn")
+    (let [w (assoc (end {39 hood})
+                   :player/controls {:control/look [10.0 -20.0]}
+                   :world/entities
+                   {9 {:entity/type (mob/type-id :enderman) :entity/pos [6.5 64.0 0.5]}})]
+      (is (= [10.0 -20.0] (:control/look (:player/controls (dragon/looks-away w))))
+          "a look not at an enderman's head is kept"))))
+
 (deftest in-a-lull-the-bot-eats-for-health-back
   ;; the hand-off of gym dragon-f: sixteen steak held, the food between 14 and 18, no healing
   (let [steak {0 {:item (recipe/item-id :cooked_beef) :count 16}}

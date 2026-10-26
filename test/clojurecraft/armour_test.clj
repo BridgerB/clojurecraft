@@ -100,6 +100,13 @@
                       (row :wear-armour))
         "a spare helmet with one worn is not worn twice")))
 
+(deftest a-carved-pumpkin-is-headwear-the-armour-row-leaves-alone
+  ;; worn on the head like a helmet (the dragon row's hood in the End), but the always
+  ;; :wear-armour row never dresses the bot in it for the whole run
+  (is (= 0 (armour/part :carved_pumpkin)))
+  (is (plan/done-by (standing {3 (item :carved_pumpkin 1)}) (row :wear-armour))
+      "held over a bare head: still dressed"))
+
 (def kit
   {0 (item :flint_and_steel 1)
    1 (item :water_bucket 1)

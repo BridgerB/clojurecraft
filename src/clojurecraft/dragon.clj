@@ -31,11 +31,14 @@
    of its reach (escape, never straight away into the fountain's pillar), it holds still
    through the dragon's scanning turn
    (scanning?), and the :defend row leaves every hostile to this row while a breath reaches the
-   feet (combat/answering); every look of the row's intents is turned from an enderman's eyes
-   (look-away, plan/steer); in a lull, the bot eats for health back (the :heal row). Not done: the cages
-   round two spikes (the strike through their bars is unproven; the gym takes them away), the
-   bridge from the End's platform to the main island, and the exit portal."
+   feet (combat/answering); every look of the rows' intents is turned from an enderman's eyes
+   (look-away, plan/steer), and a carved pumpkin held is worn on the head first
+   (wear-pumpkin), through which no look provokes one; in a lull, the bot eats for health
+   back (the :heal row). From the End's entry platform the bot bridges to the main island
+   before any crystal (toward-island). Not done: the cages round two spikes (the strike
+   through their bars is unproven; the gym takes them away), and the exit portal."
   (:require [clojure.math :as math]
+            [clojurecraft.armour :as armour]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.combat :as combat]
             [clojurecraft.dimension :as dimension]
@@ -653,6 +656,20 @@
       [(first look) 90.0]
       look)))
 
+(defn wear-pumpkin
+  "The :wear intent that puts a carved pumpkin held in the store slots on the head, or nil
+   when one is worn there already or none is held: a player's look through a worn carved
+   pumpkin never provokes an enderman (EnderMan.isBeingStaredBy), so the End's endermen
+   stay calm through the crystal walks and the perch whatever the looks cross (gym
+   chain-a3's dragon row: three runs slain by endermen, at 48, 424 and 506 s). The helmet
+   swapped off stays held, and look-away still turns the row's looks."
+  [world]
+  (when (and (not= :carved_pumpkin (armour/worn world 0))
+             (some (fn [[p {i :item}]]
+                     (and (< -1 p armour/store-slots) (= :carved_pumpkin (recipe/item-name i))))
+                   (:player/inventory world)))
+    {:intent/kind :wear :intent/item :carved_pumpkin}))
+
 (declare fountain-stand holds? in-basin?)
 
 (defmethod intent/run :perch
@@ -904,9 +921,12 @@
 (defmethod plan/done-by :dragon-dead? [world _] (boolean (:world/dragon-dead? world)))
 
 (defmethod plan/next-intent :crystals
-  ;; outside the End, a wait :other-dimension
+  ;; outside the End, a wait :other-dimension; in it, a held carved pumpkin on the head
+  ;; first (wear-pumpkin), then the crystals'
   [world _ _]
-  (if (= dimension/end (dimension/of world)) (toward-crystals world) {:plan/wait :other-dimension}))
+  (if (= dimension/end (dimension/of world))
+    (or (wear-pumpkin world) (toward-crystals world))
+    {:plan/wait :other-dimension}))
 
 (defmethod plan/interrupts? :dragon
   ;; any running intent but a :back-off ends when a breath is near (breath-near) and the feet are
@@ -958,15 +978,24 @@
                      grounded?)))
     (into (map entity/kind (vals (entity/hostiles world))))))
 
-(defmethod plan/steer :dragon
-  ;; every look the row's intents make, a walk's and a back-off's as well as the perch's, turned
-  ;; from an enderman's eyes (look-away): gym dragon-f run 3 stared at three endermen in turn on
-  ;; its walks to and from the stand and was slain by the third, dragon-e run 1 at one on its
-  ;; first walk there; a walk steers by :control/yaw, so the look's pitch is free
-  [world _]
+(defn looks-away
+  "The world with its controls' look turned from an enderman's eyes (look-away), or as it
+   is with no look set: every look an End row's intents make, a walk's and a back-off's as
+   well as the perch's (gym dragon-f run 3 stared at three endermen in turn on its walks
+   to and from the stand and was slain by the third, dragon-e run 1 at one on its first
+   walk there); a walk steers by :control/yaw, so the look's pitch is free."
+  [world]
   (if-let [look (:control/look (:player/controls world))]
     (assoc-in world [:player/controls :control/look] (look-away world look))
     world))
+
+(defmethod plan/steer :dragon [world _] (looks-away world))
+
+(defmethod plan/steer :crystals
+  ;; the crystal walks and pillars cross the whole island under the endermen's eyes, the
+  ;; chain's stage of them before the dragon's: the same turned looks as the dragon row's
+  [world _]
+  (looks-away world))
 
 (defmethod plan/done-by :healed? [world _] (nil? (heal-food world)))
 
@@ -976,4 +1005,6 @@
 
 (defmethod plan/next-intent :dragon
   [world _ _]
-  (if (= dimension/end (dimension/of world)) (toward-dragon world) {:plan/wait :other-dimension}))
+  (if (= dimension/end (dimension/of world))
+    (or (wear-pumpkin world) (toward-dragon world))
+    {:plan/wait :other-dimension}))

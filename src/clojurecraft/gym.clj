@@ -768,7 +768,8 @@
     :gym/setup [no-crystals]
     :gym/prereqs ["minecraft:iron_sword 1" "minecraft:iron_helmet 1" "minecraft:iron_chestplate 1"
                   "minecraft:iron_leggings 1" "minecraft:iron_boots 1" "minecraft:cooked_beef 16"
-                  "minecraft:cobblestone 64" "minecraft:iron_pickaxe 1"]
+                  "minecraft:cobblestone 64" "minecraft:iron_pickaxe 1"
+                  "minecraft:carved_pumpkin 1"]
     :gym/summon [no-crystals]
     :gym/timeout-ms trial-ms
     :gym/truth [{:truth/cmd
@@ -786,7 +787,8 @@
     :gym/prereqs ["minecraft:blaze_rod 7" "minecraft:ender_pearl 12" "minecraft:iron_sword 1"
                   "minecraft:iron_pickaxe 4" "minecraft:iron_helmet 1" "minecraft:iron_chestplate 1"
                   "minecraft:iron_leggings 1" "minecraft:iron_boots 1" "minecraft:cooked_beef 16"
-                  "minecraft:cobblestone 64" "minecraft:cobblestone 64" "minecraft:cobblestone 64"]
+                  "minecraft:cobblestone 64" "minecraft:cobblestone 64" "minecraft:cobblestone 64"
+                  "minecraft:carved_pumpkin 1"]
     :gym/timeout-ms trial-ms
     :gym/truth [{:truth/cmd
                  "execute in minecraft:the_end unless entity @e[type=minecraft:ender_dragon]"

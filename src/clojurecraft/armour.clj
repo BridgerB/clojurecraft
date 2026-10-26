@@ -28,8 +28,9 @@
 
 (def parts
   "Which armour slot (inventory/slot-in's [:armour n], head to feet) a piece goes in, by the end
-   of its name."
-  [["_helmet" 0] ["_chestplate" 1] ["_leggings" 2] ["_boots" 3]])
+   of its name. A carved pumpkin is no armour but is worn on the head (its equippable
+   component), the dragon row's hood against an enderman's stare."
+  [["_helmet" 0] ["_chestplate" 1] ["_leggings" 2] ["_boots" 3] ["carved_pumpkin" 0]])
 
 (defn part
   "The armour slot n (0 head .. 3 feet) item name k is worn in, or nil when it is no armour."
@@ -53,14 +54,16 @@
 
 (defn unworn
   "[player-slot name] of a piece of armour held in the hotbar or the main inventory whose armour
-   slot is empty, the lowest slot first; nil when there is none."
+   slot is empty, the lowest slot first; nil when there is none. A carved pumpkin is never
+   one: it is the dragon row's to put on in the End, not dress for the whole run."
   [world]
   (->> (:player/inventory world)
        (sort-by key)
        (some (fn [[p {:keys [item]}]]
                (let [k (recipe/item-name item)
                      n (part k)]
-                 (when (and (< -1 p store-slots) n (nil? (worn world n))) [p k]))))))
+                 (when (and (< -1 p store-slots) n (not= :carved_pumpkin k) (nil? (worn world n)))
+                   [p k]))))))
 
 (def made
   "The pieces made from spare ingots, in order, with their cost in iron ingots (the game's
@@ -178,11 +181,12 @@
     (intent/fail world :not-picked-up)))
 
 (defmethod wear-stage :check
-  ;; worn, or the armour slot refused it: then the cursor's piece goes back into a free slot
-  ;; before the intent fails, so nothing is left on the cursor
+  ;; worn with the cursor empty, done; anything on the cursor (the piece the slot refused,
+  ;; or the piece swapped off a full slot: a carved pumpkin over an iron helmet) goes back
+  ;; into a free slot first, so nothing is left on the cursor either way
   [world {:intent/keys [item]}]
-  (cond (worn? world item) (intent/done world)
-        (:window/cursor world) (intent/assoc-intent world :intent/stage :drop)
+  (cond (:window/cursor world) (intent/assoc-intent world :intent/stage :drop)
+        (worn? world item) (intent/done world)
         :else (intent/fail world :not-worn)))
 
 (defmethod wear-stage :drop

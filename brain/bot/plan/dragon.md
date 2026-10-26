@@ -30,6 +30,12 @@ sourceRefs:
   - src/clojurecraft/dragon.clj#defn breath-on-way?
   - src/clojurecraft/dragon.clj#defmethod plan/interrupts? :dragon
   - src/clojurecraft/dragon.clj#defn look-away
+  - src/clojurecraft/dragon.clj#defn wear-pumpkin
+  - src/clojurecraft/dragon.clj#defn looks-away
+  - src/clojurecraft/dragon.clj#defmethod plan/steer :crystals
+  - src/clojurecraft/armour.clj#def parts
+  - test/clojurecraft/dragon_test.clj#a-carved-pumpkin-held-is-worn-in-the-end-before-anything-else
+  - test/clojurecraft/armour_test.clj#a-carved-pumpkin-is-headwear-the-armour-row-leaves-alone
   - src/clojurecraft/dragon.clj#defmethod intent/run :perch
   - src/clojurecraft/entity.clj#defn hostile?
   - src/clojurecraft/dragon.clj#defn fountain-stand
@@ -140,7 +146,7 @@ Every head death of dragon2-a and dragon2-b was a bot whose feet were up on the 
 
 ## Endermen and the meal
 
-`plan/steer`, a registry keyed by `:goal/plan` that `plan/steered` applies each tick to the running intent's row, turns every look of the `:dragon` row's intents with `look-away`: dragon-f run 3 stared at three endermen in turn on its walks to and from the stand and was slain by the third; dragon-e run 1 at one on its first walk. A walk steers by `:control/yaw`, so a look straight down changes nothing of the way. While a breath cloud or fireball reaches the feet, the row answers every hostile shown itself (`combat/answering`, a registry by `:goal/plan` over the world that `answered-kinds` reads, `answers` alone by default), so the `:defend` row fights nothing and the back-off from the breath runs: dragon2-a run 2 and dragon2-b runs 1 and 3 died in breath clouds, their back-offs cut by `:defend`'s fights with an enderman in the cloud. The `:heal` row (always, priority 0 after `:eat`, the End only) eats (`eat/food-held`, the `:eat` intent) when the bot is hurt, its food under `heal-below` (18, where natural regeneration stops; the `:eat` row eats only under 14) and in a lull (`lull?`: no breath near, the dragon not perched, no hostile within `calm-radius` 8).
+`plan/steer`, a registry keyed by `:goal/plan` that `plan/steered` applies each tick to the running intent's row, turns every look of the `:dragon` and `:crystals` rows' intents with `look-away` (`looks-away`): dragon-f run 3 stared at three endermen in turn on its walks to and from the stand and was slain by the third; dragon-e run 1 at one on its first walk. And before anything else in the End, both rows put a held carved pumpkin on the head (`wear-pumpkin`, the `:wear` intent; `armour/parts` knows it as headwear the `:wear-armour` row never dresses the bot in): a look through a worn carved pumpkin never provokes an enderman, whatever it crosses. Gym chain-a3's dragon row lost all three runs to endermen (48, 424 and 506 s) with looks alone turned; the pumpkin is in the dragon and chain kits. A walk steers by `:control/yaw`, so a look straight down changes nothing of the way. While a breath cloud or fireball reaches the feet, the row answers every hostile shown itself (`combat/answering`, a registry by `:goal/plan` over the world that `answered-kinds` reads, `answers` alone by default), so the `:defend` row fights nothing and the back-off from the breath runs: dragon2-a run 2 and dragon2-b runs 1 and 3 died in breath clouds, their back-offs cut by `:defend`'s fights with an enderman in the cloud. The `:heal` row (always, priority 0 after `:eat`, the End only) eats (`eat/food-held`, the `:eat` intent) when the bot is hurt, its food under `heal-below` (18, where natural regeneration stops; the `:eat` row eats only under 14) and in a lull (`lull?`: no breath near, the dragon not perched, no hostile within `calm-radius` 8).
 
 The dragon is struck by its box, not through `:fight`: its box is 16 by 8 with its feet on the fountain's pillar, four over the portal, and `:fight`'s reach to an aim point 0.9 over the feet is never met from a floor; the server's own test is the box. The body takes a quarter of a hit plus one (the head takes it all; its part's position is the client's to compute, not done), and a perched dragon takes off after 50 damage in one perch, so a kill takes several perches.
 
