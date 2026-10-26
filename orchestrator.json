@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-26T10:36:48.593Z",
+  "at" : "2026-10-26T10:37:56.449Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -63,15 +63,10 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 45,
-    "title" : "Bot stops at cast-one: no-path",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 586,
     "title" : "Bot stops at furnace: stuck",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : true
+    "copilot" : false
   }, {
     "number" : 348,
     "title" : "Bot stops at flint-and-steel: stuck",
@@ -100,6 +95,11 @@
   }, {
     "number" : 65,
     "title" : "Bot stops at cobblestone: boxed",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 45,
+    "title" : "Bot stops at cast-one: no-path",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   } ],
@@ -152,13 +152,8 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 45,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
     "issue" : 586,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment"
+    "move" : "assign"
   }, {
     "issue" : 348,
     "move" : "leave",
@@ -183,13 +178,12 @@
     "issue" : 65,
     "move" : "leave",
     "why" : "hands-off label"
+  }, {
+    "issue" : 45,
+    "move" : "leave",
+    "why" : "hands-off label"
   } ],
   "log" : [ {
-    "issue" : 559,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment",
-    "at" : "2026-10-23T06:12:52.639Z"
-  }, {
     "issue" : 559,
     "move" : "assign",
     "at" : "2026-10-23T06:14:01.353Z"
@@ -1529,5 +1523,9 @@
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
     "at" : "2026-10-26T10:36:48.593Z"
+  }, {
+    "issue" : 586,
+    "move" : "assign",
+    "at" : "2026-10-26T10:37:56.449Z"
   } ]
 }
