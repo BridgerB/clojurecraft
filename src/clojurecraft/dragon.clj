@@ -662,12 +662,15 @@
    pumpkin never provokes an enderman (EnderMan.isBeingStaredBy), so the End's endermen
    stay calm through the crystal walks and the perch whatever the looks cross (gym
    chain-a3's dragon row: three runs slain by endermen, at 48, 424 and 506 s). The helmet
-   swapped off stays held, and look-away still turns the row's looks."
+   swapped off stays held, and look-away still turns the row's looks. A pumpkin an
+   earlier wear left on the cursor counts as held, so that wear is asked again instead
+   of the row going on bare-headed (gym chain-w1's dragon run 3)."
   [world]
   (when (and (not= :carved_pumpkin (armour/worn world 0))
-             (some (fn [[p {i :item}]]
-                     (and (< -1 p armour/store-slots) (= :carved_pumpkin (recipe/item-name i))))
-                   (:player/inventory world)))
+             (or (armour/cursor-holds? world :carved_pumpkin)
+                 (some (fn [[p {i :item}]]
+                         (and (< -1 p armour/store-slots) (= :carved_pumpkin (recipe/item-name i))))
+                       (:player/inventory world))))
     {:intent/kind :wear :intent/item :carved_pumpkin}))
 
 (declare fountain-stand holds? in-basin?)
@@ -826,6 +829,24 @@
          (sort-by #(physics/horizontal-distance pos (physics/centre %)))
          first)))
 
+(defn recover
+  "The intent while hurt under combat/retreat-health at the dragon, where the perch and
+   the walk to its stand are never chosen (gym chain-w3's dragon runs 2 and 3 fought on
+   at ten, then four and a half health, and the dragon slew them): a meal first when
+   food is held and the bar can take one, else, while the feet are still within
+   escape-to of the fountain, the shelter walk to a cell out of every breath's reach
+   (escape), else the wait :low-health where the feet are for the bar's own healing.
+   The :heal row's meal needs a lull (heal-food), which a sitting dragon never is, so
+   the row eats here on its own line."
+  [world]
+  (let [food (when (< (:player/food world 20) 20) (eat/food-held world))
+        [fx fz] fountain
+        near? (<= (physics/horizontal-distance (:player/pos world) [fx 0.0 fz]) escape-to)
+        flight (when near? (escape world))]
+    (cond food {:intent/kind :eat :intent/item food}
+          flight (shelter-walk flight)
+          :else {:plan/wait :low-health})))
+
 (defn toward-dragon
   "The next intent toward the dragon dead: while a crystal stands or the feet are up a pillar or
    a spike, the crystals' (toward-crystals); a breath near, combat's :back-off from it; away from
@@ -845,7 +866,9 @@
    head (escape), combat's straight :back-off only with no such cell loaded (gym dragon3-a run
    2 backed straight off into the fountain's pillar and died in the cloud against it); and
    through its scanning turn (scanning?) the :perch holds whatever stand the feet are at, the
-   stand re-chosen only in the phases the dragon does not turn in."
+   stand re-chosen only in the phases the dragon does not turn in. Hurt under
+   combat/retreat-health, none of the perch or the stands: recover's meal, shelter
+   walk or wait until the health is back over that line."
   [world]
   (let [[eid d] (dragon world)
         pos (:player/pos world)
@@ -860,6 +883,7 @@
           (and breath eid d (grounded? d) (in-basin? world) far?) (shelter-walk stand)
           (and breath flight) (shelter-walk flight)
           breath {:intent/kind :back-off :intent/target (first breath)}
+          (< (:player/health world full-health) combat/retreat-health) (recover world)
           (and (nil? stand) eid (some? (ground world 0 0 sky)))
           {:intent/kind :perch :intent/target eid}
           (nil? stand) {:plan/wait :no-fountain}
@@ -929,7 +953,8 @@
     {:plan/wait :other-dimension}))
 
 (defmethod plan/interrupts? :dragon
-  ;; any running intent but a :back-off ends when a breath is near (breath-near) and the feet are
+  ;; a :perch ends at once hurt under combat/retreat-health (recover takes over: never
+  ;; fight the dragon under that line); any running intent but a :back-off ends when a breath is near (breath-near) and the feet are
   ;; down off the pillars, spikes and entry bridge: gym dragon-d runs 1 and 3 walked into a
   ;; fireball's cloud and died in it, six a second, nothing else ending a walk; unless the intent
   ;; is the walk from the breath to a cell out of its reach (shelter-walk, :intent/for :shelter)
@@ -942,7 +967,9 @@
   (let [[_ d] (dragon world)
         pos (:player/pos world)
         shelter? (and (= :walk (:intent/kind i)) (= :shelter (:intent/for i)))]
-    (or (and (not= :back-off (:intent/kind i))
+    (or (and (= :perch (:intent/kind i))
+             (< (:player/health world full-health) combat/retreat-health))
+        (and (not= :back-off (:intent/kind i))
              (not shelter?)
              (not (off-island? world))
              (not (on-pillar? world))

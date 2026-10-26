@@ -538,6 +538,9 @@
     (is (nil? (dragon/wear-pumpkin (end {39 hood}))) "worn already: nothing")
     (is (nil? (dragon/wear-pumpkin (end {39 helmet}))) "none held: nothing")
     (is (= {:intent/kind :wear :intent/item :carved_pumpkin}
+           (dragon/wear-pumpkin (assoc (end {39 helmet}) :window/cursor hood)))
+        "left on the cursor by a wear that failed: worn still")
+    (is (= {:intent/kind :wear :intent/item :carved_pumpkin}
            (plan/next-intent (end {5 hood}) {:goal/plan :crystals} plan/goals))
         "the crystals row first")
     (is (= {:intent/kind :wear :intent/item :carved_pumpkin}
@@ -553,6 +556,24 @@
                    {9 {:entity/type (mob/type-id :enderman) :entity/pos [6.5 64.0 0.5]}})]
       (is (= [10.0 -20.0] (:control/look (:player/controls (dragon/looks-away w))))
           "a look not at an enderman's head is kept"))))
+
+(deftest hurt-under-retreat-health-the-dragon-is-not-fought
+  ;; gym chain-w3's dragon runs 2 and 3: the perch fought on at ten, then four and a
+  ;; half health, and the dragon slew both; under combat/retreat-health the row eats,
+  ;; shelters or waits, and a running perch ends at once
+  (let [steak {:item (recipe/item-id :cooked_beef) :count 4}
+        hurt (fn [food inv]
+               (assoc (round-fountain [2.5 64.0 0.5] (sitting 270.0))
+                      :player/health 9.0
+                      :player/food food
+                      :player/inventory inv))]
+    (is (= {:intent/kind :eat :intent/item :cooked_beef} (dragon/toward-dragon (hurt 10 {0 steak})))
+        "food held and the bar short: the meal, not the perch")
+    (is (not= :perch (:intent/kind (dragon/toward-dragon (hurt 20 {0 steak})))))
+    (is (not= :perch (:intent/kind (dragon/toward-dragon (hurt 20 {}))))
+        "nothing to eat: shelter or the wait, still never the perch")
+    (is (plan/interrupts? (hurt 20 {}) {:goal/plan :dragon} {:intent/kind :perch})
+        "a running perch ends under the line")))
 
 (deftest in-a-lull-the-bot-eats-for-health-back
   ;; the hand-off of gym dragon-f: sixteen steak held, the food between 14 and 18, no healing

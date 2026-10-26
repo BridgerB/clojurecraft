@@ -154,7 +154,8 @@
 
 (defmethod wear-stage :pick
   ;; a container open first closed (the server ignores window-0 clicks while one is its menu);
-  ;; then the piece picked up from its slot
+  ;; then the piece picked up from its slot, unless an earlier attempt left it on the cursor
+  ;; (clicking its slot then would only put it back)
   [world {:intent/keys [item]}]
   (let [v (window/view world :inventory)
         p (some (fn [[p {i :item}]] (when (and (< -1 p store-slots) (= i (recipe/item-id item))) p))
@@ -165,20 +166,29 @@
               (game/emit {:packet/name :container-close
                           :window-id (get-in world [:window/open :window/id])})
               (dissoc :window/open))
+          (cursor-holds? world item)
+          (intent/assoc-intent world :intent/stage :put :intent/since (:time/now world))
           (nil? p) (intent/fail world :not-held)
           :else
           (-> world
               (window/click v (inventory/left-click ((:view/slot-of v) p)))
-              (intent/assoc-intent :intent/stage :put)))))
+              (intent/assoc-intent :intent/stage :put :intent/since (:time/now world))))))
 
 (defmethod wear-stage :put
-  [world {:intent/keys [item]}]
-  (if (cursor-holds? world item)
-    (-> world
-        (window/click (window/view world :inventory)
-                      (inventory/left-click (inventory/slot [:armour (part item)])))
-        (intent/assoc-intent :intent/stage :check))
-    (intent/fail world :not-picked-up)))
+  ;; the click's answer can move the window's state id before its set-cursor packet lands:
+  ;; wait for the cursor to show the piece, a stage's answer-timeout at the most, rather
+  ;; than fail with the piece on its way to the cursor (gym chain-w1's dragon run 3: the
+  ;; pumpkin wear failed :not-picked-up, the pumpkin stayed off the head and an enderman
+  ;; slew the bot at the perch)
+  [world {:intent/keys [item since]}]
+  (cond (cursor-holds? world item)
+        (-> world
+            (window/click (window/view world :inventory)
+                          (inventory/left-click (inventory/slot [:armour (part item)])))
+            (intent/assoc-intent :intent/stage :check))
+        (> (- (:time/now world) (or since 0)) window/answer-timeout)
+        (intent/fail world :not-picked-up)
+        :else world))
 
 (defmethod wear-stage :check
   ;; worn with the cursor empty, done; anything on the cursor (the piece the slot refused,
