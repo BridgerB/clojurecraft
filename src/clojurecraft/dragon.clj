@@ -665,10 +665,9 @@
    swapped off stays held, and look-away still turns the row's looks."
   [world]
   (when (and (not= :carved_pumpkin (armour/worn world 0))
-             (or (armour/cursor-holds? world :carved_pumpkin)
-                 (some (fn [[p {i :item}]]
-                         (and (< -1 p armour/store-slots) (= :carved_pumpkin (recipe/item-name i))))
-                       (:player/inventory world))))
+             (some (fn [[p {i :item}]]
+                     (and (< -1 p armour/store-slots) (= :carved_pumpkin (recipe/item-name i))))
+                   (:player/inventory world)))
     {:intent/kind :wear :intent/item :carved_pumpkin}))
 
 (declare fountain-stand holds? in-basin?)

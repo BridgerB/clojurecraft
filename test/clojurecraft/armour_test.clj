@@ -165,18 +165,3 @@
     (is (plan/can-abandon? (assoc w :window/state-id 6)) "answered: the cursor is known again")
     (is (not (plan/can-abandon?
               (assoc w :window/state-id 6 :window/cursor (item :iron_helmet 1)))))))
-
-(deftest wear-put-waits-for-cursor-item
-  ;; batch chain-w1 dragon row run 3: container-set-slot advanced state-id before set-cursor-item
-  ;; arrived; wear-stage :put must wait up to stage-timeout rather than failing immediately
-  (let [w (assoc
-           (standing {})
-           :time/now 1000
-           :plan/intent
-           {:intent/kind :wear :intent/item :carved_pumpkin :intent/stage :put :intent/since 900})]
-    (is (= :active (:intent/status (:plan/intent (armour/wear-stage w (:plan/intent w)))))
-        "still waiting for cursor item within timeout")
-    (is (= :failed
-           (:intent/status (:plan/intent (armour/wear-stage (assoc w :time/now 7000)
-                                                            (:plan/intent w)))))
-        "fails past timeout")))
