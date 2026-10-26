@@ -1,9 +1,0 @@
-;; issue #10, step 13, batch w3: fix intent/assoc-intent threading in armour wear-stage;
-;; wait up to stage-timeout for cursor item in wear-stage :put to prevent dropping pumpkin;
-;; restore stairs fallback in stronghold to-room when tunnel-to blocked by water.
-{:plans/label "chain-w3"
- :plans/jobs 4
- :plans/issue 10
- :plans/experiments
- [{:exp/name "dragon" :exp/kind :gym :exp/goal "dragon" :exp/runs 3 :exp/bots 1 :exp/est-s 1600}
-  {:exp/name "chain" :exp/kind :gym :exp/goal "chain" :exp/runs 3 :exp/bots 1 :exp/est-s 3600}]}

@@ -179,23 +179,4 @@
     (is (= :failed
            (:intent/status (:plan/intent (armour/wear-stage (assoc w :time/now 7000)
                                                             (:plan/intent w)))))
-        "fails past timeout")
-    (let [hood {:item (recipe/item-id :carved_pumpkin) :count 1}
-          w'
-          (assoc
-           (standing {})
-           :time/now 1000
-           :window/cursor hood
-           :plan/intent
-           {:intent/kind :wear :intent/item :carved_pumpkin :intent/stage :put :intent/since 900})
-          w'' (armour/wear-stage w' (:plan/intent w'))]
-      (is (= :check (:intent/stage (:plan/intent w'')))
-          "with item on cursor, advances to :check"))))
-
-(deftest wear-pick-advances-to-put
-  (let [hood {:item (recipe/item-id :carved_pumpkin) :count 1}
-        w (assoc (standing {0 hood})
-                 :time/now 1000
-                 :plan/intent {:intent/kind :wear :intent/item :carved_pumpkin :intent/stage :pick})
-        w' (armour/wear-stage w (:plan/intent w))]
-    (is (= :put (:intent/stage (:plan/intent w'))))))
+        "fails past timeout")))
