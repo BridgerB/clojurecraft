@@ -777,7 +777,19 @@
     (is (= {:intent/kind :dig :intent/target [8 64 8]}
            (plan/next-intent (standing {} {[8 64 8] fire}) row plan/goals))
         "at the feet")
-    (is (= [8 65 8] (pearls/burning-at (standing {} {[8 65 8] fire}))) "at the head")))
+    (is (= [8 65 8] (pearls/burning-at (standing {} {[8 65 8] fire}))) "at the head")
+    ;; gym batch pearls-w1 (plan run 40387599204, probe 40421394796) run 1 dug out its feet
+    ;; cell's fire and burned to death anyway: at z 2165.14 its box still reached 0.16 into
+    ;; the fire in the cell north, which the feet's one cell never showed
+    (is (= [8 64 7]
+           (pearls/burning-at (assoc (standing {} {[8 64 7] fire}) :player/pos [8.5 64.0 8.14])))
+        "in a cell beside the feet the body overlaps")
+    (is (nil? (pearls/burning-at (standing {} {[8 64 7] fire})))
+        "the same fire, the body clear of its cell")
+    (is (= [8 64 8]
+           (pearls/burning-at
+            (assoc (standing {} {[8 64 8] fire [8 64 7] fire}) :player/pos [8.5 64.0 8.14])))
+        "both burning: the feet's own first")))
 
 (deftest no-enderman-is-provoked-hurt
   ;; sim-endermen3's probe 39847287615 (worlds R1, R2, R4): the first death each time came of a
@@ -982,6 +994,28 @@
     (is (= {:intent/kind :lookout :intent/for :pearls}
            (plan/next-intent (assoc forest :player/health 6.0) row plan/goals))
         "under danger-health the craft waits too: rest first")))
+
+(deftest empty-hands-hunt-the-wood-of-a-pickaxe
+  ;; gym batch pearls-w1 (plan run 40387599204) run 1: slain in the forest, it respawned at
+  ;; the overworld spawn, remade a wooden sword from the spruces there, and twenty seconds
+  ;; later failed :no-pickaxe with sticks and its table held: the log hunt that may start a
+  ;; bare-handed sword was refused for the pickaxe, so the death still ended the plan
+  (let [bare-floor (into {} (for [cx (range -3 4) cz (range -3 4)] [[cx cz] (world/column {})]))
+        respawned (-> (standing {})
+                      (assoc :world/chunks bare-floor
+                             :player/inventory
+                             {0 (item :wooden_sword 1) 1 (item :stick 3) 2 (item :crafting_table 1)}
+                             :time/now 0)
+                      (memory/remember-intention {:intent/id 1 :intent/kind :burrow} :done))
+        walked (plan/next-intent respawned row plan/goals)
+        worn
+        (assoc-in respawned [:player/inventory 3] (assoc (item :iron_pickaxe 1) :durability 11))]
+    (is (pearls/worn-out? respawned) "a burrow cut this run and no pickaxe held")
+    (is (= :walk (:intent/kind walked)))
+    (is (= :log-hunt (:intent/for walked))
+        "no pickaxe at all: out for the wood of one, never the :no-pickaxe wait")
+    (is (= {:intent/kind :lookout :intent/for :pearls} (plan/next-intent worn row plan/goals))
+        "a worn pickaxe still held: no hunt for wood, the hunt goes on with it")))
 
 (deftest no-sword-held-no-hunt
   ;; gym batch pearls-warped8-b (plan run 39775345028): runs 1 and 3 respawned with nothing held

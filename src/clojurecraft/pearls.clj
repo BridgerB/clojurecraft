@@ -500,18 +500,27 @@
 (def fires #{:fire :soul_fire})        ; blocks that burn whoever stands in them
 
 (defn burning-at
-  "The cell of the feet or the head that holds fire (fires), the feet's first, or nil. Gym batch
-   pearls-warped8-b (plan run 39775345028, probe 39849820209) run 1's walk ended in a fire lit on
-   gravel in its path, and it stood there in :lookout, an :eat between, from 16 health to its
-   death in seventeen seconds."
+  "A cell the body overlaps, at the feet's height or the head's, that holds fire (fires), the
+   feet's own first, or nil. Gym batch pearls-warped8-b (plan run 39775345028, probe
+   39849820209) run 1's walk ended in a fire lit on gravel in its path, and it stood there in
+   :lookout, an :eat between, from 16 health to its death in seventeen seconds. The body's
+   cells, not the feet's one: gym batch pearls-w1 (plan run 40387599204, probe 40421394796)
+   run 1 dug out the fire in its feet's cell [2457 37 2165] and still burned to death over
+   twenty seconds of :eat and :lookout, standing at z 2165.14 with its box (physics/half-width
+   each way) reaching into the fire on gravel in the cell north of it."
   [world]
-  (let [[x y z] (intent/feet world)]
+  (let [[fx fy fz] (intent/feet world)
+        [px _ pz] (:player/pos world)
+        span (fn [p c]
+               (distinct [c (long (math/floor (- p physics/half-width)))
+                          (long (math/floor (+ p physics/half-width)))]))
+        cells (for [y [fy (inc fy)] x (span px fx) z (span pz fz)] [x y z])]
     (some (fn [c]
             (when (contains? fires
                              (some-> (terrain/block-at world c)
                                      blocks/name-of))
               c))
-          [[x y z] [x (inc y) z]])))
+          cells)))
 
 (defn fresh-kill
   "The hunt's kill whose drop may still be picked up: the last intent, when it is a :fight for
@@ -1542,12 +1551,22 @@
    planks to sticks and a crafting table, then the pickaxe the held items reach, a stone one
    with cobblestone held, a wooden one without. Gym batch pearls-warped9-a (plan run
    39898400239) run 2 spent 239 digs on five pearls, about sixteen a burrow, and with eleven
-   digs left stood in lookouts for four hours: no burrow could be cut, and no pickaxe remade."
+   digs left stood in lookouts for four hours: no burrow could be cut, and no pickaxe remade.
+   With no pickaxe at all (pickaxe? false: the hands a death leaves empty, respawned at the
+   overworld spawn), the log hunt for a trunk (:intent/for :log-hunt, wood/hunt) may start
+   it too, as it may a bare-handed sword (make-sword): gym batch pearls-w1 (plan run
+   40387599204) run 1 died, remade its wooden sword from the spruces at spawn, then failed
+   :no-pickaxe twenty seconds later with sticks and its table held, the hunt for the
+   pickaxe's wood refused. A worn pickaxe still held is replaced only as before, never by
+   a hunt for wood (wood/hunt is nil underground, so the Nether remake is unchanged)."
   [world goal table]
-  (let [i (make/decide (for-pick-decide world) (assoc goal :goal/provides {:tag/pickaxes 1}) table)]
+  (let [bare? (not (pickaxe? world))
+        i (make/decide (for-pick-decide world) (assoc goal :goal/provides {:tag/pickaxes 1}) table)]
     (when (and (:intent/kind i)
                (not (and (sword/pieces? world) (= :log (:intent/for i))))
-               (or (= :log (:intent/for i)) (contains? pick-acts (:intent/kind i))))
+               (or (= :log (:intent/for i))
+                   (and bare? (= :log-hunt (:intent/for i)))
+                   (contains? pick-acts (:intent/kind i))))
       i)))
 
 (defmethod plan/next-intent :pearls
