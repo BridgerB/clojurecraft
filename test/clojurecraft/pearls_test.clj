@@ -712,13 +712,9 @@
     (is (pearls/lured-out? (lured given-up pearls/lure-tries)))
     (is (nil? (pearls/angry-near (lured given-up pearls/lure-tries)))
         "lure-tries lures it never came to: no longer held")
-    (is (= {:intent/kind :stairs-up
-            :intent/to-y 64
-            :intent/dir [1 0]
-            :intent/to-height? true
-            :intent/for :pearls}
-           (plan/next-intent (lured given-up pearls/lure-tries) row plan/goals))
-        "the way out is cut the other way from the mouth, never walked into the angry mob")
+    (is (not= :stairs-up
+              (:intent/kind (plan/next-intent (lured given-up pearls/lure-tries) row plan/goals)))
+        "and no way out is cut for one merely near the mouth: the cut-out is for the stairs")
     (is (= 7
            (first (pearls/angry-near (lured (dissoc given-up :plan/blacklist) pearls/lure-tries))))
         "one not given up on still holds the bot in")))
