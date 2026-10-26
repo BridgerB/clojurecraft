@@ -48,6 +48,7 @@
 (def press-within 0.8)                ; blocks on the plane under which an engage out of reach stops pressing in (it is under the target)
 (def hold-timeout-ms 60000)           ; a fight that holds its ground waits this long for its target to come
 (def back-off-timeout-ms 10000)       ; a walk away ends after this, however far it got
+(def give-up-ms 60000)                ; ms a target given up as unreachable (given-up) is not picked again
 
 (def swords
   "The swords by name, best first (attack damage: netherite 8, diamond 7, iron 6, stone and copper
@@ -308,6 +309,22 @@
   [world e]
   (or (strikable? world e) (map? (route-walk world e))))
 
+(defn given-up
+  "The world with entity eid kept in :plan/given-up at now: a fight's engage gave it up as
+   unreachable (not strikable, no route), so no act picks it again for a while (given-up?)."
+  [world eid]
+  (assoc-in world [:plan/given-up eid] (:time/now world)))
+
+(defn given-up?
+  "Was entity eid given up (given-up) less than give-up-ms ago, and is its aim still out of
+   the sword's reach from here (in-reach?)? One that has come within reach since is fought
+   at once. Issues #69, #62, #582 and #161: a defend or hunt fight on a mob in water two
+   blocks below (hittable, never strikable, no route) ended done at once, the act picked
+   the same target again the next tick, and the stage's own task never ran to its timeout."
+  [world eid e]
+  (let [at (get (:plan/given-up world) eid)]
+    (boolean (and at (< (- (:time/now world) at) give-up-ms) (not (in-reach? world e))))))
+
 (defmethod fight-stage :engage
   ;; face the target every tick, walking on toward it while it is out of reach (pressing?);
   ;; attack when the deadline has passed, the eyes face it (the look went out a tick before, with
@@ -341,6 +358,7 @@
                   :else
                   (-> world
                       (assoc :player/controls {})
+                      (given-up target)
                       intent/done)))
           (>= swings max-swings) (intent/fail world :ghost)
           (and since
@@ -581,8 +599,10 @@
 (defn threats
   "{eid entity} of the hostiles (entity/hostiles) the :defend row answers: within defend-radius of
    the feet, a creeper within creeper-radius, either less once shunned (reach); none the plan blacklisted (a ghost), none of a kind
-   a row in play answers itself (answered-kinds), and only what can be fought from here
-   (hittable?)."
+   a row in play answers itself (answered-kinds), only what can be fought from here
+   (hittable?) and come to (approachable?: a mob in water two blocks below is seen but never
+   strikable and no route reaches it, and a fight on it ends done at once, re-picked for the
+   whole stage, issues #69 and #62), and none given up as unreachable a while ago (given-up?)."
   [world]
   (let [pos (:player/pos world)
         bl (:plan/blacklist world #{})
@@ -593,9 +613,11 @@
       (fn [[eid e]]
         (and (not (contains? bl eid))
              (not (contains? left (entity/kind e)))
+             (not (given-up? world eid e))
              (<= (physics/distance pos (:entity/pos e))
                  (reach world eid e (if (= :creeper (entity/kind e)) creeper-radius defend-radius)))
-             (hittable? world e))))
+             (hittable? world e)
+             (approachable? world e))))
      (entity/hostiles world))))
 
 (defmethod plan/done-by :safe? [world _] (or (nil? (:player/pos world)) (empty? (threats world))))
@@ -626,13 +648,14 @@
 
 (defn quarry
   "{eid entity} of the hostiles the gym's :attack row kills: within attack-radius, not
-   blacklisted."
+   blacklisted, none given up as unreachable a while ago (given-up?)."
   [world]
   (let [pos (:player/pos world)
         bl (:plan/blacklist world #{})]
     (into {}
           (filter (fn [[eid e]]
                     (and (not (contains? bl eid))
+                         (not (given-up? world eid e))
                          (<= (physics/distance pos (:entity/pos e)) attack-radius))))
           (entity/hostiles world))))
 

@@ -11,6 +11,7 @@
    provisioning on the surface, a :forage: a bounded search (forage-ms) of walked legs, a quarter
    turn right each, for animals past the 48 blocks the server shows (issue #501)."
   (:require [clojure.math :as math]
+            [clojurecraft.combat :as combat]
             [clojurecraft.dimension :as dimension]
             [clojurecraft.eat :as eat]
             [clojurecraft.entity :as entity]
@@ -112,7 +113,9 @@
         (<= (- (physics/y-of (:entity/pos e)) (physics/y-of end)) intent/pickup-rise))))
 
 (defn game
-  "[eid entity] of the nearest animal of game-kinds, alive, not blacklisted, within reach
+  "[eid entity] of the nearest animal of game-kinds, alive, not blacklisted, none a fight
+   gave up as unreachable a while ago (combat/given-up?: an animal above the bot that no
+   fight could strike was re-picked after every done fight, issues #582 and #161), within reach
    (hunt-radius, starving-radius when starving), the first of the candidates nearest that a route
    reaches (intent/routable?) and a fight can reach from its end (fightable-from-route?); nil
    when there is none, and none while the body is in water: no route is walked from there, the
@@ -130,6 +133,7 @@
                    (and (not (:player/in-water? world))
                         (game-kinds (entity/kind e))
                         (not (entity/dead? e))
+                        (not (combat/given-up? world eid e))
                         (not (contains? bl eid))
                         (not (contains? bl (cell (:entity/pos e))))
                         (<= (physics/distance pos (:entity/pos e)) radius))))

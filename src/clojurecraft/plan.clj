@@ -447,4 +447,4 @@
   [world]
   (into {}
         (filter (fn [[k _]] (= "plan" (namespace k))))
-        (dissoc world :plan/blacklist :plan/backed-off :plan/cornered)))
+        (dissoc world :plan/blacklist :plan/backed-off :plan/cornered :plan/given-up)))

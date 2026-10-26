@@ -238,7 +238,9 @@
           "a blaze came")
       (is (= [:failed :no-blaze]
              ((juxt :intent/status :intent/reason) (:plan/intent (camp w1 (+ 1001 blaze/camp-ms)))))
-          "none in a minute"))))
+          "none in a minute")
+      (is (= #{[11 64 10]} (:plan/blacklist (camp w1 (+ 1001 blaze/camp-ms))))
+          "the silent spawner is given up for this plan, not camped again (issue #507)"))))
 
 (def closet
   "A room five by three round the feet, walled and roofed in stone: nowhere ten blocks off to hide."
