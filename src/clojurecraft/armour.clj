@@ -145,6 +145,8 @@
   {:arglists '([world intent])}
   (fn [_world i] (:intent/stage i)))
 
+(def stage-timeout 5000)
+
 (defn worn? "Is item name k worn in its armour slot?" [world k] (= k (worn world (part k))))
 
 (defn cursor-holds?
@@ -165,40 +167,51 @@
               (game/emit {:packet/name :container-close
                           :window-id (get-in world [:window/open :window/id])})
               (dissoc :window/open))
+          (cursor-holds? world item)
+          (intent/assoc-intent world :intent/stage :put :intent/since (or (:time/now world) 0))
           (nil? p) (intent/fail world :not-held)
           :else
           (-> world
               (window/click v (inventory/left-click ((:view/slot-of v) p)))
-              (intent/assoc-intent :intent/stage :put)))))
+              (intent/assoc-intent world
+                                   :intent/stage :put
+                                   :intent/since (or (:time/now world) 0))))))
 
 (defmethod wear-stage :put
-  [world {:intent/keys [item]}]
-  (if (cursor-holds? world item)
-    (-> world
-        (window/click (window/view world :inventory)
-                      (inventory/left-click (inventory/slot [:armour (part item)])))
-        (intent/assoc-intent :intent/stage :check))
-    (intent/fail world :not-picked-up)))
+  [world {:intent/keys [item since]}]
+  (cond (cursor-holds? world item)
+        (-> world
+            (window/click (window/view world :inventory)
+                          (inventory/left-click (inventory/slot [:armour (part item)])))
+            (intent/assoc-intent world :intent/stage :check :intent/since (or (:time/now world) 0)))
+        (> (- (or (:time/now world) 0) (or since 0)) stage-timeout)
+        (intent/fail world :not-picked-up)
+        :else world))
 
 (defmethod wear-stage :check
   ;; worn with the cursor empty, done; anything on the cursor (the piece the slot refused,
   ;; or the piece swapped off a full slot: a carved pumpkin over an iron helmet) goes back
   ;; into a free slot first, so nothing is left on the cursor either way
-  [world {:intent/keys [item]}]
-  (cond (:window/cursor world) (intent/assoc-intent world :intent/stage :drop)
+  [world {:intent/keys [item since]}]
+  (cond (:window/cursor world)
+        (intent/assoc-intent world :intent/stage :drop :intent/since (or (:time/now world) 0))
         (worn? world item) (intent/done world)
-        :else (intent/fail world :not-worn)))
+        (> (- (or (:time/now world) 0) (or since 0)) stage-timeout) (intent/fail world :not-worn)
+        :else world))
 
 (defmethod wear-stage :drop
-  [world _]
+  [world {:intent/keys [since]}]
   (let [v (window/view world :inventory)
         s (window/free-slot world v)]
-    (cond (nil? (:window/cursor world)) (intent/fail world :not-worn)
+    (cond (nil? (:window/cursor world))
+          (intent/assoc-intent world :intent/stage :check :intent/since (or (:time/now world) 0))
           s
           (-> world
               (window/click v (inventory/left-click s))
-              (intent/assoc-intent :intent/stage :check))
-          :else (intent/fail world :inventory-full))))
+              (intent/assoc-intent :intent/stage :check :intent/since (or (:time/now world) 0)))
+          (> (- (or (:time/now world) 0) (or since 0)) stage-timeout)
+          (intent/fail world :inventory-full)
+          :else world)))
 
 (defmethod intent/run :wear
   ;; {:intent/kind :wear :intent/item :iron_helmet}: pick it up, put it in its armour slot, done

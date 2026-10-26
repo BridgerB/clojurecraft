@@ -670,7 +670,7 @@
            :intent/steps fortress/steps-per-tunnel
            :intent/dry? true
            :intent/from-feet feet}
-          (and high? (> fy (+ y room-over))) stairs
+          (> fy (+ y room-over)) stairs
           :else {:plan/wait :no-way})))
 
 (defmethod plan/next-intent :portal-room

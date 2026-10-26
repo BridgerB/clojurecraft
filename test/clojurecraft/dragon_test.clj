@@ -535,6 +535,9 @@
     (is (= {:intent/kind :wear :intent/item :carved_pumpkin}
            (dragon/wear-pumpkin (end {5 hood 39 helmet})))
         "held, a helmet worn: swapped on")
+    (is (= {:intent/kind :wear :intent/item :carved_pumpkin}
+           (dragon/wear-pumpkin (assoc (end {39 helmet}) :window/cursor hood)))
+        "on the cursor: worn on")
     (is (nil? (dragon/wear-pumpkin (end {39 hood}))) "worn already: nothing")
     (is (nil? (dragon/wear-pumpkin (end {39 helmet}))) "none held: nothing")
     (is (= {:intent/kind :wear :intent/item :carved_pumpkin}
