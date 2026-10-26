@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-26T02:02:26.315Z",
+  "at" : "2026-10-26T02:03:31.919Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -43,14 +43,14 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 135,
-    "title" : "Bot stops at cast-one: timeout",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 538,
     "title" : "Bot stops at fortress: blocked",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 135,
+    "title" : "Bot stops at cast-one: timeout",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 45,
@@ -136,11 +136,11 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 135,
+    "issue" : 538,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 538,
+    "issue" : 135,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
