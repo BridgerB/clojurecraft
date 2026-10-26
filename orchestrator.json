@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-26T11:32:20.723Z",
+  "at" : "2026-10-26T11:33:28.841Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -23,13 +23,13 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 178,
-    "title" : "Bot stops at portal: timeout",
+    "number" : 526,
+    "title" : "Bot stops at blaze-rods: blocked",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 526,
-    "title" : "Bot stops at blaze-rods: blocked",
+    "number" : 178,
+    "title" : "Bot stops at portal: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
@@ -51,7 +51,7 @@
     "number" : 586,
     "title" : "Bot stops at furnace: stuck",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
+    "copilot" : true
   }, {
     "number" : 579,
     "title" : "Bot stops at ender-pearls: timeout",
@@ -120,11 +120,11 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 178,
+    "issue" : 526,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 526,
+    "issue" : 178,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -141,7 +141,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 586,
-    "move" : "assign"
+    "move" : "unassign",
+    "why" : "no pull request and no session since the assignment"
   }, {
     "issue" : 579,
     "move" : "leave",
@@ -184,10 +185,6 @@
     "why" : "hands-off label"
   } ],
   "log" : [ {
-    "issue" : 348,
-    "move" : "assign",
-    "at" : "2026-10-24T08:05:23.446Z"
-  }, {
     "issue" : 348,
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
@@ -1532,5 +1529,10 @@
     "issue" : 586,
     "move" : "assign",
     "at" : "2026-10-26T11:32:20.723Z"
+  }, {
+    "issue" : 586,
+    "move" : "unassign",
+    "why" : "no pull request and no session since the assignment",
+    "at" : "2026-10-26T11:33:28.841Z"
   } ]
 }
