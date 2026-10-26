@@ -324,9 +324,9 @@
 
 (defn quarry
   "[eid entity] of the enderman a stare is for: the nearest within stare-range not yet coming
-   (entity/creepy?) that is provokable? from where the bot stands and can reach the mouth or feet
-   (reaches?: one within 16 blocks that cannot reach stands outside the mouth angry and never
-   teleports, EndermanLookForPlayerGoal), or nil. Not only the nearest:
+   (entity/creepy?) that is provokable? from where the bot stands (one within 16 blocks and two or
+   more below the burrow's mouth only when a route reaches the mouth: within 16 it never teleports,
+   EndermanLookForPlayerGoal, and cannot climb a ledge to the mouth), or nil. Not only the nearest:
    gym batch pearls-263d (plan run 38899294690, probe 38904622614) tracked seventeen endermen 30
    to 80 blocks round each warped forest landing, none within a route's reach, and stood looking
    round for forty minutes while the nearest, behind a ledge, could not be stared at. One stared
@@ -334,11 +334,21 @@
    walked to."
   [world]
   (let [pos (:player/pos world)
-        to (or (:pearls/mouth world) (intent/feet world))]
+        mouth (:pearls/mouth world)
+        in-burrow? (or (= mouth (intent/feet world))
+                       (= (:pearls/shelter world) (intent/feet world)))]
     (->> (endermen world stare-range)
          (remove (comp entity/creepy? val))
          (sort-by (fn [[_ e]] (physics/distance pos (:entity/pos e))))
-         (some (fn [[_ e :as ee]] (when (and (provokable? world e) (reaches? world e to)) ee))))))
+         (some (fn [[_ e :as ee]]
+                 (when (provokable? world e)
+                   (if (and in-burrow?
+                            mouth
+                            (<= (physics/distance (:entity/pos e) (physics/centre mouth))
+                                danger-radius)
+                            (< (physics/y-of (:entity/pos e)) (dec (physics/y-of mouth))))
+                     (when (reaches? world e mouth) ee)
+                     ee)))))))
 
 (def roam-reaches [roam-reach (* 2 roam-reach) (* 3 roam-reach)]) ; how far a roam looks for an end not yet walked to, nearest first: sixteen blocks, then thirty-two, then forty-eight
 
@@ -932,10 +942,8 @@
                           (burrowable? world c (away at e))))))
          (take vantage-tries)
          (some (fn [c]
-                 (when (and (intent/routable?
-                             world
-                             {:intent/kind :walk :intent/target c :intent/for :shelter})
-                            (reaches? world e c))
+                 (when (intent/routable? world
+                                         {:intent/kind :walk :intent/target c :intent/for :shelter})
                    c))))))
 
 (defn crowd-site
@@ -1294,7 +1302,7 @@
         at-end? (= (:pearls/shelter world) (intent/feet world))
         [tid _] (threat world)
         [bid _] (when at-end? (blocking world))
-        [aid _] (when home (angry-near world))
+        [aid _] (when home (angry-near (dissoc world :plan/blacklist)))
         [qid q] (quarry world)
         ghost? (and near? (not angry?) (contains? (:plan/blacklist world #{}) eid))
         dir (when (and (nil? home)

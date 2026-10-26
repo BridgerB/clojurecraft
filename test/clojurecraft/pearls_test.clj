@@ -863,13 +863,13 @@
 (deftest an-unreachable-enderman-under-16-blocks-is-no-quarry
   ;; gym batch pearls-m10-a (plan run 40106206590) run 3: provoked an enderman 6 blocks off down
   ;; a 2-block ledge with no path up; within 16 blocks it never teleports and could not reach
-  (let [low (enderman [8.5 62.0 15.5])
-        w (-> (burrowed [8.5 64.0 8.5] {7 low})
+  (let [low (enderman [3.5 62.0 15.5])
+        w (-> (burrowed [3.5 64.0 8.5] {7 low})
               (assoc-in [:world/chunks [0 1]] (world/column {})))]
     (is (pearls/provokable? w low) "clear sight line")
     (is (not (pearls/reaches? w low (:pearls/mouth w))) "cannot climb 2 blocks up to the mouth")
     (is (nil? (pearls/quarry w)) "skipped as quarry since it cannot reach")
-    (let [far (enderman [8.5 64.0 28.5])
+    (let [far (enderman [3.5 64.0 28.5])
           w-far (assoc-in w [:world/entities 8] far)]
       (is (pearls/reaches? w-far far (:pearls/mouth w-far)) "past 16 blocks it teleports")
       (is (= 8 (first (pearls/quarry w-far))) "so the distant one is quarry"))))
