@@ -708,9 +708,10 @@
                           (reduce intent/dissoc-intent
                                   (-> world
                                       (assoc :player/controls {})
-                                      (intent/dissoc-intent :intent/reason :intent/status)
-                                      (intent/assoc-intent :intent/tunnel-visited
-                                                           (conj tunnel-visited (plus from move))))
+                                      (intent/assoc-intent :intent/status :active
+                                                           :intent/tunnel-visited
+                                                           (conj tunnel-visited (plus from move)))
+                                      (intent/dissoc-intent :intent/reason))
                                   step-keys)
                           :else world)))))))
 
