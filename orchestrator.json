@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-26T04:38:24.457Z",
+  "at" : "2026-10-26T04:47:07.210Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -33,11 +33,6 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 135,
-    "title" : "Bot stops at cast-one: timeout",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 538,
     "title" : "Bot stops at fortress: blocked",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
@@ -50,6 +45,11 @@
   }, {
     "number" : 579,
     "title" : "Bot stops at ender-pearls: timeout",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 135,
+    "title" : "Bot stops at cast-one: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
@@ -128,10 +128,6 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 135,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
     "issue" : 538,
     "move" : "leave",
     "why" : "hands-off label"
@@ -141,6 +137,10 @@
     "why" : "hands-off label"
   }, {
     "issue" : 579,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 135,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
