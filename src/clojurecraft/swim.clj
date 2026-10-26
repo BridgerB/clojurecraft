@@ -111,6 +111,34 @@
        (not (terrain/fluid-kind world cell))
        (not (terrain/fluid-kind world [x (inc y) z]))))
 
+(defn banks
+  "Cells the feet could stand in, nearest first, within bank-radius of feet on the plane and
+   between bank-drop under the float-top and bank-rise over it (a ledge higher than that is
+   out of the impulse's lift); blacklist removes cells that failed. Under the open sky (the feet
+   with nothing over them but water and air, terrain/under-sky?), only banks in the open
+   (in-the-open?): a pocket under the rock beside the water, or a ledge under it, is no way out
+   of the sea over it. Issue #89 (sim race 38811426215 runner 8, worlds R4/21 and R1/32): a bot that dug up into the sea from its tunnel
+   under the sea floor swam back into the tunnel's dry end, the trap cleared, and it climbed and
+   dug again, until its run's time ran out."
+  ([world feet surface blacklist]
+   (banks world
+          feet
+          surface
+          blacklist
+          (if (terrain/under-sky? world feet) #(in-the-open? world %) any?)))
+  ([world [fx _ fz :as feet] surface blacklist keep?]
+   (->> (for [dx (range (- bank-radius) (inc bank-radius))
+              dz (range (- bank-radius) (inc bank-radius))
+              :let [top (float-top world feet surface)]
+              y (range (- top bank-drop) (+ top bank-rise 1))
+              :let [cell [(+ fx dx) y (+ fz dz)]]
+              :when (and (not (blacklist cell)) (bank? world cell) (keep? cell))]
+          cell)
+        (sort-by (fn [cell] [(physics/horizontal-distance (physics/centre feet)
+                                                          (physics/centre cell))
+                             (- (physics/y-of cell))]))
+        first)))
+
 (defn ahead
   "The cell one step from feet toward bank on the plane, along the larger axis of the way."
   [[fx fy fz] [bx _ bz]]
@@ -158,38 +186,6 @@
           upper upper
           (diggable-cell? world over) over
           :else nil)))
-
-(defn banks
-  "Cells the feet could stand in, nearest first, within bank-radius of feet on the plane and
-   between bank-drop under the float-top and bank-rise over it (a ledge higher than that is
-   out of the impulse's lift); blacklist removes cells that failed. Under the open sky (the feet
-   with nothing over them but water and air, terrain/under-sky?), only banks in the open
-   (in-the-open?): a pocket under the rock beside the water, or a ledge under it, is no way out
-   of the sea over it. Issue #89 (sim race 38811426215 runner 8, worlds R4/21 and R1/32): a bot that dug up into the sea from its tunnel
-   under the sea floor swam back into the tunnel's dry end, the trap cleared, and it climbed and
-   dug again, until its run's time ran out."
-  ([world feet surface blacklist]
-   (banks world
-          feet
-          surface
-          blacklist
-          (if (terrain/under-sky? world feet) #(in-the-open? world %) any?)))
-  ([world [fx _ fz :as feet] surface blacklist keep?]
-   (let [trail (set (mapcat :trail/cells (vals (:fortress/trail world))))]
-     (->> (for [dx (range (- bank-radius) (inc bank-radius))
-                dz (range (- bank-radius) (inc bank-radius))
-                :let [top (float-top world feet surface)]
-                y (range (- top bank-drop) (+ top bank-rise 1))
-                :let [cell [(+ fx dx) y (+ fz dz)]]
-                :when (and (not (blacklist cell)) (bank? world cell) (keep? cell))]
-            cell)
-          (sort-by (fn [cell] [(cond (contains? trail cell) 0
-                                     (obstacle world feet cell) 2
-                                     :else 1)
-                               (physics/horizontal-distance (physics/centre feet)
-                                                            (physics/centre cell))
-                               (- (physics/y-of cell))]))
-          first))))
 
 (defn iced?
   "Is cell a lake's ice (stairs/lake-ice) that is loaded: the roof a rise through the water under a
