@@ -1,0 +1,16 @@
+;; Issue #262: the funnel wall.
+;; Walking fortress corridors instead of tunneling away;
+;; cover from active spawner; attacking reachable blazes on the floor;
+;; resting fixes.
+{:plans/label "blaze-wall-a"
+ :plans/jobs 4
+ :plans/issue 262
+ :plans/experiments
+ [{:exp/name "blaze-1" :exp/kind :gym :exp/goal "blaze-1" :exp/runs 3 :exp/bots 1 :exp/est-s 600}
+  {:exp/name "blaze-7" :exp/kind :gym :exp/goal "blaze-7" :exp/runs 3 :exp/bots 1 :exp/est-s 900}
+  {:exp/name "blaze-fortress"
+   :exp/kind :gym
+   :exp/goal "blaze-fortress"
+   :exp/runs 3
+   :exp/bots 1
+   :exp/est-s 1800}]}
