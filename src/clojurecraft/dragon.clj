@@ -990,13 +990,25 @@
   [_]
   #{:ender_dragon})
 
+(defn pumpkin-worn?
+  "Is the carved pumpkin on the head: no look of the bot's can have provoked an enderman
+   since it went on (wear-pumpkin), so one the server calls creepy here is after the
+   dragon that hit it, not the bot."
+  [world]
+  (= :carved_pumpkin (armour/worn world 0)))
+
 (defmethod combat/answering :dragon
   ;; and every hostile shown while a breath cloud or fireball reaches the feet (breath-near),
   ;; while the dragon sits or lands on its perch (grounded?: gym dragon3-b runs 1 and 2 had
   ;; :defend chase an enderman the dragon had hit out of the basin up the rim into the sitting
-  ;; dragon's head), or while crossing from the entry platform (off-island?)
+  ;; dragon's head), or while crossing from the entry platform (off-island?); and an enderman
+  ;; whenever the pumpkin is worn: gym chain-w4's dragon run 1 walked to its stand past a
+  ;; creepy enderman at hand, :defend fought it to the end as a turned neutral, and it slew
+  ;; the bot eight seconds in, though through the pumpkin no look had provoked it
   [world _]
   (cond-> #{:ender_dragon}
+    (and (:player/pos world) (= dimension/end (dimension/of world)) (pumpkin-worn? world))
+    (conj :enderman)
     (and (:player/pos world)
          (= dimension/end (dimension/of world))
          (or (breath-near world)
@@ -1004,6 +1016,14 @@
              (some-> (second (dragon world))
                      grounded?)))
     (into (map entity/kind (vals (entity/hostiles world))))))
+
+(defmethod combat/answering :crystals
+  ;; the crystal walks cross the island under the same endermen with the same pumpkin:
+  ;; never fought there either, for the chain-w4 dragon run 1 reason at :dragon above
+  [world _]
+  (if (and (:player/pos world) (= dimension/end (dimension/of world)) (pumpkin-worn? world))
+    #{:enderman}
+    #{}))
 
 (defn looks-away
   "The world with its controls' look turned from an enderman's eyes (look-away), or as it

@@ -504,7 +504,14 @@
         (is (empty? (combat/threats perched)))
         (is (= #{:ender_dragon} (combat/answering quiet :dragon))
             "circling and no breath: the dragon alone")
-        (is (= #{9} (set (keys (combat/threats quiet)))) "and the enderman is fought")))))
+        (is (= #{9} (set (keys (combat/threats quiet)))) "and the enderman is fought")
+        (let [hooded (assoc quiet
+                            :player/inventory
+                            {39 {:item (recipe/item-id :carved_pumpkin) :count 1}})]
+          (is (= #{:ender_dragon :enderman} (combat/answering hooded :dragon))
+              "the pumpkin worn: a creepy enderman is the dragon's, never fought")
+          (is (= #{:enderman} (combat/answering hooded :crystals)) "the crystals row the same")
+          (is (empty? (combat/threats (assoc hooded :plan/goals #{:dragon})))))))))
 
 (deftest every-look-of-the-dragon-row-is-away-from-an-endermans-eyes
   ;; gym dragon-f run 3: three endermen stared at in turn on the walks to and from the stand
