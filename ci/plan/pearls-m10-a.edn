@@ -1,0 +1,23 @@
+;; Issue #263, branch feat/263-mpearls, first batch (round 10): a pickaxe under spare-digs is
+;; remade in the warped forest (warped stems count as logs: stem to planks to sticks and a
+;; table, through make/decide), a tunnel toward an enderman never steps out over a drop
+;; (floored-length), and an enderman given up on standing in the burrow's stairs no longer
+;; holds the bot in (blocked-out?/cut-out). Sim gate, seeds 3 to 5 (probes 40104621028,
+;; 40104634748, 40104649691 against main's 40102685261, 40102695853, 40102708788): main
+;; 104 pearls and 51 deaths, this branch 110 and 25, seven of twelve runs done. One pearls-12
+;; trial a job, the row's full 5-hour cap.
+{:plans/label "pearls-m10-a"
+ :plans/jobs 4
+ :plans/issue 263
+ :plans/experiments [{:exp/name "pearls-12"
+                      :exp/kind :gym
+                      :exp/goal "pearls-12"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 18000}
+                     {:exp/name "pearls-1-live"
+                      :exp/kind :gym
+                      :exp/goal "pearls-1-live"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 300}]}

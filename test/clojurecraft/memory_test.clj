@@ -105,3 +105,19 @@
           "a pool above is walked up to"))
     (testing "a chunk with no fluid remembers no pool"
       (is (empty? (memory/pools (loaded {} 1) :water))))))
+
+(deftest newest-dones-are-the-newest-done-facts-newest-first
+  (let [walked
+        (reduce
+         (fn [w [id to]]
+           (memory/remember-intention w {:intent/id id :intent/kind :walk :intent/target to} :done))
+         (assoc (game/init fx/opts) :time/now 0)
+         [[1 [0 64 0]] [2 [16 64 0]] [3 [32 64 0]]])
+        w (memory/remember-intention walked
+                                     {:intent/id 4 :intent/kind :walk :intent/target [48 64 0]}
+                                     :failed)]
+    (is (= [[32 64 0] [16 64 0]] (mapv :intention/target (memory/newest-dones w :walk 2)))
+        "the last two ends walked to, the failed walk no arrival")
+    (is (= [[32 64 0]] (mapv :intention/target (memory/newest-dones w :walk 1))))
+    (is (= (:intention/target (memory/last-done w :walk)) [32 64 0]) "last-done is the first")
+    (is (empty? (memory/newest-dones w :burrow 2)) "none done: none")))

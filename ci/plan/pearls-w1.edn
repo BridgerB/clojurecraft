@@ -1,0 +1,26 @@
+;; Issue #263, branch feat/263-mpearls, wonder round batch 1:
+;; 1. Remake spent pickaxes and swords from warped stems (blocks/log? counts stems).
+;; 2. Refuse tunnel steps over open drops into caves (floored-length).
+;; 3. Cut out of a burrow only past one standing in its stairs (blocked-out?/cut-out).
+;; 4. Roam as far as the route goes when none reaches, each route planned once.
+;; 5. A distant angry enderman with a pickaxe held is met standing (held, yielding
+;;    fight), never charged and never merely looked out for.
+;; 6. Empty hands make a wooden sword from a remembered trunk or the log hunt,
+;;    so a death no longer fails :no-sword on the respawn.
+;; Sim gate first (probes 40384292887, 40384331138, 40384356540 against main's
+;; 40384395700, 40384417922, 40384440835): pearls/deaths 111/25 against 104/51.
+{:plans/label "pearls-w1"
+ :plans/jobs 4
+ :plans/issue 263
+ :plans/experiments [{:exp/name "pearls-12"
+                      :exp/kind :gym
+                      :exp/goal "pearls-12"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 18000}
+                     {:exp/name "pearls-1-live"
+                      :exp/kind :gym
+                      :exp/goal "pearls-1-live"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 300}]}

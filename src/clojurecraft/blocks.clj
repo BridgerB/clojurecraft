@@ -183,9 +183,17 @@
   (or (replaceable? id) (= :liquid (type-of id)) (= :bubble_column (type-of id))))
 
 (defn log-name?
-  "Does a block or item name end in _log (every species, stripped ones too)?"
+  "Does a block or item name end in _log (every species, stripped ones too), or is it a Nether
+   fungus's stem or hyphae (warped or crimson, stripped ones too)? The game's item tag :logs
+   lists the stems beside the logs and a stem crafts to planks as a log does, so the wood chain
+   takes a warped forest's trunks for the sticks and table of a new pickaxe where no tree grows
+   (issue #263: the hunt's pickaxe is spent on burrows there). A pumpkin's or melon's stem is a
+   plant, never a log: the warped or crimson in the name is what says trunk."
   [n]
-  (str/ends-with? (name n) "_log"))
+  (let [s (name n)]
+    (or (str/ends-with? s "_log")
+        (and (or (str/ends-with? s "_stem") (str/ends-with? s "_hyphae"))
+             (or (str/includes? s "warped") (str/includes? s "crimson"))))))
 
 (def log-states "Every state of every log block." (states-where (fn [[n]] (log-name? n))))
 

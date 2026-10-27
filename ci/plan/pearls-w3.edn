@@ -1,0 +1,25 @@
+;; Issue #263, branch feat/263-mpearls, wonder round batch 3:
+;; Batch pearls-w2 (plan run 40428200343 at e2b790c): pearls-1-live 3/3;
+;; pearls-12 1/3 - run 1 twelve pearls in 2415 s with no death; run 2 death at
+;; 2120 s then failed :no-pickaxe on table collect; run 3 death at 184 s then
+;; failed :no-pickaxe on trunk walk with table held. Since then:
+;; 1. A roam revisit refuses the last two ends walked to (95b21d0).
+;; 2. A held table is not wood for a remake's trunk walk (1b9df7d).
+;; 3. pick-acts and sword-acts include :collect, so taking a table along
+;;    collects the dropped table instead of failing :no-pickaxe.
+;; Same rows, to measure against batches w1 and w2.
+{:plans/label "pearls-w3"
+ :plans/jobs 4
+ :plans/issue 263
+ :plans/experiments [{:exp/name "pearls-12"
+                      :exp/kind :gym
+                      :exp/goal "pearls-12"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 18000}
+                     {:exp/name "pearls-1-live"
+                      :exp/kind :gym
+                      :exp/goal "pearls-1-live"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 300}]}
