@@ -1525,15 +1525,18 @@
 
 (defmethod intent/run :tunnel
   [world {:intent/keys [length level-steps stage target] :or {level-steps 0} :as i} event]
-  (cond (and (>= level-steps length) (not (contains? #{:level :lay} stage)))
-        (if (and (pos? length) (no-progress? world i))
-          (box world)
-          (cond-> (-> world
-                      (assoc :player/controls {})
-                      intent/done)
-            (no-nearer? world i)
-            (-> (update :plan/blacklist (fnil into #{}) (cons target (pond-sources world target)))
-                (game/say (str "tunnel: no nearer the bank of " target ", other water next")))))
+  (cond (and (>= level-steps length)
+             (not (contains? #{:level :lay} stage))
+             (pos? length)
+             (no-progress? world i))
+        (box world)
+        (and (>= level-steps length) (not (contains? #{:level :lay} stage)))
+        (cond-> (-> world
+                    (assoc :player/controls {})
+                    intent/done)
+          (no-nearer? world i)
+          (-> (update :plan/blacklist (fnil into #{}) (cons target (pond-sources world target)))
+              (game/say (str "tunnel: no nearer the bank of " target ", other water next"))))
         (contains? #{:level :lay} stage) (stairs-stage world i event)
         :else (tunnel-plan world i)))
 

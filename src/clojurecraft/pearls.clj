@@ -1422,7 +1422,8 @@
                 (crowd-site world))
         mouth (:pearls/mouth world)
         way-home {:intent/kind :walk :intent/target home :intent/for :shelter}
-        overworld? (= dimension/overworld (dimension/of world))
+        overworld-death? (and (pos? (:stats/deaths world 0))
+                              (= dimension/overworld (dimension/of world)))
         far (endermen world seek-radius)
         fight-id (cond (and ce (not (fought-out? world ceid))) ceid
                        (and (or angry? in-reach?) (not (fought-out? world eid))) eid
@@ -1432,7 +1433,6 @@
       (and hurt? in?) (or meal {:intent/kind :lookout :intent/for :pearls})
       (and near? hurt? (not in?)) {:intent/kind :back-off :intent/target eid :intent/for :pearls}
       (and hurt? (not in?) tid) {:intent/kind :back-off :intent/target tid :intent/for :pearls}
-      (and hurt? (not in?) ce) {:intent/kind :back-off :intent/target ceid :intent/for :pearls}
       (and hurt? (not in?)) (or meal {:intent/kind :lookout :intent/for :pearls})
       (and in? fight-id)
       {:intent/kind :fight
@@ -1490,14 +1490,14 @@
             (when-not (worn-out? world)
               (when-let [[_ e] (routable world far)]
                 {:intent/kind :walk :intent/target (cell (:entity/pos e)) :intent/for :pearls})))
-          (when-not overworld? (descend world (endermen world descend-radius)))
+          (when-not overworld-death? (descend world (endermen world descend-radius)))
           (ascend world (endermen world descend-radius))
           (toward world far)
-          (when-not overworld? (bore world (endermen world descend-radius)))
+          (when-not overworld-death? (bore world (endermen world descend-radius)))
           (when (= :lookout (:intent/kind (:plan/last world)))
             (or (roam world)
                 (when (stuck? world) (climb-out world))
-                (when-not overworld? (dig-out world))))
+                (when-not overworld-death? (dig-out world))))
           {:intent/kind :lookout :intent/for :pearls}))))
 
 (defn look-off

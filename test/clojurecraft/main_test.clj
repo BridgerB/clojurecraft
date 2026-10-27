@@ -12,9 +12,7 @@
           out (async/chan 1)
           mock-conn {:in in :out out :close! (fn [] (reset! closed? true))}
           world* (atom (game/init {:host "127.0.0.1" :port 25565 :name "Test"}))]
-      (with-redefs [conn/open! (fn [_] mock-conn)
-                    main/ok? (constantly false)
-                    main/result (fn [_ _ _] {:result/outcome :timeout})]
+      (with-redefs [conn/open! (fn [_] mock-conn)]
         (let [{:keys [result]} (main/run-bot!
                                 {:until "pearls"
                                  :timeout-ms 0
@@ -23,7 +21,8 @@
                                  :on-result (fn [_]
                                               (is (false? @closed?)
                                                   "bot is still connected when on-result fires"))})]
-          (is (= :timeout (:result/outcome result)))
+          (is (= :timeout (:reason result)))
+          (is (false? (:ok result)))
           (is (true? @closed?) "connection is closed after the hold period"))))))
 
 (deftest an-event-from-outside-is-checked-before-it-is-queued

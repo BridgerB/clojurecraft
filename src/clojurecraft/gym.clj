@@ -1390,20 +1390,19 @@
   (let [nether? (= dimension/nether (dimension-of row))
         deadline (+ (System/currentTimeMillis) timeout-ms)]
     (loop []
-      (if (realized? result)
-        @result
-        (when (< (System/currentTimeMillis) deadline)
-          (Thread/sleep 1000)
-          (if (and nether? (some? p) (.isAlive p))
-            (if-let [log-file (find-server-log dir)]
-              (if-let [msg (death-message (slurp log-file) name)]
-                (do (.destroy p)
-                    (deliver result
-                             {:ok false :reason :death :death-message msg :stats {:stats/deaths 1}})
-                    @result)
-                (recur))
-              (recur))
-            (recur)))))))
+      (cond (realized? result) @result
+            (>= (System/currentTimeMillis) deadline) nil
+            :else
+            (do (Thread/sleep 1000)
+                (let [log-file (and nether? (some? p) (.isAlive p) (find-server-log dir))
+                      msg (when log-file (death-message (slurp log-file) name))]
+                  (if msg
+                    (do (.destroy p)
+                        (deliver
+                         result
+                         {:ok false :reason :death :death-message msg :stats {:stats/deaths 1}})
+                        @result)
+                    (recur))))))))
 
 (defn judge!
   "Judge one run: wait for the bot's RESULT (result, a promise tee-output! delivers), then read what the fixture left (a missing landed

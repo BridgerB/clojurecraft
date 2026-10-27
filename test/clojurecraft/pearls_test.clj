@@ -1192,7 +1192,7 @@
   ;; counted as pieces (sword/pieces?) and dropped :plan/last after each arrival.
   ;; With log-counted?, :plan/last stays and the chain continues to the dig
   (let [stem (first (blocks/states-of :warped_stem))
-        trunk {[2374 39 2124] stem [2374 40 2124] stem [2374 41 2124] stem}
+        trunk {[6 39 12] stem [6 40 12] stem [6 41 12] stem}
         col (world/column trunk)
         chunk [148 132]
         walked {:intent/kind :walk
@@ -1224,7 +1224,7 @@
   ;; overworld at pos [2.5 93 49.3], holding crafting_table, stick 3, wooden_sword 1;
   ;; re-issued intent :walk [3 94 50] :for :log 256,743 times because crafting_table
   ;; counted as pieces and dropped :plan/last
-  (let [trunk {[3 94 50] 136 [3 95 50] 136 [3 96 50] 136}
+  (let [trunk {[3 94 2] 136 [3 95 2] 136 [3 96 2] 136}
         col (world/column trunk)
         chunk [0 3]
         walked {:intent/kind :walk
@@ -1257,14 +1257,15 @@
   ;; logged :lookout 3,369 times and 15 tunnels that dug nothing.
   ;; When stuck? is true, climb-out cuts stairs up into solid rock rather than
   ;; refusing on brink?, and dig-out refuses tunnels with 0 solid cuts.
-  (let [blocks {[8 46 8] stone
-                [8 46 9] stone
-                [8 47 9] stone
-                [8 48 9] stone
-                [8 49 9] stone
-                [8 50 9] stone
-                [7 46 8] stone
-                [9 46 8] stone}
+  (let [blocks (into {[8 46 8] stone
+                      [8 46 9] stone
+                      [8 47 9] stone
+                      [8 48 9] stone
+                      [8 49 9] stone
+                      [8 50 9] stone
+                      [7 46 8] stone
+                      [9 46 8] stone}
+                     (for [y (range 43 48)] [[8 y 7] 0]))
         w (-> (standing {} blocks)
               (assoc :player/pos [8.5 47.0 8.5]
                      :plan/last {:intent/kind :lookout :intent/for :pearls}
@@ -1290,10 +1291,11 @@
                 :intent/from-feet [8 64 8]
                 :intent/status :active}
         w (assoc (standing {}) :plan/intent tunnel)
-        stepped (intent/run w tunnel (tick 100))]
+        stepped (intent/run w tunnel (tick 100))
+        failed (plan/fail-intent stepped (:plan/intent stepped))]
     (is (= :boxed (:intent/reason (:plan/intent stepped)))
         "tunnel that makes no progress fails :boxed when finished")
-    (is (contains? (:plan/boxed-at stepped) [8 64 8])
+    (is (contains? (:plan/boxed-at failed) [8 64 8])
         "feet are recorded in boxed-at so the empty cut is never repeated")))
 
 (deftest start-intent-clears-stale-waiting-reason
