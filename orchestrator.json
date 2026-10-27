@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-27T00:49:39.479Z",
+  "at" : "2026-10-27T00:50:47.006Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -51,7 +51,7 @@
     "number" : 70,
     "title" : "Bot stops at cast-one: needs-tool",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : true
+    "copilot" : false
   }, {
     "number" : 579,
     "title" : "Bot stops at ender-pearls: timeout",
@@ -137,13 +137,12 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 586,
+    "move" : "assign"
+  }, {
     "issue" : 156,
     "move" : "leave",
     "why" : "hands-off label"
-  }, {
-    "issue" : 70,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment"
   }, {
     "issue" : 579,
     "move" : "leave",
@@ -190,10 +189,6 @@
     "why" : "hands-off label"
   } ],
   "log" : [ {
-    "issue" : 586,
-    "move" : "assign",
-    "at" : "2026-10-26T18:44:03.718Z"
-  }, {
     "issue" : 586,
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
@@ -1539,5 +1534,9 @@
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
     "at" : "2026-10-27T00:49:39.479Z"
+  }, {
+    "issue" : 586,
+    "move" : "assign",
+    "at" : "2026-10-27T00:50:47.006Z"
   } ]
 }
