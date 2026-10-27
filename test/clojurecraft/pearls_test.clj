@@ -761,6 +761,12 @@
     (is (pearls/fought-out? (fought on-stairs pearls/fight-tries) 7)
         "fight-tries fights done on it and it still stands: fought out")
     (is (not (pearls/fought-out? (fought on-stairs pearls/fight-tries) 8)) "another is not")
+    ;; sim gate r3fr3b (probe 40470765785, world R4 seed 3): left for good, one fought
+    ;; out teleported after the bot and killed it 188 times, never fought back
+    (is (not (pearls/fought-out?
+              (assoc (fought on-stairs pearls/fight-tries) :time/now (inc pearls/fight-rest-ms))
+              7))
+        "a rest on, it is fought again")
     (is (not= :fight
               (:intent/kind
                (plan/next-intent (fought on-stairs pearls/fight-tries) row plan/goals)))

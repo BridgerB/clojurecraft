@@ -161,23 +161,30 @@
 
 (def lure-tries 3)                    ; lures (a walk out to the burrow's mouth and one back in) after which a blacklisted angry enderman near the mouth that has not come holds the burrow no longer
 
-(def fight-tries 8)                   ; :fight intentions ended :done on one enderman, of the newest sixteen, after which it is fought no more (fought-out?)
+(def fight-tries 8)                   ; :fight intentions ended :done on one enderman, of the newest sixteen, after which it is fought no more for a rest (fought-out?)
+(def fight-rest-ms combat/give-up-ms) ; ms one fought out is left, as combat leaves one its engage gave up on (combat/given-up?)
 
 (defn fought-out?
   "Have fight-tries or more of the newest sixteen :fight intentions to end :done (memory/
-   newest-dones) had eid for their target, and it still stands? A kill is one fight; one
-   that keeps teleporting out of the tracked entities as it is faced ends its fight :done
-   (entity/gone?, taken for a kill) and is fought again the next tick it is tracked: gym
-   batch pearls-w3 (plan run 40434266158) run 3 planned some sixty-four thousand fights on
-   one enderman from its second minute to the five-hour timeout, nineteen of them failing
-   :unreachable and the rest ending done, and held one pearl. Fought out, it is no fight's
-   target and no reason to stay (angry-near), as one lure-tries lures did not bring is
-   (lured-out?): the burrow goes stale and the hunt moves on."
+   newest-dones) had eid for their target, it still stands, and the newest of them ended
+   within fight-rest-ms? A kill is one fight; one that keeps teleporting out of the
+   tracked entities as it is faced ends its fight :done (entity/gone?, taken for a kill)
+   and is fought again the next tick it is tracked: gym batch pearls-w3 (plan run
+   40434266158) run 3 planned some sixty-four thousand fights on one enderman from its
+   second minute to the five-hour timeout, nineteen of them failing :unreachable and the
+   rest ending done, and held one pearl. Fought out, it is no fight's target and no
+   reason to stay (angry-near), as one lure-tries lures did not bring is (lured-out?):
+   the burrow goes stale and the hunt moves on. Only for the rest: sim gate r3fr3b (probe
+   40470765785, world R4 seed 3) left one fought out for good, and it teleported after
+   the bot and killed it 188 times while the hunt backed off and never fought back; a
+   minute on, one that is still at hand is fought again."
   [world eid]
   (boolean (and eid
-                (>= (count (filter #(= eid (:intention/target %))
-                                   (memory/newest-dones world :fight (* 2 fight-tries))))
-                    fight-tries))))
+                (let [on-eid (filter #(= eid (:intention/target %))
+                                     (memory/newest-dones world :fight (* 2 fight-tries)))]
+                  (and (>= (count on-eid) fight-tries)
+                       (< (- (:time/now world 0) (:intention/at (first on-eid) 0))
+                          fight-rest-ms))))))
 
 (defn lured-out?
   "Has the bot walked lure-tries times out to its burrow's mouth and back since the burrow was cut
