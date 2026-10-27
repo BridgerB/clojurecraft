@@ -1,0 +1,25 @@
+;; Issue #263, branch feat/263-pearls-r3, round 3 batch 3 (final code):
+;; Batch pearls-r3-w1 (plan run 40469919220 at c0a97a3): pearls-1-live 3/3;
+;; pearls-12 run 2 twelve pearls in about 24 minutes, no death; runs 1 and
+;; 3 still running when this was written. Batch pearls-r3-w2 (plan run
+;; 40475390313 at a1d7506): pearls-1-live 3/3; pearls-12 runs 1 and 2 each
+;; died in the forest in the first minutes and failed :no-sword at the
+;; overworld spawn (run 2 no log in the chunks first loaded, run 1 two
+;; planks and four sticks in hand); run 3 still running. Since w2's code,
+;; empty hands after a death in the overworld look and roam for wood
+;; instead of the :no-sword/:no-pickaxe wait (8e7d66e). Same rows.
+{:plans/label "pearls-r3-w3"
+ :plans/jobs 4
+ :plans/issue 263
+ :plans/experiments [{:exp/name "pearls-12"
+                      :exp/kind :gym
+                      :exp/goal "pearls-12"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 18000}
+                     {:exp/name "pearls-1-live"
+                      :exp/kind :gym
+                      :exp/goal "pearls-1-live"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 300}]}

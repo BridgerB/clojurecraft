@@ -31,6 +31,7 @@
             [clojurecraft.blaze :as blaze]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.combat :as combat]
+            [clojurecraft.dimension :as dimension]
             [clojurecraft.drops :as drops]
             [clojurecraft.entity :as entity]
             [clojurecraft.game :as game]
@@ -161,6 +162,31 @@
 
 (def lure-tries 3)                    ; lures (a walk out to the burrow's mouth and one back in) after which a blacklisted angry enderman near the mouth that has not come holds the burrow no longer
 
+(def fight-tries 8)                   ; :fight intentions ended :done on one enderman, of the newest sixteen, after which it is fought no more for a rest (fought-out?)
+(def fight-rest-ms combat/give-up-ms) ; ms one fought out is left, as combat leaves one its engage gave up on (combat/given-up?)
+
+(defn fought-out?
+  "Have fight-tries or more of the newest sixteen :fight intentions to end :done (memory/
+   newest-dones) had eid for their target, it still stands, and the newest of them ended
+   within fight-rest-ms? A kill is one fight; one that keeps teleporting out of the
+   tracked entities as it is faced ends its fight :done (entity/gone?, taken for a kill)
+   and is fought again the next tick it is tracked: gym batch pearls-w3 (plan run
+   40434266158) run 3 planned some sixty-four thousand fights on one enderman from its
+   second minute to the five-hour timeout, nineteen of them failing :unreachable and the
+   rest ending done, and held one pearl. Fought out, it is no fight's target and no
+   reason to stay (angry-near), as one lure-tries lures did not bring is (lured-out?):
+   the burrow goes stale and the hunt moves on. Only for the rest: sim gate r3fr3b (probe
+   40470765785, world R4 seed 3) left one fought out for good, and it teleported after
+   the bot and killed it 188 times while the hunt backed off and never fought back; a
+   minute on, one that is still at hand is fought again."
+  [world eid]
+  (boolean (and eid
+                (let [on-eid (filter #(= eid (:intention/target %))
+                                     (memory/newest-dones world :fight (* 2 fight-tries)))]
+                  (and (>= (count on-eid) fight-tries)
+                       (< (- (:time/now world 0) (:intention/at (first on-eid) 0))
+                          fight-rest-ms))))))
+
 (defn lured-out?
   "Has the bot walked lure-tries times out to its burrow's mouth and back since the burrow was cut
    (memory/done-since: two :walk intentions done a lure, every walk since the burrow counted), so
@@ -192,9 +218,10 @@
     (let [c (physics/centre m)]
       (entity/nearest
        (into {}
-             (filter (fn [[_ e]]
+             (filter (fn [[eid e]]
                        (let [p (:entity/pos e)]
                          (and (entity/creepy? e)
+                              (not (fought-out? world eid))
                               (<= (physics/distance c p) danger-radius)
                               (<= (abs (- (physics/y-of p) (physics/y-of c))) danger-rise)))))
              (endermen (if (lured-out? world) world (dissoc world :plan/blacklist)) stare-range))
@@ -350,7 +377,7 @@
                      (when (reaches? world e mouth) ee)
                      ee)))))))
 
-(def roam-reaches [roam-reach (* 2 roam-reach) (* 3 roam-reach)]) ; how far a roam looks for an end not yet walked to, nearest first: sixteen blocks, then thirty-two, then forty-eight
+(def roam-reaches [roam-reach (* 2 roam-reach) (* 3 roam-reach) (* 4 roam-reach)]) ; how far a roam looks for an end not yet walked to, nearest first: sixteen, thirty-two, forty-eight, sixty-four blocks
 
 (defn roam-goal
   "The path goal of a roam along heading [dx dz] from the feet, reach blocks out (roam-reach
@@ -395,15 +422,13 @@
    again: from forty-eight blocks off the ends round there are unspent, and the forest there
    has had the walk's minutes to spawn into; the ends near the feet are revisited only by
    being walked past. Never one of the two ends the last walks arrived at (memory/newest-dones:
-   where the bot stands and where it just came from), or a pocket with two ends walks between
-   them for good, each the farthest spent from the other: gym batch pearls-w1 (plan run
-   40387599204) run 2 took five pearls, then walked between [2474 63 2168] and [2487 63 2168]
-   and back 1,443 times from 21:41 to the five-hour timeout, a lookout between, its last
-   fight at 21:55. With both refused the hunt digs out or rests where it stands, and the
-   forest round it spawns to it there. Gym batch pearls-warped9-a (plan run 39898400239) run 1 took three
-   pearls by about minute forty and then stood in lookouts in one place for four hours with
-   no enderman tracked: nothing for the roam or dig-out to go after, and the forest it never
-   searched past its stretch of floor spawned endermen it never saw."
+   where the bot stands and where it just came from), and never a spent end when an enderman is
+   tracked within descend-radius (the hunt cuts toward it with dig-out instead). With both refused
+   the hunt digs out or rests where it stands, and the forest round it spawns to it there. Gym
+   batch pearls-warped9-a (plan run 39898400239) run 1 took three pearls by about minute forty and
+   then stood in lookouts in one place for four hours with no enderman tracked: nothing for the roam
+   or dig-out to go after, and the forest it never searched past its stretch of floor spawned
+   endermen it never saw."
   [world]
   (let [feet (intent/feet world)
         start (mod (quot (:time/now world 0) roam-turn-ms) (count headings))
@@ -422,24 +447,27 @@
         ;; reaches, the second the farthest ends of those same routes, and planning the
         ;; twenty-four routes twice over spent the tick on searches already searched
         planned (mapv plan-to tries)]
-    (or (some (fn [[status to]]
-                (when (and (= :found status) to (not (contains? spent to))) (walk to)))
-              planned)
-        (let [[_ partial _ spent-end]
-              (reduce (fn [[pg p sg s] [status to]]
-                        (let [gain (when to (path/octile feet to))]
-                          (cond (and gain
-                                     (not= :found status)
-                                     (>= gain roam-reach)
-                                     (not (contains? spent to))
-                                     (> gain pg))
-                                [gain to sg s]
-                                (and gain (= :found status) (not (contains? recent to)) (> gain sg))
-                                [pg p gain to]
-                                :else [pg p sg s])))
-                      [0 nil 0 nil]
-                      planned)]
-          (when-let [to (or partial spent-end)] (walk to))))))
+    (or
+     (some (fn [[status to]] (when (and (= :found status) to (not (contains? spent to))) (walk to)))
+           planned)
+     (let [[_ partial _ spent-end] (reduce (fn [[pg p sg s] [status to]]
+                                             (let [gain (when to (path/octile feet to))]
+                                               (cond (and gain
+                                                          (not= :found status)
+                                                          (>= gain roam-reach)
+                                                          (not (contains? spent to))
+                                                          (> gain pg))
+                                                     [gain to sg s]
+                                                     (and gain
+                                                          (= :found status)
+                                                          (empty? (endermen world descend-radius))
+                                                          (not (contains? recent to))
+                                                          (> gain sg))
+                                                     [pg p gain to]
+                                                     :else [pg p sg s])))
+                                           [0 nil 0 nil]
+                                           planned)]
+       (when-let [to (or partial spent-end)] (walk to))))))
 
 (defn routable
   "[eid entity] of the first of the candidates nearest endermen past a walk's reach of the eye
@@ -996,6 +1024,23 @@
                     [world 0]
                     steps))))
 
+(def first-cut
+  ;; the cells the first cut of each kind opens from the feet along a heading (stairs.clj)
+  {:stairs-up stairs/up-cells :stairs-down stairs/stair-cells :tunnel stairs/level-cells})
+
+(defn solid-cut?
+  "Does a cut of kind (:stairs-up, :stairs-down or :tunnel) from feet along dir have at least
+   one solid block to cut within its length?"
+  ([world kind feet dir] (solid-cut? world kind feet dir 1))
+  ([world kind feet dir n]
+   (case kind
+     :tunnel
+     (let [steps (take n
+                       (iterate (fn [cells] (stairs/level-cells (last cells) dir))
+                                (stairs/level-cells feet dir)))]
+       (boolean (some (fn [cells] (some #(solid-at? world %) cells)) steps)))
+     (boolean (some #(solid-at? world %) ((first-cut kind) feet dir))))))
+
 (defn bore
   "A tunnel (:tunnel, stairs.clj: level steps, turning where one is refused) the straight way
    toward the nearest enderman in ms, as far as its steps stand on a floor, bore-length at
@@ -1026,12 +1071,8 @@
                (>= (path/octile feet (cell (:entity/pos e))) bore-length))
       (let [dir (mapv - (away world e))
             n (floored-length world feet dir bore-length)]
-        (when (pos? n)
+        (when (and (pos? n) (solid-cut? world :tunnel feet dir n))
           {:intent/kind :tunnel :intent/dir dir :intent/length n :intent/for :pearls})))))
-
-(def first-cut
-  ;; the cells the first cut of each kind opens from the feet along a heading (stairs.clj)
-  {:stairs-up stairs/up-cells :stairs-down stairs/stair-cells :tunnel stairs/level-cells})
 
 (defn cheapest-heading
   "The heading of the four straight ones (stairs/directions) whose first cut of kind (:stairs-up,
@@ -1102,8 +1143,44 @@
               :else
               (let [dir (cheapest-heading world :tunnel feet toward)
                     n (floored-length world feet dir bore-length)]
-                (when (pos? n)
+                (when (and (pos? n) (solid-cut? world :tunnel feet dir n))
                   {:intent/kind :tunnel :intent/dir dir :intent/length n :intent/for :pearls})))))))
+
+(defn stuck?
+  "Has the bot stood stale-lookouts or more :lookout intents since its last walk ended
+   (memory/done-since), or since its burrow was cut when no walk has ended since? A minute
+   of lookouts with no walk taken, as stale? counts them in a burrow, out of one."
+  [world]
+  (>= (or (memory/done-since world :lookout :walk) (memory/done-since world :lookout :burrow) 0)
+      stale-lookouts))
+
+(defn climb-heading
+  "A heading from feet to cut stairs up into rock toward the surface: one that cuts solid
+   blocks (solid-cut?) and whose stair step does not step onto an open brink (brink?). Sorted
+   by cheapest first."
+  [world feet]
+  (let [ways (sort-by (fn [h] (count (filter #(solid-at? world %) ((first-cut :stairs-up) feet h))))
+                      stairs/directions)]
+    (some (fn [[dx dz :as h]]
+            (let [step [(+ (first feet) dx) (inc (second feet)) (+ (last feet) dz)]]
+              (when (and (solid-cut? world :stairs-up feet h) (not (brink? world step))) h)))
+          ways)))
+
+(defn climb-out
+  "Stairs up from the feet, descend-step higher along the heading whose first cut digs
+   into rock without stepping onto an open brink (climb-heading), for a pocket no roam finds an
+   end out of and no enderman tracked gives dig-out a way to cut: up is toward the forest floor
+   the endermen spawn on, and from the top the roam is asked again. Nil with no digs to spare
+   past a burrow's (spare?), or a staircase boxed from these feet (:plan/boxed-at)."
+  [world]
+  (let [feet (intent/feet world)]
+    (when (and (spare? world) (not (contains? (:plan/boxed-at world) feet)))
+      (when-let [dir (climb-heading world feet)]
+        {:intent/kind :stairs-up
+         :intent/to-y (+ (physics/y-of feet) descend-step)
+         :intent/dir dir
+         :intent/to-height? true
+         :intent/for :pearls}))))
 
 (defn cut-out
   "Stairs up out of the burrow's end, the other way from its mouth, for when the burrow is
@@ -1308,7 +1385,13 @@
    burrow's (spare?): the burrow is what the pickaxe is for, and batch pearls-warped3-a's run 1
    wore its iron pickaxe out on them at fourteen minutes and had no burrow after. A walk toward
    one never ends where a walk already arrived (memory/arrived): the same batch's run 3 walked
-   between two such ends for twenty-five minutes."
+   between two such ends for twenty-five minutes. One fight-tries fights have ended on without
+   a kill is fought no more (fought-out?), in the burrow or out of it, and holds no burrow: gym
+   batch pearls-w3 (plan run 40434266158) run 3 planned some sixty-four thousand fights on one
+   enderman over five hours and took one pearl. With no end for a roam and no way cut toward
+   one either, and a minute of lookouts since the last walk (stuck?), the hunt climbs out toward
+   the floor (climb-out): the same batch's run 2 stood in lookouts its last four hours in a cave
+   under the floor, five pearls held."
   [world]
   (let [pos (:player/pos world)
         [eid e] (at-hand world)
@@ -1340,17 +1423,21 @@
                 (crowd-site world))
         mouth (:pearls/mouth world)
         way-home {:intent/kind :walk :intent/target home :intent/for :shelter}
-        far (endermen world seek-radius)]
+        overworld-death? (and (pos? (:stats/deaths world 0))
+                              (= dimension/overworld (dimension/of world)))
+        far (endermen world seek-radius)
+        fight-id (cond (and ce (not (fought-out? world ceid))) ceid
+                       (and (or angry? in-reach?) (not (fought-out? world eid))) eid
+                       :else tid)]
     (cond
       (and home (not in?) (or ce near? hurt? tid aid) (intent/routable? world way-home)) way-home
       (and hurt? in?) (or meal {:intent/kind :lookout :intent/for :pearls})
       (and near? hurt? (not in?)) {:intent/kind :back-off :intent/target eid :intent/for :pearls}
       (and hurt? (not in?) tid) {:intent/kind :back-off :intent/target tid :intent/for :pearls}
-      (and in? (or ce angry? in-reach? tid))
+      (and hurt? (not in?)) (or meal {:intent/kind :lookout :intent/for :pearls})
+      (and in? fight-id)
       {:intent/kind :fight
-       :intent/target (cond ce ceid
-                            (or angry? in-reach?) eid
-                            :else tid)
+       :intent/target fight-id
        :intent/hold? true
        :intent/yield? true
        :intent/for :pearls}
@@ -1358,6 +1445,7 @@
       (or (cut-out world) {:intent/kind :lookout :intent/for :pearls})
       (and near?
            (not in?)
+           (not (fought-out? world eid))
            (or (entity/creepy? e)
                (and (not (pickaxe? world))
                     (not (worn-out? world))
@@ -1383,13 +1471,14 @@
       {:intent/kind :provoke :intent/target qid :intent/for :pearls}
       (and qid home rested?) {:intent/kind :walk :intent/target mouth :intent/for :shelter}
       (and qid home (intent/routable? world way-home)) way-home
-      (and ce (pickaxe? world))
+      (and (not hurt?) ce (not (fought-out? world ceid)) (pickaxe? world))
       {:intent/kind :fight
        :intent/target ceid
        :intent/hold? true
        :intent/yield? true
        :intent/for :pearls}
-      ce {:intent/kind :fight :intent/target ceid :intent/for :pearls}
+      (and (not hurt?) ce (not (fought-out? world ceid)))
+      {:intent/kind :fight :intent/target ceid :intent/for :pearls}
       home (or (vantage world far) {:intent/kind :lookout :intent/for :pearls})
       :else
       (or (if (pickaxe? world)
@@ -1402,11 +1491,14 @@
             (when-not (worn-out? world)
               (when-let [[_ e] (routable world far)]
                 {:intent/kind :walk :intent/target (cell (:entity/pos e)) :intent/for :pearls})))
-          (descend world (endermen world descend-radius))
+          (when-not overworld-death? (descend world (endermen world descend-radius)))
           (ascend world (endermen world descend-radius))
           (toward world far)
-          (bore world (endermen world descend-radius))
-          (when (= :lookout (:intent/kind (:plan/last world))) (or (roam world) (dig-out world)))
+          (when-not overworld-death? (bore world (endermen world descend-radius)))
+          (when (= :lookout (:intent/kind (:plan/last world)))
+            (or (roam world)
+                (when (stuck? world) (climb-out world))
+                (when-not overworld-death? (dig-out world))))
           {:intent/kind :lookout :intent/for :pearls}))))
 
 (defn look-off
@@ -1438,11 +1530,17 @@
 
 (defn beset?
   "Does an angry enderman (entity/creepy?), blacklisted or not, stand within strike-range of the
-   feet, height counted?"
+   feet, height counted? Not one fought out (fought-out?): it has had fight-tries fights to
+   come into the open and kill or be killed and has done neither, and the hunt's way on is a
+   walk away from it, which an interrupt here would cut every tick. Sim gate r3fr3 (probe
+   40465621253, world R4 seed 3): with one fought out over its burrow's roof the hunt chose
+   the crowd site's walk 28,545 times, each cut at once, where on main the same run fought
+   it 18,657 times (probe 40465674776)."
   [world]
   (let [p (:player/pos world)]
-    (boolean (some (fn [[_ e]]
+    (boolean (some (fn [[eid e]]
                      (and (entity/creepy? e)
+                          (not (fought-out? world eid))
                           (<= (physics/distance p (:entity/pos e)) strike-range)))
                    (endermen (dissoc world :plan/blacklist) stare-range)))))
 
@@ -1497,6 +1595,14 @@
   (pos? (recipe/have (recipe/counts (:player/inventory (sword/with-laid world)))
                      (recipe/tags :logs))))
 
+(defn for-sword-decide
+  "The world a sword's needs are decided on: worn swords hidden (sword/drop-worn), the
+   crafting grid visible (sword/with-laid), and a finished log chain not continued once a
+   log is already counted (log-counted?), as for-pick-decide does for a pickaxe."
+  [world]
+  (cond-> (sword/with-laid (sword/drop-worn world))
+    (and (log-counted? world) (= :log (:intent/for (:plan/last world)))) (dissoc :plan/last)))
+
 (defn make-sword
   "The intent that makes the best sword the held items pay for (sword/payable) through the needs
    planner, when that craft can start from here: one of sword-acts, or the log chain to a
@@ -1516,11 +1622,11 @@
    was followed at once by the :no-sword wait). A worn sword still held is replaced only as
    before, never by a hunt for wood."
   [world goal table]
-  (let [bare? (nil? (combat/sword world))]
+  (let [bare? (or (nil? (combat/sword world)) (not (sword/serviceable world)))]
     (when-let [k (or (sword/payable world)
                      (when (log-counted? world) :wooden_sword)
                      (when bare? :wooden_sword))]
-      (let [i (make/decide (sword/for-decide world)
+      (let [i (make/decide (for-sword-decide world)
                            (assoc goal :goal/provides {(keyword "item" (name k)) 1})
                            table)]
         (when (and (:intent/kind i)
@@ -1555,11 +1661,17 @@
 
 (defn for-pick-decide
   "The world a pickaxe's needs are decided on: worn pickaxes hidden (drop-worn-picks), the
-   crafting grid visible (sword/with-laid), and a finished log chain not continued once the
-   table's pieces are held (sword/pieces?), as sword/for-decide does for a sword."
+   crafting grid visible (sword/with-laid), and a finished log chain not continued once a
+   log is already counted (log-counted?), as sword/for-decide does for a sword. Not once
+   the table's pieces are held (sword/pieces?): a table held counts there with no log and
+   no plank beside it, and gym batch pearls-w3 (plan run 40434266158) run 1, slain ninety
+   seconds in and respawned at the overworld spawn, remade its wooden sword, took its
+   table up and then walked to the spruce trunk beside it 356,882 times to the five-hour
+   timeout: each walk arrived in a tick, its done chain was hidden here for the table's
+   sake, and the decide asked for the walk again, never the dig."
   [world]
   (cond-> (sword/with-laid (drop-worn-picks world))
-    (and (sword/pieces? world) (= :log (:intent/for (:plan/last world)))) (dissoc :plan/last)))
+    (and (log-counted? world) (= :log (:intent/for (:plan/last world)))) (dissoc :plan/last)))
 
 (defn make-pickaxe
   "The intent that makes a pickaxe through the needs planner (a goal providing
@@ -1613,7 +1725,14 @@
         fire (burning-at world)
         replacing (when-not (sword/serviceable world) (make-sword world goal table))
         remaking (when (and (not (spare? world)) (not (menaced? world)))
-                   (make-pickaxe world goal table))]
+                   (make-pickaxe world goal table))
+        ;; the hands a death leaves empty at the overworld spawn: no trunk sighted yet is
+        ;; no reason to fail (gym batch pearls-r3-w2 run 2, plan run 40475390313, died in
+        ;; the forest at three minutes and failed :no-sword at a spawn with no log in the
+        ;; chunks first loaded); looking and roaming load more, and the remake is asked
+        ;; again after each. A sword merely broken where the bot hunts still waits.
+        respawned? (and (pos? (:stats/deaths world 0)) (= dimension/overworld (dimension/of world)))
+        seek-wood (when respawned? (or (roam world) {:intent/kind :lookout :intent/for :pearls}))]
     (cond fire {:intent/kind :dig :intent/target fire}
           d
           {:intent/kind :collect-drops
@@ -1623,8 +1742,10 @@
           (and k (body? world k)) {:plan/wait :drop}
           (< (:player/health world 20.0) danger-health) (hunt world)
           replacing replacing
+          (and seek-wood (nil? (combat/sword world))) seek-wood
           (nil? (combat/sword world)) {:plan/wait :no-sword}
           remaking remaking
+          (and seek-wood (worn-out? world) (nil? (shelter world)) (not (menaced? world))) seek-wood
           (and (worn-out? world) (nil? (shelter world)) (not (menaced? world)))
           {:plan/wait :no-pickaxe}
           :else (hunt world))))

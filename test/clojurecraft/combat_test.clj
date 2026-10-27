@@ -302,6 +302,20 @@
     (is (contains? (:plan/cornered gone) 8))
     (is (= [8.5 64.0 8.5] (:player/pos gone)) "it never steps onto the lip")))
 
+(deftest a-back-off-stops-at-lava-it-cannot-step-into
+  ;; reviewer finding (round 3 bot survival): backing away from an entity toward
+  ;; or beside lava marks the entity cornered and stops rather than stepping into lava
+  (let [lava (blocks/default-state :lava)
+        blocks {[8 64 6] lava [8 63 7] lava}
+        w (assoc (standing {8 (mob :creeper [8.5 64.0 10.5] 20.0)})
+                 :world/chunks {[0 0] (world/column blocks)}
+                 :plan/intent {:intent/kind :back-off :intent/target 8 :intent/status :active})
+        [gone _] (fx/fold intent-step w [(tick 50)])]
+    (is (combat/lava-retreat? w (get-in w [:world/entities 8])))
+    (is (= :done (:intent/status (:plan/intent gone))))
+    (is (contains? (:plan/cornered gone) 8))
+    (is (= [8.5 64.0 8.5] (:player/pos gone)) "it never steps into lava")))
+
 (deftest a-creeper-that-stands-still-is-shunned-not-fled-from-for-ever
   ;; issues #69, #62, #161: a starving bot at one health backed away from a creeper five blocks
   ;; off that never moved, again and again, and the walk it was on never finished

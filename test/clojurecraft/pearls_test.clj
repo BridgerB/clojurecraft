@@ -18,6 +18,7 @@
             [clojurecraft.recipe :as recipe]
             [clojurecraft.sim :as sim]
             [clojurecraft.stairs :as stairs]
+            [clojurecraft.sword :as sword]
             [clojurecraft.world :as world]))
 
 (use-fixtures :once fx/instrumented)
@@ -187,6 +188,38 @@
     (is (= {:intent/kind :walk :intent/target to :intent/for :pearls} (pearls/roam w*)))
     (is (not (contains? #{to (last seen)} again))
         "arrived there, the next revisit is neither it nor the end before it: no ping-pong")))
+
+(deftest a-four-point-roam-cycle-is-refused-and-engages-tracked-endermen
+  ;; gym batch pearls-r3-w4 (plan run 40521602180 at 27cff26) run 1: walked a 4-point
+  ;; cycle for 5 hours between [2415 71 2183], [2387 66 2151], [2387 65 2152], and
+  ;; [2409 68 2181] ~200 times each with :lookout between them, 0 attacks, 0 hits,
+  ;; while endermen were in :world/entities
+  (let [p1 [2415 71 2183]
+        p2 [2387 66 2151]
+        p3 [2387 65 2152]
+        p4 [2409 68 2181]
+        cycle [p1 p2 p3 p4]
+        col (world/column {})
+        w0 (-> (standing {})
+               (assoc :time/now 0
+                      :player/pos [2409.5 68.0 2181.5]
+                      :world/chunks (zipmap [[150 136] [149 134] [151 136]] (repeat col))))
+        w (reduce (fn [acc [idx pt]]
+                    (memory/remember-intention
+                     acc
+                     {:intent/id (+ 100 idx) :intent/kind :walk :intent/target pt}
+                     :done))
+                  w0
+                  (map-indexed vector cycle))
+        e (enderman [2395.5 68.0 2160.5])
+        w-with-mob
+        (assoc w :world/entities {7 e} :plan/last {:intent/kind :lookout :intent/for :pearls})
+        next-intent (plan/next-intent w-with-mob row plan/goals)]
+    (is (not= :walk (:intent/kind next-intent))
+        "with an enderman tracked, never walks back to a spent roam end")
+    (is (contains? #{:stairs-up :stairs-down :tunnel :fight :burrow :lookout}
+                   (:intent/kind next-intent))
+        "engages tracked enderman via cut or fight")))
 
 (deftest a-roam-follows-a-caves-passage-to-where-it-can-look-from
   ;; gym batch pearls-263f (plan run 38918584959, probe 39130057525): a landing in a cave pocket
@@ -404,6 +437,36 @@
     (is (nil? (pearls/dig-out (assoc-in w [:player/inventory 1 :components :damage] 229)))
         "21 digs left: kept for a burrow")
     (is (nil? (pearls/dig-out (assoc w :world/entities {}))) "no enderman: nowhere to cut to")))
+
+(defn stuck-in
+  "w with a walk ended and then n lookouts, the last of them the plan's last intent, as
+   memory keeps them: a hunt that has stood looking since it last walked anywhere."
+  [w n]
+  (looked-out
+   (reduce #(memory/remember-intention %1 {:intent/id (+ 10 %2) :intent/kind :lookout} :done)
+           (memory/remember-intention (assoc w :time/now 0) {:intent/id 1 :intent/kind :walk} :done)
+           (range n))))
+
+(deftest a-pocket-with-no-enderman-to-cut-toward-is-climbed-out-of
+  ;; gym batch pearls-w3 (plan run 40434266158) run 2: five pearls by its forty-fourth
+  ;; minute, then :lookout to the five-hour timeout in the caves under the forest floor,
+  ;; every roam end spent or short and no enderman tracked for dig-out to cut toward
+  (let [w (assoc (walled-in feet-cells [8.5 80.0 48.5]) :world/entities {})]
+    (is (nil? (pearls/roam w)) "no end for a roam in the pocket")
+    (is (nil? (pearls/dig-out w)) "no enderman: nowhere to cut to")
+    (is (not (pearls/stuck? (stuck-in w (dec pearls/stale-lookouts)))))
+    (is (pearls/stuck? (stuck-in w pearls/stale-lookouts))
+        "a minute of lookouts since the last walk")
+    (is (= {:intent/kind :lookout :intent/for :pearls}
+           (plan/next-intent (stuck-in w (dec pearls/stale-lookouts)) row plan/goals))
+        "before the minute is out it still looks")
+    (is (= [:stairs-up 72 true :pearls]
+           ((juxt :intent/kind :intent/to-y :intent/to-height? :intent/for)
+            (plan/next-intent (stuck-in w pearls/stale-lookouts) row plan/goals)))
+        "stuck: stairs up toward the floor, descend-step up")
+    (is (nil? (pearls/climb-out (assoc w :plan/boxed-at #{[8 64 8]}))) "boxed here: not again")
+    (is (nil? (pearls/climb-out (assoc-in w [:player/inventory 1 :components :damage] 229)))
+        "21 digs left: kept for a burrow")))
 
 (deftest no-way-out-is-cut-from-the-brink-of-a-drop
   ;; gym batch pearls-warped8-c (plan run 39845223845, probe 39854206523) run 2: dig-out's stairs
@@ -708,6 +771,52 @@
    #(memory/remember-intention %1 {:intent/id (+ 10 %2) :intent/kind :walk} :done)
    (memory/remember-intention (assoc w :time/now 0) {:intent/id 1 :intent/kind :burrow} :done)
    (range (* 2 n))))
+
+(defn fought
+  "w with n :fight intentions on entity 7 ended :done, as memory keeps them."
+  [w n]
+  (reduce
+   #(memory/remember-intention %1 {:intent/id (+ 10 %2) :intent/kind :fight :intent/target 7} :done)
+   (assoc w :time/now 0)
+   (range n)))
+
+(deftest one-fought-again-and-again-without-a-kill-is-fought-no-more
+  ;; gym batch pearls-w3 (plan run 40434266158) run 3: from its second minute to the
+  ;; five-hour timeout it planned some sixty-four thousand fights on one enderman, each
+  ;; ending done as the enderman teleported out of sight, nineteen failing :unreachable,
+  ;; and held one pearl
+  (let [angry (assoc (enderman [5.5 61.0 8.5]) :entity/creepy? true)
+        on-stairs (assoc (burrowed [8.5 61.0 8.5] {7 angry}) :plan/blacklist #{7})]
+    (is (= :fight (:intent/kind (plan/next-intent on-stairs row plan/goals)))
+        "at the end with it on the stairs: fought, blacklisted or not")
+    (is (not (pearls/fought-out? (fought on-stairs (dec pearls/fight-tries)) 7))
+        "seven fights done on it: not yet fought out")
+    (is (pearls/fought-out? (fought on-stairs pearls/fight-tries) 7)
+        "fight-tries fights done on it and it still stands: fought out")
+    (is (not (pearls/fought-out? (fought on-stairs pearls/fight-tries) 8)) "another is not")
+    ;; sim gate r3fr3b (probe 40470765785, world R4 seed 3): left for good, one fought
+    ;; out teleported after the bot and killed it 188 times, never fought back
+    (is (not (pearls/fought-out?
+              (assoc (fought on-stairs pearls/fight-tries) :time/now (inc pearls/fight-rest-ms))
+              7))
+        "a rest on, it is fought again")
+    (is (not= :fight
+              (:intent/kind
+               (plan/next-intent (fought on-stairs pearls/fight-tries) row plan/goals)))
+        "fought out: no fight is held on it from the end again")
+    (is (nil? (pearls/angry-near (fought on-stairs pearls/fight-tries)))
+        "and it holds the burrow no longer, so the burrow can go stale"))
+  ;; sim gate r3fr3 (probe 40465621253, world R4 seed 3): fought out, the one over the
+  ;; burrow's roof still cut every walk away from it through interrupts?, 28,545 walks
+  ;; planned in place, where main fought it in place instead (probe 40465674776)
+  (let [angry (assoc (enderman [8.5 64.0 10.5]) :entity/creepy? true)
+        w (standing {7 angry})
+        away {:intent/kind :walk :intent/target [20 64 20] :intent/for :shelter}]
+    (is (pearls/beset? w) "angry two blocks off: beset")
+    (is (plan/interrupts? w row away) "and a walk away from it is cut to meet it")
+    (is (not (pearls/beset? (fought w pearls/fight-tries))) "fought out: beset no longer")
+    (is (not (plan/interrupts? (fought w pearls/fight-tries) row away))
+        "so the walk away from it stands")))
 
 (deftest an-angry-one-blacklisted-that-never-comes-to-the-lure-holds-the-burrow-no-longer
   ;; gym batch pearls-warped8-a (plan run 39731473452, probe 39776733945) run 1: from the 49th
@@ -1058,6 +1167,252 @@
     (is (= :collect (:intent/kind collected)))
     (is (= :take-table (:intent/for collected))
         "a dug table is collected toward the pickaxe remake, never the :no-pickaxe wait")))
+
+(deftest a-table-held-hides-no-log-chain-from-the-pickaxe-decide
+  ;; gym batch pearls-w3 (plan run 40434266158) run 1: slain ninety seconds in, it
+  ;; respawned at the overworld spawn, remade its wooden sword, took its table up, and
+  ;; walked to the spruce trunk beside it 356,882 times to the five-hour timeout: the
+  ;; table held counted as the table's pieces (sword/pieces?), so each done walk's chain
+  ;; was hidden from the decide and the walk was asked for again, never the dig
+  (let [trunk {[12 64 8] 136 [12 65 8] 136 [12 66 8] 136 [12 67 8] 252}
+        col (world/column trunk)
+        walked {:intent/kind :walk :intent/target [12 64 8] :intent/for :log :intent/status :done}
+        respawned (-> (standing {})
+                      (assoc :world/chunks {[0 0] col}
+                             :player/inventory
+                             {0 (item :wooden_sword 1) 1 (item :stick 3) 2 (item :crafting_table 1)}
+                             :time/now 0
+                             :plan/last walked)
+                      (memory/remember-column [0 0] col)
+                      (memory/remember-intention {:intent/id 1 :intent/kind :burrow} :done))]
+    (is (= walked (:plan/last (pearls/for-pick-decide respawned)))
+        "sticks and a table held, no log and no plank: the done walk's chain stays")
+    (is (nil? (:plan/last (pearls/for-pick-decide
+                           (assoc-in respawned [:player/inventory 3] (item :spruce_log 1)))))
+        "a log counted: the chain is finished and hidden, as before")
+    (is (= [:dig :log]
+           ((juxt :intent/kind :intent/for) (plan/next-intent respawned row plan/goals)))
+        "so the decide continues to the dig, never the same walk again")))
+
+(deftest table-held-hides-no-log-chain-from-sword-decide
+  ;; remaking a sword when a table is held: sword/for-decide dropped :plan/last
+  ;; whenever pieces? held, so table held without planks or logs lost the done walk
+  ;; and re-planned it every tick. for-sword-decide hides the chain only once a log
+  ;; is counted (log-counted?), as for-pick-decide does for a pickaxe
+  (let [trunk {[12 64 8] 136 [12 65 8] 136 [12 66 8] 136 [12 67 8] 252}
+        col (world/column trunk)
+        walked {:intent/kind :walk :intent/target [12 64 8] :intent/for :log :intent/status :done}
+        w (-> (standing {})
+              (assoc :world/chunks {[0 0] col}
+                     :player/inventory {0 (item :crafting_table 1)}
+                     :time/now 0
+                     :plan/last walked)
+              (memory/remember-column [0 0] col)
+              (memory/remember-intention {:intent/id 1 :intent/kind :burrow} :done))]
+    (is (= walked (:plan/last (pearls/for-sword-decide w)))
+        "table held, no log and no plank: sword decide keeps the done walk's chain")
+    (is (nil? (:plan/last (pearls/for-sword-decide
+                           (assoc-in w [:player/inventory 1] (item :spruce_log 1)))))
+        "a log counted: sword decide hides the finished chain")
+    (is (= [:dig :log] ((juxt :intent/kind :intent/for) (plan/next-intent w row plan/goals)))
+        "so the decide continues to the dig, never the walk again")))
+
+(deftest nether-warped-stem-walk-advances-to-dig-not-loop
+  ;; gym batch pearls-w3 (plan run 40464154227) run 2: in the Nether at pos
+  ;; [2374.4 38 2125.3], with four warped planks and a worn pickaxe held, it
+  ;; re-issued intent :walk [2374 39 2124] :for :log 186,397 times because planks
+  ;; counted as pieces (sword/pieces?) and dropped :plan/last after each arrival.
+  ;; With log-counted?, :plan/last stays and the chain continues to the dig
+  (let [stem (first (blocks/states-of :warped_stem))
+        trunk {[6 39 12] stem [6 40 12] stem [6 41 12] stem}
+        col (world/column trunk)
+        chunk [148 132]
+        walked {:intent/kind :walk
+                :intent/target [2374 39 2124]
+                :intent/for :log
+                :intent/trunk [2374 39 2124]
+                :intent/status :done}
+        w (-> (standing {})
+              (assoc :player/pos [2374.4 38.0 2125.3]
+                     :player/dimension "minecraft:the_nether"
+                     :world/chunks {chunk col}
+                     :player/inventory
+                     {0 (assoc (item :iron_pickaxe 1) :durability 11)
+                      1 (item :iron_sword 1)
+                      2 (item :warped_planks 4)}
+                     :time/now 0
+                     :plan/last walked)
+              (memory/remember-column chunk col)
+              (memory/remember-intention {:intent/id 1 :intent/kind :burrow} :done))]
+    (is (= walked (:plan/last (pearls/for-pick-decide w)))
+        "four planks held but no log: the done walk's chain stays")
+    (is (= [:dig :log] ((juxt :intent/kind :intent/for) (plan/next-intent w row plan/goals)))
+        "standing beside the warped stem after the walk: advances to the dig, never the walk again")
+    (is (= [2374 39 2124] (:intent/target (plan/next-intent w row plan/goals)))
+        "digs the warped stem target")))
+
+(deftest overworld-respawn-beside-trunk-advances-to-dig-not-loop
+  ;; gym batch pearls-w3 (plan run 40464154227) run 3: died and respawned in the
+  ;; overworld at pos [2.5 93 49.3], holding crafting_table, stick 3, wooden_sword 1;
+  ;; re-issued intent :walk [3 94 50] :for :log 256,743 times because crafting_table
+  ;; counted as pieces and dropped :plan/last
+  (let [trunk {[3 94 2] 136 [3 95 2] 136 [3 96 2] 136}
+        col (world/column trunk)
+        chunk [0 3]
+        walked {:intent/kind :walk
+                :intent/target [3 94 50]
+                :intent/for :log
+                :intent/trunk [3 94 50]
+                :intent/status :done}
+        respawned (-> (standing {})
+                      (assoc :player/pos [2.5 93.0 49.3]
+                             :player/dimension "minecraft:overworld"
+                             :world/chunks {chunk col}
+                             :player/inventory
+                             {0 (item :wooden_sword 1) 1 (item :stick 3) 2 (item :crafting_table 1)}
+                             :time/now 0
+                             :stats/deaths 1
+                             :plan/last walked)
+                      (memory/remember-column chunk col)
+                      (memory/remember-intention {:intent/id 1 :intent/kind :burrow} :done))]
+    (is (= walked (:plan/last (pearls/for-pick-decide respawned)))
+        "table and sticks held, no log: the done walk's chain stays")
+    (is (= [:dig :log]
+           ((juxt :intent/kind :intent/for) (plan/next-intent respawned row plan/goals)))
+        "standing beside the trunk after the walk: advances to the dig, never the walk again")
+    (is (= [3 94 50] (:intent/target (plan/next-intent respawned row plan/goals)))
+        "digs the spruce log target")))
+
+(deftest stuck-lookout-in-hole-climbs-out-to-surface
+  ;; reviewer finding 1 (gym batch pearls-r3-w1 run 1, plan run 40469919220):
+  ;; stuck at y 47 inside rock with a brink behind it from its descent,
+  ;; logged :lookout 3,369 times and 15 tunnels that dug nothing.
+  ;; When stuck? is true, climb-out cuts stairs up into solid rock rather than
+  ;; refusing on brink?, and dig-out refuses tunnels with 0 solid cuts.
+  (let [blocks (into {[8 46 8] stone
+                      [8 46 9] stone
+                      [8 47 9] stone
+                      [8 48 9] stone
+                      [8 49 9] stone
+                      [8 50 9] stone
+                      [7 46 8] stone
+                      [9 46 8] stone}
+                     (for [y (range 43 48)] [[8 y 7] 0]))
+        w (-> (standing {} blocks)
+              (assoc :player/pos [8.5 47.0 8.5]
+                     :plan/last {:intent/kind :lookout :intent/for :pearls}
+                     :player/inventory {0 (item :diamond_pickaxe 1) 1 (item :iron_sword 1)})
+              (memory/remember-intention {:intent/id 0 :intent/kind :walk} :done))
+        w (reduce (fn [acc n]
+                    (memory/remember-intention acc {:intent/id n :intent/kind :lookout} :done))
+                  w
+                  (range 1 13))]
+    (is (pearls/stuck? w) "stood 12 lookouts: stuck is true")
+    (is (pearls/brink? w [8 47 8]) "drop behind makes feet a brink")
+    (let [next (plan/next-intent w row plan/goals)]
+      (is (= :stairs-up (:intent/kind next))
+          "climbs out toward surface rather than repeating lookout")
+      (is (= [1 0] (:intent/dir next)) "climbs into the solid rock wall"))))
+
+(deftest empty-tunnel-that-makes-no-progress-fails-boxed
+  ;; reviewer finding 1: :tunnel that makes no progress must not repeat forever
+  (let [tunnel {:intent/kind :tunnel
+                :intent/dir [1 0]
+                :intent/length 1
+                :intent/level-steps 1
+                :intent/from-feet [8 64 8]
+                :intent/status :active}
+        w (assoc (standing {}) :plan/intent tunnel)
+        stepped (intent/run w tunnel (tick 100))
+        failed (plan/fail-intent stepped (:plan/intent stepped))]
+    (is (= :boxed (:intent/reason (:plan/intent stepped)))
+        "tunnel that makes no progress fails :boxed when finished")
+    (is (contains? (:plan/boxed-at failed) [8 64 8])
+        "feet are recorded in boxed-at so the empty cut is never repeated")))
+
+(deftest start-intent-clears-stale-waiting-reason
+  ;; reviewer finding 2: logged :lookout 2,377 times with :waiting :no-sword
+  ;; while holding wooden_sword; start-intent must clear :plan/waiting
+  (let [w
+        (assoc (standing {}) :plan/waiting :no-sword :plan/waiting-ticks 5 :plan/waiting-since 1000)
+        started (plan/start-intent w {:intent/kind :lookout :intent/for :pearls})]
+    (is (nil? (:plan/waiting started)) "start-intent clears :plan/waiting")
+    (is (nil? (:plan/waiting-ticks started)))
+    (is (nil? (:plan/waiting-since started)))))
+
+(deftest wooden-sword-counts-for-hunt-and-overworld-does-not-descend-into-caves
+  ;; reviewer finding 2: after death in overworld, holding wooden_sword and wooden_pickaxe,
+  ;; wooden sword counts for hunt, and overworld hunt roams surface instead of digging down
+  ;; into dark caves toward underground endermen
+  (let [underground-enderman (enderman [8.5 20.0 8.5])
+        w (-> (standing {7 underground-enderman})
+              (assoc :player/dimension "minecraft:overworld"
+                     :player/inventory
+                     {0 (assoc (item :wooden_sword 1) :durability 20) 1 (item :wooden_pickaxe 1)}
+                     :stats/deaths 1
+                     :plan/last {:intent/kind :lookout :intent/for :pearls}))]
+    (is (= :wooden_sword (sword/serviceable w)) "wooden sword is serviceable")
+    (let [next (plan/next-intent w row plan/goals)]
+      (is (not= :stairs-down (:intent/kind next)) "does not descend into underground cave")
+      (is (not= :tunnel (:intent/kind next)) "does not bore underground")
+      (is (not= {:plan/wait :no-sword} next) "never waits :no-sword after death"))))
+
+(deftest never-fight-under-danger-health
+  ;; prompt requirement & #577: never fight under danger-health
+  (let [creepy (assoc (enderman [12.5 64.0 8.5]) :entity/creepy? true)
+        w (assoc (standing {7 creepy})
+                 :player/health 5.0
+                 :player/inventory {0 (item :iron_sword 1) 1 (item :diamond_pickaxe 1)})
+        next (plan/next-intent w row plan/goals)]
+    (is (not= :fight (:intent/kind next)) "never starts a fight under danger-health")
+    (is (= :back-off (:intent/kind next)) "backs off from angry enderman when hurt")))
+
+(deftest after-the-sword-is-remade-the-pickaxe-fetches-its-own-log
+  ;; gym batch pearls-r3-w2 (plan run 40475390313) run 3: slain an hour and a half in
+  ;; with pearls held, it respawned at the overworld spawn, chopped the spruce beside
+  ;; it, remade its wooden sword, dug its table up and collected it, and then failed
+  ;; :no-pickaxe with the sword, the table and three sticks held and the trunk's upper
+  ;; logs standing: no intent of the pickaxe's log chain was ever taken after the collect
+  (let [trunk {[12 64 8] 136 [12 65 8] 136 [12 66 8] 136 [12 67 8] 252}
+        col (world/column trunk)
+        respawned (-> (standing {})
+                      (assoc :world/chunks {[0 0] col}
+                             :player/inventory
+                             {0 (item :wooden_sword 1) 1 (item :stick 3) 2 (item :crafting_table 1)}
+                             :time/now 0
+                             :stats/deaths 1
+                             :plan/last
+                             {:intent/kind :collect
+                              :intent/target [12 64 8]
+                              :intent/for :take-table
+                              :intent/status :done})
+                      (memory/remember-column [0 0] col)
+                      (memory/remember-intention {:intent/id 1 :intent/kind :burrow} :done))
+        next (plan/next-intent respawned row plan/goals)]
+    (is
+     (= [:walk :log] ((juxt :intent/kind :intent/for) next))
+     "sword and table held, no plank for the pickaxe: out to the trunk again, never
+            the :no-pickaxe wait")))
+
+(deftest empty-hands-at-a-treeless-spawn-look-for-wood-never-fail-no-sword
+  ;; gym batch pearls-r3-w2 (plan run 40475390313) run 2: slain in the forest at three
+  ;; minutes, it respawned at an overworld spawn with no log in the chunks first loaded
+  ;; and failed :no-sword at five, where batches pearls-w1 to w3's respawns had spruces
+  ;; in sight and remade theirs
+  (let [bare (assoc (standing {}) :player/inventory {})
+        respawned (assoc bare :stats/deaths 1)]
+    (is (= {:plan/wait :no-sword} (plan/next-intent bare row plan/goals))
+        "never died, no sword and no trunk: the wait stands, no bare-hand hunt")
+    (is
+     (= {:intent/kind :walk :intent/target [14 64 14] :intent/for :pearls}
+        (plan/next-intent respawned row plan/goals))
+     "a death behind it and no trunk sighted yet: it roams for wood (a :lookout with
+            nowhere to roam), and the remake is asked again, never the :no-sword fail")
+    (is (= {:plan/wait :no-sword}
+           (plan/next-intent (assoc respawned :player/dimension "minecraft:the_nether")
+                             row
+                             plan/goals))
+        "in the Nether there is no wood to look for: the wait stands")))
 
 (deftest no-sword-held-no-hunt
   ;; gym batch pearls-warped8-b (plan run 39775345028): runs 1 and 3 respawned with nothing held

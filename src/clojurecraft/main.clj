@@ -177,7 +177,7 @@
    events put on events (a bounded channel: a fixture's :go) into its own world atom until the
    goal holds, a planned run fails, the deadline passes or the socket closes; record it when
    record names a file. Then (on-result result) while still connected, hold hold-ms for an
-   outside judge when ok, and close, whatever the run ends with (a throw too). world* is the bot's atom (one is made when none is given;
+   outside judge (giving RCON time to read truth inventory before the bot leaves), and close, whatever the run ends with (a throw too). world* is the bot's atom (one is made when none is given;
    a watcher may be on it already). With no events channel and a plan, the run starts where it
    stands as soon as it is loaded. Returns {:result r :world final}. Nothing is shared with
    another bot: a race runs many of these, each its own atom and loop."
@@ -208,7 +208,7 @@
                r (result final until ok)]
            (when tap ((:result tap) r) ((:close tap))) ; the recording is the run: it ends at RESULT
            (on-result r)
-           (when (and ok (pos? hold-ms))
+           (when (and (pos? hold-ms) (not (:bot/closed final)) (not (:bot/disconnected final)))
              (cli/log "holding" hold-ms "ms for an outside judge")
              (let [until (+ (now) hold-ms)]
                (run-loop! c queue world* (fn [_] (> (now) until)) nil)))
@@ -217,7 +217,7 @@
 
 (defn -main
   "Connect, run until the goal, a failed plan, the deadline or a closed socket, print RESULT,
-   hold for an outside judge when ok, and exit 0 when ok else 1."
+   hold for an outside judge, and exit 0 when ok else 1."
   [& args]
   (let [{:keys [host port name until timeout-ms hold-ms events record commit telemetry chain]
          :or {host "127.0.0.1"
