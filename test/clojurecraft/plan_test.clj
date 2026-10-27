@@ -1138,6 +1138,30 @@
                                   {:intent/kind :dig :intent/reason :target-gone :intent/id 2})))
         "any other failure breaks the streak")))
 
+(deftest an-identical-failed-intent-steps-back-instead-of-repeating
+  ;; findings 2026-10-27 item 1: stairs-down or end-portal failing from feet must not be retried
+  ;; identically in a loop to fail the plan in under a second; it steps back to the previous cell
+  (let [active (-> (plan/begin (world-state [5.5 64.0 5.5]) {:go/goals [:wood]} plan/goals)
+                   (assoc :plan/trail [[0 64 0] [5 64 5]]))
+        failed (plan/fail-intent active
+                                 {:intent/kind :stairs-down :intent/to-y 20 :intent/reason :boxed})
+        goals [{:goal/id :test-goal :goal/done? :never :goal/act :stair}]
+        table goals]
+    (with-redefs [plan/choose (constantly (first goals))
+                  plan/next-intent (constantly {:intent/kind :stairs-down :intent/to-y 20})]
+      (let [w (plan/plan-tick failed {:event/kind :tick :event/now 50 :event/rand 0.5} table)]
+        (is (= :active (:plan/status w)) "does not fail the plan")
+        (is (contains? (:plan/boxed-at w) [5 64 5]) "failed feet cell marked boxed")
+        (is (= :walk (get-in w [:plan/intent :intent/kind])) "steps back via walk")
+        (is (= [0 64 0] (get-in w [:plan/intent :intent/target])) "walks back to previous cell")))))
+
+(deftest any-intent-failing-no-path-counts-as-unwalkable-not-attempts
+  ;; end-portal or child walks failing :no-path are unwalkable routes, not instant failure attempts
+  (let [active (plan/begin (world-state [0.5 64.0 0.5]) {:go/goals [:wood]} plan/goals)
+        failed (plan/fail-intent active {:intent/kind :end-portal :intent/reason :no-path})]
+    (is (zero? (:plan/attempts failed)) "no-path spends no attempt")
+    (is (= 1 (:plan/unwalkable failed)) "counts under unwalkable")))
+
 ;; ---------------------------------------------------------------- digging with tools
 
 (defn digging

@@ -19,6 +19,7 @@
    for its row to retreat (:intent/yield?). A row whose act answers a kind of hostile itself
    (answers) has the :defend row leave that kind to it."
   (:require [clojure.math :as math]
+            [clojurecraft.armour :as armour]
             [clojurecraft.entity :as entity]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
@@ -606,7 +607,10 @@
   [world]
   (let [pos (:player/pos world)
         bl (:plan/blacklist world #{})
-        left (answered-kinds world)]
+        left (answered-kinds world)
+        pumpkin? (= :carved_pumpkin (armour/worn world 0))
+        hurt? (and (:player/hurt-at world)
+                   (<= (- (:time/tick world 0) (:player/hurt-at world)) 60))]
     (into
      {}
      (filter
@@ -614,6 +618,10 @@
         (and (not (contains? bl eid))
              (not (contains? left (entity/kind e)))
              (not (given-up? world eid e))
+             (or (not pumpkin?)
+                 (not= :enderman (entity/kind e))
+                 (= eid (:player/attacker world))
+                 (and hurt? (<= (physics/distance pos (:entity/pos e)) 3.5)))
              (<= (physics/distance pos (:entity/pos e))
                  (reach world eid e (if (= :creeper (entity/kind e)) creeper-radius defend-radius)))
              (hittable? world e)

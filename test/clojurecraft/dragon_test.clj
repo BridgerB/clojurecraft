@@ -193,12 +193,16 @@
         "a hurt is not a death")
     (is (true? (:world/dragon-dead? (told w {:packet/name :remove-entities :ids [dragon-eid]})))
         "removed near the bot with no boss bar")
-    (let [shown (told w {:packet/name :boss-event :uuid bar :action 0})]
+    (let [shown (told w {:packet/name :boss-event :uuid bar :action 0})
+          updated (told shown {:packet/name :boss-event :uuid bar :action 2 :health 0.75})]
       (is (= #{bar} (:world/boss-bars shown)))
+      (is (= 0.75 (get-in updated [:world/boss-health bar])) "boss bar health update is recorded")
       (is (nil? (:world/dragon-dead? (told shown
                                            {:packet/name :remove-entities :ids [dragon-eid]})))
           "removed with its boss bar still shown")
-      (is (= #{} (:world/boss-bars (told shown {:packet/name :boss-event :uuid bar :action 1})))))
+      (is (= #{} (:world/boss-bars (told shown {:packet/name :boss-event :uuid bar :action 1}))))
+      (is (= {} (:world/boss-health (told updated {:packet/name :boss-event :uuid bar :action 1})))
+          "boss bar removal clears its health"))
     (is (nil? (:world/dragon-dead? (told (with-dragon [200.5 80.0 0.5])
                                          {:packet/name :remove-entities :ids [dragon-eid]})))
         "removed out of sight: flown off, not dead")
@@ -511,10 +515,13 @@
         (let [hooded (assoc quiet
                             :player/inventory
                             {39 {:item (recipe/item-id :carved_pumpkin) :count 1}})]
-          (is (= #{:ender_dragon :enderman} (combat/answering hooded :dragon))
-              "the pumpkin worn: a creepy enderman is the dragon's, never fought")
-          (is (= #{:enderman} (combat/answering hooded :crystals)) "the crystals row the same")
-          (is (empty? (combat/threats (assoc hooded :plan/goals #{:dragon})))))))))
+          (is (empty? (combat/threats (assoc hooded :plan/goals #{:dragon})))
+              "the pumpkin worn: an unprovoked enderman is not a threat")
+          (is (= #{9}
+                 (set (keys
+                       (combat/threats
+                        (assoc hooded :plan/goals #{:dragon} :player/hurt-at 10 :time/tick 15)))))
+              "when hit by an enderman through the pumpkin, it is a threat at once"))))))
 
 (deftest every-look-of-the-dragon-row-is-away-from-an-endermans-eyes
   ;; gym dragon-f run 3: three endermen stared at in turn on the walks to and from the stand
@@ -584,6 +591,13 @@
         "nothing to eat: shelter or the wait, still never the perch")
     (is (plan/interrupts? (hurt 20 {}) {:goal/plan :dragon} {:intent/kind :perch})
         "a running perch ends under the line")
+    (let [perching
+          (assoc (hurt 20 {}) :plan/intent {:intent/kind :perch :intent/target dragon-eid})]
+      (is (intent/done? (:plan/intent (intent/run
+                                       perching
+                                       (:plan/intent perching)
+                                       {:event/kind :tick :event/now 1000 :event/rand 0.5})))
+          "perch intent yields at once under retreat health"))
     (let [sheltered (assoc (hurt 20 {}) :player/pos [6.5 64.0 0.5])]
       (is (= {:plan/wait :low-health} (dragon/toward-dragon sheltered))
           "in shelter outside the basin: waiting for health back, not walking"))))

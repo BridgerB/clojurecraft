@@ -33,8 +33,8 @@
    :face {:down 0 :up 1 :north 2 :south 3 :west 4 :east 5}  ; Direction
    :next-state {:status 1 :login 2 :transfer 3}             ; intention, the handshake
    :client-command {:perform-respawn 0 :request-stats 1}    ; client-command's action
-   :game-event {:win-game 4}      ; game-event's event: the credits after the exit portal (the rest unread)
-   :boss-event {:add 0 :remove 1} ; boss-event's action (BossEvent operation ordinals; the rest unread)
+   :game-event {:win-game 4} ; game-event's event: the credits after the exit portal (the rest unread)
+   :boss-event {:add 0 :remove 1 :update-health 2} ; boss-event's action (BossEvent operation ordinals; the rest unread)
    :chat-mode {:enabled 0 :commands-only 1 :hidden 2} ; ChatVisiblity
    :main-hand {:left 0 :right 1}                      ; HumanoidArm
    :particle-status {:all 0 :decreased 1 :minimal 2}  ; ParticleStatus
@@ -428,7 +428,10 @@
         id (b/read-varint buf)
         pkt-name (get-in names [state dir id])]
     (if-let [fields (and pkt-name (specs [state dir pkt-name]))]
-      (assoc (read-fields buf fields) :packet/name pkt-name)
+      (let [m (assoc (read-fields buf fields) :packet/name pkt-name)]
+        (cond-> m
+          (and (= :boss-event pkt-name) (= 2 (:action m)) (>= (.remaining buf) 4))
+          (assoc :health (b/read-f32 buf))))
       {:packet/name :unknown :packet/id id :packet/known pkt-name :packet/len (alength frame)})))
 
 ;; ---------------------------------------------------------------- writing

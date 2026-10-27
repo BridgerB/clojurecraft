@@ -8,6 +8,7 @@
             [clojure.test.check.properties :as prop]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.fixtures :as fx]
+            [clojurecraft.fortress :as fortress]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.main :as main]
@@ -420,16 +421,10 @@
                                       [40 20 60])
             "a block nearer is nowhere")))
     (testing "within deep over the frame, tunnel move blocked: stairs down fallback"
-      (let [w (assoc seen
-                     :player/pos [8.5 26.0 8.5]
-                     :world/chunks
-                     {[0 0] (world/column (into {}
-                                                (for [dx [-1 0 1]
-                                                      dz [-1 0 1]
-                                                      :when (not (and (zero? dx) (zero? dz)))]
-                                                  [[(+ 8 dx) 25 (+ 8 dz)] blocks/water-base])))})]
-        (is (= :stairs-down (:intent/kind (plan/next-intent w room-row plan/goals)))
-            "when dry tunnel has no first step within deep, falls back to stairs")))
+      (let [w (assoc seen :player/pos [8.5 26.0 8.5])]
+        (with-redefs [fortress/choose-move (constantly nil)]
+          (is (= :stairs-down (:intent/kind (plan/next-intent w room-row plan/goals)))
+              "when dry tunnel has no first step within deep, falls back to stairs"))))
     (testing "within 6 of it: there"
       (is (plan/done-by (assoc seen :player/pos [40.5 22.0 58.5]) room-row)))
     (testing "in water: out to the nearest bank first"

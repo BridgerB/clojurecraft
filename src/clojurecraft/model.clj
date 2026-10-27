@@ -102,6 +102,9 @@
     "how long the server's ticks take now, from the set-time packets' spacing; digs stretch by it (intent/slowdown)"
     "after the second set-time"]
    [:player/health "health from set_health" "after the first set_health"]
+   [:player/hurt-at "tick health dropped or damage was taken, for fight-or-flee"
+    "after taking damage"]
+   [:player/attacker "entity id of the mob that hit the player" "after taking damage from a mob"]
    [:player/food "food level, 0-20, from set_health; the :eat row eats under eat/hungry-below"
     "after the first set_health"]
    [:player/saturation "food saturation from set_health: what drains before the food does"
@@ -137,6 +140,8 @@
    [:world/boss-bars
     "ids of the boss bars the server shows (boss-event add, gone at remove): the dragon fight's"
     "after the first boss bar"]
+   [:world/boss-health "{uuid health}: health (0.0-1.0) of each boss bar (boss-event update-health)"
+    "after the first update-health"]
    [:entity/type "entity type id (71 is an item)" "inside :world/entities"]
    [:entity/pos "last known entity position" "inside :world/entities"]
    [:entity/seen-at "ms the entity was added" "inside :world/entities"]
@@ -298,6 +303,8 @@
     "after a climb out comes out"]
    [:plan/intents "intents started so far; the next one's :intent/id" "after the first intent"]
    [:plan/intent "the intent being executed" "while one runs"]
+   [:plan/failed "the last failed intent with its feet position" "after an intent fails"]
+   [:plan/trail "feet positions of recently started intents, oldest first" "while planning"]
    [:plan/last "the last intent that ended, with its outcome" "after one ends"]
    [:plan/reason "why the plan failed" "after it failed"]
    [:plan/waiting "why the planner is waiting" "after the first wait"]

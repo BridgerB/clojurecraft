@@ -255,37 +255,37 @@
    38477665442 bot Clj_r04 failed a redig :not-picked-up at the cell before its feet, placed
    the table for a spare pickaxe in that cell, could not see it, and went for the wood of a new
    one with its last pickaxe (issue #43).
-   max-attempts failures in a row fail the plan with the intent's reason. A walk that failed
-   :no-path counts apart, in :plan/unwalkable: its route was accepted and then could not be
-   walked, so the target is given up and the next candidate is tried (three such walks, each a
-   different place, used to end a run that was still searching), but max-unwalkable of them in
-   a row fail the plan too, so a search whose places keep changing cannot run for hours. A
-   staircase (down or up) or a tunnel that died :boxed (boxing-kinds) records the cell it stood
-   on in :plan/boxed-at, so the next descent, climb or tunnel does not start there and a later
-   stair will not step back onto it (the pearl hunt's climb toward an enderman on a ledge, issue
-   #263, is refused under the ledge's overhang and must not be cut again from the same cell). Its visited cells join :plan/boxed-route: a retreat back along the failed
-   search is not new rock (issue #161, R1/29). A walk for a log that failed :no-path adds its
-   target to :plan/unreached, the places a choice of logs passes over together with the trees round them
-   (issue #75). A :cross (crossing-kinds) blacklists nothing and counts against its trunk's column
-   as a log's walk does, so the trunk is skipped after max-trunk-failures of them and no sooner:
-   its target is the trunk across the water, which the bridge up the cliff at the far shore
-   reaches (wood/trees-bridge) when the swim does not. Sim worlds R3/45 (issues #87 and #108)
-   crossed a lake toward the only trunk in reach, met the foot of a cliff with the trunk on its
-   top, and the failed cross blacklisted it: the staircase up the cliff then found no trunk to
-   climb toward and the plan waited :no-log."
+   max-unwalkable walks in a row that failed :no-path fail the plan with that reason, so a search
+   whose places keep changing cannot run for hours. A staircase (down or up) or a tunnel that
+   died :boxed (boxing-kinds) records the cell it stood on in :plan/boxed-at, so the next descent,
+   climb or tunnel does not start there and a later stair will not step back onto it (the pearl
+   hunt's climb toward an enderman on a ledge, issue #263, is refused under the ledge's overhang
+   and must not be cut again from the same cell). Its visited cells join :plan/boxed-route: a
+   retreat back along the failed search is not new rock (issue #161, R1/29). A walk for a log
+   that failed :no-path adds its target to :plan/unreached, the places a choice of logs passes
+   over together with the trees round them (issue #75). A :cross (crossing-kinds) blacklists
+   nothing and counts against its trunk's column as a log's walk does, so the trunk is skipped
+   after max-trunk-failures of them and no sooner: its target is the trunk across the water,
+   which the bridge up the cliff at the far shore reaches (wood/trees-bridge) when the swim
+   does not. Sim worlds R3/45 (issues #87 and #108) crossed a lake toward the only trunk in
+   reach, met the foot of a cliff with the trunk on its top, and the failed cross blacklisted
+   it: the staircase up the cliff then found no trunk to climb toward and the plan waited :no-log."
   [world i]
-  (let [unwalkable? (and (= :walk (:intent/kind i)) (= :no-path (:intent/reason i)))
+  (let [unwalkable? (or (and (= :walk (:intent/kind i)) (= :no-path (:intent/reason i)))
+                        (= :no-path (:intent/reason i)))
         attempts (cond-> (:plan/attempts world 0) (not unwalkable?) inc)
-        unwalkable (if unwalkable? (inc (:plan/unwalkable world 0)) 0)]
+        unwalkable (if unwalkable? (inc (:plan/unwalkable world 0)) 0)
+        feet (intent/feet world)]
     (-> world
         (memory/remember-intention i :failed)
         (assoc :player/controls {})
+        (assoc :plan/failed (assoc i :intent/from-feet feet))
         (cond-> (and (:intent/target i)
                      (not (contains? placing-kinds (:intent/kind i)))
                      (not (contains? crossing-kinds (:intent/kind i))))
                 (update :plan/blacklist (fnil conj #{}) (:intent/target i)))
         (cond-> (and (contains? boxing-kinds (:intent/kind i)) (= :boxed (:intent/reason i)))
-                (-> (update :plan/boxed-at (fnil conj #{}) (intent/feet world))
+                (-> (update :plan/boxed-at (fnil conj #{}) feet)
                     (update :plan/boxed-route (fnil into #{}) (:intent/visited i))))
         (cond-> (and unwalkable? (= :log (:intent/for i)))
                 (update :plan/unreached (fnil conj #{}) (:intent/target i)))
@@ -294,11 +294,19 @@
                 (update-in [:plan/trunk-failures
                             (let [[x _ z] (or (:intent/trunk i) (:intent/target i))] [x z])]
                            (fnil inc 0)))
+        (cond-> (>= attempts max-attempts) (update :plan/boxed-at (fnil conj #{}) feet))
         (assoc :plan/attempts attempts :plan/unwalkable unwalkable)
         (dissoc :plan/intent :plan/last)
-        (game/say
-         (str "intent " (:intent/kind i) " failed: " (:intent/reason i) " (attempt " attempts ")"))
-        (cond-> (or (>= attempts max-attempts) (>= unwalkable max-unwalkable))
+        (game/say (str "intent "
+                       (:intent/kind i)
+                       " failed: "
+                       (:intent/reason i)
+                       " (attempt "
+                       attempts
+                       " of "
+                       max-attempts
+                       ")"))
+        (cond-> (>= unwalkable max-unwalkable)
                 (assoc :plan/status :failed :plan/reason (:intent/reason i))))))
 
 (declare plan-tick)
@@ -318,14 +326,28 @@
    waiting. An intent that names a dead end (:intent/dead-end) puts that cell in :plan/boxed-at."
   [world i]
   (let [n (inc (:plan/intents world 0))
+        feet (intent/feet world)
+        trail (:plan/trail world [])
         i (assoc i :intent/status :active :intent/id n)]
     (-> world
         (assoc :plan/intents n :plan/intent i)
+        (cond-> (and feet (not= feet (peek trail)))
+                (assoc :plan/trail (vec (take-last 128 (conj trail feet)))))
         (memory/remember-intention i :started)
         (cond-> (:intent/dead-end i) (update :plan/boxed-at (fnil conj #{}) (:intent/dead-end i)))
-        (dissoc :plan/waiting-since :plan/waiting-ticks)
+        (dissoc :plan/waiting-since :plan/waiting-ticks :plan/failed)
         (game/say (str "intent " (:intent/kind i)
                        " " (or (:intent/target i) (:intent/recipe i)))))))
+
+(defn identical-retry?
+  "Is next an identical repeat of the intent that just failed from feet: same kind, target and direction?"
+  [next failed feet]
+  (and next
+       failed
+       (= (:intent/kind next) (:intent/kind failed))
+       (= (:intent/target next) (:intent/target failed))
+       (= (:intent/dir next) (:intent/dir failed))
+       (= feet (:intent/from-feet failed))))
 
 (defn abandon-intent
   "Drop the running intent i before it ended, for reason (:goal-met, :preempted, :interrupted): remember it
@@ -406,7 +428,18 @@
           i (run-intent world i event table)
           (nil? next) (wait world :nothing-to-do)
           (:plan/wait next) (wait world (:plan/wait next))
-          :else (start-intent world (assoc next :intent/goal (:goal/id goal))))))
+          :else
+          (let [feet (intent/feet world)
+                failed (:plan/failed world)]
+            (if (identical-retry? next failed feet)
+              (if-let [prev (some #(when (not= % feet) %) (rseq (:plan/trail world [])))]
+                (start-intent (update world :plan/boxed-at (fnil conj #{}) feet)
+                              {:intent/kind :walk
+                               :intent/target prev
+                               :intent/for :retreat
+                               :intent/goal (:goal/id goal)})
+                (wait world :retrying))
+              (start-intent world (assoc next :intent/goal (:goal/id goal))))))))
 
 (defn steered
   "The world after steer by the row of table the running intent serves (:intent/goal), or as it

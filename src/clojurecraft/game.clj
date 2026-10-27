@@ -298,11 +298,24 @@
 (defmethod on-packet [:play :set-health]
   [w p]
   ;; the food and saturation ride on the same packet (issue #259: the :eat row reads the food); a
-  ;; packet decoded short, a prefix of the spec, has health alone
-  (cond-> (assoc w :player/health (:health p))
-    (:food p) (assoc :player/food (:food p))
-    (:saturation p) (assoc :player/saturation (:saturation p))
-    (and (<= (:health p) 0) (not (:player/dead? w))) die))
+  ;; packet decoded short, a prefix of the spec, has health alone.
+  ;; When health drops, record the tick so fight-or-flee triggers at once.
+  (let [hurt? (and (:player/health w) (< (double (:health p)) (double (:player/health w))))]
+    (cond-> (assoc w :player/health (:health p))
+      hurt? (assoc :player/hurt-at (:time/tick w 0))
+      (:food p) (assoc :player/food (:food p))
+      (:saturation p) (assoc :player/saturation (:saturation p))
+      (and (<= (:health p) 0) (not (:player/dead? w))) die)))
+
+(defmethod on-packet [:play :damage-event]
+  [w {:keys [entity-id source-cause source-direct]}]
+  (if (= entity-id (:player/eid w))
+    (let [attacker (if (pos? (long (or source-direct 0)))
+                     source-direct
+                     (when (pos? (long (or source-cause 0))) source-cause))]
+      (cond-> (assoc w :player/hurt-at (:time/tick w 0))
+        attacker (assoc :player/attacker attacker)))
+    w))
 
 (defmethod on-packet [:play :container-set-content]
   [w {:keys [window-id state-id items carried]}]
@@ -425,11 +438,17 @@
   (cond-> (update w :world/entities #(apply dissoc % ids))
     (some #(entity/dragon-gone? w %) ids) (assoc :world/dragon-dead? true)))
 (defmethod on-packet [:play :boss-event]
-  ;; the bars shown, by id (issue #267): the dragon fight's goes when its dragon dies
-  [w {:keys [uuid action]}]
+  ;; the bars shown, by id (issue #267): the dragon fight's goes when its dragon dies;
+  ;; action 2 updates health (0.0 to 1.0)
+  [w {:keys [uuid action health]}]
   (cond (nil? uuid) w
         (= action (p/value :boss-event :add)) (update w :world/boss-bars (fnil conj #{}) uuid)
-        (= action (p/value :boss-event :remove)) (update w :world/boss-bars (fnil disj #{}) uuid)
+        (= action (p/value :boss-event :remove))
+        (-> w
+            (update :world/boss-bars (fnil disj #{}) uuid)
+            (update :world/boss-health (fnil dissoc {}) uuid))
+        (= action (p/value :boss-event :update-health))
+        (cond-> w health (assoc-in [:world/boss-health uuid] health))
         :else w))
 (defmethod on-packet [:play :game-event]
   ;; win_game: the bot went through the exit portal, so the dragon is dead; the vanilla client
