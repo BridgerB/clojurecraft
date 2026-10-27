@@ -394,7 +394,13 @@
    with every end a route reaches spent, the farthest of those spent ends is walked to
    again: from forty-eight blocks off the ends round there are unspent, and the forest there
    has had the walk's minutes to spawn into; the ends near the feet are revisited only by
-   being walked past. Gym batch pearls-warped9-a (plan run 39898400239) run 1 took three
+   being walked past. Never one of the two ends the last walks arrived at (memory/newest-dones:
+   where the bot stands and where it just came from), or a pocket with two ends walks between
+   them for good, each the farthest spent from the other: gym batch pearls-w1 (plan run
+   40387599204) run 2 took five pearls, then walked between [2474 63 2168] and [2487 63 2168]
+   and back 1,443 times from 21:41 to the five-hour timeout, a lookout between, its last
+   fight at 21:55. With both refused the hunt digs out or rests where it stands, and the
+   forest round it spawns to it there. Gym batch pearls-warped9-a (plan run 39898400239) run 1 took three
    pearls by about minute forty and then stood in lookouts in one place for four hours with
    no enderman tracked: nothing for the roam or dig-out to go after, and the forest it never
    searched past its stretch of floor spawned endermen it never saw."
@@ -402,6 +408,7 @@
   (let [feet (intent/feet world)
         start (mod (quot (:time/now world 0) roam-turn-ms) (count headings))
         spent (memory/arrived world)
+        recent (into #{} (map :intention/target) (memory/newest-dones world :walk 2))
         tries (for [reach roam-reaches k (range (count headings))] [reach k])
         plan-to (fn [[reach k]]
                   (let [heading (nth headings (mod (+ start k) (count headings)))
@@ -418,19 +425,20 @@
     (or (some (fn [[status to]]
                 (when (and (= :found status) to (not (contains? spent to))) (walk to)))
               planned)
-        (let [[_ partial _ spent-end] (reduce (fn [[pg p sg s] [status to]]
-                                                (let [gain (when to (path/octile feet to))]
-                                                  (cond (and gain
-                                                             (not= :found status)
-                                                             (>= gain roam-reach)
-                                                             (not (contains? spent to))
-                                                             (> gain pg))
-                                                        [gain to sg s]
-                                                        (and gain (= :found status) (> gain sg))
-                                                        [pg p gain to]
-                                                        :else [pg p sg s])))
-                                              [0 nil 0 nil]
-                                              planned)]
+        (let [[_ partial _ spent-end]
+              (reduce (fn [[pg p sg s] [status to]]
+                        (let [gain (when to (path/octile feet to))]
+                          (cond (and gain
+                                     (not= :found status)
+                                     (>= gain roam-reach)
+                                     (not (contains? spent to))
+                                     (> gain pg))
+                                [gain to sg s]
+                                (and gain (= :found status) (not (contains? recent to)) (> gain sg))
+                                [pg p gain to]
+                                :else [pg p sg s])))
+                      [0 nil 0 nil]
+                      planned)]
           (when-let [to (or partial spent-end)] (walk to))))))
 
 (defn routable

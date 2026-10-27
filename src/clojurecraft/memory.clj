@@ -352,6 +352,19 @@
                k)]
     (when e (into {} (d/touch (d/entity db e))))))
 
+(defn newest-dones
+  "The newest n :done facts of an intention of kind k, newest first, as maps of :intention/*
+   keys (last-done is the first): where the bot's last walks arrived, in the order it arrived
+   there, is where it stands and where it just came from (pearls/roam's revisit)."
+  [world k n]
+  (let [db (:world/facts world)]
+    (->> (d/q '[:find [?e ...] :in $ ?k :where [?e :intention/kind ?k] [?e :intention/event :done]]
+              db
+              k)
+         (sort >)
+         (take n)
+         (mapv #(into {} (d/touch (d/entity db %)))))))
+
 (defn arrived
   "The set of targets of every walk that arrived (the :done facts of :walk intentions): the
    cells the bot has already walked to. A walk back to one changes nothing the first did not

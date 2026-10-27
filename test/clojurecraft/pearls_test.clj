@@ -155,15 +155,17 @@
 (deftest a-roam-with-every-end-spent-walks-to-the-farthest-again
   ;; gym batch pearls-warped9-a (plan run 39898400239) run 1: three pearls by about minute
   ;; forty, then four hours of lookouts in one place with no enderman tracked and nothing for
-  ;; the roam to go after
+  ;; the roam to go after. Never one of the last two ends walked to, though: gym batch
+  ;; pearls-w1 (plan run 40387599204) run 2 walked between [2474 63 2168] and [2487 63 2168]
+  ;; 1,443 times to the five-hour timeout, each the farthest spent end from the other
   (let [col (world/column {})
         w (-> (standing {})
               (assoc :time/now 0 :world/chunks (zipmap [[0 0] [1 0] [0 1] [1 1]] (repeat col))))
         spent (loop [w w
                      n 0
-                     seen #{}]
+                     seen []]
                 (let [to (:intent/target (pearls/roam w))]
-                  (if (and to (not (contains? seen to)) (< n 40))
+                  (if (and to (not (contains? (set seen) to)) (< n 40))
                     (recur (memory/remember-intention
                             w
                             {:intent/id (+ 100 n) :intent/kind :walk :intent/target to}
@@ -171,13 +173,20 @@
                            (inc n)
                            (conj seen to))
                     [w to seen])))
-        [w* to seen] spent]
-    (is (seq seen) "ends to spend")
-    (is (contains? seen to) "every end a route reaches spent: the farthest is walked to again")
-    (is
-     (>= (path/octile [8 64 8] to) (- (apply max (map #(path/octile [8 64 8] %) seen)) 2))
-     "the farthest of them a route reaches (ends the search only came to may lie a step farther)")
-    (is (= {:intent/kind :walk :intent/target to :intent/for :pearls} (pearls/roam w*)))))
+        [w* to seen] spent
+        recent (set (take-last 2 seen))
+        allowed (remove recent seen)
+        back
+        (memory/remember-intention w* {:intent/id 200 :intent/kind :walk :intent/target to} :done)
+        again (:intent/target (pearls/roam back))]
+    (is (< 2 (count seen)) "ends to spend, and more than the last two")
+    (is (contains? (set seen) to) "every end a route reaches spent: a far one is walked to again")
+    (is (not (contains? recent to)) "never where it stands or where it just came from")
+    (is (>= (path/octile [8 64 8] to) (- (apply max (map #(path/octile [8 64 8] %) allowed)) 2))
+        "the farthest of the rest a route reaches (ends the search only came to may lie farther)")
+    (is (= {:intent/kind :walk :intent/target to :intent/for :pearls} (pearls/roam w*)))
+    (is (not (contains? #{to (last seen)} again))
+        "arrived there, the next revisit is neither it nor the end before it: no ping-pong")))
 
 (deftest a-roam-follows-a-caves-passage-to-where-it-can-look-from
   ;; gym batch pearls-263f (plan run 38918584959, probe 39130057525): a landing in a cave pocket
