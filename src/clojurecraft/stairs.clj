@@ -326,12 +326,10 @@
           :else nil)))
 
 (defn falls-over?
-  "Would gravel or sand fall through a stair up's first cell, the one over the head, onto the
-   bot: does the block over it fall (blocks/falls?)?"
+  "Would gravel or sand fall through any of cells onto the bot: does any block over them fall
+   (intent/falling-column?)?"
   [world cells]
-  (let [[x y z] (first cells)]
-    (boolean (some-> (terrain/block-at world [x (inc y) z])
-                     blocks/falls?))))
+  (boolean (some #(intent/falling-column? world %) cells)))
 
 (defn up-safe?
   "May a stair up be cut: what any stair needs (safe?), and no gravel or sand over the cell above
@@ -461,10 +459,12 @@
   (or (seal world feet cells) (dry-feet world feet cells) (step-lay world feet cells)))
 
 (defn down-safe?
-  "May a stair down be cut as it stands: safe?, and none of its solid cells exposes a fluid the
-   child dig would refuse. Open cells need no dig, even beside water."
+  "May a stair down be cut as it stands: safe?, no falling blocks over its cells (falls-over?),
+   and none of its solid cells exposes a fluid the child dig would refuse. Open cells need no
+   dig, even beside water."
   [world cells]
   (and (safe? world cells)
+       (not (falls-over? world cells))
        (not-any? #(and (some-> (terrain/block-at world %)
                                blocks/solid?)
                        (intent/exposes-fluid? world %))
@@ -554,9 +554,10 @@
 
 (defn level-safe?
   "May a level step (or a stair whose cells are given) be cut: its cells may be opened
-   (level-clear?) and a floor lies under its feet cell (safe?)."
+   (level-clear?), no falling blocks over its cells (falls-over?), and a floor lies under its
+   feet cell (safe?)."
   [world cells]
-  (and (level-clear? world cells) (safe? world cells)))
+  (and (level-clear? world cells) (safe? world cells) (not (falls-over? world cells))))
 
 (def six-around
   "The six cells that share a face with a cell, as offsets."

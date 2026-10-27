@@ -13,7 +13,8 @@
             [clojurecraft.packet :as packet]
             [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
-            [clojurecraft.terrain :as terrain]))
+            [clojurecraft.terrain :as terrain]
+            [clojurecraft.trap :as trap]))
 
 (set! *warn-on-reflection* true)
 
@@ -94,6 +95,27 @@
                      [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])
                (fluid-over-falling? world target)
                (bed-over-fluid? world target))))
+
+(defn falling-column?
+  "Is there a block in column [x z] above y that can fall into it: a falling block
+   (blocks/falls?) with only air, passable or other falling blocks between y and it, within
+   falling-reach? A solid non-falling block supports whatever is above it."
+  [world [x y z]]
+  (loop [dy 1]
+    (when (<= dy falling-reach)
+      (let [b (terrain/block-at world [x (+ y dy) z])]
+        (cond (nil? b) false
+              (blocks/falls? b) true
+              (blocks/solid? b) false
+              :else (recur (inc dy)))))))
+
+(defn unsafe-falling?
+  "Would breaking target drop a falling block (falling-column?) onto the bot: the bot's body box
+   overlaps target's column (physics/overlaps-column?), and target is under the head cell?"
+  [world [x _ z :as target]]
+  (boolean (and (physics/overlaps-column? (:player/pos world) [x z])
+                (not= target (physics/eye-cell (:player/pos world)))
+                (falling-column? world target))))
 
 (defn dig-time
   "ms to break block id with held (an item id, or nil for the hand) under the world's penalties:
@@ -532,7 +554,9 @@
           (fail world :out-of-reach)
           (= :needs-tool (breaking-tool world at-target drop-ok?)) (fail world :needs-tool)
           (or (contains? never-dug (blocks/name-of at-target))
-              (and (not exposes-ok?) (exposes-fluid? world target)))
+              (and (not exposes-ok?) (exposes-fluid? world target))
+              (unsafe-falling? world target)
+              (and (trap/suffocating? world) (not= target (physics/eye-cell (:player/pos world)))))
           (fail world :unsafe)
           (or (and (>= still 3) (> (- now since) settle-ms)) (> (- now since) settle-deadline))
           (let [seq (inc (:bot/sequence world))

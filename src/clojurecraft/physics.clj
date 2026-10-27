@@ -58,6 +58,19 @@
 
 (defn eye "Eye position of a player whose feet centre is [x y z]." [[x y z]] [x (+ y eye-height) z])
 
+(defn eye-cell
+  "The cell [x y z] the eye position is in."
+  [pos]
+  (let [[x y z] (eye pos)] [(long (math/floor x)) (long (math/floor y)) (long (math/floor z))]))
+
+(defn overlaps-column?
+  "Does the player's body box at pos overlap column [cx cz]?"
+  [[x _ z] [cx cz]]
+  (and (< (- x half-width) (inc (long cx)))
+       (> (+ x half-width) (long cx))
+       (< (- z half-width) (inc (long cz)))
+       (> (+ z half-width) (long cz))))
+
 (defn y-of "The height of a point or a block position [x y z]: (y-of [3 64 5]) is 64." [[_ y _]] y)
 
 (defn centre
@@ -166,6 +179,11 @@
   "Does the player's box at pos overlap any water or lava, however little (touch-contract)?"
   [fluid-at pos]
   (or (touching-water? fluid-at pos) (in-fluid? fluid-at :lava touch-contract (aabb pos))))
+
+(defn suffocating?
+  "Does the eye cell hold a solid block: collision-top 1.0?"
+  [solid? pos]
+  (boolean (when-let [s (solid? (eye-cell pos))] (>= (double s) 1.0))))
 
 (defn fluids-here
   "What the player at pos is in: {:in-water? :in-lava? :eye-in-water?}."
@@ -290,7 +308,8 @@
             :player/fall-distance fall
             :player/in-water? in-water?
             :player/in-lava? in-lava?
-            :player/eye-in-water? (eye-in-water? fluid-at pos')))))
+            :player/eye-in-water? (eye-in-water? fluid-at pos')
+            :player/suffocating? (suffocating? solid? pos')))))
 
 (defn look-at
   "[yaw pitch] in degrees from eye to target, Notchian convention (south = 0, west = +90)."

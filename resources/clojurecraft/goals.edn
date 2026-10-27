@@ -12,7 +12,17 @@
 ;; A row is never edited into a different meaning or deleted: to fix one, add the fixed row under
 ;; a new id (moving :goal/until to it) and mark the old one :goal/superseded-by <new id>. It stays
 ;; here so a recording whose :go names it still replays; the planner follows the chain.
-[{:goal/id :escape-water
+[{:goal/id :escape-suffocation
+  :goal/priority 0
+  :goal/target? true
+  :goal/always? true
+  :goal/doc
+  "out from under a solid block at the head cell by stepping to a free neighbour or digging the head cell, before anything else"
+  :goal/trap :suffocation
+  :goal/done? :not-trapped-in
+  :goal/plan :escape
+  :goal/act :unbury}
+ {:goal/id :escape-water
   :goal/priority 0
   :goal/target? true
   :goal/always? true
