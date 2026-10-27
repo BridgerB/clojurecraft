@@ -28,7 +28,7 @@
      :brick-bounds (when (seq bricks)
                      [(reduce min (map first bricks)) (reduce max (map first bricks))
                       (reduce min (map second bricks)) (reduce max (map second bricks))
-                      (reduce min (map #(nth % 2) bricks)) (reduce max (map #(nth % 2) bricks))])}))
+                      (reduce min (map #(nth % 2) bricks)) (reduce max #(nth % 2) bricks)])}))
 
 (defn fortress-search-brick
   [world]
@@ -67,10 +67,9 @@
   (println "\n========================================================")
   (println "INVESTIGATING:" world-file "seed:" seed "custom?:" custom?)
   (println "========================================================")
-  (let [w (assoc (simrace/prepared (capture/read-world world-file)) :capture/file (str world-file))
-        npath (simrace/nether-file world-file)
-        nether (simrace/read-nether npath)
-        w-nether (simrace/with-nether w nether npath)
+  (let [npath (simrace/nether-file world-file)
+        w-nether (simrace/prepared (capture/read-world npath))
+        nether (:capture/nether w-nether)
         nether-info (analyze-nether nether)]
     (println "Nether file:" npath)
     (println "Nether spawners:" (:spawners nether-info))
@@ -112,6 +111,23 @@
                goal (plan/choose w' plan/goals)
                goal-id (:goal/id goal)
                current-intent (:plan/intent w')]
+           ;; Packet logging during blaze-rods
+           (when (and (= :packet (:event/kind event)) (= goal-id :blaze-rods))
+             (let [p (:event/packet event)]
+               (case (:packet/name p)
+                 :set-health
+                 (println (format "[SET-HEALTH] t=%d hp=%.1f food=%d sat=%.1f"
+                                  t
+                                  (double (:health p))
+                                  (long (or (:food p) -1))
+                                  (double (or (:saturation p) 0.0))))
+                 :damage-event
+                 (println (format "[DAMAGE-EVENT] t=%d eid=%s type=%s cause=%s"
+                                  t
+                                  (:entity-id p)
+                                  (:source-type p)
+                                  (:source-cause p)))
+                 nil)))
            ;; Nether entry
            (when (and (= dim dimension/nether) (not @entered-nether?))
              (reset! entered-nether? true)
@@ -147,18 +163,24 @@
                (reset! last-log t)
                (reset! last-intent-id (:intent/id current-intent))
                (let [sp (blaze/nearest-spawner w')
-                     bls (blaze/blazes w')]
+                     bls (blaze/blazes w')
+                     wats (blaze/watchers w')]
                  (println
                   (format
-                   "[BLAZE-RODS] t=%d pos=%s intent=%s target=%s search=%s spawner=%s blazes=%d rods=%d"
+                   "[BLAZE-RODS] t=%d pos=%s hp=%.1f food=%d intent=%s target=%s spawner=%s bls=%d wats=%d rods=%d hurt?=%s wary?=%s heals?=%s"
                    t
                    (pr-str pos)
+                   (double (:player/health w' 20.0))
+                   (long (:player/food w' 20))
                    (:intent/kind current-intent)
                    (pr-str (:intent/target current-intent))
-                   (pr-str (:intent/search current-intent))
                    (pr-str sp)
                    (count bls)
-                   (blaze/rods w'))))))
+                   (count wats)
+                   (blaze/rods w')
+                   (blaze/hurt? w')
+                   (blaze/wary? w')
+                   (blaze/heals? w'))))))
            w'))
        opts {:host "sim" :port 0 :name "Clj_sim"}
        res (sim/run+ instrumented-step
@@ -181,8 +203,9 @@
 
 (defn -main
   [& _args]
-  (let [cases [["cache/sim-worlds/R2/12.edn.gz" 2 true]]]
-    (doseq [[world seed custom?] cases]
+  (let [cases [["cache/sim-worlds/R1/1.edn.gz" 1 false (* 60000 65)]
+               ["cache/sim-worlds/R1/17.edn.gz" 1 false (* 60000 80)]]]
+    (doseq [[world seed custom? ms] cases]
       (when (.exists (io/file (str world)))
-        (run-and-log! (io/file (str world)) seed "blaze-rods" (* 60000 120) custom?))))
+        (run-and-log! (io/file (str world)) seed "blaze-rods" ms custom?))))
   (shutdown-agents))
