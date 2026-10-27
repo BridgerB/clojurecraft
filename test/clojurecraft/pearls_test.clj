@@ -1280,7 +1280,7 @@
     (let [next (plan/next-intent w row plan/goals)]
       (is (= :stairs-up (:intent/kind next))
           "climbs out toward surface rather than repeating lookout")
-      (is (= [0 1] (:intent/dir next)) "climbs into the solid rock wall"))))
+      (is (= [1 0] (:intent/dir next)) "climbs into the solid rock wall"))))
 
 (deftest empty-tunnel-that-makes-no-progress-fails-boxed
   ;; reviewer finding 1: :tunnel that makes no progress must not repeat forever
