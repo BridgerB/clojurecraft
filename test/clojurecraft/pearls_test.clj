@@ -1041,7 +1041,23 @@
         walked (plan/next-intent respawned row plan/goals)]
     (is (= :walk (:intent/kind walked)))
     (is (= :log (:intent/for walked))
-        "a table held is no wood: the remembered trunk is walked to for the pickaxe")))
+        "a table held is no wood: the remembered trunk is walked to for the pickaxe"))
+  ;; gym batch pearls-w2 (plan run 40428200343) run 2: respawned, remade its wooden sword,
+  ;; dug up the placed table (:take-table), and failed :no-pickaxe on the next tick because
+  ;; pick-acts had no :collect, leaving the dropped table uncollected
+  (let [respawned (-> (standing {})
+                      (assoc :player/inventory {0 (item :wooden_sword 1) 1 (item :stick 3)}
+                             :time/now 0
+                             :plan/last
+                             {:intent/kind :dig
+                              :intent/target [3 94 49]
+                              :intent/for :take-table
+                              :intent/status :done})
+                      (memory/remember-intention {:intent/id 1 :intent/kind :burrow} :done))
+        collected (plan/next-intent respawned row plan/goals)]
+    (is (= :collect (:intent/kind collected)))
+    (is (= :take-table (:intent/for collected))
+        "a dug table is collected toward the pickaxe remake, never the :no-pickaxe wait")))
 
 (deftest no-sword-held-no-hunt
   ;; gym batch pearls-warped8-b (plan run 39775345028): runs 1 and 3 respawned with nothing held

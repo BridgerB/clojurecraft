@@ -1479,8 +1479,8 @@
 
 (def sword-acts
   "Intents that make a sword from what is already held: placing or opening a table, the craft,
-   a dig that takes the table along, a toss that makes room for it."
-  #{:place :craft :open-container :dig :toss})
+   taking the table along (a dig and a collect), a toss that makes room for it."
+  #{:place :craft :open-container :dig :collect :toss})
 
 (defn log-counted?
   "Is a log already counted, in the inventory or laid in the crafting grid (sword/with-laid
@@ -1532,8 +1532,8 @@
 
 (def pick-acts
   "Intents that make a pickaxe from what is already held: placing or opening a table, the craft,
-   a dig that takes the table along, a toss that makes room for it."
-  #{:place :craft :open-container :dig :toss})
+   taking the table along (a dig and a collect), a toss that makes room for it."
+  #{:place :craft :open-container :dig :collect :toss})
 
 (defn worn-pick?
   "Is this stack a pickaxe under spare-digs digs (window/swings-left)?"
