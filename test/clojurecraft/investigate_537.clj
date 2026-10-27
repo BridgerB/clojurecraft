@@ -67,9 +67,10 @@
   (println "\n========================================================")
   (println "INVESTIGATING:" world-file "seed:" seed "custom?:" custom?)
   (println "========================================================")
-  (let [npath (simrace/nether-file world-file)
-        w-nether (simrace/prepared (capture/read-world npath))
-        nether (:capture/nether w-nether)
+  (let [w (assoc (simrace/prepared (capture/read-world world-file)) :capture/file (str world-file))
+        npath (simrace/nether-file world-file)
+        nether (simrace/read-nether npath)
+        w-nether (simrace/with-nether w nether npath)
         nether-info (analyze-nether nether)]
     (println "Nether file:" npath)
     (println "Nether spawners:" (:spawners nether-info))
