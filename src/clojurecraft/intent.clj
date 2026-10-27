@@ -109,13 +109,39 @@
               (blocks/solid? b) false
               :else (recur (inc dy)))))))
 
+(defn falling-in-column?
+  "Is there a block above [x y z] that can fall into it (falling-column?), or a falling block
+   entity (type 51) in column [x z] above y?"
+  [world [x y z]]
+  (or (falling-column? world [x y z])
+      (boolean (some (fn [[_ e]]
+                       (when (= 51 (:entity/type e))
+                         (let [[ex ey ez] (:entity/pos e)]
+                           (and (= (long (math/floor ex)) (long x))
+                                (= (long (math/floor ez)) (long z))
+                                (>= ey (double y))))))
+                     (:world/entities world)))))
+
+(defn step-into-falling?
+  "Would moving the bot to pos' put the body box into a column with a falling block above
+   while that block can still fall (falling-in-column?)?"
+  [world pos']
+  (let [fx (long (math/floor (first pos')))
+        fz (long (math/floor (nth pos' 2)))
+        fy (long (math/floor (second pos')))]
+    (boolean (some (fn [[dx dz]]
+                     (let [col [(+ fx dx) (+ fz dz)]]
+                       (and (physics/overlaps-column? pos' col)
+                            (falling-in-column? world [(first col) fy (second col)]))))
+                   [[0 0] [1 0] [-1 0] [0 1] [0 -1]]))))
+
 (defn unsafe-falling?
-  "Would breaking target drop a falling block (falling-column?) onto the bot: the bot's body box
+  "Would breaking target drop a falling block (falling-in-column?) onto the bot: the bot's body box
    overlaps target's column (physics/overlaps-column?), and target is under the head cell?"
   [world [x _ z :as target]]
   (boolean (and (physics/overlaps-column? (:player/pos world) [x z])
                 (not= target (physics/eye-cell (:player/pos world)))
-                (falling-column? world target))))
+                (falling-in-column? world target))))
 
 (defn dig-time
   "ms to break block id with held (an item id, or nil for the hand) under the world's penalties:
@@ -174,12 +200,14 @@
 (defn failed? "Did intent i fail?" [i] (= :failed (:intent/status i)))
 
 (defn toward
-  "Controls that walk toward a point, jumping when blocked."
+  "Controls that walk toward a point, jumping when blocked. Suppresses forward push if stepping
+   toward point would move the body box into an unsafe falling column (step-into-falling?)."
   [world point yaw-offset]
   (let [[yaw pitch] (physics/look-at (game/eye world) point)
-        yaw (+ yaw yaw-offset)]
-    {:control/forward? true
-     :control/jump? (boolean (:player/horizontal-collision? world))
+        yaw (+ yaw yaw-offset)
+        safe? (not (step-into-falling? world point))]
+    {:control/forward? safe?
+     :control/jump? (and safe? (boolean (:player/horizontal-collision? world)))
      :control/yaw yaw
      :control/look [yaw pitch]}))
 
@@ -393,13 +421,15 @@
 
 (defn route-stale?
   "Should the walk plan again: a waypoint still ahead can no longer be stood on (a chunk that
-   arrived or a block that changed broke the route), no waypoint was reached for stuck-ticks,
-   or the route ended short of the target (:partial or :none) and every waypoint is behind. A
-   chunk arriving is not by itself a reason: six arrived in the first seconds of a gym run and
-   spent all six plans before the bot had walked a step, though every plan found the same route."
+   arrived or a block that changed broke the route), enters a falling column
+   (step-into-falling?), no waypoint was reached for stuck-ticks, or the route ended short of
+   the target (:partial or :none) and every waypoint is behind. A chunk arriving is not by
+   itself a reason: six arrived in the first seconds of a gym run and spent all six plans
+   before the bot had walked a step, though every plan found the same route."
   [world {:intent/keys [waypoints at best-tick route]}]
   (let [ahead (drop at waypoints)]
-    (or (some #(not (path/standable? world %)) ahead)
+    (or (some #(or (not (path/standable? world %)) (step-into-falling? world (physics/centre %)))
+              ahead)
         (> (- (:time/tick world) best-tick) stuck-ticks)
         (and (empty? ahead) (not= :found route)))))
 
@@ -443,6 +473,12 @@
                 (assoc :player/controls {})
                 (fail :no-path))
             (assoc (route! world i) :player/controls {}))
+          (or (and (get waypoints at)
+                   (step-into-falling? world (physics/centre (get waypoints at))))
+              (and (nil? (get waypoints at)) (step-into-falling? world (physics/centre target))))
+          (-> world
+              (assoc :player/controls {})
+              (fail :unsafe))
           (nil? (get waypoints at)) ; route walked to its end, target still out of reach
           (assoc world :player/controls (toward world (physics/centre target) 0.0))
           (waypoint-reached? world (get waypoints at))

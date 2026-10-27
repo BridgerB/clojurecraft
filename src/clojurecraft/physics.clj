@@ -181,9 +181,11 @@
   (or (touching-water? fluid-at pos) (in-fluid? fluid-at :lava touch-contract (aabb pos))))
 
 (defn suffocating?
-  "Does the eye cell hold a solid block: collision-top 1.0?"
+  "Does the eye cell hold a full-cube solid block (solid? collision-top >= 1.0)?"
   [solid? pos]
-  (boolean (when-let [s (solid? (eye-cell pos))] (>= (double s) 1.0))))
+  (let [[x y z] (eye-cell pos)
+        top (solid? x y z)]
+    (boolean (or (true? top) (and (number? top) (>= (double top) 1.0))))))
 
 (defn fluids-here
   "What the player at pos is in: {:in-water? :in-lava? :eye-in-water?}."

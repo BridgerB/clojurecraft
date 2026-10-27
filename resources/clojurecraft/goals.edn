@@ -21,7 +21,7 @@
   :goal/trap :suffocation
   :goal/done? :not-trapped-in
   :goal/plan :escape
-  :goal/act :unbury}
+  :goal/act :escape-suffocation}
  {:goal/id :escape-water
   :goal/priority 0
   :goal/target? true

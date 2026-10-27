@@ -32,7 +32,7 @@
                   (not (terrain/fluid-at world [nx (inc fy) nz]))
                   floor-b
                   (blocks/solid? floor-b)
-                  (not (intent/falling-column? world [nx (inc fy) nz]))))))
+                  (not (intent/falling-in-column? world [nx (inc fy) nz]))))))
 
 (defn free-neighbours
   "The free horizontal neighbour footings [x y z] around the player's feet, nearest pos first."
@@ -43,7 +43,7 @@
          (filter #(free-neighbour? world %))
          (sort-by #(physics/distance pos (physics/centre %))))))
 
-(defmethod intent/run :unbury
+(defmethod intent/run :escape-suffocation
   [world {:intent/keys [child step-ticks target-cell] :or {step-ticks 0}} event]
   (let [pos (:player/pos world)
         head-c (physics/eye-cell pos)

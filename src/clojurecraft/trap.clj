@@ -7,7 +7,6 @@
   (:require [clojure.math :as math]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.game :as game]
-            [clojurecraft.physics :as physics]
             [clojurecraft.terrain :as terrain]))
 
 (set! *warn-on-reflection* true)
@@ -45,12 +44,10 @@
                       (= :water (terrain/fluid-kind world [cx (dec cy) cz])))))))
 
 (defn suffocating?
-  "Is the bot suffocating: does the eye cell hold a solid block (blocks/solid?)?"
+  "Is the bot suffocating: does the physics engine report a full-cube block at the eye cell
+   (:player/suffocating?)?"
   [world]
-  (boolean (or (:player/suffocating? world)
-               (when-let [pos (:player/pos world)]
-                 (when-let [b (terrain/block-at world (physics/eye-cell pos))]
-                   (blocks/solid? b))))))
+  (boolean (:player/suffocating? world)))
 
 (defn trapped-tick
   "The trap the player is in, re-derived with hysteresis every tick: lava on any contact,

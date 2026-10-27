@@ -1,9 +1,9 @@
 ---
 title: Suffocation escape and prevention
-description: How the bot reacts to and prevents suffocation under falling sand and gravel - the :escape-suffocation priority-zero goal, the :unbury intent (stepping to a free neighbour or digging the head cell), prevention of unsafe digs and steps under falling columns, and the :player/suffocating? fact.
+description: How the bot reacts to and prevents suffocation under falling sand and gravel - the :escape-suffocation priority-zero goal, the :escape-suffocation intent (stepping to a free neighbour or digging the head cell), prevention of unsafe digs and moves under falling columns, and the :player/suffocating? fact.
 type: reference
 tags: [bot, plan, survival, suffocation, gravel, sand, trap, intents, goals]
-aliases: [:escape-suffocation, :unbury, suffocating?, :player/suffocating?, falling-column?, unsafe-falling?, free-neighbours]
+aliases: [:escape-suffocation, suffocating?, :player/suffocating?, falling-column?, falling-in-column?, step-into-falling?, unsafe-falling?, free-neighbours]
 status: verified
 lastUpdated: 2026-10-27
 verifiedAgainst: HEAD
@@ -12,6 +12,8 @@ sourceRefs:
   - src/clojurecraft/suffocate.clj#defn free-neighbours
   - src/clojurecraft/trap.clj#defn suffocating?
   - src/clojurecraft/intent.clj#defn falling-column?
+  - src/clojurecraft/intent.clj#defn falling-in-column?
+  - src/clojurecraft/intent.clj#defn step-into-falling?
   - src/clojurecraft/intent.clj#defn unsafe-falling?
   - src/clojurecraft/stairs.clj#defn falls-over?
   - src/clojurecraft/physics.clj#defn overlaps-column?
@@ -31,18 +33,18 @@ Real race 40466567590 lane 3 had 137 deaths, 27 of them "suffocated in a wall". 
 
 Survival under falling sand and gravel consists of two shared behaviours:
 
-## 1. Reaction (`:escape-suffocation` and `:unbury`)
+## 1. Reaction (`:escape-suffocation`)
 
-When the bot's head (eye) cell holds a solid block (`blocks/solid?`), clearing it comes before any other intent.
-- Pure fact: `:player/suffocating?` is written by `physics/step` every tick, and `trap/suffocating?` derives whether the eye cell holds a solid block.
-- Trap: `trap/trapped-tick` marks `:plan/trap :suffocation` without delay.
+When the bot's head (eye) cell holds a full-cube solid block (`physics/suffocating?`), clearing it comes before any other intent.
+- Pure fact: `:player/suffocating?` is written by `physics/step` every tick, testing whether `(solid? x y z)` at the eye cell is a full cube (collision-top >= 1.0).
+- Trap: `trap/trapped-tick` marks `:plan/trap :suffocation` without delay from the pure physics fact.
 - Goal: `:escape-suffocation` is an always-on priority-0 goal at the top of `goals.edn`. It preempts any running intent (such as digging stairs down).
-- Executor: `:unbury` in `clojurecraft.suffocate`. It looks for an adjacent free neighbour footing (open feet and head, solid floor, no falling blocks overhead) and steps to it. If no free neighbour exists or stepping does not clear the head within 8 ticks, it digs the head cell (`physics/eye-cell`), repeating if falling blocks refill it.
+- Executor: `:escape-suffocation` in `clojurecraft.suffocate`. It looks for an adjacent free neighbour footing (open feet and head, solid floor, no falling blocks overhead) and steps to it. If no free neighbour exists or stepping does not clear the head within 8 ticks, it digs the head cell (`physics/eye-cell`), repeating if falling blocks refill it.
 - Invariant: while buried, digging below the feet is strictly refused.
 
 ## 2. Prevention
 
-- Column check: `intent/falling-column?` inspects the column above a cell. If a falling block (`blocks/falls?`) is found with only air, passable or falling blocks below it, it can fall.
+- Column check: `intent/falling-column?` inspects the column above a cell. If a falling block (`blocks/falls?`) is found with only air, passable or falling blocks below it, it can fall. `intent/falling-in-column?` also checks for falling block entities (type 51) currently falling in that column.
 - Body overlap: `physics/overlaps-column?` determines if the player's 0.6x0.6 bounding box touches the column.
 - Dig refusal: `intent/dig-stage` refuses any dig where `unsafe-falling?` holds (the cell is under a falling column and the player overlaps the column), failing with `:unsafe`.
-- Stair refusal: `stairs/falls-over?` checks whether any cell of a stair down or level step has a falling column above it. If so, `stairs/down-safe?` and `stairs/level-safe?` return false, causing the staircase to turn away rather than walking into or cutting under falling blocks.
+- Movement prevention: `intent/step-into-falling?` checks if moving the bot to a position would cause its body bounding box to overlap a column with a falling block above while it can still fall. `intent/toward` suppresses forward control when moving into a falling column; `intent/run :walk` fails with `:unsafe` instead of entering a falling column; and `stairs/stairs-stage :step` waits with empty controls when falling blocks are over the stair cells rather than stepping into falling gravel.
