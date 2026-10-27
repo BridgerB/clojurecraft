@@ -1,0 +1,9 @@
+;; issue #10, step 13, batch w7: identical-retry? ignores rotated dir,
+;; stronghold to-room refuses stairs-down from boxed feet,
+;; and unwalkable? is scoped to walk and end-portal no-path
+{:plans/label "chain-w7"
+ :plans/jobs 4
+ :plans/issue 10
+ :plans/experiments
+ [{:exp/name "dragon" :exp/kind :gym :exp/goal "dragon" :exp/runs 3 :exp/bots 1 :exp/est-s 1600}
+  {:exp/name "chain" :exp/kind :gym :exp/goal "chain" :exp/runs 3 :exp/bots 1 :exp/est-s 3600}]}
