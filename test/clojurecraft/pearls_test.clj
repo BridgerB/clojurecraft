@@ -1161,6 +1161,25 @@
            ((juxt :intent/kind :intent/for) (plan/next-intent respawned row plan/goals)))
         "so the decide continues to the dig, never the same walk again")))
 
+(deftest empty-hands-at-a-treeless-spawn-look-for-wood-never-fail-no-sword
+  ;; gym batch pearls-r3-w2 (plan run 40475390313) run 2: slain in the forest at three
+  ;; minutes, it respawned at an overworld spawn with no log in the chunks first loaded
+  ;; and failed :no-sword at five, where batches pearls-w1 to w3's respawns had spruces
+  ;; in sight and remade theirs
+  (let [bare (assoc (standing {}) :player/inventory {})
+        respawned (assoc bare :stats/deaths 1)]
+    (is (= {:plan/wait :no-sword} (plan/next-intent bare row plan/goals))
+        "never died, no sword and no trunk: the wait stands, no bare-hand hunt")
+    (is
+     (= {:intent/kind :lookout :intent/for :pearls} (plan/next-intent respawned row plan/goals))
+     "a death behind it and no trunk sighted yet: it looks and roams for wood, and the
+            remake is asked again, never the :no-sword fail")
+    (is (= {:plan/wait :no-sword}
+           (plan/next-intent (assoc respawned :player/dimension "minecraft:the_nether")
+                             row
+                             plan/goals))
+        "in the Nether there is no wood to look for: the wait stands")))
+
 (deftest no-sword-held-no-hunt
   ;; gym batch pearls-warped8-b (plan run 39775345028): runs 1 and 3 respawned with nothing held
   ;; after their first deaths and hunted on bare-handed, 39 and 26 deaths in five hours

@@ -31,6 +31,7 @@
             [clojurecraft.blaze :as blaze]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.combat :as combat]
+            [clojurecraft.dimension :as dimension]
             [clojurecraft.drops :as drops]
             [clojurecraft.entity :as entity]
             [clojurecraft.game :as game]
@@ -1691,7 +1692,14 @@
         fire (burning-at world)
         replacing (when-not (sword/serviceable world) (make-sword world goal table))
         remaking (when (and (not (spare? world)) (not (menaced? world)))
-                   (make-pickaxe world goal table))]
+                   (make-pickaxe world goal table))
+        ;; the hands a death leaves empty at the overworld spawn: no trunk sighted yet is
+        ;; no reason to fail (gym batch pearls-r3-w2 run 2, plan run 40475390313, died in
+        ;; the forest at three minutes and failed :no-sword at a spawn with no log in the
+        ;; chunks first loaded); looking and roaming load more, and the remake is asked
+        ;; again after each. A sword merely broken where the bot hunts still waits.
+        respawned? (and (pos? (:stats/deaths world 0)) (= dimension/overworld (dimension/of world)))
+        seek-wood (when respawned? (or (roam world) {:intent/kind :lookout :intent/for :pearls}))]
     (cond fire {:intent/kind :dig :intent/target fire}
           d
           {:intent/kind :collect-drops
@@ -1701,8 +1709,10 @@
           (and k (body? world k)) {:plan/wait :drop}
           (< (:player/health world 20.0) danger-health) (hunt world)
           replacing replacing
+          (and seek-wood (nil? (combat/sword world))) seek-wood
           (nil? (combat/sword world)) {:plan/wait :no-sword}
           remaking remaking
+          (and seek-wood (worn-out? world) (nil? (shelter world)) (not (menaced? world))) seek-wood
           (and (worn-out? world) (nil? (shelter world)) (not (menaced? world)))
           {:plan/wait :no-pickaxe}
           :else (hunt world))))
