@@ -1,0 +1,9 @@
+;; issue #10, step 13, batch w5: with the pumpkin worn the End rows answer
+;; endermen themselves, so :defend never fights one the dragon provoked
+;; (w4 dragon run 1 slew that way eight seconds in).
+{:plans/label "chain-w5"
+ :plans/jobs 4
+ :plans/issue 10
+ :plans/experiments
+ [{:exp/name "dragon" :exp/kind :gym :exp/goal "dragon" :exp/runs 3 :exp/bots 1 :exp/est-s 1600}
+  {:exp/name "chain" :exp/kind :gym :exp/goal "chain" :exp/runs 3 :exp/bots 1 :exp/est-s 3600}]}
