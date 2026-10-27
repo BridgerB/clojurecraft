@@ -2026,3 +2026,29 @@
     (is (pearls/shelter? w (:pearls/shelter w)) (pr-str (:pearls/shelter w)))
     (is (pos? (:sim/health sim)) "and the bot lived")
     (is (= [] (:sim/violations sim)))))
+
+(deftest an-identical-shelter-walk-failed-no-path-is-never-proposed-again
+  ;; gym batch pearls-12 run 3 (plan 40583923956): in a burrow at [2498 53 2134] with mouth at
+  ;; [2497 53 2134], walk to mouth failed :no-path. The mouth was not checked against blacklist,
+  ;; proposing the identical unroutable walk twelve times in 500 ms until unwalkable reached
+  ;; max-unwalkable and the plan failed.
+  (let [feet [2498 53 2134]
+        mouth [2497 53 2134]
+        w (-> (standing {})
+              (assoc :player/pos [2498.7 53.0 2134.5]
+                     :pearls/mouth mouth
+                     :pearls/shelter feet
+                     :plan/status :active)
+              (plan/fail-intent {:intent/kind :walk
+                                 :intent/target mouth
+                                 :intent/for :shelter
+                                 :intent/reason :no-path}))]
+    (is (contains? (:plan/blacklist w) mouth) "mouth is in the plan blacklist after failing")
+    (let [next (plan/next-intent w row plan/goals)]
+      (is (not= mouth (:intent/target next))
+          "the blacklisted walk is never proposed again from the same feet")
+      (is (not= :failed (:plan/status w)) "plan status remains active while time is left")
+      (let [ticked (plan/plan-tick w (tick 1000) plan/goals)]
+        (is (= :active (:plan/status ticked)) "plan does not fail on subsequent tick")
+        (is (not= mouth (:intent/target (:plan/intent ticked)))
+            "active intent is not the blacklisted walk")))))

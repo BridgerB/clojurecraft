@@ -393,15 +393,11 @@
                                 (long (math/floor (+ fx 0.5 (* r ux))))
                                 (long (math/floor (+ fz 0.5 (* r uz))))
                                 fy)
-                    i (when c
-                        {:intent/kind :walk
-                         :intent/target c
-                         :intent/for :stronghold
-                         :intent/max-nodes 400})]
+                    i (when c {:intent/kind :walk :intent/target c :intent/for :stronghold})]
                 (when (and i
                            (not= c [fx fy fz])
                            (not (contains? (:plan/blacklist world #{}) c))
-                           (intent/routable? world i))
+                           (intent/routable? world (assoc i :intent/max-nodes 400)))
                   i)))
             hop-turns))))
 
@@ -588,15 +584,11 @@
                                              (long (math/floor (+ fx 0.5 (* r ux))))
                                              (long (math/floor (+ fz 0.5 (* r uz))))
                                              fy)
-                    i (when c
-                        {:intent/kind :walk
-                         :intent/target c
-                         :intent/for :stronghold
-                         :intent/max-nodes 400})]
+                    i (when c {:intent/kind :walk :intent/target c :intent/for :stronghold})]
                 (when (and i
                            (<= cy (- fy downhill-drop))
                            (not (contains? (:plan/blacklist world #{}) c))
-                           (intent/routable? world i))
+                           (intent/routable? world (assoc i :intent/max-nodes 400)))
                   i)))
             (for [r downhill-reaches turn hop-turns] [r turn])))))
 

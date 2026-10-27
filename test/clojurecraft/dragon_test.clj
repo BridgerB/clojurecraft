@@ -676,13 +676,13 @@
   ;; When the stand is safe and not blocked by breath on the way, the bot commits to it with a shelter-walk.
   (let [d (sitting 270.0)
         cloud {:entity/type (blocks/entity-types :area_effect_cloud)
-               :entity/pos [0.5 64.0 2.0]
-               :entity/radius 3.0}
+               :entity/pos [6.5 64.0 -4.0]
+               :entity/radius 2.0}
         w (-> (round-fountain [5.0 64.0 -4.0] d)
               (assoc :world/entities (merge d {258 cloud})
                      :player/dimension dimension/end
                      :player/health 20.0))]
-    (is (some? (dragon/breath-near w)) "breath cloud is near the fountain")
+    (is (some? (dragon/breath-near w)) "breath cloud is near the player")
     (is (not (dragon/in-basin? w)) "player is outside the basin")
     (let [i (dragon/toward-dragon w)]
       (is (= :walk (:intent/kind i)))
@@ -693,9 +693,11 @@
 (deftest steer-wear-looks-away-from-endermen-in-the-end
   ;; gym chain-w9 run 3: landing in the End, wearing armour or pumpkin must steer looks away
   ;; from endermen's eyes so staring aggro is never triggered during the wear clicks
-  (let [enderman {:entity/type (mob/type-id :enderman) :entity/pos [0.5 64.0 10.5]}
+  (let [pos [6.5 64.0 0.5]
+        enderman {:entity/type (mob/type-id :enderman) :entity/pos pos}
         w (-> (standing {} [0.5 64.0 0.5] {} {81 enderman})
-              (assoc :player/dimension dimension/end :player/look [0.0 0.0]))
+              (assoc :player/dimension dimension/end)
+              (#(assoc % :player/look (physics/look-at (game/eye %) (mob/head :enderman pos)))))
         steered (plan/steer w {:goal/plan :wear})]
     (is (= 90.0 (second (get-in steered [:player/controls :control/look])))
         "looks down to avoid enderman eyes during wear")))

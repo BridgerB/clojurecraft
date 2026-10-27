@@ -1293,6 +1293,16 @@
 
 (def danger-health combat/retreat-health) ; health under which the hunt never fights, provokes or goes toward an enderman: one enderman hit (7 on Normal, ns doc) plus a margin, the same line combat breaks a fight off at. At or under it the bot backs off, walks home, eats or rests where it stands until its health is back over it (issue #563, probe 40022662598: after the second stone sword was crafted the hunt re-fought an angry enderman it had just backed away from, again and again down to 1.3 health, one hit from death)
 
+(defn shelter-walk
+  "A walk to target for shelter: nil when target is nil, blacklisted (:plan/blacklist),
+   or has no route (intent/routable?)."
+  [world target]
+  (when (and target
+             (not (contains? (:plan/blacklist world #{}) target))
+             (intent/routable? world
+                               {:intent/kind :walk :intent/target target :intent/for :shelter}))
+    {:intent/kind :walk :intent/target target :intent/for :shelter}))
+
 (defn hunt
   "The hunt's next step with no kill to pick up, in order: out of the burrow (shelter) with one
    coming (creepy), one at hand (within strike-range, blacklisted or not: one a held fight gave
@@ -1421,8 +1431,11 @@
         site (when (and dir (not digs?)) (burrow-site world dir))
         csite (when (and (nil? home) (pickaxe? world) (not (at-site? world)) (stale? world))
                 (crowd-site world))
+        csite-walk (shelter-walk world csite)
+        site-walk (shelter-walk world site)
         mouth (:pearls/mouth world)
-        way-home {:intent/kind :walk :intent/target home :intent/for :shelter}
+        mouth-walk (shelter-walk world mouth)
+        way-home (shelter-walk world home)
         overworld-death? (and (pos? (:stats/deaths world 0))
                               (= dimension/overworld (dimension/of world)))
         far (endermen world seek-radius)
@@ -1430,7 +1443,7 @@
                        (and (or angry? in-reach?) (not (fought-out? world eid))) eid
                        :else tid)]
     (cond
-      (and home (not in?) (or ce near? hurt? tid aid) (intent/routable? world way-home)) way-home
+      (and home (not in?) (or ce near? hurt? tid aid) way-home) way-home
       (and hurt? in?) (or meal {:intent/kind :lookout :intent/for :pearls})
       (and near? hurt? (not in?)) {:intent/kind :back-off :intent/target eid :intent/for :pearls}
       (and hurt? (not in?) tid) {:intent/kind :back-off :intent/target tid :intent/for :pearls}
@@ -1453,24 +1466,24 @@
       {:intent/kind :fight :intent/target eid :intent/for :pearls}
       meal meal
       (or hurt? (and in? bid)) {:intent/kind :lookout :intent/for :pearls}
-      (and in? aid (lure? world)) {:intent/kind :walk :intent/target mouth :intent/for :shelter}
+      (and in? aid (lure? world)) (or mouth-walk {:intent/kind :lookout :intent/for :pearls})
       (and in? aid) {:intent/kind :lookout :intent/for :pearls}
-      csite {:intent/kind :walk :intent/target csite :intent/for :shelter}
+      csite-walk csite-walk
       digs? {:intent/kind :burrow :intent/dir dir :intent/for :pearls}
-      site {:intent/kind :walk :intent/target site :intent/for :shelter}
+      site-walk site-walk
       (and in? qid rested?) {:intent/kind :provoke :intent/target qid :intent/for :pearls}
       (and in? qid) {:intent/kind :lookout :intent/for :pearls}
       (and in? (crowded? world))
       (or (vantage world far) {:intent/kind :lookout :intent/for :pearls})
-      (and in? mouth) {:intent/kind :walk :intent/target mouth :intent/for :shelter}
+      (and in? mouth-walk) mouth-walk
       (and qid
            rested?
            (or (and (not (pickaxe? world)) (not (worn-out? world)))
                (= mouth (intent/feet world))
-               (and home (>= (:player/health world 20.0) 20.0) (intent/routable? world way-home))))
+               (and home (>= (:player/health world 20.0) 20.0) way-home)))
       {:intent/kind :provoke :intent/target qid :intent/for :pearls}
-      (and qid home rested?) {:intent/kind :walk :intent/target mouth :intent/for :shelter}
-      (and qid home (intent/routable? world way-home)) way-home
+      (and qid home rested? mouth-walk) mouth-walk
+      (and qid home way-home) way-home
       (and (not hurt?) ce (not (fought-out? world ceid)) (pickaxe? world))
       {:intent/kind :fight
        :intent/target ceid

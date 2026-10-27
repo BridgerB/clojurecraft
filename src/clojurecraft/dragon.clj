@@ -904,7 +904,7 @@
           (toward-crystals world)
           (< (:player/health world full-health) combat/retreat-health) (recover world)
           (and breath eid (holds? world)) {:intent/kind :perch :intent/target eid}
-          (and breath eid d (grounded? d) (not blocked?) far?)
+          (and breath eid d (grounded? d) (or (in-basin? world) (not blocked?)) far?)
           (shelter-walk (or (when-not (in-basin? world)
                               (some->> (around d pos (physics/centre stand))
                                        (ground-cell world)))
