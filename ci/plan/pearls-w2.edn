@@ -1,0 +1,28 @@
+;; Issue #263, branch feat/263-mpearls, wonder round batch 2:
+;; Batch pearls-w1 (plan run 40387599204 at 380813e): pearls-1-live 3/3;
+;; pearls-12 1/3 - run 3 twelve pearls in 5264 s with no death (the row's
+;; first pass), run 2 five pearls at the five-hour timeout with no death,
+;; run 1 went up in flames in the caves under the floor (probe 40421394796:
+;; it dug out the fire in its feet's cell while its box still overlapped
+;; the fire in the cell north) and then failed :no-pickaxe on the respawn
+;; after remaking its wooden sword. Since then:
+;; 1. burning-at covers every cell the body overlaps at the feet's and the
+;;    head's height, the feet's own first.
+;; 2. With no pickaxe at all the log hunt may start the pickaxe remake, as
+;;    it may a bare-handed sword, so a death fails neither wait.
+;; Same rows, to measure the two against batch w1.
+{:plans/label "pearls-w2"
+ :plans/jobs 4
+ :plans/issue 263
+ :plans/experiments [{:exp/name "pearls-12"
+                      :exp/kind :gym
+                      :exp/goal "pearls-12"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 18000}
+                     {:exp/name "pearls-1-live"
+                      :exp/kind :gym
+                      :exp/goal "pearls-1-live"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 300}]}
