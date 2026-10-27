@@ -405,6 +405,36 @@
         "21 digs left: kept for a burrow")
     (is (nil? (pearls/dig-out (assoc w :world/entities {}))) "no enderman: nowhere to cut to")))
 
+(defn stuck-in
+  "w with a walk ended and then n lookouts, the last of them the plan's last intent, as
+   memory keeps them: a hunt that has stood looking since it last walked anywhere."
+  [w n]
+  (looked-out
+   (reduce #(memory/remember-intention %1 {:intent/id (+ 10 %2) :intent/kind :lookout} :done)
+           (memory/remember-intention (assoc w :time/now 0) {:intent/id 1 :intent/kind :walk} :done)
+           (range n))))
+
+(deftest a-pocket-with-no-enderman-to-cut-toward-is-climbed-out-of
+  ;; gym batch pearls-w3 (plan run 40434266158) run 2: five pearls by its forty-fourth
+  ;; minute, then :lookout to the five-hour timeout in the caves under the forest floor,
+  ;; every roam end spent or short and no enderman tracked for dig-out to cut toward
+  (let [w (assoc (walled-in feet-cells [8.5 80.0 48.5]) :world/entities {})]
+    (is (nil? (pearls/roam w)) "no end for a roam in the pocket")
+    (is (nil? (pearls/dig-out w)) "no enderman: nowhere to cut to")
+    (is (not (pearls/stuck? (stuck-in w (dec pearls/stale-lookouts)))))
+    (is (pearls/stuck? (stuck-in w pearls/stale-lookouts))
+        "a minute of lookouts since the last walk")
+    (is (= {:intent/kind :lookout :intent/for :pearls}
+           (plan/next-intent (stuck-in w (dec pearls/stale-lookouts)) row plan/goals))
+        "before the minute is out it still looks")
+    (is (= [:stairs-up 72 true :pearls]
+           ((juxt :intent/kind :intent/to-y :intent/to-height? :intent/for)
+            (plan/next-intent (stuck-in w pearls/stale-lookouts) row plan/goals)))
+        "stuck: stairs up toward the floor, descend-step up")
+    (is (nil? (pearls/climb-out (assoc w :plan/boxed-at #{[8 64 8]}))) "boxed here: not again")
+    (is (nil? (pearls/climb-out (assoc-in w [:player/inventory 1 :components :damage] 229)))
+        "21 digs left: kept for a burrow")))
+
 (deftest no-way-out-is-cut-from-the-brink-of-a-drop
   ;; gym batch pearls-warped8-c (plan run 39845223845, probe 39854206523) run 2: dig-out's stairs
   ;; up from a ledge over a lava lake, the stair's lay backing the bot off the edge into the lava
@@ -708,6 +738,35 @@
    #(memory/remember-intention %1 {:intent/id (+ 10 %2) :intent/kind :walk} :done)
    (memory/remember-intention (assoc w :time/now 0) {:intent/id 1 :intent/kind :burrow} :done)
    (range (* 2 n))))
+
+(defn fought
+  "w with n :fight intentions on entity 7 ended :done, as memory keeps them."
+  [w n]
+  (reduce
+   #(memory/remember-intention %1 {:intent/id (+ 10 %2) :intent/kind :fight :intent/target 7} :done)
+   (assoc w :time/now 0)
+   (range n)))
+
+(deftest one-fought-again-and-again-without-a-kill-is-fought-no-more
+  ;; gym batch pearls-w3 (plan run 40434266158) run 3: from its second minute to the
+  ;; five-hour timeout it planned some sixty-four thousand fights on one enderman, each
+  ;; ending done as the enderman teleported out of sight, nineteen failing :unreachable,
+  ;; and held one pearl
+  (let [angry (assoc (enderman [5.5 61.0 8.5]) :entity/creepy? true)
+        on-stairs (assoc (burrowed [8.5 61.0 8.5] {7 angry}) :plan/blacklist #{7})]
+    (is (= :fight (:intent/kind (plan/next-intent on-stairs row plan/goals)))
+        "at the end with it on the stairs: fought, blacklisted or not")
+    (is (not (pearls/fought-out? (fought on-stairs (dec pearls/fight-tries)) 7))
+        "seven fights done on it: not yet fought out")
+    (is (pearls/fought-out? (fought on-stairs pearls/fight-tries) 7)
+        "fight-tries fights done on it and it still stands: fought out")
+    (is (not (pearls/fought-out? (fought on-stairs pearls/fight-tries) 8)) "another is not")
+    (is (not= :fight
+              (:intent/kind
+               (plan/next-intent (fought on-stairs pearls/fight-tries) row plan/goals)))
+        "fought out: no fight is held on it from the end again")
+    (is (nil? (pearls/angry-near (fought on-stairs pearls/fight-tries)))
+        "and it holds the burrow no longer, so the burrow can go stale")))
 
 (deftest an-angry-one-blacklisted-that-never-comes-to-the-lure-holds-the-burrow-no-longer
   ;; gym batch pearls-warped8-a (plan run 39731473452, probe 39776733945) run 1: from the 49th
@@ -1058,6 +1117,32 @@
     (is (= :collect (:intent/kind collected)))
     (is (= :take-table (:intent/for collected))
         "a dug table is collected toward the pickaxe remake, never the :no-pickaxe wait")))
+
+(deftest a-table-held-hides-no-log-chain-from-the-pickaxe-decide
+  ;; gym batch pearls-w3 (plan run 40434266158) run 1: slain ninety seconds in, it
+  ;; respawned at the overworld spawn, remade its wooden sword, took its table up, and
+  ;; walked to the spruce trunk beside it 356,882 times to the five-hour timeout: the
+  ;; table held counted as the table's pieces (sword/pieces?), so each done walk's chain
+  ;; was hidden from the decide and the walk was asked for again, never the dig
+  (let [trunk {[12 64 8] 136 [12 65 8] 136 [12 66 8] 136 [12 67 8] 252}
+        col (world/column trunk)
+        walked {:intent/kind :walk :intent/target [12 64 8] :intent/for :log :intent/status :done}
+        respawned (-> (standing {})
+                      (assoc :world/chunks {[0 0] col}
+                             :player/inventory
+                             {0 (item :wooden_sword 1) 1 (item :stick 3) 2 (item :crafting_table 1)}
+                             :time/now 0
+                             :plan/last walked)
+                      (memory/remember-column [0 0] col)
+                      (memory/remember-intention {:intent/id 1 :intent/kind :burrow} :done))]
+    (is (= walked (:plan/last (pearls/for-pick-decide respawned)))
+        "sticks and a table held, no log and no plank: the done walk's chain stays")
+    (is (nil? (:plan/last (pearls/for-pick-decide
+                           (assoc-in respawned [:player/inventory 3] (item :spruce_log 1)))))
+        "a log counted: the chain is finished and hidden, as before")
+    (is (= [:dig :log]
+           ((juxt :intent/kind :intent/for) (plan/next-intent respawned row plan/goals)))
+        "so the decide continues to the dig, never the same walk again")))
 
 (deftest no-sword-held-no-hunt
   ;; gym batch pearls-warped8-b (plan run 39775345028): runs 1 and 3 respawned with nothing held
