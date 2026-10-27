@@ -1,0 +1,22 @@
+;; Issue #263, branch feat/263-pearls-r3, round 3 batch 4 (reviewer findings):
+;; Stuck hole lookouts climb out into rock via climb-heading and 0-dig/0-lay
+;; tunnels fail :boxed; start-intent clears :plan/waiting, wooden sword with
+;; >= 10 swings is serviceable, unserviceable sword triggers remake, overworld
+;; hunts surface instead of descending into dark caves, never waits :no-sword/
+;; :no-pickaxe after death or fights under danger-health; truth check holds
+;; connection on timeout.
+{:plans/label "pearls-r3-w4"
+ :plans/jobs 4
+ :plans/issue 263
+ :plans/experiments [{:exp/name "pearls-12"
+                      :exp/kind :gym
+                      :exp/goal "pearls-12"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 18000}
+                     {:exp/name "pearls-1-live"
+                      :exp/kind :gym
+                      :exp/goal "pearls-1-live"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 300}]}
