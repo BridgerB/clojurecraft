@@ -829,23 +829,36 @@
          (sort-by #(physics/horizontal-distance pos (physics/centre %)))
          first)))
 
+(defn sheltered?
+  "Is the bot standing in a safe shelter cell outside the fountain basin: at least escape-from
+   out from the fountain, no breath reaching the feet (breathed?), and not before the sitting
+   dragon's head (before-head?)?"
+  [world]
+  (let [[_ d] (dragon world)
+        [fx fz] fountain
+        pos (:player/pos world)
+        feet (intent/feet world)]
+    (and (>= (physics/horizontal-distance pos [fx 0.0 fz]) escape-from)
+         (not (breathed? world feet))
+         (not (before-head? d (physics/centre feet))))))
+
 (defn recover
   "The intent while hurt under combat/retreat-health at the dragon, where the perch and
    the walk to its stand are never chosen (gym chain-w3's dragon runs 2 and 3 fought on
    at ten, then four and a half health, and the dragon slew them): a meal first when
-   food is held and the bar can take one, else, while the feet are still within
-   escape-to of the fountain, the shelter walk to a cell out of every breath's reach
-   (escape), else the wait :low-health where the feet are for the bar's own healing.
+   food is held and the bar can take one, else, while not yet in shelter outside the
+   basin (sheltered?), the shelter walk to a cell out of every breath's reach (escape),
+   else the wait :low-health where the feet are for the bar's own healing.
    The :heal row's meal needs a lull (heal-food), which a sitting dragon never is, so
    the row eats here on its own line."
   [world]
-  (let [food (when (< (:player/food world 20) 20) (eat/food-held world))
-        [fx fz] fountain
-        near? (<= (physics/horizontal-distance (:player/pos world) [fx 0.0 fz]) escape-to)
-        flight (when near? (escape world))]
+  (let [food (when (< (:player/food world 20) 20) (eat/food-held world))]
     (cond food {:intent/kind :eat :intent/item food}
-          flight (shelter-walk flight)
-          :else {:plan/wait :low-health})))
+          (sheltered? world) {:plan/wait :low-health}
+          :else
+          (if-let [flight (escape world)]
+            (shelter-walk flight)
+            {:plan/wait :low-health}))))
 
 (defn toward-dragon
   "The next intent toward the dragon dead: while a crystal stands or the feet are up a pillar or
@@ -1027,14 +1040,22 @@
 
 (defn looks-away
   "The world with its controls' look turned from an enderman's eyes (look-away), or as it
-   is with no look set: every look an End row's intents make, a walk's and a back-off's as
-   well as the perch's (gym dragon-f run 3 stared at three endermen in turn on its walks
-   to and from the stand and was slain by the third, dragon-e run 1 at one on its first
-   walk there); a walk steers by :control/yaw, so the look's pitch is free."
+   is when no look, set or standing, meets one: every look an End row's intents make, a
+   walk's and a back-off's as well as the perch's (gym dragon-f run 3 stared at three
+   endermen in turn on its walks to and from the stand and was slain by the third,
+   dragon-e run 1 at one on its first walk there); a walk steers by :control/yaw, so
+   the look's pitch is free. With no look set this tick the standing look
+   (:player/look) is turned too, by setting the controls' look to its turned form:
+   an intent that sends no look (the :wear that puts the pumpkin on) otherwise leaves
+   the landing look standing into whatever it faces for the whole wear, and gym
+   chain-w5's dragon run 1 was slain by an enderman at its stand eight seconds in,
+   the pumpkin on by then and no fight ever chosen."
   [world]
-  (if-let [look (:control/look (:player/controls world))]
-    (assoc-in world [:player/controls :control/look] (look-away world look))
-    world))
+  (let [set (:control/look (:player/controls world))
+        turned (look-away world (or set (:player/look world [0.0 0.0])))]
+    (if (or set (not= turned (:player/look world [0.0 0.0])))
+      (assoc-in world [:player/controls :control/look] turned)
+      world)))
 
 (defmethod plan/steer :dragon [world _] (looks-away world))
 

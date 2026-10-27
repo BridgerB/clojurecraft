@@ -136,7 +136,10 @@
     (is (= [(first at-head) 90.0] (dragon/look-away w at-head)) "into its eyes: straight down")
     (is (= up (dragon/look-away w up)) "over its head: as it was")
     (is (= at-head (dragon/look-away (assoc w :world/entities {}) at-head))
-        "no enderman: as it was")))
+        "no enderman: as it was")
+    (is (= [(first at-head) 90.0]
+           (:control/look (:player/controls (dragon/looks-away (assoc w :player/look at-head)))))
+        "no look set this tick: the standing look is turned down too")))
 
 (deftest the-climb-jumps-and-puts-the-block-in-once-clear
   (let [w (-> (standing {} [8.5 64.0 8.5] cobblestone {})
@@ -580,7 +583,10 @@
     (is (not= :perch (:intent/kind (dragon/toward-dragon (hurt 20 {}))))
         "nothing to eat: shelter or the wait, still never the perch")
     (is (plan/interrupts? (hurt 20 {}) {:goal/plan :dragon} {:intent/kind :perch})
-        "a running perch ends under the line")))
+        "a running perch ends under the line")
+    (let [sheltered (assoc (hurt 20 {}) :player/pos [6.5 64.0 0.5])]
+      (is (= {:plan/wait :low-health} (dragon/toward-dragon sheltered))
+          "in shelter outside the basin: waiting for health back, not walking"))))
 
 (deftest in-a-lull-the-bot-eats-for-health-back
   ;; the hand-off of gym dragon-f: sixteen steak held, the food between 14 and 18, no healing
