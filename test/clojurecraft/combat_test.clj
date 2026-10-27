@@ -257,9 +257,12 @@
                         {7 (assoc (mob :enderman [11.0 64.0 8.5] 40.0) :entity/creepy? true)})
                        :plan/goals
                        #{:dragon})] ; the pearls rows, in play, answer endermen themselves
-      (is (= {:intent/kind :fight :intent/target 7 :intent/to-the-end? true}
+      (is (= {:intent/kind :back-off :intent/target 7}
              (plan/next-intent (assoc angry :player/health 6.0) (row :defend) plan/goals))
-          "an angry enderman is fought to the end, hurt or not: it cannot be outrun")
+          "under danger-health, an angry enderman is backed off from, never fought on to death")
+      (is (= {:intent/kind :fight :intent/target 7 :intent/to-the-end? true}
+             (plan/next-intent (assoc angry :player/health 20.0) (row :defend) plan/goals))
+          "healthy, an angry enderman is fought to the end: it cannot be outrun")
       (is (plan/done-by (standing {7 (mob :enderman [11.0 64.0 8.5] 40.0)}) (row :defend))
           "a calm one is no threat"))
     (is (plan/done-by (standing {9 (mob :pig [10.0 64.0 8.5] 10.0)}) (row :defend))

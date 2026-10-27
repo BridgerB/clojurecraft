@@ -16,6 +16,7 @@
    shows it in the armour slot, which the inventory keeps at player slots 36-39 (feet to head),
    so a worn piece still counts as held."
   (:require [clojure.string :as str]
+            [clojurecraft.dimension :as dimension]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
@@ -55,15 +56,29 @@
 (defn unworn
   "[player-slot name] of a piece of armour held in the hotbar or the main inventory whose armour
    slot is empty, the lowest slot first; nil when there is none. A carved pumpkin is never
-   one: it is the dragon row's to put on in the End, not dress for the whole run."
+   one in the overworld: it is the dragon row's to put on in the End, not dress for the whole run.
+   In the End, a held carved pumpkin is worn on the head first before an iron helmet."
   [world]
-  (->> (:player/inventory world)
-       (sort-by key)
-       (some (fn [[p {:keys [item]}]]
-               (let [k (recipe/item-name item)
-                     n (part k)]
-                 (when (and (< -1 p store-slots) n (not= :carved_pumpkin k) (nil? (worn world n)))
-                   [p k]))))))
+  (let [in-end? (= dimension/end (dimension/of world))
+        pumpkin (when in-end?
+                  (some (fn [[p {:keys [item]}]]
+                          (when (and (< -1 p store-slots)
+                                     (= :carved_pumpkin (recipe/item-name item)))
+                            [p :carved_pumpkin]))
+                        (:player/inventory world)))]
+    (if (and pumpkin (nil? (worn world 0)))
+      pumpkin
+      (->> (:player/inventory world)
+           (sort-by key)
+           (some (fn [[p {:keys [item]}]]
+                   (let [k (recipe/item-name item)
+                         n (part k)]
+                     (when (and (< -1 p store-slots)
+                                n
+                                (not= :carved_pumpkin k)
+                                (not (and in-end? (zero? n) (some? pumpkin)))
+                                (nil? (worn world n)))
+                       [p k]))))))))
 
 (def made
   "The pieces made from spare ingots, in order, with their cost in iron ingots (the game's

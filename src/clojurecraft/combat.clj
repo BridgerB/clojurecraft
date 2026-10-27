@@ -411,7 +411,7 @@
               intent/done)
           (and (not= :retreat (:intent/stage i))
                (not (:intent/hold? i))
-               (not (:intent/to-the-end? i))
+               (not (and (:intent/to-the-end? i) (not (contains? entity/neutral (entity/kind e)))))
                (not= :hunt (:intent/for i))
                (< (:player/health world 20.0) retreat-health))
           (-> world
@@ -662,27 +662,17 @@
   ;; the nearest threat: a creeper, or anything while the health is under retreat-health, is
   ;; backed away from; anything else fought. Silverfish are fought holding ground (:intent/hold?)
   ;; so the fight never walks off safe footing into portal-room lava. A neutral mob turned on the bot
-  ;; (an angry enderman, entity/neutral) is fought to the end whatever the health: it is faster than
-  ;; the bot and teleports after it, so a back-off from it is only hits taken. Gym dragon-e run 1
-  ;; struck one five times (40 to 10) then backed away under 10 health and died in its hands. What a
-  ;; back-off could not get away from (:plan/cornered: the bot was in a dead end) is fought to the
-  ;; end too, unless the health is already under retreat-health (one hit plus a margin) and it is
-  ;; no neutral: then it is backed away from again, never fought on to death (issue #563, probe
-  ;; 40033104245: two zombies cornered by a void back-off were fought to the end at 7.3 health
-  ;; down to 1.3). Sim race 39593219246 (issue #161, world R3/41) backed away from a zombie two
-  ;; blocks off at under one health from the end of a one-wide tunnel, a quarter hour, never moving
+  ;; (an angry enderman, entity/neutral) is fought to the end while healthy; under retreat-health
+  ;; (#577 danger-health) it is backed away from, never fought on to death. What a back-off could not get away
+  ;; from (:plan/cornered) is fought to the end too when healthy, else backed away from.
   [world _ _]
   (when-let [[eid e] (entity/nearest (threats world) (:player/pos world))]
-    (cond (or (= :creeper (entity/kind e))
-              (and (< (:player/health world 20.0) retreat-health)
-                   (contains? (:plan/cornered world #{}) eid)
-                   (not (contains? entity/neutral (entity/kind e)))))
+    (cond (or (= :creeper (entity/kind e)) (< (:player/health world 20.0) retreat-health))
           {:intent/kind :back-off :intent/target eid}
           (= :silverfish (entity/kind e))
           {:intent/kind :fight :intent/target eid :intent/hold? true}
           (or (contains? entity/neutral (entity/kind e)) (contains? (:plan/cornered world #{}) eid))
           {:intent/kind :fight :intent/target eid :intent/to-the-end? true}
-          (< (:player/health world 20.0) retreat-health) {:intent/kind :back-off :intent/target eid}
           :else {:intent/kind :fight :intent/target eid})))
 
 (defn quarry

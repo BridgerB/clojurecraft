@@ -804,6 +804,8 @@
               [(+ x 0.5) (+ y physics/eye-height) (+ z 0.5)])]
     (<= (physics/distance eye (physics/centre pos)) intent/reach)))
 
+(def stand-max-nodes 400) ; expansions spent looking for a reachable local stand to work an op
+
 (defn stand-cell?
   "Could the feet stand in cell to work pos: not pos, the head not in pos, standable, and pos
    within reach from it (reaches-from?)."
@@ -832,7 +834,10 @@
         ok? #(stand-cell? world % pos)
         routable? (fn [cell]
                     (intent/routable? world
-                                      {:intent/kind :walk :intent/target cell :intent/for :build}))]
+                                      {:intent/kind :walk
+                                       :intent/target cell
+                                       :intent/for :build
+                                       :intent/max-nodes stand-max-nodes}))]
     (if (ok? feet)
       feet
       (->> (for [dy [0 -1 1 -2]
@@ -1178,7 +1183,11 @@
        (map #(cell origin facing %))
        (filter #(and (path/standable? world %) (reaches-from? world % pos)))
        (sort-by #(physics/distance (physics/centre %) (physics/centre pos)))
-       (filter #(intent/routable? world {:intent/kind :walk :intent/target % :intent/for :build}))
+       (filter #(intent/routable? world
+                                  {:intent/kind :walk
+                                   :intent/target %
+                                   :intent/for :build
+                                   :intent/max-nodes stand-max-nodes}))
        first))
 
 (defn nearest-stand-cell

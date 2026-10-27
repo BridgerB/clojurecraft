@@ -199,11 +199,19 @@
 
 (defmethod plan/interrupts? :end-portal
   [world _ i]
-  (and (not= :end-portal (:intent/kind i)) (some? (some #(eye-op world %) (empty-frames world)))))
+  (and (not= :end-portal (:intent/kind i))
+       (let [f (stronghold/nearest-frame world)]
+         (and f
+              (<= (physics/distance (intent/feet world) f) 6.0)
+              (some? (some #(eye-op world %) (empty-frames world)))))))
 
 (defmethod plan/interrupts? :enter-end
   [world _ i]
-  (and (not= :end-portal (:intent/kind i)) (some? (some #(eye-op world %) (empty-frames world)))))
+  (and (not= :end-portal (:intent/kind i))
+       (let [f (stronghold/nearest-frame world)]
+         (and f
+              (<= (physics/distance (intent/feet world) f) 6.0)
+              (some? (some #(eye-op world %) (empty-frames world)))))))
 
 (defmethod plan/done-by :portal-lit? [world _] (boolean (seq (portals world))))
 

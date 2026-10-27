@@ -620,9 +620,14 @@
         "under retreat health, answering :dragon does not suppress hostiles")
     (is (contains? (combat/threats w) 309)
         "an enderman attacking the bot is a threat even when carved pumpkin is worn")
-    (is (= {:intent/kind :fight :intent/target 309 :intent/to-the-end? true}
+    (is (= {:intent/kind :back-off :intent/target 309}
            (plan/next-intent w {:goal/id :defend :goal/plan :defend} plan/goals))
-        "defend fights the attacking enderman to the end")))
+        "under danger health, defend backs off from the attacking enderman")
+    (is (= {:intent/kind :fight :intent/target 309 :intent/to-the-end? true}
+           (plan/next-intent (assoc w :player/health 20.0)
+                             {:goal/id :defend :goal/plan :defend}
+                             plan/goals))
+        "healthy, defend fights the attacking enderman to the end")))
 
 (deftest holds-in-basin-when-breath-cloud-is-outside-actual-radius
   ;; gym chain-w8: prematurely breaking holds? on breath clouds outside the basin drove
@@ -664,6 +669,36 @@
       (let [[_ dragon-ent] (dragon/dragon w)]
         (is (not (dragon/bite-on-way? dragon-ent (:player/pos w) (physics/centre flight)))
             "escape destination straight line never passes before the dragon's head")))))
+
+(deftest grounded-dragon-stand-approach-commits-to-safe-stand-without-escape-ping-pong
+  ;; gym chain-w9 run 2: approaching the fountain from outside the basin (distance 4.5) with a
+  ;; grounded dragon and breath near the fountain ping-ponged between the stand and escape flight.
+  ;; When the stand is safe and not blocked by breath on the way, the bot commits to it with a shelter-walk.
+  (let [d (sitting 270.0)
+        cloud {:entity/type (blocks/entity-types :area_effect_cloud)
+               :entity/pos [0.5 64.0 2.0]
+               :entity/radius 3.0}
+        w (-> (round-fountain [5.0 64.0 -4.0] d)
+              (assoc :world/entities (merge d {258 cloud})
+                     :player/dimension dimension/end
+                     :player/health 20.0))]
+    (is (some? (dragon/breath-near w)) "breath cloud is near the fountain")
+    (is (not (dragon/in-basin? w)) "player is outside the basin")
+    (let [i (dragon/toward-dragon w)]
+      (is (= :walk (:intent/kind i)))
+      (is (= :shelter (:intent/for i)) "shelter-walk protects approach from breath interruption")
+      (is (= [2 64 0] (:intent/target i))
+          "commits to the safe stand behind the dragon, never ping-pongs to flight"))))
+
+(deftest steer-wear-looks-away-from-endermen-in-the-end
+  ;; gym chain-w9 run 3: landing in the End, wearing armour or pumpkin must steer looks away
+  ;; from endermen's eyes so staring aggro is never triggered during the wear clicks
+  (let [enderman {:entity/type (mob/type-id :enderman) :entity/pos [0.5 64.0 10.5]}
+        w (-> (standing {} [0.5 64.0 0.5] {} {81 enderman})
+              (assoc :player/dimension dimension/end :player/look [0.0 0.0]))
+        steered (plan/steer w {:goal/plan :wear})]
+    (is (= 90.0 (second (get-in steered [:player/controls :control/look])))
+        "looks down to avoid enderman eyes during wear")))
 
 (deftest in-a-lull-the-bot-eats-for-health-back
   ;; the hand-off of gym dragon-f: sixteen steak held, the food between 14 and 18, no healing

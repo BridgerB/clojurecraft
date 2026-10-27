@@ -393,7 +393,11 @@
                                 (long (math/floor (+ fx 0.5 (* r ux))))
                                 (long (math/floor (+ fz 0.5 (* r uz))))
                                 fy)
-                    i (when c {:intent/kind :walk :intent/target c :intent/for :stronghold})]
+                    i (when c
+                        {:intent/kind :walk
+                         :intent/target c
+                         :intent/for :stronghold
+                         :intent/max-nodes 400})]
                 (when (and i
                            (not= c [fx fy fz])
                            (not (contains? (:plan/blacklist world #{}) c))
@@ -436,7 +440,7 @@
         c (when d (mapv #(long (math/floor %)) (:entity/pos d)))]
     (when (and c
                (<= (abs (- (physics/y-of c) (physics/y-of (intent/feet world)))) pickup-rise)
-               (intent/routable? world {:intent/kind :walk :intent/target c}))
+               (intent/routable? world {:intent/kind :walk :intent/target c :intent/max-nodes 400}))
       {:intent/kind :collect-drops :intent/item eye :intent/target c :intent/for :stronghold})))
 
 
@@ -524,7 +528,9 @@
                      (when (and c
                                 (dry-cell? world c)
                                 (not (contains? (:plan/blacklist world #{}) c))
-                                (intent/routable? world {:intent/kind :walk :intent/target c}))
+                                (intent/routable?
+                                 world
+                                 {:intent/kind :walk :intent/target c :intent/max-nodes 400}))
                        c))))))))
 
 (defn far-start
@@ -582,7 +588,11 @@
                                              (long (math/floor (+ fx 0.5 (* r ux))))
                                              (long (math/floor (+ fz 0.5 (* r uz))))
                                              fy)
-                    i (when c {:intent/kind :walk :intent/target c :intent/for :stronghold})]
+                    i (when c
+                        {:intent/kind :walk
+                         :intent/target c
+                         :intent/for :stronghold
+                         :intent/max-nodes 400})]
                 (when (and i
                            (<= cy (- fy downhill-drop))
                            (not (contains? (:plan/blacklist world #{}) c))

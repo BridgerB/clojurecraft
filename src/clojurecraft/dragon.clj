@@ -904,7 +904,11 @@
           (toward-crystals world)
           (< (:player/health world full-health) combat/retreat-health) (recover world)
           (and breath eid (holds? world)) {:intent/kind :perch :intent/target eid}
-          (and breath eid d (grounded? d) (in-basin? world) far?) (shelter-walk stand)
+          (and breath eid d (grounded? d) (not blocked?) far?)
+          (shelter-walk (or (when-not (in-basin? world)
+                              (some->> (around d pos (physics/centre stand))
+                                       (ground-cell world)))
+                            stand))
           (and breath flight) (shelter-walk flight)
           breath {:intent/kind :back-off :intent/target (first breath)}
           (and (nil? stand) eid (some? (ground world 0 0 sky)))
@@ -1058,6 +1062,12 @@
   ;; chain's stage of them before the dragon's: the same turned looks as the dragon row's
   [world _]
   (looks-away world))
+
+(defmethod plan/steer :wear
+  ;; in the End, wearing armour or the carved pumpkin on the head must turn looks away
+  ;; from endermen so the bot never stares during the clicks
+  [world _]
+  (if (= dimension/end (dimension/of world)) (looks-away world) world))
 
 (defmethod plan/done-by :healed? [world _] (nil? (heal-food world)))
 
