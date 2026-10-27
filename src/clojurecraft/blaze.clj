@@ -44,7 +44,8 @@
             [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
-            [clojurecraft.terrain :as terrain]))
+            [clojurecraft.terrain :as terrain]
+            [datascript.core :as d]))
 
 (set! *warn-on-reflection* true)
 
@@ -65,6 +66,8 @@
 (def rested 18.0)                     ; health a rest out of sight ends at: two volleys' hits over the wary line
 (def rest-ms 90000)                   ; a rest with no health coming back this long fails :no-heal (the slow heal is one point every four seconds)
 (def fire-radius 4)                   ; cells from a spawner a fire is put out in: a fire lights its cells past 11, where a spawner's blaze no longer spawns
+(def corridor-reach 48.0)             ; standable bricks within this distance are considered for corridor walk
+(def corridor-candidates 8)           ; candidate bricks tested with routable? to find the farthest walkable
 
 (def rod (recipe/item-id :blaze_rod))
 (def spawner (blocks/default-state :spawner))
@@ -98,13 +101,12 @@
   (and (combat/hittable? world e) (combat/approachable? world e)))
 
 (defn quarry
-  "[eid entity] of the blaze to fight: the first of the candidates nearest (blazes) that is
+  "[eid entity] of the blaze to fight: the first blaze within fight-radius (blazes) that is
    reachable?, or nil."
   [world]
   (let [pos (:player/pos world)]
     (->> (blazes world)
          (sort-by (fn [[_ e]] (physics/distance pos (:entity/pos e))))
-         (take candidates)
          (some (fn [[_ e :as ee]] (when (reachable? world e) ee))))))
 
 (defn at-hand-blaze
@@ -293,8 +295,8 @@
 (defmethod path/goal-done? :unseen
   ;; a cell from whose eye height the line to the body of the blaze in the cell :goal/pos, and
   ;; of each in :goal/cells, is blocked: out of all their sight
-  [world {:goal/keys [pos cells]} node]
-  (every? #(unseen-from? world node %) (cons pos cells)))
+  [world {:goal/keys [pos cells exclude]} node]
+  (and (not (contains? exclude node)) (every? #(unseen-from? world node %) (cons pos cells))))
 
 (defmethod path/heuristic :unseen [_ _] 0.0)
 
@@ -309,28 +311,51 @@
    blaze) is none: blaze-fortress-g run 3 (run 38904048480) walked to nothing and the run threw."
   [world es]
   (let [pos (:player/pos world)
-        [c & cs] (map #(hunt/cell (:entity/pos %))
-                      (sort-by #(physics/distance pos (:entity/pos %)) es))
+        recent (into #{} (map :intention/target) (memory/newest-dones world :walk 2))
+        [c & cs] (map #(if (vector? %) % (hunt/cell (:entity/pos %)))
+                      (sort-by #(if (vector? %)
+                                  (physics/distance pos (physics/centre %))
+                                  (physics/distance pos (:entity/pos %)))
+                               es))
         r (when c
             (path/plan world
                        (path/feet-cell pos)
-                       {:goal/kind :unseen :goal/pos c :goal/cells (vec cs)}))
+                       {:goal/kind :unseen :goal/pos c :goal/cells (vec cs) :goal/exclude recent}))
         to (last (:path/waypoints r))]
     (when (and r (= :found (:path/status r)) to (not= to (intent/feet world)))
       {:intent/kind :walk :intent/target to :intent/for :cover})))
 
-(defn hide
-  "The cover walk from every watcher, or nil: none watching, or no cell out of their sight."
+(defn in-open?
+  "Is the bot in the open where blazes or the active spawner see it: watchers watching, or an active spawner in sight?"
   [world]
-  (cover world (vals (watchers world))))
+  (let [sp (nearest-spawner world)]
+    (boolean (or (seq (watchers world))
+                 (and sp
+                      (<= (physics/distance (physics/centre (intent/feet world))
+                                            (physics/centre sp))
+                          cover-range)
+                      (top-in-sight? world sp))))))
+
+(defn hide
+  "The cover walk from every watcher, and from the remembered spawner if within sight: none watching,
+   or no cell out of their sight."
+  [world]
+  (let [sp (nearest-spawner world)
+        sp-threat? (and sp
+                        (<= (physics/distance (physics/centre (intent/feet world))
+                                              (physics/centre sp))
+                            cover-range)
+                        (top-in-sight? world sp))
+        threats (concat (vals (watchers world)) (when sp-threat? [(update sp 1 inc)]))]
+    (cover world threats)))
 
 (def rest-intent {:intent/kind :rest})
 
 (defn healing
   "What a hurt bot does: out of the watching blazes' sight (hide); else the meal; else back away
    from the nearest watcher, unless that line steps off a drop no landing survives
-   (combat/void-retreat?); else a :rest (held in cover when it cannot heal, heals?: a death is
-   no plan, the bot stays alive). Cover before the meal where there is cover: a meal takes a
+   (combat/void-retreat?); else a :rest when not in the open (held in cover when it cannot heal,
+   heals?: a death is no plan, the bot stays alive), else nil. Cover before the meal where there is cover: a meal takes a
    second and a half standing still, two hits from a burst, and gym blazefort-k run 3 (run
    38913023560) ate at 9.4 by its spawner and was dead before the food came. The meal before the
    back-off where there is none: gym blaze-7 run 1 (run 38891910129) backed away three times
@@ -345,7 +370,8 @@
           (meal world) (meal world)
           (and weid (not (combat/void-retreat? world e)))
           {:intent/kind :back-off :intent/target weid}
-          :else rest-intent)))
+          (not (in-open? world)) rest-intent
+          :else nil)))
 
 (defn wary?
   "Is the health under eat-under: a meal then comes before the next fight. Gym blaze-7b run 2 (run
@@ -356,14 +382,14 @@
 
 (defn warily
   "What a wary bot does before the next fight: out of the watching blazes' sight (hide); else
-   the meal; else, with no blaze watching, a :rest until rested (held when it cannot heal); else nil, and it fights on.
+   the meal; else, when not in the open, a :rest until rested (held when it cannot heal); else nil, and it fights on.
    Gym blazefort-k run 3 (run 38913023560) fought on at 11.5, watched by the spawner's burst,
    and was under 10 a second later."
   [world]
   (let [away (hide world)]
     (cond away away
           (meal world) (meal world)
-          (empty? (watchers world)) rest-intent
+          (not (in-open? world)) rest-intent
           :else nil)))
 
 (defn fires
@@ -418,17 +444,76 @@
            :intent/reach spawner-reach
            :intent/climb 0})))
 
-(defn search
-  "The next leg of the spiral search for a spawner, a :tunnel-to as the :fortress row's
-   (fortress/exploring), or nil when no heading has a way to go. Sim races R2/47 and R4/2 (issue
-   #507) stood healthy at a fortress's edge with no spawner on record and waited :no-blaze: the
-   captured Nethers' spawners lay 117 and 134 blocks off, beyond what the server showed."
+(defn visited-locations
+  "The set of cell locations visited by completed walks or tunnels, plus the current feet."
   [world]
-  (when-let [s (fortress/exploring world)]
-    {:intent/kind :tunnel-to
-     :intent/target (fortress/leg-target s)
-     :intent/steps fortress/steps-per-tunnel
-     :intent/search s}))
+  (let [targets (d/q '[:find [?t ...] :where [?e :intention/kind ?k]
+                       [(contains? #{:tunnel-to :walk} ?k)] [?e :intention/event :done]
+                       [?e :intention/target ?t]]
+                     (:world/facts world))]
+    (conj (set targets) (intent/feet world))))
+
+(defn unvisited-brick?
+  "Is brick b further than fortress/reach from every visited location?"
+  [visited b]
+  (not-any? (fn [vp] (<= (physics/distance (physics/centre vp) (physics/centre b)) fortress/reach))
+            visited))
+
+(defn unvisited-fortress-bricks
+  "The fortress bricks on record that have not been visited and are not blacklisted."
+  [world]
+  (let [bl (:plan/blacklist world #{})
+        visited (visited-locations world)]
+    (->> (fortress/bricks world)
+         (remove bl)
+         (filter #(unvisited-brick? visited %)))))
+
+(defn corridor-walk
+  "A walk along known fortress corridors (bricks) toward unexplored fortress, or nil when no
+   unvisited standable brick can be reached by a walk."
+  [world]
+  (let [feet (intent/feet world)
+        standable (->> (unvisited-fortress-bricks world)
+                       (filter (fn [b]
+                                 (<= (physics/distance (physics/centre feet) (physics/centre b))
+                                     corridor-reach)))
+                       (filter (fn [b] (path/standable? world (update b 1 inc))))
+                       (sort-by
+                        (fn [b] (- (physics/distance (physics/centre feet) (physics/centre b))))))]
+    (when-let [target (or (some (fn [b]
+                                  (let [w {:intent/kind :walk :intent/target (update b 1 inc)}]
+                                    (when (intent/routable? world w) b)))
+                                (take corridor-candidates standable))
+                          (some (fn [b]
+                                  (let [w {:intent/kind :walk :intent/target (update b 1 inc)}]
+                                    (when (intent/routable? world w) b)))
+                                (take-last corridor-candidates standable)))]
+      {:intent/kind :walk :intent/target (update target 1 inc) :intent/for :corridor})))
+
+(defn fortress-search
+  "Search the fortress: walk along open corridors (corridor-walk) toward unexplored bricks, or
+   tunnel/bridge to the nearest unvisited brick when no walk reaches one, or nil when all known
+   bricks are visited."
+  [world]
+  (or (corridor-walk world)
+      (when-let [b (memory/nearest-of (physics/centre (intent/feet world))
+                                      fortress/sight-radius
+                                      (unvisited-fortress-bricks world))]
+        {:intent/kind :tunnel-to
+         :intent/target b
+         :intent/steps fortress/steps-per-tunnel
+         :intent/bridge? true})))
+
+(defn search
+  "The search for a spawner: explore known fortress corridors and bricks first (fortress-search),
+   else the next leg of the spiral search (fortress/exploring), or nil when no heading has a way to go."
+  [world]
+  (or (fortress-search world)
+      (when-let [s (fortress/exploring world)]
+        {:intent/kind :tunnel-to
+         :intent/target (fortress/leg-target s)
+         :intent/steps fortress/steps-per-tunnel
+         :intent/search s})))
 
 (defmethod plan/done-by :rods-held? [world _] (>= (rods world) rods-wanted))
 
@@ -522,10 +607,11 @@
 ;; ---------------------------------------------------------------- the :rest intent
 
 (defmethod intent/run :rest
-  ;; {:intent/kind :rest}: stand still out of sight until the health is back to rested, or a
-  ;; blaze watches the bot that did not when the rest began (:intent/blazes), or the health
-  ;; falls under what it was then (:intent/health: shot from somewhere unseen) (done, and the
-  ;; act looks again), failed :no-heal after rest-ms (no food in the bar, nothing comes back).
+  ;; {:intent/kind :rest}: stand still out of sight until the health is back to rested, or
+  ;; healthy enough to fight when food cannot heal further, or a blaze watches the bot that
+  ;; did not when the rest began (:intent/blazes), or the health falls under what it was then
+  ;; (:intent/health: shot from somewhere unseen), or exposed in the open (done, and the act
+  ;; looks again), failed :no-heal after rest-ms when food could heal.
   ;; An intent, not a planner wait: the slow heal brings a point every four seconds, and a wait
   ;; fails the plan after plan/wait-ticks (20 s)
   [world {:intent/keys [since health] seen :intent/blazes} _]
@@ -535,11 +621,16 @@
         since (or since now)
         health (or health (:player/health world 20.0))
         now-health (:player/health world 20.0)
+        open? (in-open? world)
         world
         (-> world
             (assoc :player/controls {})
             (intent/assoc-intent :intent/since since :intent/blazes seen :intent/health health))]
-    (cond (or (>= now-health rested) (< now-health health) (seq (remove seen here)))
+    (cond (or (>= now-health rested)
+              (and (not (heals? world)) (>= now-health eat-under))
+              (< now-health health)
+              (seq (remove seen here))
+              open?)
           (intent/done world)
           (and (> (- now since) rest-ms) (heals? world)) (intent/fail world :no-heal)
           :else world)))

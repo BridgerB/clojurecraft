@@ -542,3 +542,47 @@
       (is (not (blaze/under-fire? hurt {:intent/kind :rest})))
       (is (not (blaze/under-fire? hurt {:intent/kind :walk :intent/for :cover})))
       (is (not (blaze/under-fire? (assoc (standing {}) :player/health 9.0) tunnel))))))
+
+(deftest with-no-spawner-known-and-bricks-on-record-the-bot-walks-the-corridor
+  ;; issue #262: reached fortress, but nearest spawner is far; instead of tunneling away
+  ;; via spiral search, the bot walks open fortress corridors toward unexplored bricks
+  (let [brick (blocks/default-state :nether_bricks)
+        air (blocks/default-state :air)
+        ;; A corridor extending east along x from 8 to 20 at y=64 (floor at 63)
+        corridor (merge (into {} (for [x (range 8 21)] [[x 63 8] brick]))
+                        (into {} (for [x (range 8 21) y [64 65]] [[x y 8] air])))
+        w (-> (standing {})
+              (assoc :world/chunks {[0 0] (world/column corridor)})
+              (memory/observe [18 63 8] brick))
+        i (next-intent w)]
+    (is (= :walk (:intent/kind i)))
+    (is (= :corridor (:intent/for i)))
+    (is (= 64 (second (:intent/target i))))))
+
+(deftest hurt-or-wary-bot-takes-cover-from-active-spawner-and-never-rests-in-the-open
+  ;; beside a live spawner, resting in the open leads to fireball death (probe 40597529086)
+  (let [sp [11 64 10]
+        pillar {[6 64 8] (blocks/default-state :stone) [6 65 8] (blocks/default-state :stone)}
+        w (-> (standing {})
+              (assoc :world/chunks {[0 0] (world/column pillar)})
+              (memory/observe sp blaze/spawner))]
+    (testing "in the open by spawner under 14 health: takes cover rather than resting"
+      (let [wary (assoc w :player/health 12.0)]
+        (is (blaze/in-open? wary))
+        (is (= {:intent/kind :walk :intent/target [5 64 8] :intent/for :cover}
+               (next-intent wary)))))
+    (testing "once in cover out of spawner sight: rests"
+      (let [in-cover (assoc w :player/pos [5.5 64.0 8.5] :player/health 12.0)]
+        (is (not (blaze/in-open? in-cover)))
+        (is (= blaze/rest-intent (next-intent in-cover)))))))
+
+(deftest rest-completes-when-healthy-and-food-cannot-heal-further
+  ;; issue #262 (sim R1/17): hp 14.8, food 17, no food held: heals? is false, rest must finish
+  (let [w (assoc (standing {})
+                 :player/health 14.8
+                 :player/food 17
+                 :time/now 1000
+                 :plan/intent (assoc blaze/rest-intent :intent/status :active))
+        tick (fn [w] (intent/run w (:plan/intent w) {:event/kind :tick :event/now 1000}))]
+    (is (not (blaze/heals? w)))
+    (is (= :done (:intent/status (:plan/intent (tick w)))))))
