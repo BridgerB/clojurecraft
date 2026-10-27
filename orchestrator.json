@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-27T06:47:39.614Z",
+  "at" : "2026-10-27T06:48:46.557Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -38,11 +38,6 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 579,
-    "title" : "Bot stops at ender-pearls: timeout",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 538,
     "title" : "Bot stops at fortress: blocked",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
@@ -66,7 +61,7 @@
     "number" : 586,
     "title" : "Bot stops at furnace: stuck",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : true
+    "copilot" : false
   }, {
     "number" : 89,
     "title" : "Bot stops at portal-kit: no-log",
@@ -76,6 +71,11 @@
     "number" : 57,
     "title" : "Bot stops at wood: no-log",
     "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 579,
+    "title" : "Bot stops at ender-pearls: timeout",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 348,
@@ -142,10 +142,6 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 579,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
     "issue" : 538,
     "move" : "leave",
     "why" : "hands-off label"
@@ -163,10 +159,13 @@
     "why" : "hands-off label"
   }, {
     "issue" : 586,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment"
+    "move" : "assign"
   }, {
     "issue" : 89,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 579,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -195,11 +194,6 @@
     "why" : "hands-off label"
   } ],
   "log" : [ {
-    "issue" : 586,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment",
-    "at" : "2026-10-27T01:10:01.259Z"
-  }, {
     "issue" : 586,
     "move" : "assign",
     "at" : "2026-10-27T01:11:08.882Z"
@@ -1545,5 +1539,9 @@
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
     "at" : "2026-10-27T06:47:39.614Z"
+  }, {
+    "issue" : 586,
+    "move" : "assign",
+    "at" : "2026-10-27T06:48:46.557Z"
   } ]
 }
