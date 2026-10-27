@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-27T09:23:44.721Z",
+  "at" : "2026-10-27T09:24:52.947Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -43,14 +43,14 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 461,
-    "title" : "Bot stops at portal: out-of-reach",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 161,
     "title" : "Bot stops at portal-kit: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 461,
+    "title" : "Bot stops at portal: out-of-reach",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 342,
@@ -71,7 +71,7 @@
     "number" : 57,
     "title" : "Bot stops at wood: no-log",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : true
+    "copilot" : false
   }, {
     "number" : 586,
     "title" : "Bot stops at furnace: stuck",
@@ -146,11 +146,11 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 461,
+    "issue" : 161,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 161,
+    "issue" : 461,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -167,8 +167,7 @@
     "why" : "hands-off label"
   }, {
     "issue" : 57,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment"
+    "move" : "assign"
   }, {
     "issue" : 579,
     "move" : "leave",
@@ -195,11 +194,6 @@
     "why" : "hands-off label"
   } ],
   "log" : [ {
-    "issue" : 586,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment",
-    "at" : "2026-10-27T01:28:11.558Z"
-  }, {
     "issue" : 586,
     "move" : "assign",
     "at" : "2026-10-27T01:29:18.624Z"
@@ -1545,5 +1539,9 @@
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
     "at" : "2026-10-27T09:23:44.721Z"
+  }, {
+    "issue" : 57,
+    "move" : "assign",
+    "at" : "2026-10-27T09:24:52.947Z"
   } ]
 }
