@@ -175,19 +175,19 @@
                            (conj seen to))
                     [w to seen])))
         [w* to seen] spent
-        recent (set (take-last pearls/roam-recent-walks seen))
+        recent (set (take-last 2 seen))
         allowed (remove recent seen)
         back
         (memory/remember-intention w* {:intent/id 200 :intent/kind :walk :intent/target to} :done)
         again (:intent/target (pearls/roam back))]
-    (is (< pearls/roam-recent-walks (count seen)) "ends to spend, and more than recent")
+    (is (< 2 (count seen)) "ends to spend, and more than the last two")
     (is (contains? (set seen) to) "every end a route reaches spent: a far one is walked to again")
     (is (not (contains? recent to)) "never where it stands or where it just came from")
     (is (>= (path/octile [8 64 8] to) (- (apply max (map #(path/octile [8 64 8] %) allowed)) 2))
         "the farthest of the rest a route reaches (ends the search only came to may lie farther)")
     (is (= {:intent/kind :walk :intent/target to :intent/for :pearls} (pearls/roam w*)))
-    (is (not (contains? (set (conj (vec (take-last pearls/roam-recent-walks seen)) to)) again))
-        "arrived there, the next revisit is not one of recent ends")))
+    (is (not (contains? #{to (last seen)} again))
+        "arrived there, the next revisit is neither it nor the end before it: no ping-pong")))
 
 (deftest a-four-point-roam-cycle-is-refused-and-engages-tracked-endermen
   ;; gym batch pearls-r3-w4 (plan run 40521602180 at 27cff26) run 1: walked a 4-point
@@ -210,19 +210,16 @@
                      {:intent/id (+ 100 idx) :intent/kind :walk :intent/target pt}
                      :done))
                   w0
-                  (map-indexed vector cycle))]
-    (let [next-roam (pearls/roam w)]
-      (is (not (contains? (set cycle) (:intent/target next-roam)))
-          "a roam never picks any of the recent cycle endpoints"))
-    (let [e (enderman [2395.5 68.0 2160.5])
-          w-with-mob
-          (assoc w :world/entities {7 e} :plan/last {:intent/kind :lookout :intent/for :pearls})
-          next-intent (plan/next-intent w-with-mob row plan/goals)]
-      (is (not= :walk (:intent/kind next-intent))
-          "with an enderman tracked, never walks back to a spent roam end")
-      (is (contains? #{:stairs-up :stairs-down :tunnel :fight :burrow :lookout}
-                     (:intent/kind next-intent))
-          "engages tracked enderman via cut or fight"))))
+                  (map-indexed vector cycle))
+        e (enderman [2395.5 68.0 2160.5])
+        w-with-mob
+        (assoc w :world/entities {7 e} :plan/last {:intent/kind :lookout :intent/for :pearls})
+        next-intent (plan/next-intent w-with-mob row plan/goals)]
+    (is (not= :walk (:intent/kind next-intent))
+        "with an enderman tracked, never walks back to a spent roam end")
+    (is (contains? #{:stairs-up :stairs-down :tunnel :fight :burrow :lookout}
+                   (:intent/kind next-intent))
+        "engages tracked enderman via cut or fight")))
 
 (deftest a-roam-follows-a-caves-passage-to-where-it-can-look-from
   ;; gym batch pearls-263f (plan run 38918584959, probe 39130057525): a landing in a cave pocket

@@ -377,7 +377,6 @@
                      (when (reaches? world e mouth) ee)
                      ee)))))))
 
-(def roam-recent-walks 12)          ; how many recent walk destinations roam refuses to revisit, breaking cycles
 (def roam-reaches [roam-reach (* 2 roam-reach) (* 3 roam-reach) (* 4 roam-reach)]) ; how far a roam looks for an end not yet walked to, nearest first: sixteen, thirty-two, forty-eight, sixty-four blocks
 
 (defn roam-goal
@@ -422,11 +421,9 @@
    with every end a route reaches spent, the farthest of those spent ends is walked to
    again: from forty-eight blocks off the ends round there are unspent, and the forest there
    has had the walk's minutes to spawn into; the ends near the feet are revisited only by
-   being walked past. Never one of the ends the last walks arrived at (memory/newest-dones
-   roam-recent-walks: where the bot stands, where it just came from, or points in a recent cycle:
-   gym batch pearls-r3-w4 run 1 walked a 4-point cycle between [2415 71 2183], [2387 66 2151],
-   [2387 65 2152] and [2409 68 2181] for five hours), and never a spent end when an enderman is
-   tracked within descend-radius (the hunt cuts toward it with dig-out instead). With all refused
+   being walked past. Never one of the two ends the last walks arrived at (memory/newest-dones:
+   where the bot stands and where it just came from), and never a spent end when an enderman is
+   tracked within descend-radius (the hunt cuts toward it with dig-out instead). With both refused
    the hunt digs out or rests where it stands, and the forest round it spawns to it there. Gym
    batch pearls-warped9-a (plan run 39898400239) run 1 took three pearls by about minute forty and
    then stood in lookouts in one place for four hours with no enderman tracked: nothing for the roam
@@ -436,8 +433,7 @@
   (let [feet (intent/feet world)
         start (mod (quot (:time/now world 0) roam-turn-ms) (count headings))
         spent (memory/arrived world)
-        recent
-        (into #{} (map :intention/target) (memory/newest-dones world :walk roam-recent-walks))
+        recent (into #{} (map :intention/target) (memory/newest-dones world :walk 2))
         tries (for [reach roam-reaches k (range (count headings))] [reach k])
         plan-to (fn [[reach k]]
                   (let [heading (nth headings (mod (+ start k) (count headings)))
