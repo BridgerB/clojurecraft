@@ -63,6 +63,22 @@
   (is (= :disconnect (gym/outcome (left :result nil))) "the bot never printed RESULT")
   (is (= :harness (gym/outcome (left :landed? false))) "the landing failed before :go"))
 
+(deftest server-log-death-messages-are-extracted
+  (let
+    [log-sample
+     "[09:29:45] [Server thread/INFO]: Clj_g1 was slain by Enderman\n[09:31:12] [Server thread/INFO]: Clj_g1 tried to swim in lava\n"]
+    (is (= "Clj_g1 was slain by Enderman" (gym/death-message log-sample "Clj_g1")))
+    (is (nil? (gym/death-message log-sample "Clj_g2")) "different bot name not matched")))
+
+(deftest judged-retains-death-message
+  (let [result {:ok false
+                :reason :death
+                :death-message "Clj_g1 tried to swim in lava"
+                :stats {:stats/deaths 1}}
+        row (gym/judged (left :result result))]
+    (is (= :death (:gym/outcome row)))
+    (is (= "Clj_g1 tried to swim in lava" (:gym/death-message row)))))
+
 (deftest an-arena-is-written-round-the-landing
   ;; a portal row builds its arena relative to the landing [x z y] (issue #8)
   (is (= "fill 92 63 192 116 63 216 minecraft:stone"

@@ -203,7 +203,7 @@
       (cond-> goals (assoc :plan/goals (set (map #(current-id table %) goals))))
       (cond-> at (assoc :plan/go-at at))
       (cond-> chain? (assoc :plan/chain? true :plan/reached #{}))
-      (dissoc :plan/intent :plan/last :plan/waiting-since :plan/waiting-ticks)))
+      (dissoc :plan/intent :plan/last :plan/waiting :plan/waiting-since :plan/waiting-ticks)))
 
 (defn landed?
   "Is the bot at the landing the fixture named, standing in a loaded chunk?"
@@ -335,7 +335,7 @@
                 (assoc :plan/trail (vec (take-last 128 (conj trail feet)))))
         (memory/remember-intention i :started)
         (cond-> (:intent/dead-end i) (update :plan/boxed-at (fnil conj #{}) (:intent/dead-end i)))
-        (dissoc :plan/waiting-since :plan/waiting-ticks :plan/failed)
+        (dissoc :plan/waiting :plan/waiting-since :plan/waiting-ticks :plan/failed)
         (game/say (str "intent " (:intent/kind i)
                        " " (or (:intent/target i) (:intent/recipe i)))))))
 

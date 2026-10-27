@@ -1451,7 +1451,7 @@
    cobblestone at y 63 with air round it, every level step refused for its floor, every tunnel
    toward a remembered pool :boxed in a tick and that pool blacklisted, until no pool was left
    and it waited :no-water with 156 cobblestone in hand."
-  [world {:intent/keys [dir side level-steps] :or {level-steps 0}}]
+  [world {:intent/keys [dir side level-steps from-feet] :or {level-steps 0}}]
   (let [dir (or dir (first directions))
         feet (intent/feet world)
         sides (if side [side] [(turn dir) (turn (turn (turn dir)))])
@@ -1470,6 +1470,7 @@
                                    :intent/level-steps (inc level-steps)
                                    :intent/stage (if to-lay :lay :level)
                                    :intent/started-tick (:time/tick world))
+        (and (zero? level-steps) (nil? from-feet)) (intent/assoc-intent :intent/from-feet feet)
         to-lay (intent/assoc-intent :intent/lay to-lay)
         (not= d dir)
         (-> (intent/assoc-intent :intent/side d)
@@ -1513,9 +1514,27 @@
                       world
                       {:intent/kind :walk :intent/target target :intent/for :scoop})))))
 
+(defn no-progress?
+  "Did the tunnel make no progress from where it began (:intent/from-feet): position unchanged,
+   or no nearer target when one was given (excluding :bank tunnels, which blacklist their pond
+   via no-nearer?)?"
+  [world {:intent/keys [for target from-feet]}]
+  (boolean (and from-feet
+                (not= :bank for)
+                (if target
+                  (>= (physics/distance (physics/centre (intent/feet world))
+                                        (physics/centre target))
+                      (physics/distance (physics/centre from-feet) (physics/centre target)))
+                  (= (intent/feet world) from-feet)))))
+
 (defmethod intent/run :tunnel
   [world {:intent/keys [length level-steps stage target] :or {level-steps 0} :as i} event]
-  (cond (and (>= level-steps length) (not (contains? #{:level :lay} stage)))
+  (cond (and (>= level-steps length)
+             (not (contains? #{:level :lay} stage))
+             (pos? length)
+             (no-progress? world i))
+        (box world)
+        (and (>= level-steps length) (not (contains? #{:level :lay} stage)))
         (cond-> (-> world
                     (assoc :player/controls {})
                     intent/done)

@@ -1,0 +1,24 @@
+;; Issue #263, branch feat/263-pearls-r3, round 3 batch 2:
+;; Batch pearls-r3-w1 (plan run 40469919220 at e6140bc): pearls-1-live 3/3;
+;; pearls-12 run 2 twelve pearls in about 24 minutes, no death (the fastest
+;; pass yet; runs 1 and 3 still running when this batch was written).
+;; Since w1's code, one fought out is left only for a rest
+;; (fight-rest-ms, 0c1199a): sim gate r3fr3b (probe 40470765785) showed one
+;; left for good teleporting after the bot and killing it 188 times in the
+;; model; with the rest, R4 seed 3 took its twelve in 30 sim-minutes with
+;; no death (probe 40472753229). Same rows, on the branch's final code.
+{:plans/label "pearls-r3-w2"
+ :plans/jobs 4
+ :plans/issue 263
+ :plans/experiments [{:exp/name "pearls-12"
+                      :exp/kind :gym
+                      :exp/goal "pearls-12"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 18000}
+                     {:exp/name "pearls-1-live"
+                      :exp/kind :gym
+                      :exp/goal "pearls-1-live"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 300}]}
