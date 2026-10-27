@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-27T02:54:11.063Z",
+  "at" : "2026-10-27T02:55:17.923Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -28,20 +28,20 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 531,
-    "title" : "Bot stops at ingots: boxed",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 178,
     "title" : "Bot stops at portal: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
+    "number" : 531,
+    "title" : "Bot stops at ingots: boxed",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
     "number" : 586,
     "title" : "Bot stops at furnace: stuck",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : true
+    "copilot" : false
   }, {
     "number" : 70,
     "title" : "Bot stops at cast-one: needs-tool",
@@ -129,17 +129,16 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 531,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
     "issue" : 178,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 531,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
     "issue" : 586,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment"
+    "move" : "assign"
   }, {
     "issue" : 579,
     "move" : "leave",
@@ -190,11 +189,6 @@
     "why" : "hands-off label"
   } ],
   "log" : [ {
-    "issue" : 586,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment",
-    "at" : "2026-10-26T20:52:19.256Z"
-  }, {
     "issue" : 586,
     "move" : "assign",
     "at" : "2026-10-26T20:53:27.771Z"
@@ -1540,5 +1534,9 @@
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
     "at" : "2026-10-27T02:54:11.063Z"
+  }, {
+    "issue" : 586,
+    "move" : "assign",
+    "at" : "2026-10-27T02:55:17.923Z"
   } ]
 }
