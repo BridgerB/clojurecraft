@@ -157,7 +157,7 @@
    Never tunnels when already in the portal room: the room is open and has a lava pit under
    the frame."
   [world frame]
-  (when-not (plan/done-by :in-portal-room? world nil)
+  (when-not (plan/done-by world {:goal/done? :in-portal-room?})
     (let [way (stronghold/to-room world (update frame 1 inc))]
       (if (= :tunnel-to (:intent/kind way)) (assoc way :intent/reach 1.5 :intent/climb 1) way))))
 
