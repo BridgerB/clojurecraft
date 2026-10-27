@@ -1161,6 +1161,33 @@
            ((juxt :intent/kind :intent/for) (plan/next-intent respawned row plan/goals)))
         "so the decide continues to the dig, never the same walk again")))
 
+(deftest after-the-sword-is-remade-the-pickaxe-fetches-its-own-log
+  ;; gym batch pearls-r3-w2 (plan run 40475390313) run 3: slain an hour and a half in
+  ;; with pearls held, it respawned at the overworld spawn, chopped the spruce beside
+  ;; it, remade its wooden sword, dug its table up and collected it, and then failed
+  ;; :no-pickaxe with the sword, the table and three sticks held and the trunk's upper
+  ;; logs standing: no intent of the pickaxe's log chain was ever taken after the collect
+  (let [trunk {[12 64 8] 136 [12 65 8] 136 [12 66 8] 136 [12 67 8] 252}
+        col (world/column trunk)
+        respawned (-> (standing {})
+                      (assoc :world/chunks {[0 0] col}
+                             :player/inventory
+                             {0 (item :wooden_sword 1) 1 (item :stick 3) 2 (item :crafting_table 1)}
+                             :time/now 0
+                             :stats/deaths 1
+                             :plan/last
+                             {:intent/kind :collect
+                              :intent/target [12 64 8]
+                              :intent/for :take-table
+                              :intent/status :done})
+                      (memory/remember-column [0 0] col)
+                      (memory/remember-intention {:intent/id 1 :intent/kind :burrow} :done))
+        next (plan/next-intent respawned row plan/goals)]
+    (is
+     (= [:walk :log] ((juxt :intent/kind :intent/for) next))
+     "sword and table held, no plank for the pickaxe: out to the trunk again, never
+            the :no-pickaxe wait")))
+
 (deftest empty-hands-at-a-treeless-spawn-look-for-wood-never-fail-no-sword
   ;; gym batch pearls-r3-w2 (plan run 40475390313) run 2: slain in the forest at three
   ;; minutes, it respawned at an overworld spawn with no log in the chunks first loaded
