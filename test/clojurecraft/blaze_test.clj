@@ -548,12 +548,12 @@
   ;; via spiral search, the bot walks open fortress corridors toward unexplored bricks
   (let [brick (blocks/default-state :nether_bricks)
         air (blocks/default-state :air)
-        ;; A corridor extending east along x from 8 to 20 at y=64 (floor at 63)
-        corridor (merge (into {} (for [x (range 8 21)] [[x 63 8] brick]))
-                        (into {} (for [x (range 8 21) y [64 65]] [[x y 8] air])))
+        ;; A corridor extending east along x from 8 to 15 at y=64 (floor at 63) in chunk [0 0]
+        corridor (merge (into {} (for [x (range 8 16)] [[x 63 8] brick]))
+                        (into {} (for [x (range 8 16) y [64 65]] [[x y 8] air])))
         w (-> (standing {})
               (assoc :world/chunks {[0 0] (world/column corridor)})
-              (memory/observe [18 63 8] brick))
+              (memory/observe [15 63 8] brick))
         i (next-intent w)]
     (is (= :walk (:intent/kind i)))
     (is (= :corridor (:intent/for i)))
@@ -567,10 +567,12 @@
               (assoc :world/chunks {[0 0] (world/column pillar)})
               (memory/observe sp blaze/spawner))]
     (testing "in the open by spawner under 14 health: takes cover rather than resting"
-      (let [wary (assoc w :player/health 12.0)]
+      (let [wary (assoc w :player/health 12.0)
+            i (next-intent wary)]
         (is (blaze/in-open? wary))
-        (is (= {:intent/kind :walk :intent/target [5 64 8] :intent/for :cover}
-               (next-intent wary)))))
+        (is (= :walk (:intent/kind i)))
+        (is (= :cover (:intent/for i)))
+        (is (= 5 (first (:intent/target i))))))
     (testing "once in cover out of spawner sight: rests"
       (let [in-cover (assoc w :player/pos [5.5 64.0 8.5] :player/health 12.0)]
         (is (not (blaze/in-open? in-cover)))

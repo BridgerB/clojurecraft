@@ -370,8 +370,8 @@
           (meal world) (meal world)
           (and weid (not (combat/void-retreat? world e)))
           {:intent/kind :back-off :intent/target weid}
-          (not (in-open? world)) rest-intent
-          :else nil)))
+          (and (not weid) (in-open? world)) nil
+          :else rest-intent)))
 
 (defn wary?
   "Is the health under eat-under: a meal then comes before the next fight. Gym blaze-7b run 2 (run
@@ -389,7 +389,7 @@
   (let [away (hide world)]
     (cond away away
           (meal world) (meal world)
-          (not (in-open? world)) rest-intent
+          (and (empty? (watchers world)) (not (in-open? world))) rest-intent
           :else nil)))
 
 (defn fires
