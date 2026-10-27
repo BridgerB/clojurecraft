@@ -766,7 +766,18 @@
                (plan/next-intent (fought on-stairs pearls/fight-tries) row plan/goals)))
         "fought out: no fight is held on it from the end again")
     (is (nil? (pearls/angry-near (fought on-stairs pearls/fight-tries)))
-        "and it holds the burrow no longer, so the burrow can go stale")))
+        "and it holds the burrow no longer, so the burrow can go stale"))
+  ;; sim gate r3fr3 (probe 40465621253, world R4 seed 3): fought out, the one over the
+  ;; burrow's roof still cut every walk away from it through interrupts?, 28,545 walks
+  ;; planned in place, where main fought it in place instead (probe 40465674776)
+  (let [angry (assoc (enderman [8.5 64.0 10.5]) :entity/creepy? true)
+        w (standing {7 angry})
+        away {:intent/kind :walk :intent/target [20 64 20] :intent/for :shelter}]
+    (is (pearls/beset? w) "angry two blocks off: beset")
+    (is (plan/interrupts? w row away) "and a walk away from it is cut to meet it")
+    (is (not (pearls/beset? (fought w pearls/fight-tries))) "fought out: beset no longer")
+    (is (not (plan/interrupts? (fought w pearls/fight-tries) row away))
+        "so the walk away from it stands")))
 
 (deftest an-angry-one-blacklisted-that-never-comes-to-the-lure-holds-the-burrow-no-longer
   ;; gym batch pearls-warped8-a (plan run 39731473452, probe 39776733945) run 1: from the 49th

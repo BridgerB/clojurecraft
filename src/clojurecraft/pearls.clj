@@ -1497,11 +1497,17 @@
 
 (defn beset?
   "Does an angry enderman (entity/creepy?), blacklisted or not, stand within strike-range of the
-   feet, height counted?"
+   feet, height counted? Not one fought out (fought-out?): it has had fight-tries fights to
+   come into the open and kill or be killed and has done neither, and the hunt's way on is a
+   walk away from it, which an interrupt here would cut every tick. Sim gate r3fr3 (probe
+   40465621253, world R4 seed 3): with one fought out over its burrow's roof the hunt chose
+   the crowd site's walk 28,545 times, each cut at once, where on main the same run fought
+   it 18,657 times (probe 40465674776)."
   [world]
   (let [p (:player/pos world)]
-    (boolean (some (fn [[_ e]]
+    (boolean (some (fn [[eid e]]
                      (and (entity/creepy? e)
+                          (not (fought-out? world eid))
                           (<= (physics/distance p (:entity/pos e)) strike-range)))
                    (endermen (dissoc world :plan/blacklist) stare-range)))))
 
