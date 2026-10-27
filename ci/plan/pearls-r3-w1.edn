@@ -1,0 +1,28 @@
+;; Issue #263, branch feat/263-pearls-r3, round 3 batch 1:
+;; Batch pearls-w3 (plan run 40434266158): pearls-1-live 3/3, pearls-12 0/3,
+;; every run to the five-hour timeout in its own loop. Since then:
+;; 1. for-pick-decide hides a done log walk's chain only while a log is
+;;    counted, not while a taken-up table counts as pieces (run 1 walked
+;;    to the trunk beside it 356,882 times after respawning).
+;; 2. One fight-tries fights end on without a kill is fought no more and
+;;    holds no burrow (fought-out?): run 3 planned some sixty-four
+;;    thousand fights on one enderman.
+;; 3. Stuck a minute of lookouts with no roam end and no enderman to cut
+;;    toward, the hunt climbs out toward the floor (stuck?, climb-out):
+;;    run 2 stood in lookouts its last four hours under the floor.
+;; Same rows, to measure against batches w1 to w3.
+{:plans/label "pearls-r3-w1"
+ :plans/jobs 4
+ :plans/issue 263
+ :plans/experiments [{:exp/name "pearls-12"
+                      :exp/kind :gym
+                      :exp/goal "pearls-12"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 18000}
+                     {:exp/name "pearls-1-live"
+                      :exp/kind :gym
+                      :exp/goal "pearls-1-live"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 300}]}
