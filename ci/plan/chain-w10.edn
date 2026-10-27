@@ -1,0 +1,9 @@
+;; issue #10, step 13, batch w10: bound stand searches to prevent keepalive timeout stalls,
+;; commit grounded dragon approach to safe stands, wear pumpkin first in the End looking down,
+;; and retreat under danger-health in defend
+{:plans/label "chain-w10"
+ :plans/jobs 4
+ :plans/issue 10
+ :plans/experiments
+ [{:exp/name "dragon" :exp/kind :gym :exp/goal "dragon" :exp/runs 3 :exp/bots 1 :exp/est-s 1600}
+  {:exp/name "chain" :exp/kind :gym :exp/goal "chain" :exp/runs 3 :exp/bots 1 :exp/est-s 3600}]}
