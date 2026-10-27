@@ -1024,7 +1024,24 @@
     (is (= :log-hunt (:intent/for walked))
         "no pickaxe at all: out for the wood of one, never the :no-pickaxe wait")
     (is (= {:intent/kind :lookout :intent/for :pearls} (plan/next-intent worn row plan/goals))
-        "a worn pickaxe still held: no hunt for wood, the hunt goes on with it")))
+        "a worn pickaxe still held: no hunt for wood, the hunt goes on with it"))
+  ;; gym batch pearls-w2 (plan run 40428200343) run 3: the same respawn with spruces
+  ;; remembered round it, so the planner asked for the remembered trunk (:log), not the
+  ;; hunt; the table taken up after the sword craft counted as the table's pieces
+  ;; (sword/pieces?) and the walk was refused, :no-pickaxe again in 184 s
+  (let [trunk {[12 64 8] 136 [12 65 8] 136 [12 66 8] 136 [12 67 8] 252}
+        col (world/column trunk)
+        respawned (-> (standing {})
+                      (assoc :world/chunks {[0 0] col}
+                             :player/inventory
+                             {0 (item :wooden_sword 1) 1 (item :stick 3) 2 (item :crafting_table 1)}
+                             :time/now 0)
+                      (memory/remember-column [0 0] col)
+                      (memory/remember-intention {:intent/id 1 :intent/kind :burrow} :done))
+        walked (plan/next-intent respawned row plan/goals)]
+    (is (= :walk (:intent/kind walked)))
+    (is (= :log (:intent/for walked))
+        "a table held is no wood: the remembered trunk is walked to for the pickaxe")))
 
 (deftest no-sword-held-no-hunt
   ;; gym batch pearls-warped8-b (plan run 39775345028): runs 1 and 3 respawned with nothing held

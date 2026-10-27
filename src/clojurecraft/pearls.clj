@@ -1482,11 +1482,26 @@
    a dig that takes the table along, a toss that makes room for it."
   #{:place :craft :open-container :dig :toss})
 
+(defn log-counted?
+  "Is a log already counted, in the inventory or laid in the crafting grid (sword/with-laid
+   over recipe/counts)? Then a remake's wood is in hand and its log chain is finished:
+   another trunk is not walked to, the log is crafted. A crafting table held is no wood
+   (sword/pieces? counts one as pieces): gym batch pearls-w2 (plan run 40428200343) run 3,
+   slain by a piglin, respawned at the overworld spawn, remade its wooden sword and took
+   its table up, then failed :no-pickaxe with sticks and the table held and spruces
+   remembered round it: the pickaxe's :log walk was refused for the table's sake, with no
+   plank and no log held. The log hunt of the batch before (pearls-w1 run 1, the same
+   failure) is refused only when a trunk is remembered, so the hunt's allowance alone never
+   reached it."
+  [world]
+  (pos? (recipe/have (recipe/counts (:player/inventory (sword/with-laid world)))
+                     (recipe/tags :logs))))
+
 (defn make-sword
   "The intent that makes the best sword the held items pay for (sword/payable) through the needs
    planner, when that craft can start from here: one of sword-acts, or the log chain to a
-   remembered trunk (:intent/for :log) while the table's pieces are not already held
-   (sword/pieces?). Nil when nothing is payable, or the planner would only wait, go looking for
+   remembered trunk (:intent/for :log) while no log is already counted (log-counted?).
+   Nil when nothing is payable, or the planner would only wait, go looking for
    a tree, or chop another trunk with a log already in the grid. The Nether has no oak, and a
    wait there fails the plan. With no blade payable from the planks or cobblestone held but a
    log held, in the inventory or the grid (sword/with-laid: in the warped forest a stem, which
@@ -1503,16 +1518,13 @@
   [world goal table]
   (let [bare? (nil? (combat/sword world))]
     (when-let [k (or (sword/payable world)
-                     (when (pos? (recipe/have (recipe/counts (:player/inventory (sword/with-laid
-                                                                                 world)))
-                                              (recipe/tags :logs)))
-                       :wooden_sword)
+                     (when (log-counted? world) :wooden_sword)
                      (when bare? :wooden_sword))]
       (let [i (make/decide (sword/for-decide world)
                            (assoc goal :goal/provides {(keyword "item" (name k)) 1})
                            table)]
         (when (and (:intent/kind i)
-                   (not (and (sword/pieces? world) (= :log (:intent/for i))))
+                   (not (and (log-counted? world) (= :log (:intent/for i))))
                    (or (= :log (:intent/for i))
                        (and bare? (= :log-hunt (:intent/for i)))
                        (contains? sword-acts (:intent/kind i))))
@@ -1552,8 +1564,8 @@
 (defn make-pickaxe
   "The intent that makes a pickaxe through the needs planner (a goal providing
    {:tag/pickaxes 1}, as blaze.clj's row asks), when that craft can start from here: one of
-   pick-acts, or the log chain to a remembered trunk (:intent/for :log) while the table's
-   pieces are not already held (sword/pieces?). Nil when the planner would only wait, or go
+   pick-acts, or the log chain to a remembered trunk (:intent/for :log) while no log is
+   already counted (log-counted?). Nil when the planner would only wait, or go
    out by stairs, a swim or a search for the wood. In a warped forest the trunk is a warped
    stem (blocks/log? counts stems, and the item tag :logs lists them beside the logs): stem to
    planks to sticks and a crafting table, then the pickaxe the held items reach, a stone one
@@ -1571,7 +1583,7 @@
   (let [bare? (not (pickaxe? world))
         i (make/decide (for-pick-decide world) (assoc goal :goal/provides {:tag/pickaxes 1}) table)]
     (when (and (:intent/kind i)
-               (not (and (sword/pieces? world) (= :log (:intent/for i))))
+               (not (and (log-counted? world) (= :log (:intent/for i))))
                (or (= :log (:intent/for i))
                    (and bare? (= :log-hunt (:intent/for i)))
                    (contains? pick-acts (:intent/kind i))))
