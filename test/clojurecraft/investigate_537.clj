@@ -28,7 +28,7 @@
      :brick-bounds (when (seq bricks)
                      [(reduce min (map first bricks)) (reduce max (map first bricks))
                       (reduce min (map second bricks)) (reduce max (map second bricks))
-                      (reduce min (map #(nth % 2) bricks)) (reduce max #(nth % 2) bricks)])}))
+                      (reduce min (map #(nth % 2) bricks)) (reduce max (map #(nth % 2) bricks))])}))
 
 (defn fortress-search-brick
   [world]
