@@ -426,7 +426,7 @@
 (s/def :player/health number?)
 (s/def :player/hurt-at int?)
 (s/def :player/attacker int?)
-(s/def :world/boss-health number?)
+(s/def :world/boss-health (s/map-of uuid? number?))
 (s/def :player/food int?)               ; 0-20 from a server; the wire allows any varint, and step is total over it
 (s/def :player/saturation number?)
 (s/def :intent/food-before int?)
