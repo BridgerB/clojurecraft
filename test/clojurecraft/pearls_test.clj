@@ -1162,6 +1162,95 @@
            ((juxt :intent/kind :intent/for) (plan/next-intent respawned row plan/goals)))
         "so the decide continues to the dig, never the same walk again")))
 
+(deftest table-held-hides-no-log-chain-from-sword-decide
+  ;; remaking a sword when a table is held: sword/for-decide dropped :plan/last
+  ;; whenever pieces? held, so table held without planks or logs lost the done walk
+  ;; and re-planned it every tick. for-sword-decide hides the chain only once a log
+  ;; is counted (log-counted?), as for-pick-decide does for a pickaxe
+  (let [trunk {[12 64 8] 136 [12 65 8] 136 [12 66 8] 136 [12 67 8] 252}
+        col (world/column trunk)
+        walked {:intent/kind :walk :intent/target [12 64 8] :intent/for :log :intent/status :done}
+        w (-> (standing {})
+              (assoc :world/chunks {[0 0] col}
+                     :player/inventory {0 (item :crafting_table 1)}
+                     :time/now 0
+                     :plan/last walked)
+              (memory/remember-column [0 0] col)
+              (memory/remember-intention {:intent/id 1 :intent/kind :burrow} :done))]
+    (is (= walked (:plan/last (pearls/for-sword-decide w)))
+        "table held, no log and no plank: sword decide keeps the done walk's chain")
+    (is (nil? (:plan/last (pearls/for-sword-decide
+                           (assoc-in w [:player/inventory 1] (item :spruce_log 1)))))
+        "a log counted: sword decide hides the finished chain")
+    (is (= [:dig :log] ((juxt :intent/kind :intent/for) (plan/next-intent w row plan/goals)))
+        "so the decide continues to the dig, never the walk again")))
+
+(deftest nether-warped-stem-walk-advances-to-dig-not-loop
+  ;; gym batch pearls-w3 (plan run 40464154227) run 2: in the Nether at pos
+  ;; [2374.4 38 2125.3], with four warped planks and a worn pickaxe held, it
+  ;; re-issued intent :walk [2374 39 2124] :for :log 186,397 times because planks
+  ;; counted as pieces (sword/pieces?) and dropped :plan/last after each arrival.
+  ;; With log-counted?, :plan/last stays and the chain continues to the dig
+  (let [stem (first (blocks/states-of :warped_stem))
+        trunk {[2374 39 2124] stem [2374 40 2124] stem [2374 41 2124] stem}
+        col (world/column trunk)
+        chunk [148 132]
+        walked {:intent/kind :walk
+                :intent/target [2374 39 2124]
+                :intent/for :log
+                :intent/trunk [2374 39 2124]
+                :intent/status :done}
+        w (-> (standing {})
+              (assoc :player/pos [2374.4 38.0 2125.3]
+                     :player/dimension "minecraft:the_nether"
+                     :world/chunks {chunk col}
+                     :player/inventory
+                     {0 (assoc (item :iron_pickaxe 1) :durability 11)
+                      1 (item :iron_sword 1)
+                      2 (item :warped_planks 4)}
+                     :time/now 0
+                     :plan/last walked)
+              (memory/remember-column chunk col)
+              (memory/remember-intention {:intent/id 1 :intent/kind :burrow} :done))]
+    (is (= walked (:plan/last (pearls/for-pick-decide w)))
+        "four planks held but no log: the done walk's chain stays")
+    (is (= [:dig :log] ((juxt :intent/kind :intent/for) (plan/next-intent w row plan/goals)))
+        "standing beside the warped stem after the walk: advances to the dig, never the walk again")
+    (is (= [2374 39 2124] (:intent/target (plan/next-intent w row plan/goals)))
+        "digs the warped stem target")))
+
+(deftest overworld-respawn-beside-trunk-advances-to-dig-not-loop
+  ;; gym batch pearls-w3 (plan run 40464154227) run 3: died and respawned in the
+  ;; overworld at pos [2.5 93 49.3], holding crafting_table, stick 3, wooden_sword 1;
+  ;; re-issued intent :walk [3 94 50] :for :log 256,743 times because crafting_table
+  ;; counted as pieces and dropped :plan/last
+  (let [trunk {[3 94 50] 136 [3 95 50] 136 [3 96 50] 136}
+        col (world/column trunk)
+        chunk [0 3]
+        walked {:intent/kind :walk
+                :intent/target [3 94 50]
+                :intent/for :log
+                :intent/trunk [3 94 50]
+                :intent/status :done}
+        respawned (-> (standing {})
+                      (assoc :player/pos [2.5 93.0 49.3]
+                             :player/dimension "minecraft:overworld"
+                             :world/chunks {chunk col}
+                             :player/inventory
+                             {0 (item :wooden_sword 1) 1 (item :stick 3) 2 (item :crafting_table 1)}
+                             :time/now 0
+                             :stats/deaths 1
+                             :plan/last walked)
+                      (memory/remember-column chunk col)
+                      (memory/remember-intention {:intent/id 1 :intent/kind :burrow} :done))]
+    (is (= walked (:plan/last (pearls/for-pick-decide respawned)))
+        "table and sticks held, no log: the done walk's chain stays")
+    (is (= [:dig :log]
+           ((juxt :intent/kind :intent/for) (plan/next-intent respawned row plan/goals)))
+        "standing beside the trunk after the walk: advances to the dig, never the walk again")
+    (is (= [3 94 50] (:intent/target (plan/next-intent respawned row plan/goals)))
+        "digs the spruce log target")))
+
 (deftest stuck-lookout-in-hole-climbs-out-to-surface
   ;; reviewer finding 1 (gym batch pearls-r3-w1 run 1, plan run 40469919220):
   ;; stuck at y 47 inside rock with a brink behind it from its descent,

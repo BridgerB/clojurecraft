@@ -1594,6 +1594,14 @@
   (pos? (recipe/have (recipe/counts (:player/inventory (sword/with-laid world)))
                      (recipe/tags :logs))))
 
+(defn for-sword-decide
+  "The world a sword's needs are decided on: worn swords hidden (sword/drop-worn), the
+   crafting grid visible (sword/with-laid), and a finished log chain not continued once a
+   log is already counted (log-counted?), as for-pick-decide does for a pickaxe."
+  [world]
+  (cond-> (sword/with-laid (sword/drop-worn world))
+    (and (log-counted? world) (= :log (:intent/for (:plan/last world)))) (dissoc :plan/last)))
+
 (defn make-sword
   "The intent that makes the best sword the held items pay for (sword/payable) through the needs
    planner, when that craft can start from here: one of sword-acts, or the log chain to a
@@ -1617,7 +1625,7 @@
     (when-let [k (or (sword/payable world)
                      (when (log-counted? world) :wooden_sword)
                      (when bare? :wooden_sword))]
-      (let [i (make/decide (sword/for-decide world)
+      (let [i (make/decide (for-sword-decide world)
                            (assoc goal :goal/provides {(keyword "item" (name k)) 1})
                            table)]
         (when (and (:intent/kind i)
