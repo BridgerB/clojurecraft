@@ -645,6 +645,7 @@
   [world [_ y _ :as f]]
   (let [[_ fy _ :as feet] (intent/feet world)
         high? (> fy (+ y deep))
+        boxed? (contains? (:plan/boxed-at world #{}) feet)
         start (when (and high?
                          (not (:player/in-water? world))
                          (terrain/under-sky? world feet)
@@ -663,14 +664,14 @@
           {:intent/kind :walk :intent/target start :intent/for :retreat}
           far {:intent/kind :cross :intent/target far :intent/for :stronghold}
           down down
-          (and (> fy (+ y room-over)) (or high? (tunnel-spent? world f))) stairs
+          (and (not boxed?) (> fy (+ y room-over)) (or high? (tunnel-spent? world f))) stairs
           (fortress/choose-move world feet f fortress/climb-past true)
           {:intent/kind :tunnel-to
            :intent/target f
            :intent/steps fortress/steps-per-tunnel
            :intent/dry? true
            :intent/from-feet feet}
-          (> fy (+ y room-over)) stairs
+          (and (not boxed?) (> fy (+ y room-over))) stairs
           :else {:plan/wait :no-way})))
 
 (defmethod plan/next-intent :portal-room

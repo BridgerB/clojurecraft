@@ -1155,6 +1155,38 @@
         (is (= :walk (get-in w [:plan/intent :intent/kind])) "steps back via walk")
         (is (= [0 64 0] (get-in w [:plan/intent :intent/target])) "walks back to previous cell")))))
 
+(deftest run-3-boxed-stairs-down-steps-back-and-never-fails-in-retry-storm
+  ;; gym chain-w6 run 3 (17:47:19): stairs-down boxed at [14828 31 13564] failed attempts 1, 2, 3
+  ;; in 0.4s because turned dir [-1 0] did not match planned dir [0 -1]. An identical stairs-down
+  ;; must step back along trail and never repeat the identical intent nor fail while time remains.
+  (let [feet [14828 31 13564]
+        prev [14829 36 13563]
+        active (-> (plan/begin (world-state [14828.5 31.0 13564.5]) {:go/goals [:wood]} plan/goals)
+                   (assoc :plan/trail [prev feet]))
+        ;; During execution stairs-down turned through headings to [-1 0] before dying :boxed
+        failed-intent {:intent/kind :stairs-down
+                       :intent/to-y 23
+                       :intent/dir [-1 0]
+                       :intent/turns 3
+                       :intent/reason :boxed}
+        goals [{:goal/id :test-goal :goal/done? :never :goal/act :stair}]
+        table goals]
+    (with-redefs [plan/choose (constantly (first goals))
+                  ;; Next-intent computes initial heading toward frame [0 -1], NOT [-1 0]
+                  plan/next-intent (constantly
+                                    {:intent/kind :stairs-down :intent/to-y 23 :intent/dir [0 -1]})]
+      ;; Driven with failure: plan-tick must detect identical retry despite different dir
+      (let [w1 (plan/plan-tick (plan/fail-intent active failed-intent)
+                               {:event/kind :tick :event/now 50 :event/rand 0.5}
+                               table)]
+        (is (= :active (:plan/status w1)) "first failure does not fail the plan")
+        (is (contains? (:plan/boxed-at w1) feet) "feet cell marked boxed-at")
+        (is (= :walk (get-in w1 [:plan/intent :intent/kind])) "steps back via walk")
+        (is (= prev (get-in w1 [:plan/intent :intent/target]))
+            "walks back to previous cell in trail")
+        (is (not= :stairs-down (get-in w1 [:plan/intent :intent/kind]))
+            "does not repeat identical stairs-down")))))
+
 (deftest any-intent-failing-no-path-counts-as-unwalkable-not-attempts
   ;; end-portal or child walks failing :no-path are unwalkable routes, not instant failure attempts
   (let [active (plan/begin (world-state [0.5 64.0 0.5]) {:go/goals [:wood]} plan/goals)

@@ -425,6 +425,11 @@
         (with-redefs [fortress/choose-move (constantly nil)]
           (is (= :stairs-down (:intent/kind (plan/next-intent w room-row plan/goals)))
               "when dry tunnel has no first step within deep, falls back to stairs"))))
+    (testing "when feet cell is in :plan/boxed-at, stairs down fallback is refused"
+      (let [w (assoc seen :player/pos [8.5 26.0 8.5] :plan/boxed-at #{[8 26 8]})]
+        (with-redefs [fortress/choose-move (constantly nil)]
+          (is (= {:plan/wait :no-way} (plan/next-intent w room-row plan/goals))
+              "a boxed feet cell never attempts stairs down again"))))
     (testing "within 6 of it: there"
       (is (plan/done-by (assoc seen :player/pos [40.5 22.0 58.5]) room-row)))
     (testing "in water: out to the nearest bank first"

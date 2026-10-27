@@ -271,8 +271,8 @@
    reach, met the foot of a cliff with the trunk on its top, and the failed cross blacklisted
    it: the staircase up the cliff then found no trunk to climb toward and the plan waited :no-log."
   [world i]
-  (let [unwalkable? (or (and (= :walk (:intent/kind i)) (= :no-path (:intent/reason i)))
-                        (= :no-path (:intent/reason i)))
+  (let [unwalkable? (and (contains? #{:walk :end-portal} (:intent/kind i))
+                         (= :no-path (:intent/reason i)))
         attempts (cond-> (:plan/attempts world 0) (not unwalkable?) inc)
         unwalkable (if unwalkable? (inc (:plan/unwalkable world 0)) 0)
         feet (when (:player/pos world) (intent/feet world))]
@@ -340,15 +340,17 @@
                        " " (or (:intent/target i) (:intent/recipe i)))))))
 
 (defn identical-retry?
-  "Is next an identical repeat of the intent that just failed from feet: same kind, target and direction?"
+  "Is next an identical repeat of the intent that just failed from feet: same kind, target, height or recipe?"
   [next failed feet]
   (and next
        failed
        feet
+       (= feet (:intent/from-feet failed))
        (= (:intent/kind next) (:intent/kind failed))
        (= (:intent/target next) (:intent/target failed))
-       (= (:intent/dir next) (:intent/dir failed))
-       (= feet (:intent/from-feet failed))))
+       (= (:intent/to-y next) (:intent/to-y failed))
+       (= (:intent/recipe next) (:intent/recipe failed))
+       (= (:intent/item next) (:intent/item failed))))
 
 (defn abandon-intent
   "Drop the running intent i before it ended, for reason (:goal-met, :preempted, :interrupted): remember it
