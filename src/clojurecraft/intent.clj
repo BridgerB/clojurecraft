@@ -101,19 +101,20 @@
    (blocks/falls?) with only air, passable or other falling blocks between y and it, within
    falling-reach? A solid non-falling block supports whatever is above it."
   [world [x y z]]
-  (loop [dy 1]
-    (when (<= dy falling-reach)
-      (let [b (terrain/block-at world [x (+ y dy) z])]
-        (cond (nil? b) false
-              (blocks/falls? b) true
-              (blocks/solid? b) false
-              :else (recur (inc dy)))))))
+  (when (and world (or (:world/chunks world) (:world/blocks world)))
+    (loop [dy 1]
+      (when (<= dy falling-reach)
+        (let [b (terrain/block-at world [x (+ y dy) z])]
+          (cond (nil? b) false
+                (blocks/falls? b) true
+                (blocks/solid? b) false
+                :else (recur (inc dy))))))))
 
 (defn falling-in-column?
   "Is there a block above [x y z] that can fall into it (falling-column?), or a falling block
    entity (type 51) in column [x z] above y?"
   [world [x y z]]
-  (or (falling-column? world [x y z])
+  (or (boolean (falling-column? world [x y z]))
       (boolean (some (fn [[_ e]]
                        (when (= 51 (:entity/type e))
                          (let [[ex ey ez] (:entity/pos e)]
@@ -126,14 +127,15 @@
   "Would moving the bot to pos' put the body box into a column with a falling block above
    while that block can still fall (falling-in-column?)?"
   [world pos']
-  (let [fx (long (math/floor (first pos')))
-        fz (long (math/floor (nth pos' 2)))
-        fy (long (math/floor (second pos')))]
-    (boolean (some (fn [[dx dz]]
-                     (let [col [(+ fx dx) (+ fz dz)]]
-                       (and (physics/overlaps-column? pos' col)
-                            (falling-in-column? world [(first col) fy (second col)]))))
-                   [[0 0] [1 0] [-1 0] [0 1] [0 -1]]))))
+  (when (and world (or (:world/chunks world) (:world/blocks world)))
+    (let [fx (long (math/floor (first pos')))
+          fz (long (math/floor (nth pos' 2)))
+          fy (long (math/floor (second pos')))]
+      (boolean (some (fn [[dx dz]]
+                       (let [col [(+ fx dx) (+ fz dz)]]
+                         (and (physics/overlaps-column? pos' col)
+                              (falling-in-column? world [(first col) fy (second col)]))))
+                     [[0 0] [1 0] [-1 0] [0 1] [0 -1]])))))
 
 (defn unsafe-falling?
   "Would breaking target drop a falling block (falling-in-column?) onto the bot: the bot's body box

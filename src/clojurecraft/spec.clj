@@ -321,7 +321,7 @@
 (s/def :goal/until string?)                ; the --until name that selects a target row
 (s/def :goal/always? boolean?)
 (s/def :goal/aside? boolean?)              ; a trial of its own, never a step of a run (plan/aside?)
-(s/def :goal/trap #{:water :lava})
+(s/def :goal/trap #{:water :lava :suffocation})
 (s/def :goal/plan keyword?)                ; which next-intent planner the row uses (default :needs)
 (s/def :goal/superseded-by keyword?)       ; the row that replaced this one; this one is kept, not chosen
 (s/def :goal/blocks (s/coll-of keyword? :kind vector? :min-count 1)) ; what a :mine row digs

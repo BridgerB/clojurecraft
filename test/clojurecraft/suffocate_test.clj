@@ -52,7 +52,7 @@
         ;; intent/toward suppresses forward push
         (let [ctrls (intent/toward w-dug move-pos 0.0)] (is (false? (:control/forward? ctrls))))
         ;; intent/run :walk refuses to step into the falling column
-        (let [walk-i {:intent/kind :walk :intent/target move-pos :intent/status :active}
+        (let [walk-i {:intent/kind :walk :intent/target [2435 58 2321] :intent/status :active}
               w-walk (intent/run (assoc w-dug :plan/intent walk-i) walk-i {:event/kind :tick})]
           (is (= :failed (get-in w-walk [:plan/intent :intent/status])))
           (is (= :unsafe (get-in w-walk [:plan/intent :intent/reason]))))
