@@ -1281,19 +1281,18 @@
           "climbs out toward surface rather than repeating lookout")
       (is (= [0 1] (:intent/dir next)) "climbs into the solid rock wall"))))
 
-(deftest empty-tunnel-that-digs-nothing-fails-boxed
-  ;; reviewer finding 1: :tunnel that digs nothing must not repeat forever
+(deftest empty-tunnel-that-makes-no-progress-fails-boxed
+  ;; reviewer finding 1: :tunnel that makes no progress must not repeat forever
   (let [tunnel {:intent/kind :tunnel
                 :intent/dir [1 0]
                 :intent/length 1
                 :intent/level-steps 1
-                :intent/digs 0
-                :intent/laid 0
+                :intent/from-feet [8 64 8]
                 :intent/status :active}
         w (assoc (standing {}) :plan/intent tunnel)
         stepped (intent/run w tunnel (tick 100))]
     (is (= :boxed (:intent/reason (:plan/intent stepped)))
-        "tunnel with 0 digs and 0 lays fails :boxed when finished")
+        "tunnel that makes no progress fails :boxed when finished")
     (is (contains? (:plan/boxed-at stepped) [8 64 8])
         "feet are recorded in boxed-at so the empty cut is never repeated")))
 

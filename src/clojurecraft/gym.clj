@@ -915,16 +915,17 @@
 (defn judged
   "The result row for one run: what it left behind, plus its outcome."
   [{:gym/keys [goal run landing landed? result truths ms commit] :as left}]
-  {:gym/goal goal
-   :gym/run run
-   :gym/landing landing
-   :gym/landed? (boolean landed?)
-   :gym/outcome (outcome left)
-   :gym/ms ms
-   :gym/reason (:reason result)
-   :gym/truths (vec truths)
-   :gym/commit commit
-   :gym/result result})
+  (cond-> {:gym/goal goal
+           :gym/run run
+           :gym/landing landing
+           :gym/landed? (boolean landed?)
+           :gym/outcome (outcome left)
+           :gym/ms ms
+           :gym/reason (:reason result)
+           :gym/truths (vec truths)
+           :gym/commit commit
+           :gym/result result}
+    (:death-message result) (assoc :gym/death-message (:death-message result))))
 
 (defn wilson
   "The 95% Wilson score interval for k passes in n trials, [lo hi] in 0..1."
@@ -1355,15 +1356,65 @@
     (.setDaemon true)
     (.start)))
 
+(defn find-server-log
+  "The server log file (latest.log or server.log) under the world directory, or nil when none exists."
+  [dir]
+  (let [candidates (concat (when-let [w (System/getenv "WORLD")]
+                             [(io/file w "logs" "latest.log") (io/file w "server.log")])
+                           (when-let [parent (some-> (io/file dir)
+                                                     .getParentFile)]
+                             [(io/file parent "world" "logs" "latest.log")
+                              (io/file parent "world" "server.log")])
+                           [(io/file "work" "world" "logs" "latest.log")
+                            (io/file "work" "world" "server.log")
+                            (io/file "world" "logs" "latest.log") (io/file "world" "server.log")])]
+    (first (filter (fn [^java.io.File f] (and (.exists f) (pos? (.length f)))) candidates))))
+
+(defn death-message
+  "The server death message for player name from the server log text, or nil when none."
+  [log-text name]
+  (let
+    [pattern
+     (re-pattern
+      (str
+       "(?m)^\\[[^\\]]+\\] \\[Server thread/INFO\\]: ("
+       (java.util.regex.Pattern/quote name)
+       " (?:was fireballed by|tried to swim in lava|was slain by|burned to death|fell from|suffocated|was blown up|was shot by|was killed by|withered away|starved to death|drowned|died).*)$"))]
+    (when-let [m (re-find pattern log-text)] (second m))))
+
+(defn await-result!
+  "Wait for the bot's RESULT promise to be delivered, or timeout. When row lands in the Nether,
+   periodically polls the server log: if the bot died, delivers an early failure :death, destroys
+   the bot process p, and finishes without running for hours after respawning in the Overworld."
+  [result timeout-ms row name dir ^Process p]
+  (let [nether? (= dimension/nether (dimension-of row))
+        deadline (+ (System/currentTimeMillis) timeout-ms)]
+    (loop []
+      (if (realized? result)
+        @result
+        (when (< (System/currentTimeMillis) deadline)
+          (Thread/sleep 1000)
+          (if (and nether? (some? p) (.isAlive p))
+            (if-let [log-file (find-server-log dir)]
+              (if-let [msg (death-message (slurp log-file) name)]
+                (do (.destroy p)
+                    (deliver result
+                             {:ok false :reason :death :death-message msg :stats {:stats/deaths 1}})
+                    @result)
+                (recur))
+              (recur))
+            (recur)))))))
+
 (defn judge!
   "Judge one run: wait for the bot's RESULT (result, a promise tee-output! delivers), then read what the fixture left (a missing landed
    file is a landing that never happened), ask the server each truth command while the bot
    still holds, write the result row and print it as one GYMRESULT line. Returns the row."
-  [{:keys [goal run name host rcon-port rcon-pass result landed out wait-ms commit]}]
+  [{:keys [goal run name host rcon-port rcon-pass result landed out wait-ms commit process dir]}]
   (let [row (gym goal)
-        result (deref result
-                      (if wait-ms (parse-long wait-ms) (+ (:gym/timeout-ms row) judge-grace-ms))
-                      nil)
+        timeout (if wait-ms (parse-long wait-ms) (+ (:gym/timeout-ms row) judge-grace-ms))
+        result (if (and process dir)
+                 (await-result! result timeout row name dir process)
+                 (deref result timeout nil))
         left (if (.exists (io/file landed))
                (edn/read-string (slurp landed))
                {:gym/landed? false :gym/error "no landed file"})
@@ -1425,7 +1476,9 @@
                                  :result result
                                  :landed (str landed-file)
                                  :out (str (io/file dir "result.edn"))
-                                 :commit commit})
+                                 :commit commit
+                                 :process p
+                                 :dir dir})
                         tags)]
       (.destroy p)
       (.waitFor p)

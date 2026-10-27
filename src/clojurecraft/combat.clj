@@ -480,13 +480,37 @@
                            (or (void-step? world [x fy z]) (void-step? world [x (inc fy) z]))))
                        (range 1 (inc void-look))))))))
 
+(defn lava-step?
+  "Is cell lava, or does it have lava beside or under it (path/lava-near?)?"
+  [world cell]
+  (let [at (path/cells world)] (or (= :lava (at cell)) (path/lava-near? at cell))))
+
+(defn lava-retreat?
+  "Does backing straight away from entity e step into or beside lava: a cell one,
+   two or three blocks along that line, at the feet or one up?"
+  [world e]
+  (let [[px _ pz] (:player/pos world)
+        [ax _ az] (away-point world e)
+        d (physics/horizontal-distance [px 0.0 pz] [ax 0.0 az])
+        [_ fy _] (intent/feet world)]
+    (boolean (when (pos? d)
+               (let [ux (/ (- ax px) d)
+                     uz (/ (- az pz) d)]
+                 (some (fn [n]
+                         (let [x (long (math/floor (+ px (* (double n) ux))))
+                               z (long (math/floor (+ pz (* (double n) uz))))]
+                           (or (lava-step? world [x fy z])
+                               (lava-step? world [x (inc fy) z])
+                               (lava-step? world [x (dec fy) z]))))
+                       (range 1 (inc void-look))))))))
+
 (defmethod intent/run :back-off
   ;; {:intent/kind :back-off :intent/target eid}: straight away from it, done once back-off-to
   ;; is between them, it is gone, or back-off-timeout-ms has passed (a cornered bot plans again,
   ;; and has the target kept in :plan/cornered: :defend fights what it could not get away from).
-  ;; The same when the way away is a drop no landing survives (void-retreat?): the lip one cell
-  ;; out hides the void from ledge-look, and the jump clears it. The first tick notes a creeper
-  ;; (noted), so :defend can tell one that stands still
+  ;; The same when the way away is a drop no landing survives (void-retreat?) or steps into or
+  ;; near lava (lava-retreat?): the lip one cell out hides the void from ledge-look, and the jump
+  ;; clears it. The first tick notes a creeper (noted), so :defend can tell one that stands still
   [world i _]
   (let [now (:time/now world)
         e (get-in world [:world/entities (:intent/target i)])
@@ -497,7 +521,8 @@
           (-> world
               (assoc :player/controls {})
               intent/done)
-          (or (> (- now (:intent/since i)) back-off-timeout-ms) (and e (void-retreat? world e)))
+          (or (> (- now (:intent/since i)) back-off-timeout-ms)
+              (and e (or (void-retreat? world e) (lava-retreat? world e))))
           (-> world
               (assoc :player/controls {})
               (cornered (:intent/target i))

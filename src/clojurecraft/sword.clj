@@ -25,6 +25,12 @@
 
 (def stick-planks 2)                  ; planks that make the sticks when no stick is held
 
+(def wooden-spare-uses
+  "Swings left a wooden sword keeps to be serviceable: an enderman takes 10 hits at 4 damage
+   (40 health), so 10 swings finishes one kill. A fresh wooden sword has 59 durability; window/spare-uses
+   (32) would drop it after a single kill."
+  10)
+
 (defn rank
   "A sword's place in combat/swords, 0 the best."
   [k]
@@ -58,7 +64,8 @@
               (if (and item
                        (< -1 p combat/store-slots)
                        (some #{n} combat/swords)
-                       (or (nil? left) (>= left (if (= :wooden_sword n) 10 window/spare-uses)))
+                       (or (nil? left)
+                           (>= left (if (= :wooden_sword n) wooden-spare-uses window/spare-uses)))
                        (or (nil? best) (< (rank n) (rank best))))
                 n
                 best)))

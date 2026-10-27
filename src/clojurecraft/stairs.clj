@@ -1188,13 +1188,10 @@
   ;; of a filler; then open the stair (:intent/cells) or walk the level step
   ;; (:intent/level-cells). A placement the server refused, or no filler left, refuses the
   ;; stair like any cell that cannot be cut: turn
-  [world {:intent/keys [child lay level-cells laid] :or {laid 0} :as i} event]
+  [world {:intent/keys [child lay level-cells] :as i} event]
   (let [next (first (remove #(= :solid (path/classify world %)) lay))
         item (filler world 1)]
-    (cond (and child (intent/done? child))
-          (-> world
-              (intent/dissoc-intent :intent/child)
-              (intent/assoc-intent :intent/laid (inc laid)))
+    (cond (and child (intent/done? child)) (intent/dissoc-intent world :intent/child)
           (and child (intent/failed? child))
           (refuse
            world
@@ -1405,13 +1402,13 @@
   ;; dig the level step's cells, one child at a time, then walk onto its feet cell; then plan
   ;; the stairs again from there. The step's time is the walk's: it starts again after each dig.
   ;; A cell the child will not dig (refusals) plans the step again (level-refused)
-  [world {:intent/keys [child level-cells started-tick digs] :or {digs 0} :as i} event]
+  [world {:intent/keys [child level-cells started-tick] :as i} event]
   (let [[fx fy fz] (last level-cells)]
     (cond
       (and child (or (intent/done? child) (fell? child)))
       (-> world
           (intent/dissoc-intent :intent/child)
-          (intent/assoc-intent :intent/digs (inc digs) :intent/started-tick (:time/tick world)))
+          (intent/assoc-intent :intent/started-tick (:time/tick world)))
       (and child (intent/failed? child) (= :rejected (:intent/reason child))) (rejected world i)
       (and child (contains? refusals (:intent/reason child)))
       (level-refused
@@ -1450,7 +1447,7 @@
    cobblestone at y 63 with air round it, every level step refused for its floor, every tunnel
    toward a remembered pool :boxed in a tick and that pool blacklisted, until no pool was left
    and it waited :no-water with 156 cobblestone in hand."
-  [world {:intent/keys [dir side level-steps] :or {level-steps 0}}]
+  [world {:intent/keys [dir side level-steps from-feet] :or {level-steps 0}}]
   (let [dir (or dir (first directions))
         feet (intent/feet world)
         sides (if side [side] [(turn dir) (turn (turn (turn dir)))])
@@ -1469,6 +1466,7 @@
                                    :intent/level-steps (inc level-steps)
                                    :intent/stage (if to-lay :lay :level)
                                    :intent/started-tick (:time/tick world))
+        (and (zero? level-steps) (nil? from-feet)) (intent/assoc-intent :intent/from-feet feet)
         to-lay (intent/assoc-intent :intent/lay to-lay)
         (not= d dir)
         (-> (intent/assoc-intent :intent/side d)
@@ -1512,10 +1510,23 @@
                       world
                       {:intent/kind :walk :intent/target target :intent/for :scoop})))))
 
+(defn no-progress?
+  "Did the tunnel make no progress from where it began (:intent/from-feet): position unchanged,
+   or no nearer target when one was given (excluding :bank tunnels, which blacklist their pond
+   via no-nearer?)?"
+  [world {:intent/keys [for target from-feet]}]
+  (boolean (and from-feet
+                (not= :bank for)
+                (if target
+                  (>= (physics/distance (physics/centre (intent/feet world))
+                                        (physics/centre target))
+                      (physics/distance (physics/centre from-feet) (physics/centre target)))
+                  (= (intent/feet world) from-feet)))))
+
 (defmethod intent/run :tunnel
   [world {:intent/keys [length level-steps stage target] :or {level-steps 0} :as i} event]
   (cond (and (>= level-steps length) (not (contains? #{:level :lay} stage)))
-        (if (and (pos? length) (zero? (:intent/digs i 0)) (zero? (:intent/laid i 0)))
+        (if (and (pos? length) (no-progress? world i))
           (box world)
           (cond-> (-> world
                       (assoc :player/controls {})
