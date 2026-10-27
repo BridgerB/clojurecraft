@@ -9,9 +9,12 @@
             [clojurecraft.fortress :as fortress]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
+            [clojurecraft.memory :as memory]
+            [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
             [clojurecraft.sim :as sim]
-            [clojurecraft.simrace :as simrace]))
+            [clojurecraft.simrace :as simrace]
+            [datascript.core :as d]))
 
 (set! *warn-on-reflection* true)
 
@@ -27,10 +30,42 @@
                       (reduce min (map second bricks)) (reduce max (map second bricks))
                       (reduce min (map #(nth % 2) bricks)) (reduce max (map #(nth % 2) bricks))])}))
 
+(defn fortress-search-brick
+  [world]
+  (let [bl (:plan/blacklist world #{})
+        feet (intent/feet world)
+        trail (or (:trail/cells (:fortress/trail world)) [])
+        arrived-targets (set (d/q '[:find [?t ...] :where [?e :intention/kind ?k]
+                                    [(contains? #{:tunnel-to :walk} ?k)] [?e :intention/event :done]
+                                    [?e :intention/target ?t]]
+                                  (:world/facts world)))
+        visited-pts (into (conj arrived-targets feet) trail)
+        unvisited? (fn [b]
+                     (not-any? (fn [vp]
+                                 (<= (physics/distance (physics/centre vp) (physics/centre b)) 6.0))
+                               visited-pts))
+        candidates (->> (fortress/bricks world)
+                        (remove bl)
+                        (filter unvisited?))]
+    (memory/nearest-of (physics/centre feet) fortress/sight-radius candidates)))
+
+(defn custom-search
+  [world]
+  (if-let [b (fortress-search-brick world)]
+    {:intent/kind :tunnel-to
+     :intent/target b
+     :intent/steps fortress/steps-per-tunnel
+     :intent/bridge? true}
+    (when-let [s (fortress/exploring world)]
+      {:intent/kind :tunnel-to
+       :intent/target (fortress/leg-target s)
+       :intent/steps fortress/steps-per-tunnel
+       :intent/search s})))
+
 (defn run-and-log!
-  [world-file seed until max-ms]
+  [world-file seed until max-ms custom?]
   (println "\n========================================================")
-  (println "INVESTIGATING:" world-file "seed:" seed "until:" until)
+  (println "INVESTIGATING:" world-file "seed:" seed "custom?:" custom?)
   (println "========================================================")
   (let [w (assoc (simrace/prepared (capture/read-world world-file)) :capture/file (str world-file))
         npath (simrace/nether-file world-file)
@@ -48,7 +83,28 @@
        last-intent-id (atom nil)
        instrumented-step
        (fn [world event]
-         (let [w' (simrace/step world event)
+         (let [world (if (and custom?
+                              (= :active (:plan/status world))
+                              (= :tick (:event/kind event))
+                              (= :blaze-rods (:goal/id (plan/choose world plan/goals)))
+                              (nil? (:plan/intent world))
+                              (nil? (blaze/nearest-spawner world))
+                              (nil? (first (blaze/at-hand-blaze world)))
+                              (nil? (first (blaze/quarry world)))
+                              (nil? (second (blaze/rod-lying world)))
+                              (not (and (blaze/hurt? world) (blaze/healing world)))
+                              (not (and (blaze/wary? world) (blaze/warily world)))
+                              (not (and (blaze/outnumbered? world) (blaze/hide world))))
+                       (if-let [si (custom-search world)]
+                         (assoc world
+                                :plan/intent
+                                (assoc si
+                                       :intent/status :active
+                                       :intent/id (inc (:plan/intents world 0))
+                                       :intent/goal :blaze-rods))
+                         world)
+                       world)
+               w' (simrace/step world event)
                t (:time/now w' 0)
                dim (dimension/of w')
                pos (:player/pos w')
@@ -65,20 +121,29 @@
              (reset! reached-fortress? true)
              (let [brs (fortress/bricks w')
                    arrived (filter #(fortress/arrived? w' %) brs)
-                   sp (blaze/nearest-spawner w')]
+                   sp (blaze/nearest-spawner w')
+                   xs (map first brs)
+                   ys (map second brs)
+                   zs (map #(nth % 2) brs)]
                (println
                 (format
-                 "[FORTRESS-REACHED] t=%d pos=%s feet=%s search=%s arrived-bricks=%s all-bricks-count=%d nearest-spawner-known=%s"
+                 "[FORTRESS-REACHED] t=%d pos=%s feet=%s arrived-bricks=%s all-bricks-count=%d nearest-spawner-known=%s"
                  t
                  (pr-str pos)
                  (pr-str feet)
-                 (pr-str (:fortress/search w'))
                  (pr-str arrived)
                  (count brs)
-                 (pr-str sp)))))
+                 (pr-str sp)))
+               (println (format "[BRICK-BOUNDS-AT-REACH] X:[%d %d] Y:[%d %d] Z:[%d %d]"
+                                (reduce min xs)
+                                (reduce max xs)
+                                (reduce min ys)
+                                (reduce max ys)
+                                (reduce min zs)
+                                (reduce max zs)))))
            ;; Blaze-rods activity
            (when (= goal-id :blaze-rods)
-             (when (or (> (- t @last-log) 30000) (not= (:intent/id current-intent) @last-intent-id))
+             (when (or (> (- t @last-log) 15000) (not= (:intent/id current-intent) @last-intent-id))
                (reset! last-log t)
                (reset! last-intent-id (:intent/id current-intent))
                (let [sp (blaze/nearest-spawner w')
@@ -109,13 +174,15 @@
                      #(or (plan/done? %) (plan/failed? %))
                      max-ms
                      (simrace/go-of w-nether until))]
-      (println "[RUN-FINISHED] ms:" (:run/ms res) "reason:" (:reason res) "pos:" (:pos res)))))
+      (println "[RUN-FINISHED] ms:" (:run/ms res)
+               "reason:" (:reason res)
+               "pos:" (:pos res)
+               "rods:" (blaze/rods (:run/end res))))))
 
 (defn -main
   [& _args]
-  (let [cases [["cache/sim-worlds/R2/12.edn.gz" 2] ["cache/sim-worlds/R3/4.edn.gz" 2]
-               ["cache/sim-worlds/R1/1.edn.gz" 1] ["cache/sim-worlds/R1/17.edn.gz" 1]]]
-    (doseq [[world seed] cases]
+  (let [cases [["cache/sim-worlds/R2/12.edn.gz" 2 true]]]
+    (doseq [[world seed custom?] cases]
       (when (.exists (io/file (str world)))
-        (run-and-log! (io/file (str world)) seed "blaze-rods" (* 60000 200)))))
+        (run-and-log! (io/file (str world)) seed "blaze-rods" (* 60000 120) custom?))))
   (shutdown-agents))
