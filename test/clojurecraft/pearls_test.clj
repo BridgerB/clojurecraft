@@ -18,6 +18,7 @@
             [clojurecraft.recipe :as recipe]
             [clojurecraft.sim :as sim]
             [clojurecraft.stairs :as stairs]
+            [clojurecraft.sword :as sword]
             [clojurecraft.world :as world]))
 
 (use-fixtures :once fx/instrumented)
@@ -1160,6 +1161,89 @@
     (is (= [:dig :log]
            ((juxt :intent/kind :intent/for) (plan/next-intent respawned row plan/goals)))
         "so the decide continues to the dig, never the same walk again")))
+
+(deftest stuck-lookout-in-hole-climbs-out-to-surface
+  ;; reviewer finding 1 (gym batch pearls-r3-w1 run 1, plan run 40469919220):
+  ;; stuck at y 47 inside rock with a brink behind it from its descent,
+  ;; logged :lookout 3,369 times and 15 tunnels that dug nothing.
+  ;; When stuck? is true, climb-out cuts stairs up into solid rock rather than
+  ;; refusing on brink?, and dig-out refuses tunnels with 0 solid cuts.
+  (let [blocks {[8 46 8] stone
+                [8 46 9] stone
+                [8 47 9] stone
+                [8 48 9] stone
+                [8 49 9] stone
+                [8 50 9] stone
+                [7 46 8] stone
+                [9 46 8] stone}
+        w (-> (standing {} blocks)
+              (assoc :player/pos [8.5 47.0 8.5]
+                     :plan/last {:intent/kind :lookout :intent/for :pearls}
+                     :player/inventory {0 (item :diamond_pickaxe 1) 1 (item :iron_sword 1)})
+              (memory/remember-intention {:intent/id 0 :intent/kind :walk} :done))
+        w (reduce (fn [acc n]
+                    (memory/remember-intention acc {:intent/id n :intent/kind :lookout} :done))
+                  w
+                  (range 1 13))]
+    (is (pearls/stuck? w) "stood 12 lookouts: stuck is true")
+    (is (pearls/brink? w [8 47 8]) "drop behind makes feet a brink")
+    (let [next (plan/next-intent w row plan/goals)]
+      (is (= :stairs-up (:intent/kind next))
+          "climbs out toward surface rather than repeating lookout")
+      (is (= [0 1] (:intent/dir next)) "climbs into the solid rock wall"))))
+
+(deftest empty-tunnel-that-digs-nothing-fails-boxed
+  ;; reviewer finding 1: :tunnel that digs nothing must not repeat forever
+  (let [tunnel {:intent/kind :tunnel
+                :intent/dir [1 0]
+                :intent/length 1
+                :intent/level-steps 1
+                :intent/digs 0
+                :intent/laid 0
+                :intent/status :active}
+        w (assoc (standing {}) :plan/intent tunnel)
+        stepped (intent/run w tunnel (tick 100))]
+    (is (= :boxed (:intent/reason (:plan/intent stepped)))
+        "tunnel with 0 digs and 0 lays fails :boxed when finished")
+    (is (contains? (:plan/boxed-at stepped) [8 64 8])
+        "feet are recorded in boxed-at so the empty cut is never repeated")))
+
+(deftest start-intent-clears-stale-waiting-reason
+  ;; reviewer finding 2: logged :lookout 2,377 times with :waiting :no-sword
+  ;; while holding wooden_sword; start-intent must clear :plan/waiting
+  (let [w
+        (assoc (standing {}) :plan/waiting :no-sword :plan/waiting-ticks 5 :plan/waiting-since 1000)
+        started (plan/start-intent w {:intent/kind :lookout :intent/for :pearls})]
+    (is (nil? (:plan/waiting started)) "start-intent clears :plan/waiting")
+    (is (nil? (:plan/waiting-ticks started)))
+    (is (nil? (:plan/waiting-since started)))))
+
+(deftest wooden-sword-counts-for-hunt-and-overworld-does-not-descend-into-caves
+  ;; reviewer finding 2: after death in overworld, holding wooden_sword and wooden_pickaxe,
+  ;; wooden sword counts for hunt, and overworld hunt roams surface instead of digging down
+  ;; into dark caves toward underground endermen
+  (let [underground-enderman (enderman [8.5 20.0 8.5])
+        w (-> (standing {7 underground-enderman})
+              (assoc :player/dimension "minecraft:overworld"
+                     :player/inventory
+                     {0 (assoc (item :wooden_sword 1) :durability 20) 1 (item :wooden_pickaxe 1)}
+                     :stats/deaths 1
+                     :plan/last {:intent/kind :lookout :intent/for :pearls}))]
+    (is (= :wooden_sword (sword/serviceable w)) "wooden sword is serviceable")
+    (let [next (plan/next-intent w row plan/goals)]
+      (is (not= :stairs-down (:intent/kind next)) "does not descend into underground cave")
+      (is (not= :tunnel (:intent/kind next)) "does not bore underground")
+      (is (not= {:plan/wait :no-sword} next) "never waits :no-sword after death"))))
+
+(deftest never-fight-under-danger-health
+  ;; prompt requirement & #577: never fight under danger-health
+  (let [creepy (assoc (enderman [12.5 64.0 8.5]) :entity/creepy? true)
+        w (assoc (standing {7 creepy})
+                 :player/health 5.0
+                 :player/inventory {0 (item :iron_sword 1) 1 (item :diamond_pickaxe 1)})
+        next (plan/next-intent w row plan/goals)]
+    (is (not= :fight (:intent/kind next)) "never starts a fight under danger-health")
+    (is (= :back-off (:intent/kind next)) "backs off from angry enderman when hurt")))
 
 (deftest after-the-sword-is-remade-the-pickaxe-fetches-its-own-log
   ;; gym batch pearls-r3-w2 (plan run 40475390313) run 3: slain an hour and a half in

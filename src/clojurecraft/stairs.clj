@@ -1188,10 +1188,13 @@
   ;; of a filler; then open the stair (:intent/cells) or walk the level step
   ;; (:intent/level-cells). A placement the server refused, or no filler left, refuses the
   ;; stair like any cell that cannot be cut: turn
-  [world {:intent/keys [child lay level-cells] :as i} event]
+  [world {:intent/keys [child lay level-cells laid] :or {laid 0} :as i} event]
   (let [next (first (remove #(= :solid (path/classify world %)) lay))
         item (filler world 1)]
-    (cond (and child (intent/done? child)) (intent/dissoc-intent world :intent/child)
+    (cond (and child (intent/done? child))
+          (-> world
+              (intent/dissoc-intent :intent/child)
+              (intent/assoc-intent :intent/laid (inc laid)))
           (and child (intent/failed? child))
           (refuse
            world
@@ -1402,13 +1405,13 @@
   ;; dig the level step's cells, one child at a time, then walk onto its feet cell; then plan
   ;; the stairs again from there. The step's time is the walk's: it starts again after each dig.
   ;; A cell the child will not dig (refusals) plans the step again (level-refused)
-  [world {:intent/keys [child level-cells started-tick] :as i} event]
+  [world {:intent/keys [child level-cells started-tick digs] :or {digs 0} :as i} event]
   (let [[fx fy fz] (last level-cells)]
     (cond
       (and child (or (intent/done? child) (fell? child)))
       (-> world
           (intent/dissoc-intent :intent/child)
-          (intent/assoc-intent :intent/started-tick (:time/tick world)))
+          (intent/assoc-intent :intent/digs (inc digs) :intent/started-tick (:time/tick world)))
       (and child (intent/failed? child) (= :rejected (:intent/reason child))) (rejected world i)
       (and child (contains? refusals (:intent/reason child)))
       (level-refused
@@ -1512,12 +1515,14 @@
 (defmethod intent/run :tunnel
   [world {:intent/keys [length level-steps stage target] :or {level-steps 0} :as i} event]
   (cond (and (>= level-steps length) (not (contains? #{:level :lay} stage)))
-        (cond-> (-> world
-                    (assoc :player/controls {})
-                    intent/done)
-          (no-nearer? world i)
-          (-> (update :plan/blacklist (fnil into #{}) (cons target (pond-sources world target)))
-              (game/say (str "tunnel: no nearer the bank of " target ", other water next"))))
+        (if (and (pos? length) (zero? (:intent/digs i 0)) (zero? (:intent/laid i 0)))
+          (box world)
+          (cond-> (-> world
+                      (assoc :player/controls {})
+                      intent/done)
+            (no-nearer? world i)
+            (-> (update :plan/blacklist (fnil into #{}) (cons target (pond-sources world target)))
+                (game/say (str "tunnel: no nearer the bank of " target ", other water next")))))
         (contains? #{:level :lay} stage) (stairs-stage world i event)
         :else (tunnel-plan world i)))
 

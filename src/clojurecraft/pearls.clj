@@ -1023,6 +1023,23 @@
                     [world 0]
                     steps))))
 
+(def first-cut
+  ;; the cells the first cut of each kind opens from the feet along a heading (stairs.clj)
+  {:stairs-up stairs/up-cells :stairs-down stairs/stair-cells :tunnel stairs/level-cells})
+
+(defn solid-cut?
+  "Does a cut of kind (:stairs-up, :stairs-down or :tunnel) from feet along dir have at least
+   one solid block to cut within its length?"
+  ([world kind feet dir] (solid-cut? world kind feet dir 1))
+  ([world kind feet dir n]
+   (case kind
+     :tunnel
+     (let [steps (take n
+                       (iterate (fn [cells] (stairs/level-cells (last cells) dir))
+                                (stairs/level-cells feet dir)))]
+       (boolean (some (fn [cells] (some #(solid-at? world %) cells)) steps)))
+     (boolean (some #(solid-at? world %) ((first-cut kind) feet dir))))))
+
 (defn bore
   "A tunnel (:tunnel, stairs.clj: level steps, turning where one is refused) the straight way
    toward the nearest enderman in ms, as far as its steps stand on a floor, bore-length at
@@ -1053,12 +1070,8 @@
                (>= (path/octile feet (cell (:entity/pos e))) bore-length))
       (let [dir (mapv - (away world e))
             n (floored-length world feet dir bore-length)]
-        (when (pos? n)
+        (when (and (pos? n) (solid-cut? world :tunnel feet dir n))
           {:intent/kind :tunnel :intent/dir dir :intent/length n :intent/for :pearls})))))
-
-(def first-cut
-  ;; the cells the first cut of each kind opens from the feet along a heading (stairs.clj)
-  {:stairs-up stairs/up-cells :stairs-down stairs/stair-cells :tunnel stairs/level-cells})
 
 (defn cheapest-heading
   "The heading of the four straight ones (stairs/directions) whose first cut of kind (:stairs-up,
@@ -1129,7 +1142,7 @@
               :else
               (let [dir (cheapest-heading world :tunnel feet toward)
                     n (floored-length world feet dir bore-length)]
-                (when (pos? n)
+                (when (and (pos? n) (solid-cut? world :tunnel feet dir n))
                   {:intent/kind :tunnel :intent/dir dir :intent/length n :intent/for :pearls})))))))
 
 (defn stuck?
@@ -1140,27 +1153,33 @@
   (>= (or (memory/done-since world :lookout :walk) (memory/done-since world :lookout :burrow) 0)
       stale-lookouts))
 
+(defn climb-heading
+  "A heading from feet to cut stairs up into rock toward the surface: one that cuts solid
+   blocks (solid-cut?) and whose stair step does not step onto an open brink (brink?). Sorted
+   by cheapest first."
+  [world feet]
+  (let [ways (sort-by (fn [h] (count (filter #(solid-at? world %) ((first-cut :stairs-up) feet h))))
+                      stairs/directions)]
+    (some (fn [[dx dz :as h]]
+            (let [step [(+ (first feet) dx) (inc (second feet)) (+ (last feet) dz)]]
+              (when (and (solid-cut? world :stairs-up feet h) (not (brink? world step))) h)))
+          ways)))
+
 (defn climb-out
   "Stairs up from the feet, descend-step higher along the heading whose first cut digs
-   least (cheapest-heading), for a pocket no roam finds an end out of and no enderman
-   tracked gives dig-out a way to cut: up is toward the forest floor the endermen spawn
-   on, and from the top the roam is asked again. Nil with no digs to spare past a burrow's
-   (spare?), a staircase boxed from these feet (:plan/boxed-at), or the feet a brink
-   (brink?), as dig-out refuses. Gym batch pearls-w3 (plan run 40434266158) run 2 took five
-   pearls, then from its forty-fourth minute stood in :lookout to the five-hour timeout in
-   the caves it had descended into under the floor at y 44: every route's end spent or
-   short of a roam, and no enderman near enough to cut toward, where resting spawns nothing
-   (the forest's packs walk its floor, not the caves under it)."
+   into rock without stepping onto an open brink (climb-heading), for a pocket no roam finds an
+   end out of and no enderman tracked gives dig-out a way to cut: up is toward the forest floor
+   the endermen spawn on, and from the top the roam is asked again. Nil with no digs to spare
+   past a burrow's (spare?), or a staircase boxed from these feet (:plan/boxed-at)."
   [world]
   (let [feet (intent/feet world)]
-    (when (and (spare? world)
-               (not (contains? (:plan/boxed-at world) feet))
-               (not (brink? world feet)))
-      {:intent/kind :stairs-up
-       :intent/to-y (+ (physics/y-of feet) descend-step)
-       :intent/dir (cheapest-heading world :stairs-up feet (first stairs/directions))
-       :intent/to-height? true
-       :intent/for :pearls})))
+    (when (and (spare? world) (not (contains? (:plan/boxed-at world) feet)))
+      (when-let [dir (climb-heading world feet)]
+        {:intent/kind :stairs-up
+         :intent/to-y (+ (physics/y-of feet) descend-step)
+         :intent/dir dir
+         :intent/to-height? true
+         :intent/for :pearls}))))
 
 (defn cut-out
   "Stairs up out of the burrow's end, the other way from its mouth, for when the burrow is
@@ -1403,6 +1422,7 @@
                 (crowd-site world))
         mouth (:pearls/mouth world)
         way-home {:intent/kind :walk :intent/target home :intent/for :shelter}
+        overworld? (= dimension/overworld (dimension/of world))
         far (endermen world seek-radius)
         fight-id (cond (and ce (not (fought-out? world ceid))) ceid
                        (and (or angry? in-reach?) (not (fought-out? world eid))) eid
@@ -1412,6 +1432,8 @@
       (and hurt? in?) (or meal {:intent/kind :lookout :intent/for :pearls})
       (and near? hurt? (not in?)) {:intent/kind :back-off :intent/target eid :intent/for :pearls}
       (and hurt? (not in?) tid) {:intent/kind :back-off :intent/target tid :intent/for :pearls}
+      (and hurt? (not in?) ce) {:intent/kind :back-off :intent/target ceid :intent/for :pearls}
+      (and hurt? (not in?)) (or meal {:intent/kind :lookout :intent/for :pearls})
       (and in? fight-id)
       {:intent/kind :fight
        :intent/target fight-id
@@ -1448,13 +1470,13 @@
       {:intent/kind :provoke :intent/target qid :intent/for :pearls}
       (and qid home rested?) {:intent/kind :walk :intent/target mouth :intent/for :shelter}
       (and qid home (intent/routable? world way-home)) way-home
-      (and ce (not (fought-out? world ceid)) (pickaxe? world))
+      (and (not hurt?) ce (not (fought-out? world ceid)) (pickaxe? world))
       {:intent/kind :fight
        :intent/target ceid
        :intent/hold? true
        :intent/yield? true
        :intent/for :pearls}
-      (and ce (not (fought-out? world ceid)))
+      (and (not hurt?) ce (not (fought-out? world ceid)))
       {:intent/kind :fight :intent/target ceid :intent/for :pearls}
       home (or (vantage world far) {:intent/kind :lookout :intent/for :pearls})
       :else
@@ -1468,12 +1490,14 @@
             (when-not (worn-out? world)
               (when-let [[_ e] (routable world far)]
                 {:intent/kind :walk :intent/target (cell (:entity/pos e)) :intent/for :pearls})))
-          (descend world (endermen world descend-radius))
+          (when-not overworld? (descend world (endermen world descend-radius)))
           (ascend world (endermen world descend-radius))
           (toward world far)
-          (bore world (endermen world descend-radius))
+          (when-not overworld? (bore world (endermen world descend-radius)))
           (when (= :lookout (:intent/kind (:plan/last world)))
-            (or (roam world) (dig-out world) (when (stuck? world) (climb-out world))))
+            (or (roam world)
+                (when (stuck? world) (climb-out world))
+                (when-not overworld? (dig-out world))))
           {:intent/kind :lookout :intent/for :pearls}))))
 
 (defn look-off
@@ -1589,7 +1613,7 @@
    was followed at once by the :no-sword wait). A worn sword still held is replaced only as
    before, never by a hunt for wood."
   [world goal table]
-  (let [bare? (nil? (combat/sword world))]
+  (let [bare? (or (nil? (combat/sword world)) (not (sword/serviceable world)))]
     (when-let [k (or (sword/payable world)
                      (when (log-counted? world) :wooden_sword)
                      (when bare? :wooden_sword))]

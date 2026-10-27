@@ -58,7 +58,7 @@
               (if (and item
                        (< -1 p combat/store-slots)
                        (some #{n} combat/swords)
-                       (or (nil? left) (>= left window/spare-uses))
+                       (or (nil? left) (>= left (if (= :wooden_sword n) 10 window/spare-uses)))
                        (or (nil? best) (< (rank n) (rank best))))
                 n
                 best)))
