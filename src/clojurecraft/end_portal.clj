@@ -153,13 +153,10 @@
   "The way through the stronghold's walls to an empty frame when none has a reachable stand
    yet: the portal room's way (stronghold/to-room) toward the cell on top of frame, with a
    tunnel reach of 1.5 and climb of 1 so a tunnel started within fortress/reach (6) outside
-   the room's wall or roof digs through into the room.
-   Never tunnels when already in the portal room: the room is open and has a lava pit under
-   the frame."
+   the room's wall or roof digs through into the room."
   [world frame]
-  (when-not (plan/done-by world {:goal/done? :in-portal-room?})
-    (let [way (stronghold/to-room world (update frame 1 inc))]
-      (if (= :tunnel-to (:intent/kind way)) (assoc way :intent/reach 1.5 :intent/climb 1) way))))
+  (let [way (stronghold/to-room world (update frame 1 inc))]
+    (if (= :tunnel-to (:intent/kind way)) (assoc way :intent/reach 1.5 :intent/climb 1) way)))
 
 ;; ---------------------------------------------------------------- the executor
 
@@ -188,16 +185,14 @@
    still between the feet and the frames after :portal-room arrived within 6), the way through
    to the nearest empty frame (toward-frame); a wait :no-frames with no frame on record,
    :no-eyes when fewer eyes are held than frames lack them (the eyes stage, issue #264, is the
-   one to look at), :clearing when inside the portal room but no frame stand is reachable yet,
-   :lighting once every frame is eyed and the portal's blocks are not yet on record; nil when
-   nothing is left."
+   one to look at), :lighting once every frame is eyed and the portal's blocks are not yet on
+   record; nil when nothing is left."
   [world enter?]
   (let [fs (frames world)
         empty (empty-frames world)]
     (cond (empty? fs) {:plan/wait :no-frames}
           (and (seq empty) (< (eyes-held world) (count empty))) {:plan/wait :no-eyes}
-          (and (seq empty) (nil? (some #(eye-op world %) empty)))
-          (or (toward-frame world (first empty)) {:plan/wait :clearing})
+          (and (seq empty) (nil? (some #(eye-op world %) empty))) (toward-frame world (first empty))
           (or (seq empty) enter?) {:intent/kind :end-portal :intent/enter? enter?}
           (empty? (portals world)) {:plan/wait :lighting}
           :else nil)))

@@ -609,8 +609,9 @@
   ;; When damaged by an attacker or under retreat-health, the enderman is answered.
   (let [enderman {:entity/type (mob/type-id :enderman) :entity/pos [1.5 64.0 0.5]}
         w (-> (round-fountain [0.5 64.0 0.5] (sitting 270.0))
-              (assoc :player/inventory {103 {:item (recipe/item-id :carved_pumpkin) :count 1}}
+              (assoc :player/inventory {39 {:item (recipe/item-id :carved_pumpkin) :count 1}}
                      :world/entities (merge (sitting 270.0) {309 enderman})
+                     :player/dimension dimension/end
                      :player/health 8.0
                      :player/attacker 309
                      :player/hurt-at 100

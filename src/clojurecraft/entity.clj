@@ -115,9 +115,13 @@
 ;; ---------------------------------------------------------------- the questions a fight asks
 
 (defn hostiles
-  "{eid entity} of the tracked entities that are hostile? now."
+  "{eid entity} of the tracked entities that are hostile? now, or an attacker actively hitting
+   the bot."
   [world]
-  (into {} (filter (fn [[_ e]] (hostile? e))) (:world/entities world)))
+  (into {}
+        (filter (fn [[eid e]]
+                  (or (hostile? e) (and (= eid (:player/attacker world)) (not (dead? e))))))
+        (:world/entities world)))
 
 (defn nearest
   "The [eid entity] of entities (a {eid entity} map, :world/entities or a part of it) nearest the
