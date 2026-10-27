@@ -665,21 +665,6 @@
         (is (not (dragon/bite-on-way? dragon-ent (:player/pos w) (physics/centre flight)))
             "escape destination straight line never passes before the dragon's head")))))
 
-(deftest when-stands-are-nil-outside-basin-toward-dragon-never-issues-perch
-  ;; gym chain-w8 run 2: at [3 63 -8] on the rim, stands in the basin were nil;
-  ;; toward-dragon must never issue :perch from outside the basin when stand is nil.
-  (let [cloud {:entity/type (blocks/entity-types :area_effect_cloud)
-               :entity/pos [0.5 64.0 0.5]
-               :entity/radius 4.0}
-        w (-> (round-fountain [3.5 63.0 -8.5] (sitting 270.0))
-              (assoc :player/dimension dimension/end
-                     :world/entities (merge (sitting 270.0) {258 cloud})))]
-    (is (not (dragon/in-basin? w)) "player is outside the basin")
-    (is (nil? (dragon/fountain-stand w)) "fountain stands are covered by breath")
-    (let [i (dragon/toward-dragon w)]
-      (is (not= :perch (:intent/kind i))
-          "toward-dragon never perches outside the basin with nil stand"))))
-
 (deftest in-a-lull-the-bot-eats-for-health-back
   ;; the hand-off of gym dragon-f: sixteen steak held, the food between 14 and 18, no healing
   (let [steak {0 {:item (recipe/item-id :cooked_beef) :count 16}}

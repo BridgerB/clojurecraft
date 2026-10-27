@@ -382,14 +382,18 @@
   ;; Minecraft protocol [:play :damage-event] encodes entity IDs as 1 + Entity ID (0 = none).
   ;; The handler decrements source-direct and source-cause to record the real entity ID in :player/attacker.
   (let [w (assoc (in-play) :time/tick 120)
-        [w2 _] (run
-                w
-                [(packet
-                  {:packet/name :damage-event :entity-id 7 :source-direct 91 :source-cause 91})])
-        [w3 _] (run
-                w
-                [(packet
-                  {:packet/name :damage-event :entity-id 7 :source-direct 0 :source-cause 169})])]
+        [w2 _] (run w
+                    [(packet {:packet/name :damage-event
+                              :entity-id 7
+                              :source-type 28
+                              :source-direct 91
+                              :source-cause 91})])
+        [w3 _] (run w
+                    [(packet {:packet/name :damage-event
+                              :entity-id 7
+                              :source-type 28
+                              :source-direct 0
+                              :source-cause 169})])]
     (is (= 90 (:player/attacker w2)))
     (is (= 120 (:player/hurt-at w2)))
     (is (= 168 (:player/attacker w3)))))

@@ -706,8 +706,8 @@
               (and (breath-near world) (not (holds? world)))
               (and (in-bite? e (:player/pos world)) (not (scanning? e)) (some? stand))
               (and (not (in-basin? world))
-                   (or (nil? stand)
-                       (not (breath-on-way? world (:player/pos world) (physics/centre stand)))))
+                   stand
+                   (not (breath-on-way? world (:player/pos world) (physics/centre stand))))
               (> (- now (:intent/since i)) perch-hold-ms))
           (-> world
               (assoc :player/controls {})
@@ -907,7 +907,7 @@
           (and breath eid d (grounded? d) (in-basin? world) far?) (shelter-walk stand)
           (and breath flight) (shelter-walk flight)
           breath {:intent/kind :back-off :intent/target (first breath)}
-          (and (in-basin? world) (nil? stand) eid (some? (ground world 0 0 sky)))
+          (and (nil? stand) eid (some? (ground world 0 0 sky)))
           {:intent/kind :perch :intent/target eid}
           (nil? stand) {:plan/wait :no-fountain}
           (and eid (or blocked? (and (scanning? d) (in-basin? world))))
