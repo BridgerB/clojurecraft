@@ -1171,9 +1171,10 @@
     (is (= {:plan/wait :no-sword} (plan/next-intent bare row plan/goals))
         "never died, no sword and no trunk: the wait stands, no bare-hand hunt")
     (is
-     (= {:intent/kind :lookout :intent/for :pearls} (plan/next-intent respawned row plan/goals))
-     "a death behind it and no trunk sighted yet: it looks and roams for wood, and the
-            remake is asked again, never the :no-sword fail")
+     (= {:intent/kind :walk :intent/target [14 64 14] :intent/for :pearls}
+        (plan/next-intent respawned row plan/goals))
+     "a death behind it and no trunk sighted yet: it roams for wood (a :lookout with
+            nowhere to roam), and the remake is asked again, never the :no-sword fail")
     (is (= {:plan/wait :no-sword}
            (plan/next-intent (assoc respawned :player/dimension "minecraft:the_nether")
                              row
