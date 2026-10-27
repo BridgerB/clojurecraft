@@ -216,15 +216,6 @@
                               :intent/best-tick)
         :else (intent/run-child world event)))
 
-(defn pressing?
-  "Should an engaged fight walk on toward entity e: its aim out of attack-reach of the eye while
-   it is still press-within or more away on the plane. A blaze hovers: two blocks over the floor,
-   its aim from approach-range on the plane was 3.3 from the eye, past attack-reach, and the engage
-   faced it and never attacked (issue #262, the server model's blaze)."
-  [world e]
-  (and (> (physics/distance (game/eye world) (aim e)) attack-reach)
-       (>= (horizontal world e) press-within)))
-
 (defn floor-pos
   "The bot's feet position with y at the floor it stands on or jumped from: the cell the feet are
    in (a hair over a whole number counts as that number), or the one under it when nothing solid
@@ -286,6 +277,17 @@
         here [(long (math/floor px)) (long (math/floor (+ (double py) 0.5)))
               (long (math/floor pz))]]
     (or (= c here) (path/standable? world c))))
+
+(defn pressing?
+  "Should an engaged fight walk on toward entity e: its aim out of attack-reach of the eye while
+   it is still press-within or more away on the plane, not leaving safe footing. A blaze hovers:
+   two blocks over the floor, its aim from approach-range on the plane was 3.3 from the eye, past
+   attack-reach, and the engage faced it and never attacked (issue #262, the server model's blaze)."
+  [world e]
+  (and (> (physics/distance (game/eye world) (aim e)) attack-reach)
+       (>= (horizontal world e) press-within)
+       (not= :silverfish (entity/kind e))
+       (press-stands? world e)))
 
 (defn strikable?
   "Can the sword reach entity e from here (in-reach?), or by pressing in to press-within onto
@@ -616,7 +618,7 @@
      (filter
       (fn [[eid e]]
         (and (not (contains? bl eid))
-             (not (contains? left (entity/kind e)))
+             (or (= eid (:player/attacker world)) (not (contains? left (entity/kind e))))
              (not (given-up? world eid e))
              (or (not pumpkin?)
                  (not= :enderman (entity/kind e))
@@ -632,10 +634,11 @@
 
 (defmethod plan/next-intent :defend
   ;; the nearest threat: a creeper, or anything while the health is under retreat-health, is
-  ;; backed away from; anything else fought. A neutral mob turned on the bot (an angry enderman,
-  ;; entity/neutral) is fought to the end whatever the health: it is faster than the bot and
-  ;; teleports after it, so a back-off from it is only hits taken. Gym dragon-e run 1 struck one
-  ;; five times (40 to 10) then backed away under 10 health and died in its hands. What a
+  ;; backed away from; anything else fought. Silverfish are fought holding ground (:intent/hold?)
+  ;; so the fight never walks off safe footing into portal-room lava. A neutral mob turned on the bot
+  ;; (an angry enderman, entity/neutral) is fought to the end whatever the health: it is faster than
+  ;; the bot and teleports after it, so a back-off from it is only hits taken. Gym dragon-e run 1
+  ;; struck one five times (40 to 10) then backed away under 10 health and died in its hands. What a
   ;; back-off could not get away from (:plan/cornered: the bot was in a dead end) is fought to the
   ;; end too, unless the health is already under retreat-health (one hit plus a margin) and it is
   ;; no neutral: then it is backed away from again, never fought on to death (issue #563, probe
@@ -649,6 +652,8 @@
                    (contains? (:plan/cornered world #{}) eid)
                    (not (contains? entity/neutral (entity/kind e)))))
           {:intent/kind :back-off :intent/target eid}
+          (= :silverfish (entity/kind e))
+          {:intent/kind :fight :intent/target eid :intent/hold? true}
           (or (contains? entity/neutral (entity/kind e)) (contains? (:plan/cornered world #{}) eid))
           {:intent/kind :fight :intent/target eid :intent/to-the-end? true}
           (< (:player/health world 20.0) retreat-health) {:intent/kind :back-off :intent/target eid}

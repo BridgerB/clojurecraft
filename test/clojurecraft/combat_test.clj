@@ -493,3 +493,13 @@
     (is (= (combat/hittable? w zombie) (combat/hittable? jumped zombie)) "the jump changes nothing")
     (is (not (combat/hittable? w zombie))
         "three and a half over the floor is out of reach, jumped or not")))
+
+(deftest silverfish-are-fought-holding-ground-without-leaving-safe-footing
+  ;; gym chain-w7 run 3: silverfish in the portal room must be fought without stepping
+  ;; off safe footing into the lava pool below
+  (let [silverfish (mob :silverfish [10.5 64.0 10.5] 8.0)
+        w (standing {12 silverfish})]
+    (is (= {:intent/kind :fight :intent/target 12 :intent/hold? true}
+           (plan/next-intent w {:goal/id :defend :goal/plan :defend} plan/goals))
+        "silverfish are fought with :intent/hold? true")
+    (is (not (combat/pressing? w silverfish)) "pressing? never walks toward silverfish")))

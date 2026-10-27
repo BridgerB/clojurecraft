@@ -602,6 +602,38 @@
       (is (= {:plan/wait :low-health} (dragon/toward-dragon sheltered))
           "in shelter outside the basin: waiting for health back, not walking"))))
 
+(deftest an-attacker-enderman-is-answered-when-pumpkin-worn-and-dragon-grounded
+  ;; gym chain-w7 run 2 (at 2a3adb1): dragon grounded, carved pumpkin worn,
+  ;; an enderman struck the bot down to 2.7 health because answering :dragon
+  ;; suppressed all hostiles when grounded and threats excluded answered-kinds.
+  ;; When damaged by an attacker or under retreat-health, the enderman is answered.
+  (let [enderman {:entity/type (mob/type-id :enderman) :entity/pos [1.5 64.0 0.5]}
+        w (-> (round-fountain [0.5 64.0 0.5] (sitting 270.0))
+              (assoc :player/inventory {103 {:item (recipe/item-id :carved_pumpkin) :count 1}}
+                     :world/entities (merge (sitting 270.0) {309 enderman})
+                     :player/health 8.0
+                     :player/attacker 309
+                     :player/hurt-at 100
+                     :time/tick 110))]
+    (is (not (contains? (combat/answering w :dragon) :enderman))
+        "under retreat health, answering :dragon does not suppress hostiles")
+    (is (contains? (combat/threats w) 309)
+        "an enderman attacking the bot is a threat even when carved pumpkin is worn")
+    (is (= {:intent/kind :fight :intent/target 309 :intent/to-the-end? true}
+           (plan/next-intent w {:goal/id :defend :goal/plan :defend} plan/goals))
+        "defend fights the attacking enderman to the end")))
+
+(deftest in-breath-detects-edge-of-expanding-breath-cloud-with-player-margin
+  ;; gym chain-w7 dragon run 2: breath cloud radius 5.67 expanded toward the bot at
+  ;; distance 6.0; player collision margin ensures in-breath? detects the edge
+  (let [cloud {:entity/type (blocks/entity-types :area_effect_cloud)
+               :entity/pos [6.5 64.0 0.5]
+               :entity/radius 5.7}
+        w (-> (round-fountain [0.5 64.0 0.5] (sitting 270.0))
+              (assoc :world/entities (merge (sitting 270.0) {258 cloud})))]
+    (is (dragon/in-breath? w) "within radius plus collision margin counts as in-breath")
+    (is (not (dragon/holds? w)) "the bot does not hold when breath touches its collision box")))
+
 (deftest in-a-lull-the-bot-eats-for-health-back
   ;; the hand-off of gym dragon-f: sixteen steak held, the food between 14 and 18, no healing
   (let [steak {0 {:item (recipe/item-id :cooked_beef) :count 16}}

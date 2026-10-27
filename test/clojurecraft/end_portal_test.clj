@@ -178,6 +178,12 @@
                 :intent/reach 1.5
                 :intent/climb 1}
                (end-portal/next-toward outside false)))))
+    (testing "already inside the portal room: toward-frame never tunnels"
+      ;; gym chain-w7 run 3: when in the portal room, toward-frame never tunnels across lava
+      (let [inside (assoc w :player/pos [3.5 68.0 9.5])]
+        (is (plan/done-by :in-portal-room? inside nil))
+        (is (nil? (end-portal/toward-frame inside [3 67 9]))
+            "already in portal room: toward-frame returns nil, never tunnels")))
     (testing "the rows' done predicates"
       (let [lit-row (first (filter #(= :end-portal (:goal/id %)) plan/goals))
             end-row (first (filter #(= :enter-end (:goal/id %)) plan/goals))]

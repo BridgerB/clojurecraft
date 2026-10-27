@@ -7,6 +7,7 @@
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]
             [clojurecraft.blocks :as blocks]
+            [clojurecraft.dimension :as dimension]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.fortress :as fortress]
             [clojurecraft.game :as game]
@@ -430,6 +431,27 @@
         (with-redefs [fortress/choose-move (constantly nil)]
           (is (= {:plan/wait :no-way} (plan/next-intent w room-row plan/goals))
               "a boxed feet cell never attempts stairs down again"))))
+    (testing "when feet cell is boxed, to-room retreats along trail to earlier unboxed cell"
+      ;; gym chain-w7 run 1: aquifer blocked tunnel-to, stairs-down boxed at [12985 3 16726];
+      ;; to-room must retreat along trail to a different stair start, not wait :no-way
+      (let [w (assoc seen
+                     :player/pos [12985.5 3.0 16726.5]
+                     :plan/boxed-at #{[12985 3 16726]}
+                     :plan/trail [[13008 8 16727] [12985 3 16726]])]
+        (with-redefs [fortress/choose-move (constantly nil)]
+          (is (= {:intent/kind :walk :intent/target [13008 8 16727] :intent/for :retreat}
+                 (stronghold/to-room w [12815 0 16673]))
+              "retreats along trail to earlier unboxed cell instead of waiting :no-way"))))
+    (testing "to-room refuses moves through or bordering lava in portal room"
+      ;; gym chain-w7 run 3: in portal room with lava pool under frame, tunnel-to
+      ;; must never step into or border lava
+      (let [feet [10 21 7]
+            lava (blocks/default-state :lava)
+            w {:world/chunks {[0 0] (world/column {[10 20 8] lava [10 19 8] lava})}
+               :player/pos [10.5 21.0 7.5]
+               :player/dimension dimension/overworld}]
+        (is (not (stronghold/safe-portal-move? w feet [0 0 1]))
+            "a move opening or bordering lava in the portal room is refused")))
     (testing "within 6 of it: there"
       (is (plan/done-by (assoc seen :player/pos [40.5 22.0 58.5]) room-row)))
     (testing "in water: out to the nearest bank first"

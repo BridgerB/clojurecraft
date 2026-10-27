@@ -622,6 +622,29 @@
                   (>= (:intent/taken l 0) (:intent/steps l 0))
                   (or (nil? from) (< (- (gone from) (gone (intent/feet world))) tunnel-gain))))))
 
+(defn safe-portal-move?
+  "Does move from feet open no cell that is or borders lava, and have no lava floor?
+   In the portal room the 3x3 pool under the frame is lava; stepping or digging into it
+   is a death."
+  [world feet move]
+  (let [cells (fortress/opens feet move)
+        floor (fortress/plus (fortress/plus feet move) [0 -1 0])
+        lava? (fn [c]
+                (let [id (terrain/block-at world c)]
+                  (or (contains? blocks/lava-states id) (= :lava (terrain/fluid-kind world c)))))]
+    (and (not-any? lava? (conj cells floor)) (empty? (fortress/lava-beside world feet move)))))
+
+(defn safe-tunnel-move
+  "The first move toward f that is safe?, dry?, and has no lava in its opened cells,
+   floor or border."
+  [world feet f]
+  (when (fortress/choose-move world feet f fortress/climb-past true)
+    (first (filter (fn [m]
+                     (and (fortress/safe? world feet m)
+                          (fortress/dry? world feet m)
+                          (safe-portal-move? world feet m)))
+                   (fortress/moves feet f fortress/climb-past)))))
+
 (defn to-room
   "The way to the portal room's frame f, in order: in water, out to the nearest bank first
    (swim's :swim-out :retreat); from a shore, a walk to a dry start (dry-start) that ends
@@ -636,9 +659,11 @@
    a bridge off the mountain's slope into the sky over a flooded valley); more than deep
    over the frame, or after a tunnel that got nowhere (tunnel-spent?), a staircase down toward
    it a leg of stair-leg at a time (stairs-toward), never under room-over over the frame; then
-   the fortress's tunnel to it, its steps opening no cell by water (fortress/dry?), when its
-   first step can be taken from the feet (through the stronghold's walls, never into its frames:
-   fortress/unbreakable); else, still over room-over, the stairs; else the wait :no-way. Gym
+   the fortress's tunnel to it, its steps opening no cell by water (fortress/dry?) and no cell
+   through or bordering lava (safe-portal-move?), when its first step can be taken from the feet
+   (through the stronghold's walls, never into its frames: fortress/unbreakable); else, still over
+   room-over, the stairs; else with feet boxed or no move forward, a retreat step back along the
+   plan trail to an earlier unboxed cell (a different stair start); else the wait :no-way. Gym
    batch stronghold-265b (plan run 38930188463) run 2 of the portal room: the frame at y 0
    under a lake, seen while the bot swam it, every first step of the tunnel from the water opened
    a cell by water and it failed :blocked."
@@ -658,20 +683,25 @@
                        (not (#{:stairs-down :tunnel-to} (:intent/kind (:plan/last world)))))
               (or (far-start world) (walked-ground world)))
         down (when (and high? (= start feet)) (downhill world f))
-        stairs (stairs-toward feet f (max (+ y room-over) (- fy stair-leg)))]
+        stairs (stairs-toward feet f (max (+ y room-over) (- fy stair-leg)))
+        tunnel-move (safe-tunnel-move world feet f)
+        retreat (when (or boxed? (nil? tunnel-move))
+                  (some #(when-not (contains? (:plan/boxed-at world #{}) %) %)
+                        (rseq (:plan/trail world []))))]
     (cond (:player/in-water? world) {:intent/kind :swim-out :intent/for :retreat}
           (and start (not= start feet))
           {:intent/kind :walk :intent/target start :intent/for :retreat}
           far {:intent/kind :cross :intent/target far :intent/for :stronghold}
           down down
           (and (not boxed?) (> fy (+ y room-over)) (or high? (tunnel-spent? world f))) stairs
-          (fortress/choose-move world feet f fortress/climb-past true)
+          tunnel-move
           {:intent/kind :tunnel-to
            :intent/target f
            :intent/steps fortress/steps-per-tunnel
            :intent/dry? true
            :intent/from-feet feet}
           (and (not boxed?) (> fy (+ y room-over))) stairs
+          retreat {:intent/kind :walk :intent/target retreat :intent/for :retreat}
           :else {:plan/wait :no-way})))
 
 (defmethod plan/next-intent :portal-room

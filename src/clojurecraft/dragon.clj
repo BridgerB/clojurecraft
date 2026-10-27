@@ -773,11 +773,11 @@
 
 (defn in-breath?
   "Are the feet within a breath cloud's or fireball's own radius (:entity/radius, breath-radius
-   when unsaid), where it hurts, not only within its breath-reach?"
+   when unsaid), plus player collision margin, where it hurts, not only within its breath-reach?"
   [world]
   (let [pos (:player/pos world)]
     (boolean (some #(<= (physics/horizontal-distance pos (:entity/pos %))
-                        (:entity/radius % breath-radius))
+                        (+ (:entity/radius % breath-radius) 0.5))
                    (vals (breaths world))))))
 
 (defn at-stand?
@@ -1016,11 +1016,13 @@
   ;; and every hostile shown while a breath cloud or fireball reaches the feet (breath-near),
   ;; while the dragon sits or lands on its perch (grounded?: gym dragon3-b runs 1 and 2 had
   ;; :defend chase an enderman the dragon had hit out of the basin up the rim into the sitting
-  ;; dragon's head), or while crossing from the entry platform (off-island?)
+  ;; dragon's head), or while crossing from the entry platform (off-island?),
+  ;; unless health is under retreat-health where the dragon is not fought (recover takes over)
   [world _]
   (cond-> #{:ender_dragon}
     (and (:player/pos world)
          (= dimension/end (dimension/of world))
+         (>= (:player/health world full-health) combat/retreat-health)
          (or (breath-near world)
              (off-island? world)
              (some-> (second (dragon world))
