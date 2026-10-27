@@ -618,6 +618,7 @@
      (filter
       (fn [[eid e]]
         (and (not (contains? bl eid))
+             (not= :ender_dragon (entity/kind e))
              (or (= eid (:player/attacker world)) (not (contains? left (entity/kind e))))
              (not (given-up? world eid e))
              (or (not pumpkin?)

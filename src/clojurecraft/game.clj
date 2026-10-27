@@ -309,10 +309,10 @@
 
 (defmethod on-packet [:play :damage-event]
   [w {:keys [entity-id source-cause source-direct]}]
-  (if (= entity-id (:player/eid w))
+  (if (= entity-id (or (:player/entity-id w) (:player/eid w)))
     (let [attacker (if (pos? (long (or source-direct 0)))
-                     source-direct
-                     (when (pos? (long (or source-cause 0))) source-cause))]
+                     (dec (long source-direct))
+                     (when (pos? (long (or source-cause 0))) (dec (long source-cause))))]
       (cond-> (assoc w :player/hurt-at (:time/tick w 0))
         attacker (assoc :player/attacker attacker)))
     w))

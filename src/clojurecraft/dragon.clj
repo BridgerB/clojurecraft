@@ -706,8 +706,8 @@
               (and (breath-near world) (not (holds? world)))
               (and (in-bite? e (:player/pos world)) (not (scanning? e)) (some? stand))
               (and (not (in-basin? world))
-                   stand
-                   (not (breath-on-way? world (:player/pos world) (physics/centre stand))))
+                   (or (nil? stand)
+                       (not (breath-on-way? world (:player/pos world) (physics/centre stand)))))
               (> (- now (:intent/since i)) perch-hold-ms))
           (-> world
               (assoc :player/controls {})
@@ -773,11 +773,11 @@
 
 (defn in-breath?
   "Are the feet within a breath cloud's or fireball's own radius (:entity/radius, breath-radius
-   when unsaid), plus player collision margin, where it hurts, not only within its breath-reach?"
+   when unsaid), where it hurts, not only within its breath-reach?"
   [world]
   (let [pos (:player/pos world)]
     (boolean (some #(<= (physics/horizontal-distance pos (:entity/pos %))
-                        (+ (:entity/radius % breath-radius) 0.5))
+                        (:entity/radius % breath-radius))
                    (vals (breaths world))))))
 
 (defn at-stand?
@@ -835,6 +835,7 @@
          (remove #{feet})
          (remove #(breathed? world %))
          (remove #(before-head? d (physics/centre %)))
+         (remove #(bite-on-way? d pos (physics/centre %)))
          (sort-by #(physics/horizontal-distance pos (physics/centre %)))
          first)))
 
@@ -906,7 +907,7 @@
           (and breath eid d (grounded? d) (in-basin? world) far?) (shelter-walk stand)
           (and breath flight) (shelter-walk flight)
           breath {:intent/kind :back-off :intent/target (first breath)}
-          (and (nil? stand) eid (some? (ground world 0 0 sky)))
+          (and (in-basin? world) (nil? stand) eid (some? (ground world 0 0 sky)))
           {:intent/kind :perch :intent/target eid}
           (nil? stand) {:plan/wait :no-fountain}
           (and eid (or blocked? (and (scanning? d) (in-basin? world))))

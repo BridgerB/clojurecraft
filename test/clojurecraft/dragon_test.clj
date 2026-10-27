@@ -624,16 +624,61 @@
            (plan/next-intent w {:goal/id :defend :goal/plan :defend} plan/goals))
         "defend fights the attacking enderman to the end")))
 
-(deftest in-breath-detects-edge-of-expanding-breath-cloud-with-player-margin
-  ;; gym chain-w7 dragon run 2: breath cloud radius 5.67 expanded toward the bot at
-  ;; distance 6.0; player collision margin ensures in-breath? detects the edge
+(deftest holds-in-basin-when-breath-cloud-is-outside-actual-radius
+  ;; gym chain-w8: prematurely breaking holds? on breath clouds outside the basin drove
+  ;; the bot up the rim into the sitting dragon's head and wings. holds? holds as long as
+  ;; the breath cloud has not engulfed the feet.
   (let [cloud {:entity/type (blocks/entity-types :area_effect_cloud)
                :entity/pos [6.5 64.0 0.5]
                :entity/radius 5.7}
         w (-> (round-fountain [0.5 64.0 0.5] (sitting 270.0))
               (assoc :world/entities (merge (sitting 270.0) {258 cloud})))]
-    (is (dragon/in-breath? w) "within radius plus collision margin counts as in-breath")
-    (is (not (dragon/holds? w)) "the bot does not hold when breath touches its collision box")))
+    (is (not (dragon/in-breath? w)) "feet outside cloud radius is not in-breath")
+    (is (dragon/holds? w) "the bot holds in the basin rather than fleeing up the rim")))
+
+(deftest when-dragon-attacks-the-bot-defend-never-claims-it-and-recover-takes-over
+  ;; gym chain-w8: dragon struck the bot down to 6.4 health; dragon must never be claimed by
+  ;; :defend as a threat (combat/threats excludes :ender_dragon), so the dragon row stays
+  ;; in control and recover takes over when health is under combat/retreat-health.
+  (let [w (-> (round-fountain [0.5 64.0 0.5] (sitting 270.0))
+              (assoc :player/dimension dimension/end
+                     :player/health 6.4
+                     :player/food 20
+                     :player/attacker 40
+                     :player/hurt-at 100
+                     :time/tick 110))]
+    (is (empty? (combat/threats w)) "the dragon is never a threat in combat/threats")
+    (is
+     (contains? #{:walk :low-health}
+                (let [i (dragon/toward-dragon w)] (or (:intent/kind i) (:plan/wait i))))
+     "dragon row executes recover (shelter walk or wait :low-health), never :fight or :back-off from defend")))
+
+(deftest escape-never-paths-through-the-sitting-dragons-head-or-bite-area
+  ;; gym chain-w8 run 3: escaping from [4 63 -9] toward [7 62 -3] crossed the dragon's head
+  ;; and bite path (bite-on-way?), dealing fatal contact damage in 0.35 s.
+  ;; escape must reject cells whose straight way crosses before the sitting dragon's head.
+  (let [d (sitting 270.0)
+        w (-> (round-fountain [4.5 63.0 -9.5] d)
+              (assoc :player/dimension dimension/end))]
+    (when-let [flight (dragon/escape w)]
+      (let [[_ dragon-ent] (dragon/dragon w)]
+        (is (not (dragon/bite-on-way? dragon-ent (:player/pos w) (physics/centre flight)))
+            "escape destination straight line never passes before the dragon's head")))))
+
+(deftest when-stands-are-nil-outside-basin-toward-dragon-never-issues-perch
+  ;; gym chain-w8 run 2: at [3 63 -8] on the rim, stands in the basin were nil;
+  ;; toward-dragon must never issue :perch from outside the basin when stand is nil.
+  (let [cloud {:entity/type (blocks/entity-types :area_effect_cloud)
+               :entity/pos [0.5 64.0 0.5]
+               :entity/radius 4.0}
+        w (-> (round-fountain [3.5 63.0 -8.5] (sitting 270.0))
+              (assoc :player/dimension dimension/end
+                     :world/entities (merge (sitting 270.0) {258 cloud})))]
+    (is (not (dragon/in-basin? w)) "player is outside the basin")
+    (is (nil? (dragon/fountain-stand w)) "fountain stands are covered by breath")
+    (let [i (dragon/toward-dragon w)]
+      (is (not= :perch (:intent/kind i))
+          "toward-dragon never perches outside the basin with nil stand"))))
 
 (deftest in-a-lull-the-bot-eats-for-health-back
   ;; the hand-off of gym dragon-f: sixteen steak held, the food between 14 and 18, no healing
