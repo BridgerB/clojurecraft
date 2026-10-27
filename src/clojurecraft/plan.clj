@@ -275,17 +275,17 @@
                         (= :no-path (:intent/reason i)))
         attempts (cond-> (:plan/attempts world 0) (not unwalkable?) inc)
         unwalkable (if unwalkable? (inc (:plan/unwalkable world 0)) 0)
-        feet (intent/feet world)]
+        feet (when (:player/pos world) (intent/feet world))]
     (-> world
         (memory/remember-intention i :failed)
         (assoc :player/controls {})
-        (assoc :plan/failed (assoc i :intent/from-feet feet))
+        (assoc :plan/failed (cond-> i feet (assoc :intent/from-feet feet)))
         (cond-> (and (:intent/target i)
                      (not (contains? placing-kinds (:intent/kind i)))
                      (not (contains? crossing-kinds (:intent/kind i))))
                 (update :plan/blacklist (fnil conj #{}) (:intent/target i)))
         (cond-> (and (contains? boxing-kinds (:intent/kind i)) (= :boxed (:intent/reason i)))
-                (-> (update :plan/boxed-at (fnil conj #{}) feet)
+                (-> (cond-> feet (update :plan/boxed-at (fnil conj #{}) feet))
                     (update :plan/boxed-route (fnil into #{}) (:intent/visited i))))
         (cond-> (and unwalkable? (= :log (:intent/for i)))
                 (update :plan/unreached (fnil conj #{}) (:intent/target i)))
@@ -294,7 +294,7 @@
                 (update-in [:plan/trunk-failures
                             (let [[x _ z] (or (:intent/trunk i) (:intent/target i))] [x z])]
                            (fnil inc 0)))
-        (cond-> (>= attempts max-attempts) (update :plan/boxed-at (fnil conj #{}) feet))
+        (cond-> (and feet (>= attempts max-attempts)) (update :plan/boxed-at (fnil conj #{}) feet))
         (assoc :plan/attempts attempts :plan/unwalkable unwalkable)
         (dissoc :plan/intent :plan/last)
         (game/say (str "intent "
@@ -306,7 +306,7 @@
                        " of "
                        max-attempts
                        ")"))
-        (cond-> (>= unwalkable max-unwalkable)
+        (cond-> (or (>= attempts max-attempts) (>= unwalkable max-unwalkable))
                 (assoc :plan/status :failed :plan/reason (:intent/reason i))))))
 
 (declare plan-tick)
@@ -326,7 +326,7 @@
    waiting. An intent that names a dead end (:intent/dead-end) puts that cell in :plan/boxed-at."
   [world i]
   (let [n (inc (:plan/intents world 0))
-        feet (intent/feet world)
+        feet (when (:player/pos world) (intent/feet world))
         trail (:plan/trail world [])
         i (assoc i :intent/status :active :intent/id n)]
     (-> world
@@ -344,6 +344,7 @@
   [next failed feet]
   (and next
        failed
+       feet
        (= (:intent/kind next) (:intent/kind failed))
        (= (:intent/target next) (:intent/target failed))
        (= (:intent/dir next) (:intent/dir failed))
@@ -409,7 +410,11 @@
         goal (when active? (choose world table))
         preempt? (and i goal (:intent/goal i) (not= (:goal/id goal) (:intent/goal i)))
         cut? (and i goal (not preempt?) (interrupts? world goal i))
-        next (when (and goal (nil? i)) (next-intent world goal table))]
+        next (when (and goal (nil? i)) (next-intent world goal table))
+        feet (when (:player/pos world) (intent/feet world))
+        failed (:plan/failed world)
+        retrying? (and next (identical-retry? next failed feet))
+        retreat-cell (when retrying? (some #(when (not= % feet) %) (rseq (:plan/trail world []))))]
     (cond (not active?) world
           (and i (or (nil? goal) preempt? cut?) (not (can-abandon? world)))
           (run-intent world i event table)
@@ -428,18 +433,14 @@
           i (run-intent world i event table)
           (nil? next) (wait world :nothing-to-do)
           (:plan/wait next) (wait world (:plan/wait next))
-          :else
-          (let [feet (intent/feet world)
-                failed (:plan/failed world)]
-            (if (identical-retry? next failed feet)
-              (if-let [prev (some #(when (not= % feet) %) (rseq (:plan/trail world [])))]
-                (start-intent (update world :plan/boxed-at (fnil conj #{}) feet)
-                              {:intent/kind :walk
-                               :intent/target prev
-                               :intent/for :retreat
-                               :intent/goal (:goal/id goal)})
-                (wait world :retrying))
-              (start-intent world (assoc next :intent/goal (:goal/id goal))))))))
+          (and retrying? retreat-cell)
+          (start-intent (update world :plan/boxed-at (fnil conj #{}) feet)
+                        {:intent/kind :walk
+                         :intent/target retreat-cell
+                         :intent/for :retreat
+                         :intent/goal (:goal/id goal)})
+          retrying? (wait world :retrying)
+          :else (start-intent world (assoc next :intent/goal (:goal/id goal))))))
 
 (defn steered
   "The world after steer by the row of table the running intent serves (:intent/goal), or as it

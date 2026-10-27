@@ -282,6 +282,8 @@
 (s/def :plan/retreat-unreachable (s/coll-of ::block-pos :kind set?))
 (s/def :plan/unreached (s/coll-of ::block-pos :kind set?))
 (s/def :plan/unwalkable nat-int?)
+(s/def :plan/trail (s/coll-of ::block-pos :kind vector?))
+(s/def :plan/failed map?)
 (s/def :backed-off/times pos-int?)
 (s/def :backed-off/pos (s/coll-of number? :count 3))
 (s/def :plan/backed-off ; creeper entity id → where it stood when first backed away from, and how often
@@ -422,6 +424,9 @@
 (s/def :server/time-at int?)
 (s/def :server/tick-ms number?)
 (s/def :player/health number?)
+(s/def :player/hurt-at int?)
+(s/def :player/attacker int?)
+(s/def :world/boss-health number?)
 (s/def :player/food int?)               ; 0-20 from a server; the wire allows any varint, and step is total over it
 (s/def :player/saturation number?)
 (s/def :intent/food-before int?)
