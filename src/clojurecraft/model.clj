@@ -190,6 +190,8 @@
    [:intention/recipe "the intent's recipe" "a fact, when the intent had one"]
    [:intention/reason "why it failed or was abandoned (:goal-met, :preempted, :interrupted)"
     "a :failed or :abandoned fact"]
+   [:intention/ended-at "the feet cell a :tunnel-to stood in when it ended"
+    "a :done :tunnel-to fact"]
    [:answer/kind
     "which server answer to the bot's own action: :ack, :pickup, or :death (health reached zero)"
     "a fact in :world/facts"] [:answer/at "ms the answer arrived" "a fact in :world/facts"]
@@ -335,6 +337,9 @@
    [:intent/goal "the target goal id the intent serves; another target chosen preempts it"
     "intents the planner starts"]
    [:intent/reason "why it failed, or why the planner abandoned it" "a failed or abandoned intent"]
+   [:intent/ended-at
+    "the feet cell a :tunnel-to ended in, kept when it is done: a tunnel that ends where the next one for the same target begins made no progress (issue #262)"
+    "a done :tunnel-to"]
    [:intent/target
     "block position it acts on or walks to; for a :fight, a :back-off or a :provoke (issue #263), the entity id it is after; for a :throw-eye, the eye it follows (issue #265); for a :tunnel for :bank or :lava, the water or the lava source it heads for (issue #130) (issue #259: a widening, a position is still one)"
     "most intents"]

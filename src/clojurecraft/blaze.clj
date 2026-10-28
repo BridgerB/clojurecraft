@@ -386,6 +386,21 @@
   [world]
   (entity/nearest (watchers world) (:player/pos world)))
 
+(def food-reserve 4) ; edible items held before the stage fights: a heal from under 10 to 20 takes more than one volley's worth, and the Nether has little to eat (issue #262, R1/17)
+
+(defn stocking
+  "The food to take before the stage starts, or nil: fewer than food-reserve edible items held,
+   no blaze watching, and a source at hand (an edible drop in sight, a meal craftable from what
+   is held, a hoglin hunt/game would take, which it refuses under combat/retreat-health). Never
+   a search for crimson ground: the stage is not held up for a forest that may not be near.
+   Sim R1/17 reached the blazes at 9.3 health with food 17 and nothing edible, where nothing
+   heals and no fight is allowed (follow-up 1:15 AM)."
+  [world]
+  (when (and (< (hunt/edible-held world) food-reserve) (empty? (watchers world)))
+    (or (when-let [[_ e] (food-lying world)] (food-intent world e))
+        (craft-meal world)
+        (hoglin-intent world))))
+
 (defn outnumbered?
   "Do volley blazes or more watch the bot: more volleys than its armour and its sword answer,
    whatever its health. Gym blazefort-k (run 38913023560) runs 3 and 4 died at the spawner from
@@ -487,22 +502,26 @@
    way away from that attacker has a landing: blaze-wall-b (plan 40624888909) blaze-fortress run
    1 rested at 8 health while two zombified piglins hit it. test.yml 40624888901: a watched void
    retreat is still a rest, in the open or not, or the act searches. Probe 40634461444: a rest
-   at 9.3 with food 17 cannot heal, and holding it is not a plan."
-  [world]
-  (let [[weid e] (watcher world)
-        [aid ae] (combat/striker world)
-        away (hide world)
-        food (delay (when-not (heals? world) (provisions world)))]
-    (cond away away
-          (meal world) (meal world)
-          (and aid (not (combat/void-retreat? world ae)))
-          {:intent/kind :back-off :intent/target aid}
-          (and e (combat/void-retreat? world e)) rest-intent
-          weid {:intent/kind :back-off :intent/target weid}
-          @food @food
-          (in-open? world) nil
-          (heals? world) rest-intent
-          :else nil)))
+   at 9.3 with food 17 cannot heal, and holding it is not a plan. With provide? false (the
+   per-tick under-fire? asks so) the food is not looked for: provisions scans a 33 by 33 patch
+   and routes, and asked every tick it made a replay of sim R2/12 run past the 60-minute limit
+   (probe 40640227015) where 21cec97f3 took six."
+  ([world] (healing world true))
+  ([world provide?]
+   (let [[weid e] (watcher world)
+         [aid ae] (combat/striker world)
+         away (hide world)
+         food (delay (when (and provide? (not (heals? world))) (provisions world)))]
+     (cond away away
+           (meal world) (meal world)
+           (and aid (not (combat/void-retreat? world ae)))
+           {:intent/kind :back-off :intent/target aid}
+           (and e (combat/void-retreat? world e)) rest-intent
+           weid {:intent/kind :back-off :intent/target weid}
+           @food @food
+           (in-open? world) nil
+           (heals? world) rest-intent
+           :else nil))))
 
 (defn wary?
   "Is the health under eat-under: a meal then comes before the next fight. Gym blaze-7b run 2 (run
@@ -519,19 +538,20 @@
    heal is not chosen. Gym blazefort-k run 3 (run 38913023560) fought on at 11.5, watched by
    the spawner's burst, and was under 10 a second later. blaze-wall-b run 1 chose :rest at 13
    health, over eat-under and not yet hurt, while the piglins that a blaze swing had hit were
-   hitting back."
-  [world]
-  (let [away (hide world)
-        [aid ae] (combat/striker world)
-        food (delay (when-not (heals? world) (provisions world)))]
-    (cond away away
-          (meal world) (meal world)
-          (and aid (not (combat/void-retreat? world ae)))
-          {:intent/kind :back-off :intent/target aid}
-          @food @food
-          (and (heals? world) (nil? aid) (empty? (watchers world)) (not (in-open? world)))
-          rest-intent
-          :else nil)))
+   hitting back. provide? is as for healing."
+  ([world] (warily world true))
+  ([world provide?]
+   (let [away (hide world)
+         [aid ae] (combat/striker world)
+         food (delay (when (and provide? (not (heals? world))) (provisions world)))]
+     (cond away away
+           (meal world) (meal world)
+           (and aid (not (combat/void-retreat? world ae)))
+           {:intent/kind :back-off :intent/target aid}
+           @food @food
+           (and (heals? world) (nil? aid) (empty? (watchers world)) (not (in-open? world)))
+           rest-intent
+           :else nil))))
 
 (defn fires
   "The cells within fire-radius of spawner sp on the plane, from a block under its height to two
@@ -564,13 +584,30 @@
             (intent/routable? world walk) walk
             :else nil))))
 
+(def stalled-looked 4) ; the newest done tunnels asked where they ended
+
+(defn stalled
+  "The set of targets of the newest done :tunnel-to facts that ended in the cell the feet stand in
+   now (:intention/ended-at): a tunnel for that target begun here again would end here again.
+   R1/1 (probe 40640225673) tunnelled to the same stand from the same place until the window
+   closed, each one :done at the step cap."
+  [world]
+  (let [feet (intent/feet world)]
+    (->> (memory/newest-dones world :tunnel-to stalled-looked)
+         (filter #(= feet (:intention/ended-at %)))
+         (keep :intention/target)
+         set)))
+
 (defn to-spawner
   "The way to spawner sp: a walk when it is walkable?, else a tunnel by the fortress's steps
    (which never open a cell beside lava nor the spawner itself), climbing first, to its stand
-   (into it), or with no stand known to within spawner-reach of it."
+   (into it), or with no stand known to within spawner-reach of it. A target a tunnel already
+   ended on this very cell for (stalled) is not chosen again: another stand, else the spawner
+   itself, else nil, and the act goes on with the search."
   [world sp]
-  (let [walk {:intent/kind :walk :intent/target sp}
-        at (stand world sp)]
+  (let [dead (stalled world)
+        walk {:intent/kind :walk :intent/target sp}
+        at (stand (update world :plan/blacklist (fnil into #{}) dead) sp)]
     (cond (walkable? world sp) walk
           at
           {:intent/kind :tunnel-to
@@ -578,6 +615,7 @@
            :intent/steps fortress/steps-per-tunnel
            :intent/reach 0.5
            :intent/climb 0}
+          (contains? dead sp) nil
           :else
           {:intent/kind :tunnel-to
            :intent/target sp
@@ -601,9 +639,10 @@
             visited))
 
 (defn unvisited-fortress-bricks
-  "The fortress bricks on record that have not been visited and are not blacklisted."
+  "The fortress bricks on record that have not been visited, not blacklisted, and not the target
+   of a tunnel that ended on this cell (stalled)."
   [world]
-  (let [bl (:plan/blacklist world #{})
+  (let [bl (into (:plan/blacklist world #{}) (stalled world))
         visited (visited-locations world)]
     (->> (fortress/bricks world)
          (remove bl)
@@ -714,8 +753,8 @@
   (and (not (contains? #{:fight :eat :rest :back-off} (:intent/kind i)))
        (not= :cover (:intent/for i))
        (seq (watchers world))
-       (some? (cond (hurt? world) (healing world)
-                    (wary? world) (warily world)))))
+       (some? (cond (hurt? world) (healing world false)
+                    (wary? world) (warily world false)))))
 
 (defmethod plan/interrupts? :blaze-rods
   ;; any running intent but a fight ends when a blaze is at hand (at-hand-blaze), and the act
@@ -738,6 +777,7 @@
         heal (delay (when (hurt? world) (healing world)))
         wary (delay (when (wary? world) (warily world)))
         away (delay (when (outnumbered? world) (hide world)))
+        stock (delay (when-not (hurt? world) (stocking world)))
         fire (delay (when (and sp (at-spawner? world sp)) (put-out world sp)))
         pick (delay (when (build/pickaxe-at-hand? world)
                       (make/decide world (assoc goal :goal/provides {:tag/pickaxes 1}) table)))]
@@ -754,10 +794,13 @@
            :intent/target (hunt/cell (:entity/pos lying))}
           (and (not (hurt? world)) beid)
           {:intent/kind :fight :intent/target beid :intent/yield? true}
+          @stock @stock
           @fire @fire
+          (and (hurt? world) (not (heals? world))) {:plan/wait :no-food}
           (and (or (nil? sp) (not (at-spawner? world sp))) @pick) @pick
           (and sp (not (at-spawner? world sp))) (to-spawner world sp)
-          (and sp (not (hurt? world))) {:intent/kind :camp :intent/spawner sp}
+          (and sp (at-spawner? world sp) (not (hurt? world)))
+          {:intent/kind :camp :intent/spawner sp}
           :else (or (search world) {:plan/wait :no-blaze}))))
 
 ;; ---------------------------------------------------------------- the :camp intent

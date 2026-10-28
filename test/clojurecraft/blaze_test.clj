@@ -649,7 +649,9 @@
       (is (= {:intent/kind :collect-drops :intent/item :porkchop :intent/target [10 64 9]}
              (next-intent w)))))
   (testing "a stew the kit can make is made"
-    (let [w (assoc (standing {1 (item :bowl 1) 2 (item :red_mushroom 1) 3 (item :brown_mushroom 1)})
+    (let [w (assoc (standing
+                    {9 (item :bowl 1) 10 (item :red_mushroom 1) 11 (item :brown_mushroom 1)}
+                    {})
                    :player/health 9.3
                    :player/food 17)]
       (is (= {:intent/kind :craft :intent/recipe :mushroom_stew :intent/window :inventory}
@@ -687,6 +689,41 @@
       (is (combat/void-retreat? w (get-in w [:world/entities 7])))
       (is (not (blaze/heals? w)))
       (is (= blaze/rest-intent (next-intent w))))))
+
+(deftest the-stage-starts-provisioned-and-a-bot-that-cannot-heal-waits-for-food
+  ;; sim R1/17 (probe 40634461444): health 9.3, food 17, nothing edible, blazes watching. A
+  ;; healthy bot takes the food it can before the stage; a hurt one with none says so.
+  (let [hog (entity :hoglin [14.5 64.0 8.5] :entity/health 20.0)
+        pork (item :cooked_porkchop 1)]
+    (testing "healthy, nothing edible, a hoglin near: the hoglin is hunted before the stage"
+      (is (= {:intent/kind :walk :intent/target [14 64 8] :intent/for :hunt}
+             (next-intent (standing {} {5 hog})))))
+    (testing "the reserve held: the hoglin is left"
+      (is (not= :hunt (:intent/for (next-intent (standing {9 (assoc pork :count 4)} {5 hog}))))))
+    (testing "hurt under retreat-health, cannot heal, nothing to take: waits, no walk or rest"
+      (let [w (assoc (standing {}) :player/health 9.3 :player/food 17)]
+        (is (= {:plan/wait :no-food} (next-intent w)))))))
+
+(deftest a-tunnel-that-ended-where-it-began-is-not-chosen-again
+  ;; probe 40640225673, sim R1/1: tunnels to one stand, each :done at the step cap from the cell
+  ;; the last ended in. The stand it ended for is left; another is taken.
+  (let [sp [20 64 8]
+        w (-> (standing {})
+              (memory/observe sp blaze/spawner))
+        feet (intent/feet w)
+        first-stand (:intent/target (blaze/to-spawner w sp))
+        done (assoc w
+                    :world/facts
+                    (:world/facts (memory/remember-intention w
+                                                             {:intent/id 1
+                                                              :intent/kind :tunnel-to
+                                                              :intent/target first-stand
+                                                              :intent/ended-at feet}
+                                                             :done)))]
+    (is (= #{first-stand} (blaze/stalled done)))
+    (is (not= first-stand (:intent/target (blaze/to-spawner done sp))))
+    (testing "from another cell the same stand is fine"
+      (let [moved (assoc done :player/pos [9.5 64.0 8.5])] (is (= #{} (blaze/stalled moved)))))))
 
 (deftest a-corridor-with-no-route-tunnels-to-the-brick
   ;; probe 40634456698, sim R2/12, snapshot at 101.00 min (t 6060000): feet [979 69 450], the

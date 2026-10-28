@@ -617,6 +617,7 @@
       (or (arrived? world target r) (>= taken steps))
       (-> world
           (assoc :player/controls {})
+          (intent/assoc-intent :intent/ended-at feet)
           intent/done)
       (and move (or (off-step? feet from move) (lost-way? i)))
       (reduce intent/dissoc-intent (assoc world :player/controls {}) step-keys)
