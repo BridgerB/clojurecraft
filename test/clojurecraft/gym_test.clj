@@ -25,7 +25,16 @@
     (is (= "blaze-7" (:gym/name (gym/gym "blaze-7"))))
     (is (= :blaze-rods (:gym/goal (gym/gym "blaze-fortress"))))
     (is (str/includes? (gym/plan-matrix ["blaze-7"] 1) "{\"goal\":\"blaze-7\",\"run\":1,"))
-    (is (apply distinct? (keep :gym/name gym/gyms)))))
+    (is (apply distinct? (keep :gym/name gym/gyms))))
+  (testing "suffocate-column is r08's gravel, east of the feet"
+    (let [row (gym/gym "suffocate-column")]
+      (is (= :cobblestone (:gym/goal row)))
+      (is (= "peaceful" (:gym/difficulty row)))
+      (is (= ["setblock {x+1} {y+20} {z} minecraft:gravel"
+              "setblock {x+1} {y+21} {z} minecraft:gravel"
+              "setblock {x+1} {y+22} {z} minecraft:gravel"
+              "setblock {x+1} {y+23} {z} minecraft:gravel"]
+             (filterv #(str/starts-with? % "setblock") (:gym/setup row)))))))
 
 (def ok-result {:ok true :reason :goal :stats {}})
 

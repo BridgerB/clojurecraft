@@ -350,6 +350,19 @@
    (piece-fill [7 3 9] [7 3 11] "end_portal_frame[facing=west]")
    (str "setblock " (piece [5 3 6]) " minecraft:spawner")])
 
+(def suffocate-column
+  "r08's column, built where the first stair goes. The bot stands on a dirt cap twenty above the
+   landing (stone/search-height is 12, so the forest's stone is not the dig it walks to). The
+   stone under the cap has dirt on every side, the floor included, so it is not exposed from
+   below. Gravel fills the next column east from the feet up three (stair-cells' +x), the block
+   under it the stair's new feet. Digging that stair brings the column down."
+  ["time set day" "kill @e[type=!minecraft:player]"
+   "fill {x-14} {y+20} {z-14} {x+14} {y+40} {z+14} minecraft:air"
+   "fill {x-14} {y+11} {z-14} {x+14} {y+19} {z+14} minecraft:dirt"
+   "fill {x-12} {y+12} {z-12} {x+12} {y+18} {z+12} minecraft:stone"
+   "setblock {x+1} {y+20} {z} minecraft:gravel" "setblock {x+1} {y+21} {z} minecraft:gravel"
+   "setblock {x+1} {y+22} {z} minecraft:gravel" "setblock {x+1} {y+23} {z} minecraft:gravel"])
+
 (def gyms
   "The gym registry. Truth commands count items without removing any (`clear <name> <item> 0`
    answers \"Found N matching item(s)...\"); {name} is the bot's name; patterns are strings so
@@ -770,7 +783,17 @@
     :gym/timeout-ms trial-ms
     :gym/truth [{:truth/cmd
                  "execute in minecraft:the_end unless entity @e[type=minecraft:ender_dragon]"
-                 :truth/re "Test passed"}]}])
+                 :truth/re "Test passed"}]}
+   ;; the cobblestone row's chain, from a platform whose first +x stair is r08's gravel column
+   {:gym/goal :cobblestone
+    :gym/name "suffocate-column"
+    :gym/until "cobblestone"
+    :gym/difficulty "peaceful"
+    :gym/setup suffocate-column
+    :gym/prereqs ["minecraft:wooden_pickaxe 1" "minecraft:bread 8"]
+    :gym/timeout-ms 240000
+    :gym/truth [{:truth/cmd "clear {name} minecraft:cobblestone 0"
+                 :truth/re "Found ([1-9]|[1-9][0-9])"}]}])
 
 (def counted
   "Outcomes that say something about the goal; :harness and :disconnect do not."
