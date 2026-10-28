@@ -39,7 +39,7 @@
    [:player/eye-in-water? "the eye (y + 1.62) is inside water, by the physics this tick"
     "after the first physics tick"]
    [:player/suffocating?
-    "the eye cell holds a solid block (blocks/solid?), by the physics this tick"
+    "a full cube (collision-top >= 1.0) intersects the eye box, by the physics this tick"
     "after the first physics tick"]
    [:plan/wet-ticks "consecutive ticks the eye has been under water" "while planning"]
    [:plan/afloat-ticks

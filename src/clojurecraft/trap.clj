@@ -51,7 +51,7 @@
 
 (defn trapped-tick
   "The trap the player is in, re-derived with hysteresis every tick: lava on any contact,
-   suffocation whenever the eye cell holds a solid block (suffocating?), water once the eye has
+   suffocation whenever a full cube intersects the eye box (suffocating?), water once the eye has
    been under for trap-after-ticks or the body has been afloat (afloat?) for afloat-after-ticks
    with no :cross or :wade swimming on purpose, and either held until dry land has been held for
    dry-ticks-to-clear. :plan/wet-ticks, :plan/afloat-ticks and :plan/dry-ticks are the

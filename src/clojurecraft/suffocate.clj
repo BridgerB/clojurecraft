@@ -1,5 +1,5 @@
 (ns clojurecraft.suffocate
-  "Reaction when the bot's eye cell holds a solid block: clearing it before any other intent,
+  "Reaction when a full cube intersects the eye box: clearing it before any other intent,
    either by stepping to an adjacent free neighbour cell when one is clear and supported, or
    by digging the head cell, repeating if falling blocks refill it. Never digs below the feet
    while buried."
@@ -46,7 +46,12 @@
 (defmethod intent/run :escape-suffocation
   [world {:intent/keys [child step-ticks target-cell] :or {step-ticks 0}} event]
   (let [pos (:player/pos world)
-        head-c (physics/eye-cell pos)
+        head-c (or (physics/suffocation-cell (terrain/solid-fn world)
+                                             pos
+                                             (fn [x z]
+                                               (or (empty? (:world/chunks world))
+                                                   (terrain/chunk-loaded? world [x 0 z]))))
+                   (physics/eye-cell pos))
         buried? (trap/suffocating? world)]
     (cond (not buried?)
           (-> world

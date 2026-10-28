@@ -137,12 +137,24 @@
                               (falling-in-column? world [(first col) fy (second col)]))))
                      [[0 0] [1 0] [-1 0] [0 1] [0 -1]])))))
 
+(defn clearing-head?
+  "Is target the full cube the eye box touches (physics/suffocation-cell), the one cell a buried
+   dig may break?"
+  [world target]
+  (let [pos (:player/pos world)]
+    (= target
+       (physics/suffocation-cell
+        (terrain/solid-fn world)
+        pos
+        (fn [x z] (or (empty? (:world/chunks world)) (terrain/chunk-loaded? world [x 0 z])))))))
+
 (defn unsafe-falling?
   "Would breaking target drop a falling block (falling-in-column?) onto the bot: the bot's body box
-   overlaps target's column (physics/overlaps-column?), and target is under the head cell?"
+   overlaps target's column (physics/overlaps-column?), and target is not the full cube in the
+   eye box?"
   [world [x _ z :as target]]
   (boolean (and (physics/overlaps-column? (:player/pos world) [x z])
-                (not= target (physics/eye-cell (:player/pos world)))
+                (not (clearing-head? world target))
                 (falling-in-column? world target))))
 
 (defn dig-time
@@ -445,14 +457,28 @@
   [{:intent/keys [waypoints]}]
   (+ walk-timeout-ticks (* waypoint-ticks (count waypoints))))
 
+(defn walk-into-falling?
+  "Would a walk to target stand the body in a column that can still drop a block
+   (step-into-falling? of the cell's centre)? False for a pickup walk: it ends beside the block,
+   not in the block's column, so the column is cleared from the side. Real race 40466567590 lane 3
+   bot Clj_r08 stood at x 2434.56 beside gravel at [2435 58..61 2321], dug the bottom, and the walk
+   toward the column was already within reach, so it counted as arrived and stepped in while the
+   gravel was still falling."
+  [world target pickup?]
+  (boolean (and (not pickup?) target (step-into-falling? world (physics/centre target)))))
+
 (defmethod run :walk
-  [world {:intent/keys [target started waypoints at replans] :or {replans 0}} _]
+  [world {:intent/keys [target started waypoints at replans pickup?] :or {replans 0}} _]
   (let [tick (:time/tick world)
         started (or started tick)
         d (physics/distance (game/eye world) (physics/centre target))
         world (assoc-intent world :intent/started started)
         i (:plan/intent world)]
-    (cond (arrived? world i d)
+    (cond (walk-into-falling? world target pickup?)
+          (-> world
+              (assoc :player/controls {})
+              (fail :unsafe))
+          (arrived? world i d)
           (-> world
               (assoc :player/controls
                      {:control/look (physics/look-at (game/eye world) (physics/centre target))})
@@ -594,7 +620,7 @@
           (or (contains? never-dug (blocks/name-of at-target))
               (and (not exposes-ok?) (exposes-fluid? world target))
               (unsafe-falling? world target)
-              (and (trap/suffocating? world) (not= target (physics/eye-cell (:player/pos world)))))
+              (and (trap/suffocating? world) (not (clearing-head? world target))))
           (fail world :unsafe)
           (or (and (>= still 3) (> (- now since) settle-ms)) (> (- now since) settle-deadline))
           (let [seq (inc (:bot/sequence world))

@@ -91,7 +91,19 @@
                   [2435 58 2320] stone-state}
           solid-fn (fn [x y z] (when-let [b (blocks [x y z])] (if (blocks/solid? b) 1.0 false)))
           w (assoc (world-at [2435.16 58.0 2321.51] blocks) :player/suffocating? true)]
-      ;; The physics engine reports suffocating (eye cell holds gravel)
+      ;; The logged burial is x 2434.98: the eye point is still in cell 2434 (air) and the
+      ;; eye box reaches the gravel at [2435 59 2321].
+      (is (true? (physics/suffocating? solid-fn [2434.98 58.0 2321.51])))
+      (is (false? (physics/suffocating? solid-fn [2434.56 58.0 2321.51])))
+      (let [w-edge (assoc w :player/pos [2434.98 58.0 2321.51])
+            esc-i {:intent/kind :escape-suffocation :intent/status :active}
+            w-edge-run (intent/run (assoc (trap/trapped-tick w-edge) :plan/intent esc-i)
+                                   esc-i
+                                   {:event/kind :tick})]
+        (is (empty? (suffocate/free-neighbours w-edge (:player/pos w-edge))))
+        (is (= :dig (get-in w-edge-run [:plan/intent :intent/child :intent/kind])))
+        (is (= [2435 59 2321] (get-in w-edge-run [:plan/intent :intent/child :intent/target]))))
+      ;; Fully inside the column the eye point itself is the gravel
       (is (true? (physics/suffocating? solid-fn (:player/pos w))))
       (is (true? (trap/suffocating? w)))
       ;; trapped-tick sets :suffocation
