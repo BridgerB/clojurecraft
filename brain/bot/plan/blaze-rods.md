@@ -140,6 +140,8 @@ Health comes back only from food 18 (`hunger/heal-level`), and the Nether has no
 
 A bot back in the overworld after a death with the Nether reached has `hunt/provision-phase` `:return`: the hunt row stocks `provision-wanted` before `:return-nether` goes back (sim R1/1 went back twelve times with nothing to eat). `crowded?` (outnumbered, health under `rested`) puts the cover before the swing at a blaze at hand, and a cover walk is not interrupted by it. The sim run prints `TRACE` lines (`simrace/trace-note`: portal-home, fight start and end, dimension, a sample every 30 s in the Nether).
 
+A search of an earlier life does not end this life's (`:forage/life` is `:stats/deaths` at its start). In cover with a volley of blazes about (`swarm`, in sight or not) and none seeing the bot, `ambush` holds the cell for `ambush-ms` so the swarm comes to it one at a time (a blaze that loses sight flies to where it last saw its target), then lets the act go on; `ambush-cooldown` between. Sim R1/1 cycled cover and spawner room for 25 minutes, shot to 4 health each time it went out. The sim run also prints `:hit` TRACE lines (a drop of 2 health or more in the Nether, with the blazes about and watching).
+
 ## Limits
 - Fireballs are not dodged; the damage-event log is where to look when they kill.
 - A blaze hovering higher than the eye can reach from under it is never hit (`pressing?` stops within 0.8 on the plane); the fight has no engage timeout, only `:ghost` after 25 swings in reach.

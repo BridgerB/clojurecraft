@@ -413,6 +413,34 @@
     (testing "with no cover to be had the nearest is still fought"
       (is (= :fight (:intent/kind (next-intent (assoc (standing two) :player/health 15.0))))))))
 
+(deftest a-swarm-out-of-sight-is-waited-for-in-cover
+  ;; sim R1/1 (probe 40761589784, TRACE): healed to 18 in cover, the bot walked out to the
+  ;; spawner each time, was shot to 4 in the open and went back; sixteen foods, no kill
+  (let [row-of (fn [x] (entity :blaze [x 65.0 8.5] :entity/health 20.0))
+        w (assoc (standing {7 (row-of 12.5) 8 (row-of 13.5) 9 (row-of 14.5)})
+                 :world/chunks {[0 0] (world/column pillar)}
+                 :player/pos [5.5 64.0 8.5]
+                 :time/now 1000000)
+        tick (fn [w i] (intent/run w i {:event/kind :tick :event/now (:time/now w)}))]
+    (is (empty? (blaze/watchers w)) "behind the pillar, unseen")
+    (is (= 3 (count (blaze/swarm w))))
+    (is (= {:intent/kind :ambush} (next-intent w)))
+    (testing "in the open it is the cover, not the ambush"
+      (is (not= :ambush (:intent/kind (next-intent (assoc w :player/pos [8.5 64.0 8.5]))))))
+    (testing "hurt: not an ambush"
+      (is (not= :ambush (:intent/kind (next-intent (assoc w :player/health 8.0))))))
+    (testing "an ambush that ended lately is not begun again, a later one is"
+      (let [ended (memory/remember-intention w {:intent/id 5 :intent/kind :ambush} :done)]
+        (is (not= :ambush (:intent/kind (next-intent ended))))
+        (is (= :ambush
+               (:intent/kind (next-intent
+                              (assoc ended :time/now (+ 1000000 blaze/ambush-cooldown 1000))))))))
+    (testing "the intent holds, then ends when ambush-ms is spent"
+      (let [i {:intent/kind :ambush :intent/since 1000000 :intent/status :active}]
+        (is (not (intent/done? (:plan/intent (tick (assoc w :plan/intent i) i)))))
+        (let [late (assoc w :time/now (+ 1000000 blaze/ambush-ms 1000))]
+          (is (intent/done? (:plan/intent (tick (assoc late :plan/intent i) i)))))))))
+
 (deftest watched-by-a-volley-the-bot-takes-cover
   ;; gym blazefort-k (run 38913023560) runs 3 and 4: the natural spawner's burst of four, a hit a
   ;; second, and the bot dead from over 14 health in four seconds

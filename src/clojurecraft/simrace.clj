@@ -23,6 +23,7 @@
             [clojure.java.io :as io]
             [clojure.math :as math]
             [clojure.string :as str]
+            [clojurecraft.blaze :as blaze]
             [clojurecraft.capture :as capture]
             [clojurecraft.chunk :as chunk]
             [clojurecraft.cli :as cli]
@@ -160,7 +161,10 @@
         sample? (and (= dimension/nether (:player/dimension after))
                      (not= (quot (:time/now before 0) sample-ms)
                            (quot (:time/now after 0) sample-ms)))
-        what (cond (= ib ia)
+        hit? (and (= dimension/nether (:player/dimension after))
+                  (<= 2.0 (- (:player/health before 20.0) (:player/health after 20.0))))
+        what (cond hit? :hit
+                   (= ib ia)
                    (cond (not= (:player/dimension before) (:player/dimension after)) :dimension
                          sample? :sample)
                    (and (= :portal-home ka) (not= :portal-home kb)) :portal-home-start
@@ -182,6 +186,7 @@
                                          (= :blaze (entity/kind e))
                                          (<= (physics/distance pos (:entity/pos e)) 16.0))]
                           e))
+         :watchers (count (blaze/watchers after))
          :pos (some->> pos
                        (mapv #(long (math/round (double %)))))
          :intent (select-keys (:plan/intent after) [:intent/kind :intent/for :intent/target])}))))

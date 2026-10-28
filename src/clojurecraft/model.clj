@@ -270,11 +270,14 @@
     "the looks in a row that brought the feet no stall-gain nearer than :search/best; stall-tunnels end the leg (issue #338)"
     "inside :fortress/search, from the leg's second look"]
    [:hunt/forage
-    "the search for animals a bot makes with fewer than hunt/provision-wanted foods held, with the stone pickaxe (before the descent) or the portal kit: {:forage/since :forage/leg :forage/retry-at :forage/phase}; the :forage intent keeps it, and hunt/foraging? ends the search hunt/forage-budget after its first leg (issues #501, #504)"
+    "the search for animals a bot makes with fewer than hunt/provision-wanted foods held, with the stone pickaxe (before the descent) or the portal kit: {:forage/since :forage/leg :forage/retry-at :forage/phase :forage/life}; the :forage intent keeps it, and hunt/foraging? ends the search hunt/forage-budget after its first leg (issues #501, #504)"
     "after a :forage intent chose its first leg"]
    [:forage/since "ms the search's first leg was chosen" "inside :hunt/forage"]
    [:forage/leg
     "the leg the next :forage turns to, from 0: its heading is a quarter turn right of the last (hunt/forage-headings)"
+    "inside :hunt/forage"]
+   [:forage/life
+    "the bot's :stats/deaths when the search began: a search of an earlier life is not this one's, and starts afresh (sim R1/1, probe 40761589784: after the first respawn the budget of the first search was long spent, and every later life went back to the Nether with no food)"
     "inside :hunt/forage"]
    [:forage/phase
     "the hunt/provision-phase the search began in (:early with the stone pickaxe, :kit with the portal's iron, :return after the Nether was reached and the goods are lost): a search of another phase is not this one's, and starts afresh"
@@ -314,7 +317,7 @@
    [:plan/wait "a planner answer meaning: nothing to do yet, for this reason"
     "returned by next-intent, never stored"]
    [:intent/kind
-    "executor: :walk :dig :collect :craft :place :open-container :stairs-down :stairs-up :tunnel :tunnel-to :smelt :redig :scoop :equip :build :pour :use-on :await :toss :eat :wear :fight :back-off :provoke :burrow :lookout :throw-eye :end-portal :portal-home :pillar :dig-down :strike :perch"
+    "executor: :walk :dig :collect :craft :place :open-container :stairs-down :stairs-up :tunnel :tunnel-to :smelt :redig :scoop :equip :build :pour :use-on :await :toss :eat :wear :fight :back-off :provoke :burrow :lookout :throw-eye :end-portal :portal-home :ambush :pillar :dig-down :strike :perch"
     "every intent"] [:intent/status ":active, :done or :failed" "every intent"]
    [:intent/top "feet height a :pillar climbs to (issue #267)" "a :pillar intent"]
    [:intent/under

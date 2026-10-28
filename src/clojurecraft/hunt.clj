@@ -219,7 +219,11 @@
    none yet): each phase has its own search and its own budget, so the surface search before the
    descent leaves the iron kit's whole forage-ms, hours of mining later."
   [world]
-  (let [s (:hunt/forage world)] (when (and s (= (provision-phase world) (:forage/phase s))) s)))
+  (let [s (:hunt/forage world)]
+    (when (and s
+               (= (provision-phase world) (:forage/phase s))
+               (= (:stats/deaths world 0) (:forage/life s 0)))
+      s)))
 
 (defn forage-budget
   "The ms a search of provision-phase p goes on from its first leg."
@@ -308,9 +312,11 @@
   ;; nothing walked, and the next look comes forage-retry-ms on (:forage/retry-at): the bot may
   ;; stand in a pit or a thicket a few blocks from open ground
   [world i event]
-  (let [state
-        (or (forage-state world)
-            {:forage/since (:time/now world) :forage/leg 0 :forage/phase (provision-phase world)})
+  (let [state (or (forage-state world)
+                  {:forage/since (:time/now world)
+                   :forage/leg 0
+                   :forage/phase (provision-phase world)
+                   :forage/life (:stats/deaths world 0)})
         found (forage-leg world state)]
     (cond (nil? found)
           (-> world

@@ -505,6 +505,37 @@
         threats (concat (vals (watchers world)) (when sp-threat? [(update sp 1 inc)]))]
     (cover world threats)))
 
+(def ambush-ms 45000)      ; ms an ambush holds a cover for the swarm to come to the bot
+(def ambush-cooldown 180000) ; ms after an ambush ended before the next: a swarm that does not come is gone to, as before
+
+(defn swarm
+  "{eid entity} of the blazes alive within cover-range of the feet, in sight or not."
+  [world]
+  (let [pos (:player/pos world)
+        bl (:plan/blacklist world #{})]
+    (into {}
+          (filter (fn [[eid e]]
+                    (and (= :blaze (entity/kind e))
+                         (not (entity/dead? e))
+                         (not (contains? bl eid))
+                         (<= (physics/distance pos (:entity/pos e)) cover-range))))
+          (:world/entities world))))
+
+(defn ambush
+  "An :ambush of the cell the feet stand in, or nil: volley blazes or more about (swarm), none of
+   them with the bot in sight (not in-open?), the bot not hurt, and no ambush ended within
+   ambush-cooldown. A blaze that loses sight of its target flies to where it last saw it, so the
+   swarm comes to the bot one at a time, and each one that gets within at-hand is fought. Sim R1/1
+   (probe 40761589784, TRACE) left its cover for the spawner each time it was healed, was shot
+   from 18 to 4 health in the open, and went back: twenty-five minutes, sixteen foods, no kill."
+  [world]
+  (let [last-end (:intention/at (memory/last-done world :ambush))]
+    (when (and (>= (count (swarm world)) volley)
+               (not (in-open? world))
+               (not (hurt? world))
+               (or (nil? last-end) (> (- (:time/now world 0) last-end) ambush-cooldown)))
+      {:intent/kind :ambush})))
+
 (def rest-intent {:intent/kind :rest})
 
 (defn void-hold?
@@ -816,6 +847,7 @@
         heal (delay (when (hurt? world) (healing world)))
         wary (delay (when (wary? world) (warily world)))
         away (delay (when (outnumbered? world) (hide world)))
+        waiting (delay (ambush world))
         stock (delay (when-not (hurt? world) (stocking world)))
         fire (delay (when (and sp (at-spawner? world sp)) (put-out world sp)))
         pick (delay (when (build/pickaxe-at-hand? world)
@@ -833,6 +865,7 @@
            :intent/target (hunt/cell (:entity/pos lying))}
           (and (not (hurt? world)) beid)
           {:intent/kind :fight :intent/target beid :intent/yield? true}
+          @waiting @waiting
           @stock @stock
           @fire @fire
           (and (hurt? world) (not (heals? world)) (food-trip world)) (food-trip world)
@@ -859,6 +892,26 @@
               (assoc :player/controls {})
               (intent/fail :no-portal))
           :else (build/work-op world i (home-op p) event))))
+
+;; ---------------------------------------------------------------- the :ambush intent
+
+(defmethod intent/run :ambush
+  ;; {:intent/kind :ambush}: stand still in cover until a blaze comes within at-hand (done, and
+  ;; the act fights it), the swarm is thinner than a volley, the cell is seen (in-open?), the
+  ;; health is hurt, or ambush-ms is spent (done, and ambush's cooldown lets the act go on)
+  [world {:intent/keys [since]} _]
+  (let [now (:time/now world)
+        since (or since now)
+        world (-> world
+                  (assoc :player/controls {})
+                  (intent/assoc-intent :intent/since since))]
+    (cond (or (some? (at-hand-blaze world))
+              (< (count (swarm world)) volley)
+              (in-open? world)
+              (hurt? world)
+              (> (- now since) ambush-ms))
+          (intent/done world)
+          :else world)))
 
 ;; ---------------------------------------------------------------- the :camp intent
 

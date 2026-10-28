@@ -217,6 +217,24 @@
     (is (nil? (hunt/provision-phase (assoc w :plan/reached #{})))
         "the Nether never reached: no phase")))
 
+(deftest a-search-of-an-earlier-life-does-not-end-this-lifes
+  ;; sim R1/1 (probe 40761589784): the first respawn hunted for 1000 s; the search's start
+  ;; stayed in :hunt/forage, so at every later respawn (94 s on) its budget was long spent, the
+  ;; hunt row was done, and the bot went back through the portal with edible 0
+  (let [spent {:forage/since 1000 :forage/leg 3 :forage/phase :return :forage/life 0}
+        w (-> (standing 20 {} {})
+              (assoc :plan/reached #{:nether}
+                     :time/now 5000000
+                     :time/tick 0
+                     :hunt/forage spent
+                     :stats/deaths 3))]
+    (is (nil? (hunt/forage-state w)) "a search of life 0 is not life 3's")
+    (is (hunt/foraging? w))
+    (is (= :hunt (:goal/id (plan/choose w plan/goals)))
+        "the hunt row comes before the way back to the Nether")
+    (is (not (hunt/foraging? (assoc w :stats/deaths 0)))
+        "the same life: its budget is spent, the bot goes on")))
+
 (deftest with-no-animal-in-reach-the-portal-bot-searches-for-one
   ;; issue #501: herds are about one chunk in ten, and the Nether has no game
   (let [w (provisioning 1000)]
