@@ -1078,25 +1078,6 @@
 
 ;;;; I/O: RCON, files, stdout ;;;;
 
-(defmulti land!
-  "Put the bot where row starts, given this run's landing [x z y] of the set: build the row's
-   arena and teleport it there. Returns the landing its truths are filled in with. Keyed by
-   :gym/land (:surface when absent); a new kind of start is a defmethod."
-  {:arglists '([rc row name landing])}
-  (fn [_rc row _name _landing] (:gym/land row :surface)))
-
-(defmethod land! :surface
-  ;; the row's arena round the landing, the teleport onto its surface, the spawn pinned there
-  [rc row name [x z y :as landing]]
-  (when-let [cmds (seq (:gym/setup row))]
-    (fixture/with-forceload rc
-                            [(- x arena-reach) (- z arena-reach) (+ x arena-reach)
-                             (+ z arena-reach)]
-                            #(doseq [c cmds] (rcon/command! rc (fill-in c name landing)))))
-  (fixture/teleport! rc name [x z])
-  (rcon/command! rc (str "spawnpoint " name " " x " " y " " z))
-  landing)
-
 (defn wait-loaded-in!
   "Block until the server reports every column of the square [x0 z0 x1 z1] loaded in dim (its
    corners), polling every 200 ms, up to 30 s; true when they loaded."
@@ -1110,6 +1091,30 @@
             true
             (>= i 150) false
             :else (do (Thread/sleep 200) (recur (inc i)))))))
+
+(defmulti land!
+  "Put the bot where row starts, given this run's landing [x z y] of the set: build the row's
+   arena and teleport it there. Returns the landing its truths are filled in with. Keyed by
+   :gym/land (:surface when absent); a new kind of start is a defmethod."
+  {:arglists '([rc row name landing])}
+  (fn [_rc row _name _landing] (:gym/land row :surface)))
+
+(defmethod land! :surface
+  ;; the row's arena round the landing, once its chunks have loaded (a summon into a chunk still
+  ;; loading is dropped: gym combat-w1, run 40629957509, met no husk and no zombie), the teleport
+  ;; onto its surface, the spawn pinned there
+  [rc row name [x z y :as landing]]
+  (when-let [cmds (seq (:gym/setup row))]
+    (let [square [(- x arena-reach) (- z arena-reach) (+ x arena-reach) (+ z arena-reach)]]
+      (fixture/with-forceload
+       rc
+       square
+       #(cond (not (wait-loaded-in! rc (dimension-of row) square))
+              (throw (ex-info "the arena's chunks never loaded" {:landing landing}))
+              :else (doseq [c cmds] (rcon/command! rc (fill-in c name landing)))))))
+  (fixture/teleport! rc name [x z])
+  (rcon/command! rc (str "spawnpoint " name " " x " " y " " z))
+  landing)
 
 (defn place!
   "Build cmds (fill-in templates) round at [x z y] in the dimension dim and stand the bot named
