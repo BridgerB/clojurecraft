@@ -289,7 +289,7 @@
 (s/def :plan/cornered (s/coll-of int? :kind set?)) ; entity ids a back-off ended on its clock beside
 (s/def :plan/given-up (s/map-of int? int?)) ; entity id → ms a fight gave it up as unreachable
 (s/def :fled/at number?)
-(s/def :fled/why #{:hurt :trade})
+(s/def :fled/why #{:hurt})
 (s/def :plan/fled (s/map-of int? (s/keys :req [:fled/at :fled/why]))) ; entity id → {:fled/at :fled/why}
 (s/def :plan/surfaced (s/tuple ::block-pos int?)) ; where and when the last climb out came out
 (s/def :plan/goals (s/coll-of keyword? :kind set?))
