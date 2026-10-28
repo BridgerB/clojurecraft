@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-28T21:45:57.683Z",
+  "at" : "2026-10-28T21:47:05.712Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -33,14 +33,14 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 595,
-    "title" : "Bot stops at blaze-rods: unsafe",
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
-  }, {
     "number" : 594,
     "title" : "Bot stops at portal: unsafe",
     "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 595,
+    "title" : "Bot stops at blaze-rods: unsafe",
+    "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
     "number" : 151,
