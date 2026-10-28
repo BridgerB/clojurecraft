@@ -202,6 +202,20 @@
   [now]
   (assoc (standing 20 kit-held {}) :time/now now :time/tick 0))
 
+(deftest before-the-descent-the-early-reserve-is-six
+  ;; sim snapshot R3-27-1 (issue #69): sixteen at the stone-pickaxe stage kept the bot hunting at
+  ;; the water bucket; the sixteen are the kit's and the return's (issue #262)
+  (let [w (-> (standing 20 {0 (item :stone_pickaxe 1)} {})
+              (assoc :time/now 1000 :time/tick 0))]
+    (is (= :early (hunt/provision-phase w)))
+    (is (= hunt/early-provision-wanted (hunt/provision-target w)))
+    (is (hunt/provisioning? w))
+    (is (not (hunt/provisioning? (assoc w
+                                        :player/inventory
+                                        {0 (item :stone_pickaxe 1)
+                                         1 (item :bread hunt/early-provision-wanted)}))))
+    (is (= hunt/provision-wanted (hunt/provision-target (standing 20 kit-held {}))))))
+
 (deftest back-in-the-overworld-after-the-nether-the-bot-stocks-food-again
   ;; sim R1/1 (probe 40751212155): after a death the pickaxe and the kit were gone, no phase
   ;; applied, and the bot went back through its lit portal twelve times with no edible item

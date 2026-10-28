@@ -17,7 +17,6 @@
             [clojurecraft.fixtures :as fx]
             [clojurecraft.fortress :as fortress]
             [clojurecraft.game :as game]
-            [clojurecraft.hunt :as hunt]
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
             [clojurecraft.main :as main]
@@ -1040,12 +1039,11 @@
                                     (world/column-bytes
                                      (assoc deep-stone [13 74 9] (blocks/default-state :iron_ore)))
                                     :spawn [8.5 76.0 8.5]
-                                    ;; the reserve in bread (hunt/provision-wanted): the early forage
-                                    ;; (issue #504) is for a bot short of it, and this row is the tunnel
-                                    :inventory {[:hotbar 0] {:item (get blocks/items :stone_pickaxe)
-                                                             :count 1}
-                                                [:hotbar 1] {:item (get blocks/items :bread)
-                                                             :count hunt/provision-wanted}}})
+                                    ;; six bread: the early forage (issue #504) is for a bot
+                                    ;; with nothing to eat, and this row is the tunnel
+                                    :inventory
+                                    {[:hotbar 0] {:item (get blocks/items :stone_pickaxe) :count 1}
+                                     [:hotbar 1] {:item (get blocks/items :bread) :count 6}}})
                          #(or (plan/done? %) (plan/failed? %))
                          240000
                          {:event/kind :go :go/goals [:ore-test]})]

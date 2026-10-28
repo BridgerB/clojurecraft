@@ -23,6 +23,7 @@
             [clojure.java.io :as io]
             [clojure.math :as math]
             [clojure.string :as str]
+            [clojurecraft.armour :as armour]
             [clojurecraft.blaze :as blaze]
             [clojurecraft.capture :as capture]
             [clojurecraft.chunk :as chunk]
@@ -39,6 +40,7 @@
             [clojurecraft.recipe :as recipe]
             [clojurecraft.scene :as scene]
             [clojurecraft.sim :as sim]
+            [clojurecraft.sword :as sword]
             [datascript.core :as d]))
 
 (set! *warn-on-reflection* true)
@@ -144,6 +146,8 @@
 
 (def sample-ms "Sim ms between the :sample TRACE lines in the Nether." 30000)
 
+(def overworld-sample-ms "Sim ms between the :sample TRACE lines in the overworld." 300000)
+
 (defn trace-note
   "The TRACE line for the tick that took world before to after, or nil: a :portal-home intent
    starting or ending, a blaze :fight starting or ending, a change of dimension. It carries
@@ -158,9 +162,8 @@
                         (some-> (get (:world/entities w) (get-in w [:plan/intent :intent/target]))
                                 entity/kind
                                 (= :blaze)))
-        sample? (and (= dimension/nether (:player/dimension after))
-                     (not= (quot (:time/now before 0) sample-ms)
-                           (quot (:time/now after 0) sample-ms)))
+        every (if (= dimension/nether (:player/dimension after)) sample-ms overworld-sample-ms)
+        sample? (not= (quot (:time/now before 0) every) (quot (:time/now after 0) every))
         hit? (and (= dimension/nether (:player/dimension after))
                   (<= 2.0 (- (:player/health before 20.0) (:player/health after 20.0))))
         what (cond hit? :hit
@@ -181,6 +184,9 @@
          :health (:player/health after)
          :food (:player/food after)
          :edible (hunt/edible-held after)
+         :sword (sword/serviceable after)
+         :worn (into [] (keep #(armour/worn after %)) (range 4))
+         :ingots (get (armour/counts after) :iron_ingot 0)
          :blazes (count (for [[_ e] (entity/hostiles after)
                               :when (and pos
                                          (= :blaze (entity/kind e))

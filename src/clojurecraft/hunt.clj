@@ -39,6 +39,7 @@
 (def starving-radius 48)              ; blocks a starving bot hunts within (a server shows animals this far, and the model populates three chunks round the player)
 (def strike-range 4.5)                ; blocks on the plane from which a hunt fights instead of walking: past a walk's reach (intent/reach 4), so a walk that arrived is never asked again
 (def candidates 3)                    ; nearest animals asked for a route, as the other acts ask
+(def early-provision-wanted 6)         ; edible items held before the descent (the :early phase): as before issue #262, so the surface is not hunted bare for the stone pickaxe's hours
 (def provision-wanted 16)             ; edible items held before the portal is lit: health comes back in the Nether only from food 18, and a hoglin is hunted only when one is already near and health is at least retreat-health (issue #501: three raw meats were eaten to the bar's 18 before the portal, and the Nether leg began with none)
 (def early-forage-ms 120000)          ; ms the search goes on before the descent, from its first leg: the stone pickaxe is made on the surface among animals, and the iron kit's search still has its own forage-ms
 (def forage-ms 360000)                ; ms the search for animals goes on, from its first leg, however many legs: then the bot goes on with what it holds, never holding the portal up
@@ -79,13 +80,21 @@
           (pos? (inventory/item-count world (recipe/item-id :stone_pickaxe))) :early
           (contains? (:plan/reached world) :nether) :return)))
 
+(defn provision-target
+  "The edible items the provision-phase wants held: early-provision-wanted in :early (the
+   surface is left for hours either way, and sixteen made sim snapshot R3-27-1, issue #69, hunt
+   at the stone-pickaxe stage and stay at the water bucket), provision-wanted in :kit and
+   :return (issue #262: the Nether leg's reserve)."
+  [world]
+  (if (= :early (provision-phase world)) early-provision-wanted provision-wanted))
+
 (defn provisioning?
   "Is the bot in a provision-phase (:early with the stone pickaxe, :kit with the portal's iron in
    hand) and fewer than provision-wanted edible items held? Sim race 39712220957 (issue #501,
    world R1/2) reached a fortress hurt at food 16 with nothing to eat: health comes back only
    from food 18, and a rest in the Nether failed :no-heal."
   [world]
-  (and (some? (provision-phase world)) (< (edible-held world) provision-wanted)))
+  (and (some? (provision-phase world)) (< (edible-held world) (provision-target world))))
 
 (defn reach
   "Blocks from the feet within which an animal is hunted: hunt-radius, and starving-radius once the
