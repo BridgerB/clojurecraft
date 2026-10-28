@@ -48,6 +48,7 @@
             [clojurecraft.suffocate]
             [clojurecraft.swim]
             [clojurecraft.sword]
+            [clojurecraft.unstick]
             [clojurecraft.watch :as watch]
             [clojurecraft.wood])
   (:gen-class))
