@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-28T23:19:58.935Z",
+  "at" : "2026-10-28T23:22:13.138Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -43,19 +43,14 @@
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
-    "number" : 596,
-    "title" : "Bot stops at portal-kit: unsafe",
-    "labels" : [ "bot-failure", "real", "sim" ],
+    "number" : 531,
+    "title" : "Bot stops at ingots: boxed",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 151,
     "title" : "Bot stops at flint-and-steel: not-picked-up",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
-  }, {
-    "number" : 71,
-    "title" : "Bot stops at portal-kit: boxed",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 595,
@@ -68,19 +63,14 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 531,
-    "title" : "Bot stops at ingots: boxed",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 538,
     "title" : "Bot stops at fortress: blocked",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 178,
-    "title" : "Bot stops at portal: timeout",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "number" : 596,
+    "title" : "Bot stops at portal-kit: unsafe",
+    "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
     "number" : 461,
@@ -93,9 +83,19 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
+    "number" : 71,
+    "title" : "Bot stops at portal-kit: boxed",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
     "number" : 54,
     "title" : "Bot stops at water-bucket: no-path",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 178,
+    "title" : "Bot stops at portal: timeout",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 171,
@@ -184,7 +184,7 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 71,
+    "issue" : 531,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -192,15 +192,7 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 531,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
     "issue" : 538,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
-    "issue" : 178,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -212,7 +204,15 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 71,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
     "issue" : 54,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 178,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
