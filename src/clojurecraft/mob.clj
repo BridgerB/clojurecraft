@@ -48,6 +48,7 @@
             :speed 0.115
             :follow 35.0
             :melee 3.0
+            :paths true
             :every 20
             :reach 1.4
             :undead true
@@ -59,6 +60,7 @@
               :speed 0.137
               :follow 16.0
               :shoot 3.0
+              :paths true
               :every 40
               :range 15.0
               :keep 10.0
@@ -71,6 +73,7 @@
              :speed 0.137
              :follow 16.0
              :fuse 30
+             :paths true
              :swell 3.0
              :blast 3.0
              :hostile true
@@ -81,6 +84,7 @@
             :speed 0.197
             :follow 16.0
             :melee 2.0
+            :paths true
             :every 20
             :reach 1.6
             :hostile true

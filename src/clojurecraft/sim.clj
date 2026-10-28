@@ -2318,7 +2318,7 @@
          (or (not (:neutral k)) angry?))))
 
 (defn trail
-  "Mob eid of a kind that finds its way (:paths, the enderman) a tick on toward the player,
+  "Mob eid of a kind that finds its way (:paths: the enderman, zombie, skeleton, creeper and spider) a tick on toward the player,
    stopping stop short of it on the plane: along its route (:route) while it has one, a cell
    dropped once its feet stand on that cell's centre and the route dropped when a step there
    leaves it where it stood; with none, straight (mob/step-toward). A straight step that leaves
