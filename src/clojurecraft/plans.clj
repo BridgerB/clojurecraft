@@ -217,20 +217,41 @@
   []
   (str/join (repeatedly 32 #(rand-nth "0123456789abcdef"))))
 
+(defn arm-bot
+  "The JVM an arm's bots run in: fallback (this checkout) when the arm names no ref, else a
+   detached worktree of that ref fetched at depth 1. Returns {:bot-dir :cp :commit}. The gym
+   setup still runs in this process, so a column built here meets the other ref's bot."
+  [arm fallback log]
+  (if-let [ref (:arm/ref arm)]
+    (let [dir (io/file ".worktrees" (str/replace ref #"[^A-Za-z0-9._-]" "_"))
+          sha (io/file (.getParentFile log) "arm-sha.txt")]
+      (when-not (.exists (io/file dir "deps.edn"))
+        (.mkdirs (.getParentFile dir))
+        (when-not (zero? (cli/exec! ["git" "fetch" "--depth" "1" "origin" ref] {:log log}))
+          (throw (ex-info "could not fetch the arm" {:ref ref})))
+        (when-not (zero? (cli/exec! ["git" "worktree" "add" "--detach" (str dir) "FETCH_HEAD"]
+                                    {:log log}))
+          (throw (ex-info "could not check out the arm" {:ref ref :dir (str dir)}))))
+      (when-not (zero? (cli/exec! ["git" "-C" (str dir) "rev-parse" "HEAD"] {:log sha}))
+        (throw (ex-info "could not read the arm's commit" {:ref ref})))
+      {:bot-dir (str dir) :cp (cli/classpath! (str dir)) :commit (str/trim (slurp sha))})
+    fallback))
+
 (defn gym-unit!
   "A gym unit: a fresh copy of the set's world, one server, its trials' bots side by side, the
-   server stopped; forceload checked empty before and logged after."
+   server stopped; forceload checked empty before and logged after. An arm with :arm/ref runs
+   that ref's bot (arm-bot); the landing and its setup are still this process's."
   [unit unit-index {:keys [out worlds cp bot-dir commit heap-mb]}]
-  (let [dir (io/file out (:unit/id unit))
+  (let [dir (doto (io/file out (:unit/id unit)) .mkdirs)
         world (io/file dir "world")
         pass (rcon-pass)
         log (io/file dir "unit.log")
+        bot (arm-bot (:unit/arm unit) {:bot-dir bot-dir :cp cp :commit commit} log)
         env {"PORT" 25565
              "RCON_PORT" 25575
              "RCON_PASS" pass
              "WORLD" (str world)
              "HEAP_MB" (or heap-mb 6144)}]
-    (.mkdirs dir)
     (cli/exec! ["cp" "-r" (str (io/file worlds (:unit/set unit))) (str world)] {:log log})
     (try (when-not (zero? (cli/exec! ["bb" "server" "start"] {:env env :log log}))
            (throw (ex-info "server did not start" {:unit (:unit/id unit)})))
@@ -243,11 +264,11 @@
                                                        :run run
                                                        :name (bot-name unit-index run)
                                                        :dir (io/file dir (str "run-" run))
-                                                       :cp cp
-                                                       :bot-dir bot-dir
+                                                       :cp (:cp bot)
+                                                       :bot-dir (:bot-dir bot)
                                                        :pass pass
                                                        :landings landings
-                                                       :commit commit
+                                                       :commit (:commit bot)
                                                        :tags {:plans/exp (:unit/exp unit)
                                                               :plans/arm (:arm/name (:unit/arm
                                                                                      unit))

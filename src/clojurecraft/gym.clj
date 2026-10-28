@@ -350,6 +350,34 @@
    (piece-fill [7 3 9] [7 3 11] "end_portal_frame[facing=west]")
    (str "setblock " (piece [5 3 6]) " minecraft:spawner")])
 
+(def suffocate-platform
+  "A dirt cap twenty above the landing, stone inside it with dirt on every side, so the forest's
+   stone is outside stone/search-height and the first dig is a stair on the cap."
+  ["time set day" "kill @e[type=!minecraft:player]"
+   "fill {x-14} {y+20} {z-14} {x+14} {y+40} {z+14} minecraft:air"
+   "fill {x-14} {y+11} {z-14} {x+14} {y+19} {z+14} minecraft:dirt"
+   "fill {x-12} {y+12} {z-12} {x+12} {y+18} {z+12} minecraft:stone"])
+
+(def suffocate-column
+  "Gravel the body overlaps at spawn. The surface teleport stands the bot at {x+1}.0 {y+20}
+   {z+1}.0, and this column is {x+1} {y+20..23} {z}, so the body and the eye box reach it. Plan
+   40639800893: every head run escaped, every main run also lived. It proves the escape, not r08
+   digging from beside."
+  (into suffocate-platform
+        ["setblock {x+1} {y+20} {z} minecraft:gravel" "setblock {x+1} {y+21} {z} minecraft:gravel"
+         "setblock {x+1} {y+22} {z} minecraft:gravel"
+         "setblock {x+1} {y+23} {z} minecraft:gravel"]))
+
+(def suffocate-beside
+  "r08's column on the stair cut next. The same teleport stands the bot at {x+1}.0 {y+20} {z+1}.0.
+   stairs-down with no dir opens +x, and its bottom cell is {x+2} {y+19} {z+1}: column-main-1 on
+   plan 40639800893 dug [18650 86 18465] first. Gravel fills that column from the feet up. The body
+   at x {x+1}.0 does not reach column {x+2}."
+  (into
+   suffocate-platform
+   ["setblock {x+2} {y+20} {z+1} minecraft:gravel" "setblock {x+2} {y+21} {z+1} minecraft:gravel"
+    "setblock {x+2} {y+22} {z+1} minecraft:gravel" "setblock {x+2} {y+23} {z+1} minecraft:gravel"]))
+
 (def gyms
   "The gym registry. Truth commands count items without removing any (`clear <name> <item> 0`
    answers \"Found N matching item(s)...\"); {name} is the bot's name; patterns are strings so
@@ -770,7 +798,27 @@
     :gym/timeout-ms trial-ms
     :gym/truth [{:truth/cmd
                  "execute in minecraft:the_end unless entity @e[type=minecraft:ender_dragon]"
-                 :truth/re "Test passed"}]}])
+                 :truth/re "Test passed"}]}
+   ;; the cobblestone row's chain. suffocate-column spawns the body in the gravel (the escape).
+   ;; suffocate-beside puts that gravel on the +x stair, which the body does not overlap.
+   {:gym/goal :cobblestone
+    :gym/name "suffocate-column"
+    :gym/until "cobblestone"
+    :gym/difficulty "peaceful"
+    :gym/setup suffocate-column
+    :gym/prereqs ["minecraft:wooden_pickaxe 1" "minecraft:bread 8"]
+    :gym/timeout-ms 240000
+    :gym/truth [{:truth/cmd "clear {name} minecraft:cobblestone 0"
+                 :truth/re "Found ([1-9]|[1-9][0-9])"}]}
+   {:gym/goal :cobblestone
+    :gym/name "suffocate-beside"
+    :gym/until "cobblestone"
+    :gym/difficulty "peaceful"
+    :gym/setup suffocate-beside
+    :gym/prereqs ["minecraft:wooden_pickaxe 1" "minecraft:bread 8"]
+    :gym/timeout-ms 240000
+    :gym/truth [{:truth/cmd "clear {name} minecraft:cobblestone 0"
+                 :truth/re "Found ([1-9]|[1-9][0-9])"}]}])
 
 (def counted
   "Outcomes that say something about the goal; :harness and :disconnect do not."
@@ -1452,7 +1500,7 @@
         cmd ["java" bot-heap "-cp" cp "clojure.main" "-m" "clojurecraft.main" "--host" "127.0.0.1"
              "--port" (str port) "--name" name "--until" (:gym/until row) "--events" "stdin"
              "--timeout-ms" (str (:gym/timeout-ms row)) "--hold-ms" (str hold-ms) "--record"
-             (str (io/file dir "run.edn"))]
+             (str (.getAbsoluteFile (io/file dir "run.edn")))]
         ^java.util.List cmd (cond-> cmd commit (into ["--commit" commit])) ; the recording names its code
         p (.start
            (doto (ProcessBuilder. cmd) (.directory (io/file bot-dir)) (.redirectErrorStream true)))

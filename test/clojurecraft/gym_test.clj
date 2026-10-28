@@ -25,7 +25,23 @@
     (is (= "blaze-7" (:gym/name (gym/gym "blaze-7"))))
     (is (= :blaze-rods (:gym/goal (gym/gym "blaze-fortress"))))
     (is (str/includes? (gym/plan-matrix ["blaze-7"] 1) "{\"goal\":\"blaze-7\",\"run\":1,"))
-    (is (apply distinct? (keep :gym/name gym/gyms)))))
+    (is (apply distinct? (keep :gym/name gym/gyms))))
+  (testing "suffocate-column overlaps the spawn; suffocate-beside is the +x stair"
+    (let [column (gym/gym "suffocate-column")
+          beside (gym/gym "suffocate-beside")
+          gravel (fn [row] (filterv #(str/starts-with? % "setblock") (:gym/setup row)))]
+      (is (= :cobblestone (:gym/goal column) (:gym/goal beside)))
+      (is (= "peaceful" (:gym/difficulty column) (:gym/difficulty beside)))
+      (is (= ["setblock {x+1} {y+20} {z} minecraft:gravel"
+              "setblock {x+1} {y+21} {z} minecraft:gravel"
+              "setblock {x+1} {y+22} {z} minecraft:gravel"
+              "setblock {x+1} {y+23} {z} minecraft:gravel"]
+             (gravel column)))
+      (is (= ["setblock {x+2} {y+20} {z+1} minecraft:gravel"
+              "setblock {x+2} {y+21} {z+1} minecraft:gravel"
+              "setblock {x+2} {y+22} {z+1} minecraft:gravel"
+              "setblock {x+2} {y+23} {z+1} minecraft:gravel"]
+             (gravel beside))))))
 
 (def ok-result {:ok true :reason :goal :stats {}})
 

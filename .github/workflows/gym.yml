@@ -10,7 +10,7 @@ on:
     inputs:
       goal:
         type: choice
-        options: [wood, table, pickaxe, cobblestone, stone-pickaxe, furnace, ingots, bucket, water-bucket, flint-and-steel, iron-kit, cast-one, portal, nether, fortress, arena-nether, arena-end, shore, eat, armour, attack, defend, entities, blaze-1, blaze-7, blaze-fortress, pearls-1, pearls-1-live, pearls-12, eyes, end-portal, enter-end, crystals, dragon]
+        options: [wood, table, pickaxe, cobblestone, suffocate-column, suffocate-beside, stone-pickaxe, furnace, ingots, bucket, water-bucket, flint-and-steel, iron-kit, cast-one, portal, nether, fortress, arena-nether, arena-end, shore, eat, armour, attack, defend, entities, blaze-1, blaze-7, blaze-fortress, pearls-1, pearls-1-live, pearls-12, eyes, end-portal, enter-end, crystals, dragon]
         default: wood
       runs:
         default: '6'
