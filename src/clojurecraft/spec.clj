@@ -202,6 +202,7 @@
 (s/def :forage/leg nat-int?)
 (s/def :forage/retry-at int?)
 (s/def :forage/phase #{:early :kit :return})
+(s/def :forage/life nat-int?)
 (s/def :hunt/forage
   (s/keys :req [:forage/since :forage/leg] :opt [:forage/retry-at :forage/phase :forage/life]))
 (s/def :trail/target (s/coll-of number? :kind vector? :count 3))

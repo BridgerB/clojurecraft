@@ -333,7 +333,7 @@
                     "brain/siblings/sib-dimension-change.md"]}
  {:problem/stage :survival
   :problem/issue 259
-  :problem/goals [:eat :wear-armour :armour :defend :attack :hunt :sword]
+  :problem/goals [:eat :wear-armour :armour :defend :attack :hunt :sword :gear :regear :cook]
   :problem/statement
   "Normal difficulty brings hunger and night mobs to every stage. Food drains with every dig and jump, an empty bar stops healing and starves the bot to one heart, and zombies, skeletons and creepers find a bot that cannot hit back. The world value read the health from set-health and threw the food away; the bot could not eat, wear armour or attack."
   :problem/needs

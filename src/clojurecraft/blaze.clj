@@ -831,7 +831,7 @@
   [world _ i]
   (or (and (not (hurt? world))
            (not= :fight (:intent/kind i))
-           (not= :cover (:intent/for i))
+           (not (and (= :cover (:intent/for i)) (crowded? world)))
            (some? (at-hand-blaze world)))
       (under-fire? world i)))
 

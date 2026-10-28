@@ -351,7 +351,8 @@
     (is (= :walk (get-in wide [:plan/intent :intent/kind])))
     (is (= :hunt (get-in wide [:plan/intent :intent/for])))
     (is (< 40 (first (get-in wide [:plan/intent :intent/target]))) "east, far past the bot at 8")
-    (is (= {:forage/since 1000 :forage/leg 1 :forage/phase :kit} (:hunt/forage wide)))
+    (is (= {:forage/since 1000 :forage/leg 1 :forage/phase :kit :forage/life 0}
+           (:hunt/forage wide)))
     (is (intent/done? (:plan/intent alone)))
     (is (= (+ 1000 hunt/forage-retry-ms) (get-in alone [:hunt/forage :forage/retry-at])))
     (is (not (hunt/foraging? alone)) "it waits before it looks again")
