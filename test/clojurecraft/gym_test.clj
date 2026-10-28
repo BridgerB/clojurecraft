@@ -10,6 +10,20 @@
             [clojurecraft.rcon :as rcon]
             [clojurecraft.spec]))
 
+(deftest a-fight-row-is-judged-by-a-kill
+  (testing "attack does not pass because the husk is absent"
+    (let [row (gym/gym "attack")
+          cmds (map :truth/cmd (:gym/truth row))]
+      (is (some #(str/includes? % "summon minecraft:husk") (:gym/setup row)))
+      (is (some #(str/includes? % "hkills 0") (:gym/setup row)))
+      (is (some #(str/includes? % "hkills") cmds))
+      (is (not-any? #(str/includes? % "unless entity") cmds))))
+  (testing "defend summons its zombies and starts its kill counter at zero"
+    (let [row (gym/gym "defend")]
+      (is (>= (count (filter #(str/includes? % "summon minecraft:zombie") (:gym/setup row))) 3))
+      (is (some #(str/includes? % "zkills 0") (:gym/setup row)))
+      (is (some #(str/includes? % "zkills") (map :truth/cmd (:gym/truth row)))))))
+
 (deftest the-registry-is-data-and-agrees-with-the-goal-table
   (is (every? #(s/valid? :clojurecraft.gym/row %) gym/gyms))
   (is (= gym/gyms (edn/read-string (pr-str gym/gyms))) "printable and readable back")

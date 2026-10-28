@@ -1,0 +1,7 @@
+;; The defend and attack rows, after the landing square is loaded before setup
+;; and attack is judged by a kill. No :plans/issue: the report stays off #259.
+{:plans/label "combat-gym"
+ :plans/jobs 2
+ :plans/experiments
+ [{:exp/name "defend" :exp/kind :gym :exp/goal "defend" :exp/runs 5 :exp/bots 1 :exp/est-s 600}
+  {:exp/name "attack" :exp/kind :gym :exp/goal "attack" :exp/runs 5 :exp/bots 1 :exp/est-s 600}]}
