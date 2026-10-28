@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-28T14:01:47.476Z",
+  "at" : "2026-10-28T14:02:54.679Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -33,19 +33,24 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 538,
-    "title" : "Bot stops at fortress: blocked",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 592,
     "title" : "Bot stops at cast-one: unsafe",
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
+    "number" : 538,
+    "title" : "Bot stops at fortress: blocked",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
     "number" : 40,
     "title" : "Bot stops at ingots: no-path",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 594,
+    "title" : "Bot stops at portal: unsafe",
+    "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
     "number" : 531,
@@ -61,11 +66,6 @@
     "number" : 151,
     "title" : "Bot stops at flint-and-steel: not-picked-up",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
-  }, {
-    "number" : 594,
-    "title" : "Bot stops at portal: unsafe",
-    "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
     "number" : 178,
