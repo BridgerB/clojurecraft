@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-28T13:03:31.087Z",
+  "at" : "2026-10-28T13:04:39.216Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -26,7 +26,7 @@
     "number" : 593,
     "title" : "Bot stops at water-bucket: unsafe",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
+    "copilot" : true
   }, {
     "number" : 526,
     "title" : "Bot stops at blaze-rods: blocked",
@@ -151,7 +151,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 593,
-    "move" : "assign"
+    "move" : "wait",
+    "why" : "session starting"
   }, {
     "issue" : 526,
     "move" : "leave",
