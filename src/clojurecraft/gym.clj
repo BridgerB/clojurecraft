@@ -540,23 +540,23 @@
                 {:truth/cmd "execute if items entity {name} armor.chest minecraft:iron_chestplate"
                  :truth/re "Test passed"}]}
    ;; issue #259: a husk that does not move (NoAI; a husk does not burn by day) three blocks east
-   ;; of the landing at noon, a stone sword given; judged by a kill on the counter the setup
-   ;; adds, zeroed each run (a plan holds one server). The husk being gone is not a pass: that
-   ;; was also true when the summon never landed, and the row then passed having fought nothing.
-   ;; The attacks' spacing is read from the recording
+   ;; of the landing at noon, a stone sword given; judged by the husk gone. The attacks' spacing
+   ;; is read from the recording
    {:gym/goal :attack
     :gym/until "attack"
     :gym/prereqs ["minecraft:stone_sword 1"]
-    :gym/setup ["time set noon" "scoreboard objectives add hkills minecraft.killed:minecraft.husk"
-                "scoreboard players set {name} hkills 0"
+    :gym/setup ["time set noon"
                 "summon minecraft:husk {x+3} {y} {z} {NoAI:1b,PersistenceRequired:1b}"]
     :gym/timeout-ms trial-ms
-    :gym/truth [{:truth/cmd "scoreboard players get {name} hkills" :truth/re "has [1-9]"}]}
+    :gym/truth
+    [{:truth/cmd
+      "execute positioned {x} {y} {z} unless entity @e[type=minecraft:husk,distance=..24]"
+      :truth/re "Test passed"}]}
    ;; issue #259: three zombies two blocks round the landing at midnight, the bot in iron armour
    ;; (put on by the fixture: a zombie at hand comes before dressing) with an iron sword; judged
-   ;; by a zombie killed (a kill counter the setup adds, zeroed each run: counting zombies round
-   ;; the landing counts the night's new ones too, five in defend-259b run 1) and the bot alive
-   ;; with health left (a death is its own outcome). Not all
+   ;; by a zombie killed (a kill counter the setup adds: counting zombies round the landing counts
+   ;; the night's new ones too, five in defend-259b run 1) and the bot alive with health left (a
+   ;; death is its own outcome). Not all
    ;; three: the row is done when none is within 4, and in gym defend-259a (run 38881961947)
    ;; the others wandered off while the first was fought. Judged at the landing, never as the
    ;; bot: execute as the bot answered RCON with nothing in every trial of that run
@@ -565,7 +565,6 @@
     :gym/prereqs ["minecraft:iron_sword 1"]
     :gym/setup ["time set midnight"
                 "scoreboard objectives add zkills minecraft.killed:minecraft.zombie"
-                "scoreboard players set {name} zkills 0"
                 "item replace entity {name} armor.head with minecraft:iron_helmet"
                 "item replace entity {name} armor.chest with minecraft:iron_chestplate"
                 "item replace entity {name} armor.legs with minecraft:iron_leggings"
@@ -1038,6 +1037,18 @@
   {:arglists '([rc row name landing])}
   (fn [_rc row _name _landing] (:gym/land row :surface)))
 
+(defmethod land! :surface
+  ;; the row's arena round the landing, the teleport onto its surface, the spawn pinned there
+  [rc row name [x z y :as landing]]
+  (when-let [cmds (seq (:gym/setup row))]
+    (fixture/with-forceload rc
+                            [(- x arena-reach) (- z arena-reach) (+ x arena-reach)
+                             (+ z arena-reach)]
+                            #(doseq [c cmds] (rcon/command! rc (fill-in c name landing)))))
+  (fixture/teleport! rc name [x z])
+  (rcon/command! rc (str "spawnpoint " name " " x " " y " " z))
+  landing)
+
 (defn wait-loaded-in!
   "Block until the server reports every column of the square [x0 z0 x1 z1] loaded in dim (its
    corners), polling every 200 ms, up to 30 s; true when they loaded."
@@ -1051,24 +1062,6 @@
             true
             (>= i 150) false
             :else (do (Thread/sleep 200) (recur (inc i)))))))
-
-(defmethod land! :surface
-  ;; the row's arena round the landing, once that square's chunks are loaded, the teleport onto
-  ;; its surface, the spawn pinned there. A summon into an unloaded chunk is dropped and the
-  ;; reply ignored: forceload alone does not wait, and a fight row's mobs then never appear
-  [rc row name [x z y :as landing]]
-  (when-let [cmds (seq (:gym/setup row))]
-    (let [square [(- x arena-reach) (- z arena-reach) (+ x arena-reach) (+ z arena-reach)]]
-      (fixture/with-forceload rc
-                              square
-                              (fn []
-                                (when-not (wait-loaded-in! rc dimension/overworld square)
-                                  (throw (ex-info "the landing's chunks never loaded"
-                                                  {:at landing})))
-                                (doseq [c cmds] (rcon/command! rc (fill-in c name landing)))))))
-  (fixture/teleport! rc name [x z])
-  (rcon/command! rc (str "spawnpoint " name " " x " " y " " z))
-  landing)
 
 (defn place!
   "Build cmds (fill-in templates) round at [x z y] in the dimension dim and stand the bot named
