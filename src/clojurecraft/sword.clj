@@ -6,8 +6,9 @@
    priority, after the armour in the table, so a chained run comes to it once the iron the portal
    needs is in hand and the wood-hungry mining is behind it, and only in a chained run. Done by
    :armed? (nothing wanted, or no chain),
-   planned by :sword through the needs planner into the craft. Until then a fight is fought with
-   the hand: :defend never stops to make a sword with a zombie at hand."
+   planned by :sword through the needs planner into the craft. A fight the held weapon wins is
+   fought with the hand until then. One it loses is backed away from, and combat/rearm makes
+   this sword once the mob is far enough that standing to craft is not a death."
   (:require [clojurecraft.armour :as armour]
             [clojurecraft.combat :as combat]
             [clojurecraft.inventory :as inventory]
@@ -164,3 +165,13 @@
     (make/decide (for-decide world)
                  (assoc goal :goal/provides {(keyword "item" (name k)) 1})
                  table)))
+
+(defmethod combat/rearm :chain
+  ;; the sword row's own craft when the held items pay for one (wanted). Nil when they do not,
+  ;; so :defend backs off instead of standing to craft. The same decide the row itself uses.
+  [world]
+  (when-let [k (wanted world)]
+    (let [row (first (filter #(= :sword (:goal/id %)) plan/goals))]
+      (make/decide (for-decide world)
+                   (assoc row :goal/provides {(keyword "item" (name k)) 1})
+                   plan/goals))))

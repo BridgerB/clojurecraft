@@ -17,6 +17,7 @@
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.sim :as sim]
+            [clojurecraft.sword :as sword]
             [clojurecraft.world :as world]))
 
 (use-fixtures :once fx/instrumented)
@@ -249,9 +250,12 @@
            (plan/next-intent creeper (row :defend) plan/goals))
         "a creeper five blocks off is a threat, and never fought")
     (is (plan/done-by far (row :defend)) "a zombie four and a half blocks off is not yet one")
-    (is (= {:intent/kind :back-off :intent/target 7}
+    (is (= {:intent/kind :back-off
+            :intent/target 7
+            :intent/why :hurt
+            :intent/distance combat/flee-radius}
            (plan/next-intent (assoc zombie :player/health 6.0) (row :defend) plan/goals))
-        "hurt, the bot backs away instead")
+        "hurt, the bot backs away, out to flee-radius")
     (is (plan/done-by (assoc zombie :plan/blacklist #{7}) (row :defend)) "a ghost is left alone")
     (let [angry (assoc (standing
                         {7 (assoc (mob :enderman [11.0 64.0 8.5] 40.0) :entity/creepy? true)})
@@ -348,11 +352,17 @@
         [timed-out _] (fx/fold intent-step backing [(tick (+ combat/back-off-timeout-ms 100))])]
     (is (= :done (:intent/status (:plan/intent timed-out))))
     (is (= #{7} (:plan/cornered timed-out)) "the target is kept")
-    (is (= {:intent/kind :back-off :intent/target 7}
+    (is (= {:intent/kind :back-off
+            :intent/target 7
+            :intent/why :hurt
+            :intent/distance combat/flee-radius}
            (plan/next-intent hurt (row :defend) plan/goals))
         "before, hurt, the bot backs away")
     (is
-     (= {:intent/kind :back-off :intent/target 7}
+     (= {:intent/kind :back-off
+         :intent/target 7
+         :intent/why :hurt
+         :intent/distance combat/flee-radius}
         (plan/next-intent timed-out (row :defend) plan/goals))
      "after, at 0.7 health it backs away again: under one hit plus a margin a cornered zombie is never fought on to death (issue #563)")
     (is (= {:intent/kind :fight :intent/target 7 :intent/to-the-end? true}
@@ -381,7 +391,8 @@
     (let [w
           (assoc hurt :plan/intent {:intent/kind :back-off :intent/target 7 :intent/status :active})
           [w _] (fx/fold intent-step w [(tick 50)])]
-      (is (= 1 (get-in w [:plan/backed-off 7 :times])) "the first tick of a back-off notes it"))))
+      (is (= 1 (get-in w [:plan/backed-off 7 :times])) "the first tick of a back-off notes it")
+      (is (nil? (:plan/fled w)) "a back-off that is not a break-off records no flee"))))
 
 (deftest back-offs-from-a-creeper-count-where-it-stood
   (let [w (assoc (standing {8 (mob :creeper [13.0 64.0 8.5] 20.0)})
@@ -401,7 +412,8 @@
                  :plan/intent
                  {:intent/kind :back-off :intent/target 8 :intent/status :active})
         [w _] (fx/fold intent-step w [(tick 50)])]
-    (is (= 1 (get-in w [:plan/backed-off 8 :times])) "the first tick of a back-off notes it")))
+    (is (= 1 (get-in w [:plan/backed-off 8 :times])) "the first tick of a back-off notes it")
+    (is (nil? (:plan/fled w)) "a creeper is not a fled fact")))
 
 (deftest no-two-attacks-within-600-ms
   ;; the property the issue asks for: whatever the clock does between ticks (a starved loop, a
@@ -415,6 +427,130 @@
                                  at (map first (attacks fx))]
                              (every? (fn [[a b]] (>= (- b a) 600)) (partition 2 1 at)))))]
     (is (:pass? r) (pr-str (select-keys r [:fail :shrunk])))))
+
+(defn flee
+  "The :back-off :defend starts from a break-off or a losing trade."
+  [eid why]
+  {:intent/kind :back-off :intent/target eid :intent/why why :intent/distance combat/flee-radius})
+
+(deftest health-just-over-retreat-does-not-restart-a-fight
+  ;; race 40466567590 Clj_r04 at 11.73m: regeneration put health at 10.2, at or over
+  ;; retreat-health, and :defend picked :fight again. The trade here wins (a stone sword's 5
+  ;; against a zombie on 4), so only the hysteresis can refuse it. At resume-health it fights.
+  (let [z (mob :zombie [11.0 64.0 8.5] 4.0)
+        w
+        (assoc (standing {7 z}) :player/health 10.2 :plan/fled {7 {:fled/at 1000 :fled/why :hurt}})]
+    (is (not (combat/losing-trade? w z)) "one stone blow finishes a zombie on 4")
+    (is (= (flee 7 :hurt) (plan/next-intent w (row :defend) plan/goals)))
+    (is (=
+         {:intent/kind :fight :intent/target 7}
+         (plan/next-intent (assoc w :player/health combat/resume-health) (row :defend) plan/goals))
+        "at resume-health the break-off is over")
+    (testing "the :hurt fact is cleared at resume-health, so a later dip does not reuse it"
+      (let [rested (combat/spent (assoc w :player/health combat/resume-health))]
+        (is (nil? (:plan/fled rested)))
+        (is (not (combat/fled? (assoc rested :player/health 14.0) 7)))))
+    (is (= :hurt (get-in (combat/spent (assoc w :player/health 14.0)) [:plan/fled 7 :fled/why]))
+        "under resume-health the fact stays")
+    (testing "the same shape as the death: no sword, a full zombie, health 10.2, already fled"
+      (let [full (mob :zombie [11.0 64.0 8.5] 20.0)
+            bare (assoc (standing {7 full})
+                        :player/inventory {}
+                        :player/health 10.2
+                        :plan/fled {7 {:fled/at 1000 :fled/why :hurt}})]
+        (is (combat/losing-trade? bare full))
+        (is (= (flee 7 :hurt) (plan/next-intent bare (row :defend) plan/goals))))))
+  (testing "the first tick of that back-off remembers the mob, and does not let :trade replace it"
+    (let [w (assoc (standing {7 (mob :zombie [11.0 64.0 8.5] 20.0)})
+                   :player/health 9.0
+                   :time/now 1000
+                   :plan/intent (assoc (flee 7 :hurt) :intent/status :active))
+          [gone _] (fx/fold intent-step w [(tick 50)])]
+      (is (= :hurt (get-in gone [:plan/fled 7 :fled/why])))
+      (is (= :hurt (get-in (combat/fled gone 7 :trade) [:plan/fled 7 :fled/why]))))))
+
+(defmethod plan/done-by :unmet [_ _] false)
+
+(defmethod plan/next-intent :past-zombie [_ _ _] {:intent/kind :walk :intent/target [20 64 8]})
+
+(deftest a-back-off-does-not-resume-the-walk-it-interrupted
+  ;; Clj_r04 at 11.71m: back-off 10189 and walk [2898 11 2236] every tick. The zombie was just
+  ;; past defend-radius, the walk's target was past the zombie, and :defend let go.
+  (let [z (mob :zombie [13.0 64.0 8.5] 20.0)
+        w (assoc (standing {7 z})
+                 :player/health 9.0
+                 :time/now 2000
+                 :time/tick 1
+                 :plan/status :active
+                 :plan/since 0
+                 :plan/goals #{:past-zombie}
+                 :plan/fled {7 {:fled/at 1000 :fled/why :hurt}}
+                 :plan/intent
+                 {:intent/kind :back-off
+                  :intent/target 7
+                  :intent/status :active
+                  :intent/goal :defend
+                  :intent/since 0
+                  :intent/why :hurt
+                  :intent/distance combat/flee-radius})
+        table (conj plan/goals
+                    {:goal/id :past-zombie
+                     :goal/priority 5
+                     :goal/target? true
+                     :goal/done? :unmet
+                     :goal/plan :past-zombie})
+        walked {:intent/kind :walk :intent/target [20 64 8]}]
+    (is (not (plan/done-by w (row :defend))) "4.5 off and fled: still a threat")
+    (is (plan/done-by (dissoc w :plan/fled) (row :defend))
+        "the same zombie with no flee is past defend-radius")
+    (is (combat/passes? [8.5 64.0 8.5] (physics/centre [20 64 8]) [13.0 64.0 8.5])
+        "the walk to [20 64 8] passes through the zombie")
+    (is (not (combat/passes? [8.5 64.0 8.5] (physics/centre [0 64 8]) [13.0 64.0 8.5]))
+        "a walk the other way does not")
+    (is (= {:intent/kind :back-off
+            :intent/target 7
+            :intent/distance combat/flee-radius
+            :intent/for :flee}
+           (combat/not-toward-fled w walked))
+        "inside flee-radius the walk becomes a back-off")
+    (let [out (assoc-in w [:world/entities 7 :entity/pos] [21.0 64.0 8.5])]
+      (is (= {:intent/kind :walk :intent/target [0 64 8] :intent/for :flee}
+             (combat/not-toward-fled out {:intent/kind :walk :intent/target [30 64 8]}))
+          "past flee-radius the walk is turned away, not handed back"))
+    (let [after (plan/step-over table w {:event/kind :tick :event/now 2050 :event/rand 0.5})
+          i (:plan/intent after)]
+      (is (= :back-off (:intent/kind i)))
+      (is (= 7 (:intent/target i)))
+      (is (= :defend (:intent/goal i)) "the interrupted walk did not take the tick"))))
+
+(deftest a-fist-against-a-full-zombie-is-not-a-fight
+  ;; at full health with nothing but the hand, six swings deal 6 and the zombie deals 3 four
+  ;; times before health is under retreat-health. A stone sword's six swings deal 30.
+  (let [z (mob :zombie [11.0 64.0 8.5] 20.0)
+        bare (assoc (standing {7 z}) :player/inventory {})
+        armed (standing {7 z})]
+    (is (combat/losing-trade? bare z))
+    (is (not (combat/losing-trade? armed z)))
+    (is (= (flee 7 :trade) (plan/next-intent bare (row :defend) plan/goals)))
+    (is (= {:intent/kind :fight :intent/target 7}
+           (plan/next-intent armed (row :defend) plan/goals))))
+  (testing "a chained run with the wood for a sword makes it once the zombie is craft-room off"
+    (let [z (mob :zombie [15.0 64.0 8.5] 20.0)
+          w (assoc (standing {7 z})
+                   :player/inventory
+                   {3 (item :oak_planks 4) 4 (item :stick 1) 8 (item :crafting_table 1)}
+                   :player/health 20.0
+                   :plan/chain? true
+                   :plan/fled {7 {:fled/at 1000 :fled/why :trade}})]
+      (is (= :wooden_sword (sword/wanted w)))
+      (is (contains? (set (keys (combat/threats w))) 7))
+      (is (= :place (:intent/kind (plan/next-intent w (row :defend) plan/goals))))
+      (is (= :back-off
+             (:intent/kind (plan/next-intent (dissoc w :plan/chain?) (row :defend) plan/goals)))
+          "no chain: the sword row does not run, so this is a back-off")
+      (let [close (assoc-in w [:world/entities 7 :entity/pos] [11.0 64.0 8.5])]
+        (is (= (flee 7 :trade) (plan/next-intent close (row :defend) plan/goals))
+            "inside craft-room the craft waits, even with the wood in hand")))))
 
 (defn zombies-alive
   "The model's zombies that are not dead."

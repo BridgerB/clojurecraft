@@ -232,6 +232,12 @@
    [:plan/given-up
     "per entity id the ms a fight gave it up as unreachable (not strikable, no route): no act picks it again for combat/give-up-ms while its aim stays out of reach (combat/given-up, issues #69, #62, #582 and #161)"
     "after a fight's engage gave its target up"]
+   [:plan/fled
+    "per hostile entity id {:fled/at ms :fled/why :hurt or :trade}: a fight broke off under retreat-health, or :defend refused it because the blows lose. While health is under resume-health a :hurt id is not fought again; while the fact holds and the mob is within flee-radius it stays a threat, so a back-off is not dropped for a walk toward it (combat/fled, race 40466567590 Clj_r04)"
+    "after a fight breaks off under retreat-health, or :defend backs off from a losing trade"]
+   [:fled/at "ms the flee was recorded" "inside :plan/fled"]
+   [:fled/why ":hurt a break-off under retreat-health, :trade a fight the blows lose"
+    "inside :plan/fled"]
    [:pearls/shelter
     "the feet cell of the pearl hunt's burrow, where no enderman can stand within reach of the bot (pearls/shelter?), set when a :burrow ends (issue #263)"
     "after the hunt dug one"]
@@ -418,6 +424,12 @@
    [:intent/yield?
     "a :fight that ends (done) under retreat-health instead of walking away: its row plans the retreat itself (blaze-rods' cover, issue #262)"
     "a :fight the blaze-rods row starts"]
+   [:intent/distance
+    "blocks a :back-off puts between the bot and its target when that is not back-off-to: flee-radius after a break-off, so the walk is not resumed at defend-radius"
+    "a :back-off :defend starts from a flee"]
+   [:intent/why
+    "why a :back-off was chosen: :hurt under retreat-health or still healing from that break-off, :trade the blows lose"
+    "a :back-off :defend starts"]
    [:intent/mouth "where a :burrow began: the stairs go down from it"
     ":burrow, from its first tick"]
    [:intent/eye-from "where the eye a :throw-eye follows was first seen [x y z]"
