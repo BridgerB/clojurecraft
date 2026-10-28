@@ -19,10 +19,6 @@ sourceRefs:
   - src/clojurecraft/plan.clj#def wait-ticks
   - test/clojurecraft/plan_test.clj#the-wait-fails-in-ticks-not-wall-ms
   - src/clojurecraft/plan.clj#defn fail-intent
-  - src/clojurecraft/plan.clj#defn guard
-  - src/clojurecraft/unstick.clj#defn heading
-  - test/clojurecraft/unstick_test.clj#a-retry-takes-an-escape-or-waits
-  - test/clojurecraft/unstick_test.clj#a-boxed-descent-is-not-followed-by-a-lookout
   - src/clojurecraft/plan.clj#def placing-kinds
   - test/clojurecraft/plan_test.clj#a-cell-a-place-or-a-redig-chose-is-never-blacklisted
   - test/clojurecraft/plan_test.clj#a-walk-with-no-way-on-fails-no-path
@@ -65,7 +61,6 @@ The goal table is data in `resources/clojurecraft/goals.edn`: rows of `{:goal/id
 - Rows are retired, never rewritten: a superseded row (`:goal/superseded-by`) stays in the table and is never chosen, and a `:go` that names it is mapped to its replacement by `plan/current-id` ([[add-a-goal]]).
 - Completion is re-derived from the world each tick, so a lost log is simply planned for again; nothing remembers "done".
 - The planner re-chooses every active tick, even while an intent runs (`plan-tick`): no target left means `:done` and the running intent is abandoned `:goal-met`; a running intent whose `:intent/goal` is not the target chosen now (a higher-priority target regressed) is abandoned `:preempted` and the new target planned. Neither happens while the cursor holds an item (`can-abandon?`): the intent puts it down first; nor while one of the running intent's clicks is unanswered (`window/waiting`), since a click forgets the cursor as it sends and what it holds is unknown until the answer (issue #259: a `:wear` preempted between its pick-up and the answer left the helmet on the cursor, `a-helmet-and-chestplate-are-made-and-worn-against-the-model`). `abandon-intent` closes any open container, so the server is never left with one. A live pickaxe run ended with the craft abandoned `:goal-met` the tick the pickaxe arrived, and the table window closed. Escaping water is a target that preempts this way ([[water-escape]]): a running walk or dig yields to `:swim-out` the tick the trap is called. An abandon also drops `:plan/last`, so the next goal never continues a chain from it.
-- The same intent is not proposed twice, and a waiting bot does not stay: `fail-intent` remembers [kind target feet] in `:plan/failed` for `retry-ms`, and `guard` (between a row's choice and `start-intent`) swaps a retry, or a `:lookout` in a cell a descent died `:boxed` in (or after `stuck-ms` in one cell, `:plan/stay-*`), for `escape-intent`: the ladder `:retreat`, `:climb`, `:cut` (`unstick.clj`, a defmethod each), picked by `:plan/escapes`. An escape (`:intent/escape?`) counts against neither `:plan/attempts` nor `:plan/unwalkable`; a retry with no escape waits `:retry`. Issue #263: pearls-12 stood in lookouts for 2h44, and walked one failing walk fifteen times in 0.6 s.
 
 ## See also
 - [[make-goals]] - the needs planner, the generated recipe rows and the acts.
