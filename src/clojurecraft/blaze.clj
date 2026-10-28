@@ -552,6 +552,13 @@
            (heals? world) rest-intent
            :else nil))))
 
+(defn crowded?
+  "Is the bot outnumbered? (a volley of blazes watching) with the health under rested? Then the
+   cover comes before the swing, a blaze at hand or not: sim R1/1 (probe 40751212155) started a
+   fight at 15.0 health with three blazes about and was at 7.2 six seconds later, dead 14 s on."
+  [world]
+  (and (outnumbered? world) (< (:player/health world 20.0) rested)))
+
 (defn wary?
   "Is the health under eat-under: a meal then comes before the next fight. Gym blaze-7b run 2 (run
    38893157426) fought on at 12.7 with the food at 17 and a blaze's volley took it to nothing in
@@ -791,7 +798,10 @@
   ;; from 20 health to 13.8, since nothing else ends a running intent; never interrupt cover or healing when hurt (#577);
   ;; and one hurt and watched (under-fire?) by blazes further off, whatever the intent but the answer to it
   [world _ i]
-  (or (and (not (hurt? world)) (not= :fight (:intent/kind i)) (some? (at-hand-blaze world)))
+  (or (and (not (hurt? world))
+           (not= :fight (:intent/kind i))
+           (not= :cover (:intent/for i))
+           (some? (at-hand-blaze world)))
       (under-fire? world i)))
 
 (defmethod plan/next-intent :blaze-rods
@@ -812,7 +822,7 @@
                       (make/decide world (assoc goal :goal/provides {:tag/pickaxes 1}) table)))]
     (cond (not= dimension/nether (dimension/of world)) {:plan/wait :other-dimension}
           @heal @heal
-          (and (not (hurt? world)) heid)
+          (and (not (hurt? world)) heid (not (crowded? world)))
           {:intent/kind :fight :intent/target heid :intent/to-the-end? true :intent/yield? true}
           @wary @wary
           @away @away

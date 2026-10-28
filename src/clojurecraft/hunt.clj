@@ -68,13 +68,16 @@
    descent for coal and iron is next, and the surface, where the animals are, is left behind
    for hours); nil in any other dimension or before the pickaxe. Sim race 39869307990 (issue
    #504): the kit was finished at y -29 and the bot never surfaced again, so the Nether leg began
-   with no food."
+   with no food. :return when the Nether was reached before and neither goods are held, the bot
+   back in the overworld after a death: sim R1/1 (probe 40751212155) went back through its lit
+   portal twelve times with no edible item and no pickaxe, each time dead within the half hour."
   [world]
   (when (= dimension/overworld (dimension/of world))
     (cond (and (pos? (inventory/item-count world (recipe/item-id :flint_and_steel)))
                (pos? (inventory/item-count world (recipe/item-id :water_bucket))))
           :kit
-          (pos? (inventory/item-count world (recipe/item-id :stone_pickaxe))) :early)))
+          (pos? (inventory/item-count world (recipe/item-id :stone_pickaxe))) :early
+          (contains? (:plan/reached world) :nether) :return)))
 
 (defn provisioning?
   "Is the bot in a provision-phase (:early with the stone pickaxe, :kit with the portal's iron in

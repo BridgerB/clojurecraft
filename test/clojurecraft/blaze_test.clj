@@ -393,6 +393,26 @@
                                    row
                                    {:intent/kind :camp :intent/spawner [11 64 10]})))))))
 
+(deftest three-blazes-about-and-under-rested-health-cover-comes-before-the-swing
+  ;; sim R1/1 (probe 40751212155, t 5380350): a fight started at 15.0 health with three blazes
+  ;; about, was at 7.2 six seconds later and dead 14 s on
+  (let [hand (entity :blaze [10.5 65.0 8.5] :entity/health 20.0)
+        two {7 hand
+             8 (entity :blaze [13.5 65.0 6.5] :entity/health 20.0)
+             9 (entity :blaze [13.5 65.0 10.5] :entity/health 20.0)}
+        w (assoc (standing two) :world/chunks {[0 0] (world/column pillar)})]
+    (is (blaze/outnumbered? w))
+    (is (blaze/crowded? (assoc w :player/health 15.0)))
+    (is (not (blaze/crowded? w)) "at full health the one at hand is fought")
+    (is (= :cover (:intent/for (next-intent (assoc w :player/health 15.0)))))
+    (is (= :fight (:intent/kind (next-intent w))))
+    (testing "a cover walk is not interrupted by the blaze at hand"
+      (is (not (plan/interrupts? (assoc w :player/health 15.0)
+                                 row
+                                 {:intent/kind :walk :intent/target [5 64 8] :intent/for :cover}))))
+    (testing "with no cover to be had the nearest is still fought"
+      (is (= :fight (:intent/kind (next-intent (assoc (standing two) :player/health 15.0))))))))
+
 (deftest watched-by-a-volley-the-bot-takes-cover
   ;; gym blazefort-k (run 38913023560) runs 3 and 4: the natural spawner's burst of four, a hit a
   ;; second, and the bot dead from over 14 health in four seconds

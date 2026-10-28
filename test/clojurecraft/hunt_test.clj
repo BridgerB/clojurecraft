@@ -202,6 +202,21 @@
   [now]
   (assoc (standing 20 kit-held {}) :time/now now :time/tick 0))
 
+(deftest back-in-the-overworld-after-the-nether-the-bot-stocks-food-again
+  ;; sim R1/1 (probe 40751212155): after a death the pickaxe and the kit were gone, no phase
+  ;; applied, and the bot went back through its lit portal twelve times with no edible item
+  (let [w (-> (standing 20 {} {})
+              (assoc :plan/reached #{:nether} :time/now 1000 :time/tick 0))]
+    (is (= :return (hunt/provision-phase w)))
+    (is (hunt/provisioning? w))
+    (is (not (hunt/provisioning? (assoc w :player/dimension "minecraft:the_nether")))
+        "in the Nether the bot is not provisioning")
+    (is (not (hunt/provisioning?
+              (assoc w :player/inventory {0 (item :bread hunt/provision-wanted)})))
+        "the reserve held")
+    (is (nil? (hunt/provision-phase (assoc w :plan/reached #{})))
+        "the Nether never reached: no phase")))
+
 (deftest with-no-animal-in-reach-the-portal-bot-searches-for-one
   ;; issue #501: herds are about one chunk in ten, and the Nether has no game
   (let [w (provisioning 1000)]

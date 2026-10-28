@@ -21,6 +21,7 @@
    view (issue #353); a set with none captured keeps the overworld's columns past the portal."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
+            [clojure.math :as math]
             [clojure.string :as str]
             [clojurecraft.capture :as capture]
             [clojurecraft.chunk :as chunk]
@@ -140,6 +141,8 @@
                              :d (when pos (physics/distance pos (:entity/pos e)))
                              :health (:entity/health e)})))}))
 
+(def sample-ms "Sim ms between the :sample TRACE lines in the Nether." 30000)
+
 (defn trace-note
   "The TRACE line for the tick that took world before to after, or nil: a :portal-home intent
    starting or ending, a blaze :fight starting or ending, a change of dimension. It carries
@@ -154,8 +157,12 @@
                         (some-> (get (:world/entities w) (get-in w [:plan/intent :intent/target]))
                                 entity/kind
                                 (= :blaze)))
+        sample? (and (= dimension/nether (:player/dimension after))
+                     (not= (quot (:time/now before 0) sample-ms)
+                           (quot (:time/now after 0) sample-ms)))
         what (cond (= ib ia)
-                   (when (not= (:player/dimension before) (:player/dimension after)) :dimension)
+                   (cond (not= (:player/dimension before) (:player/dimension after)) :dimension
+                         sample? :sample)
                    (and (= :portal-home ka) (not= :portal-home kb)) :portal-home-start
                    (and (= :portal-home kb) (not= :portal-home ka)) :portal-home-end
                    (and (= :fight ka) (blaze-target? after) (not= :fight kb)) :fight-start
@@ -175,7 +182,9 @@
                                          (= :blaze (entity/kind e))
                                          (<= (physics/distance pos (:entity/pos e)) 16.0))]
                           e))
-         :intent (select-keys (:plan/intent after) [:intent/kind :intent/target])}))))
+         :pos (some->> pos
+                       (mapv #(long (math/round (double %)))))
+         :intent (select-keys (:plan/intent after) [:intent/kind :intent/for :intent/target])}))))
 
 (defn run
   "One run: the bot from empty hands on world w's landing, playing every step up to until,

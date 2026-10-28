@@ -277,7 +277,7 @@
     "the leg the next :forage turns to, from 0: its heading is a quarter turn right of the last (hunt/forage-headings)"
     "inside :hunt/forage"]
    [:forage/phase
-    "the hunt/provision-phase the search began in (:early with the stone pickaxe, :kit with the portal's iron): a search of another phase is not this one's, and starts afresh"
+    "the hunt/provision-phase the search began in (:early with the stone pickaxe, :kit with the portal's iron, :return after the Nether was reached and the goods are lost): a search of another phase is not this one's, and starts afresh"
     "inside :hunt/forage"]
    [:forage/retry-at
     "ms before which the search looks for no leg: set when no heading had a route at any reach (hunt/forage-retry-ms on)"
