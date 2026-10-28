@@ -1293,6 +1293,35 @@
 
 (def danger-health combat/retreat-health) ; health under which the hunt never fights, provokes or goes toward an enderman: one enderman hit (7 on Normal, ns doc) plus a margin, the same line combat breaks a fight off at. At or under it the bot backs off, walks home, eats or rests where it stands until its health is back over it (issue #563, probe 40022662598: after the second stone sword was crafted the hunt re-fought an angry enderman it had just backed away from, again and again down to 1.3 health, one hit from death)
 
+(def struck-health 14.0)                ; health under which an enderman at hand has landed a hit (7 on Normal off 20): fought back, fought out or not
+
+(defn unfightable?
+  "Is enderman e (id eid) no fight's target now: fought out (fought-out?), or given up by a fight's
+   engage as not strikable (combat/given-up?: it is not within the sword's reach from here)?
+   Run 4 of gym plan run 40747177526 (issue #263, pearls-12) planned :fight on one eight blocks
+   below it eight times in 10 ms, each given up and ended done at once, and the eight counted as
+   fought out: the walk that followed was no longer cut by it, and the bot walked on while it
+   took 20 health in five seconds, with no attack sent."
+  [world eid e]
+  (or (fought-out? world eid) (combat/given-up? world eid e)))
+
+(defn struck-by
+  "[eid e] of the nearest angry enderman (entity/creepy?) within the sword's reach (combat/in-reach?)
+   and strike-range of the feet while health is under struck-health, fought out or not, or nil.
+   One that has hit the bot and stands where the sword reaches it is fought back, never walked
+   away from: runs 4 and 5 of the same plan run took three hits in five seconds with a walk and a
+   back-off going on, and sent no attack (run 4) or too few."
+  [world]
+  (when (< (:player/health world 20.0) struck-health)
+    (let [pos (:player/pos world)]
+      (entity/nearest (into {}
+                            (filter (fn [[_ e]]
+                                      (and (entity/creepy? e)
+                                           (<= (physics/distance pos (:entity/pos e)) strike-range)
+                                           (combat/in-reach? world e))))
+                            (endermen (dissoc world :plan/blacklist) strike-range))
+                      pos))))
+
 (defn shelter-walk
   "A :walk for :shelter to target, or nil when target is nil or in :plan/blacklist (a walk to it
    failed, plan/fail-intent). A walk is tried once before it is known to fail: a fence between
@@ -1419,6 +1448,7 @@
         in? (and home (= home (intent/feet world)))
         at-end? (= (:pearls/shelter world) (intent/feet world))
         [tid _] (threat world)
+        [sid _] (struck-by world)
         [bid _] (when at-end? (blocking world))
         [aid _] (when home (angry-near world))
         [qid q] (quarry world)
@@ -1439,8 +1469,8 @@
         overworld-death? (and (pos? (:stats/deaths world 0))
                               (= dimension/overworld (dimension/of world)))
         far (endermen world seek-radius)
-        fight-id (cond (and ce (not (fought-out? world ceid))) ceid
-                       (and (or angry? in-reach?) (not (fought-out? world eid))) eid
+        fight-id (cond (and ce (not (unfightable? world ceid ce))) ceid
+                       (and (or angry? in-reach?) (not (unfightable? world eid e))) eid
                        :else tid)]
     (cond
       (and home (not in?) (or ce near? hurt? tid aid) (intent/routable? world way-home)) way-home
@@ -1454,11 +1484,12 @@
        :intent/hold? true
        :intent/yield? true
        :intent/for :pearls}
+      (and sid (not hurt?) (not in?)) {:intent/kind :fight :intent/target sid :intent/for :pearls}
       (and at-end? bid (blocked-out? world))
       (or (cut-out world) {:intent/kind :lookout :intent/for :pearls})
       (and near?
            (not in?)
-           (not (fought-out? world eid))
+           (not (unfightable? world eid e))
            (or (entity/creepy? e)
                (and (not (pickaxe? world))
                     (not (worn-out? world))
@@ -1484,13 +1515,13 @@
       {:intent/kind :provoke :intent/target qid :intent/for :pearls}
       (and qid home rested? @mouth-walk) @mouth-walk
       (and qid home (intent/routable? world way-home)) way-home
-      (and (not hurt?) ce (not (fought-out? world ceid)) (pickaxe? world))
+      (and (not hurt?) ce (not (unfightable? world ceid ce)) (pickaxe? world))
       {:intent/kind :fight
        :intent/target ceid
        :intent/hold? true
        :intent/yield? true
        :intent/for :pearls}
-      (and (not hurt?) ce (not (fought-out? world ceid)))
+      (and (not hurt?) ce (not (unfightable? world ceid ce)))
       {:intent/kind :fight :intent/target ceid :intent/for :pearls}
       home (or (vantage world far) {:intent/kind :lookout :intent/for :pearls})
       :else
@@ -1571,7 +1602,7 @@
   (and (not (contains? answers-to-hand (:intent/kind i)))
        (not (and (= :walk (:intent/kind i)) (= (:intent/target i) (:pearls/shelter world))))
        (not= (:pearls/shelter world) (intent/feet world))
-       (beset? world)))
+       (or (beset? world) (some? (first (struck-by world))))))
 
 (defmethod combat/answers :pearls
   ;; the hunt provokes endermen and fights them from its burrow; an angry one (entity/creepy?)

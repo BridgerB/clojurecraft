@@ -2026,3 +2026,45 @@
     (is (pearls/shelter? w (:pearls/shelter w)) (pr-str (:pearls/shelter w)))
     (is (pos? (:sim/health sim)) "and the bot lived")
     (is (= [] (:sim/violations sim)))))
+
+(deftest one-given-up-as-out-of-reach-is-not-fought-again
+  ;; gym plan run 40747177526 run 4 (issue #263, pearls-12): an angry enderman eight blocks below
+  ;; the bot in its stair shaft was chosen as :fight eight times in 10 ms, each given up as not
+  ;; strikable and ended done at once
+  (let [below (assoc (enderman [11.5 56.0 8.5]) :entity/creepy? true)
+        w (standing {7 below})
+        given (combat/given-up w 7)]
+    (is (= :fight (:intent/kind (plan/next-intent w row plan/goals)))
+        "not given up: the hunt fights it")
+    (is (pearls/unfightable? given 7 below) "given up and out of reach: no fight's target")
+    (is (not= :fight (:intent/kind (plan/next-intent given row plan/goals)))
+        "so the fight is not chosen again, the hunt does something else")
+    (testing "once it is within reach it is fought at once"
+      (let [near (assoc below :entity/pos [9.5 64.0 8.5])
+            given-near (combat/given-up (standing {7 near}) 7)]
+        (is (not (pearls/unfightable? given-near 7 near)))))))
+
+(deftest one-that-has-struck-and-stands-in-reach-is-fought-back
+  ;; run 4 again: three hits in five seconds, 20 to 0, with a walk going on and no attack sent,
+  ;; the enderman counted as fought out
+  (let [angry (assoc (enderman [9.5 64.0 8.5]) :entity/creepy? true)
+        base (assoc (standing {7 angry}) :player/health 12.0)
+        out (fought base pearls/fight-tries)
+        walking
+        (assoc
+         out
+         :plan/intent
+         {:intent/kind :walk :intent/target [20 64 20] :intent/status :active :intent/for :pearls})]
+    (is (pearls/fought-out? out 7))
+    (is (= 7 (first (pearls/struck-by out))) "hit once (under struck-health), in reach")
+    (is (= {:intent/kind :fight :intent/target 7 :intent/for :pearls}
+           (plan/next-intent out row plan/goals))
+        "fought out or not, it is fought back")
+    (is (plan/interrupts? walking row (:plan/intent walking)) "a walk is cut by it")
+    (testing "at full health it is fought out as before"
+      (let [full (assoc out :player/health 20.0)]
+        (is (nil? (pearls/struck-by full)))
+        (is (not (plan/interrupts? full row (:plan/intent walking))))))
+    (testing "out of the sword's reach it is not struck-by"
+      (is (nil? (pearls/struck-by
+                 (assoc-in out [:world/entities 7 :entity/pos] [9.5 70.0 8.5])))))))
