@@ -687,8 +687,8 @@
     (let [i (dragon/toward-dragon w)]
       (is (= :walk (:intent/kind i)))
       (is (= :shelter (:intent/for i)) "shelter-walk protects approach from breath interruption")
-      (is (= [2 64 0] (:intent/target i))
-          "commits to the safe stand behind the dragon, never ping-pongs to flight"))))
+      (is (= [2 64 -4] (:intent/target i))
+          "commits to the way round the dragon's head to the stand (around), never flight"))))
 
 (deftest steer-wear-looks-away-from-endermen-in-the-end
   ;; gym chain-w9 run 3: landing in the End, wearing armour or pumpkin must steer looks away
