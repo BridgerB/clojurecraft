@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-28T21:40:21.900Z",
+  "at" : "2026-10-28T21:43:42.232Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -23,14 +23,14 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : true
   }, {
-    "number" : 539,
-    "title" : "Bot stops at fortress: timeout",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 592,
     "title" : "Bot stops at cast-one: unsafe",
     "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 539,
+    "title" : "Bot stops at fortress: timeout",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 595,
@@ -48,14 +48,14 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 526,
-    "title" : "Bot stops at blaze-rods: blocked",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 597,
     "title" : "Bot stops at ingots: unsafe",
     "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 526,
+    "title" : "Bot stops at blaze-rods: blocked",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 596,
