@@ -548,6 +548,34 @@
         (is (= (flee 7 :trade) (plan/next-intent close (row :defend) plan/goals))
             "inside craft-room the craft waits, even with the wood in hand")))))
 
+(deftest a-pursuer-the-blows-can-finish-is-fought-to-the-end
+  ;; probe 40626972972, R4/1 seed 5: 43 zombie deaths, then a creeper. A stone pickaxe loses
+  ;; the retreat trade at full health, so every meeting fled. The zombie follows 35, the flee
+  ;; stops at 12, and the back-off died in its hands (333400 ms of :back-off, two rotten flesh).
+  ;; Health 14 with the stone sword is the same shape once the retreat count has gone losing
+  ;; and the count to 0 has not. Under retreat-health, and after a :hurt break-off, it still flees.
+  (let [z (mob :zombie [10.5 64.0 8.5] 20.0)
+        armed (assoc (standing {7 z}) :player/health 14.0)
+        pick (assoc (standing {7 z}) :player/inventory {0 (item :stone_pickaxe 1)})
+        low (assoc pick :player/health 14.0)]
+    (is (combat/pursues? z) "a zombie follows past flee-radius")
+    (is (combat/losing-trade? armed z) "at 14 a stone sword loses the retreat trade")
+    (is (not (combat/dying-trade? armed z)) "and wins the one counted to 0")
+    (is (= {:intent/kind :fight :intent/target 7 :intent/to-the-end? true}
+           (plan/next-intent armed (row :defend) plan/goals))
+        "health 14, stone sword, zombie two blocks off: fight it out")
+    (is (combat/losing-trade? pick z) "a stone pickaxe loses the retreat trade at full health")
+    (is (not (combat/dying-trade? pick z)) "and wins the one counted to 0")
+    (is (= {:intent/kind :fight :intent/target 7 :intent/to-the-end? true}
+           (plan/next-intent pick (row :defend) plan/goals))
+        "the cave weapon: finish the zombie instead of fleeing into its hands")
+    (is (combat/dying-trade? low z) "at 14 the pickaxe cannot finish it")
+    (is (= (flee 7 :trade) (plan/next-intent low (row :defend) plan/goals))
+        "that meeting still flees")
+    (testing "a :hurt break-off is not restarted by a trade the death count would win"
+      (let [healing (assoc armed :plan/fled {7 {:fled/at 1000 :fled/why :hurt}})]
+        (is (= (flee 7 :hurt) (plan/next-intent healing (row :defend) plan/goals)))))))
+
 (defn zombies-alive
   "The model's zombies that are not dead."
   [sim]

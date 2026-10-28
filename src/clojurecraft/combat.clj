@@ -17,8 +17,11 @@
    survives max-swings swings in reach is a ghost (ruststeve tasks/nether.rs), failed :ghost and
    blacklisted by the planner; below retreat-health the fight breaks off and walks away, or ends
    for its row to retreat (:intent/yield?). A break-off is remembered (:plan/fled) until health
-   is well above that line, and a fight the held weapon cannot win is not started. A row whose
-   act answers a kind of hostile itself (answers) has the :defend row leave that kind to it."
+   is well above that line, and a fight the held weapon cannot finish even down to 0 is not
+   started. A melee mob that chases past flee-radius, and that the blows can finish before it
+   lands the killing hit, is fought to the end: a flee that stops at 12 does not break its
+   chase. A row whose act answers a kind of hostile itself (answers) has the :defend row leave
+   that kind to it."
   (:require [clojure.math :as math]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.entity :as entity]
@@ -669,22 +672,47 @@
         d (or (:melee k) (:shoot k))]
     (when (and d (:every k)) [(double d) (* (long (:every k)) 50)])))
 
-(defn losing-trade?
-  "Would a fight with entity e from this health lose: the swings that land before health falls
-   under retreat-health deal less than the health it has (or its kind's max, when the server
-   has not said)? A mob that does not hit is not a losing trade. Equal damage wins: a stone
-   sword's four blows are a full zombie's 20."
-  [world e]
+(defn blows-lose?
+  "Do the swing-every blows that land before health falls to floor deal less than entity e's
+   health (its :entity/health, or its kind's max)? The swings are how many fit before e's hits
+   cover that drop. Equal damage wins. A mob that does not hit does not lose: a creeper, a
+   passive. floor is retreat-health for a break-off and 0 for a fight that does not break off."
+  [world e floor]
   (let [[dmg every-ms] (mob-hit e)
         health (:player/health world 20.0)
         mob-health (or (:entity/health e) (:health (mob/kinds (entity/kind e))))]
     (boolean (and dmg
                   mob-health
-                  (let [gap (- (double health) (double retreat-health))
-                        n (if (neg? gap) 0 (inc (long (math/floor (/ gap (double dmg))))))
+                  (let [gap (- (double health) (double floor))
+                        n (cond (neg? gap) 0
+                                :else (inc (long (math/floor (/ gap (double dmg))))))
                         swings (long (math/floor (/ (* (double n) (double every-ms))
                                                     (double swing-every))))]
                     (< (* swings (best-blow world)) (double mob-health)))))))
+
+(defn losing-trade?
+  "Would a fight with entity e from this health lose: blows-lose? down to retreat-health. A
+   mob that does not hit is not a losing trade. Equal damage wins: a stone sword's four blows
+   are a full zombie's 20. A stone pickaxe's charged blow is about 2, and six of those come
+   before health crosses 10, which is not 20: the pickaxe loses and the fight is not started."
+  [world e]
+  (blows-lose? world e retreat-health))
+
+(defn dying-trade?
+  "Would a fight with entity e from this health lose if it ran to 0 instead of breaking off at
+   retreat-health? blows-lose? with floor 0. A stone pickaxe at full health loses losing-trade?
+   against a full zombie and wins this one (ten charged blows are its 20). Equal damage wins.
+   A mob that does not hit is not a dying trade."
+  [world e]
+  (blows-lose? world e 0))
+
+(defn pursues?
+  "Does entity e keep chasing after a flee finishes? A melee kind whose :follow is farther than
+   flee-radius. A zombie follows 35 and a spider 16, both past 12, so a back-off that stops
+   there leaves it still coming. A skeleton shoots and has no :melee; a creeper has none either."
+  [e]
+  (let [k (mob/kinds (entity/kind e))]
+    (boolean (and (:melee k) (:follow k) (> (double (:follow k)) flee-radius)))))
 
 (defn fled?
   "Is eid still a mob to stay away from: a :hurt flee while health is under resume-health, or
@@ -902,12 +930,18 @@
   ;; is backed away from out to flee-radius: regeneration from 9.2 to 10.2 must not start the
   ;; fight again (race 40466567590, Clj_r04). A trade the blows lose (losing-trade?) is backed
   ;; away from too, or a sword is made once the mob is craft-room off (craft-first), even in a
-  ;; corner: a fist against a full zombie is a death. A neutral turned on the bot (an angry
-  ;; enderman) is fought to the end whatever the health: it is faster and teleports, so a
-  ;; back-off is only hits taken (gym dragon-e run 1, 40 to 10, then dead in its hands). What a
-  ;; back-off could not get away from (:plan/cornered) is fought to the end when the trade wins
-  ;; and the health is at retreat-health or more (issue #563: at 7.3 two cornered zombies were
-  ;; fought down to 1.3; issue #161, a quarter hour of back-offs at under one health).
+  ;; corner: a fist against a full zombie is a death. Except a melee pursuer (pursues?) the
+  ;; blows can finish before it finishes the bot (dying-trade? loses is false) while health is
+  ;; still at retreat-health: that one is fought to the end. A flee to flee-radius does not
+  ;; break a zombie's follow of 35, and the back-off dies in its hands (probe 40626972972,
+  ;; R4/1 seed 5: 43 zombies, 5.56 min of :back-off, two rotten flesh). The fist is not that
+  ;; weapon: its dying trade against a spider is a tie the hits do not pay. A neutral turned
+  ;; on the bot (an angry enderman) is fought to the end whatever the health: it is faster and
+  ;; teleports, so a back-off is only hits taken (gym dragon-e run 1, 40 to 10, then dead in
+  ;; its hands). What a back-off could not get away from (:plan/cornered) is fought to the end
+  ;; when the trade wins and the health is at retreat-health or more (issue #563: at 7.3 two
+  ;; cornered zombies were fought down to 1.3; issue #161, a quarter hour of back-offs at
+  ;; under one health).
   [world _ _]
   (when-let [[eid e] (entity/nearest (threats world) (:player/pos world))]
     (let [neutral? (contains? entity/neutral (entity/kind e))
@@ -916,6 +950,12 @@
       (cond (= :creeper (entity/kind e)) {:intent/kind :back-off :intent/target eid}
             (and (not neutral?) (or hurt? (healing? world eid))) (flee-intent eid :hurt)
             craft craft
+            (and (pursues? e)
+                 (not neutral?)
+                 (> (best-blow world) (charged-damage nil))
+                 (losing-trade? world e)
+                 (not (dying-trade? world e)))
+            {:intent/kind :fight :intent/target eid :intent/to-the-end? true}
             (and (losing-trade? world e) (not neutral?)) (flee-intent eid :trade)
             (or neutral? (contains? (:plan/cornered world #{}) eid))
             {:intent/kind :fight :intent/target eid :intent/to-the-end? true}

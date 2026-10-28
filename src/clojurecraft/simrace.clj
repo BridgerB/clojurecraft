@@ -26,11 +26,14 @@
             [clojurecraft.chunk :as chunk]
             [clojurecraft.cli :as cli]
             [clojurecraft.dimension :as dimension]
+            [clojurecraft.entity :as entity]
             [clojurecraft.failure :as failure]
             [clojurecraft.game :as game]
             [clojurecraft.main :as main]
             [clojurecraft.memory :as memory]
+            [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
+            [clojurecraft.recipe :as recipe]
             [clojurecraft.scene :as scene]
             [clojurecraft.sim :as sim]
             [datascript.core :as d]))
@@ -108,6 +111,34 @@
   [w until]
   {:event/kind :go :go/goals (plan/through until) :go/chain? true :go/at (spawn-of w)})
 
+(defn death-note
+  "Facts from the tick a run dies on: when, where, what it held, the intent it was in, and
+   the three nearest hostiles. Printed as a DEATH line. Not part of the run's result."
+  [world world-set seed]
+  (let [pos (:player/pos world)
+        held (get (:player/inventory world) (:player/held-slot world 0))]
+    {:set world-set
+     :seed seed
+     :t (:time/now world)
+     :health (:player/health world)
+     :food (:player/food world)
+     :pos pos
+     :wall (:player/horizontal-collision? world)
+     :held (when held (recipe/item-name (:item held)))
+     :intent (select-keys (:plan/intent world)
+                          [:intent/kind :intent/why :intent/stage :intent/distance
+                           :intent/to-the-end? :intent/target])
+     :cornered (count (:plan/cornered world #{}))
+     :fled (count (:plan/fled world {}))
+     :near (into []
+                 (take 3)
+                 (sort-by #(or (:d %) Double/POSITIVE_INFINITY)
+                          (for [[eid e] (entity/hostiles world)]
+                            {:eid eid
+                             :kind (entity/kind e)
+                             :d (when pos (physics/distance pos (:entity/pos e)))
+                             :health (:entity/health e)})))}))
+
 (defn run
   "One run: the bot from empty hands on world w's landing, playing every step up to until,
    against the model, at most max-ms of simulated time, rolling from seed. Returns its RESULT
@@ -119,7 +150,9 @@
    in), :run/last (the moment of the
    stopping tick) and :run/moments (the moments sim/play-from kept, every half minute, the
    last six minutes), from which a failure's snapshot is chosen (dropped from the lines written).
-   The two counters do not change a decision. Its
+   The two counters do not change a decision. A death prints a DEATH line (death-note: the
+   intent, the position, the nearest hostiles) and a respawn prints a RESPAWN line. Neither
+   line is part of the result. Its
    :go names the landing (:go/at), as race/land-bot! does for a real bot: the plan's
    landing-relative choices (the climb home from deep, a climb's level steps toward the landing,
    how far they may go) are the real race's. Without it, sim race 38659291345 world R4/38 (issue
@@ -139,9 +172,19 @@
          backoff (atom 0)
          counting (fn [before event]
                     (let [t0 (:time/now before 0)
-                          after (step before event)]
+                          after (step before event)
+                          world-set (:capture/set w)]
                       (when (= :back-off (get-in after [:plan/intent :intent/kind]))
                         (swap! backoff + (max 0 (- (:time/now after 0) t0))))
+                      (cond (and (not (:player/dead? before)) (:player/dead? after))
+                            (println "DEATH" (pr-str (death-note before world-set seed)))
+                            (and (:player/dead? before) (not (:player/dead? after)))
+                            (println "RESPAWN"
+                                     (pr-str {:set world-set
+                                              :seed seed
+                                              :t (:time/now after)
+                                              :health (:player/health after)
+                                              :pos (:player/pos after)})))
                       after))
          {:keys [world sim last moments crashed]}
          (sim/run+ counting
