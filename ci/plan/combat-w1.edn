@@ -1,0 +1,9 @@
+;; One batch of the rows that fight early. Defend: midnight, three zombies, an iron
+;; sword and iron armour. Attack: noon, a husk with NoAI, a stone sword. Five runs
+;; a row, two jobs.
+{:plans/label "combat-w1"
+ :plans/jobs 2
+ :plans/issue 259
+ :plans/experiments
+ [{:exp/name "defend" :exp/kind :gym :exp/goal "defend" :exp/runs 5 :exp/bots 1 :exp/est-s 600}
+  {:exp/name "attack" :exp/kind :gym :exp/goal "attack" :exp/runs 5 :exp/bots 1 :exp/est-s 600}]}
