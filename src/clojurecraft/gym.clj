@@ -569,9 +569,12 @@
                  :truth/re "Test passed"}]}
    ;; issue #259: a husk that does not move (NoAI; a husk does not burn by day) three blocks east
    ;; of the landing at noon, a stone sword given; judged by the husk gone. The attacks' spacing
-   ;; is read from the recording
+   ;; is read from the recording. This row and defend run at Normal: the gym server is peaceful by
+   ;; default and refuses to summon a monster there (gym combat-w1, run 40629957509, and
+   ;; gym-summon, run 40718460530, met no husk and no zombie)
    {:gym/goal :attack
     :gym/until "attack"
+    :gym/difficulty "normal"
     :gym/prereqs ["minecraft:stone_sword 1"]
     :gym/setup ["time set noon"
                 "summon minecraft:husk {x+3} {y} {z} {NoAI:1b,PersistenceRequired:1b}"]
@@ -590,6 +593,7 @@
    ;; bot: execute as the bot answered RCON with nothing in every trial of that run
    {:gym/goal :defend
     :gym/until "defend"
+    :gym/difficulty "normal"
     :gym/prereqs ["minecraft:iron_sword 1"]
     :gym/setup ["time set midnight"
                 "scoreboard objectives add zkills minecraft.killed:minecraft.zombie"
