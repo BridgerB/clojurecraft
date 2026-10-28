@@ -1,0 +1,11 @@
+;; Gravel on the +x stair, beside the body. A new label. No issue: the report stays on the run.
+{:plans/label "suffocate-beside"
+ :plans/jobs 2
+ :plans/max-parallel 2
+ :plans/experiments [{:exp/name "beside"
+                      :exp/kind :gym
+                      :exp/goal "suffocate-beside"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 420
+                      :exp/arms [{:arm/name "head"} {:arm/name "main" :arm/ref "main"}]}]}

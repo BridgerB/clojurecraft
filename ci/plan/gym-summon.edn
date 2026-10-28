@@ -1,0 +1,7 @@
+;; the attack and defend rows, now that the landing waits for its chunks before summons
+{:plans/label "gym-summon"
+ :plans/jobs 2
+ :plans/issue 259
+ :plans/experiments
+ [{:exp/name "attack" :exp/kind :gym :exp/goal "attack" :exp/runs 3 :exp/bots 1 :exp/est-s 300}
+  {:exp/name "defend" :exp/kind :gym :exp/goal "defend" :exp/runs 3 :exp/bots 1 :exp/est-s 300}]}

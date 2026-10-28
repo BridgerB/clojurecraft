@@ -58,6 +58,19 @@
 
 (defn eye "Eye position of a player whose feet centre is [x y z]." [[x y z]] [x (+ y eye-height) z])
 
+(defn eye-cell
+  "The cell [x y z] the eye position is in."
+  [pos]
+  (let [[x y z] (eye pos)] [(long (math/floor x)) (long (math/floor y)) (long (math/floor z))]))
+
+(defn overlaps-column?
+  "Does the player's body box at pos overlap column [cx cz]?"
+  [[x _ z] [cx cz]]
+  (and (< (- x half-width) (inc (long cx)))
+       (> (+ x half-width) (long cx))
+       (< (- z half-width) (inc (long cz)))
+       (> (+ z half-width) (long cz))))
+
 (defn y-of "The height of a point or a block position [x y z]: (y-of [3 64 5]) is 64." [[_ y _]] y)
 
 (defn centre
@@ -166,6 +179,42 @@
   "Does the player's box at pos overlap any water or lava, however little (touch-contract)?"
   [fluid-at pos]
   (or (touching-water? fluid-at pos) (in-fluid? fluid-at :lava touch-contract (aabb pos))))
+
+(def eye-reach
+  "Half-width of the vanilla eye box: 0.8 of the body width. A full cube the body has only just
+   entered intersects it; one the body merely touches does not."
+  (* 0.8 half-width))
+
+(defn full-cube?
+  "Is solid?'s answer a full cube: true, or a number at least 1.0?"
+  [top]
+  (boolean (or (true? top) (and (number? top) (>= (double top) 1.0)))))
+
+(defn eye-box-cells
+  "The cells the eye box touches. The box is the eye point grown by eye-reach on x and z."
+  [pos]
+  (let [[x y z] (eye pos)
+        y (long (math/floor y))]
+    (for [cx (range (long (math/floor (- x eye-reach))) (inc (long (math/floor (+ x eye-reach)))))
+          cz (range (long (math/floor (- z eye-reach))) (inc (long (math/floor (+ z eye-reach)))))]
+      [cx y cz])))
+
+(defn suffocation-cell
+  "The full-cube cell the eye box touches: the point cell when that is one, otherwise another
+   cell the box reaches. Nil when the box is clear. loaded?, when given, is (fn [x z] → bool);
+   a cell whose chunk it rejects is skipped, so a column that has not arrived cannot count as
+   a wall."
+  ([solid? pos] (suffocation-cell solid? pos nil))
+  ([solid? pos loaded?]
+   (let [ok? (fn [[x y z]] (and (or (nil? loaded?) (loaded? x z)) (full-cube? (solid? x y z))))
+         point (eye-cell pos)]
+     (cond (ok? point) point
+           :else (first (filter ok? (eye-box-cells pos)))))))
+
+(defn suffocating?
+  "Does a full cube (solid? collision-top >= 1.0) intersect the eye box?"
+  ([solid? pos] (suffocating? solid? pos nil))
+  ([solid? pos loaded?] (boolean (suffocation-cell solid? pos loaded?))))
 
 (defn fluids-here
   "What the player at pos is in: {:in-water? :in-lava? :eye-in-water?}."
@@ -290,7 +339,14 @@
             :player/fall-distance fall
             :player/in-water? in-water?
             :player/in-lava? in-lava?
-            :player/eye-in-water? (eye-in-water? fluid-at pos')))))
+            :player/eye-in-water? (eye-in-water? fluid-at pos')
+            :player/suffocating?
+            (suffocating? solid?
+                          pos'
+                          (fn [x z]
+                            (contains? (:world/chunks world)
+                                       [(bit-shift-right (long x) 4)
+                                        (bit-shift-right (long z) 4)])))))))
 
 (defn look-at
   "[yaw pitch] in degrees from eye to target, Notchian convention (south = 0, west = +90)."

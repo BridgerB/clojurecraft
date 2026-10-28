@@ -43,13 +43,20 @@
                       (= :water (terrain/fluid-kind world [cx cy cz]))
                       (= :water (terrain/fluid-kind world [cx (dec cy) cz])))))))
 
+(defn suffocating?
+  "Is the bot suffocating: does the physics engine report a full-cube block at the eye cell
+   (:player/suffocating?)?"
+  [world]
+  (boolean (:player/suffocating? world)))
+
 (defn trapped-tick
-  "The trap the player is in, re-derived with hysteresis every tick: lava on any contact, water
-   once the eye has been under for trap-after-ticks or the body has been afloat (afloat?) for
-   afloat-after-ticks with no :cross or :wade swimming on purpose, and either held until dry land has been
-   held for dry-ticks-to-clear. :plan/wet-ticks, :plan/afloat-ticks and :plan/dry-ticks are the counters; :plan/trap
-   is the kind or absent; :plan/trap-at is where the trap began. A trap that clears leaves a
-   fact in :world/traps, so later routes keep away from the place."
+  "The trap the player is in, re-derived with hysteresis every tick: lava on any contact,
+   suffocation whenever a full cube intersects the eye box (suffocating?), water once the eye has
+   been under for trap-after-ticks or the body has been afloat (afloat?) for afloat-after-ticks
+   with no :cross or :wade swimming on purpose, and either held until dry land has been held for
+   dry-ticks-to-clear. :plan/wet-ticks, :plan/afloat-ticks and :plan/dry-ticks are the
+   counters; :plan/trap is the kind or absent; :plan/trap-at is where the trap began. A trap
+   that clears leaves a fact in :world/traps, so later routes keep away from the place."
   [world]
   (let [wet (if (:player/eye-in-water? world) (inc (:plan/wet-ticks world 0)) 0)
         afloat (if (and (afloat? world)
@@ -58,9 +65,11 @@
                  0)
         dry (if (dry-land? world) (inc (:plan/dry-ticks world 0)) 0)
         was (:plan/trap world)
+        suffocate? (suffocating? world)
         trap (cond (:player/in-lava? world) :lava
+                   suffocate? :suffocation
                    (or (>= wet trap-after-ticks) (>= afloat afloat-after-ticks)) :water
-                   (and was (< dry dry-ticks-to-clear)) was
+                   (and was (not= :suffocation was) (< dry dry-ticks-to-clear)) was
                    :else nil)
         [x _ z] (:player/pos world)]
     (cond-> (assoc world :plan/wet-ticks wet :plan/afloat-ticks afloat :plan/dry-ticks dry)

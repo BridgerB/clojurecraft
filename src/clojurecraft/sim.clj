@@ -1893,17 +1893,21 @@
    hunger/exhaustion :hurt; starving: not): within hurt-window-ms of the last hurt only a harder
    one lands, for what it exceeds the last by (LivingEntity.hurtServer); health never under
    zero. A dead player is not hurt; the client learns its health from sync-health or the
-   caller's tell-health."
-  [sim amount exhausting?]
-  (let [{:keys [at last]} (:sim/hurt sim)
-        window? (and at (< (- (:sim/now sim) at) hurt-window-ms))
-        dealt (if window? (- amount last) amount)]
-    (cond (or (<= (:sim/health sim) 0.0) (and window? (<= amount last))) sim
-          :else
-          (-> sim
-              (update :sim/health #(max 0.0 (- % dealt)))
-              (assoc :sim/hurt {:at (if window? at (:sim/now sim)) :last amount})
-              (cond-> exhausting? (add-exhaustion (hunger/exhaustion :hurt)))))))
+   caller's tell-health. cause (a mob's kind, :starve, :drown) is kept in :sim/death-causes when
+   this blow is the one that reaches zero."
+  ([sim amount exhausting?] (hurt sim amount exhausting? :unknown))
+  ([sim amount exhausting? cause]
+   (let [{:keys [at last]} (:sim/hurt sim)
+         window? (and at (< (- (:sim/now sim) at) hurt-window-ms))
+         dealt (if window? (- amount last) amount)]
+     (cond (or (<= (:sim/health sim) 0.0) (and window? (<= amount last))) sim
+           :else
+           (let [health (max 0.0 (- (:sim/health sim) dealt))]
+             (-> sim
+                 (assoc :sim/health health
+                        :sim/hurt {:at (if window? at (:sim/now sim)) :last amount})
+                 (cond-> (<= health 0.0) (update :sim/death-causes (fnil conj []) cause)
+                         exhausting? (add-exhaustion (hunger/exhaustion :hurt)))))))))
 
 (defn heal
   "The model after a living player heals amount, up to max-health."
@@ -1937,7 +1941,7 @@
             (-> sim
                 (with-food-value food')
                 (cond-> (pos? healed) (heal healed)
-                        (pos? starved) (hurt starved false))
+                        (pos? starved) (hurt starved false :starve))
                 peaceful-regen)))))
 
 (def use-finished 9)                  ; entity-event status: the player finished using an item (EntityEvent.USE_ITEM_COMPLETE)
@@ -1980,6 +1984,7 @@
     (cond (or (nil? at) (< (:sim/now sim) at)) sim
           :else
           (-> sim
+              (cond-> (pos? (:sim/health sim)) (update :sim/death-causes (fnil conj []) :scheduled))
               (assoc :sim/health 0.0)
               (dissoc :sim/kill-at)
               tell-health))))
@@ -1996,7 +2001,9 @@
                    (zero? (mod (quot (:sim/now sim) physics/tick-ms) drown-every))
                    (pos? (:sim/health sim)))
         health (if hurt? (max 0.0 (- (:sim/health sim) drown-damage)) (:sim/health sim))]
-    (cond-> (assoc sim :sim/air air :sim/health health) hurt? tell-health)))
+    (cond-> (assoc sim :sim/air air :sim/health health)
+      (and hurt? (<= health 0.0)) (update :sim/death-causes (fnil conj []) :drown)
+      hurt? tell-health)))
 
 (defn keep-alive
   "A keep-alive for the client when one is due, remembered as pending until answered."
@@ -2190,7 +2197,7 @@
         (remove-mob eid)
         (cond-> (and (pos? dmg)
                      (mob/sight? (solid-fn sim) (mob/head type pos) (physics/eye player)))
-                (hurt (armoured sim (mob/scaled dmg (:sim/difficulty sim))) true)))))
+                (hurt (armoured sim (mob/scaled dmg (:sim/difficulty sim))) true type)))))
 
 (defn die-mob
   "Mob eid at zero health: a crystal blasts (blast); any other dies, the client told
@@ -2429,7 +2436,7 @@
           :else
           (-> sim
               (assoc-in [:sim/mobs eid :attack-at] (+ now (* (:every k) physics/tick-ms)))
-              (hurt (armoured sim (mob/scaled (:melee k) (:sim/difficulty sim))) true)))))
+              (hurt (armoured sim (mob/scaled (:melee k) (:sim/difficulty sim))) true type)))))
 
 (defn shoot
   "A shooter (a skeleton's arrow, a blaze's fireball) within its :range of the player, with a
@@ -2448,7 +2455,7 @@
           :else
           (-> sim
               (assoc-in [:sim/mobs eid :attack-at] (+ now (* (:every k) physics/tick-ms)))
-              (hurt (armoured sim (mob/scaled (:shoot k) (:sim/difficulty sim))) true)))))
+              (hurt (armoured sim (mob/scaled (:shoot k) (:sim/difficulty sim))) true type)))))
 
 (defn swell
   "A creeper within :swell of the player lights its fuse; with the player past unswell the fuse
@@ -2941,7 +2948,9 @@
           :else
           (-> sim
               (assoc-in [:sim/mobs eid :attack-at] (+ now (* mob/bite-every physics/tick-ms)))
-              (hurt (armoured sim (mob/scaled mob/bite-damage (:sim/difficulty sim))) true)))))
+              (hurt (armoured sim (mob/scaled mob/bite-damage (:sim/difficulty sim)))
+                    true
+                    :ender_dragon)))))
 
 (defn perch
   "The perched dragon's tick: its bite, and while any crystal stands, one health back every

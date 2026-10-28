@@ -13,7 +13,8 @@
             [clojurecraft.packet :as packet]
             [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
-            [clojurecraft.terrain :as terrain]))
+            [clojurecraft.terrain :as terrain]
+            [clojurecraft.trap :as trap]))
 
 (set! *warn-on-reflection* true)
 
@@ -95,6 +96,112 @@
                (fluid-over-falling? world target)
                (bed-over-fluid? world target))))
 
+(defn falling-column?
+  "Is there a block in column [x z] above y that can fall into it: a falling block
+   (blocks/falls?) with only air, passable or other falling blocks between y and it, within
+   falling-reach? A solid non-falling block supports whatever is above it."
+  [world [x y z]]
+  (when (and world (or (:world/chunks world) (:world/blocks world)))
+    (loop [dy 1]
+      (when (<= dy falling-reach)
+        (let [b (terrain/block-at world [x (+ y dy) z])]
+          (cond (nil? b) false
+                (blocks/falls? b) true
+                (blocks/solid? b) false
+                :else (recur (inc dy))))))))
+
+(defn falling-entity?
+  "Is a falling block (entity type 51) in column [x z] at or above y: a block already in the
+   air, not a stack that is still sitting?"
+  [world [x y z]]
+  (boolean (some (fn [[_ e]]
+                   (when (= 51 (:entity/type e))
+                     (let [[ex ey ez] (:entity/pos e)]
+                       (and (= (long (math/floor ex)) (long x))
+                            (= (long (math/floor ez)) (long z))
+                            (>= ey (double y))))))
+                 (:world/entities world))))
+
+(defn falling-in-column?
+  "Is there a block above [x y z] that can fall into it (falling-column?), or a falling block
+   entity (type 51) in column [x z] above y (falling-entity?)?"
+  [world [x y z]]
+  (or (boolean (falling-column? world [x y z])) (falling-entity? world [x y z])))
+
+(defn step-into-falling?
+  "Would moving the bot to pos' put the body box into a column where a falling block is already
+   in the air (falling-entity?, type 51)? A stack that is still sitting (falling-column?) is not
+   one: walking under it does not drop it. Refusing those cells made every waypoint under a sand
+   or gravel ceiling stale, the walk failed :no-path after six replans, and twelve such walks
+   failed the plan (probe 40641701980, R3/1 seed 1, [:ingots :no-path])."
+  [world pos']
+  (when (and world (or (:world/chunks world) (:world/blocks world) (:world/entities world)))
+    (let [fx (long (math/floor (first pos')))
+          fz (long (math/floor (nth pos' 2)))
+          fy (long (math/floor (second pos')))]
+      (boolean (some (fn [[dx dz]]
+                       (let [col [(+ fx dx) (+ fz dz)]]
+                         (and (physics/overlaps-column? pos' col)
+                              (falling-entity? world [(first col) fy (second col)]))))
+                     [[0 0] [1 0] [-1 0] [0 1] [0 -1]])))))
+
+(def step-reach
+  "Blocks ahead of the feet a step looks: one body width. A destination past that is approached;
+   only the step that would enter a falling column is refused."
+  (* 2 physics/half-width))
+
+(defn step-toward
+  "The point one body width (step-reach) from pos toward point, or point when it is closer.
+   The place the next step can put the body, not a far destination."
+  [pos point]
+  (let [dx (- (double (first point)) (double (first pos)))
+        dy (- (double (second point)) (double (second pos)))
+        dz (- (double (nth point 2)) (double (nth pos 2)))
+        dist (math/sqrt (+ (* dx dx) (* dy dy) (* dz dz)))]
+    (cond (<= dist (double step-reach)) point
+          :else
+          (let [s (/ (double step-reach) dist)]
+            [(+ (double (first pos)) (* dx s)) (+ (double (second pos)) (* dy s))
+             (+ (double (nth pos 2)) (* dz s))]))))
+
+(defn clearing-head?
+  "Is target the full cube the eye box touches (physics/suffocation-cell), the one cell a buried
+   dig may break?"
+  [world target]
+  (let [pos (:player/pos world)]
+    (= target
+       (physics/suffocation-cell
+        (terrain/solid-fn world)
+        pos
+        (fn [x z] (or (empty? (:world/chunks world)) (terrain/chunk-loaded? world [x 0 z])))))))
+
+(defn unsafe-falling?
+  "Would breaking target drop a falling block (falling-in-column?) onto the bot: the bot's body box
+   overlaps target's column (physics/overlaps-column?), and target is not the full cube in the
+   eye box?"
+  [world [x _ z :as target]]
+  (boolean (and (physics/overlaps-column? (:player/pos world) [x z])
+                (not (clearing-head? world target))
+                (falling-in-column? world target))))
+
+(defn column-stand
+  "A feet cell beside column [x z], at the bot's own feet, where the body at the cell's centre
+   does not overlap that column, the cell is standable (path/standable?), and no falling block
+   is already in the air there. Nil when every orthogonal neighbour is blocked. Where a dig steps
+   before it breaks a falling column from inside it (probe 40641701942, R4/1 seed 2: three
+   :unsafe failures ended [:ingots :unsafe] while time was left)."
+  [world [x _ z]]
+  (let [pos (:player/pos world)
+        fy (long (math/floor (+ (double (second pos)) 0.5)))]
+    (->> [[1 0] [-1 0] [0 1] [0 -1]]
+         (map (fn [[dx dz]] [(+ (long x) dx) fy (+ (long z) dz)]))
+         (filter (fn [cell]
+                   (and (path/standable? world cell)
+                        (not (falling-entity? world cell))
+                        (not (physics/overlaps-column? (physics/centre cell) [x z])))))
+         (sort-by #(physics/distance pos (physics/centre %)))
+         first)))
+
 (defn dig-time
   "ms to break block id with held (an item id, or nil for the hand) under the world's penalties:
    dig/ms, with 3000 for an unknown block so a stale sighting is still dug at a log's pace."
@@ -152,12 +259,16 @@
 (defn failed? "Did intent i fail?" [i] (= :failed (:intent/status i)))
 
 (defn toward
-  "Controls that walk toward a point, jumping when blocked."
+  "Controls that walk toward a point, jumping when blocked. Forward is off when the next step
+   (step-toward) would put the body in a column where a block is already falling
+   (step-into-falling?). A sitting stack is walked under. A point farther than one body width
+   is still approached."
   [world point yaw-offset]
   (let [[yaw pitch] (physics/look-at (game/eye world) point)
-        yaw (+ yaw yaw-offset)]
-    {:control/forward? true
-     :control/jump? (boolean (:player/horizontal-collision? world))
+        yaw (+ yaw yaw-offset)
+        safe? (not (step-into-falling? world (step-toward (:player/pos world) point)))]
+    {:control/forward? safe?
+     :control/jump? (and safe? (boolean (:player/horizontal-collision? world)))
      :control/yaw yaw
      :control/look [yaw pitch]}))
 
@@ -371,10 +482,13 @@
 
 (defn route-stale?
   "Should the walk plan again: a waypoint still ahead can no longer be stood on (a chunk that
-   arrived or a block that changed broke the route), no waypoint was reached for stuck-ticks,
-   or the route ended short of the target (:partial or :none) and every waypoint is behind. A
-   chunk arriving is not by itself a reason: six arrived in the first seconds of a gym run and
-   spent all six plans before the bot had walked a step, though every plan found the same route."
+   arrived or a block that changed broke the route), no waypoint was reached for stuck-ticks, or
+   the route ended short of the target (:partial or :none) and every waypoint is behind. A
+   falling block over a waypoint is not a replan: a sitting stack is safe to walk under, and a
+   block already in the air is waited out (step-into-falling?), because a replan finds the same
+   route and six of them fail the walk :no-path. A chunk arriving is not by itself a reason: six
+   arrived in the first seconds of a gym run and spent all six plans before the bot had walked a
+   step, though every plan found the same route."
   [world {:intent/keys [waypoints at best-tick route]}]
   (let [ahead (drop at waypoints)]
     (or (some #(not (path/standable? world %)) ahead)
@@ -391,14 +505,30 @@
   [{:intent/keys [waypoints]}]
   (+ walk-timeout-ticks (* waypoint-ticks (count waypoints))))
 
+(defn walk-into-falling?
+  "Would a walk to target stand the body in a column where a block is already falling
+   (step-into-falling? of the cell's centre)? False for a pickup walk: it ends beside the block,
+   not in the block's column, so the column is cleared from the side. False for a stack that is
+   still sitting. The walk waits; it does not fail :unsafe. Real race 40466567590 lane 3 bot
+   Clj_r08 stood at x 2434.56 beside gravel at [2435 58..61 2321], dug the bottom, and the walk
+   toward the column was already within reach, so it counted as arrived and stepped in while the
+   gravel was still falling."
+  [world target pickup?]
+  (boolean (and (not pickup?) target (step-into-falling? world (physics/centre target)))))
+
 (defmethod run :walk
-  [world {:intent/keys [target started waypoints at replans] :or {replans 0}} _]
+  [world {:intent/keys [target started waypoints at replans pickup?] :or {replans 0}} _]
   (let [tick (:time/tick world)
         started (or started tick)
         d (physics/distance (game/eye world) (physics/centre target))
         world (assoc-intent world :intent/started started)
         i (:plan/intent world)]
-    (cond (arrived? world i d)
+    (cond (and (walk-into-falling? world target pickup?) (> (- tick started) (walk-deadline i)))
+          (-> world
+              (assoc :player/controls {})
+              (fail :stuck))
+          (walk-into-falling? world target pickup?) (assoc world :player/controls {})
+          (arrived? world i d)
           (-> world
               (assoc :player/controls
                      {:control/look (physics/look-at (game/eye world) (physics/centre target))})
@@ -421,6 +551,12 @@
                 (assoc :player/controls {})
                 (fail :no-path))
             (assoc (route! world i) :player/controls {}))
+          (or (and (get waypoints at)
+                   (step-into-falling? world (physics/centre (get waypoints at))))
+              (and (nil? (get waypoints at)) (step-into-falling? world (physics/centre target))))
+          (-> world
+              (assoc :player/controls {})
+              (assoc-intent :intent/best-tick tick))
           (nil? (get waypoints at)) ; route walked to its end, target still out of reach
           (assoc world :player/controls (toward world (physics/centre target) 0.0))
           (waypoint-reached? world (get waypoints at))
@@ -532,8 +668,13 @@
           (fail world :out-of-reach)
           (= :needs-tool (breaking-tool world at-target drop-ok?)) (fail world :needs-tool)
           (or (contains? never-dug (blocks/name-of at-target))
-              (and (not exposes-ok?) (exposes-fluid? world target)))
+              (and (not exposes-ok?) (exposes-fluid? world target))
+              (and (trap/suffocating? world) (not (clearing-head? world target))))
           (fail world :unsafe)
+          (unsafe-falling? world target)
+          (if-let [stand (column-stand world target)]
+            (assoc world :player/controls (toward world (physics/centre stand) 0.0))
+            (fail world :unsafe))
           (or (and (>= still 3) (> (- now since) settle-ms)) (> (- now since) settle-deadline))
           (let [seq (inc (:bot/sequence world))
                 face (face-toward eye target)
