@@ -602,7 +602,7 @@
         death-1 (assoc (standing {166 (mob :zombie [9.62 64.0 8.5] 8.0)
                                   145 (mob :zombie [18.15 64.0 8.5] 20.0)})
                        :player/health 2.1666666666666643
-                       :player/food 20.0
+                       :player/food 20
                        :player/held-slot 0
                        :player/inventory {2 (item :stone_pickaxe 1)})
         ;; t 223650: zombie 206 at 1.120 health 8, zombie 207 at 1.120 health 20.
@@ -610,7 +610,7 @@
         death-4 (assoc (standing {206 (mob :zombie [9.62 64.0 8.5] 8.0)
                                   207 (mob :zombie [8.5 64.0 9.61] 20.0)})
                        :player/health 2.1666666666666643
-                       :player/food 20.0
+                       :player/food 20
                        :player/held-slot 0
                        :player/inventory {2 (item :stone_pickaxe 1)})
         broke (fn [w eid]
