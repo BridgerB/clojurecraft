@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-28T21:32:34.225Z",
+  "at" : "2026-10-28T21:40:21.900Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -33,23 +33,18 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 594,
-    "title" : "Bot stops at portal: unsafe",
-    "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
-  }, {
     "number" : 595,
     "title" : "Bot stops at blaze-rods: unsafe",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 151,
-    "title" : "Bot stops at flint-and-steel: not-picked-up",
-    "labels" : [ "bot-failure", "real", "sim" ],
+    "number" : 594,
+    "title" : "Bot stops at portal: unsafe",
+    "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
-    "number" : 596,
-    "title" : "Bot stops at portal-kit: unsafe",
+    "number" : 151,
+    "title" : "Bot stops at flint-and-steel: not-picked-up",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
@@ -61,6 +56,11 @@
     "number" : 597,
     "title" : "Bot stops at ingots: unsafe",
     "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 596,
+    "title" : "Bot stops at portal-kit: unsafe",
+    "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
     "number" : 71,
@@ -80,11 +80,6 @@
   }, {
     "number" : 461,
     "title" : "Bot stops at portal: out-of-reach",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
-    "number" : 156,
-    "title" : "Bot stops at portal-kit: stuck",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
@@ -125,6 +120,11 @@
   }, {
     "number" : 342,
     "title" : "Bot stops at furnace: boxed",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 156,
+    "title" : "Bot stops at portal-kit: stuck",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
@@ -204,10 +204,6 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 156,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
     "issue" : 54,
     "move" : "leave",
     "why" : "hands-off label"
@@ -233,6 +229,10 @@
     "why" : "hands-off label"
   }, {
     "issue" : 342,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 156,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
