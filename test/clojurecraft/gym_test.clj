@@ -33,23 +33,7 @@
       (is (= {:event/kind :go :go/goals (:gym/goals row) :go/chain? true :go/at [10.0 64.0 20.0]}
              (gym/go-event row [10.0 64.0 20.0])))
       (is (= (fixture/go-event "dragon" [10.0 64.0 20.0])
-             (gym/go-event (gym/gym "dragon") [10.0 64.0 20.0])))))
-  (testing "suffocate-column overlaps the spawn; suffocate-beside is the +x stair"
-    (let [column (gym/gym "suffocate-column")
-          beside (gym/gym "suffocate-beside")
-          gravel (fn [row] (filterv #(str/starts-with? % "setblock") (:gym/setup row)))]
-      (is (= :cobblestone (:gym/goal column) (:gym/goal beside)))
-      (is (= "peaceful" (:gym/difficulty column) (:gym/difficulty beside)))
-      (is (= ["setblock {x+1} {y+20} {z} minecraft:gravel"
-              "setblock {x+1} {y+21} {z} minecraft:gravel"
-              "setblock {x+1} {y+22} {z} minecraft:gravel"
-              "setblock {x+1} {y+23} {z} minecraft:gravel"]
-             (gravel column)))
-      (is (= ["setblock {x+2} {y+20} {z+1} minecraft:gravel"
-              "setblock {x+2} {y+21} {z+1} minecraft:gravel"
-              "setblock {x+2} {y+22} {z+1} minecraft:gravel"
-              "setblock {x+2} {y+23} {z+1} minecraft:gravel"]
-             (gravel beside))))))
+             (gym/go-event (gym/gym "dragon") [10.0 64.0 20.0]))))))
 
 (def ok-result {:ok true :reason :goal :stats {}})
 

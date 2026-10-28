@@ -45,7 +45,6 @@
             [clojurecraft.stairs]
             [clojurecraft.stone]
             [clojurecraft.stronghold :as stronghold]
-            [clojurecraft.suffocate]
             [clojurecraft.swim]
             [clojurecraft.sword]
             [clojurecraft.watch :as watch]
