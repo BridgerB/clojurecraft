@@ -3,6 +3,7 @@
    killed and its meat picked up, then eaten; over canned worlds and against the server model."
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [clojurecraft.blocks :as blocks]
+            [clojurecraft.combat :as combat]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
             [clojurecraft.hunt :as hunt]
@@ -51,6 +52,21 @@
     (is (= {:intent/kind :fight :intent/target 5 :intent/for :hunt}
            (plan/next-intent near hunt-row plan/goals))
         "beside it (within a walk's reach) it is fought")))
+
+(deftest a-hoglin-is-hunted-only-at-or-above-retreat-health
+  ;; a crimson-forest hoglin hits back. under combat/retreat-health it is not game (issue #577)
+  (let [hog {5 (animal :hoglin [14.5 64.0 8.5])}
+        low (assoc (standing 8 {} hog) :player/health 9.3)
+        ok (assoc (standing 8 {} hog) :player/health 12.0)
+        beside (assoc (standing 8 {} {5 (animal :hoglin [11.5 64.0 8.5])}) :player/health 12.0)]
+    (is (nil? (hunt/game low)))
+    (is (plan/done-by low hunt-row) "not approached under retreat-health")
+    (is (= {:intent/kind :walk :intent/target [14 64 8] :intent/for :hunt}
+           (plan/next-intent ok hunt-row plan/goals)))
+    (is (= {:intent/kind :fight :intent/target 5 :intent/for :hunt :intent/yield? true}
+           (plan/next-intent beside hunt-row plan/goals))
+        "beside it the fight yields")
+    (is (= 10 combat/retreat-health) "issue #577: the line is 10, and 9.3 is under it")))
 
 (deftest fed-holding-food-or-with-no-game-the-hunt-is-done
   (let [cow {5 (animal :cow [11.5 64.0 8.5])}]

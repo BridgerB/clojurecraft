@@ -322,17 +322,19 @@
                    {0 (item :iron_sword 1) 1 (item :rotten_flesh 8) 2 (item :cooked_beef 2)})))
         "real food first")))
 
-(deftest a-rest-that-cannot-heal-holds-in-cover-and-never-fights-on
+(deftest a-rest-that-cannot-heal-is-never-chosen-or-kept
   ;; sim race 39712220957 (issue #501): hurt at food 16 with nothing to eat, three rests of ninety
-  ;; seconds, no health back, the run ended :no-heal
+  ;; seconds, no health back, the run ended :no-heal. Probe 40634461444 then held such a rest for
+  ;; hours: it is never chosen, and one already running ends.
   (let [hurt #(assoc % :player/health 8.0)]
     (is (blaze/heals? (standing {})) "food 20: health comes back by itself")
     (is (not (blaze/heals? (assoc (standing {}) :player/food 16))) "food under 18, nothing to eat")
     (is (blaze/heals? (assoc (standing {1 (item :cooked_beef 4)} {}) :player/food 16))
         "food held: the meal first")
     (is (= blaze/rest-intent (next-intent (hurt (standing {})))) "fed: a rest")
-    (is (= blaze/rest-intent (next-intent (hurt (assoc (standing {}) :player/food 16))))
-        "food 16, nothing to eat: still a rest, never back out to fight at that health")
+    (let [dry (next-intent (hurt (assoc (standing {}) :player/food 16)))]
+      (is (not= :rest (:intent/kind dry)) "food 16, nothing to eat: not a rest")
+      (is (not= :fight (:intent/kind dry)) "and not a fight under retreat-health"))
     (let [rest-for (fn [food now]
                      (intent/run (assoc (standing {})
                                         :player/health 8.0
@@ -347,14 +349,13 @@
                                  {:event/kind :tick :event/now now}))]
       (is (= :failed (:intent/status (:plan/intent (rest-for 20 (inc blaze/rest-ms)))))
           "fed and no health back in rest-ms: :no-heal")
-      (is (not= :failed (:intent/status (:plan/intent (rest-for 16 (inc blaze/rest-ms)))))
-          "it cannot heal: held, not failed"))
+      (is (= :done (:intent/status (:plan/intent (rest-for 16 0))))
+          "it cannot heal: ended, not held"))
     (is (= {:intent/kind :eat :intent/item :cooked_beef}
            (next-intent (hurt (assoc (standing {1 (item :cooked_beef 4)} {}) :player/food 16))))
         "with food held it eats")
-    (is (= blaze/rest-intent
-           (blaze/warily (assoc (standing {}) :player/health 12.0 :player/food 16)))
-        "wary the same")))
+    (is (nil? (blaze/warily (assoc (standing {}) :player/health 12.0 :player/food 16)))
+        "wary, and the rest cannot heal: not a rest")))
 
 (deftest a-blaze-at-hand-is-fought-first
   ;; gym blaze-fire-b run 3 (run 39136853644): blazes half a block to two off followed the bot
@@ -564,8 +565,13 @@
     (is (= :walk (:intent/kind i)))
     (is (= :corridor (:intent/for i)))
     (is (= 64 (second (:intent/target i))))
-    (is (= blaze/corridor-nodes (:intent/max-nodes i))
-        "one bounded route, not a search per brick")))
+    (is (= blaze/corridor-nodes (:intent/max-nodes i)) "one bounded route, not a search per brick")
+    (testing "a stand whose walk failed is not proposed again"
+      (let [blocked (assoc w :plan/blacklist #{[15 64 8]})
+            t (blaze/fortress-search blocked)]
+        (is (= :tunnel-to (:intent/kind t)))
+        (is (= [15 63 8] (:intent/target t)) "the brick, by the fortress tunnel")
+        (is (not= :walk (:intent/kind (blaze/corridor-walk blocked))))))))
 
 (deftest hurt-or-wary-bot-takes-cover-from-active-spawner-and-never-rests-in-the-open
   ;; beside a live spawner, resting in the open leads to fireball death (probe 40597529086)
@@ -616,6 +622,102 @@
         tick (fn [w] (intent/run w (:plan/intent w) {:event/kind :tick :event/now 1000}))]
     (is (not (blaze/heals? w)))
     (is (= :done (:intent/status (:plan/intent (tick w)))))))
+
+(deftest rest-360-cannot-heal-so-it-ends-and-food-is-taken
+  ;; probe 40634461444, sim R1/17, rest id 360: health 9.3, food 17, nothing edible held,
+  ;; :intent/blazes #{}, from 72.78 min (since 4366550) to the 330 min stop. 9.3 is under
+  ;; combat/retreat-health, so neither a blaze nor a hoglin is fought.
+  (let [since 4366550
+        w (assoc (standing {}) :player/health 9.3 :player/food 17 :time/now since)
+        resting (assoc w
+                       :plan/intent
+                       (assoc blaze/rest-intent
+                              :intent/status :active
+                              :intent/since since
+                              :intent/health 9.3
+                              :intent/blazes #{}))
+        tick (fn [w] (intent/run w (:plan/intent w) {:event/kind :tick :event/now since}))
+        bare (next-intent w)]
+    (is (not (blaze/heals? w)))
+    (is (blaze/hurt? w))
+    (is (not= :rest (:intent/kind bare)))
+    (is (not= :fight (:intent/kind bare)))
+    (is (= :done (:intent/status (:plan/intent (tick resting))))))
+  (testing "a porkchop in sight is taken"
+    (let [pork (entity :item [10.5 64.0 9.5] :entity/item (recipe/item-id :porkchop))
+          w (assoc (standing {40 pork}) :player/health 9.3 :player/food 17)]
+      (is (= {:intent/kind :collect-drops :intent/item :porkchop :intent/target [10 64 9]}
+             (next-intent w)))))
+  (testing "a stew the kit can make is made"
+    (let [w (assoc (standing {1 (item :bowl 1) 2 (item :red_mushroom 1) 3 (item :brown_mushroom 1)})
+                   :player/health 9.3
+                   :player/food 17)]
+      (is (= {:intent/kind :craft :intent/recipe :mushroom_stew :intent/window :inventory}
+             (next-intent w)))))
+  (testing "a hoglin under retreat-health is not approached"
+    (let [hog (entity :hoglin [14.5 64.0 8.5] :entity/health 20.0)
+          w (assoc (standing {5 hog}) :player/health 9.3 :player/food 17)
+          i (next-intent w)]
+      (is (not= :hunt (:intent/for i)))
+      (is (not= 5 (:intent/target i)))))
+  (testing "at or above retreat-health the same hoglin is hunted"
+    (let [hog (entity :hoglin [14.5 64.0 8.5] :entity/health 20.0)
+          w (assoc (standing {5 hog}) :player/health 12.0 :player/food 17)]
+      (is (= {:intent/kind :walk :intent/target [14 64 8] :intent/for :hunt} (next-intent w)))))
+  (testing "crimson ground is walked only at or above retreat-health"
+    (let [nylium (blocks/default-state :crimson_nylium)
+          floor (fn [w] (assoc w :world/chunks {[0 0] (world/column {[12 63 8] nylium})}))
+          low (floor (assoc (standing {}) :player/health 9.3 :player/food 17))
+          ok (floor (assoc (standing {}) :player/health 12.0 :player/food 17))]
+      (is (not= [12 64 8] (:intent/target (next-intent low))))
+      (is (= {:intent/kind :walk
+              :intent/target [12 64 8]
+              :intent/for :food
+              :intent/max-nodes blaze/corridor-nodes}
+             (next-intent ok)))))
+  (testing "a watched void retreat is still a rest when it cannot heal"
+    (let [near (entity :blaze [13.5 65.0 8.5] :entity/health 20.0)
+          air (blocks/default-state :air)
+          lip (blocks/default-state :nether_bricks)
+          void (into {[7 64 8] lip} (for [x [5 6] y (range 60 64)] [[x y 8] air]))
+          w (assoc (standing {7 near})
+                   :player/health 8.0
+                   :player/food 16
+                   :world/chunks {[0 0] (world/column void)})]
+      (is (combat/void-retreat? w (get-in w [:world/entities 7])))
+      (is (not (blaze/heals? w)))
+      (is (= blaze/rest-intent (next-intent w))))))
+
+(deftest a-corridor-with-no-route-tunnels-to-the-brick
+  ;; probe 40634456698, sim R2/12, snapshot at 101.00 min (t 6060000): feet [979 69 450], the
+  ;; nearest brick [984 72 455] 7 blocks off, intent :tunnel-to that brick. The stand is
+  ;; standable and the chunk holds no route to it. Twelve :walk :no-path failures then hit
+  ;; plan/max-unwalkable (6,095,500 to 6,099,700 ms).
+  (let [netherrack (blocks/default-state :netherrack)
+        brick (blocks/default-state :nether_bricks)
+        air (blocks/default-state :air)
+        ;; local cells of chunk [61 28]: world x = 976 + lx, world z = 448 + lz
+        blocks
+        {[3 68 2] netherrack [3 69 2] air [3 70 2] air [8 72 7] brick [8 73 7] air [8 74 7] air}
+        w (-> (standing {})
+              (assoc :player/pos [979.5 69.0 450.5]
+                     :time/now 6060000
+                     :plan/reached #{:fortress}
+                     :world/chunks {[61 28] (world/column blocks)})
+              (memory/observe [984 72 455] brick))
+        stand [984 73 455]
+        walk {:intent/kind :walk
+              :intent/target stand
+              :intent/for :corridor
+              :intent/max-nodes blaze/corridor-nodes}
+        tunnel {:intent/kind :tunnel-to
+                :intent/target [984 72 455]
+                :intent/steps fortress/steps-per-tunnel
+                :intent/bridge? true}]
+    (is (path/standable? w stand))
+    (is (not (intent/routable? w walk)))
+    (is (= tunnel (blaze/corridor-walk w)))
+    (is (= tunnel (next-intent w)))))
 
 (deftest when-all-known-bricks-visited-the-bot-extends-corridor-from-fortress-bounds
   ;; issue #262 (probe 40602224561, sim R2/12 s2): all bricks on record visited; instead of

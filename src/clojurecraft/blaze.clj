@@ -5,8 +5,11 @@
    Requiring this namespace registers the row's rules and the :camp and :rest executors. Planned
    by :blaze-rods, in order: hurt under combat/retreat-health, into a cell out of the watching
    blazes' sight, or eat when the food is under the healing level, or back away from the nearest
-   watcher, or rest out of sight until the health is back (ruststeve broke off under 10 health: a
-   run that fought on killed the blaze and died with it); wary under eat-under, the same cover,
+   watcher, or rest out of sight until the health is back when that rest can heal (heals?; one
+   that cannot is never chosen or kept: probe 40634461444 rested 4.4 h at 9.3 health and food 17).
+   Food is picked up, crafted from what is held, or taken from a hoglin only at or above
+   retreat-health (ruststeve broke off under 10 health: a run that fought on killed the blaze and
+   died with it); wary under eat-under, the same cover,
    meal or rest before the next fight; watched by a volley of blazes at once, cover whatever the
    health; a rod lying near is picked up (:collect-drops: a blaze drops one a kill in two, so
    nothing lying there is no failure); the nearest blaze within fight-radius is fought (combat's
@@ -251,11 +254,118 @@
   "Can a rest bring the health back: the food the server last sent at or over hunger/heal-level
    (natural regeneration), or edible food held (the meal first)? Sim race 39712220957 (issue
    #501, world R1/2) rested three times ninety seconds at food 16 with nothing to eat, health
-   falling, and the run ended :no-heal: a rest that cannot heal holds in cover instead of
-   failing, and never goes back out to fight at that health."
+   falling, and the run ended :no-heal. A rest that cannot heal is never chosen and a running
+   one ends (probe 40634461444, sim R1/17, rest 360: health 9.3, food 17, nothing held, 4.4 h).
+   The exception is a watched void retreat, which stays on the lip (issue #514)."
   [world]
   (or (>= (:player/food world hunger/heal-level) hunger/heal-level)
       (some? (or (eat/food-held world) (eat/scrap-held world)))))
+
+(def food-drop-ids
+  "Item ids a dropped stack is worth picking up so a rest can heal: everything eat/edible, and
+   rotten flesh (the meal eats it when it is all there is)."
+  (set (map recipe/item-id (conj (set (keys eat/edible)) :rotten_flesh))))
+
+(def meal-crafts
+  "Edible recipes the inventory's 2×2 grid can craft, the most nourishing first. A recipe that
+   needs the 3×3 table is not started from here: looking for a table is not a meal."
+  (->> recipe/recipes
+       (filter (fn [r]
+                 (and (seq (recipe/needs r)) (eat/edible (:recipe/result r)) (recipe/fits? r 2))))
+       (sort-by (fn [r] (- (long (eat/edible (:recipe/result r))))))
+       vec))
+
+(defn ingredients-held?
+  "Does counts hold every ingredient one craft of recipe r consumes?"
+  [counts r]
+  (every? (fn [[s n]] (>= (recipe/have counts s) n)) (recipe/needs r)))
+
+(defn craft-meal
+  "A :craft of the most nourishing edible recipe whose ingredients are already held, or nil.
+   Never a gather and never a search for a table: at 9 health the fortress is not left to find
+   wheat."
+  [world]
+  (let [counts (recipe/counts (:player/inventory world))]
+    (when-let [r (some #(when (ingredients-held? counts %) %) meal-crafts)]
+      {:intent/kind :craft :intent/recipe (:recipe/id r) :intent/window :inventory})))
+
+(defn food-lying
+  "[eid entity] of the nearest edible drop within hunt/hunt-radius that the eye can see
+   (combat/clear?), that can be picked up (fetchable?), or nil."
+  [world]
+  (let [pos (:player/pos world)
+        eye (game/eye world)
+        bl (:plan/blacklist world #{})]
+    (->> (:world/entities world)
+         (filter (fn [[eid e]]
+                   (and (entity/item? e)
+                        (not (entity/dead? e))
+                        (contains? food-drop-ids (:entity/item e))
+                        (not (contains? bl eid))
+                        (not (contains? bl (hunt/cell (:entity/pos e))))
+                        (<= (physics/distance pos (:entity/pos e)) hunt/hunt-radius)
+                        (combat/clear? world eye (:entity/pos e)))))
+         (sort-by (fn [[_ e]] (physics/distance pos (:entity/pos e))))
+         (some (fn [[_ e :as ee]] (when (fetchable? world e) ee))))))
+
+(defn food-intent
+  "The pickup of edible drop e: a walk onto its cell when it lies under the pickup box, else
+   :collect-drops of what it holds."
+  [world e]
+  (let [n (recipe/item-name (:entity/item e))
+        cell (hunt/cell (:entity/pos e))]
+    (if (drops/under-reach? world e)
+      {:intent/kind :walk :intent/target cell :intent/for :food}
+      {:intent/kind :collect-drops :intent/item n :intent/target cell})))
+
+(defn hoglin-intent
+  "A walk or a yielding fight of the nearest hoglin hunt/game would take, or nil. hunt/game
+   already refuses one under combat/retreat-health: a hoglin hits back, and 9.3 is under 10
+   (issue #577), so it is not approached. The fight yields, so a hit under that line ends it."
+  [world]
+  (when-let [[eid e] (hunt/game world)]
+    (when (= :hoglin (entity/kind e))
+      (if (<= (physics/horizontal-distance (:player/pos world) (:entity/pos e)) hunt/strike-range)
+        {:intent/kind :fight :intent/target eid :intent/for :hunt :intent/yield? true}
+        {:intent/kind :walk :intent/target (hunt/cell (:entity/pos e)) :intent/for :hunt}))))
+
+(def crimson-ground #{:crimson_nylium}) ; the floor a hoglin is found on
+(def food-sight 16)                     ; blocks of crimson ground crossed to find a hoglin, only at or above retreat-health
+
+(defn crimson-intent
+  "A walk to the nearest standable cell on crimson nylium within food-sight, or nil. Only at or
+   above combat/retreat-health: under it, walking into a crimson forest is walking into a hoglin
+   (issue #577). One route of corridor-nodes; a stand with none is left, not failed :no-path."
+  [world]
+  (when (>= (:player/health world 20.0) combat/retreat-health)
+    (let [[x y z] (intent/feet world)
+          stands (for [dx (range (- food-sight) (inc food-sight))
+                       dz (range (- food-sight) (inc food-sight))
+                       dy [-1 0 1]
+                       :let [floor [(+ x dx) (+ y dy) (+ z dz)]
+                             stand (update floor 1 inc)]
+                       :when (and (not= stand [x y z])
+                                  (contains? crimson-ground
+                                             (some-> (terrain/block-at world floor)
+                                                     blocks/name-of))
+                                  (path/standable? world stand))]
+                   stand)
+          to (memory/nearest-of (:player/pos world) (double food-sight) stands)
+          walk
+          {:intent/kind :walk :intent/target to :intent/for :food :intent/max-nodes corridor-nodes}]
+      (when (and to (intent/routable? world walk)) walk))))
+
+(defn provisions
+  "How to get the food a rest needs when heals? is false: an edible drop in sight, a meal crafted
+   from what is held, or (only at or above combat/retreat-health) a nearby hoglin or the crimson
+   ground one lives on. nil when none of that can be had. The hunt row itself does not run in
+   the Nether at food 17 (eat/hungry? is food under 14, and provisioning? is the overworld), so
+   this asks hunt/game directly."
+  [world]
+  (or (when-let [[_ e] (food-lying world)] (food-intent world e))
+      (craft-meal world)
+      (hoglin-intent world)
+      (crimson-intent world)))
 
 (defn watchers
   "{eid entity} of the blazes alive within cover-range of the feet that have the bot in sight
@@ -353,34 +463,46 @@
 
 (def rest-intent {:intent/kind :rest})
 
+(defn void-hold?
+  "Is the retreat from a watcher a step off a lip (combat/void-retreat?): that rest stays even
+   when it cannot heal. test.yml 40624888901: treating the open lip as no rest sent the search
+   off the lip."
+  [world]
+  (let [[_ e] (watcher world)] (boolean (and e (combat/void-retreat? world e)))))
+
 (defn healing
   "What a hurt bot does: out of the watching blazes' sight (hide); else the meal; else back away
    from whoever last struck (combat/striker), and from the nearest watcher, unless that line
-   steps off a drop no landing survives (combat/void-retreat?); else a :rest on that lip, or when
-   not in the open (held in cover when it cannot heal, heals?: a death is no plan, the bot stays
-   alive), else nil. Cover before the meal where there is cover: a meal takes a second and a
-   half standing still, two hits from a burst, and gym blazefort-k run 3 (run 38913023560) ate
-   at 9.4 by its spawner and was dead before the food came. The meal before the back-off where
-   there is none: gym blaze-7 run 1 (run 38891910129) backed away three times round a room seven
-   square with the food at 17, where no back-off gets away, and burned to death without eating.
-   The rest before a back-off off a lip: issue #514 (sim R3-5-1) jumped the nether brick one
-   cell north and fell 31 into lava, and a footing found down there is not a survival. The rest
-   is never chosen while a strike is fresh and the way away from that attacker has a landing:
-   blaze-wall-b (plan 40624888909) blaze-fortress run 1 rested at 8 health while two zombified
-   piglins hit it. test.yml 40624888901: a watched void retreat is still a rest, in the open or
-   not, or the act searches."
+   steps off a drop no landing survives (combat/void-retreat?); else a :rest on that lip. Else,
+   when the rest cannot heal, food (provisions: a drop, a craft, a hoglin only at or above
+   retreat-health). Else a :rest when it can heal and the bot is not in the open, else nil: the
+   rods go on, and no fight is chosen under retreat-health. Cover before the meal where there
+   is cover: a meal takes a second and a half standing still, two hits from a burst, and gym
+   blazefort-k run 3 (run 38913023560) ate at 9.4 by its spawner and was dead before the food
+   came. The meal before the back-off where there is none: gym blaze-7 run 1 (run 38891910129)
+   backed away three times round a room seven square with the food at 17, where no back-off gets
+   away, and burned to death without eating. The rest before a back-off off a lip: issue #514
+   (sim R3-5-1) jumped the nether brick one cell north and fell 31 into lava, and a footing
+   found down there is not a survival. The rest is never chosen while a strike is fresh and the
+   way away from that attacker has a landing: blaze-wall-b (plan 40624888909) blaze-fortress run
+   1 rested at 8 health while two zombified piglins hit it. test.yml 40624888901: a watched void
+   retreat is still a rest, in the open or not, or the act searches. Probe 40634461444: a rest
+   at 9.3 with food 17 cannot heal, and holding it is not a plan."
   [world]
   (let [[weid e] (watcher world)
         [aid ae] (combat/striker world)
-        away (hide world)]
+        away (hide world)
+        food (delay (when-not (heals? world) (provisions world)))]
     (cond away away
           (meal world) (meal world)
           (and aid (not (combat/void-retreat? world ae)))
           {:intent/kind :back-off :intent/target aid}
           (and e (combat/void-retreat? world e)) rest-intent
           weid {:intent/kind :back-off :intent/target weid}
+          @food @food
           (in-open? world) nil
-          :else rest-intent)))
+          (heals? world) rest-intent
+          :else nil)))
 
 (defn wary?
   "Is the health under eat-under: a meal then comes before the next fight. Gym blaze-7b run 2 (run
@@ -391,20 +513,24 @@
 
 (defn warily
   "What a wary bot does before the next fight: out of the watching blazes' sight (hide); else
-   the meal; else back away from whoever last struck, unless that line is a void; else, when
-   nothing has struck and not in the open, a :rest until rested (held when it cannot heal); else
-   nil, and it fights on. Gym blazefort-k run 3 (run 38913023560) fought on at 11.5, watched by
+   the meal; else back away from whoever last struck, unless that line is a void; else food,
+   when the rest cannot heal (provisions); else, when nothing has struck and not in the open
+   and the rest can heal, a :rest until rested; else nil, and it fights on. A rest that cannot
+   heal is not chosen. Gym blazefort-k run 3 (run 38913023560) fought on at 11.5, watched by
    the spawner's burst, and was under 10 a second later. blaze-wall-b run 1 chose :rest at 13
    health, over eat-under and not yet hurt, while the piglins that a blaze swing had hit were
    hitting back."
   [world]
   (let [away (hide world)
-        [aid ae] (combat/striker world)]
+        [aid ae] (combat/striker world)
+        food (delay (when-not (heals? world) (provisions world)))]
     (cond away away
           (meal world) (meal world)
           (and aid (not (combat/void-retreat? world ae)))
           {:intent/kind :back-off :intent/target aid}
-          (and (nil? aid) (empty? (watchers world)) (not (in-open? world))) rest-intent
+          @food @food
+          (and (heals? world) (nil? aid) (empty? (watchers world)) (not (in-open? world)))
+          rest-intent
           :else nil)))
 
 (defn fires
@@ -483,14 +609,25 @@
          (remove bl)
          (filter #(unvisited-brick? visited %)))))
 
+(defn brick-tunnel
+  "The fortress's own tunnel to brick b. The lava rules are the :tunnel-to executor's
+   (fortress/safe?: never a cell beside lava, never the spawner), not a second tunneller."
+  [b]
+  {:intent/kind :tunnel-to
+   :intent/target b
+   :intent/steps fortress/steps-per-tunnel
+   :intent/bridge? true})
+
 (defn corridor-walk
-  "One walk to the nearest unvisited standable fortress brick within corridor-reach, or nil
-   when none is. The cells are read once (path/cells) and the route is planned once, when the
-   walk runs, with at most corridor-nodes. Asking routable? here planned a full search
-   (path/default-max-nodes, 6000) for each of 16 bricks every time this was chosen, and a walk
-   already at its brick ended in one tick and asked again: probe 40624590128 cancelled at the
-   60-minute limit still in its first replay. A walk that finds no route fails :no-path and
-   blacklists its stand cell, so the next choice is another brick."
+  "One walk to the nearest unvisited standable fortress brick within corridor-reach, or the
+   fortress's tunnel to that brick when the walk has no route, or nil when no such brick is.
+   The cells are read once (path/cells). The route is one search of corridor-nodes, asked here
+   so a stand with no route is never proposed as a walk. Asking routable? for each of 16 bricks
+   at path/default-max-nodes (6000) cancelled probe 40624590128 at the 60-minute limit. A walk
+   that fails :no-path blacklists its stand cell (y+1), and that stand is not proposed again.
+   Probe 40634456698 (sim R2/12) reached the fortress and twelve such walks failed in 4.2 s
+   (6,095,500 to 6,099,700 ms), and plan/max-unwalkable killed the plan seven blocks from the
+   brick."
   [world]
   (let [feet (intent/feet world)
         at (path/cells world)
@@ -501,10 +638,11 @@
                                corridor-reach))
                   (sort-by #(physics/distance (physics/centre feet) (physics/centre %))))]
     (when-let [b (some (fn [brick] (when (path/standable? at (update brick 1 inc)) brick)) near)]
-      {:intent/kind :walk
-       :intent/target (update b 1 inc)
-       :intent/for :corridor
-       :intent/max-nodes corridor-nodes})))
+      (let [walk {:intent/kind :walk
+                  :intent/target (update b 1 inc)
+                  :intent/for :corridor
+                  :intent/max-nodes corridor-nodes}]
+        (if (intent/routable? world walk) walk (brick-tunnel b))))))
 
 (defn fortress-bounds
   "The bounding box {:min-x :max-x :min-y :max-y :min-z :max-z} of fortress bricks on record,
@@ -534,10 +672,7 @@
           unvisited (remove #(contains? visited %) candidates)]
       (when-let [target (first (sort-by #(physics/distance (physics/centre feet) (physics/centre %))
                                         (or (seq unvisited) candidates)))]
-        {:intent/kind :tunnel-to
-         :intent/target target
-         :intent/steps fortress/steps-per-tunnel
-         :intent/bridge? true}))))
+        (brick-tunnel target)))))
 
 (defn fortress-search
   "Search the fortress: walk along open corridors (corridor-walk) toward unexplored bricks, or
@@ -550,10 +685,7 @@
       (when-let [b (memory/nearest-of (physics/centre (intent/feet world))
                                       corridor-reach
                                       (unvisited-fortress-bricks world))]
-        {:intent/kind :tunnel-to
-         :intent/target b
-         :intent/steps fortress/steps-per-tunnel
-         :intent/bridge? true})
+        (brick-tunnel b))
       (corridor-extension world)))
 
 (defn search
@@ -663,13 +795,15 @@
 ;; ---------------------------------------------------------------- the :rest intent
 
 (defmethod intent/run :rest
-  ;; {:intent/kind :rest}: stand still out of sight until the health is back to rested, or
-  ;; healthy enough to fight when food cannot heal further, or a blaze watches the bot that
-  ;; did not when the rest began (:intent/blazes), or the health falls under what it was then
-  ;; (:intent/health: shot from somewhere unseen), or someone who has struck is still there and
-  ;; the way away from them has a landing (combat/striker: a rest beside an angry zombified
-  ;; piglin, blaze-wall-b run 1), or exposed in the open (done, and the act looks again),
-  ;; failed :no-heal after rest-ms when food could heal.
+  ;; {:intent/kind :rest}: stand still out of sight until the health is back to rested, or the
+  ;; rest cannot heal and this is not a watched void retreat (void-hold?: the lip stays), or a
+  ;; blaze watches the bot that did not when the rest began (:intent/blazes), or the health falls
+  ;; under what it was then (:intent/health: shot from somewhere unseen), or someone who has
+  ;; struck is still there and the way away from them has a landing (combat/striker: a rest
+  ;; beside an angry zombified piglin, blaze-wall-b run 1), or exposed in the open (done, and
+  ;; the act looks again), failed :no-heal after rest-ms when food could heal.
+  ;; A rest that cannot heal used to run until the window: probe 40634461444 rest 360, health
+  ;; 9.3, food 17, from 72.78 min to the 330 min stop.
   ;; An intent, not a planner wait: the slow heal brings a point every four seconds, and a wait
   ;; fails the plan after plan/wait-ticks (20 s)
   [world {:intent/keys [since health] seen :intent/blazes} _]
@@ -687,7 +821,7 @@
             (assoc :player/controls {})
             (intent/assoc-intent :intent/since since :intent/blazes seen :intent/health health))]
     (cond (or (>= now-health rested)
-              (and (not (heals? world)) (>= now-health eat-under))
+              (and (not (heals? world)) (not (void-hold? world)))
               (< now-health health)
               (seq (remove seen here))
               struck?

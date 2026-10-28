@@ -27,8 +27,10 @@
 
 (def game-kinds
   "The animals hunted, by type name, with the raw meat each drops (the game's loot tables).
-   Chickens are left: raw chicken may make the eater hungry (eat/unsafe), and it is not cooked."
-  {:cow :beef :mooshroom :beef :pig :porkchop :sheep :mutton :rabbit :rabbit})
+   Chickens are left: raw chicken may make the eater hungry (eat/unsafe), and it is not cooked.
+   A hoglin is the Nether's pig (a crimson forest). It hits back, so game refuses one under
+   combat/retreat-health and the fight yields (issue #577)."
+  {:cow :beef :mooshroom :beef :pig :porkchop :sheep :mutton :rabbit :rabbit :hoglin :porkchop})
 
 (def meats "The item ids of what game-kinds drop." (set (map recipe/item-id (vals game-kinds))))
 
@@ -37,7 +39,7 @@
 (def starving-radius 48)              ; blocks a starving bot hunts within (a server shows animals this far, and the model populates three chunks round the player)
 (def strike-range 4.5)                ; blocks on the plane from which a hunt fights instead of walking: past a walk's reach (intent/reach 4), so a walk that arrived is never asked again
 (def candidates 3)                    ; nearest animals asked for a route, as the other acts ask
-(def provision-wanted 6)              ; edible items held before the portal is lit: the Nether has no animals, and health comes back there only from food held (issue #501: three raw meats were eaten to the bar's 18 before the portal, and the Nether leg began with none)
+(def provision-wanted 6)              ; edible items held before the portal is lit: health comes back in the Nether only from food 18, and a hoglin is hunted only when one is already near and health is at least retreat-health (issue #501: three raw meats were eaten to the bar's 18 before the portal, and the Nether leg began with none)
 (def early-forage-ms 120000)          ; ms the search goes on before the descent, from its first leg: the stone pickaxe is made on the surface among animals, and the iron kit's search still has its own forage-ms
 (def forage-ms 360000)                ; ms the search for animals goes on, from its first leg, however many legs: then the bot goes on with what it holds, never holding the portal up
 (def forage-reach 48)                 ; blocks the first two forage legs walk from the feet: a server shows animals this far (starving-radius)
@@ -119,11 +121,12 @@
    (hunt-radius, starving-radius when starving), the first of the candidates nearest that a route
    reaches (intent/routable?) and a fight can reach from its end (fightable-from-route?); nil
    when there is none, and none while the body is in water: no route is walked from there, the
-   rows that swim out come first. Never an animal standing in a cell of the blacklist, where a
-   walk to it that failed :no-path left it (fail-intent blacklists the walk's cell, not the
-   animal). Sim snapshot R1-41-1 (issue #162): the bot surfaced in open sea, a sheep stood on
-   the far shore, and the walk at its cell failed :no-path every twelve seconds, twelve in a row
-   ending the plan."
+   rows that swim out come first. Never a hoglin under combat/retreat-health: it hits back
+   (issue #577). Never an animal standing in a cell of the blacklist, where a walk to it that
+   failed :no-path left it (fail-intent blacklists the walk's cell, not the animal). Sim
+   snapshot R1-41-1 (issue #162): the bot surfaced in open sea, a sheep stood on the far shore,
+   and the walk at its cell failed :no-path every twelve seconds, twelve in a row ending the
+   plan."
   [world]
   (let [pos (:player/pos world)
         bl (:plan/blacklist world #{})
@@ -132,6 +135,8 @@
          (filter (fn [[eid e]]
                    (and (not (:player/in-water? world))
                         (game-kinds (entity/kind e))
+                        (or (not= :hoglin (entity/kind e))
+                            (>= (:player/health world 20.0) combat/retreat-health))
                         (not (entity/dead? e))
                         (not (combat/given-up? world eid e))
                         (not (contains? bl eid))
@@ -288,7 +293,8 @@
            :intent/for :hunt}
           e
           (if (<= (physics/horizontal-distance (:player/pos world) (:entity/pos e)) strike-range)
-            {:intent/kind :fight :intent/target eid :intent/for :hunt}
+            (cond-> {:intent/kind :fight :intent/target eid :intent/for :hunt}
+              (= :hoglin (entity/kind e)) (assoc :intent/yield? true))
             {:intent/kind :walk :intent/target (cell (:entity/pos e)) :intent/for :hunt})
           (foraging? world) {:intent/kind :forage :intent/for :hunt})))
 
