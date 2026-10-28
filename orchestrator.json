@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-28T22:09:27.323Z",
+  "at" : "2026-10-28T22:11:41.534Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -33,11 +33,6 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 594,
-    "title" : "Bot stops at portal: unsafe",
-    "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
-  }, {
     "number" : 151,
     "title" : "Bot stops at flint-and-steel: not-picked-up",
     "labels" : [ "bot-failure", "real", "sim" ],
@@ -50,6 +45,11 @@
   }, {
     "number" : 597,
     "title" : "Bot stops at ingots: unsafe",
+    "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 594,
+    "title" : "Bot stops at portal: unsafe",
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
