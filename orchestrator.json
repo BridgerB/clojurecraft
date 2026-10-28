@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-28T03:55:09.579Z",
+  "at" : "2026-10-28T03:56:16.997Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -43,20 +43,25 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
+    "number" : 579,
+    "title" : "Bot stops at ender-pearls: timeout",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
     "number" : 71,
     "title" : "Bot stops at portal-kit: boxed",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 579,
-    "title" : "Bot stops at ender-pearls: timeout",
+    "number" : 135,
+    "title" : "Bot stops at cast-one: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 586,
     "title" : "Bot stops at furnace: stuck",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
+    "copilot" : true
   }, {
     "number" : 461,
     "title" : "Bot stops at portal: out-of-reach",
@@ -81,11 +86,6 @@
     "number" : 156,
     "title" : "Bot stops at portal-kit: stuck",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
-    "number" : 135,
-    "title" : "Bot stops at cast-one: timeout",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 89,
@@ -151,16 +151,21 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 71,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
     "issue" : 579,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 71,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 135,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
     "issue" : 586,
-    "move" : "assign"
+    "move" : "unassign",
+    "why" : "no pull request and no session since the assignment"
   }, {
     "issue" : 461,
     "move" : "leave",
@@ -182,10 +187,6 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 135,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
     "issue" : 89,
     "move" : "leave",
     "why" : "hands-off label"
@@ -203,10 +204,6 @@
     "why" : "hands-off label"
   } ],
   "log" : [ {
-    "issue" : 586,
-    "move" : "assign",
-    "at" : "2026-10-27T22:17:24.807Z"
-  }, {
     "issue" : 586,
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
@@ -1551,5 +1548,10 @@
     "issue" : 586,
     "move" : "assign",
     "at" : "2026-10-28T03:55:09.579Z"
+  }, {
+    "issue" : 586,
+    "move" : "unassign",
+    "why" : "no pull request and no session since the assignment",
+    "at" : "2026-10-28T03:56:16.997Z"
   } ]
 }
