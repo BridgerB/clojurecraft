@@ -548,12 +548,13 @@
         (is (= (flee 7 :trade) (plan/next-intent close (row :defend) plan/goals))
             "inside craft-room the craft waits, even with the wood in hand")))))
 
-(deftest a-pursuer-the-blows-can-finish-is-fought-to-the-end
+(deftest a-pursuer-the-blows-can-finish-is-fought-while-health-holds
   ;; probe 40626972972, R4/1 seed 5: 43 zombie deaths, then a creeper. A stone pickaxe loses
   ;; the retreat trade at full health, so every meeting fled. The zombie follows 35, the flee
   ;; stops at 12, and the back-off died in its hands (333400 ms of :back-off, two rotten flesh).
   ;; Health 14 with the stone sword is the same shape once the retreat count has gone losing
-  ;; and the count to 0 has not. Under retreat-health, and after a :hurt break-off, it still flees.
+  ;; and the count to 0 has not. The fight is not :to-the-end?: it breaks off at retreat-health
+  ;; (issue #577). Under retreat-health, and after a :hurt break-off, it still flees.
   (let [z (mob :zombie [10.5 64.0 8.5] 20.0)
         armed (assoc (standing {7 z}) :player/health 14.0)
         pick (assoc (standing {7 z}) :player/inventory {0 (item :stone_pickaxe 1)})
@@ -561,20 +562,147 @@
     (is (combat/pursues? z) "a zombie follows past flee-radius")
     (is (combat/losing-trade? armed z) "at 14 a stone sword loses the retreat trade")
     (is (not (combat/dying-trade? armed z)) "and wins the one counted to 0")
-    (is (= {:intent/kind :fight :intent/target 7 :intent/to-the-end? true}
-           (plan/next-intent armed (row :defend) plan/goals))
-        "health 14, stone sword, zombie two blocks off: fight it out")
+    (is (= (combat/dying-trade? armed z) (combat/crowd-dies? armed z))
+        "one zombie, the held sword: the crowd count is the dying trade")
+    (is (= {:intent/kind :fight :intent/target 7} (plan/next-intent armed (row :defend) plan/goals))
+        "health 14, stone sword, one zombie: fight, and break off at 10")
     (is (combat/losing-trade? pick z) "a stone pickaxe loses the retreat trade at full health")
     (is (not (combat/dying-trade? pick z)) "and wins the one counted to 0")
-    (is (= {:intent/kind :fight :intent/target 7 :intent/to-the-end? true}
-           (plan/next-intent pick (row :defend) plan/goals))
-        "the cave weapon: finish the zombie instead of fleeing into its hands")
+    (is (= (combat/dying-trade? pick z) (combat/crowd-dies? pick z)))
+    (is (= {:intent/kind :fight :intent/target 7} (plan/next-intent pick (row :defend) plan/goals))
+        "the cave weapon, in the hand: fight while health holds, not to the end")
     (is (combat/dying-trade? low z) "at 14 the pickaxe cannot finish it")
     (is (= (flee 7 :trade) (plan/next-intent low (row :defend) plan/goals))
         "that meeting still flees")
     (testing "a :hurt break-off is not restarted by a trade the death count would win"
       (let [healing (assoc armed :plan/fled {7 {:fled/at 1000 :fled/why :hurt}})]
         (is (= (flee 7 :hurt) (plan/next-intent healing (row :defend) plan/goals)))))))
+
+(defn engaged
+  "w with a :fight already in :engage and :to-the-end? on eid, the shape of the deaths."
+  [w eid]
+  (assoc w
+         :plan/intent
+         {:intent/kind :fight
+          :intent/target eid
+          :intent/status :active
+          :intent/stage :engage
+          :intent/to-the-end? true
+          :intent/since 0}))
+
+(deftest a-pursuer-under-retreat-health-is-not-swung-at
+  ;; probe 40632244663, R2 seed 5. Deaths 1 and 4 were a :to-the-end? fight at health 2.17,
+  ;; the hand empty, a second zombie already in melee on the fourth. Feet here are the test
+  ;; column's [8.5 64 8.5]; the logged distances are kept. The logged health already flees from
+  ;; next-intent (hurt? is first). The fight that was running does not: to-the-end? used to
+  ;; skip the break-off. The decision that started it is the same mobs at health 20 with the
+  ;; pickaxe in another slot, and death 4's two melee zombies at health 14 with the sword.
+  (let [feet [8.5 64.0 8.5]
+        ;; t 109050: zombie 166 at 1.120 health 8, zombie 145 at 9.650 health 20
+        death-1 (assoc (standing {166 (mob :zombie [9.62 64.0 8.5] 8.0)
+                                  145 (mob :zombie [18.15 64.0 8.5] 20.0)})
+                       :player/health 2.1666666666666643
+                       :player/food 20.0
+                       :player/held-slot 0
+                       :player/inventory {2 (item :stone_pickaxe 1)})
+        ;; t 223650: zombie 206 at 1.120 health 8, zombie 207 at 1.120 health 20.
+        ;; 1.11 and 1.12, both inside a zombie's reach of 1.4, so the nearer one is stable.
+        death-4 (assoc (standing {206 (mob :zombie [9.62 64.0 8.5] 8.0)
+                                  207 (mob :zombie [8.5 64.0 9.61] 20.0)})
+                       :player/health 2.1666666666666643
+                       :player/food 20.0
+                       :player/held-slot 0
+                       :player/inventory {2 (item :stone_pickaxe 1)})
+        broke (fn [w eid]
+                (let [[gone fx] (fx/fold intent-step (engaged w eid) [(tick 50)])]
+                  [(:plan/intent gone) (attacks fx)]))]
+    (is (= feet (:player/pos death-1)))
+    (is (combat/melee? death-1 (get-in death-1 [:world/entities 166])))
+    (is (not (combat/melee? death-1 (get-in death-1 [:world/entities 145]))) "9.65 is not melee")
+    (is (= (flee 166 :hurt) (plan/next-intent death-1 (row :defend) plan/goals)))
+    (let [[i at] (broke death-1 166)]
+      (is (= :retreat (:intent/stage i)) "the running fight breaks off")
+      (is (not (:intent/to-the-end? i)))
+      (is (empty? at) "no swing at 2.17"))
+    (is (combat/melee? death-4 (get-in death-4 [:world/entities 206])))
+    (is (combat/melee? death-4 (get-in death-4 [:world/entities 207])))
+    (is (= 2 (count (combat/crowd death-4 (get-in death-4 [:world/entities 207])))))
+    (let [[i at] (broke death-4 206)]
+      (is (= :retreat (:intent/stage i)))
+      (is (empty? at)))
+    (testing "the hand was empty: a pickaxe in another slot is not harder than a fist"
+      ;; the logged zombie was on 8, which a pickaxe's retreat count already beats. The fight
+      ;; was started against a full one: retreat loses, the count to 0 wins, best-blow saw the
+      ;; pickaxe. The hand did not.
+      (let [full (assoc death-1
+                        :player/health 20.0
+                        :world/entities {166 (mob :zombie [9.62 64.0 8.5] 20.0)})
+            z (get-in full [:world/entities 166])
+            held (assoc full :player/held-slot 2)]
+        (is (not (combat/held-harder? full)))
+        (is (combat/losing-trade? full z))
+        (is (not (combat/dying-trade? full z)) "the bag's pickaxe still wins the count to 0")
+        (is (= (flee 166 :trade) (plan/next-intent full (row :defend) plan/goals))
+            "empty hand, even with the pickaxe in the bag")
+        (is (= {:intent/kind :fight :intent/target 166}
+               (plan/next-intent held (row :defend) plan/goals))
+            "the same pickaxe in the hand is a fight that still breaks off at 10")))
+    (testing "both zombies in melee are counted, not the one target"
+      (let [both (assoc death-4 :player/health 14.0 :player/inventory {0 (item :stone_sword 1)})]
+        (is (combat/crowd-dies? both (get-in both [:world/entities 207])))
+        (is (not (combat/dying-trade? both (get-in both [:world/entities 207])))
+            "the one full zombie would still be a win")
+        (is (= :back-off (:intent/kind (plan/next-intent both (row :defend) plan/goals))))
+        (is (not (:intent/to-the-end? (plan/next-intent both (row :defend) plan/goals)))))))
+  (testing "under the line the answer is cover, a meal, or a straight back-off, never a swing"
+    (let [stone (blocks/default-state :stone)
+          zombie (mob :zombie [11.0 64.0 8.5] 20.0)
+          hurt (assoc (standing {7 zombie}) :player/health 6.0)
+          blocks (fn [w b] (update w :player/inventory merge b))
+          pillared (assoc hurt
+                          :world/chunks {[0 0] (world/column {[6 64 8] stone [6 65 8] stone})}
+                          :world/entities {7 (mob :zombie [11.5 64.0 8.5] 20.0)})
+          corner (plan/next-intent pillared (row :defend) plan/goals)]
+      (is
+       (= {:intent/kind :place :intent/item :cobblestone :intent/cell [9 64 8] :intent/for :shelter}
+          (plan/next-intent (blocks hurt {1 (item :cobblestone 4)}) (row :defend) plan/goals))
+       "a block into the air between the feet and the zombie")
+      (is (= {:intent/kind :pillar :intent/item :cobblestone :intent/top 66 :intent/for :shelter}
+             (plan/next-intent (blocks
+                                (assoc-in hurt [:world/entities 7 :entity/pos] [9.62 64.0 8.5])
+                                {1 (item :cobblestone 4)})
+                               (row :defend)
+                               plan/goals))
+          "the zombie stands in that cell: pillar")
+      (is (= {:intent/kind :dig :intent/target [8 64 7] :intent/for :shelter}
+             (plan/next-intent (-> hurt
+                                   (assoc-in [:world/entities 7 :entity/pos] [9.62 64.0 8.5])
+                                   (assoc :world/chunks
+                                          {[0 0] (world/column {[8 64 7] stone [8 65 7] stone})})
+                                   (blocks {1 (item :cobblestone 4)}))
+                               (row :defend)
+                               plan/goals))
+          "a wall beside the feet, the step toward the zombie blocked: dig the pocket")
+      (is (= {:intent/kind :eat :intent/item :bread :intent/for :shelter}
+             (plan/next-intent (assoc (blocks hurt {1 (item :bread 2)}) :player/food 10)
+                               (row :defend)
+                               plan/goals)))
+      (is (= :walk (:intent/kind corner)))
+      (is (= :cover (:intent/for corner)))
+      (is (combat/hidden-from? pillared
+                               (:intent/target corner)
+                               (combat/aim (get-in pillared [:world/entities 7]))))
+      (is (= (flee 7 :hurt) (plan/next-intent hurt (row :defend) plan/goals))
+          "open ground, a sword, no food: the straight back-off")))
+  (testing "a neutral and a blaze held to the end still do not break off"
+    (let [tick-1 (fn [w] (first (fx/fold intent-step (engaged w 7) [(tick 50)])))
+          enderman (assoc (standing
+                           {7 (assoc (mob :enderman [10.5 64.0 8.5] 40.0) :entity/creepy? true)})
+                          :player/health
+                          6.0)
+          blaze (assoc (standing {7 (mob :blaze [10.5 65.0 8.5] 20.0)}) :player/health 6.0)]
+      (is (not= :retreat (:intent/stage (:plan/intent (tick-1 enderman)))))
+      (is (not= :retreat (:intent/stage (:plan/intent (tick-1 blaze))))))))
 
 (defn zombies-alive
   "The model's zombies that are not dead."

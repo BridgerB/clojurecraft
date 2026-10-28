@@ -18,12 +18,15 @@
    blacklisted by the planner; below retreat-health the fight breaks off and walks away, or ends
    for its row to retreat (:intent/yield?). A break-off is remembered (:plan/fled) until health
    is well above that line, and a fight the held weapon cannot finish even down to 0 is not
-   started. A melee mob that chases past flee-radius, and that the blows can finish before it
-   lands the killing hit, is fought to the end: a flee that stops at 12 does not break its
-   chase. A row whose act answers a kind of hostile itself (answers) has the :defend row leave
-   that kind to it."
+   started. A melee mob that chases past flee-radius is fought only while health is at
+   retreat-health or above, and only when the item in the hand hits harder than a fist and
+   those blows finish every hostile in melee: the fight breaks off at the line (issue #577,
+   a to-the-end fight held at 2.17). Under the line the bot blocks in, pillars, digs a pocket,
+   eats, or walks round a corner. A row whose act answers a kind of hostile itself (answers)
+   has the :defend row leave that kind to it."
   (:require [clojure.math :as math]
             [clojurecraft.blocks :as blocks]
+            [clojurecraft.eat :as eat]
             [clojurecraft.entity :as entity]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
@@ -34,6 +37,7 @@
             [clojurecraft.place :as place]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
+            [clojurecraft.stairs :as stairs]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.window :as window]))
 
@@ -398,6 +402,20 @@
   [e]
   (let [k (entity/kind e)] (and (some? e) (not= :creeper k) (not (contains? entity/neutral k)))))
 
+(declare pursues? shelter-intent)
+
+(defn breaks-off?
+  "Does fight intent i break off under retreat-health? A hold and a hunt never do. :to-the-end?
+   does not either (a blaze at hand follows any retreat, and a neutral is fought out), except a
+   non-neutral pursuer: that fight is not held under the line (issue #577)."
+  [world i e]
+  (and (not= :retreat (:intent/stage i))
+       (not (:intent/hold? i))
+       (not= :hunt (:intent/for i))
+       (< (:player/health world 20.0) retreat-health)
+       (or (not (:intent/to-the-end? i))
+           (boolean (and e (pursues? e) (not (contains? entity/neutral (entity/kind e))))))))
+
 (defn fled
   "The world with eid kept in :plan/fled at now for why (:hurt a break-off under retreat-health,
    :trade a fight the blows lose). A :hurt fact is not replaced by :trade: the hysteresis
@@ -413,7 +431,8 @@
   ;; retreat-health it breaks off and walks away (done once away: a fight left is not a failure).
   ;; Where the target was last seen is kept (:intent/target-pos): a hunt collects its drop there.
   ;; With :intent/yield? it ends there instead (done), and its row plans the retreat itself; with
-  ;; :intent/to-the-end? it never breaks off (a blaze at hand follows any retreat). A fight for
+  ;; :intent/to-the-end? it never breaks off (a blaze at hand follows any retreat), unless the
+  ;; target is a non-neutral pursuer (breaks-off?: issue #577, a fight held at 2.17). A fight for
   ;; :hunt never breaks off either: an animal does not strike back, and a starving bot (food 0,
   ;; health under retreat-health) that backed off ended the fight done with the animal alive,
   ;; which the hunt took for a kill: it collected at the live animal, failed :not-picked-up and
@@ -433,14 +452,22 @@
           (-> world
               (assoc :player/controls {})
               intent/done)
-          (and (not= :retreat (:intent/stage i))
-               (not (:intent/hold? i))
-               (not (:intent/to-the-end? i))
-               (not= :hunt (:intent/for i))
-               (< (:player/health world 20.0) retreat-health))
-          (-> (cond-> world (flee-kind? e) (fled (:intent/target i) :hurt))
-              (intent/dissoc-intent :intent/child)
-              (intent/assoc-intent :intent/stage :retreat :intent/since now))
+          (breaks-off? world i e)
+          (let [eid (:intent/target i)
+                away (when (and e (pursues? e) (flee-kind? e)) (shelter-intent world e))
+                world (cond-> world (flee-kind? e) (fled eid :hurt))]
+            (cond away
+                  (assoc world
+                         :player/controls {}
+                         :plan/intent
+                         (assoc away
+                                :intent/status :active
+                                :intent/goal (:intent/goal i)
+                                :intent/id (:intent/id i)))
+                  :else
+                  (-> world
+                      (intent/dissoc-intent :intent/child :intent/to-the-end?)
+                      (intent/assoc-intent :intent/stage :retreat :intent/since now))))
           (and (= :approach (:intent/stage i)) (:intent/child i)) (walk-on world i e event)
           :else
           (case (window/waiting world i)
@@ -664,6 +691,18 @@
    (charged-damage nil)
    (:player/inventory world)))
 
+(defn held-id
+  "The item id in the selected hotbar slot, or nil when that slot is empty. The blow a fight
+   swings is this one: a pickaxe in another slot is not in the hand."
+  [world]
+  (get-in world [:player/inventory (:player/held-slot world 0) :item]))
+
+(defn held-harder?
+  "Does the held item's charged blow beat an empty hand? Equal is not harder: a fist is not a
+   weapon the pursuer clause may fight with."
+  [world]
+  (> (charged-damage (held-id world)) (charged-damage nil)))
+
 (defn mob-hit
   "The [damage ms] of one hit entity e lands on Normal, its :melee or its :shoot and the ticks
    between them, or nil when it does not hit (a creeper, a passive)."
@@ -709,10 +748,53 @@
 (defn pursues?
   "Does entity e keep chasing after a flee finishes? A melee kind whose :follow is farther than
    flee-radius. A zombie follows 35 and a spider 16, both past 12, so a back-off that stops
-   there leaves it still coming. A skeleton shoots and has no :melee; a creeper has none either."
+   there leaves it still coming. A skeleton shoots and has no :melee; a creeper has none either.
+   A blaze shoots and has no :melee, so a to-the-end fight on one still never breaks off."
   [e]
   (let [k (mob/kinds (entity/kind e))]
     (boolean (and (:melee k) (:follow k) (> (double (:follow k)) flee-radius)))))
+
+(defn melee?
+  "Is entity e's melee reach over the feet, on the plane? A zombie's :reach is 1.4. One at 9.65
+   is not in the blow, whatever defend-radius says."
+  [world e]
+  (let [k (mob/kinds (entity/kind e))
+        reach (:reach k)]
+    (boolean
+     (and e (:melee k) reach (not (entity/dead? e)) (<= (horizontal world e) (double reach))))))
+
+(defn crowd
+  "Entity e plus every other hostile whose melee reach covers the feet. The one target is kept
+   even when it stands just outside its own reach: the decision is about the fight on it."
+  [world e]
+  (vec (distinct (cons e
+                       (map second (filter #(melee? world (second %)) (entity/hostiles world)))))))
+
+(defn swings-before
+  "How many swing-every blows land before hostiles' hits cover the drop from health to floor.
+   One hostile is the count blows-lose? uses. Several add their damage in the shared interval,
+   so two zombies in melee leave half the swings one does."
+  [health floor hostiles]
+  (let [hits (keep mob-hit hostiles)
+        gap (- (double health) (double floor))]
+    (cond (or (empty? hits) (neg? gap)) 0
+          :else
+          (let [every-ms (double (apply min (map second hits)))
+                dmg (reduce + 0.0 (map first hits))
+                n (inc (long (math/floor (/ gap dmg))))]
+            (long (math/floor (/ (* (double n) every-ms) (double swing-every))))))))
+
+(defn crowd-dies?
+  "Do the held item's blows lose a fight to 0 against crowd of entity e? The health to beat is
+   the sum of theirs, and their hits add. One mob with the held item matches dying-trade? when
+   that item is also the best blow. An empty hand is the fist."
+  [world e]
+  (let [hostiles (crowd world e)
+        blow (charged-damage (held-id world))
+        need (reduce +
+                     0.0
+                     (map #(or (:entity/health %) (:health (mob/kinds (entity/kind %)))) hostiles))]
+    (< (* (swings-before (:player/health world 20.0) 0 hostiles) blow) need)))
 
 (defn fled?
   "Is eid still a mob to stay away from: a :hurt flee while health is under resume-health, or
@@ -782,6 +864,149 @@
   "A :back-off from eid out to flee-radius, for why (:hurt or :trade)."
   [eid why]
   {:intent/kind :back-off :intent/target eid :intent/why why :intent/distance flee-radius})
+
+(def cover-look 6)                    ; cells round the feet a corner is looked for in before a line-of-sight route is searched
+
+(defn cover-near?
+  "Is a solid cell within cover-look of the feet, at the feet or the head? Open ground has no
+   corner for a line to break on, and is not searched."
+  [world]
+  (let [[x y z] (path/feet-cell (:player/pos world))]
+    (boolean (some (fn [[dx dz]]
+                     (or (some-> (terrain/block-at world [(+ x dx) y (+ z dz)])
+                                 blocks/solid?)
+                         (some-> (terrain/block-at world [(+ x dx) (inc y) (+ z dz)])
+                                 blocks/solid?)))
+                   (for [dx (range (- cover-look) (inc cover-look))
+                         dz (range (- cover-look) (inc cover-look))
+                         :when (pos? (+ (* dx dx) (* dz dz)))]
+                     [dx dz])))))
+
+(defn hidden-from?
+  "Is the line from eye height over cell node to point blocked (clear?)?"
+  [world node point]
+  (let [[x y z] node] (not (clear? world [(+ x 0.5) (+ y physics/eye-height) (+ z 0.5)] point))))
+
+(defmethod path/goal-done? :out-of-sight
+  ;; a cell whose eye cannot see :goal/pos, nor any point in :goal/cells
+  [world {:goal/keys [pos cells]} node]
+  (every? #(hidden-from? world node %) (cons pos cells)))
+
+(defmethod path/heuristic :out-of-sight [_ _] 0.0)
+
+(defn line-cover
+  "A walk to the nearest standable cell out of sight of every entity in es, or nil when the
+   ground is open (cover-near?) or no route finds one. The walk is stood in (:intent/for
+   :cover): a cell round a corner hides only once the feet are there."
+  [world es]
+  (when (and (seq es) (cover-near? world))
+    (let [aims (mapv aim es)
+          r (path/plan
+             world
+             (path/feet-cell (:player/pos world))
+             {:goal/kind :out-of-sight :goal/pos (first aims) :goal/cells (vec (rest aims))}
+             {:path/max-nodes 1500})
+          to (last (:path/waypoints r))]
+      (when (and (= :found (:path/status r)) to (not= to (intent/feet world)))
+        {:intent/kind :walk :intent/target to :intent/for :cover}))))
+
+(defn between-cell
+  "The feet's neighbour one cardinal step toward entity e, or nil when e shares the column."
+  [world e]
+  (let [[fx fy fz] (intent/feet world)
+        [ex _ ez] (:entity/pos e)
+        dx (- ex (+ fx 0.5))
+        dz (- ez (+ fz 0.5))
+        sx (cond (>= dx 0.5) 1
+                 (<= dx -0.5) -1
+                 :else 0)
+        sz (cond (>= dz 0.5) 1
+                 (<= dz -0.5) -1
+                 :else 0)]
+    (cond (and (zero? sx) (zero? sz)) nil
+          (>= (abs dx) (abs dz)) [(+ fx sx) fy fz]
+          :else [fx fy (+ fz sz)])))
+
+(defn occupied?
+  "Does a hostile stand in cell?"
+  [world cell]
+  (boolean (some (fn [[_ e]] (= cell (mapv #(long (math/floor (double %))) (:entity/pos e))))
+                 (entity/hostiles world))))
+
+(defn block-in
+  "A :place of one filler block into the air between the feet and entity e, or nil. The cell
+   the mob already stands in is not one: the server refuses a block into it."
+  [world e]
+  (let [item (stairs/filler world 1)
+        cell (between-cell world e)
+        id (when cell (terrain/block-at world cell))]
+    (when (and item
+               cell
+               id
+               (blocks/placeable-into? id)
+               (place/support world cell)
+               (not (place/inside-player? world cell))
+               (not (occupied? world cell)))
+      {:intent/kind :place :intent/item item :intent/cell cell :intent/for :shelter})))
+
+(defn pocket
+  "A :dig into a solid neighbour of the feet that is not the step toward entity e, when a filler
+   block is held to seal the pocket. Nil in the open. The seal is the next decision, once the
+   cell is air and the feet stand past it."
+  [world e]
+  (when (stairs/filler world 1)
+    (let [[x y z] (intent/feet world)
+          toward (between-cell world e)]
+      (some (fn [[dx dz]]
+              (let [c [(+ x dx) y (+ z dz)]
+                    head [(+ x dx) (inc y) (+ z dz)]]
+                (when (and (not= c toward)
+                           (some-> (terrain/block-at world c)
+                                   blocks/solid?)
+                           (some-> (terrain/block-at world head)
+                                   blocks/solid?))
+                  {:intent/kind :dig :intent/target c :intent/for :shelter})))
+            [[1 0] [-1 0] [0 1] [0 -1]]))))
+
+(defn pillar-up
+  "A :pillar two blocks up when a block to lay is held, the ground under the feet is solid, and
+   the two cells over the head are clear. Nil under a ceiling or with nothing to lay."
+  [world]
+  (let [item (stairs/pillar-item world)
+        [x y z] (intent/feet world)
+        above (fn [dy] (terrain/block-at world [x (+ y dy) z]))]
+    (when (and item
+               (some-> (above -1)
+                       blocks/solid?)
+               (some-> (above 1)
+                       blocks/placeable-into?)
+               (some-> (above 2)
+                       blocks/placeable-into?))
+      {:intent/kind :pillar :intent/item item :intent/top (+ y 2) :intent/for :shelter})))
+
+(defn meal
+  "An :eat of the food in hand when the bar is under hungry-below, or nil. Food at 20 is not
+   a meal: the deaths at 2.17 health were not hungry."
+  [world]
+  (when-let [n (and (eat/hungry? world) (eat/food-held world))]
+    {:intent/kind :eat :intent/item n :intent/for :shelter}))
+
+(defn shelter-intent
+  "What answers pursuer e under retreat-health, or nil when only a straight back-off remains.
+   A block between (block-in), a wall dug into (pocket), a pillar, a meal, or a walk round a
+   corner (line-cover). Never a swing."
+  [world e]
+  (or (block-in world e)
+      (pocket world e)
+      (pillar-up world)
+      (meal world)
+      (line-cover world (crowd world e))))
+
+(defn sheltering?
+  "Is intent i cover, a meal, a pillar, a dig or a seal chosen under retreat-health? A threat
+   at hand must not take it back every tick: the zombie is why it was chosen."
+  [i]
+  (boolean (or (= :cover (:intent/for i)) (= :shelter (:intent/for i)))))
 
 (defn passes?
   "Does the straight line from point a to point b come within pass-by of point p on the plane,
@@ -928,51 +1153,60 @@
   ;; the nearest threat. A creeper is backed away from, out to back-off-to. Anything else under
   ;; retreat-health, or still healing from that break-off (healing?, health under resume-health),
   ;; is backed away from out to flee-radius: regeneration from 9.2 to 10.2 must not start the
-  ;; fight again (race 40466567590, Clj_r04). A trade the blows lose (losing-trade?) is backed
-  ;; away from too, or a sword is made once the mob is craft-room off (craft-first), even in a
-  ;; corner: a fist against a full zombie is a death. Except a melee pursuer (pursues?) the
-  ;; blows can finish before it finishes the bot (dying-trade? loses is false) while health is
-  ;; still at retreat-health: that one is fought to the end. A flee to flee-radius does not
-  ;; break a zombie's follow of 35, and the back-off dies in its hands (probe 40626972972,
-  ;; R4/1 seed 5: 43 zombies, 5.56 min of :back-off, two rotten flesh). The fist is not that
-  ;; weapon: its dying trade against a spider is a tie the hits do not pay. A neutral turned
-  ;; on the bot (an angry enderman) is fought to the end whatever the health: it is faster and
-  ;; teleports, so a back-off is only hits taken (gym dragon-e run 1, 40 to 10, then dead in
-  ;; its hands). What a back-off could not get away from (:plan/cornered) is fought to the end
-  ;; when the trade wins and the health is at retreat-health or more (issue #563: at 7.3 two
-  ;; cornered zombies were fought down to 1.3; issue #161, a quarter hour of back-offs at
-  ;; under one health).
+  ;; fight again (race 40466567590, Clj_r04). A pursuer under the line is not swung at (issue
+  ;; #577): a block between, a dug pocket, a pillar, a meal, or a walk round a corner
+  ;; (shelter-intent), and the straight back-off only when none of those exist. A flee to
+  ;; flee-radius does not break a zombie's follow of 35 (probe 40626972972, R4/1 seed 5: 43
+  ;; zombies on that flee). While health holds, a pursuer the held blow can finish, counting
+  ;; every hostile in melee (crowd-dies?), is fought, and the fight breaks off at the line: it
+  ;; is not :to-the-end?. The fist is not that weapon. A trade the blows lose (losing-trade?)
+  ;; is backed away from too, or a sword is made once the mob is craft-room off (craft-first).
+  ;; A neutral turned on the bot (an angry enderman) is fought to the end whatever the health.
+  ;; What a back-off could not get away from (:plan/cornered) is fought to the end when health
+  ;; is at retreat-health or more (issue #563: at 7.3 two cornered zombies were fought down to
+  ;; 1.3; issue #161, a quarter hour of back-offs at under one health).
   [world _ _]
   (when-let [[eid e] (entity/nearest (threats world) (:player/pos world))]
     (let [neutral? (contains? entity/neutral (entity/kind e))
           hurt? (< (:player/health world 20.0) retreat-health)
-          craft (craft-first world eid e)]
+          craft (craft-first world eid e)
+          held? (held-harder? world)
+          finish? (not (crowd-dies? world e))]
       (cond (= :creeper (entity/kind e)) {:intent/kind :back-off :intent/target eid}
+            (and (not neutral?) hurt? (pursues? e))
+            (or (shelter-intent world e) (flee-intent eid :hurt))
             (and (not neutral?) (or hurt? (healing? world eid))) (flee-intent eid :hurt)
             craft craft
-            (and (pursues? e)
-                 (not neutral?)
-                 (> (best-blow world) (charged-damage nil))
-                 (losing-trade? world e)
-                 (not (dying-trade? world e)))
-            {:intent/kind :fight :intent/target eid :intent/to-the-end? true}
-            (and (losing-trade? world e) (not neutral?)) (flee-intent eid :trade)
             (or neutral? (contains? (:plan/cornered world #{}) eid))
             {:intent/kind :fight :intent/target eid :intent/to-the-end? true}
+            (and (pursues? e)
+                 (not neutral?)
+                 (<= retreat-health (:player/health world 20.0))
+                 held?
+                 finish?)
+            {:intent/kind :fight :intent/target eid}
+            (and (losing-trade? world e) (not neutral?)) (flee-intent eid :trade)
             :else {:intent/kind :fight :intent/target eid}))))
 
 (defmethod plan/interrupts? :defend
   ;; a back-off gives way once craft-first has a craft (the mob is craft-room off and the trade
-  ;; loses). Any other intent but a fight gives way when a threat is back inside its own close
-  ;; radius, so a mob that walks up during the craft is backed away from. A fled mob still out
-  ;; near flee-radius does not: close? is defend-radius, not the stretched one.
+  ;; loses), and once a pursuer under retreat-health has a shelter (shelter-intent): the straight
+  ;; flee is not kept while a corner or a block would do. A shelter itself is left to finish. Any
+  ;; other intent but a fight gives way when a threat is back inside its own close radius, so a
+  ;; mob that walks up during the craft is backed away from. A fled mob still out near flee-radius
+  ;; does not: close? is defend-radius, not the stretched one.
   [world _ i]
-  (cond (not (#{:fight :back-off} (:intent/kind i)))
-        (boolean (some (fn [[_ e]] (close? world e)) (threats world)))
-        (= :back-off (:intent/kind i))
-        (boolean
-         (craft-first world (:intent/target i) (get-in world [:world/entities (:intent/target i)])))
-        :else false))
+  (let [e (get-in world [:world/entities (:intent/target i)])]
+    (cond (sheltering? i) false
+          (not (#{:fight :back-off} (:intent/kind i)))
+          (boolean (some (fn [[_ t]] (close? world t)) (threats world)))
+          (= :back-off (:intent/kind i))
+          (boolean (or (craft-first world (:intent/target i) e)
+                       (and e
+                            (pursues? e)
+                            (< (:player/health world 20.0) retreat-health)
+                            (shelter-intent world e))))
+          :else false)))
 
 (defn quarry
   "{eid entity} of the hostiles the gym's :attack row kills: within attack-radius, not
