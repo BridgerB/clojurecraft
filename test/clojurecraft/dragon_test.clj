@@ -883,8 +883,11 @@
               (assoc :player/on-ground? false))]
     (is (= {:plan/wait :falling} (dragon/toward-crystals w)) "in the air, no route is asked for")
     (is (= {:intent/kind :dig-down}
-           (dragon/toward-crystals (assoc w :player/on-ground? true :world/entities {})))
-        "on the ground again, the planner goes on")))
+           (dragon/toward-crystals
+            (assoc (standing (merge s (pillar [8 5] 64 69)) [8.5 70.0 5.5] cobblestone {})
+                   :player/on-ground?
+                   true)))
+        "on the pillar again with the crystal gone, the planner goes on")))
 
 (deftest in-the-breath-on-the-island-with-a-crystal-standing-the-bot-walks-out-and-fights-nothing
   ;; gym chain-w11 run 4: an enderman fought at 14 health inside a breath cloud (type 23 damage,
@@ -896,8 +899,12 @@
               (assoc :player/dimension dimension/end :player/health 14.0 :player/food 20))
         out (assoc-in w [:world/entities 50 :entity/pos] [30.5 64.0 0.5])]
     (is (entity/in-breath? w) "the feet are inside the cloud")
-    (is (empty? (combat/threats w)) "nothing is fought inside it")
-    (is (seq (combat/threats out)) "the enderman is a threat again out of it")
+    (is (combat/breathed-on? w))
+    (is (not (combat/breathed-on? out)))
+    (with-redefs [combat/hittable? (constantly true)
+                  combat/approachable? (constantly true)]
+      (is (empty? (combat/threats w)) "nothing is fought inside it")
+      (is (contains? (combat/threats out) 99) "the enderman is a threat again out of it"))
     (let [i (dragon/toward-dragon w)]
       (is (= :walk (:intent/kind i)))
       (is (= :shelter (:intent/for i)))
