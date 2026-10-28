@@ -18,6 +18,7 @@
             [clojurecraft.eat :as eat]
             [clojurecraft.hunt :as hunt]
             [clojurecraft.make :as make]
+            [clojurecraft.memory :as memory]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]))
 
@@ -44,21 +45,41 @@
   [world]
   (transduce (map second) + 0 (missing world)))
 
+(defn started-at
+  "The ms the gear's time began: the later of the portal kit's being reached and the last death
+   (a new life makes its gear afresh, gear-ms each), or nil before either."
+  [world]
+  (let [since (:plan/since world (:time/now world 0))
+        kit (some->> (get (:plan/reached-after world) :portal-kit)
+                     (+ since))
+        death (:answer/at (last (memory/answers world :death)))]
+    (when-let [ts (seq (remove nil? [kit death]))] (reduce max ts))))
+
+(defn expired?
+  "Is the gear given up: gear-ms past started-at?"
+  [world]
+  (boolean (some-> (started-at world)
+                   (->> (- (:time/now world 0)))
+                   (>= gear-ms))))
+
 (defn wanted?
   "Is the gear to be worked now: a chained run in the overworld, the portal kit reached (or its
-   iron held), some piece missing, and not gear-ms past the kit?"
+   iron held), some piece missing, and not gear-ms past started-at?"
   [world]
-  (let [reached (:plan/reached world #{})
-        after (get (:plan/reached-after world) :portal-kit)
-        spent (some-> after
-                      (->> (- (- (:time/now world 0) (:plan/since world (:time/now world 0))))))]
+  (let [reached (:plan/reached world #{})]
     (boolean (and (:plan/chain? world)
                   (= dimension/overworld (dimension/of world))
                   (or (contains? reached :portal-kit) (pos? (armour/spare-ingots world)))
                   (pos? (gear-cost world))
-                  (or (nil? spent) (< spent gear-ms))))))
+                  (not (expired? world))))))
 
-(defmethod plan/done-by :geared? [world _] (not (wanted? world)))
+(defmethod plan/done-by :geared?
+  ;; not (wanted?) would be done before the portal kit, and plan/reach marks a chain target done
+  ;; the moment it is, for the run (probe 40779151074: :gear was reached at t 0 and never run).
+  ;; Done is the gear held, given up, or no chain; undone before, and the order of the chain keeps
+  ;; it from being chosen until the portal kit is reached
+  [world _]
+  (or (not (:plan/chain? world)) (zero? (gear-cost world)) (expired? world)))
 
 (defmethod plan/done-by :regeared?
   ;; the always row: only once the first gear was reached; before that :gear is the step

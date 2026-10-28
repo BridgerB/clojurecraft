@@ -430,6 +430,14 @@
         (craft-meal world)
         (hoglin-intent world))))
 
+(defn collectable?
+  "May a rod lying by the spawner be gone for: no blaze has the bot in sight, or the health is at
+   least rested? Sim R1/1 (probe 40779151074) went for the drops beside the spawner at 13.4, 13.6
+   and 8.0 health with blazes alive, was hit on each and died twice. A rod left is a rod the next
+   blaze drops again."
+  [world]
+  (or (empty? (watchers world)) (>= (:player/health world 20.0) rested)))
+
 (defn outnumbered?
   "Do volley blazes or more watch the bot: more volleys than its armour and its sword answer,
    whatever its health. Gym blazefort-k (run 38913023560) runs 3 and 4 died at the spawner from
@@ -845,7 +853,7 @@
   [world goal table]
   (let [[heid] (at-hand-blaze world)
         [beid] (quarry world)
-        [_ lying] (rod-lying world)
+        [_ lying] (when (collectable? world) (rod-lying world))
         sp (nearest-spawner world)
         heal (delay (when (hurt? world) (healing world)))
         wary (delay (when (wary? world) (warily world)))

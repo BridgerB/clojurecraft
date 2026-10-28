@@ -6,6 +6,7 @@
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
             [clojurecraft.gear :as gear]
+            [clojurecraft.memory :as memory]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.world :as world]))
@@ -49,9 +50,9 @@
   (testing "the portal kit reached, nothing worn: the step is undone"
     (is (gear/wanted? (standing kit)))
     (is (not (plan/done-by (standing kit) (row :gear)))))
-  (testing "before the portal kit: not yet"
+  (testing "before the portal kit: not wanted yet, and not done either (it would be reached)"
     (is (not (gear/wanted? (standing {} #{:iron-kit}))))
-    (is (plan/done-by (standing {} #{:iron-kit}) (row :gear))))
+    (is (not (plan/done-by (standing {} #{:iron-kit}) (row :gear)))))
   (testing "all of it held: done"
     (is (plan/done-by (standing (merge kit
                                        {3 (item :iron_helmet 1)
@@ -77,6 +78,37 @@
     (let [w (standing (merge kit {3 (item :iron_ingot 22)}))]
       (is (= :iron_helmet (armour/wanted w)))
       (is (not (plan/done-by w (row :armour)))))))
+
+(deftest the-gear-step-is-not-reached-before-it-is-worked
+  ;; sim R1/1 (probe 40779151074): :gear was done-by true until the portal kit, and plan/reach
+  ;; marks a chain target reached the moment it is done, for the run: the step never ran, and the
+  ;; bot entered the Nether with a stone sword and no armour
+  (let [w (standing {} #{})]
+    (is (not (contains? (:plan/reached (plan/reach w plan/goals)) :gear)))
+    (is (contains? (:plan/reached (plan/reach (standing (merge kit
+                                                               {3 (item :iron_helmet 1)
+                                                                4 (item :iron_chestplate 1)
+                                                                5 (item :iron_leggings 1)
+                                                                6 (item :iron_sword 1)}))
+                                              plan/goals))
+                   :gear)
+        "reached once it is held")))
+
+(deftest each-life-has-its-own-gear-time
+  ;; probe 40779151074: the second death came 63 minutes after the portal kit, gear-ms gone, so
+  ;; the regear never began and the bot went back with a stone sword
+  (let [late (+ 100 gear/gear-ms 100000)
+        w (assoc (standing {} #{:portal-kit :gear :nether})
+                 :plan/since 0
+                 :plan/reached-after {:portal-kit 100}
+                 :time/now late)]
+    (is (gear/expired? w))
+    (is (not (gear/wanted? w)) "the first life's time is gone")
+    (let [dead (memory/remember-answer w {:answer/kind :death})]
+      (is (not (gear/expired? dead)))
+      (is (gear/wanted? dead) "the new life's time has just begun")
+      (is (not (plan/done-by dead (row :regear))))
+      (is (gear/expired? (assoc dead :time/now (+ late gear/gear-ms)))))))
 
 (deftest after-a-death-the-gear-is-made-again
   ;; sim R1/1 (probe 40761589784): every life after the first went back to the blazes with a

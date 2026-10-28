@@ -421,6 +421,19 @@
     (testing "with no cover to be had the nearest is still fought"
       (is (= :fight (:intent/kind (next-intent (assoc (standing two) :player/health 15.0))))))))
 
+(deftest a-rod-by-the-spawner-is-not-gone-for-under-fire
+  ;; sim R1/1 (probe 40779151074): :collect-drops [317 77 238] at 13.4, 13.6 and 8.0 health with
+  ;; blazes alive; each was hit, two died
+  (let [rod (entity :item [10.5 64.0 9.5] :entity/item (recipe/item-id :blaze_rod))
+        watchers {8 (entity :blaze [13.5 65.0 8.5] :entity/health 20.0)}
+        w (assoc (standing (assoc watchers 7 rod)) :player/health 13.4)]
+    (is (seq (blaze/watchers w)))
+    (is (not (blaze/collectable? w)))
+    (is (not= :collect-drops (:intent/kind (next-intent w))))
+    (testing "healthy, or unseen, the rod is gone for"
+      (is (blaze/collectable? (assoc w :player/health 19.0)))
+      (is (blaze/collectable? (assoc (standing {7 rod}) :player/health 13.4))))))
+
 (deftest a-swarm-out-of-sight-is-waited-for-in-cover
   ;; sim R1/1 (probe 40761589784, TRACE): healed to 18 in cover, the bot walked out to the
   ;; spawner each time, was shot to 4 in the open and went back; sixteen foods, no kill
