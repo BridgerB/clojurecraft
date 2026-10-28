@@ -16,8 +16,10 @@
    is the target gone (entity/gone?: removed, or dead by the server's word); a target that
    survives max-swings swings in reach is a ghost (ruststeve tasks/nether.rs), failed :ghost and
    blacklisted by the planner; below retreat-health the fight breaks off and walks away, or ends
-   for its row to retreat (:intent/yield?). A row whose act answers a kind of hostile itself
-   (answers) has the :defend row leave that kind to it."
+   for its row to retreat (:intent/yield?). A break-off is remembered (:plan/fled) until health
+   is at resume-health, and while that mob is inside flee-radius a walk toward it is not
+   resumed. A row whose act answers a kind of hostile itself (answers) has the :defend row
+   leave that kind to it."
   (:require [clojure.math :as math]
             [clojurecraft.entity :as entity]
             [clojurecraft.game :as game]
@@ -49,6 +51,10 @@
 (def hold-timeout-ms 60000)           ; a fight that holds its ground waits this long for its target to come
 (def back-off-timeout-ms 10000)       ; a walk away ends after this, however far it got
 (def give-up-ms 60000)                ; ms a target given up as unreachable (given-up) is not picked again
+(def resume-health 16)                ; a break-off under retreat-health waits for this before that mob is fought again: two zombie hits of 3 over the line, so regeneration from 9.2 to 10.2 does not restart it (race 40466567590, Clj_r04)
+(def flee-radius 12.0)                ; a fled mob stays a threat this far, three times defend-radius and past back-off-to, so the back-off is not handed back to the walk it interrupted
+(def flee-keep 32.0)                  ; past this a fled mob is no longer between the bot and a walk
+(def pass-by 1.5)                     ; a walk whose line comes this close to a fled mob on the plane is a walk toward it
 
 (def swords
   "The swords by name, best first (attack damage: netherite 8, diamond 7, iron 6, stone and copper
@@ -381,12 +387,28 @@
             intent/done)
         :else (assoc world :player/controls (intent/toward world (away-point world e) 0.0))))
 
+(defn flee-kind?
+  "Is entity e one a break-off is remembered for? A creeper is backed away from at any health
+   and shunned when it stands still, and a neutral is fought to the end, so neither is a fled fact."
+  [e]
+  (let [k (entity/kind e)] (and (some? e) (not= :creeper k) (not (contains? entity/neutral k)))))
+
+(defn fled
+  "The world with eid kept in :plan/fled at now (:fled/why :hurt). A fight broke off under
+   retreat-health, or a :back-off was started for that break-off. A fact already there is kept,
+   so a later tick does not move :fled/at."
+  [world eid]
+  (update-in world
+             [:plan/fled eid]
+             (fn [seen] (or seen {:fled/at (:time/now world) :fled/why :hurt}))))
+
 (defmethod intent/run :fight
   ;; {:intent/kind :fight :intent/target eid}: done when the target is gone (a kill); below
   ;; retreat-health it breaks off and walks away (done once away: a fight left is not a failure).
   ;; Where the target was last seen is kept (:intent/target-pos): a hunt collects its drop there.
   ;; With :intent/yield? it ends there instead (done), and its row plans the retreat itself; with
-  ;; :intent/to-the-end? it never breaks off (a blaze at hand follows any retreat). A fight for
+  ;; :intent/to-the-end? it never breaks off (a blaze at hand follows any retreat). A break-off
+  ;; records the mob (fled) when flee-kind? says so: not a creeper, not a neutral. A fight for
   ;; :hunt never breaks off either: an animal does not strike back, and a starving bot (food 0,
   ;; health under retreat-health) that backed off ended the fight done with the animal alive,
   ;; which the hunt took for a kill: it collected at the live animal, failed :not-picked-up and
@@ -411,7 +433,7 @@
                (not (:intent/to-the-end? i))
                (not= :hunt (:intent/for i))
                (< (:player/health world 20.0) retreat-health))
-          (-> world
+          (-> (cond-> world (flee-kind? e) (fled (:intent/target i)))
               (intent/dissoc-intent :intent/child)
               (intent/assoc-intent :intent/stage :retreat :intent/since now))
           (and (= :approach (:intent/stage i)) (:intent/child i)) (walk-on world i e event)
@@ -510,14 +532,21 @@
   ;; and has the target kept in :plan/cornered: :defend fights what it could not get away from).
   ;; The same when the way away is a drop no landing survives (void-retreat?) or steps into or
   ;; near lava (lava-retreat?): the lip one cell out hides the void from ledge-look, and the jump
-  ;; clears it. The first tick notes a creeper (noted), so :defend can tell one that stands still
+  ;; clears it. The first tick notes where it stood (noted). A back-off :defend chose for a
+  ;; break-off (:intent/why :hurt) also remembers the mob (fled) so the walk it interrupted is
+  ;; not resumed at defend-radius. :intent/distance, when the intent carries one, is how far:
+  ;; flee-radius, not back-off-to, which a creeper's back-off still uses.
   [world i _]
   (let [now (:time/now world)
-        e (get-in world [:world/entities (:intent/target i)])
-        world (cond-> world (and e (nil? (:intent/since i))) (noted (:intent/target i) e))
+        eid (:intent/target i)
+        e (get-in world [:world/entities eid])
+        world (cond-> world
+                (and e (nil? (:intent/since i))) (noted eid e)
+                (and e (nil? (:intent/since i)) (= :hurt (:intent/why i))) (fled eid))
         i (cond-> i (nil? (:intent/since i)) (assoc :intent/since now))
-        world (assoc world :plan/intent i)]
-    (cond (or (entity/gone? world (:intent/target i)) (>= (horizontal world e) back-off-to))
+        world (assoc world :plan/intent i)
+        far (or (:intent/distance i) back-off-to)]
+    (cond (or (entity/gone? world eid) (>= (horizontal world e) far))
           (-> world
               (assoc :player/controls {})
               intent/done)
@@ -589,6 +618,106 @@
           (>= times shun-after) (min base shunned-radius)
           :else base)))
 
+;; ---------------------------------------------------------------- staying away
+
+(defn fled?
+  "Is eid still a mob the break-off keeps the bot away from? A :hurt fact while health is
+   under resume-health. At resume-health it no longer refuses the fight, even before spent
+   drops the fact."
+  [world eid]
+  (and (= :hurt (get-in world [:plan/fled eid :fled/why]))
+       (< (:player/health world 20.0) resume-health)))
+
+(defn spent
+  "The world with flees that no longer hold removed: health at resume-health, or the mob
+   gone. A later dip under resume-health does not bring a cleared fact back. Nothing left
+   removes :plan/fled."
+  [world]
+  (let [health (:player/health world 20.0)
+        left (into {}
+                   (remove (fn [[eid]] (or (entity/gone? world eid) (>= health resume-health)))
+                           (:plan/fled world)))]
+    (cond (empty? left) (dissoc world :plan/fled)
+          (= left (:plan/fled world)) world
+          :else (assoc world :plan/fled left))))
+
+(defmethod plan/keep-world :fled [world] (spent world))
+
+(defn flee-intent
+  "A :back-off from eid out to flee-radius, for a break-off under retreat-health (:hurt)."
+  [eid why]
+  {:intent/kind :back-off :intent/target eid :intent/why why :intent/distance flee-radius})
+
+(defn passes?
+  "Does the straight line from point a to point b come within pass-by of point p on the plane,
+   strictly between the two (the fraction along the line in (0.05, 0.98))?"
+  [a b p]
+  (let [ax (double (first a))
+        az (double (nth a 2))
+        bx (double (first b))
+        bz (double (nth b 2))
+        px (double (first p))
+        pz (double (nth p 2))
+        dx (- bx ax)
+        dz (- bz az)
+        len2 (+ (* dx dx) (* dz dz))]
+    (and (> len2 1.0e-6)
+         (let [t (/ (+ (* (- px ax) dx) (* (- pz az) dz)) len2)
+               cx (+ ax (* t dx))
+               cz (+ az (* t dz))
+               off (math/sqrt (+ (* (- px cx) (- px cx)) (* (- pz cz) (- pz cz))))]
+           (and (< 0.05 t 0.98) (<= off pass-by))))))
+
+(defn nearer?
+  "Is block target's centre nearer entity e than the feet are, on the plane?"
+  [world e target]
+  (< (physics/horizontal-distance (physics/centre target) (:entity/pos e))
+     (physics/horizontal-distance (:player/pos world) (:entity/pos e))))
+
+(defn blocking?
+  "Is eid a fled mob a walk must not close on? One reach has shrunk, because it stood still,
+   is not: the walk may pass it (issues #161 and #62)."
+  [world eid e]
+  (and e
+       (fled? world eid)
+       (< (physics/distance (:player/pos world) (:entity/pos e)) flee-keep)
+       (>= (reach world eid e flee-radius) flee-radius)))
+
+(defn toward-fled
+  "The [eid entity] of a fled mob a walk to block target would close on, or nil. The line
+   passes within pass-by of it, or the target's centre is nearer it than the feet are."
+  [world target]
+  (some (fn [[eid _]]
+          (let [e (get-in world [:world/entities eid])]
+            (when (and (blocking? world eid e)
+                       (or (passes? (:player/pos world) (physics/centre target) (:entity/pos e))
+                           (nearer? world e target)))
+              [eid e])))
+        (:plan/fled world)))
+
+(defn away-cell
+  "The block cell of a point straight away from entity e, retreat-distance and more out."
+  [world e]
+  (cell (away-point world e)))
+
+(defn not-toward-fled
+  "intent, or a back-off (inside flee-radius) or a walk away (past it) when intent is a :walk
+   that would close on a mob the bot fled. Race 40466567590 Clj_r04 at 11.71m: back-off from
+   the zombie and the walk to [2898 11 2236] took turns every tick, and the bot never left."
+  [world intent]
+  (let [target (:intent/target intent)
+        hit (when (and (= :walk (:intent/kind intent)) (vector? target))
+              (toward-fled world target))]
+    (cond (nil? hit) intent
+          (< (horizontal world (second hit)) flee-radius)
+          {:intent/kind :back-off
+           :intent/target (first hit)
+           :intent/distance flee-radius
+           :intent/for :flee}
+          :else
+          {:intent/kind :walk :intent/target (away-cell world (second hit)) :intent/for :flee})))
+
+(defmethod plan/divert :fled [world intent] (not-toward-fled world intent))
 
 (defmulti answers
   "The hostile kinds a goal row's act fights and hides from itself, by the row's :goal/plan: the
@@ -623,52 +752,55 @@
 
 (defn threats
   "{eid entity} of the hostiles (entity/hostiles) the :defend row answers: within defend-radius of
-   the feet, a creeper within creeper-radius, either less once shunned (reach); none the plan blacklisted (a ghost), none of a kind
-   a row in play answers itself (answered-kinds), only what can be fought from here
-   (hittable?) and come to (approachable?: a mob in water two blocks below is seen but never
-   strikable and no route reaches it, and a fight on it ends done at once, re-picked for the
-   whole stage, issues #69 and #62), and none given up as unreachable a while ago (given-up?)."
+   the feet, a creeper within creeper-radius, a fled mob within flee-radius (fled?, strict, so
+   the back-off that finishes at that distance is not started again), any of them less once
+   shunned (reach); none the plan blacklisted (a ghost), none of a kind a row in play answers
+   itself (answered-kinds), only what can be fought from here (hittable?) and come to
+   (approachable?: a mob in water two blocks below is seen but never strikable and no route
+   reaches it, and a fight on it ends done at once, re-picked for the whole stage, issues #69
+   and #62), and none given up as unreachable a while ago (given-up?)."
   [world]
   (let [pos (:player/pos world)
         bl (:plan/blacklist world #{})
         left (answered-kinds world)]
-    (into
-     {}
-     (filter
-      (fn [[eid e]]
-        (and (not (contains? bl eid))
-             (not (contains? left (entity/kind e)))
-             (not (given-up? world eid e))
-             (<= (physics/distance pos (:entity/pos e))
-                 (reach world eid e (if (= :creeper (entity/kind e)) creeper-radius defend-radius)))
-             (hittable? world e)
-             (approachable? world e))))
-     (entity/hostiles world))))
+    (into {}
+          (filter (fn [[eid e]]
+                    (let [kind (entity/kind e)
+                          fled (fled? world eid)
+                          base (cond (= :creeper kind) creeper-radius
+                                     fled flee-radius
+                                     :else defend-radius)
+                          radius (reach world eid e base)
+                          d (physics/distance pos (:entity/pos e))]
+                      (and (not (contains? bl eid))
+                           (not (contains? left kind))
+                           (not (given-up? world eid e))
+                           (if fled (< d radius) (<= d radius))
+                           (hittable? world e)
+                           (approachable? world e)))))
+          (entity/hostiles world))))
 
 (defmethod plan/done-by :safe? [world _] (or (nil? (:player/pos world)) (empty? (threats world))))
 
 (defmethod plan/next-intent :defend
-  ;; the nearest threat: a creeper, or anything while the health is under retreat-health, is
-  ;; backed away from; anything else fought. A neutral mob turned on the bot (an angry enderman,
-  ;; entity/neutral) is fought to the end whatever the health: it is faster than the bot and
-  ;; teleports after it, so a back-off from it is only hits taken. Gym dragon-e run 1 struck one
-  ;; five times (40 to 10) then backed away under 10 health and died in its hands. What a
-  ;; back-off could not get away from (:plan/cornered: the bot was in a dead end) is fought to the
-  ;; end too, unless the health is already under retreat-health (one hit plus a margin) and it is
-  ;; no neutral: then it is backed away from again, never fought on to death (issue #563, probe
-  ;; 40033104245: two zombies cornered by a void back-off were fought to the end at 7.3 health
-  ;; down to 1.3). Sim race 39593219246 (issue #161, world R3/41) backed away from a zombie two
-  ;; blocks off at under one health from the end of a one-wide tunnel, a quarter hour, never moving
+  ;; the nearest threat. A creeper is backed away from, out to back-off-to. A neutral turned
+  ;; on the bot (an angry enderman) is fought to the end whatever the health: it is faster
+  ;; than the bot and teleports after it. Anything else under retreat-health, or still inside
+  ;; a break-off (fled?, health under resume-health), is backed away from out to flee-radius:
+  ;; regeneration from 9.2 to 10.2 must not start the fight again (race 40466567590, Clj_r04).
+  ;; What a back-off could not get away from (:plan/cornered) is fought to the end once health
+  ;; is at retreat-health and the break-off has cleared (issue #563: at 7.3 two cornered
+  ;; zombies were fought down to 1.3; issue #161, a quarter hour of back-offs at under one
+  ;; health).
   [world _ _]
   (when-let [[eid e] (entity/nearest (threats world) (:player/pos world))]
-    (cond (or (= :creeper (entity/kind e))
-              (and (< (:player/health world 20.0) retreat-health)
-                   (contains? (:plan/cornered world #{}) eid)
-                   (not (contains? entity/neutral (entity/kind e)))))
-          {:intent/kind :back-off :intent/target eid}
-          (or (contains? entity/neutral (entity/kind e)) (contains? (:plan/cornered world #{}) eid))
+    (cond (= :creeper (entity/kind e)) {:intent/kind :back-off :intent/target eid}
+          (contains? entity/neutral (entity/kind e))
           {:intent/kind :fight :intent/target eid :intent/to-the-end? true}
-          (< (:player/health world 20.0) retreat-health) {:intent/kind :back-off :intent/target eid}
+          (or (< (:player/health world 20.0) retreat-health) (fled? world eid))
+          (flee-intent eid :hurt)
+          (contains? (:plan/cornered world #{}) eid)
+          {:intent/kind :fight :intent/target eid :intent/to-the-end? true}
           :else {:intent/kind :fight :intent/target eid})))
 
 (defn quarry
