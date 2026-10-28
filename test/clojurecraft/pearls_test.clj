@@ -1584,9 +1584,9 @@
         "so the hunt walks to the nearest cell a burrow would shelter from, and stands in it")
     (is (= [7 64 8] (pearls/burrow-site cave [0 -1])))
     (is (=
-         {:intent/kind :provoke :intent/target 7 :intent/for :pearls}
+         {:intent/kind :walk :intent/target [3 64 8] :intent/for :shelter}
          (plan/next-intent (burrowed [3.5 64.0 2.5] {7 (enderman [3.5 64.0 14.5])}) row plan/goals))
-        "a burrow six blocks off with a route to it and one to provoke: the stare from here")
+        "a burrow six blocks off and one to provoke: to the mouth first, never the stare from here")
     (is
      (= {:intent/kind :walk :intent/target [3 64 8] :intent/for :shelter}
         (plan/next-intent (burrowed [3.5 64.0 2.5]
@@ -1858,9 +1858,10 @@
     (is (<= (physics/distance target [8 61 8]) (physics/distance target [3.5 64.0 20.5]))
         "no farther from home than from the enderman: provoked, it comes at the bot's pace")
     (is (= 7 (first (pearls/quarry there))) "from there it can be stared at")
-    (is (= {:intent/kind :provoke :intent/target 7 :intent/for :pearls}
-           (plan/next-intent there row plan/goals))
-        "and is, from there: the way home is known")
+    (is
+     (= :walk (:intent/kind (plan/next-intent there row plan/goals)))
+     "but not provoked from there: a provoked one is at the bot in a second, and the walk home
+         from a vantage took four hits (gym plan run 40747177526 run 6); the mouth first")
     (is
      (= {:intent/kind :walk :intent/target [8 61 8] :intent/for :shelter}
         (plan/next-intent (assoc-in there [:world/entities 7 :entity/creepy?] true) row plan/goals))
@@ -2068,3 +2069,38 @@
     (testing "out of the sword's reach it is not struck-by"
       (is (nil? (pearls/struck-by
                  (assoc-in out [:world/entities 7 :entity/pos] [9.5 70.0 8.5])))))))
+
+(deftest a-cornered-bot-under-danger-health-eats-or-walls-off
+  ;; gym plan run 40747177526 run 1 (issue #263, pearls-12): 7.6 health, an angry enderman a block
+  ;; or two off, back-off ten seconds at a time for ninety seconds with the bot backing into a
+  ;; wall, forty-eight cooked beef and many blocks held; slain by the next two hits
+  (let [angry (assoc (enderman [10.5 64.0 8.5]) :entity/creepy? true)
+        held {0 (item :iron_sword 1) 1 (item :cobblestone 64)}
+        w (-> (standing {7 angry})
+              (assoc :player/health 7.6 :player/inventory held :plan/cornered #{7}))]
+    (is (= {:intent/kind :place
+            :intent/item :cobblestone
+            :intent/cell [9 64 8]
+            :intent/for :pearls
+            :intent/wall? true}
+           (plan/next-intent w row plan/goals))
+        "a block at the feet's level on the side it stands on")
+    (is (= [9 65 8]
+           (:intent/cell
+            (plan/next-intent
+             (assoc w :world/chunks (:world/chunks (standing {7 angry} {[9 64 8] stone})))
+             row
+             plan/goals)))
+        "then one over it")
+    (is (= :eat
+           (:intent/kind
+            (plan/next-intent
+             (assoc w :player/food 12 :player/inventory (assoc held 2 (item :cooked_beef 8)))
+             row
+             plan/goals)))
+        "hungry with food held: the meal first")
+    (is (= :back-off (:intent/kind (plan/next-intent (assoc w :plan/cornered #{}) row plan/goals)))
+        "not cornered: backed off from as before")
+    (is (plan/interrupts? w row {:intent/kind :walk :intent/target [1 64 1] :intent/for :pearls})
+        "an angry one at hand cuts a walk")
+    (is (not (plan/interrupts? w row (plan/next-intent w row plan/goals))) "but not the wall")))

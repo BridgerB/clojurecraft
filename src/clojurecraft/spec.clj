@@ -519,6 +519,7 @@
 (s/def :intent/floor-to int?)
 (s/def :intent/to-height? boolean?)
 (s/def :intent/escape? boolean?)
+(s/def :intent/wall? boolean?)
 (s/def :intent/dir (s/tuple int? int?))
 (s/def :intent/turns nat-int?)
 (s/def :intent/rejections pos-int?)

@@ -455,6 +455,9 @@
    [:intent/floor-to
     "the height a mine's staircases are cut toward a few stairs at a time (its row's :goal/depth): how far down a floor laid through a cave must go on"
     "stairs-down from the mine act (stone/stairs), when the row has a depth"]
+   [:intent/wall?
+    "a :place of a block between the bot and an enderman it is cornered by (pearls/wall-off): the hunt's interrupt does not cut it"
+    "pearls/wall-off"]
    [:intent/escape?
     "an intent the planner issued to change place (plan/escape): its failure counts against neither :plan/attempts nor :plan/unwalkable"
     "plan/guard, when a retry or a stuck wait was refused"]

@@ -205,6 +205,8 @@ In order:
 
 A target a fight's engage gave up as not strikable is no fight's target until it is in reach (`unfightable?`; eight instant fights on one enderman eight blocks below counted as fought out in gym run 40747177526 run 4), and an angry one in reach after a hit (health under `struck-health`) is fought back and cuts a running walk (`struck-by`), fought out or not.
 
+Provoke only from the mouth, inside, or within `provoke-home-reach` (3) of the burrow's end: an angry enderman is at the bot in about a second on the real server, and the walk home from a vantage six blocks off took four hits (gym run 40747177526 run 6). Cornered (`:plan/cornered`) under `danger-health` with an enderman at hand, the hunt eats, else `wall-off` places a block at the feet's level and one over it between them; never a fight under `danger-health` (#577).
+
 ## The burrow
 Gym batch pearls-263a (plan run 38892130785) put three live endermen round the bot in iron helmet and chestplate: five trials, five deaths. A replay of one (probe 38893413043) showed the hits landing at 5.74 a second, the sword's sweep pulling a second enderman in, and a break-off with nowhere to go. A sword needs seven hits against forty health; the open fight loses. The game says where it cannot lose: a mob's melee is its box grown 0.83 sideways and not at all up or down (`Mob.getAttackBoundingBox`, `isWithinMeleeAttackRange`, probe 38893918055), and an enderman needs three free cells to stand. `shelter?` is that rule over the terrain: the bot's own two cells open, and no cell an enderman could stand in (`stand?`: a floor, three open cells) in the nine columns round it, at the heights whose body would overlap the bot's (feet two under to one over).
 

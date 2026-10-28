@@ -1293,6 +1293,8 @@
 
 (def danger-health combat/retreat-health) ; health under which the hunt never fights, provokes or goes toward an enderman: one enderman hit (7 on Normal, ns doc) plus a margin, the same line combat breaks a fight off at. At or under it the bot backs off, walks home, eats or rests where it stands until its health is back over it (issue #563, probe 40022662598: after the second stone sword was crafted the hunt re-fought an angry enderman it had just backed away from, again and again down to 1.3 health, one hit from death)
 
+(def provoke-home-reach 3.0)              ; blocks from the burrow's end within which an enderman is provoked from outside the mouth: a provoked one is at the bot in about a second, and four hits fell it in the 3.6 s a walk of six blocks home took (gym plan run 40747177526 run 6)
+
 (def struck-health 14.0)                ; health under which an enderman at hand has landed a hit (7 on Normal off 20): fought back, fought out or not
 
 (defn unfightable?
@@ -1321,6 +1323,34 @@
                                            (combat/in-reach? world e))))
                             (endermen (dissoc world :plan/blacklist) strike-range))
                       pos))))
+
+(defn wall-off
+  "A :place of one block of the filler held (stairs/filler) in the first open cell, the feet's
+   level and then the head's, on the side of the feet that enderman e stands on (the heading of the
+   larger offset on the plane), or nil when both are solid or none is held. An enderman cannot
+   reach through two full blocks. Run 1 of gym plan run 40747177526 (issue #263, pearls-12) stood
+   ninety seconds at 7.6 health with one beside it, backing off into a wall, forty-eight cooked
+   beef and 84 blocks held, and was slain: never fought under danger-health (#577), so what is left
+   is to eat, or to put a block between."
+  [world e]
+  (let [[fx fy fz :as feet] (intent/feet world)
+        [ex _ ez] (:entity/pos e)
+        dx (- ex (+ fx 0.5))
+        dz (- ez (+ fz 0.5))
+        [hx hz] (if (>= (Math/abs dx) (Math/abs dz))
+                  [(long (math/signum dx)) 0]
+                  [0 (long (math/signum dz))])
+        item (stairs/filler world 2)]
+    (when (and item feet (not= [0 0] [hx hz]))
+      (some (fn [dy]
+              (let [c [(+ fx hx) (+ fy dy) (+ fz hz)]]
+                (when-not (solid-at? world c)
+                  {:intent/kind :place
+                   :intent/item item
+                   :intent/cell c
+                   :intent/for :pearls
+                   :intent/wall? true})))
+            [0 1]))))
 
 (defn shelter-walk
   "A :walk for :shelter to target, or nil when target is nil or in :plan/blacklist (a walk to it
@@ -1449,6 +1479,8 @@
         at-end? (= (:pearls/shelter world) (intent/feet world))
         [tid _] (threat world)
         [sid _] (struck-by world)
+        angry-close? (and ce (<= (physics/distance pos (:entity/pos ce)) strike-range))
+        cornered? (and near? eid (contains? (:plan/cornered world #{}) eid))
         [bid _] (when at-end? (blocking world))
         [aid _] (when home (angry-near world))
         [qid q] (quarry world)
@@ -1475,6 +1507,7 @@
     (cond
       (and home (not in?) (or ce near? hurt? tid aid) (intent/routable? world way-home)) way-home
       (and hurt? in?) (or meal {:intent/kind :lookout :intent/for :pearls})
+      (and cornered? hurt? (not in?) (or meal (wall-off world e))) (or meal (wall-off world e))
       (and near? hurt? (not in?)) {:intent/kind :back-off :intent/target eid :intent/for :pearls}
       (and hurt? (not in?) tid) {:intent/kind :back-off :intent/target tid :intent/for :pearls}
       (and hurt? (not in?)) (or meal {:intent/kind :lookout :intent/for :pearls})
@@ -1506,12 +1539,12 @@
       (and in? qid) {:intent/kind :lookout :intent/for :pearls}
       (and in? (crowded? world))
       (or (vantage world far) {:intent/kind :lookout :intent/for :pearls})
-      (and in? mouth @mouth-walk) @mouth-walk
+      (and in? mouth (not angry-close?) @mouth-walk) @mouth-walk
       (and qid
            rested?
            (or (and (not (pickaxe? world)) (not (worn-out? world)))
                (= mouth (intent/feet world))
-               (and home (>= (:player/health world 20.0) 20.0) (intent/routable? world way-home))))
+               (and home (<= (physics/distance pos (physics/centre home)) provoke-home-reach))))
       {:intent/kind :provoke :intent/target qid :intent/for :pearls}
       (and qid home rested? @mouth-walk) @mouth-walk
       (and qid home (intent/routable? world way-home)) way-home
@@ -1600,6 +1633,7 @@
   ;; for twenty minutes over one given up on by the mouth, and the lure never counted a lookout
   [world _ i]
   (and (not (contains? answers-to-hand (:intent/kind i)))
+       (not (:intent/wall? i))
        (not (and (= :walk (:intent/kind i)) (= (:intent/target i) (:pearls/shelter world))))
        (not= (:pearls/shelter world) (intent/feet world))
        (or (beset? world) (some? (first (struck-by world))))))
