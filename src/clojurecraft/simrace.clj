@@ -113,10 +113,13 @@
    against the model, at most max-ms of simulated time, rolling from seed. Returns its RESULT
    (main/result) with :run/world (its set and landing), :run/seed, :run/ms (simulated time),
    :run/violations (what a real server would have punished), :run/respawns and :run/eaten (the
-   lives the model gave after deaths and the foods it let the player eat), :run/end (the world it stopped
+   lives the model gave after deaths and the foods it let the player eat), :run/backoff-ms (how
+   long the intent was :back-off), :run/death-causes (the cause of each death: a mob's kind,
+   :starve, :drown, :scheduled or :ender_dragon), :run/end (the world it stopped
    in), :run/last (the moment of the
    stopping tick) and :run/moments (the moments sim/play-from kept, every half minute, the
-   last six minutes), from which a failure's snapshot is chosen (dropped from the lines written). Its
+   last six minutes), from which a failure's snapshot is chosen (dropped from the lines written).
+   The two counters do not change a decision. Its
    :go names the landing (:go/at), as race/land-bot! does for a real bot: the plan's
    landing-relative choices (the climb home from deep, a climb's level steps toward the landing,
    how far they may go) are the real race's. Without it, sim race 38659291345 world R4/38 (issue
@@ -133,8 +136,15 @@
   ([w seed until max-ms] (run w seed until max-ms nil))
   ([w seed until max-ms food]
    (let [opts {:host "sim" :port 0 :name "Clj_sim"}
+         backoff (atom 0)
+         counting (fn [before event]
+                    (let [t0 (:time/now before 0)
+                          after (step before event)]
+                      (when (= :back-off (get-in after [:plan/intent :intent/kind]))
+                        (swap! backoff + (max 0 (- (:time/now after 0) t0))))
+                      after))
          {:keys [world sim last moments crashed]}
-         (sim/run+ step
+         (sim/run+ counting
                    (game/init opts)
                    (sim/init (cond-> {:columns (:capture/columns w)
                                       :decoded (:capture/decoded w)
@@ -157,6 +167,8 @@
             :run/violations (:sim/violations sim)
             :run/respawns (:sim/respawns sim 0)
             :run/eaten (:sim/eaten sim 0)
+            :run/backoff-ms @backoff
+            :run/death-causes (:sim/death-causes sim [])
             :run/end world
             :run/last last
             :run/moments moments))))
@@ -459,7 +471,8 @@
    SIMRUN line and appended to out as it ends, with what reproduces it (:run/file, :run/seed,
    :run/commit) and, when it failed, what bb failures reads (failure/mark) and a moment from
    before the choice that failed kept as a snapshot beside out (:run/snapshot, chosen-moment,
-   issue #77); returns it."
+   issue #77). Also prints a GATE line: deaths by cause, minutes in :back-off, and minutes
+   to the kit, the stone pickaxe, the iron kit and the portal kit. Returns the run."
   [w seed until max-ms commit out food]
   (let [r (try (run w seed until max-ms food)
                (catch Exception e
@@ -481,6 +494,21 @@
         r (cond-> (dissoc r :run/end :run/last :run/moments)
             path (assoc :run/snapshot path :run/moment (:moment m)))]
     (locking out
+      (let [reached (get-in r [:plan :plan/reached-after])]
+        (println "GATE"
+                 (pr-str {:world (:run/world r)
+                          :seed (:run/seed r)
+                          :ok (:ok r)
+                          :reason (:reason r)
+                          :deaths (frequencies (:run/death-causes r []))
+                          :deaths-n (get-in r [:stats :stats/deaths])
+                          :backoff-min (/ (:run/backoff-ms r 0) 60000.0)
+                          :ms (:run/ms r)
+                          :reached (into {}
+                                         (keep (fn [id]
+                                                 (when-let [ms (get reached id)]
+                                                   [id (/ ms 60000.0)])))
+                                         [:kit :stone-pickaxe :iron-kit :portal-kit])})))
       (println "SIMRUN" (pr-str (dissoc r :plan :stats)))
       (spit out (str (pr-str r) "\n") :append true)
       (flush))
