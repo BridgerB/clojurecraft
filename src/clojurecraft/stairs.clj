@@ -1339,11 +1339,13 @@
           (-> world
               (assoc :player/controls {})
               (intent/assoc-intent :intent/stage :open :intent/started-tick (:time/tick world)))
-          (some #(intent/falling-in-column? world %) cells) (assoc world :player/controls {})
           (> (- (:time/tick world) started-tick) step-timeout-ticks)
           (-> world
               (assoc :player/controls {})
               (intent/fail :stair-not-taken))
+          ;; a block in the air over the stair: wait it out. A stack that is still sitting
+          ;; does not: probes 40633083832 and 40633083843 held this step until the 30 min cap
+          (some #(intent/falling-entity? world %) cells) (assoc world :player/controls {})
           :else (assoc world :player/controls (onto world rise cell dir)))))
 
 (def bore-timeout-ticks 1200)           ; ticks (a minute) a bore may take, digging and rising

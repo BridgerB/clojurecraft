@@ -56,7 +56,7 @@
               w-walk (intent/run (assoc w-dug :plan/intent walk-i) walk-i {:event/kind :tick})]
           (is (= :failed (get-in w-walk [:plan/intent :intent/status])))
           (is (= :unsafe (get-in w-walk [:plan/intent :intent/reason]))))
-        ;; stairs stage :step waits with empty controls rather than walking onto the stair
+        ;; a stack that is still sitting does not hold the step: the stair walks on
         (let [step-i {:intent/kind :stairs-down
                       :intent/stage :step
                       :intent/cells [[2435 58 2321]]
@@ -66,7 +66,26 @@
                       :intent/status :active}
               w-step
               (stairs/stairs-stage (assoc w-dug :plan/intent step-i) step-i {:event/kind :tick})]
-          (is (empty? (:player/controls w-step)))))
+          (is (true? (:control/forward? (:player/controls w-step)))))
+        ;; a block already in the air does: empty controls until the step's own timeout
+        (let [step-i {:intent/kind :stairs-down
+                      :intent/stage :step
+                      :intent/cells [[2435 58 2321]]
+                      :intent/dir [1 0]
+                      :intent/started-y 58.0
+                      :intent/started-tick 20
+                      :intent/status :active}
+              falling {1 {:entity/type 51 :entity/pos [2435.5 60.0 2321.5]}}
+              w-air (stairs/stairs-stage (assoc w-dug :world/entities falling :plan/intent step-i)
+                                         step-i
+                                         {:event/kind :tick})
+              w-late (stairs/stairs-stage
+                      (assoc w-dug :world/entities falling :time/tick 221 :plan/intent step-i)
+                      step-i
+                      {:event/kind :tick})]
+          (is (empty? (:player/controls w-air)))
+          (is (= :failed (get-in w-late [:plan/intent :intent/status])))
+          (is (= :stair-not-taken (get-in w-late [:plan/intent :intent/reason])))))
       ;; Overlapping the column: body extends into x 2435
       (let [w-overlap (world-at [2434.98 58.0 2321.51] all-blocks)]
         (is (true? (physics/overlaps-column? (:player/pos w-overlap) [2435 2321])))

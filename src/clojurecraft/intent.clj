@@ -110,18 +110,23 @@
                 (blocks/solid? b) false
                 :else (recur (inc dy))))))))
 
+(defn falling-entity?
+  "Is a falling block (entity type 51) in column [x z] at or above y: a block already in the
+   air, not a stack that is still sitting?"
+  [world [x y z]]
+  (boolean (some (fn [[_ e]]
+                   (when (= 51 (:entity/type e))
+                     (let [[ex ey ez] (:entity/pos e)]
+                       (and (= (long (math/floor ex)) (long x))
+                            (= (long (math/floor ez)) (long z))
+                            (>= ey (double y))))))
+                 (:world/entities world))))
+
 (defn falling-in-column?
   "Is there a block above [x y z] that can fall into it (falling-column?), or a falling block
-   entity (type 51) in column [x z] above y?"
+   entity (type 51) in column [x z] above y (falling-entity?)?"
   [world [x y z]]
-  (or (boolean (falling-column? world [x y z]))
-      (boolean (some (fn [[_ e]]
-                       (when (= 51 (:entity/type e))
-                         (let [[ex ey ez] (:entity/pos e)]
-                           (and (= (long (math/floor ex)) (long x))
-                                (= (long (math/floor ez)) (long z))
-                                (>= ey (double y))))))
-                     (:world/entities world)))))
+  (or (boolean (falling-column? world [x y z])) (falling-entity? world [x y z])))
 
 (defn step-into-falling?
   "Would moving the bot to pos' put the body box into a column with a falling block above

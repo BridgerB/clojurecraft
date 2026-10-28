@@ -1475,7 +1475,7 @@
         cmd ["java" bot-heap "-cp" cp "clojure.main" "-m" "clojurecraft.main" "--host" "127.0.0.1"
              "--port" (str port) "--name" name "--until" (:gym/until row) "--events" "stdin"
              "--timeout-ms" (str (:gym/timeout-ms row)) "--hold-ms" (str hold-ms) "--record"
-             (str (io/file dir "run.edn"))]
+             (str (.getAbsoluteFile (io/file dir "run.edn")))]
         ^java.util.List cmd (cond-> cmd commit (into ["--commit" commit])) ; the recording names its code
         p (.start
            (doto (ProcessBuilder. cmd) (.directory (io/file bot-dir)) (.redirectErrorStream true)))
