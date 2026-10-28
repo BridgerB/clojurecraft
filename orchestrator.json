@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-28T15:38:39.206Z",
+  "at" : "2026-10-28T15:40:50.662Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -43,6 +43,11 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
+    "number" : 594,
+    "title" : "Bot stops at portal: unsafe",
+    "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
     "number" : 595,
     "title" : "Bot stops at blaze-rods: unsafe",
     "labels" : [ "bot-failure", "real", "sim" ],
@@ -51,11 +56,6 @@
     "number" : 40,
     "title" : "Bot stops at ingots: no-path",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
-    "number" : 594,
-    "title" : "Bot stops at portal: unsafe",
-    "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
     "number" : 178,
@@ -68,13 +68,13 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 151,
-    "title" : "Bot stops at flint-and-steel: not-picked-up",
+    "number" : 596,
+    "title" : "Bot stops at portal-kit: unsafe",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 596,
-    "title" : "Bot stops at portal-kit: unsafe",
+    "number" : 151,
+    "title" : "Bot stops at flint-and-steel: not-picked-up",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
@@ -91,6 +91,11 @@
     "number" : 586,
     "title" : "Bot stops at furnace: stuck",
     "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 156,
+    "title" : "Bot stops at portal-kit: stuck",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 597,
@@ -117,11 +122,6 @@
     "title" : "Bot stops at flint-and-steel: stuck",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : true
-  }, {
-    "number" : 156,
-    "title" : "Bot stops at portal-kit: stuck",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
   }, {
     "number" : 135,
     "title" : "Bot stops at cast-one: timeout",
@@ -207,6 +207,10 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 156,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
     "issue" : 171,
     "move" : "leave",
     "why" : "hands-off label"
@@ -220,10 +224,6 @@
     "why" : "hands-off label"
   }, {
     "issue" : 348,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
-    "issue" : 156,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
