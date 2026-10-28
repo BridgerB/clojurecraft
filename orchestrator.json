@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-28T10:48:01.217Z",
+  "at" : "2026-10-28T10:49:07.551Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -45,6 +45,11 @@
   }, {
     "number" : 45,
     "title" : "Bot stops at cast-one: no-path",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 40,
+    "title" : "Bot stops at ingots: no-path",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
@@ -117,11 +122,6 @@
     "title" : "Bot stops at wood: no-log",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
-  }, {
-    "number" : 40,
-    "title" : "Bot stops at ingots: no-path",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
   } ],
   "moves" : [ {
     "issue" : 537,
@@ -157,6 +157,10 @@
     "why" : "hands-off label"
   }, {
     "issue" : 45,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 40,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -201,10 +205,6 @@
     "why" : "hands-off label"
   }, {
     "issue" : 65,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
-    "issue" : 40,
     "move" : "leave",
     "why" : "hands-off label"
   } ],
