@@ -282,6 +282,10 @@
 (s/def :plan/retreat-unreachable (s/coll-of ::block-pos :kind set?))
 (s/def :plan/unreached (s/coll-of ::block-pos :kind set?))
 (s/def :plan/unwalkable nat-int?)
+(s/def :plan/failed (s/map-of (s/tuple keyword? any? (s/nilable ::block-pos)) nat-int?)) ; [kind target feet] → ms it failed at
+(s/def :plan/stay-at ::block-pos)
+(s/def :plan/stay-since nat-int?)
+(s/def :plan/escapes nat-int?)
 (s/def :backed-off/times pos-int?)
 (s/def :backed-off/pos (s/coll-of number? :count 3))
 (s/def :plan/backed-off ; creeper entity id → where it stood when first backed away from, and how often
@@ -345,7 +349,8 @@
            :window/state-id :window/grid :window/cursor :window/open :player/held-slot :plan/intent
            :plan/status :plan/blacklist :plan/trunk-failures :plan/chain? :plan/reached
            :plan/boxed-at :plan/boxed-route :plan/retreat-unreachable :plan/unreached
-           :plan/unwalkable :plan/backed-off :plan/cornered :plan/given-up]))
+           :plan/unwalkable :plan/failed :plan/stay-at :plan/stay-since :plan/escapes
+           :plan/backed-off :plan/cornered :plan/given-up]))
 
 (s/fdef game/step
   :args
@@ -513,6 +518,7 @@
 (s/def :intent/tall pos-int?)
 (s/def :intent/floor-to int?)
 (s/def :intent/to-height? boolean?)
+(s/def :intent/escape? boolean?)
 (s/def :intent/dir (s/tuple int? int?))
 (s/def :intent/turns nat-int?)
 (s/def :intent/rejections pos-int?)
