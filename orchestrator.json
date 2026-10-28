@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-28T18:18:16.638Z",
+  "at" : "2026-10-28T18:27:06.214Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -78,11 +78,6 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 342,
-    "title" : "Bot stops at furnace: boxed",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 171,
     "title" : "Bot stops at flint-and-steel: unsafe",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
@@ -96,6 +91,11 @@
     "number" : 586,
     "title" : "Bot stops at furnace: stuck",
     "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 342,
+    "title" : "Bot stops at furnace: boxed",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 156,
@@ -200,15 +200,15 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 342,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
     "issue" : 171,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
     "issue" : 161,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 342,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
