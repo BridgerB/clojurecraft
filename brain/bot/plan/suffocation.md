@@ -3,7 +3,7 @@ title: Suffocation escape and prevention
 description: How the bot reacts to and prevents suffocation under falling sand and gravel - the :escape-suffocation priority-zero goal, the :escape-suffocation intent (stepping to a free neighbour or digging the head cell), prevention of unsafe digs and moves under falling columns, and the :player/suffocating? fact.
 type: reference
 tags: [bot, plan, survival, suffocation, gravel, sand, trap, intents, goals]
-aliases: [:escape-suffocation, suffocating?, :player/suffocating?, falling-column?, falling-in-column?, step-into-falling?, unsafe-falling?, free-neighbours]
+aliases: [:escape-suffocation, suffocating?, :player/suffocating?, falling-column?, falling-in-column?, step-into-falling?, step-toward, unsafe-falling?, free-neighbours]
 status: verified
 lastUpdated: 2026-10-27
 verifiedAgainst: HEAD
@@ -14,6 +14,7 @@ sourceRefs:
   - src/clojurecraft/intent.clj#defn falling-column?
   - src/clojurecraft/intent.clj#defn falling-in-column?
   - src/clojurecraft/intent.clj#defn step-into-falling?
+  - src/clojurecraft/intent.clj#defn step-toward
   - src/clojurecraft/intent.clj#defn walk-into-falling?
   - src/clojurecraft/intent.clj#defn unsafe-falling?
   - src/clojurecraft/stairs.clj#defn falls-over?
@@ -49,4 +50,4 @@ When a full cube intersects the eye box (`physics/suffocating?`), clearing it co
 - Column check: `intent/falling-column?` inspects the column above a cell. If a falling block (`blocks/falls?`) is found with only air, passable or falling blocks below it, it can fall. `intent/falling-in-column?` also checks for falling block entities (type 51) currently falling in that column.
 - Body overlap: `physics/overlaps-column?` determines if the player's 0.6x0.6 bounding box touches the column.
 - Dig refusal: `intent/dig-stage` refuses any dig where `unsafe-falling?` holds (the cell is under a falling column and the player overlaps the column), failing with `:unsafe`. Digging the full cube in the eye box is allowed, and digging any other cell while buried is refused.
-- Movement prevention: `intent/step-into-falling?` is true when a position's body box overlaps a column with a falling block above it, or a falling-block entity in that column. `intent/toward` suppresses forward when the point would enter one. `intent/walk-into-falling?` fails a walk `:unsafe` before it can count as arrived: race 40466567590 bot Clj_r08 stood at x 2434.56, beside the gravel, already within reach of the column cell, so the walk was `:done` and the body then stepped to x 2434.98 while the gravel was still falling. A pickup walk is not that failure: it ends beside the block, and the column is cleared from the side. `stairs/stairs-stage :step` waits with empty controls while a stair cell can still receive a fall. `falls-over?` stays the one block directly over a stair's head cell, so a desert or a gravel beach is not refused in every direction.
+- Movement prevention: `intent/step-into-falling?` is true when a position's body box overlaps a column with a falling block above it, or a falling-block entity in that column. `intent/toward` suppresses forward when the next step would enter one: `step-toward` is one body width toward the point, or the point itself when it is closer, so a shore many blocks away is still approached. Issue #177 snapshot `b10211335-R4-1-1` (world R4/1) passed on main and recurred when toward tested the shore centre fourteen blocks off. `intent/walk-into-falling?` fails a walk `:unsafe` before it can count as arrived: race 40466567590 bot Clj_r08 stood at x 2434.56, beside the gravel, already within reach of the column cell, so the walk was `:done` and the body then stepped to x 2434.98 while the gravel was still falling. A pickup walk is not that failure: it ends beside the block, and the column is cleared from the side. `stairs/stairs-stage :step` waits with empty controls while a stair cell can still receive a fall. `falls-over?` stays the one block directly over a stair's head cell, so a desert or a gravel beach is not refused in every direction.

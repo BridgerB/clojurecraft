@@ -137,6 +137,25 @@
                               (falling-in-column? world [(first col) fy (second col)]))))
                      [[0 0] [1 0] [-1 0] [0 1] [0 -1]])))))
 
+(def step-reach
+  "Blocks ahead of the feet a step looks: one body width. A destination past that is approached;
+   only the step that would enter a falling column is refused."
+  (* 2 physics/half-width))
+
+(defn step-toward
+  "The point one body width (step-reach) from pos toward point, or point when it is closer.
+   The place the next step can put the body, not a far destination."
+  [pos point]
+  (let [dx (- (double (first point)) (double (first pos)))
+        dy (- (double (second point)) (double (second pos)))
+        dz (- (double (nth point 2)) (double (nth pos 2)))
+        dist (math/sqrt (+ (* dx dx) (* dy dy) (* dz dz)))]
+    (cond (<= dist (double step-reach)) point
+          :else
+          (let [s (/ (double step-reach) dist)]
+            [(+ (double (first pos)) (* dx s)) (+ (double (second pos)) (* dy s))
+             (+ (double (nth pos 2)) (* dz s))]))))
+
 (defn clearing-head?
   "Is target the full cube the eye box touches (physics/suffocation-cell), the one cell a buried
    dig may break?"
@@ -214,12 +233,13 @@
 (defn failed? "Did intent i fail?" [i] (= :failed (:intent/status i)))
 
 (defn toward
-  "Controls that walk toward a point, jumping when blocked. Suppresses forward push if stepping
-   toward point would move the body box into an unsafe falling column (step-into-falling?)."
+  "Controls that walk toward a point, jumping when blocked. Forward is off when the next step
+   (step-toward) would put the body in a column that can still fall (step-into-falling?).
+   A point farther than one body width is still approached."
   [world point yaw-offset]
   (let [[yaw pitch] (physics/look-at (game/eye world) point)
         yaw (+ yaw yaw-offset)
-        safe? (not (step-into-falling? world point))]
+        safe? (not (step-into-falling? world (step-toward (:player/pos world) point)))]
     {:control/forward? safe?
      :control/jump? (and safe? (boolean (:player/horizontal-collision? world)))
      :control/yaw yaw

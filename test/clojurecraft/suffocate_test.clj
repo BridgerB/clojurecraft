@@ -159,3 +159,15 @@
               w-run (intent/run (assoc w-trapped :plan/intent esc-i) esc-i {:event/kind :tick})]
           (is (= :dig (get-in w-run [:plan/intent :intent/child :intent/kind])))
           (is (= [2588 59 2824] (get-in w-run [:plan/intent :intent/child :intent/target]))))))))
+
+(deftest toward-approaches-a-far-column
+  (testing "gravel fourteen blocks away is approached; a step of 0.42 into it is not"
+    (let [gravel-col (into {} (for [y (range 58 62)] [[2435 y 2321] gravel-state]))
+          shore [2435.5 58.5 2321.5]
+          w-far (world-at [2420.5 58.0 2321.5] gravel-col)]
+      (is (true? (intent/step-into-falling? w-far shore)))
+      (is (true? (:control/forward? (intent/toward w-far shore 0.0))))
+      (let [w-near (world-at [2434.56 58.0 2321.51] gravel-col)
+            move-pos [2434.98 58.0 2321.51]]
+        (is (true? (intent/step-into-falling? w-near move-pos)))
+        (is (false? (:control/forward? (intent/toward w-near move-pos 0.0))))))))
