@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-28T23:24:27.445Z",
+  "at" : "2026-10-28T23:25:35.428Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -58,6 +58,11 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
+    "number" : 538,
+    "title" : "Bot stops at fortress: blocked",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
     "number" : 526,
     "title" : "Bot stops at blaze-rods: blocked",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
@@ -88,16 +93,6 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 538,
-    "title" : "Bot stops at fortress: blocked",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
-    "number" : 178,
-    "title" : "Bot stops at portal: timeout",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 171,
     "title" : "Bot stops at flint-and-steel: unsafe",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
@@ -117,6 +112,11 @@
     "title" : "Bot stops at flint-and-steel: stuck",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : true
+  }, {
+    "number" : 178,
+    "title" : "Bot stops at portal: timeout",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : false
   }, {
     "number" : 161,
     "title" : "Bot stops at portal-kit: timeout",
@@ -188,6 +188,10 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 538,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
     "issue" : 526,
     "move" : "leave",
     "why" : "hands-off label"
@@ -208,14 +212,6 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 538,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
-    "issue" : 178,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
     "issue" : 171,
     "move" : "leave",
     "why" : "hands-off label"
@@ -225,6 +221,10 @@
     "why" : "hands-off label"
   }, {
     "issue" : 348,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 178,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
