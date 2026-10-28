@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-28T20:02:38.091Z",
+  "at" : "2026-10-28T20:04:57.916Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -177,8 +177,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 593,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment"
+    "move" : "wait",
+    "why" : "session starting"
   }, {
     "issue" : 539,
     "move" : "leave",
