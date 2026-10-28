@@ -403,9 +403,10 @@
         w (assoc (standing two) :world/chunks {[0 0] (world/column pillar)})]
     (is (blaze/outnumbered? w))
     (is (blaze/crowded? (assoc w :player/health 15.0)))
-    (is (not (blaze/crowded? w)) "at full health the one at hand is fought")
+    (is (not (blaze/crowded? w)) "at rested health it is not crowded")
     (is (= :cover (:intent/for (next-intent (assoc w :player/health 15.0)))))
-    (is (= :fight (:intent/kind (next-intent w))))
+    (is (= :cover (:intent/for (next-intent w)))
+        "three watching, none at hand, full health: the cover (the goal row's rule)")
     (testing "with one at hand it is fought, as it follows into any cover (blaze-fire-b)"
       (let [near (assoc-in w [:world/entities 10] hand)
             hurt (assoc near :player/health 15.0)]

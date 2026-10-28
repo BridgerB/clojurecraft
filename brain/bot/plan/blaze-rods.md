@@ -147,6 +147,8 @@ The gym rows that get seven rods land with an iron sword, iron armour, Fire Resi
 
 `:gear` is undone until the gear is held, given up or the run is no chain (`plan/reach` would mark it reached at once if it were done before the portal kit: probe 40779151074); its `gear-ms` runs from `gear/started-at`, the later of the portal kit and the last death. A rod by the spawner is gone for only when no blaze has the bot in sight or the health is at `rested` (`collectable?`).
 
+`:return-nether` waits (`fortress/ready-for-nether?`) until the health is at `return-health` or `return-wait-ms` have passed since the last death; the hunt, meal and regear rows come first meanwhile.
+
 ## Limits
 - Fireballs are not dodged; the damage-event log is where to look when they kill.
 - A blaze hovering higher than the eye can reach from under it is never hit (`pressing?` stops within 0.8 on the plane); the fight has no engage timeout, only `:ghost` after 25 swings in reach.

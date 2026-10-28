@@ -851,10 +851,25 @@
   (boolean (and (= dimension/nether (dimension/of world))
                 (some #(arrived? world %) (bricks world)))))
 
+(def return-health 18.0)   ; health a bot back in the overworld has before it goes through the portal again
+(def return-wait-ms 900000) ; ms after a death the bot waits to be ready, however it fares: the food may never come
+
+(defn ready-for-nether?
+  "May the bot go back through the portal: its health at return-health or over, or return-wait-ms
+   gone since its last death? Sim R1/1 (probe 40787504601) entered the Nether at 7.9 health, food 14
+   and nothing edible, and was dead within the half hour: the hunt, the meal and the regear are
+   always rows that come first while this waits."
+  [world]
+  (let [died (:answer/at (last (memory/answers world :death)))]
+    (or (>= (:player/health world 20.0) return-health)
+        (nil? died)
+        (>= (- (:time/now world 0) died) return-wait-ms))))
+
 (defmethod plan/done-by :nether-access?
   [world _]
   (or (not= dimension/overworld (dimension/of world))
       (not (contains? (:plan/reached world) :nether))
+      (not (ready-for-nether? world))
       (empty? (plan/undone world (filter #(= dimension/nether (:goal/dimension %)) plan/goals)))))
 
 (defmethod plan/next-intent :return-nether

@@ -195,7 +195,8 @@
          :watchers (count (blaze/watchers after))
          :pos (some->> pos
                        (mapv #(long (math/round (double %)))))
-         :intent (select-keys (:plan/intent after) [:intent/kind :intent/for :intent/target])}))))
+         :intent (select-keys (:plan/intent after)
+                              [:intent/kind :intent/for :intent/goal :intent/target])}))))
 
 (defn run
   "One run: the bot from empty hands on world w's landing, playing every step up to until,

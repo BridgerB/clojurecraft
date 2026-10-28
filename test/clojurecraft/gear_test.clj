@@ -4,6 +4,7 @@
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [clojurecraft.armour :as armour]
             [clojurecraft.fixtures :as fx]
+            [clojurecraft.fortress :as fortress]
             [clojurecraft.game :as game]
             [clojurecraft.gear :as gear]
             [clojurecraft.memory :as memory]
@@ -120,6 +121,19 @@
     (testing "the kit is gone but the Nether was reached: every ingot is spare"
       (is (= 5 (armour/spare-ingots (standing {3 (item :iron_ingot 5)} #{:nether}))))
       (is (zero? (armour/spare-ingots (standing {3 (item :iron_ingot 5)} #{})))))))
+
+(deftest the-way-back-waits-for-health-after-a-death
+  ;; sim R1/1 (probe 40787504601, t 18078400): into the Nether at 7.9 health, food 14, edible 0,
+  ;; dead at t 19370500
+  (let [dead (memory/remember-answer (standing {} #{:portal-kit :gear :nether})
+                                     {:answer/kind :death})
+        hurt (assoc dead :player/health 7.92 :player/food 14 :time/now 2000)]
+    (is (not (fortress/ready-for-nether? hurt)))
+    (is (plan/done-by hurt (row :return-nether)) "the row waits, and the always rows come first")
+    (testing "healed, or the wait spent, or no death: ready"
+      (is (fortress/ready-for-nether? (assoc hurt :player/health 18.5)))
+      (is (fortress/ready-for-nether? (assoc hurt :time/now (+ 1000 fortress/return-wait-ms))))
+      (is (fortress/ready-for-nether? (assoc (standing {} #{:nether}) :player/health 7.0))))))
 
 (deftest raw-meat-is-cooked-after-the-portal-kit
   (let [w (standing (merge kit {3 (item :beef 6) 4 (item :porkchop 2)}))]
