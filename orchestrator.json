@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-28T12:49:18.809Z",
+  "at" : "2026-10-28T12:52:35.885Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -33,6 +33,11 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
+    "number" : 593,
+    "title" : "Bot stops at water-bucket: unsafe",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
     "number" : 40,
     "title" : "Bot stops at ingots: no-path",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
@@ -46,11 +51,6 @@
     "number" : 531,
     "title" : "Bot stops at ingots: boxed",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
-    "number" : 593,
-    "title" : "Bot stops at water-bucket: unsafe",
-    "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
     "number" : 161,
