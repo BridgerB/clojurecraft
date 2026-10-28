@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-28T17:26:18.318Z",
+  "at" : "2026-10-28T17:27:26.378Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -21,7 +21,7 @@
     "number" : 593,
     "title" : "Bot stops at water-bucket: unsafe",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : true
+    "copilot" : false
   }, {
     "number" : 539,
     "title" : "Bot stops at fortress: timeout",
@@ -43,14 +43,14 @@
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
-    "number" : 538,
-    "title" : "Bot stops at fortress: blocked",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 526,
     "title" : "Bot stops at blaze-rods: blocked",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 538,
+    "title" : "Bot stops at fortress: blocked",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 178,
@@ -172,18 +172,17 @@
     "why" : "hands-off label"
   }, {
     "issue" : 593,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment"
+    "move" : "assign"
   }, {
     "issue" : 539,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 538,
+    "issue" : 526,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 526,
+    "issue" : 538,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -248,11 +247,6 @@
     "why" : "hands-off label"
   } ],
   "log" : [ {
-    "issue" : 586,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment",
-    "at" : "2026-10-28T03:16:08.608Z"
-  }, {
     "issue" : 586,
     "move" : "assign",
     "at" : "2026-10-28T03:17:15.268Z"
@@ -1597,5 +1591,9 @@
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
     "at" : "2026-10-28T17:26:18.318Z"
+  }, {
+    "issue" : 593,
+    "move" : "assign",
+    "at" : "2026-10-28T17:27:26.378Z"
   } ]
 }
