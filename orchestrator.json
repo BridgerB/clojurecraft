@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-28T11:30:33.079Z",
+  "at" : "2026-10-28T11:34:54.323Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -141,8 +141,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 151,
-    "move" : "wait",
-    "why" : "session starting"
+    "move" : "unassign",
+    "why" : "no pull request and no session since the assignment"
   }, {
     "issue" : 526,
     "move" : "leave",
@@ -209,11 +209,6 @@
     "why" : "hands-off label"
   } ],
   "log" : [ {
-    "issue" : 586,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment",
-    "at" : "2026-10-28T02:38:09.821Z"
-  }, {
     "issue" : 586,
     "move" : "assign",
     "at" : "2026-10-28T02:39:17.208Z"
@@ -1557,5 +1552,10 @@
     "issue" : 151,
     "move" : "assign",
     "at" : "2026-10-28T11:14:15.498Z"
+  }, {
+    "issue" : 151,
+    "move" : "unassign",
+    "why" : "no pull request and no session since the assignment",
+    "at" : "2026-10-28T11:34:54.323Z"
   } ]
 }
