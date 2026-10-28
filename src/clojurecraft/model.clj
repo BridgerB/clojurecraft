@@ -38,17 +38,21 @@
     "after the first physics tick"]
    [:player/eye-in-water? "the eye (y + 1.62) is inside water, by the physics this tick"
     "after the first physics tick"]
+   [:player/suffocating?
+    "a full cube (collision-top >= 1.0) intersects the eye box, by the physics this tick"
+    "after the first physics tick"]
    [:plan/wet-ticks "consecutive ticks the eye has been under water" "while planning"]
    [:plan/afloat-ticks
     "consecutive ticks off the ground over water with no deliberate swim (trap/afloat?)"
     "while planning"]
    [:plan/dry-ticks "consecutive ticks on dry land (trap/dry-land?)" "while planning"]
-   [:plan/trap "the trap the player is in, :water or :lava, with hysteresis (trap/trapped-tick)"
+   [:plan/trap
+    "the trap the player is in, :water, :lava or :suffocation, with hysteresis (trap/trapped-tick)"
     "while trapped"] [:plan/trap-at "the [x z] column where the current trap began" "while trapped"]
    [:world/traps
     "every trap escaped: {:trap/pos [x z] :trap/kind :trap/at}, for routes to keep away from"
     "after the first escape"] [:trap/pos "the column [x z] a trap began in" "inside :world/traps"]
-   [:trap/kind "what the trap was, :water or :lava" "inside :world/traps"]
+   [:trap/kind "what the trap was, :water, :lava or :suffocation" "inside :world/traps"]
    [:trap/at "ms the trap cleared" "inside :world/traps"]
    [:intent/bank "the cell a :swim-out swims to, chosen once" "while a :swim-out has one"]
    [:intent/wet? "a :wade or a :cross has had the body in water at some point"

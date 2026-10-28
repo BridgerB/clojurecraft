@@ -108,10 +108,10 @@
 (s/def :plan/wet-ticks nat-int?)
 (s/def :plan/afloat-ticks nat-int?)
 (s/def :plan/dry-ticks nat-int?)
-(s/def :plan/trap #{:water :lava})
+(s/def :plan/trap #{:water :lava :suffocation})
 (s/def :plan/trap-at (s/tuple int? int?))
 (s/def :trap/pos (s/tuple int? int?))
-(s/def :trap/kind #{:water :lava})
+(s/def :trap/kind #{:water :lava :suffocation})
 (s/def :trap/at int?)
 (s/def ::trap (s/keys :req [:trap/pos :trap/kind :trap/at]))
 (s/def :world/traps (s/coll-of ::trap :kind vector?))
@@ -132,6 +132,7 @@
 (s/def :player/dead? boolean?)
 (s/def :player/in-lava? boolean?)
 (s/def :player/eye-in-water? boolean?)
+(s/def :player/suffocating? boolean?)
 (s/def :control/sneak? boolean?)
 (s/def :player/jump-ticks int?)
 (s/def :player/loaded? boolean?)
@@ -320,7 +321,7 @@
 (s/def :goal/until string?)                ; the --until name that selects a target row
 (s/def :goal/always? boolean?)
 (s/def :goal/aside? boolean?)              ; a trial of its own, never a step of a run (plan/aside?)
-(s/def :goal/trap #{:water :lava})
+(s/def :goal/trap #{:water :lava :suffocation})
 (s/def :goal/plan keyword?)                ; which next-intent planner the row uses (default :needs)
 (s/def :goal/superseded-by keyword?)       ; the row that replaced this one; this one is kept, not chosen
 (s/def :goal/blocks (s/coll-of keyword? :kind vector? :min-count 1)) ; what a :mine row digs
