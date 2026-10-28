@@ -2,10 +2,11 @@
 
 ## 0. Getting going again after a collapse or a restart
 1. Read this whole file (LOOP.md at the root of BridgerB/clojurecraft main: `git show origin/main:LOOP.md`), then T/postmortem-2026-10-27.md, then T/ledger.md (the failure ledger; create it if missing), then T/feat-rules.md.
-   Then read docs/RICH-HICKEY.md in full, from main: `git show origin/main:docs/RICH-HICKEY.md`. It is the design bible: data-oriented, pure functions, facts as attributes, behaviour as defmethods. Never read a stale checkout's copy (upstream/clojurecraft is an old Oct 13 checkout whose docs/hickey.md is out of date). Every fix you review or brief must follow it.
+   Then read docs/RICH-HICKEY.md in full, from main: `git show origin/main:docs/RICH-HICKEY.md`. It is the design bible: data-oriented, pure functions, facts as attributes, behaviour as defmethods. Read it from origin/main, never from a worktree that may be behind. Every fix you review or brief must follow it.
 2. Read memory: clojurecraft-read-the-logs, clojurecraft-own-the-loop, clojurecraft-no-short-gym-caps, clojurecraft-never-die-as-plan, clojurecraft-no-mac-compute, orca-never-switch-tabs, agy-headless-waiting.
 3. Find what is in flight:
-   - `pgrep -fl 'muse exec|agy -p|agy-supervisor|agy-wait|merge-when-green'`;
+   - the Sonnet workers still running (ListAgents), and each one's queue item;
+   - `pgrep -fl 'muse exec|agy -p|agy-supervisor|agy-wait|grok |merge-when-green'` (fallback workers, merges);
    - `gh pr list --state open --repo BridgerB/clojurecraft`;
    - `gh run list --repo BridgerB/clojurecraft --limit 30`;
    - `ls -t T | head -30` (the newest briefs, hand-offs, waiting files and launch outputs).
@@ -98,17 +99,40 @@ Keep the queue at the top of T/ledger.md. Re-rank it daily by how many runs each
 - **g. Crashes** (socket closed, exceptions) go to the top whenever they appear.
 
 ## 5. Workers, models and quotas
-- **Muse Wonder Full** (`MUSE_MODEL=muse-wonder-full-1.0 T/muse-launch.sh <batch> <worktree> [prompt-file]`) is the strongest worker.
-  - Its weekly cap resets Sun Nov 1 5 PM Denver; its 5-hour window shows in each launch output's `window`/`weekly` %.
-  - A run that hits the cap dies with "429 Subscription quota exhausted". Read the jsonl tail, kill the hung `muse exec`, move the batch.
-  - It can't resume headless; a follow-up is a fresh run with a brief that states the branch state.
-- **agy gemini-3.8-flash-high** (Google models only; never Claude or GPT inside agy):
-  - first turn: `T/agy-launch.sh <batch> <worktree>` (brief T/agy-<batch>-brief.md);
-  - then: `node T/agy-supervisor.ts <batch> <worktree> <conversation-id>` in the background.
-  - agy backgrounds every command after 10 s and polls it, which burns quota. So workers must write T/agy-<batch>-waiting.txt and end their turn; `T/agy-wait.sh` waits for free.
-  - Quota: `agy -p /usage`. Gemini 4 Argon is out until Sat Oct 31 8:50 AM.
-  - Flash is weak on shared code: give it small, exact tasks with the failing states spelled out, and review it harder.
-- **Grok** (T/grok-launch.sh) is the backup.
+**The setup, top priority (Bridger, Oct 28):** the main chat is the lead and runs Opus 5.5. It does no bot-fixing itself. It hands all of that to subagents on the latest Sonnet (`claude-sonnet-5-5`: the Agent tool with `model: "sonnet"`), one per queue item, and keeps the larger layers for itself.
+- **Sonnet does the item work:**
+  - reads the failed runs (bot.log, server.log, run.edn.zst, with T/audit-run.ts and T/timeline.ts);
+  - finds the cause with log lines;
+  - writes the fix and its unit tests from the logged states;
+  - pushes its branch and dispatches the test, judge, sim gate and gym runs;
+  - writes the hand-off.
+- **The lead (Opus) does the larger layers:**
+  - picks the queue item and writes the brief (below);
+  - audits every finished run itself (section 2);
+  - checks each claimed cause against the logs;
+  - reviews the diff for design, shared-code risk and RICH-HICKEY;
+  - decides when an approach has failed (section 7) and changes it;
+  - opens the PRs, merges, reverts;
+  - fixes the harness, tooling and sim model;
+  - reports.
+- **How to run a Sonnet worker:**
+  - launch it in the background with a full brief (the Agent tool, `model: "sonnet"`, `run_in_background: true`, a name per item);
+  - it never waits on a run or polls; it pushes, lists the run ids it started in its reply, and ends;
+  - the lead waits for those runs (one plain `gh run watch` in the background), audits them, then continues the same worker with SendMessage and the results;
+  - one item per worker, as many in parallel as the queue has independent items;
+  - stop a worker that finished, so it does not spend tokens.
+- **Fallbacks, only when Claude usage is out:**
+  - **Muse Wonder Full**:
+    - launch: `MUSE_MODEL=muse-wonder-full-1.0 T/muse-launch.sh <batch> <worktree> [prompt-file]`;
+    - weekly cap; a run that hits it dies with "429 Subscription quota exhausted";
+    - it cannot resume headless, so a follow-up is a fresh run with a brief that states the branch state.
+  - **agy gemini-3.8-flash-high** (Google models only):
+    - launch with `T/agy-launch.sh <batch> <worktree>`, then `node T/agy-supervisor.ts <batch> <worktree> <conversation-id>` in the background;
+    - workers write T/agy-<batch>-waiting.txt and end their turn;
+    - check quota with `agy -p /usage`;
+    - Flash is weak on shared code.
+  - **Grok** (`T/grok-launch.sh <batch> <worktree> [session-id]`, follow-ups in T/grok-<batch>-followup.md):
+    - a 402 "usage balance exhausted" means stop and ask Bridger.
 - **Cost:** reading a log costs far less than a wasted worker round. Never save tokens by not looking.
 - **Every brief contains:**
   1. the goal: one queue item;
@@ -179,6 +203,7 @@ Keep the queue at the top of T/ledger.md. Re-rank it daily by how many runs each
 - Parking a worker or the loop until Bridger says go.
 - Relaying a worker's claim unverified.
 - Fighting a quota or a tool when the evidence work needs nothing but files you already have.
+- Trusting a sim gate for a combat change. The sim's zombies, skeletons, creepers and spiders do not path round walls (only the enderman has :paths), so a sim gate cannot see a chase. #589 gated 28 vs 30 deaths in the sim, then real lane 8 went from 1.8 to 3.3 deaths a bot and it was reverted (#591). For combat, gym the attack/defend rows on a real server first (they spawn mobs since #599), and after merge compare the same race lane before and after, deaths by cause from server.log.
 
 ## 8c. Self-check before ending a tick (all must be yes)
 - Did I audit every run that finished since the last tick, and log it in T/ledger.md?
@@ -192,7 +217,7 @@ Keep the queue at the top of T/ledger.md. Re-rank it daily by how many runs each
 1. What the logs showed since the last tick: the top behaviours killing runs, with counts and one example each (run id + timestamp).
 2. Code changes: "merged #N" items, and whether the follow-up audit shows the behaviour gone.
 3. Funnel: the furthest stage reached, and how many gym and race bots reached each stage.
-4. Each worker: its queue item, its state, and quota % (Muse window/weekly, agy Gemini).
+4. Each worker (Sonnet subagents first, any fallback after): its queue item and its state.
 5. Decisions made and why, including anything you chose not to do.
 
 Then ScheduleWakeup 1800 s with this same prompt (the whole file, from "/loop" to "Stop when Bridger says stop."). Use a Monitor or a background wait for any run you need sooner.
