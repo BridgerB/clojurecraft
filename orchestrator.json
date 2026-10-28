@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-28T12:35:02.548Z",
+  "at" : "2026-10-28T12:39:24.544Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -48,6 +48,11 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
+    "number" : 161,
+    "title" : "Bot stops at portal-kit: timeout",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
     "number" : 592,
     "title" : "Bot stops at cast-one: unsafe",
     "labels" : [ "bot-failure", "sim" ],
@@ -55,11 +60,6 @@
   }, {
     "number" : 178,
     "title" : "Bot stops at portal: timeout",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
-    "number" : 161,
-    "title" : "Bot stops at portal-kit: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
@@ -165,11 +165,11 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 178,
+    "issue" : 161,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 161,
+    "issue" : 178,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
