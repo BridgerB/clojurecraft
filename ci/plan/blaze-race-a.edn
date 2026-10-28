@@ -1,0 +1,11 @@
+;; Issue #262: the gym with what the race bot brings (gear.clj): iron sword, helmet, chestplate and
+;; leggings, sixteen cooked beef, no Fire Resistance. blaze-fortress is the mechanics check.
+{:plans/label "blaze-race-a"
+ :plans/jobs 4
+ :plans/issue 262
+ :plans/experiments [{:exp/name "blaze-fortress-race"
+                      :exp/kind :gym
+                      :exp/goal "blaze-fortress-race"
+                      :exp/runs 5
+                      :exp/bots 1
+                      :exp/est-s 1800}]}

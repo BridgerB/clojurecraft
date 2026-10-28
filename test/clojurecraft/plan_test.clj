@@ -889,8 +889,8 @@
   (is (= [:ender-pearls] (plan/goals-for (plan/current-until))))
   (let [chain (plan/through (plan/current-until))]
     (is (= [:wood :kit :pickaxe :cobblestone :stone-pickaxe :furnace :ingots :bucket :water-bucket
-            :flint-and-steel :iron-kit :portal-kit :cast-one :portal :nether :fortress :blaze-rods
-            :ender-pearls]
+            :flint-and-steel :iron-kit :portal-kit :gear :cast-one :portal :nether :fortress
+            :blaze-rods :ender-pearls]
            chain))
     (is (= [:wood] (plan/through "wood")))
     (is (nil? (plan/through "play")))

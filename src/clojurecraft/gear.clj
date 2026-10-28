@@ -1,0 +1,128 @@
+(ns clojurecraft.gear
+  "The gear a bot takes into the Nether (issue #262): an iron sword, iron helmet, chestplate and
+   leggings, and its raw meat cooked. The gym rows that get seven blaze rods in five minutes land
+   with all of it; the race bot reached the blazes with a stone sword, no armour and no food
+   (sim R1/17 carried six unsmelted raw iron).
+
+   Requiring this namespace registers four rows' rules. :gear (a step of the chain, after the
+   portal kit, before the cast) and :regear (an always row, once :gear was reached: after a death
+   the gear is lost) are done by :geared? / :regeared?, nothing in gear-cost left to pay, and
+   planned by :gear: the iron ingots the missing pieces cost, mined and smelted through the needs
+   planner (the armour and sword rows then craft each piece the moment its ingots are spare), else
+   the next missing piece itself when the ingots are held and no row has crafted it. :gear gives up
+   gear-ms after the portal kit, so a world without iron never holds the run. :cook (an always row,
+   overworld, after the portal kit) is done by :cooked?, no raw meat of the hunt's held, planned by
+   :cook into a smelt of all of it: cooked meat feeds twice the raw."
+  (:require [clojurecraft.armour :as armour]
+            [clojurecraft.dimension :as dimension]
+            [clojurecraft.eat :as eat]
+            [clojurecraft.hunt :as hunt]
+            [clojurecraft.make :as make]
+            [clojurecraft.plan :as plan]
+            [clojurecraft.recipe :as recipe]))
+
+(set! *warn-on-reflection* true)
+
+(def gear-ms 3000000) ; ms after the portal kit the gear is worked for: fifty minutes of mining, then the run goes on
+
+(def sword-cost "The iron ingots an iron sword costs." 2)
+
+(defn pieces
+  "The pieces the gear is, in the order they are made, as [item-name ingots]: the armour's, then
+   the sword."
+  []
+  (conj (vec armour/made) [:iron_sword sword-cost]))
+
+(defn missing
+  "The pieces of the gear not held (armour/counts: worn, in a grid or on the cursor counts as
+   held), in order."
+  [world]
+  (let [c (armour/counts world)] (filterv (fn [[k _]] (zero? (get c k 0))) (pieces))))
+
+(defn gear-cost
+  "The iron ingots the missing pieces cost, together."
+  [world]
+  (transduce (map second) + 0 (missing world)))
+
+(defn wanted?
+  "Is the gear to be worked now: a chained run in the overworld, the portal kit reached (or its
+   iron held), some piece missing, and not gear-ms past the kit?"
+  [world]
+  (let [reached (:plan/reached world #{})
+        after (get (:plan/reached-after world) :portal-kit)
+        spent (some-> after
+                      (->> (- (- (:time/now world 0) (:plan/since world (:time/now world 0))))))]
+    (boolean (and (:plan/chain? world)
+                  (= dimension/overworld (dimension/of world))
+                  (or (contains? reached :portal-kit) (pos? (armour/spare-ingots world)))
+                  (pos? (gear-cost world))
+                  (or (nil? spent) (< spent gear-ms))))))
+
+(defmethod plan/done-by :geared? [world _] (not (wanted? world)))
+
+(defmethod plan/done-by :regeared?
+  ;; the always row: only once the first gear was reached; before that :gear is the step
+  [world _]
+  (or (not (contains? (:plan/reached world #{}) :gear)) (not (wanted? world))))
+
+(defn gear-intent
+  "The next intent toward the gear, or nil when none is wanted: the ingots for everything
+   missing, mined through the needs planner; with them held, the next piece itself, for when no
+   always row could craft it (no table at hand)."
+  [world goal table]
+  (when (wanted? world)
+    (let [cost (gear-cost world)
+          held (get (armour/counts world) :iron_ingot 0)
+          [k _] (first (missing world))]
+      (if (< held cost)
+        (make/decide world (assoc goal :goal/provides {:item/iron_ingot cost}) table)
+        (make/decide world (assoc goal :goal/provides {(keyword "item" (name k)) 1}) table)))))
+
+(defmethod plan/next-intent :gear [world goal table] (gear-intent world goal table))
+
+(defmethod plan/next-intent :regear [world goal table] (gear-intent world goal table))
+
+;; ---------------------------------------------------------------- cooking
+
+(def cookable
+  "{raw-name cooked-name} for the raw meats the hunt row brings (hunt/game-kinds) that a furnace
+   cooks into food (eat/edible)."
+  (let [raw (set (vals hunt/game-kinds))]
+    (into {}
+          (for [r recipe/smelting
+                :let [in (first (:smelt/input r))]
+                :when (and (= 1 (count (:smelt/input r)))
+                           (contains? raw in)
+                           (contains? eat/edible (:smelt/result r)))]
+            [in (:smelt/result r)]))))
+
+(defn raw-held
+  "[raw-name cooked-name n] for the raw meat held in the largest number (n), or nil when none is."
+  [world]
+  (let [c (make/counts world)]
+    (->> cookable
+         (keep (fn [[raw cooked]] (let [n (get c raw 0)] (when (pos? n) [raw cooked n]))))
+         (sort-by (comp - last))
+         first)))
+
+(defn cook-wanted?
+  "Is raw meat to be cooked now: a chained run in the overworld, the portal kit reached, raw meat
+   held?"
+  [world]
+  (boolean (and (:plan/chain? world)
+                (= dimension/overworld (dimension/of world))
+                (contains? (:plan/reached world #{}) :portal-kit)
+                (raw-held world))))
+
+(defmethod plan/done-by :cooked? [world _] (not (cook-wanted? world)))
+
+(defmethod plan/next-intent :cook
+  ;; all the raw meat of the kind held most, smelted: the cooked stack provided is what is held
+  ;; of it cooked already, plus the raw
+  [world goal table]
+  (when-let [[_ cooked n] (and (cook-wanted? world) (raw-held world))]
+    (make/decide world
+                 (assoc goal
+                        :goal/provides
+                        {(keyword "item" (name cooked)) (+ n (get (make/counts world) cooked 0))})
+                 table)))

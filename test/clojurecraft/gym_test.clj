@@ -24,6 +24,10 @@
   (testing "several rows of one goal are found by their own names (issue #262)"
     (is (= "blaze-7" (:gym/name (gym/gym "blaze-7"))))
     (is (= :blaze-rods (:gym/goal (gym/gym "blaze-fortress"))))
+    (is (= :blaze-rods (:gym/goal (gym/gym "blaze-fortress-race"))))
+    (is (not-any? #(str/includes? % "fire_resistance")
+                  (:gym/summon (gym/gym "blaze-fortress-race")))
+        "the race bot has no Fire Resistance")
     (is (str/includes? (gym/plan-matrix ["blaze-7"] 1) "{\"goal\":\"blaze-7\",\"run\":1,"))
     (is (apply distinct? (keep :gym/name gym/gyms)))))
 

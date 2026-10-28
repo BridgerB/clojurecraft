@@ -130,6 +130,32 @@
   :goal/provides {:item/water_bucket 1 :item/bucket 1}
   :goal/spares {:item/stick 24}
   :goal/done? :provided?}
+ {:goal/id :gear
+  :goal/priority 14
+  :goal/target? true
+  :goal/until "gear"
+  :goal/doc
+  "an iron sword and iron helmet, chestplate and leggings before the portal is cast (issue #262): the iron they cost beyond the kit's mined and smelted through the needs planner, the armour and sword rows crafting each piece the moment its ingots are spare. The race bot reached the blazes with a stone sword, no armour and no food, where the gym rows that get seven rods in five minutes land with all of it. Given up fifty minutes after the portal kit (gear/gear-ms), so a world without iron never holds the run"
+  :goal/done? :geared?
+  :goal/plan :gear}
+ {:goal/id :regear
+  :goal/priority 14
+  :goal/target? true
+  :goal/always? true
+  :goal/dimension "minecraft:overworld"
+  :goal/doc
+  "the gear again after a death in the Nether took it (issue #262): the :gear step is reached once and never asked again, so this always row, in the overworld and only once :gear was reached, makes what is missing before the way back"
+  :goal/done? :regeared?
+  :goal/plan :regear}
+ {:goal/id :cook
+  :goal/priority 14
+  :goal/target? true
+  :goal/always? true
+  :goal/dimension "minecraft:overworld"
+  :goal/doc
+  "the raw meat the hunt brought, cooked in the furnace (issue #262): after the portal kit in a chained run, the kind held most, all of it, through the needs planner's smelt (a furnace, fuel and the input), so the Nether leg begins with cooked meat, which feeds twice the raw and heals as the food bar needs"
+  :goal/done? :cooked?
+  :goal/plan :cook}
  {:goal/id :cast-one
   :goal/priority 14
   :goal/target? true

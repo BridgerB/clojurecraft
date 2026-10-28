@@ -64,8 +64,8 @@
 
 (def made
   "The pieces made from spare ingots, in order, with their cost in iron ingots (the game's
-   recipes: five for a helmet, eight for a chestplate)."
-  [[:iron_helmet 5] [:iron_chestplate 8]])
+   recipes: five for a helmet, eight for a chestplate, seven for leggings)."
+  [[:iron_helmet 5] [:iron_chestplate 8] [:iron_leggings 7]])
 
 (def kit-iron
   "What the portal needs of the iron, held (the iron kit and the portal kit): until all of it is,
@@ -93,10 +93,14 @@
                                            vector))))))
 
 (defn spare-ingots
-  "The iron ingots held (counts) once every item of kit-iron is, else 0: armour never takes the
+  "The iron ingots held (counts) once every item of kit-iron is, or once the Nether was reached
+   (the portal is lit, and a death took the kit with the rest), else 0: armour never takes the
    iron the portal still needs."
   [world]
-  (let [c (counts world)] (if (every? #(pos? (get c % 0)) kit-iron) (get c :iron_ingot 0) 0)))
+  (let [c (counts world)]
+    (if (or (every? #(pos? (get c % 0)) kit-iron) (contains? (:plan/reached world #{}) :nether))
+      (get c :iron_ingot 0)
+      0)))
 
 (def table-planks 4)                  ; planks a crafting table takes
 

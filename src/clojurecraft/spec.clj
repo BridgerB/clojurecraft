@@ -17,6 +17,7 @@
             [clojurecraft.eyes]
             [clojurecraft.fortress :as fortress]
             [clojurecraft.game :as game]
+            [clojurecraft.gear]
             [clojurecraft.hunt]
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
