@@ -87,9 +87,8 @@
 (def scanning-phase 6)                ; its phase turning on the perch toward a player (DragonSittingScanningPhase): the head sweeps the basin
 (def walk-in-to 3.0)                  ; blocks on the plane from the fountain a perch walks in to for reach, no nearer
 (def perch-hold-ms 60000)             ; a :perch hands back to the planner this often
-(def breath-radius 5.0)               ; a breath cloud's radius when its metadata has not said: the sitting dragon's flame cloud (DragonSittingFlamingPhase)
+(def breath-radius entity/breath-radius) ; a breath cloud's radius when its metadata has not said: the sitting dragon's flame cloud (DragonSittingFlamingPhase)
 (def breath-margin 1.5)               ; blocks beyond a breath cloud's radius (:entity/radius: a fireball's grows from 3 to 7) the bot keeps
-(def breath-kinds #{:area_effect_cloud :dragon_fireball})
 (def behind-by 1.0)                   ; blocks behind the sitting dragon's body (along its facing, mob/ahead) a stand must be: out of its head's and neck's way
 (def leave-by 0.5)                    ; blocks behind it the feet may come to, the dragon turning, before the :perch hands back for another stand
 (def clear-across 3.3)                ; blocks across its facing a way must keep: the neck's box (mob/bite-across), the body's half width, a half block
@@ -122,7 +121,7 @@
 (defn breaths
   "{eid entity} of the dragon's breath clouds and fireballs the server shows."
   [world]
-  (into {} (filter (fn [[_ e]] (contains? breath-kinds (entity/kind e)))) (:world/entities world)))
+  (entity/breaths world))
 
 (defn pillar-block?
   "Is the state one of the pillar blocks?"
@@ -309,7 +308,10 @@
    a spike's top, the walk back to the pillar's top, on a pillar the :dig-down, on the ground the
    walk to the pillar's foot. A wait :no-blocks with no pillar block held where one is needed,
    :no-approach for a crystal no axis reaches, :stranded on a spike with no pillar back down; nil
-   with no crystal and the feet down."
+   with no crystal and the feet down. Falling (not :player/on-ground?, a hit's knockback off a
+   pillar or the way down it) the wait :falling: no route starts in the air, and gym chain-w11
+   runs 3 and 4 asked for a walk every tick, each failed :no-path, twelve in a row failed the
+   run in 0.6 s."
   [world]
   (let [[fx fy fz :as feet] (intent/feet world)
         [eid c] (entity/nearest (crystals world) (:player/pos world))
@@ -318,6 +320,7 @@
         item (pillar-block world)
         gap (when a (wall-gap world a))]
     (cond (off-island? world) (toward-island world)
+          (not (:player/on-ground? world true)) {:plan/wait :falling}
           (and a (= feet (:stand a)) gap item)
           {:intent/kind :place :intent/item item :intent/cell gap}
           (and a (= feet (:stand a)) gap) {:plan/wait :no-blocks}
@@ -775,10 +778,7 @@
   "Are the feet within a breath cloud's or fireball's own radius (:entity/radius, breath-radius
    when unsaid), where it hurts, not only within its breath-reach?"
   [world]
-  (let [pos (:player/pos world)]
-    (boolean (some #(<= (physics/horizontal-distance pos (:entity/pos %))
-                        (:entity/radius % breath-radius))
-                   (vals (breaths world))))))
+  (entity/in-breath? world))
 
 (defn at-stand?
   "Are the feet within stand-near of stand's middle on the plane?"
@@ -871,7 +871,10 @@
             {:plan/wait :low-health}))))
 
 (defn toward-dragon
-  "The next intent toward the dragon dead: while a crystal stands or the feet are up a pillar or
+  "The next intent toward the dragon dead: on the ground in a breath cloud itself (in-breath?)
+   with a crystal standing, the shelter walk out of it (escape), first of all: gym chain-w11 runs
+   3 and 4 stood in one fighting an enderman, six health every half second of magic, and died;
+   while a crystal stands or the feet are up a pillar or
    a spike, the crystals' (toward-crystals); a breath near, combat's :back-off from it; away from
    the fountain's stand (fountain-stand), the walk there; there, the :perch, and with every stand
    under a breath, or one on the straight way to the stand (breath-on-way?), the :perch where
@@ -900,7 +903,13 @@
         far? (and stand (> (physics/horizontal-distance pos (physics/centre stand)) stand-near))
         blocked? (and far? (breath-on-way? world pos (physics/centre stand)))
         flight (when breath (escape world))]
-    (cond (or (off-island? world) (seq (crystals world)) (on-pillar? world) (on-spike? world))
+    (cond (and (seq (crystals world))
+               (in-breath? world)
+               (:player/on-ground? world true)
+               (not (or (off-island? world) (on-pillar? world) (on-spike? world)))
+               (escape world))
+          (shelter-walk (escape world))
+          (or (off-island? world) (seq (crystals world)) (on-pillar? world) (on-spike? world))
           (toward-crystals world)
           (< (:player/health world full-health) combat/retreat-health) (recover world)
           (and breath eid (holds? world)) {:intent/kind :perch :intent/target eid}

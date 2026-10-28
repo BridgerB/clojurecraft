@@ -20,6 +20,7 @@
    (answers) has the :defend row leave that kind to it."
   (:require [clojure.math :as math]
             [clojurecraft.armour :as armour]
+            [clojurecraft.dimension :as dimension]
             [clojurecraft.entity :as entity]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
@@ -384,6 +385,13 @@
             intent/done)
         :else (assoc world :player/controls (intent/toward world (away-point world e) 0.0))))
 
+(defn breathed-on?
+  "Does the bot stand in the dragon's breath (entity/in-breath?) in the End? A fight there is the
+   bot's death: gym chain-w11 runs 3 and 4 fought an enderman inside a cloud, six health every
+   half second of magic, 20 to 0 in three seconds. The cloud is left first, whatever hits."
+  [world]
+  (and (= dimension/end (:player/dimension world)) (entity/in-breath? world)))
+
 (defmethod intent/run :fight
   ;; {:intent/kind :fight :intent/target eid}: done when the target is gone (a kill); below
   ;; retreat-health it breaks off and walks away (done once away: a fight left is not a failure).
@@ -405,6 +413,7 @@
             e (assoc :intent/target-pos (:entity/pos e)))
         world (assoc world :plan/intent i)]
     (cond (or (entity/gone? world (:intent/target i))
+              (breathed-on? world)
               (and (:intent/yield? i) (< (:player/health world 20.0) retreat-health)))
           (-> world
               (assoc :player/controls {})
@@ -630,7 +639,8 @@
    a row in play answers itself (answered-kinds), only what can be fought from here
    (hittable?) and come to (approachable?: a mob in water two blocks below is seen but never
    strikable and no route reaches it, and a fight on it ends done at once, re-picked for the
-   whole stage, issues #69 and #62), and none given up as unreachable a while ago (given-up?)."
+   whole stage, issues #69 and #62), and none given up as unreachable a while ago (given-up?).
+   None at all while the bot stands in the dragon's breath (breathed-on?)."
   [world]
   (let [pos (:player/pos world)
         bl (:plan/blacklist world #{})
@@ -642,7 +652,8 @@
      {}
      (filter
       (fn [[eid e]]
-        (and (not (contains? bl eid))
+        (and (not (breathed-on? world))
+             (not (contains? bl eid))
              (not= :ender_dragon (entity/kind e))
              (or (= eid (:player/attacker world)) (not (contains? left (entity/kind e))))
              (not (given-up? world eid e))

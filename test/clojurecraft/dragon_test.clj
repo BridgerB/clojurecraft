@@ -873,3 +873,39 @@
           "at the shore's y with air ahead: places floor west"))
     (is (not (plan/done-by base {:goal/done? :crystals-gone?}))
         "never done while still off the island or within 3s of entering the End")))
+
+(deftest a-bot-falling-from-a-pillar-waits-and-asks-for-no-walk
+  ;; gym chain-w11 runs 3 and 4 (plan run 40741523320): knocked off a pillar at y 79 by the
+  ;; dragon, the bot asked for a walk to the nearest crystal's foot and to the pillar's top every
+  ;; tick, 50 ms apart, each failed :no-path from the air, and twelve in a row failed the run.
+  (let [s (spike [8 8] 2 64 6)
+        w (-> (standing s [8.5 70.0 5.5] cobblestone crystal)
+              (assoc :player/on-ground? false))]
+    (is (= {:plan/wait :falling} (dragon/toward-crystals w)) "in the air, no route is asked for")
+    (is (= {:intent/kind :dig-down}
+           (dragon/toward-crystals (assoc w :player/on-ground? true :world/entities {})))
+        "on the ground again, the planner goes on")))
+
+(deftest in-the-breath-on-the-island-with-a-crystal-standing-the-bot-walks-out-and-fights-nothing
+  ;; gym chain-w11 run 4: an enderman fought at 14 health inside a breath cloud (type 23 damage,
+  ;; six every half second from the dragon's cloud), 14 -> 8.9 -> 3.4 -> 0 in three seconds.
+  (let [pos [8.5 64.0 0.5]
+        enderman
+        {99 {:entity/type (mob/type-id :enderman) :entity/pos [10.5 64.0 0.5] :entity/creepy? true}}
+        w (-> (round-fountain pos (merge (sitting 270.0) crystal (cloud pos 3.0) enderman))
+              (assoc :player/dimension dimension/end :player/health 14.0 :player/food 20))
+        out (assoc-in w [:world/entities 50 :entity/pos] [30.5 64.0 0.5])]
+    (is (entity/in-breath? w) "the feet are inside the cloud")
+    (is (empty? (combat/threats w)) "nothing is fought inside it")
+    (is (seq (combat/threats out)) "the enderman is a threat again out of it")
+    (let [i (dragon/toward-dragon w)]
+      (is (= :walk (:intent/kind i)))
+      (is (= :shelter (:intent/for i)))
+      (is (not (dragon/breathed? w (:intent/target i))) "to a cell no breath reaches"))
+    (testing "a fight running when the cloud comes ends at once"
+      (let [fighting (-> w
+                         (assoc :plan/intent
+                                {:intent/kind :fight :intent/target 99 :intent/status :active})
+                         (assoc :time/now 5000))
+            after (intent/run fighting (:plan/intent fighting) {:event/kind :tick})]
+        (is (intent/done? (:plan/intent after)))))))

@@ -416,7 +416,9 @@
         feet (when (:player/pos world) (intent/feet world))
         failed (:plan/failed world)
         retrying? (and next (identical-retry? next failed feet))
-        retreat-cell (when retrying? (some #(when (not= % feet) %) (rseq (:plan/trail world []))))]
+        retreat-cell (when retrying?
+                       (some #(when-not (or (= % feet) (contains? (:plan/blacklist world #{}) %)) %)
+                             (rseq (:plan/trail world []))))]
     (cond (not active?) world
           (and i (or (nil? goal) preempt? cut?) (not (can-abandon? world)))
           (run-intent world i event table)

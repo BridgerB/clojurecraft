@@ -665,7 +665,9 @@
    through or bordering lava (safe-portal-move?), when its first step can be taken from the feet
    (through the stronghold's walls, never into its frames: fortress/unbreakable); else, still over
    room-over, the stairs; else with feet boxed or no move forward, a retreat step back along the
-   plan trail to an earlier unboxed cell (a different stair start); else the wait :no-way. Gym
+   plan trail to an earlier unboxed cell no walk failed at (:plan/blacklist: gym chain-w11 run 1
+   walked to the same cell twelve times in 0.6 s, each :no-path, and the plan failed); else the
+   wait :no-way. Gym
    batch stronghold-265b (plan run 38930188463) run 2 of the portal room: the frame at y 0
    under a lake, seen while the bot swam it, every first step of the tunnel from the water opened
    a cell by water and it failed :blocked."
@@ -688,7 +690,9 @@
         stairs (stairs-toward feet f (max (+ y room-over) (- fy stair-leg)))
         tunnel-move (safe-tunnel-move world feet f)
         retreat (when (or boxed? (nil? tunnel-move))
-                  (some #(when-not (contains? (:plan/boxed-at world #{}) %) %)
+                  (some #(when-not (or (contains? (:plan/boxed-at world #{}) %)
+                                       (contains? (:plan/blacklist world #{}) %))
+                           %)
                         (rseq (:plan/trail world []))))]
     (cond (:player/in-water? world) {:intent/kind :swim-out :intent/for :retreat}
           (and start (not= start feet))

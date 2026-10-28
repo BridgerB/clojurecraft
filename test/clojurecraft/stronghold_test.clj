@@ -442,6 +442,22 @@
           (is (= {:intent/kind :walk :intent/target [13008 8 16727] :intent/for :retreat}
                  (stronghold/to-room w [12815 0 16673]))
               "retreats along trail to earlier unboxed cell instead of waiting :no-way"))))
+    (testing "a retreat cell a walk failed at is not chosen again"
+      ;; gym chain-w11 run 1 (plan run 40741523320): the retreat walk to [12983 3 16726] failed
+      ;; :no-path twelve times in 0.6 s, the same cell each time, and the plan failed
+      (let [w (assoc seen
+                     :player/pos [12985.5 3.0 16726.5]
+                     :plan/boxed-at #{[12985 3 16726]}
+                     :plan/trail [[12983 3 16726] [13008 8 16727] [12985 3 16726]]
+                     :plan/blacklist #{[13008 8 16727]})]
+        (with-redefs [fortress/choose-move (constantly nil)]
+          (is (= {:intent/kind :walk :intent/target [12983 3 16726] :intent/for :retreat}
+                 (stronghold/to-room w [12815 0 16673]))
+              "the walk that failed is skipped for the next cell back")
+          (is (= {:plan/wait :no-way}
+                 (stronghold/to-room (update w :plan/blacklist conj [12983 3 16726])
+                                     [12815 0 16673]))
+              "every cell tried: the wait, never the same walk again"))))
     (testing "to-room refuses moves through or bordering lava in portal room"
       ;; gym chain-w7 run 3: in portal room with lava pool under frame, tunnel-to
       ;; must never step into or border lava

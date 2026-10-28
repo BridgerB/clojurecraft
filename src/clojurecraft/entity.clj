@@ -21,6 +21,8 @@
 (def radius-index 8)                  ; AreaEffectCloud.DATA_RADIUS, a float: a dragon's breath cloud grows from 3 to 7 (gym dragon-d's recordings)
 (def death-status 3)                  ; an entity-event's status for a living entity's death (EntityEvent.DEATH)
 (def on-fire-bit 0x01)                ; in the shared flags: burning (a blaze's state, a mob in lava)
+(def breath-kinds #{:area_effect_cloud :dragon_fireball}) ; the dragon's breath: a cloud on the ground, a fireball
+(def breath-radius 5.0)               ; a breath cloud's radius when its metadata has not said: the sitting dragon's flame cloud (DragonSittingFlamingPhase)
 (def dragon-seen-radius 96.0)         ; blocks from the bot within which the dragon's removal is its death, not a flight out of sight
 
 (def neutral
@@ -113,6 +115,22 @@
        (or (not (contains? neutral (kind e))) (creepy? e))))
 
 ;; ---------------------------------------------------------------- the questions a fight asks
+
+(defn breaths
+  "{eid entity} of the dragon's breath clouds and fireballs the server shows."
+  [world]
+  (into {} (filter (fn [[_ e]] (contains? breath-kinds (kind e)))) (:world/entities world)))
+
+(defn in-breath?
+  "Are the feet within a breath cloud's or fireball's own radius on the plane (:entity/radius,
+   breath-radius when unsaid), where it hurts? Gym chain-w11 runs 3 and 4 fought an enderman on
+   the island standing in a cloud, six health every half second of magic, and died there."
+  [world]
+  (let [pos (:player/pos world)]
+    (boolean (and pos
+                  (some #(<= (physics/horizontal-distance pos (:entity/pos %))
+                             (:entity/radius % breath-radius))
+                        (vals (breaths world)))))))
 
 (defn hostiles
   "{eid entity} of the tracked entities that are hostile? now, or an attacker actively hitting
