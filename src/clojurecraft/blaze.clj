@@ -15,12 +15,13 @@
    is a fortress's, memory/nether-landmark-kinds) is walked to, or tunnelled to by the fortress's
    steps when no route reaches it, and camped by until its blazes come; with no spawner known (or each one
    given-up?: stands beside it blocked), the next leg of the fortress row's spiral search, and a wait :no-blaze
-   only when no heading has a way to go. Before all of it, a blaze at hand (within 4, at-hand-blaze) is fought to the
-   end (:intent/to-the-end?), whatever the health, and ends any other running intent
-   (plan/interrupts?): it follows into any cover. The :defend row answers anything else hostile within 4 first; blazes it
+   only when no heading has a way to go. Before all of it, a blaze at hand (within 4, at-hand-blaze) is fought when
+   the bot is not hurt, and ends any other running intent (plan/interrupts?): it follows into any cover. The
+   fight carries :intent/yield?, so under combat/retreat-health it ends and the cover, the meal or the rest
+   follows, not combat's straight retreat. The :defend row answers anything else hostile within 4 first; blazes it
    leaves to this row while it is worked (combat/answers), or its fights would override the
-   cover. A fight this row starts ends under combat/retreat-health (:intent/yield?), and the
-   cover, the meal or the rest follows, not combat's straight retreat.
+   cover. A zombified piglin that has struck (combat/striker) is backed away from by :defend, and this row
+   never rests beside it.
 
    Fireballs are not dodged: ruststeve never needed it with its break-off at 10 health; the
    damage-event log is where to look if they kill. The bot does not put itself out: no water
@@ -66,8 +67,8 @@
 (def rested 18.0)                     ; health a rest out of sight ends at: two volleys' hits over the wary line
 (def rest-ms 90000)                   ; a rest with no health coming back this long fails :no-heal (the slow heal is one point every four seconds)
 (def fire-radius 4)                   ; cells from a spawner a fire is put out in: a fire lights its cells past 11, where a spawner's blaze no longer spawns
-(def corridor-reach 48.0)             ; standable bricks within this distance are considered for corridor walk
-(def corridor-candidates 16)          ; candidate bricks tested with routable? to find the farthest walkable
+(def corridor-reach 48.0)             ; bricks within this of the feet are walked or tunnelled to; farther is another fortress, not this leg
+(def corridor-nodes 800)              ; nodes one corridor walk may spend finding its route (the cover search's budget)
 
 (def rod (recipe/item-id :blaze_rod))
 (def spawner (blocks/default-state :spawner))
@@ -354,23 +355,30 @@
 
 (defn healing
   "What a hurt bot does: out of the watching blazes' sight (hide); else the meal; else back away
-   from the nearest watcher, unless that line steps off a drop no landing survives
-   (combat/void-retreat?); else a :rest when not in the open (held in cover when it cannot heal,
-   heals?: a death is no plan, the bot stays alive), else nil. Cover before the meal where there is cover: a meal takes a
-   second and a half standing still, two hits from a burst, and gym blazefort-k run 3 (run
-   38913023560) ate at 9.4 by its spawner and was dead before the food came. The meal before the
-   back-off where there is none: gym blaze-7 run 1 (run 38891910129) backed away three times
-   round a room seven square with the food at 17, where no back-off gets away, and burned to
-   death without eating. The rest before a back-off off a lip: issue #514 (sim R3-5-1) jumped
-   the nether brick one cell north and fell 31 into lava, and a footing found down there is not
-   a survival."
+   from whoever last struck (combat/striker), and from the nearest watcher, unless that line
+   steps off a drop no landing survives (combat/void-retreat?); else a :rest on that lip, or when
+   not in the open (held in cover when it cannot heal, heals?: a death is no plan, the bot stays
+   alive), else nil. Cover before the meal where there is cover: a meal takes a second and a
+   half standing still, two hits from a burst, and gym blazefort-k run 3 (run 38913023560) ate
+   at 9.4 by its spawner and was dead before the food came. The meal before the back-off where
+   there is none: gym blaze-7 run 1 (run 38891910129) backed away three times round a room seven
+   square with the food at 17, where no back-off gets away, and burned to death without eating.
+   The rest before a back-off off a lip: issue #514 (sim R3-5-1) jumped the nether brick one
+   cell north and fell 31 into lava, and a footing found down there is not a survival. The rest
+   is never chosen while a strike is fresh and the way away from that attacker has a landing:
+   blaze-wall-b (plan 40624888909) blaze-fortress run 1 rested at 8 health while two zombified
+   piglins hit it. test.yml 40624888901: a watched void retreat is still a rest, in the open or
+   not, or the act searches."
   [world]
   (let [[weid e] (watcher world)
+        [aid ae] (combat/striker world)
         away (hide world)]
     (cond away away
           (meal world) (meal world)
-          (and weid (not (combat/void-retreat? world e)))
-          {:intent/kind :back-off :intent/target weid}
+          (and aid (not (combat/void-retreat? world ae)))
+          {:intent/kind :back-off :intent/target aid}
+          (and e (combat/void-retreat? world e)) rest-intent
+          weid {:intent/kind :back-off :intent/target weid}
           (in-open? world) nil
           :else rest-intent)))
 
@@ -383,14 +391,20 @@
 
 (defn warily
   "What a wary bot does before the next fight: out of the watching blazes' sight (hide); else
-   the meal; else, when not in the open, a :rest until rested (held when it cannot heal); else nil, and it fights on.
-   Gym blazefort-k run 3 (run 38913023560) fought on at 11.5, watched by the spawner's burst,
-   and was under 10 a second later."
+   the meal; else back away from whoever last struck, unless that line is a void; else, when
+   nothing has struck and not in the open, a :rest until rested (held when it cannot heal); else
+   nil, and it fights on. Gym blazefort-k run 3 (run 38913023560) fought on at 11.5, watched by
+   the spawner's burst, and was under 10 a second later. blaze-wall-b run 1 chose :rest at 13
+   health, over eat-under and not yet hurt, while the piglins that a blaze swing had hit were
+   hitting back."
   [world]
-  (let [away (hide world)]
+  (let [away (hide world)
+        [aid ae] (combat/striker world)]
     (cond away away
           (meal world) (meal world)
-          (and (empty? (watchers world)) (not (in-open? world))) rest-intent
+          (and aid (not (combat/void-retreat? world ae)))
+          {:intent/kind :back-off :intent/target aid}
+          (and (nil? aid) (empty? (watchers world)) (not (in-open? world))) rest-intent
           :else nil)))
 
 (defn fires
@@ -470,22 +484,27 @@
          (filter #(unvisited-brick? visited %)))))
 
 (defn corridor-walk
-  "A walk along known fortress corridors (bricks) toward unexplored fortress, or nil when no
-   unvisited standable brick can be reached by a walk."
+  "One walk to the nearest unvisited standable fortress brick within corridor-reach, or nil
+   when none is. The cells are read once (path/cells) and the route is planned once, when the
+   walk runs, with at most corridor-nodes. Asking routable? here planned a full search
+   (path/default-max-nodes, 6000) for each of 16 bricks every time this was chosen, and a walk
+   already at its brick ended in one tick and asked again: probe 40624590128 cancelled at the
+   60-minute limit still in its first replay. A walk that finds no route fails :no-path and
+   blacklists its stand cell, so the next choice is another brick."
   [world]
   (let [feet (intent/feet world)
-        standable (->> (unvisited-fortress-bricks world)
-                       (filter (fn [b]
-                                 (<= (physics/distance (physics/centre feet) (physics/centre b))
-                                     corridor-reach)))
-                       (filter (fn [b] (path/standable? world (update b 1 inc))))
-                       (sort-by (fn [b]
-                                  (physics/distance (physics/centre feet) (physics/centre b)))))]
-    (when-let [target (some (fn [b]
-                              (let [w {:intent/kind :walk :intent/target (update b 1 inc)}]
-                                (when (intent/routable? world w) b)))
-                            (take corridor-candidates standable))]
-      {:intent/kind :walk :intent/target (update target 1 inc) :intent/for :corridor})))
+        at (path/cells world)
+        bl (:plan/blacklist world #{})
+        near (->> (unvisited-fortress-bricks world)
+                  (remove #(contains? bl (update % 1 inc)))
+                  (filter #(<= (physics/distance (physics/centre feet) (physics/centre %))
+                               corridor-reach))
+                  (sort-by #(physics/distance (physics/centre feet) (physics/centre %))))]
+    (when-let [b (some (fn [brick] (when (path/standable? at (update brick 1 inc)) brick)) near)]
+      {:intent/kind :walk
+       :intent/target (update b 1 inc)
+       :intent/for :corridor
+       :intent/max-nodes corridor-nodes})))
 
 (defn fortress-bounds
   "The bounding box {:min-x :max-x :min-y :max-y :min-z :max-z} of fortress bricks on record,
@@ -522,12 +541,14 @@
 
 (defn fortress-search
   "Search the fortress: walk along open corridors (corridor-walk) toward unexplored bricks, or
-   tunnel/bridge to the nearest unvisited brick when no walk reaches one, or extend corridors from
-   the fortress bounds when all known bricks are visited."
+   tunnel/bridge to the nearest unvisited brick within corridor-reach when no walk reaches one,
+   or extend corridors from the fortress bounds when all known bricks are visited. A brick
+   further off is not a tunnel: sight-radius (512) sent the search hundreds of blocks out of the
+   corridors (probe 40580596249, sim R2/12 s2, 310 blocks; probe 40602224561, 430 blocks north)."
   [world]
   (or (corridor-walk world)
       (when-let [b (memory/nearest-of (physics/centre (intent/feet world))
-                                      fortress/sight-radius
+                                      corridor-reach
                                       (unvisited-fortress-bricks world))]
         {:intent/kind :tunnel-to
          :intent/target b
@@ -645,8 +666,10 @@
   ;; {:intent/kind :rest}: stand still out of sight until the health is back to rested, or
   ;; healthy enough to fight when food cannot heal further, or a blaze watches the bot that
   ;; did not when the rest began (:intent/blazes), or the health falls under what it was then
-  ;; (:intent/health: shot from somewhere unseen), or exposed in the open (done, and the act
-  ;; looks again), failed :no-heal after rest-ms when food could heal.
+  ;; (:intent/health: shot from somewhere unseen), or someone who has struck is still there and
+  ;; the way away from them has a landing (combat/striker: a rest beside an angry zombified
+  ;; piglin, blaze-wall-b run 1), or exposed in the open (done, and the act looks again),
+  ;; failed :no-heal after rest-ms when food could heal.
   ;; An intent, not a planner wait: the slow heal brings a point every four seconds, and a wait
   ;; fails the plan after plan/wait-ticks (20 s)
   [world {:intent/keys [since health] seen :intent/blazes} _]
@@ -657,6 +680,8 @@
         health (or health (:player/health world 20.0))
         now-health (:player/health world 20.0)
         open? (in-open? world)
+        [_ struck] (combat/striker world)
+        struck? (and struck (not (combat/void-retreat? world struck)))
         world
         (-> world
             (assoc :player/controls {})
@@ -665,6 +690,7 @@
               (and (not (heals? world)) (>= now-health eat-under))
               (< now-health health)
               (seq (remove seen here))
+              struck?
               open?)
           (intent/done world)
           (and (> (- now since) rest-ms) (heals? world)) (intent/fail world :no-heal)

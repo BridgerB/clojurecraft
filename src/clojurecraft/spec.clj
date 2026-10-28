@@ -424,6 +424,8 @@
 (s/def :player/health number?)
 (s/def :player/food int?)               ; 0-20 from a server; the wire allows any varint, and step is total over it
 (s/def :player/saturation number?)
+(s/def :player/attacker int?)
+(s/def :player/hurt-at number?)
 (s/def :intent/food-before int?)
 (s/def :intent/eat-by number?)
 (s/def :entity/seen-at int?)

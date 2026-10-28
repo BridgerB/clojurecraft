@@ -304,6 +304,17 @@
     (:saturation p) (assoc :player/saturation (:saturation p))
     (and (<= (:health p) 0) (not (:player/dead? w))) die))
 
+(defmethod on-packet [:play :damage-event]
+  ;; ClientboundDamageEventPacket writes an optional entity id as 0 or id+1. source-cause 0 is
+  ;; no entity; otherwise the attacker is source-cause minus one (gym blaze-wall-b, plan
+  ;; 40624888909: zombified piglin 126 arrived as 127, 144 as 145). Only a strike on the bot
+  ;; itself is kept: the same packet reports every entity's hurt, including the blaze just hit.
+  [w {:keys [entity-id source-cause]}]
+  (cond (not= entity-id (:player/entity-id w)) w
+        (and (int? source-cause) (pos? source-cause))
+        (assoc w :player/attacker (dec source-cause) :player/hurt-at (:time/now w 0))
+        :else w))
+
 (defmethod on-packet [:play :container-set-content]
   [w {:keys [window-id state-id items carried]}]
   (let [w (cond-> w

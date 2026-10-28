@@ -563,7 +563,9 @@
         i (next-intent w)]
     (is (= :walk (:intent/kind i)))
     (is (= :corridor (:intent/for i)))
-    (is (= 64 (second (:intent/target i))))))
+    (is (= 64 (second (:intent/target i))))
+    (is (= blaze/corridor-nodes (:intent/max-nodes i))
+        "one bounded route, not a search per brick")))
 
 (deftest hurt-or-wary-bot-takes-cover-from-active-spawner-and-never-rests-in-the-open
   ;; beside a live spawner, resting in the open leads to fireball death (probe 40597529086)
@@ -583,6 +585,26 @@
       (let [in-cover (assoc w :player/pos [5.5 64.0 8.5] :player/health 12.0)]
         (is (not (blaze/in-open? in-cover)))
         (is (= blaze/rest-intent (next-intent in-cover)))))))
+
+(deftest a-struck-piglin-is-backed-away-from-and-a-rest-beside-it-ends
+  ;; blaze-wall-b run 1 rested at 13 health (wary, not yet hurt) after the blaze fight yielded,
+  ;; while zombified piglins 126 and 144 were hitting. :rest was chosen three times in two
+  ;; seconds (bot.log 03:17:01, 03:17:02, 03:17:03) and the run died.
+  (let [pig (entity :zombified_piglin [11.0 64.0 8.5] :entity/health 20.0)
+        w (assoc (standing {7 pig})
+                 :player/health 13.0
+                 :player/food 20
+                 :player/attacker 7
+                 :player/hurt-at 1000
+                 :time/now 1500
+                 :plan/goals #{:blaze-rods})]
+    (is (= {:intent/kind :back-off :intent/target 7} (next-intent w))
+        "the blaze row itself does not rest beside the strike")
+    (is (= :defend (:goal/id (plan/choose w plan/goals))) "defend is asked first and backs away")
+    (let [resting (assoc w :plan/intent (assoc blaze/rest-intent :intent/status :active))
+          tick (fn [w] (intent/run w (:plan/intent w) {:event/kind :tick :event/now 1500}))]
+      (is (= :done (:intent/status (:plan/intent (tick resting))))
+          "a rest already running ends when the strike is fresh"))))
 
 (deftest rest-completes-when-healthy-and-food-cannot-heal-further
   ;; issue #262 (sim R1/17): hp 14.8, food 17, no food held: heals? is false, rest must finish

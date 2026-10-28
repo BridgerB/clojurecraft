@@ -105,7 +105,12 @@
    [:player/food "food level, 0-20, from set_health; the :eat row eats under eat/hungry-below"
     "after the first set_health"]
    [:player/saturation "food saturation from set_health: what drains before the food does"
-    "after the first set_health"] [:control/forward? "walk forward" "inside :player/controls"]
+    "after the first set_health"]
+   [:player/attacker
+    "entity id of whoever last struck the bot: a damage-event's source-cause minus one (0 on the wire is no entity). A zombified piglin that hit is angry, and a hit angers its pack"
+    "for combat/struck-ms after a damage-event on the bot"]
+   [:player/hurt-at "ms (:time/now) of that strike" "with :player/attacker"]
+   [:control/forward? "walk forward" "inside :player/controls"]
    [:control/jump? "jump when allowed" "inside :player/controls"]
    [:control/yaw "heading to walk on" "inside :player/controls"]
    [:control/look "[yaw pitch] to face" "inside :player/controls"]

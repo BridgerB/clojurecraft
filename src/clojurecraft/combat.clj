@@ -621,17 +621,43 @@
               (mapcat #(answering world (:goal/plan %))))
         (plan/in-play world plan/goals)))
 
+(def struck-ms 4000)                  ; ms a strike stays the answer to who is hitting: the gym's piglin hits came about a second apart
+
+(defn pack-neutral?
+  "Is e a zombified piglin? Hitting one angers the pack, so one that has struck is backed away
+   from and never swung at."
+  [e]
+  (= :zombified_piglin (entity/kind e)))
+
+(defn striker
+  "[eid entity] that last struck the bot, while the strike is fresher than struck-ms and the
+   entity is still there; nil otherwise. :player/attacker and :player/hurt-at come from a
+   damage-event. A zombified piglin is not hostile until it hits (entity/hostile? wants
+   creepy?, which only an enderman sends), so the strike is the sign the pack is angry."
+  [world]
+  (let [id (:player/attacker world)
+        at (:player/hurt-at world)
+        e (get-in world [:world/entities id])]
+    (when
+      (and (some? id) (some? at) e (not (entity/dead? e)) (<= (- (:time/now world 0) at) struck-ms))
+      [id e])))
+
 (defn threats
-  "{eid entity} of the hostiles (entity/hostiles) the :defend row answers: within defend-radius of
-   the feet, a creeper within creeper-radius, either less once shunned (reach); none the plan blacklisted (a ghost), none of a kind
-   a row in play answers itself (answered-kinds), only what can be fought from here
-   (hittable?) and come to (approachable?: a mob in water two blocks below is seen but never
-   strikable and no route reaches it, and a fight on it ends done at once, re-picked for the
-   whole stage, issues #69 and #62), and none given up as unreachable a while ago (given-up?)."
+  "{eid entity} of the hostiles (entity/hostiles) the :defend row answers, plus whoever last
+   struck (striker) while that strike is fresh: within defend-radius of the feet, a creeper
+   within creeper-radius, either less once shunned (reach); none the plan blacklisted (a ghost),
+   none of a kind a row in play answers itself (answered-kinds), only what can be fought from
+   here (hittable?) and come to (approachable?: a mob in water two blocks below is seen but
+   never strikable and no route reaches it, and a fight on it ends done at once, re-picked for
+   the whole stage, issues #69 and #62), and none given up as unreachable a while ago
+   (given-up?). A struck zombified piglin is not in entity/hostiles, and the strike is what
+   puts it here (gym blaze-wall-b, plan 40624888909)."
   [world]
   (let [pos (:player/pos world)
         bl (:plan/blacklist world #{})
-        left (answered-kinds world)]
+        left (answered-kinds world)
+        [aid ae] (striker world)
+        pool (cond-> (entity/hostiles world) ae (assoc aid ae))]
     (into
      {}
      (filter
@@ -643,7 +669,7 @@
                  (reach world eid e (if (= :creeper (entity/kind e)) creeper-radius defend-radius)))
              (hittable? world e)
              (approachable? world e))))
-     (entity/hostiles world))))
+     pool)))
 
 (defmethod plan/done-by :safe? [world _] (or (nil? (:player/pos world)) (empty? (threats world))))
 
@@ -657,11 +683,15 @@
   ;; end too, unless the health is already under retreat-health (one hit plus a margin) and it is
   ;; no neutral: then it is backed away from again, never fought on to death (issue #563, probe
   ;; 40033104245: two zombies cornered by a void back-off were fought to the end at 7.3 health
-  ;; down to 1.3). Sim race 39593219246 (issue #161, world R3/41) backed away from a zombie two
+  ;; down to 1.3). A zombified piglin (pack-neutral?) is backed away from even at full health
+  ;; and even when cornered: the first swing angers the pack, and fighting one to the end is how
+  ;; the pack arrives (gym blaze-wall-b run 1). An angry enderman stays a fight to the end.
+  ;; Sim race 39593219246 (issue #161, world R3/41) backed away from a zombie two
   ;; blocks off at under one health from the end of a one-wide tunnel, a quarter hour, never moving
   [world _ _]
   (when-let [[eid e] (entity/nearest (threats world) (:player/pos world))]
-    (cond (or (= :creeper (entity/kind e))
+    (cond (or (pack-neutral? e)
+              (= :creeper (entity/kind e))
               (and (< (:player/health world 20.0) retreat-health)
                    (contains? (:plan/cornered world #{}) eid)
                    (not (contains? entity/neutral (entity/kind e)))))
