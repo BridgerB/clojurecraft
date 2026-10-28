@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-28T17:07:42.422Z",
+  "at" : "2026-10-28T17:10:59.843Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -30,7 +30,7 @@
   }, {
     "number" : 592,
     "title" : "Bot stops at cast-one: unsafe",
-    "labels" : [ "bot-failure", "sim" ],
+    "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
     "number" : 595,
