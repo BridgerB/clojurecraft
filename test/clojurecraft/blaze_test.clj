@@ -17,7 +17,8 @@
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.sim :as sim]
-            [clojurecraft.world :as world]))
+            [clojurecraft.world :as world]
+            [datascript.core :as d]))
 
 (use-fixtures :once fx/instrumented)
 
@@ -360,12 +361,14 @@
   ;; into four covers in eight seconds, and it died from 14 health without a swing
   (let [hand (entity :blaze [10.5 65.0 8.5] :entity/health 20.0)
         far (entity :blaze [13.5 65.0 8.5] :entity/health 20.0)
-        fight {:intent/kind :fight :intent/target 7 :intent/to-the-end? true}
+        fight {:intent/kind :fight :intent/target 7 :intent/to-the-end? true :intent/yield? true}
         pillar-world (fn [w] (assoc w :world/chunks {[0 0] (world/column pillar)}))]
     (is (= [7 hand] (blaze/at-hand-blaze (standing {7 hand 8 far}))))
     (is (nil? (blaze/at-hand-blaze (standing {8 far}))) "five off is not at hand")
-    (is (= fight (next-intent (pillar-world (assoc (standing {7 hand}) :player/health 8.0))))
-        "hurt, with cover behind the pillar: fought, to the end")
+    (is (= :cover
+           (:intent/for (next-intent (pillar-world
+                                      (assoc (standing {7 hand}) :player/health 8.0)))))
+        "hurt under retreat-health: breaks off and takes cover behind pillar, never fights (#577)")
     (is (= fight
            (next-intent (assoc (standing {1 (item :cooked_beef 4)} {7 hand}) :player/food 15)))
         "before the meal")
@@ -376,11 +379,14 @@
     (is (= fight
            (next-intent (assoc (standing {7 hand}) :world/chunks {[0 0] (world/column closet)})))
         "in the closet too")
-    (testing "it ends any other running intent, never a fight"
-      (let [w (standing {7 hand})]
+    (testing "it ends running camp when healthy, but never interrupts cover when hurt (#577)"
+      (let [w (standing {7 hand})
+            hurt-w (assoc w :player/health 8.0)]
         (is (plan/interrupts? w row {:intent/kind :camp :intent/spawner [11 64 10]}))
-        (is
-         (plan/interrupts? w row {:intent/kind :walk :intent/target [5 64 8] :intent/for :cover}))
+        (is (not (plan/interrupts?
+                  hurt-w
+                  row
+                  {:intent/kind :walk :intent/target [5 64 8] :intent/for :cover})))
         (is (not (plan/interrupts? w row {:intent/kind :fight :intent/target 8})))
         (is (not (plan/interrupts? (standing {8 far})
                                    row
@@ -588,3 +594,24 @@
         tick (fn [w] (intent/run w (:plan/intent w) {:event/kind :tick :event/now 1000}))]
     (is (not (blaze/heals? w)))
     (is (= :done (:intent/status (:plan/intent (tick w)))))))
+
+(deftest when-all-known-bricks-visited-the-bot-extends-corridor-from-fortress-bounds
+  ;; issue #262 (probe 40602224561, sim R2/12 s2): all bricks on record visited; instead of
+  ;; resuming Nether spiral search and tunneling 430 blocks away, search extends corridors along
+  ;; fortress axes from the bounds
+  (let [brick (blocks/default-state :nether_bricks)
+        w (-> (standing {})
+              (assoc :plan/reached #{:fortress})
+              (memory/observe [10 64 10] brick)
+              (memory/observe [20 64 10] brick)
+              (update
+               :world/facts
+               #(d/db-with
+                 %
+                 [{:intention/kind :walk :intention/event :done :intention/target [10 65 10]}
+                  {:intention/kind :walk :intention/event :done :intention/target [20 65 10]}]))
+              (assoc :player/pos [15.5 65.0 10.5]))
+        i (next-intent w)]
+    (is (= :tunnel-to (:intent/kind i)))
+    (is (not (:intent/search i)) "never runs the Nether spiral search when at fortress")
+    (is (int? (second (:intent/target i))))))

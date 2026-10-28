@@ -67,7 +67,7 @@
 (def rest-ms 90000)                   ; a rest with no health coming back this long fails :no-heal (the slow heal is one point every four seconds)
 (def fire-radius 4)                   ; cells from a spawner a fire is put out in: a fire lights its cells past 11, where a spawner's blaze no longer spawns
 (def corridor-reach 48.0)             ; standable bricks within this distance are considered for corridor walk
-(def corridor-candidates 8)           ; candidate bricks tested with routable? to find the farthest walkable
+(def corridor-candidates 16)          ; candidate bricks tested with routable? to find the farthest walkable
 
 (def rod (recipe/item-id :blaze_rod))
 (def spawner (blocks/default-state :spawner))
@@ -320,7 +320,8 @@
         r (when c
             (path/plan world
                        (path/feet-cell pos)
-                       {:goal/kind :unseen :goal/pos c :goal/cells (vec cs) :goal/exclude recent}))
+                       {:goal/kind :unseen :goal/pos c :goal/cells (vec cs) :goal/exclude recent}
+                       {:path/max-nodes 800}))
         to (last (:path/waypoints r))]
     (when (and r (= :found (:path/status r)) to (not= to (intent/feet world)))
       {:intent/kind :walk :intent/target to :intent/for :cover})))
@@ -370,7 +371,7 @@
           (meal world) (meal world)
           (and weid (not (combat/void-retreat? world e)))
           {:intent/kind :back-off :intent/target weid}
-          (and (not weid) (in-open? world)) nil
+          (in-open? world) nil
           :else rest-intent)))
 
 (defn wary?
@@ -478,22 +479,51 @@
                                  (<= (physics/distance (physics/centre feet) (physics/centre b))
                                      corridor-reach)))
                        (filter (fn [b] (path/standable? world (update b 1 inc))))
-                       (sort-by
-                        (fn [b] (- (physics/distance (physics/centre feet) (physics/centre b))))))]
-    (when-let [target (or (some (fn [b]
-                                  (let [w {:intent/kind :walk :intent/target (update b 1 inc)}]
-                                    (when (intent/routable? world w) b)))
-                                (take corridor-candidates standable))
-                          (some (fn [b]
-                                  (let [w {:intent/kind :walk :intent/target (update b 1 inc)}]
-                                    (when (intent/routable? world w) b)))
-                                (take-last corridor-candidates standable)))]
+                       (sort-by (fn [b]
+                                  (physics/distance (physics/centre feet) (physics/centre b)))))]
+    (when-let [target (some (fn [b]
+                              (let [w {:intent/kind :walk :intent/target (update b 1 inc)}]
+                                (when (intent/routable? world w) b)))
+                            (take corridor-candidates standable))]
       {:intent/kind :walk :intent/target (update target 1 inc) :intent/for :corridor})))
+
+(defn fortress-bounds
+  "The bounding box {:min-x :max-x :min-y :max-y :min-z :max-z} of fortress bricks on record,
+   or nil when none."
+  [world]
+  (let [bs (fortress/bricks world)]
+    (when (seq bs)
+      {:min-x (reduce min (map first bs))
+       :max-x (reduce max (map first bs))
+       :min-y (reduce min (map second bs))
+       :max-y (reduce max (map second bs))
+       :min-z (reduce min (map #(nth % 2) bs))
+       :max-z (reduce max (map #(nth % 2) bs))})))
+
+(defn corridor-extension
+  "When all known fortress bricks have been visited, extend the search outward along the fortress
+   corridor axes from the bounds at corridor height."
+  [world]
+  (when-let [{:keys [min-x max-x min-z max-z]} (fortress-bounds world)]
+    (let [feet (intent/feet world)
+          y (fortress/explore-y feet)
+          mid-x (long (/ (+ min-x max-x) 2))
+          mid-z (long (/ (+ min-z max-z) 2))
+          candidates [[(inc max-x) y mid-z] [(dec min-x) y mid-z] [mid-x y (inc max-z)]
+                      [mid-x y (dec min-z)]]
+          visited (visited-locations world)
+          unvisited (remove #(contains? visited %) candidates)]
+      (when-let [target (first (sort-by #(physics/distance (physics/centre feet) (physics/centre %))
+                                        (or (seq unvisited) candidates)))]
+        {:intent/kind :tunnel-to
+         :intent/target target
+         :intent/steps fortress/steps-per-tunnel
+         :intent/bridge? true}))))
 
 (defn fortress-search
   "Search the fortress: walk along open corridors (corridor-walk) toward unexplored bricks, or
-   tunnel/bridge to the nearest unvisited brick when no walk reaches one, or nil when all known
-   bricks are visited."
+   tunnel/bridge to the nearest unvisited brick when no walk reaches one, or extend corridors from
+   the fortress bounds when all known bricks are visited."
   [world]
   (or (corridor-walk world)
       (when-let [b (memory/nearest-of (physics/centre (intent/feet world))
@@ -502,18 +532,20 @@
         {:intent/kind :tunnel-to
          :intent/target b
          :intent/steps fortress/steps-per-tunnel
-         :intent/bridge? true})))
+         :intent/bridge? true})
+      (corridor-extension world)))
 
 (defn search
   "The search for a spawner: explore known fortress corridors and bricks first (fortress-search),
-   else the next leg of the spiral search (fortress/exploring), or nil when no heading has a way to go."
+   else the next leg of the spiral search (fortress/exploring) when no fortress is known, or nil when no heading has a way to go."
   [world]
   (or (fortress-search world)
-      (when-let [s (fortress/exploring world)]
-        {:intent/kind :tunnel-to
-         :intent/target (fortress/leg-target s)
-         :intent/steps fortress/steps-per-tunnel
-         :intent/search s})))
+      (when-not (or (contains? (:plan/reached world) :fortress) (seq (fortress/bricks world)))
+        (when-let [s (fortress/exploring world)]
+          {:intent/kind :tunnel-to
+           :intent/target (fortress/leg-target s)
+           :intent/steps fortress/steps-per-tunnel
+           :intent/search s}))))
 
 (defmethod plan/done-by :rods-held? [world _] (>= (rods world) rods-wanted))
 
@@ -534,11 +566,12 @@
 
 (defmethod plan/interrupts? :blaze-rods
   ;; any running intent but a fight ends when a blaze is at hand (at-hand-blaze), and the act
-  ;; fights it: gym blaze-fire-b run 3 (run 39136853644) tunnelled on with one hitting it in melee
-  ;; from 20 health to 13.8, since nothing else ends a running intent; and one hurt and watched
-  ;; (under-fire?) by blazes further off, whatever the intent but the answer to it
+  ;; fights it when healthy: gym blaze-fire-b run 3 (run 39136853644) tunnelled on with one hitting it in melee
+  ;; from 20 health to 13.8, since nothing else ends a running intent; never interrupt cover or healing when hurt (#577);
+  ;; and one hurt and watched (under-fire?) by blazes further off, whatever the intent but the answer to it
   [world _ i]
-  (or (and (not= :fight (:intent/kind i)) (some? (at-hand-blaze world))) (under-fire? world i)))
+  (or (and (not (hurt? world)) (not= :fight (:intent/kind i)) (some? (at-hand-blaze world)))
+      (under-fire? world i)))
 
 (defmethod plan/next-intent :blaze-rods
   ;; a tunnel to the spawner or on the search first makes the pickaxe it lacks from what is held
@@ -556,8 +589,9 @@
         pick (delay (when (build/pickaxe-at-hand? world)
                       (make/decide world (assoc goal :goal/provides {:tag/pickaxes 1}) table)))]
     (cond (not= dimension/nether (dimension/of world)) {:plan/wait :other-dimension}
-          heid {:intent/kind :fight :intent/target heid :intent/to-the-end? true}
           @heal @heal
+          (and (not (hurt? world)) heid)
+          {:intent/kind :fight :intent/target heid :intent/to-the-end? true :intent/yield? true}
           @wary @wary
           @away @away
           (and lying (drops/under-reach? world lying)) (fetch-walk lying)
@@ -565,11 +599,12 @@
           {:intent/kind :collect-drops
            :intent/item :blaze_rod
            :intent/target (hunt/cell (:entity/pos lying))}
-          beid {:intent/kind :fight :intent/target beid :intent/yield? true}
+          (and (not (hurt? world)) beid)
+          {:intent/kind :fight :intent/target beid :intent/yield? true}
           @fire @fire
           (and (or (nil? sp) (not (at-spawner? world sp))) @pick) @pick
           (and sp (not (at-spawner? world sp))) (to-spawner world sp)
-          sp {:intent/kind :camp :intent/spawner sp}
+          (and sp (not (hurt? world))) {:intent/kind :camp :intent/spawner sp}
           :else (or (search world) {:plan/wait :no-blaze}))))
 
 ;; ---------------------------------------------------------------- the :camp intent
