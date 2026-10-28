@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-28T17:06:35.575Z",
+  "at" : "2026-10-28T17:07:42.422Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -53,14 +53,14 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 178,
-    "title" : "Bot stops at portal: timeout",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 151,
     "title" : "Bot stops at flint-and-steel: not-picked-up",
     "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 178,
+    "title" : "Bot stops at portal: timeout",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 596,
