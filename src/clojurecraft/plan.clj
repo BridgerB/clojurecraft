@@ -131,23 +131,6 @@
 (defmethod interrupts? :default [_ _ _] false)
 (defmethod steer :default [world _] world)
 
-(defmulti keep-world
-  "The world a planning tick starts from. :none leaves it. Combat's :fled drops a :hurt
-   flee once health is back at resume-health, so a later dip does not refuse a fight the
-   break-off no longer holds."
-  {:arglists '([world])}
-  (fn [world] (if (:plan/fled world) :fled :none)))
-
-(defmethod keep-world :none [world] world)
-
-(defmulti divert
-  "The intent about to start, or the one to start instead. :none leaves it. Combat's :fled
-   turns a walk that would close on a fled mob aside."
-  {:arglists '([world intent])}
-  (fn [world _intent] (if (:plan/fled world) :fled :none)))
-
-(defmethod divert :none [_world intent] intent)
-
 (defmethod done-by :default [_ _] false)
 (defmethod act :default [_ goal] {:plan/wait [:no-act (:goal/act goal)]})
 (defmethod next-intent :default [_ _ _] nil)
@@ -396,7 +379,7 @@
    cursor holds an item. Otherwise the intent runs, or
    the chosen target's next intent starts."
   [world event table]
-  (let [world (cond-> (keep-world world)
+  (let [world (cond-> world
                 (:player/pos world) trap/trapped-tick
                 true (reach table))
         i (:plan/intent world)
@@ -404,8 +387,7 @@
         goal (when active? (choose world table))
         preempt? (and i goal (:intent/goal i) (not= (:goal/id goal) (:intent/goal i)))
         cut? (and i goal (not preempt?) (interrupts? world goal i))
-        next (when (and goal (nil? i)) (next-intent world goal table))
-        next (when next (divert world next))]
+        next (when (and goal (nil? i)) (next-intent world goal table))]
     (cond (not active?) world
           (and i (or (nil? goal) preempt? cut?) (not (can-abandon? world)))
           (run-intent world i event table)
@@ -460,9 +442,9 @@
 (defn failed? "Has the plan given up (see :plan/reason)?" [world] (= :failed (:plan/status world)))
 
 (defn summary
-  "Every :plan/* attribute but the blacklist, the creepers backed away from, the mobs a
-   back-off was cornered by, the ones a fight gave up and the ones fled, for the RESULT line."
+  "Every :plan/* attribute but the blacklist, the creepers backed away from and the mobs a
+   back-off was cornered by, for the RESULT line."
   [world]
   (into {}
         (filter (fn [[k _]] (= "plan" (namespace k))))
-        (dissoc world :plan/blacklist :plan/backed-off :plan/cornered :plan/given-up :plan/fled)))
+        (dissoc world :plan/blacklist :plan/backed-off :plan/cornered :plan/given-up)))
