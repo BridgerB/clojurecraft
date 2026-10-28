@@ -386,6 +386,35 @@
   [world]
   (entity/nearest (watchers world) (:player/pos world)))
 
+(def portal-states "Every state of the Nether portal block." (blocks/states-of :nether_portal))
+
+(defn home-portal
+  "The Nether portal block on record in the bot's dimension nearest the feet, or nil: the way
+   back to the overworld, where the animals are (memory/positions-now; portals are remembered
+   whenever they are seen lit)."
+  [world]
+  (memory/nearest-of (physics/centre (intent/feet world))
+                     Double/POSITIVE_INFINITY
+                     (memory/positions-now world portal-states)))
+
+(defn home-op
+  "The op that stands in the portal block p until the dimension is the overworld."
+  [p]
+  {:build/op :stand-in
+   :build/pos p
+   :build/stand p
+   :build/step :enter
+   :build/done [:dimension dimension/overworld]})
+
+(defn food-trip
+  "The intent to go home through the portal for food, or nil when no portal is on record: asked
+   of a bot hurt under combat/retreat-health that cannot heal (heals? false) with nothing to take
+   in the Nether (provisions). Sim R1/17 reached the blazes at 9.3 health, food 17, nothing edible,
+   and no fight is allowed there; the overworld has animals (hunt/provisioning? stocks
+   hunt/provision-wanted again with the portal kit held) and the :return-nether row brings it back."
+  [world]
+  (when (home-portal world) {:intent/kind :portal-home}))
+
 (def food-reserve 4) ; edible items held before the stage fights: a heal from under 10 to 20 takes more than one volley's worth, and the Nether has little to eat (issue #262, R1/17)
 
 (defn stocking
@@ -796,12 +825,30 @@
           {:intent/kind :fight :intent/target beid :intent/yield? true}
           @stock @stock
           @fire @fire
-          (and (hurt? world) (not (heals? world))) {:plan/wait :no-food}
+          (and (hurt? world) (not (heals? world)) (food-trip world)) (food-trip world)
           (and (or (nil? sp) (not (at-spawner? world sp))) @pick) @pick
           (and sp (not (at-spawner? world sp))) (to-spawner world sp)
           (and sp (at-spawner? world sp) (not (hurt? world)))
           {:intent/kind :camp :intent/spawner sp}
           :else (or (search world) {:plan/wait :no-blaze}))))
+
+;; ---------------------------------------------------------------- the :portal-home intent
+
+(defmethod intent/run :portal-home
+  ;; {:intent/kind :portal-home}: work the stand in the nearest remembered Nether portal block
+  ;; through build/work-op (its child a walk to it, the await); done in the overworld, failed
+  ;; :no-portal when none is on record
+  [world i event]
+  (let [p (home-portal world)]
+    (cond (not= dimension/nether (dimension/of world))
+          (-> world
+              (assoc :player/controls {})
+              intent/done)
+          (nil? p)
+          (-> world
+              (assoc :player/controls {})
+              (intent/fail :no-portal))
+          :else (build/work-op world i (home-op p) event))))
 
 ;; ---------------------------------------------------------------- the :camp intent
 

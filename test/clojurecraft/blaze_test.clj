@@ -700,14 +700,26 @@
              (next-intent (standing {} {5 hog})))))
     (testing "the reserve held: the hoglin is left"
       (is (not= :hunt (:intent/for (next-intent (standing {9 (assoc pork :count 4)} {5 hog}))))))
-    (testing "hurt under retreat-health, cannot heal, nothing to take: waits, no walk or rest"
+    (testing "hurt under retreat-health, cannot heal, nothing to take, no portal on record: no wait"
       (let [w (assoc (standing {}) :player/health 9.3 :player/food 17)]
-        (is (= {:plan/wait :no-food} (next-intent w)))))))
+        (is (not= {:plan/wait :no-food} (next-intent w)))))
+    (testing "the same with a lit portal on record: home through it, for food"
+      (let [portal (blocks/default-state :nether_portal)
+            w (-> (standing {})
+                  (assoc :player/health 9.3 :player/food 17)
+                  (memory/observe [3 64 8] portal))]
+        (is (= blaze/portal-states (blocks/states-of :nether_portal)))
+        (is (= [3 64 8] (blaze/home-portal w)))
+        (is (= {:intent/kind :portal-home} (next-intent w)))
+        (testing "healthy, the portal is not the way"
+          (is (not= :portal-home
+                    (:intent/kind (next-intent
+                                   (assoc w :player/health 20.0 :player/food 20))))))))))
 
 (deftest a-tunnel-that-ended-where-it-began-is-not-chosen-again
   ;; probe 40640225673, sim R1/1: tunnels to one stand, each :done at the step cap from the cell
   ;; the last ended in. The stand it ended for is left; another is taken.
-  (let [sp [20 64 8]
+  (let [sp [12 70 8]
         w (-> (standing {})
               (memory/observe sp blaze/spawner))
         feet (intent/feet w)

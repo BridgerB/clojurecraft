@@ -253,8 +253,10 @@
         "afloat before the flag: a :go plans before any tick")
     (is (not (hunt/foraging? (assoc (standing 20 {} {}) :time/now 1000))) "no kit, no search")
     (is (not (hunt/foraging?
-              (assoc (standing 20 (assoc kit-held 2 (item :bread 6)) {}) :time/now 1000)))
-        "six foods held: enough")
+              (assoc (standing 20 (assoc kit-held 2 (item :bread hunt/provision-wanted)) {})
+                     :time/now
+                     1000)))
+        "provision-wanted foods held: enough")
     (is (not (hunt/foraging? (assoc w :player/dimension "minecraft:the_nether")))
         "the Nether has no game")
     (is (not
