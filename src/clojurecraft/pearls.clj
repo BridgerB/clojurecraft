@@ -1294,14 +1294,14 @@
 (def danger-health combat/retreat-health) ; health under which the hunt never fights, provokes or goes toward an enderman: one enderman hit (7 on Normal, ns doc) plus a margin, the same line combat breaks a fight off at. At or under it the bot backs off, walks home, eats or rests where it stands until its health is back over it (issue #563, probe 40022662598: after the second stone sword was crafted the hunt re-fought an angry enderman it had just backed away from, again and again down to 1.3 health, one hit from death)
 
 (defn shelter-walk
-  "A :walk for :shelter to target, or nil when target is nil, is in :plan/blacklist (a walk to it
-   failed) or has no route (intent/routable?). Gym plan run 40583923956 run 3 (issue #263,
-   pearls-12) walked to the mouth of its burrow fifteen times in 0.6 s, each failing :no-path,
-   because these walks asked neither."
+  "A :walk for :shelter to target, or nil when target is nil or in :plan/blacklist (a walk to it
+   failed, plan/fail-intent). A walk is tried once before it is known to fail: a fence between
+   the bot and its mouth is walked at first, as the burrow test holds, and given up after. Gym
+   plan run 40583923956 run 3 (issue #263, pearls-12) walked to the mouth of its burrow fifteen
+   times in 0.6 s, each failing :no-path, because these walks never asked the blacklist."
   [world target]
   (when (and target (not (contains? (:plan/blacklist world #{}) target)))
-    (let [w {:intent/kind :walk :intent/target target :intent/for :shelter}]
-      (when (intent/routable? world w) w))))
+    {:intent/kind :walk :intent/target target :intent/for :shelter}))
 
 (defn hunt
   "The hunt's next step with no kill to pick up, in order: out of the burrow (shelter) with one
