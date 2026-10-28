@@ -94,9 +94,6 @@
 (def landing-reach 2.0)               ; horizontal distance from :go/at that counts as landed
 
 (def max-attempts 3)                  ; consecutive failed intents before the plan fails
-(def retry-ms 10000)                  ; an intent that failed is not proposed again from the same feet for this long
-(def stuck-ms 300000)                 ; a wait that goes on this long in one cell is a stuck bot
-(def idle-kinds #{:lookout})          ; intents that wait where they stand: the ones a stuck bot is found in
 (def max-unwalkable 12)               ; consecutive walks that failed :no-path before the plan fails
 (def wait-ticks 400)                  ; a goal that has nothing to do for this many planner ticks has failed: 20 s at 20 ticks a second
 
@@ -250,88 +247,6 @@
 (def boxing-kinds #{:stairs-down :stairs-up :tunnel}) ; intents that die :boxed standing in a pocket, or under an overhang no stair up is cut through, which :plan/boxed-at remembers
 (def crossing-kinds #{:cross})         ; intents whose target is a trunk the way to it failed, not a place to give up
 
-(defn failure-key
-  "The key a failed intent is remembered under: [kind target feet], where feet is the cell the
-   bot stood in (intent/feet). The same intent from another cell is a new try."
-  [world i]
-  [(:intent/kind i) (:intent/target i) (when (:player/pos world) (intent/feet world))])
-
-(defn remember-failure
-  "The world with intent i added to :plan/failed at the time now, and every entry older than
-   retry-ms dropped, so the map stays as long as the failures of the last few seconds."
-  [world i]
-  (let [now (:time/now world 0)]
-    (assoc world
-           :plan/failed
-           (into {}
-                 (filter (fn [[_ at]] (< (- now at) retry-ms)))
-                 (assoc (:plan/failed world) (failure-key world i) now)))))
-
-(defn retry?
-  "Is intent i the same as one that failed less than retry-ms ago from the feet the bot stands in
-   now? Run 3 of gym plan run 40583923956 (issue #263, pearls-12) planned the same walk fifteen
-   times in 0.6 s, each failing :no-path, and failed the run on max-unwalkable with three pearls
-   held: nothing changed between one attempt and the next."
-  [world i]
-  (let [at (get (:plan/failed world) (failure-key world i))]
-    (boolean (and at (< (- (:time/now world 0) at) retry-ms)))))
-
-(defn stuck?
-  "Is the bot waiting where it stands and has it stood in the same cell for stuck-ms, or does it
-   stand in a cell a staircase or tunnel died :boxed in (:plan/boxed-at)? i is the intent about to
-   start: only a waiting kind (idle-kinds) is found stuck. Runs 1 and 2 of gym plan run
-   40583923956 (issue #263) failed a :stairs-down :boxed three blocks from the landing and then
-   stood in :lookout for two hours and forty-four minutes, every five seconds, until the cap."
-  [world i]
-  (boolean (and (contains? idle-kinds (:intent/kind i))
-                (:player/pos world)
-                (or (contains? (:plan/boxed-at world #{}) (intent/feet world))
-                    (and (= (intent/feet world) (:plan/stay-at world))
-                         (>= (- (:time/now world 0) (:plan/stay-since world (:time/now world 0)))
-                             stuck-ms))))))
-
-(defmulti escape
-  "A move that changes place, as an intent, for the rung of the ladder (:retreat, :climb or :cut)
-   or nil when the ground allows none. Open on the rung: clojurecraft.unstick registers them."
-  {:arglists '([world rung])}
-  (fn [_world rung] rung))
-
-(defmethod escape :default [_ _] nil)
-
-(def escape-ladder [:retreat :climb :cut]) ; the order escapes are tried in, the first after the ones issued so far
-
-(defn escape-intent
-  "The next escape for the world: the rung escapes issued so far points at, then each rung after
-   it, the first that gives an intent, marked :intent/escape?. Nil when no rung gives one."
-  [world]
-  (let [n (:plan/escapes world 0)
-        rungs (take (count escape-ladder) (drop n (cycle escape-ladder)))]
-    (some (fn [rung]
-            (some-> (escape world rung)
-                    (assoc :intent/escape? true)))
-          rungs)))
-
-(defn guard
-  "[world' intent] for the intent the row chose, which may be nil. A retry (retry?) or a stuck bot
-   (stuck?) takes an escape (escape-intent) instead, counted in :plan/escapes; a retry with no
-   escape waits (:plan/wait :retry) until retry-ms has passed; a stuck bot with none keeps its
-   wait. Anything else is returned as it was."
-  [world i]
-  (let [again? (and i (retry? world i))
-        stayed? (and i (stuck? world i))
-        e (when (or again? stayed?) (escape-intent world))]
-    (cond e [(update world :plan/escapes (fnil inc 0)) e]
-          again? [world {:plan/wait :retry}]
-          :else [world i])))
-
-(defn track-stay
-  "The world with :plan/stay-at the feet cell and :plan/stay-since the time it was first stood in."
-  [world]
-  (let [feet (intent/feet world)]
-    (cond-> world
-      (not= feet (:plan/stay-at world))
-      (assoc :plan/stay-at feet :plan/stay-since (:time/now world 0)))))
-
 (defn fail-intent
   "An intent failed: stop moving, blacklist its target (and count a failure against its trunk's
    column, for a log: digging the base moves the bottom up, the column stays), count the attempt.
@@ -357,18 +272,14 @@
    reaches (wood/trees-bridge) when the swim does not. Sim worlds R3/45 (issues #87 and #108)
    crossed a lake toward the only trunk in reach, met the foot of a cliff with the trunk on its
    top, and the failed cross blacklisted it: the staircase up the cliff then found no trunk to
-   climb toward and the plan waited :no-log. An escape (:intent/escape?, the planner's own
-   move to change place) counts against neither attempts nor unwalkable walks: it fails when the
-   ground allows no move that way, and the next escape tries another."
+   climb toward and the plan waited :no-log."
   [world i]
-  (let [escape? (:intent/escape? i)
-        unwalkable? (and (= :walk (:intent/kind i)) (= :no-path (:intent/reason i)) (not escape?))
-        attempts (cond-> (:plan/attempts world 0) (not (or unwalkable? escape?)) inc)
+  (let [unwalkable? (and (= :walk (:intent/kind i)) (= :no-path (:intent/reason i)))
+        attempts (cond-> (:plan/attempts world 0) (not unwalkable?) inc)
         unwalkable (if unwalkable? (inc (:plan/unwalkable world 0)) 0)]
     (-> world
         (memory/remember-intention i :failed)
         (assoc :player/controls {})
-        (remember-failure i)
         (cond-> (and (:intent/target i)
                      (not (contains? placing-kinds (:intent/kind i)))
                      (not (contains? crossing-kinds (:intent/kind i))))
@@ -470,14 +381,13 @@
   [world event table]
   (let [world (cond-> world
                 (:player/pos world) trap/trapped-tick
-                (:player/pos world) track-stay
                 true (reach table))
         i (:plan/intent world)
         active? (= :active (:plan/status world))
         goal (when active? (choose world table))
         preempt? (and i goal (:intent/goal i) (not= (:goal/id goal) (:intent/goal i)))
         cut? (and i goal (not preempt?) (interrupts? world goal i))
-        [world next] (guard world (when (and goal (nil? i)) (next-intent world goal table)))]
+        next (when (and goal (nil? i)) (next-intent world goal table))]
     (cond (not active?) world
           (and i (or (nil? goal) preempt? cut?) (not (can-abandon? world)))
           (run-intent world i event table)

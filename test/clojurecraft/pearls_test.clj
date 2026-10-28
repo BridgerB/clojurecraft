@@ -2104,3 +2104,12 @@
     (is (plan/interrupts? w row {:intent/kind :walk :intent/target [1 64 1] :intent/for :pearls})
         "an angry one at hand cuts a walk")
     (is (not (plan/interrupts? w row (plan/next-intent w row plan/goals))) "but not the wall")))
+
+(deftest a-shelter-walk-asks-the-blacklist
+  ;; gym plan run 40583923956 run 3 (issue #263): the walk to the burrow's mouth, planned fifteen
+  ;; times in 0.6 s, each failing :no-path
+  (let [w (assoc (standing {}) :plan/blacklist #{[2497 53 2134]})]
+    (is (nil? (pearls/shelter-walk w [2497 53 2134])))
+    (is (nil? (pearls/shelter-walk w nil)))
+    (is (= {:intent/kind :walk :intent/target [1 64 1] :intent/for :shelter}
+           (pearls/shelter-walk w [1 64 1])))))
