@@ -1,0 +1,6 @@
+;; dragon regression bisect at 470508d: the dragon row alone, 6 runs
+{:plans/label "dragon-bisect-470508d"
+ :plans/jobs 2
+ :plans/issue 10
+ :plans/experiments
+ [{:exp/name "dragon" :exp/kind :gym :exp/goal "dragon" :exp/runs 6 :exp/bots 1 :exp/est-s 1600}]}
