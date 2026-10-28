@@ -29,6 +29,7 @@
             [clojurecraft.entity :as entity]
             [clojurecraft.failure :as failure]
             [clojurecraft.game :as game]
+            [clojurecraft.hunt :as hunt]
             [clojurecraft.main :as main]
             [clojurecraft.memory :as memory]
             [clojurecraft.physics :as physics]
@@ -139,6 +140,43 @@
                              :d (when pos (physics/distance pos (:entity/pos e)))
                              :health (:entity/health e)})))}))
 
+(defn trace-note
+  "The TRACE line for the tick that took world before to after, or nil: a :portal-home intent
+   starting or ending, a blaze :fight starting or ending, a change of dimension. It carries
+   when, the health, the food, the edible items held and the blazes within 16 of the feet, the
+   facts a replay of the blaze stage is read by (issue #262). Not part of the run's result, and
+   never read by the bot."
+  [before after world-set seed]
+  (let [ident (fn [w] (let [i (:plan/intent w)] [(:intent/kind i) (:intent/id i)]))
+        [kb :as ib] (ident before)
+        [ka :as ia] (ident after)
+        blaze-target? (fn [w]
+                        (some-> (get (:world/entities w) (get-in w [:plan/intent :intent/target]))
+                                entity/kind
+                                (= :blaze)))
+        what (cond (= ib ia)
+                   (when (not= (:player/dimension before) (:player/dimension after)) :dimension)
+                   (and (= :portal-home ka) (not= :portal-home kb)) :portal-home-start
+                   (and (= :portal-home kb) (not= :portal-home ka)) :portal-home-end
+                   (and (= :fight ka) (blaze-target? after) (not= :fight kb)) :fight-start
+                   (and (= :fight kb) (blaze-target? before) (not= :fight ka)) :fight-end)]
+    (when what
+      (let [pos (:player/pos after)]
+        {:what what
+         :set world-set
+         :seed seed
+         :t (:time/now after)
+         :dim (:player/dimension after)
+         :health (:player/health after)
+         :food (:player/food after)
+         :edible (hunt/edible-held after)
+         :blazes (count (for [[_ e] (entity/hostiles after)
+                              :when (and pos
+                                         (= :blaze (entity/kind e))
+                                         (<= (physics/distance pos (:entity/pos e)) 16.0))]
+                          e))
+         :intent (select-keys (:plan/intent after) [:intent/kind :intent/target])}))))
+
 (defn run
   "One run: the bot from empty hands on world w's landing, playing every step up to until,
    against the model, at most max-ms of simulated time, rolling from seed. Returns its RESULT
@@ -174,6 +212,8 @@
                     (let [t0 (:time/now before 0)
                           after (step before event)
                           world-set (:capture/set w)]
+                      (when-let [note (trace-note before after world-set seed)]
+                        (println "TRACE" (pr-str note)))
                       (when (= :back-off (get-in after [:plan/intent :intent/kind]))
                         (swap! backoff + (max 0 (- (:time/now after 0) t0))))
                       (cond (and (not (:player/dead? before)) (:player/dead? after))
