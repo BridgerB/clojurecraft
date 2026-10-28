@@ -290,7 +290,7 @@
 (s/def :plan/given-up (s/map-of int? int?)) ; entity id → ms a fight gave it up as unreachable
 (s/def :fled/at number?)
 (s/def :fled/why #{:hurt :trade})
-(s/def :plan/fled (s/map-of int? (s/keys :req-un [:fled/at :fled/why]))) ; entity id → a break-off or a losing trade
+(s/def :plan/fled (s/map-of int? (s/keys :req [:fled/at :fled/why]))) ; entity id → {:fled/at :fled/why}
 (s/def :plan/surfaced (s/tuple ::block-pos int?)) ; where and when the last climb out came out
 (s/def :plan/goals (s/coll-of keyword? :kind set?))
 (s/def :plan/chain? boolean?)

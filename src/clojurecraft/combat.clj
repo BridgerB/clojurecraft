@@ -725,7 +725,10 @@
 
 (defmulti rearm
   "An intent that makes a sword before the next fight, or nil. :chain when this is a chained
-   run (the sword row registers it); :none otherwise, and by default when that row is not loaded."
+   run (the sword row registers it); :none otherwise, and by default when that row is not loaded.
+   A race is chained: land-bot! and simrace/run send :go/chain? true, and main loads sword, so a
+   losing trade there makes one once the materials are in hand. A gym stage is not chained, and
+   its fight rows already hold a sword, so it does not leave the stage to craft."
   {:arglists '([world])}
   (fn [world] (if (:plan/chain? world) :chain :none)))
 

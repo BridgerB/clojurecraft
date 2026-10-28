@@ -389,16 +389,24 @@
     (is (every? #(= 64.0 (second (:pos (val %)))) animals) "standing on the grass")))
 
 (deftest the-bot-killed-by-a-zombie-respawns
-  ;; the sim lanes' deaths: a bot with nothing to do (no tree) beside a zombie at night dies, its
-  ;; client-command answered with a new life, as a real Normal server does
-  (let [step (game/compose game/step plan/step)
+  ;; an open field is a back-off now: a fist loses the trade and the bot leaves. This is the
+  ;; death that back-off cannot prevent. The zombie shares the cell and the cell is bedrock, so
+  ;; the hits land until the bot dies and its client-command is answered with a new life.
+  (let [rock (blocks/default-state :bedrock)
+        walls (into {}
+                    (for [x (range 7 10)
+                          z (range 7 10)
+                          y [64 65]
+                          :when (not (and (= x 8) (= z 8)))]
+                      [[x y z] rock]))
+        step (game/compose game/step plan/step)
         [w sim] (sim/run step
                          (game/init fx/opts)
-                         (sim/init {:column (world/column-bytes {})
-                                    :spawn [0.5 64.0 0.5]
+                         (sim/init {:column (world/column-bytes (assoc walls [8 66 8] rock))
+                                    :spawn [8.5 64.0 8.5]
                                     :difficulty :normal
                                     :day-time night
-                                    :mobs [{:type :zombie :pos [3.5 64.0 0.5]}]})
+                                    :mobs [{:type :zombie :pos [8.9 64.0 8.5]}]})
                          #(or (pos? (:stats/deaths % 0)) (plan/failed? %))
                          60000
                          {:event/kind :go :go/goals [:wood]})]

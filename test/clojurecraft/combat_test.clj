@@ -469,10 +469,6 @@
       (is (= :hurt (get-in gone [:plan/fled 7 :fled/why])))
       (is (= :hurt (get-in (combat/fled gone 7 :trade) [:plan/fled 7 :fled/why]))))))
 
-(defmethod plan/done-by :unmet [_ _] false)
-
-(defmethod plan/next-intent :past-zombie [_ _ _] {:intent/kind :walk :intent/target [20 64 8]})
-
 (deftest a-back-off-does-not-resume-the-walk-it-interrupted
   ;; Clj_r04 at 11.71m: back-off 10189 and walk [2898 11 2236] every tick. The zombie was just
   ;; past defend-radius, the walk's target was past the zombie, and :defend let go.
