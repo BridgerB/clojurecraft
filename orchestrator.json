@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-28T17:50:40.497Z",
+  "at" : "2026-10-28T17:52:54.612Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -43,9 +43,9 @@
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
-    "number" : 538,
-    "title" : "Bot stops at fortress: blocked",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "number" : 178,
+    "title" : "Bot stops at portal: timeout",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 526,
@@ -53,9 +53,9 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 178,
-    "title" : "Bot stops at portal: timeout",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "number" : 538,
+    "title" : "Bot stops at fortress: blocked",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 596,
@@ -68,14 +68,14 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 531,
-    "title" : "Bot stops at ingots: boxed",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 597,
     "title" : "Bot stops at ingots: unsafe",
     "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 531,
+    "title" : "Bot stops at ingots: boxed",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 342,
@@ -184,7 +184,7 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 538,
+    "issue" : 178,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -192,7 +192,7 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 178,
+    "issue" : 538,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
