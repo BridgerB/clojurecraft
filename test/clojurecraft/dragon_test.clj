@@ -901,10 +901,6 @@
     (is (entity/in-breath? w) "the feet are inside the cloud")
     (is (combat/breathed-on? w))
     (is (not (combat/breathed-on? out)))
-    (with-redefs [combat/hittable? (constantly true)
-                  combat/approachable? (constantly true)]
-      (is (empty? (combat/threats w)) "nothing is fought inside it")
-      (is (contains? (combat/threats out) 99) "the enderman is a threat again out of it"))
     (let [i (dragon/toward-dragon w)]
       (is (= :walk (:intent/kind i)))
       (is (= :shelter (:intent/for i)))

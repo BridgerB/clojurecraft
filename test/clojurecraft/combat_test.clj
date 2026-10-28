@@ -9,6 +9,7 @@
             [clojurecraft.blocks :as blocks]
             [clojurecraft.bytes :as b]
             [clojurecraft.combat :as combat]
+            [clojurecraft.dimension :as dimension]
             [clojurecraft.fixtures :as fx :refer [packet]]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
@@ -520,3 +521,21 @@
            (plan/next-intent w {:goal/id :defend :goal/plan :defend} plan/goals))
         "silverfish are fought with :intent/hold? true")
     (is (not (combat/pressing? w silverfish)) "pressing? never walks toward silverfish")))
+
+(deftest nothing-is-fought-inside-the-dragons-breath
+  ;; gym chain-w11 run 4 (plan run 40741523320): an enderman fought at 14 health inside a breath
+  ;; cloud, six health every half second of magic, 14 to 0 in three seconds
+  (let [zombie {7 (mob :zombie [11.0 64.0 8.5] 20.0)}
+        cloud (fn [pos]
+                {8 {:entity/type (blocks/entity-types :area_effect_cloud)
+                    :entity/pos pos
+                    :entity/radius 3.0}})
+        end (fn [entities] (assoc (standing entities) :player/dimension dimension/end))]
+    (is (= #{7} (set (keys (combat/threats (end zombie)))))
+        "in the End, out of any cloud, a threat")
+    (is (empty? (combat/threats (end (merge zombie (cloud [9.5 64.0 8.5])))))
+        "inside a cloud, none")
+    (is (= #{7} (set (keys (combat/threats (end (merge zombie (cloud [30.5 64.0 8.5])))))))
+        "a cloud far off changes nothing")
+    (is (= #{7} (set (keys (combat/threats (standing (merge zombie (cloud [9.5 64.0 8.5])))))))
+        "outside the End a cloud is no reason to leave a fight")))
