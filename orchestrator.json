@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-28T12:39:24.544Z",
+  "at" : "2026-10-28T12:40:31.014Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -78,6 +78,11 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
+    "number" : 593,
+    "title" : "Bot stops at water-bucket: unsafe",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
     "number" : 579,
     "title" : "Bot stops at ender-pearls: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
@@ -146,8 +151,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 151,
-    "move" : "wait",
-    "why" : "session starting"
+    "move" : "unassign",
+    "why" : "no pull request and no session since the assignment"
   }, {
     "issue" : 526,
     "move" : "leave",
@@ -214,11 +219,6 @@
     "why" : "hands-off label"
   } ],
   "log" : [ {
-    "issue" : 586,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment",
-    "at" : "2026-10-28T02:44:52.493Z"
-  }, {
     "issue" : 586,
     "move" : "assign",
     "at" : "2026-10-28T02:45:58.953Z"
@@ -1562,5 +1562,10 @@
     "issue" : 151,
     "move" : "assign",
     "at" : "2026-10-28T12:19:41.006Z"
+  }, {
+    "issue" : 151,
+    "move" : "unassign",
+    "why" : "no pull request and no session since the assignment",
+    "at" : "2026-10-28T12:40:31.014Z"
   } ]
 }
