@@ -220,17 +220,6 @@
     "from the :go event"]
    [:plan/unwalkable "walks in a row that failed :no-path; max-unwalkable of them fail the plan"
     "from the :go event"]
-   [:plan/failed
-    "intents that failed, [kind target feet] to the ms they failed at, those within plan/retry-ms: the same intent is not proposed again from the same feet while it is there (a retry storm); the plan changes place instead"
-    "after an intent fails"]
-   [:plan/stay-at "the feet cell the bot has stood in since :plan/stay-since"
-    "from the first planner tick"]
-   [:plan/stay-since
-    "ms the bot's feet cell last changed: a wait that goes on for plan/stuck-ms from here is a stuck bot"
-    "from the first planner tick"]
-   [:plan/escapes
-    "escapes the planner issued (plan/escape) to move a bot that retried or sat stuck; picks the rung of the ladder"
-    "after the first escape"]
    [:plan/unreached
     "targets log walks failed :no-path toward; a log within unreached-radius of one is not chosen: the trees round a place no route reaches are as far from the feet"
     "after a walk fails :no-path"]
@@ -455,9 +444,6 @@
    [:intent/floor-to
     "the height a mine's staircases are cut toward a few stairs at a time (its row's :goal/depth): how far down a floor laid through a cave must go on"
     "stairs-down from the mine act (stone/stairs), when the row has a depth"]
-   [:intent/escape?
-    "an intent the planner issued to change place (plan/escape): its failure counts against neither :plan/attempts nor :plan/unwalkable"
-    "plan/guard, when a retry or a stuck wait was refused"]
    [:intent/to-height?
     "a :stairs-up that ends only at :intent/to-y: the open sky over a pit's floor is not out"
     "a climb out of a pit under the sky"]
