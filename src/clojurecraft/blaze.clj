@@ -584,11 +584,14 @@
            :else nil))))
 
 (defn crowded?
-  "Is the bot outnumbered? (a volley of blazes watching) with the health under rested? Then the
-   cover comes before the swing, a blaze at hand or not: sim R1/1 (probe 40751212155) started a
-   fight at 15.0 health with three blazes about and was at 7.2 six seconds later, dead 14 s on."
+  "Is the bot outnumbered? (a volley of blazes watching) with the health under rested and no
+   blaze at hand? Then the cover comes before the swing at the one coming: sim R1/1 (probe
+   40751212155) was at 7.2 health six seconds after a fight begun at 15.0 with three blazes about.
+   Never with one at hand (within at-hand): it follows into any cover and hits in melee, and gym
+   blaze-fire-b run 3 (run 39136853644) died from 14 health in four covers without a swing; sim
+   three-of-the-models-blazes-at-hand-the-nearest-is-killed holds that."
   [world]
-  (and (outnumbered? world) (< (:player/health world 20.0) rested)))
+  (and (outnumbered? world) (< (:player/health world 20.0) rested) (nil? (at-hand-blaze world))))
 
 (defn wary?
   "Is the health under eat-under: a meal then comes before the next fight. Gym blaze-7b run 2 (run

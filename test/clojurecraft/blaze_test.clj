@@ -397,7 +397,7 @@
   ;; sim R1/1 (probe 40751212155, t 5380350): a fight started at 15.0 health with three blazes
   ;; about, was at 7.2 six seconds later and dead 14 s on
   (let [hand (entity :blaze [10.5 65.0 8.5] :entity/health 20.0)
-        two {7 hand
+        two {7 (entity :blaze [12.5 65.0 8.5] :entity/health 20.0)
              8 (entity :blaze [13.5 65.0 6.5] :entity/health 20.0)
              9 (entity :blaze [13.5 65.0 10.5] :entity/health 20.0)}
         w (assoc (standing two) :world/chunks {[0 0] (world/column pillar)})]
@@ -406,7 +406,15 @@
     (is (not (blaze/crowded? w)) "at full health the one at hand is fought")
     (is (= :cover (:intent/for (next-intent (assoc w :player/health 15.0)))))
     (is (= :fight (:intent/kind (next-intent w))))
-    (testing "a cover walk is not interrupted by the blaze at hand"
+    (testing "with one at hand it is fought, as it follows into any cover (blaze-fire-b)"
+      (let [near (assoc-in w [:world/entities 10] hand)
+            hurt (assoc near :player/health 15.0)]
+        (is (not (blaze/crowded? hurt)))
+        (is (= :fight (:intent/kind (next-intent hurt))))
+        (is (plan/interrupts? hurt
+                              row
+                              {:intent/kind :walk :intent/target [5 64 8] :intent/for :cover}))))
+    (testing "a cover walk is not interrupted by a blaze not at hand"
       (is (not (plan/interrupts? (assoc w :player/health 15.0)
                                  row
                                  {:intent/kind :walk :intent/target [5 64 8] :intent/for :cover}))))
