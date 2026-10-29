@@ -56,6 +56,7 @@
 (def candidates 3)                    ; nearest blazes asked for a route, as the hunt asks of its animals
 (def side-steps [[1 0 0] [-1 0 0] [0 0 1] [0 0 -1]]) ; the cells beside a spawner a stand is looked for in
 (def stand-levels [0 -1 1])           ; the heights from the spawner's own a stand is looked for at, in this order: its blazes' floor first
+(def stand-memory 3)                  ; tunnels last done whose target is looked for among the stands, before the nearest
 (def stands-tried 2)                  ; stands beside one spawner whose tunnel ended :blocked before the spawner is given up
 (def spawner-reach 2.0)                ; blocks from the feet cell's centre to the spawner's a tunnel to it ends within: in its room, at the blazes' floor
 (def cover-range 16.0)                ; blazes this near that see the bot are the ones a hurt bot takes cover from (they shoot that far)
@@ -221,15 +222,25 @@
   "The cell beside spawner sp with room for the body (open?) and not blacklisted (a tunnel to it
    ended :blocked), at its own height when one is there, else a level under or over it
    (stand-levels), nearest the feet: where a tunnel to it ends, on its blazes' floor; nil when
-   none is."
+   none is. The target of a tunnel last done, when it is still one of those cells, before the
+   nearest: the feet moved a cell or two in the pocket the tunnel dug and the nearest of two
+   stands side by side changed with them, so the tunnel's trail was kept for the other target and
+   the same cells were dug again, 140 minutes (blaze-race-a run 5, 727b4c2b2: :tunnel-to
+   [2209 60 1794] and [2210 60 1793] by turns every 14.5 s, 0 attacks to the five-hour cap; the
+   same on blaze-race-c, 3a082f7b7)."
   [world sp]
   (let [bl (:plan/blacklist world #{})
-        open (remove bl (filter #(open? world %) (cells-beside sp)))]
-    (some (fn [dy]
-            (memory/nearest-of (physics/centre (intent/feet world))
-                               Double/POSITIVE_INFINITY
-                               (filter #(= (+ (physics/y-of sp) dy) (physics/y-of %)) open)))
-          stand-levels)))
+        open (remove bl (filter #(open? world %) (cells-beside sp)))
+        kept (->> (memory/newest-dones world :tunnel-to stand-memory)
+                  (keep :intention/target)
+                  (filter (set open))
+                  first)]
+    (or kept
+        (some (fn [dy]
+                (memory/nearest-of (physics/centre (intent/feet world))
+                                   Double/POSITIVE_INFINITY
+                                   (filter #(= (+ (physics/y-of sp) dy) (physics/y-of %)) open)))
+              stand-levels))))
 
 (defn hurt?
   "Is the health the server last told under combat/retreat-health?"
