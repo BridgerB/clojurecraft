@@ -436,6 +436,7 @@
 (s/def :player/saturation number?)
 (s/def :player/on-fire? boolean?)
 (s/def :player/using-item? boolean?)
+(s/def :player/ignitions (s/coll-of number? :kind vector? :max-count 3))
 (s/def :player/struck-at number?)
 (s/def :intent/food-before int?)
 (s/def :intent/eat-by number?)

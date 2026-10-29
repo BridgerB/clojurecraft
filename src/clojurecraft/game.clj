@@ -410,6 +410,15 @@
       death? (track entity-id assoc :entity/died-at (:time/now w))
       (and death? (entity/dragon? (get-in w [:world/entities entity-id])))
       (assoc :world/dragon-dead? true))))
+(defn ignite
+  "w with :player/on-fire? set to lit?; a flag that turns on from off adds :time/now to
+   :player/ignitions, the last three (blaze-race-k: the burn is five seconds, a second ignition
+   within thirty means the fight is lost for now)."
+  [w lit?]
+  (cond-> (assoc w :player/on-fire? lit?)
+    (and lit? (not (:player/on-fire? w)))
+    (update :player/ignitions (fn [v] (vec (take-last 3 (conj (or v []) (:time/now w 0))))))))
+
 (defmethod on-packet [:play :set-entity-data]
   ;; the skimmed metadata: shared flags, and a living entity's health (entity/metadata-facts)
   [w {:keys [entity-id metadata]}]
@@ -417,7 +426,7 @@
     ;; the bot's own flags byte: bit 0x01 is on fire (gym blaze-fortress-race run 4: {0 1} at the
     ;; first fireball, {0 0} when it burned out)
     (and (= entity-id (:player/entity-id w)) (number? (get metadata entity/flags-index)))
-    (assoc :player/on-fire? (odd? (long (get metadata entity/flags-index))))
+    (ignite (odd? (long (get metadata entity/flags-index))))
     ;; the living flags byte: bit 0x01 is a held use key (a raised shield, a meal)
     (and (= entity-id (:player/entity-id w)) (number? (get metadata entity/living-flags-index)))
     (assoc :player/using-item?

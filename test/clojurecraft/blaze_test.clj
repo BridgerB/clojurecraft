@@ -1104,8 +1104,6 @@
     (is (not (:intent/search i)) "never runs the Nether spiral search when at fortress")
     (is (int? (second (:intent/target i))))))
 
-(def shielded {inventory/offhand-slot (item :shield 1)})
-
 (def pocket-walls
   "The cell [8 64 8] shut east, south and north at the feet and the head, roofed, open west."
   (into {}
@@ -1120,57 +1118,38 @@
   [w]
   (assoc w :world/chunks {[0 0] (world/column pocket-walls)} :pocket/site pocket-site))
 
-(deftest a-shield-is-raised-against-watching-blazes-and-lowered-to-walk
-  ;; blaze-race-g geared run 4: blazes at range with sight of the bot, fireballs and the burning
-  ;; after them the damage (on_fire 7 to 45, fireball 3 to 10 a run)
-  (let [far (entity :blaze [3.5 65.0 8.5] :entity/health 20.0)
-        hand (entity :blaze [6.5 65.0 8.5] :entity/health 20.0)
-        tick (fn [w] (intent/run w (:plan/intent w) {:event/kind :tick :event/now 1000}))
-        sent-names (fn [w] (map :packet/name (map :effect/packet (:bot/effects w))))]
-    (testing "watched from range with a shield in the offhand: block"
-      (is (= {:intent/kind :block} (next-intent (in-pocket (standing shielded {7 far})))))
-      (is (not= :block (:intent/kind (next-intent (in-pocket (standing {7 far})))))
-          "no shield, no block"))
-    (testing "a blaze at hand is swung at, not blocked"
-      (is (= :fight (:intent/kind (next-intent (in-pocket (standing shielded {7 hand})))))))
-    (testing "hurt, the cover first"
-      (is (not= :block
-                (:intent/kind (next-intent (assoc (in-pocket (standing shielded {7 far}))
-                                                  :player/health
-                                                  8.0))))))
-    (testing "the block sends the use key once to the offhand, and a second tick does not"
-      (let [w (assoc (in-pocket (standing shielded {7 far})) :plan/intent {:intent/kind :block})
-            w1 (tick (assoc w :bot/effects []))
-            w2 (tick (assoc w1 :bot/effects []))]
-        (is (= [:use-item] (sent-names w1)))
-        (is (= 1 (:hand (:effect/packet (first (:bot/effects w1))))) "the offhand")
-        (is (true? (:intent/raised? (:plan/intent w1))))
-        (is (empty? (sent-names w2)))))
-    (testing "the block ends when the blaze is at hand"
-      (let [w (assoc (in-pocket (standing shielded {7 hand})) :plan/intent {:intent/kind :block})]
-        (is (= :done (:intent/status (:plan/intent (tick w)))))))
-    (testing "a raised shield is lowered before anything but a block"
-      (let [up (assoc (in-pocket (standing shielded {7 hand})) :player/using-item? true)
-            low (next-intent up)
-            w (assoc up :plan/intent low :bot/effects [])
-            w' (tick w)]
-        (is (= {:intent/kind :lower} low))
-        (is (= [:player-action] (sent-names w')))
-        (is (= 5 (:status (:effect/packet (first (:bot/effects w'))))))
-        (is (false? (:player/using-item? w'))))
-      (is (= {:intent/kind :block}
-             (next-intent (assoc (in-pocket (standing shielded {7 far})) :player/using-item? true)))
-          "still watched: it stays up"))
-    (testing "the living flags byte is read off the bot's own entity"
-      (let [me (assoc (standing {}) :player/entity-id 27)
-            md (fn [w m]
-                 (game/step w
-                            {:event/kind :packet
-                             :event/packet
-                             {:packet/name :set-entity-data :entity-id 27 :metadata m}}))]
-        (is (true? (:player/using-item? (md me {8 1}))))
-        (is (false? (:player/using-item? (md (md me {8 1}) {8 0}))))
-        (is (nil? (:player/using-item? (md me {0 1}))))))))
+(deftest the-living-flags-byte-is-read-off-the-bots-own-entity
+  (let [me (assoc (standing {}) :player/entity-id 27)
+        md (fn [w m]
+             (game/step w
+                        {:event/kind :packet
+                         :event/packet {:packet/name :set-entity-data :entity-id 27 :metadata m}}))]
+    (is (true? (:player/using-item? (md me {8 1}))))
+    (is (false? (:player/using-item? (md (md me {8 1}) {8 0}))))
+    (is (nil? (:player/using-item? (md me {0 1}))))))
+
+(deftest ignitions-are-counted-and-a-second-within-thirty-seconds-sends-the-bot-to-its-pocket
+  ;; blaze-race-k: ten deaths in ten, on_fire 5 to 64 a run; a human banks health between fights
+  (let [me (assoc (standing {}) :player/entity-id 27 :time/now 1000)
+        md (fn [w m now]
+             (game/step (assoc w :time/now now)
+                        {:event/kind :packet
+                         :event/packet {:packet/name :set-entity-data :entity-id 27 :metadata m}}))
+        once (-> me
+                 (md {0 1} 1000)
+                 (md {0 1} 1500))
+        twice (-> once
+                  (md {0 0} 6000)
+                  (md {0 1} 12000))
+        far (-> once
+                (md {0 0} 6000)
+                (md {0 1} 50000))]
+    (is (= [1000] (:player/ignitions once)) "a flag that stays on is one ignition")
+    (is (= [1000 12000] (:player/ignitions twice)))
+    (is (blaze/reignited? twice))
+    (is (not (blaze/reignited? far)) "forty-nine seconds apart: not")
+    (is (blaze/refuge-needed? (assoc me :player/health 11.0)) "under low-health, nothing in sight")
+    (is (not (blaze/refuge-needed? me)))))
 
 (deftest burning-or-outnumbered-the-bot-takes-the-pocket
   ;; blaze-race-g and -i, 20 deaths: nine fought or backed off in the open while burning or
@@ -1195,9 +1174,9 @@
   (let [far (entity :blaze [3.5 65.0 8.5] :entity/health 20.0)
         hand (entity :blaze [6.5 65.0 8.5] :entity/health 20.0)
         w (in-pocket (standing {7 far}))]
-    (is (= {:intent/kind :hold :intent/heal-to 18.0} (next-intent (assoc w :player/on-fire? true)))
+    (is (= {:intent/kind :hold :intent/heal-to 20.0} (next-intent (assoc w :player/on-fire? true)))
         "burning: stay out of every line but the opening's")
-    (is (= {:intent/kind :hold :intent/heal-to 18.0} (next-intent (assoc w :player/health 14.0)))
+    (is (= {:intent/kind :hold :intent/heal-to 20.0} (next-intent (assoc w :player/health 14.0)))
         "under engage-health")
     (is (not= :hold (:intent/kind (next-intent w))) "healthy and not burning: no hold")
     (testing "a blaze in reach is struck, burning or not"
@@ -1208,7 +1187,7 @@
       (let [w (in-pocket (standing {7 (entity :blaze [4.5 65.0 8.5] :entity/health 20.0)}))]
         (is (not= :fight (:intent/kind (next-intent w))))))
     (testing "the hold ends when the fire is out and the health up, or a blaze is in reach"
-      (let [i {:intent/kind :hold :intent/heal-to 18.0}
+      (let [i {:intent/kind :hold :intent/heal-to 20.0}
             run (fn [w]
                   (:plan/intent (intent/run (assoc w :plan/intent i :time/now 1000)
                                             i
@@ -1217,18 +1196,59 @@
         (is (intent/done? (run w)))
         (is (intent/done? (run (in-pocket (standing {7 hand})))))))))
 
-(deftest fire-at-the-feet-is-left-once-the-shield-is-down
-  ;; blaze-race-i geared run 3 (plan run 40902125691): the feet cell fire from 15:40:05, :lower
-  ;; x427 and then :walk x72, 22 in_fire hits, dead at 15:40:16
+(deftest the-walk-out-of-a-fire-ends-standing-in-its-cell-not-near-it
+  ;; blaze-race-k race 1 at 19:42:57.9: :walk [2346 57 2286] x190 in 9.5 s from the feet at
+  ;; [2344.5 57 2286.7], 30 in_fire hits, dead at 19:43:07: the walk to a cell two off, within
+  ;; reach of the eye, ended in its first tick, standing in the fire
   (let [fire (blocks/default-state :fire)
-        burning (-> (standing shielded {7 (entity :blaze [3.5 65.0 8.5] :entity/health 20.0)})
+        burning (-> (standing {})
                     (assoc :world/chunks {[0 0] (world/column {[8 64 8] fire})}
-                           :player/using-item? true))
-        up (next-intent burning)
-        down (next-intent (assoc burning :player/using-item? false))]
-    (is (= {:intent/kind :lower} up) "the raised shield comes down first: it walks at a fifth")
-    (is (= :fire-out (:intent/for down)) "then the walk out of the fire")
-    (is (= :walk (:intent/kind down)))))
+                           :player/on-fire? true))
+        i (next-intent burning)
+        run (intent/run (assoc burning :plan/intent i :time/tick 5)
+                        i
+                        {:event/kind :tick :event/now 1000})]
+    (is (= :walk (:intent/kind i)))
+    (is (= :fire-out (:intent/for i)))
+    (is (contains? intent/standing-walks :fire-out))
+    (is (not (intent/done? (:plan/intent run)))
+        "not done in its first tick: the feet are in the fire")))
+
+(deftest a-bot-sealed-in-with-a-fire-at-its-feet-punches-it-out
+  ;; blaze-race-k race 1 sealed itself in and stood 15 s in the fire lit in its cell: no clear
+  ;; cell to walk to, so nothing; the fire is dug out
+  (let [fire (blocks/default-state :fire)
+        stone (blocks/default-state :stone)
+        shut (into {[8 64 8] fire}
+                   (for [c [[9 64 8] [9 65 8] [7 64 8] [7 65 8] [8 64 9] [8 65 9] [8 64 7] [8 65 7]
+                            [8 66 8]]]
+                     [c stone]))
+        w (-> (standing {})
+              (assoc :world/chunks {[0 0] (world/column shut)} :player/on-fire? true))]
+    (is (= {:intent/kind :dig :intent/target [8 64 8]} (next-intent w)))))
+
+(deftest hurt-in-an-open-pocket-with-a-blaze-in-reach-the-opening-is-sealed
+  ;; blaze-race-k geared 2: :pocket and :back-off 658 alternated every 0.4 s for 8 s, burning,
+  ;; from 8.2 hp to 0.9: a blaze at the opening hits for 3.6 a second and there is no cover to run to
+  (let [hand (entity :blaze [6.5 65.0 8.5] :entity/health 20.0)
+        w (-> (in-pocket (standing {7 hand}))
+              (assoc-in [:player/inventory 9] (item :cobblestone 62))
+              (assoc :player/health 8.0))]
+    (is (= {:intent/kind :seal} (next-intent w)))
+    (testing "healthy it is struck, as before"
+      (is (= :fight (:intent/kind (next-intent (assoc w :player/health 20.0))))))))
+
+(deftest a-burning-bot-in-the-tunnel-is-cut-for-its-refuge
+  ;; blaze-race-k geared 4: :tunnel-to went on 35 s at [2344.6 60 2284.5] while the bot burned from
+  ;; 20 hp to 0; nothing cut it: its refuge was not among what interrupts?
+  (let [w (-> (standing {7 (entity :blaze [3.5 65.0 8.5] :entity/health 20.0)})
+              (assoc :player/on-fire? true))
+        tunnel {:intent/kind :tunnel-to :intent/target [2346 60 2281]}]
+    (is (plan/interrupts? w row tunnel))
+    (is (not (plan/interrupts? (assoc w :player/on-fire? false) row {:intent/kind :hold}))
+        "the hold is the answer, not cut for itself")
+    (is (= :pocket (:intent/kind (next-intent w))) "the cell stood in is sealed in place")
+    (is (true? (:pocket/here? (:intent/site (next-intent w)))))))
 
 (def cobble (blocks/default-state :cobblestone))
 

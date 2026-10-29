@@ -115,6 +115,9 @@
    [:player/on-fire?
     "is the bot burning: bit 0x01 of the shared flags byte (metadata index 0) the server last sent for its own entity. A fireball sets it alight for seconds, and there is no water in the Nether to put it out"
     "after the first set-entity-data of its own entity"]
+   [:player/ignitions
+    "ms (:time/now) of the bot's last three ignitions: :player/on-fire? turning on from off. Two within thirty seconds send it to its pocket to heal"
+    "after the bot first burns"]
    [:pocket/site
     "the pocket the bot fights blazes from: {:pocket/cell the cell with one opening and solid blocks round it and overhead, :pocket/stand the cell it is dug into the wall from (nil for one that exists), :pocket/dig the solid cells still to dig}. Set by the first tick of a :pocket; dropped when it stops being one"
     "after a :pocket began"]
