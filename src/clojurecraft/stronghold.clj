@@ -64,7 +64,7 @@
 (def travel 64)                       ; blocks from a throw the next is made, off its line
 (def travel-turn 60.0)                ; degrees off a throw's line the way to the next turns, either side: ahead and well aside
 (def min-offset 32.0)                 ; blocks off the last throw's line from which the next throw is made, wherever the way got to
-(def pickup-rise 2)                   ; blocks over or under the feet a dropped eye is picked up within
+(def pickup-rise 4)                   ; blocks over or under the feet a dropped eye is picked up within
 (def room-over 1)                     ; blocks over a frame a staircase down to it ends: the feet at the frames' standing level, the tunnel the rest of the way; a stand higher over the portal room's air has no tunnel step down
 (def deep 8)                          ; blocks over a frame past which the way down is stairs, not the tunnel: a tunnel steps down only onto a floor, the stairs lay one over a cave
 (def stair-leg 8)                     ; blocks a staircase toward the frame goes down before the planner looks again, so each leg turns toward the frame
@@ -223,10 +223,14 @@
             {:throw/from (mapv double from) :throw/dir dir :throw/at at})))
 
 (defn eye-drop
-  "[eid entity] of an eye lying within drops/drop-radius of pos, where a thrown eye ended, brought
-   down to the feet's height (it flew up, and its item fell to the ground), or nil."
+  "[eid entity] of an eye lying on a floor (path/floor?: the item spawns at the top of the
+   flight and falls for a second before landing) within drops/drop-radius of pos, where a
+   thrown eye ended, brought down to the feet's height, or nil."
   [world [ex _ ez]]
-  (let [[_ fy _] (:player/pos world)] (drops/nearest world eye [ex fy ez])))
+  (let [[_ fy _] (:player/pos world)
+        [_ d :as hit] (drops/nearest world eye [ex fy ez])]
+    (when (and d (path/floor? world (update (mapv #(long (math/floor %)) (:entity/pos d)) 1 dec)))
+      hit)))
 
 (defmethod throw-stage :follow
   ;; the eye's last place kept each tick; its line read follow-ms after it was seen (or at once
@@ -393,7 +397,7 @@
                 (when (and i
                            (not= c [fx fy fz])
                            (not (contains? (:plan/blacklist world #{}) c))
-                           (intent/routable? world i))
+                           (intent/routable? world (assoc i :intent/max-nodes 400)))
                   i)))
             hop-turns))))
 
@@ -432,7 +436,7 @@
         c (when d (mapv #(long (math/floor %)) (:entity/pos d)))]
     (when (and c
                (<= (abs (- (physics/y-of c) (physics/y-of (intent/feet world)))) pickup-rise)
-               (intent/routable? world {:intent/kind :walk :intent/target c}))
+               (intent/routable? world {:intent/kind :walk :intent/target c :intent/max-nodes 400}))
       {:intent/kind :collect-drops :intent/item eye :intent/target c :intent/for :stronghold})))
 
 
@@ -472,7 +476,9 @@
               (>= (off-line world t) min-offset) (throw-now world)
               :else (or (some #(way world % fy) (spots world t)) {:plan/wait :no-way})))))
 
-(defmethod plan/done-by :frames-seen? [world _] (boolean (seq (frames world))))
+(defmethod plan/done-by :frames-seen?
+  [world _]
+  (boolean (and (seq (frames world)) (not= :throw-eye (:intent/kind (:plan/intent world))))))
 
 (defmethod plan/next-intent :stronghold [world _ _] (stronghold-next world))
 
@@ -518,7 +524,9 @@
                      (when (and c
                                 (dry-cell? world c)
                                 (not (contains? (:plan/blacklist world #{}) c))
-                                (intent/routable? world {:intent/kind :walk :intent/target c}))
+                                (intent/routable?
+                                 world
+                                 {:intent/kind :walk :intent/target c :intent/max-nodes 400}))
                        c))))))))
 
 (defn far-start
@@ -580,7 +588,7 @@
                 (when (and i
                            (<= cy (- fy downhill-drop))
                            (not (contains? (:plan/blacklist world #{}) c))
-                           (intent/routable? world i))
+                           (intent/routable? world (assoc i :intent/max-nodes 400)))
                   i)))
             (for [r downhill-reaches turn hop-turns] [r turn])))))
 
@@ -616,6 +624,31 @@
                   (>= (:intent/taken l 0) (:intent/steps l 0))
                   (or (nil? from) (< (- (gone from) (gone (intent/feet world))) tunnel-gain))))))
 
+(defn safe-portal-move?
+  "Does move from feet open no cell that is or borders lava, and have no lava floor?
+   In the portal room the 3x3 pool under the frame is lava; stepping or digging into it
+   is a death."
+  [world feet move]
+  (let [cells (fortress/opens feet move)
+        floor (fortress/plus (fortress/plus feet move) [0 -1 0])
+        lava? (fn [c]
+                (let [id (terrain/block-at world c)]
+                  (or (contains? blocks/lava-states id) (= :lava (terrain/fluid-kind world c)))))]
+    (and (not-any? lava? (conj cells floor)) (empty? (fortress/lava-beside world feet move)))))
+
+(defn safe-tunnel-move
+  "The first move toward f that is safe?, dry?, and has no lava in its opened cells,
+   floor or border."
+  [world feet f]
+  (when (fortress/choose-move world feet f fortress/climb-past true)
+    (first (filter (fn [m]
+                     (and (fortress/safe? world feet m)
+                          (fortress/dry? world feet m)
+                          (safe-portal-move? world feet m)))
+                   (fortress/moves feet f fortress/climb-past)))))
+
+(def retreat-tries 4)                 ; trail cells a retreat looks at for one a route reaches, nearest first
+
 (defn to-room
   "The way to the portal room's frame f, in order: in water, out to the nearest bank first
    (swim's :swim-out :retreat); from a shore, a walk to a dry start (dry-start) that ends
@@ -630,16 +663,27 @@
    a bridge off the mountain's slope into the sky over a flooded valley); more than deep
    over the frame, or after a tunnel that got nowhere (tunnel-spent?), a staircase down toward
    it a leg of stair-leg at a time (stairs-toward), never under room-over over the frame; then
-   the fortress's tunnel to it, its steps opening no cell by water (fortress/dry?), when its
-   first step can be taken from the feet (through the stronghold's walls, never into its frames:
-   fortress/unbreakable); else, still over room-over, the stairs; else the wait :no-way. Gym
+   the fortress's tunnel to it, its steps opening no cell by water (fortress/dry?) and no cell
+   through or bordering lava (safe-portal-move?), when its first step can be taken from the feet
+   (through the stronghold's walls, never into its frames: fortress/unbreakable); else, still over
+   room-over, the stairs; else with feet boxed or no move forward, a retreat step back along the
+   plan trail to an earlier unboxed cell no walk failed at (:plan/blacklist) that a route reaches or whose chunk is not loaded
+   (retreat-tries of them looked at), else a swim (:cross) to the nearest: gym chain-w11 to w14
+   run 1 stood on a bank at the bottom of its flooded staircase and asked for a walk to each
+   trail cell in turn, fifty milliseconds apart, every one :no-path (the way up is under water),
+   twelve of them failed the plan at 8 minutes; else the wait :no-way. Gym
    batch stronghold-265b (plan run 38930188463) run 2 of the portal room: the frame at y 0
    under a lake, seen while the bot swam it, every first step of the tunnel from the water opened
    a cell by water and it failed :blocked."
   [world [_ y _ :as f]]
   (let [[_ fy _ :as feet] (intent/feet world)
         high? (> fy (+ y deep))
-        start (when (and high? (not (:player/in-water? world))) (dry-start world f))
+        boxed? (contains? (:plan/boxed-at world #{}) feet)
+        start (when (and high?
+                         (not (:player/in-water? world))
+                         (terrain/under-sky? world feet)
+                         (not (#{:stairs-down :tunnel-to} (:intent/kind (:plan/last world)))))
+                (dry-start world f))
         far (when (and high?
                        (not (:player/in-water? world))
                        (nil? start)
@@ -647,25 +691,42 @@
                        (not (#{:stairs-down :tunnel-to} (:intent/kind (:plan/last world)))))
               (or (far-start world) (walked-ground world)))
         down (when (and high? (= start feet)) (downhill world f))
-        stairs (stairs-toward feet f (max (+ y room-over) (- fy stair-leg)))]
+        stairs (stairs-toward feet f (max (+ y room-over) (- fy stair-leg)))
+        tunnel-move (safe-tunnel-move world feet f)
+        retreats (when (or boxed? (nil? tunnel-move))
+                   (take retreat-tries
+                         (remove #(or (contains? (:plan/boxed-at world #{}) %)
+                                      (contains? (:plan/blacklist world #{}) %))
+                                 (rseq (:plan/trail world [])))))
+        walkable (some #(when (or (not (terrain/chunk-loaded? world %))
+                                  (intent/routable?
+                                   world
+                                   {:intent/kind :walk :intent/target % :intent/max-nodes 400}))
+                          %)
+                       retreats)]
     (cond (:player/in-water? world) {:intent/kind :swim-out :intent/for :retreat}
           (and start (not= start feet))
           {:intent/kind :walk :intent/target start :intent/for :retreat}
           far {:intent/kind :cross :intent/target far :intent/for :stronghold}
           down down
-          (and (> fy (+ y room-over)) (or high? (tunnel-spent? world f))) stairs
-          (fortress/choose-move world feet f fortress/climb-past true)
+          (and (not boxed?) (> fy (+ y room-over)) (or high? (tunnel-spent? world f))) stairs
+          tunnel-move
           {:intent/kind :tunnel-to
            :intent/target f
            :intent/steps fortress/steps-per-tunnel
            :intent/dry? true
            :intent/from-feet feet}
-          (> fy (+ y room-over)) stairs
+          (and (not boxed?) (> fy (+ y room-over))) stairs
+          walkable {:intent/kind :walk :intent/target walkable :intent/for :retreat}
+          (seq retreats) {:intent/kind :cross :intent/target (first retreats) :intent/for :retreat}
           :else {:plan/wait :no-way})))
 
 (defmethod plan/next-intent :portal-room
-  ;; a frame remembered: the way to it (to-room); none yet: the search (stronghold-next)
+  ;; the eye the last throw dropped first (picked-up: a frame seen during the throw moves the
+  ;; chain on to this row when the throw ends), then a frame remembered: the way to it (to-room);
+  ;; none yet: the search (stronghold-next)
   [world _ _]
-  (if-let [f (nearest-frame world)]
-    (to-room world f)
-    (stronghold-next world)))
+  (or (picked-up world)
+      (if-let [f (nearest-frame world)]
+        (to-room world f)
+        (stronghold-next world))))

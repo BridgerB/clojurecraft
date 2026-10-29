@@ -1,0 +1,9 @@
+;; issue #10, step 13, batch w6: looks-away turns standing looks down when unset,
+;; recover waits once in shelter outside basin, and to-room falls back to stairs
+;; when dry tunnel has no first step within deep over frame.
+{:plans/label "chain-w6"
+ :plans/jobs 4
+ :plans/issue 10
+ :plans/experiments
+ [{:exp/name "dragon" :exp/kind :gym :exp/goal "dragon" :exp/runs 3 :exp/bots 1 :exp/est-s 1600}
+  {:exp/name "chain" :exp/kind :gym :exp/goal "chain" :exp/runs 3 :exp/bots 1 :exp/est-s 3600}]}

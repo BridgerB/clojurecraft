@@ -1,0 +1,8 @@
+;; issue #10, batch w13: the way back to the stand asked with breath-hold more, eat only sheltered;
+;; the chain row (6) and the dragon row (3)
+{:plans/label "chain-w13"
+ :plans/jobs 4
+ :plans/issue 10
+ :plans/experiments
+ [{:exp/name "dragon" :exp/kind :gym :exp/goal "dragon" :exp/runs 3 :exp/bots 1 :exp/est-s 1600}
+  {:exp/name "chain" :exp/kind :gym :exp/goal "chain" :exp/runs 6 :exp/bots 1 :exp/est-s 3600}]}

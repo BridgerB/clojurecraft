@@ -53,9 +53,11 @@
 (s/def :gym/difficulty #{"peaceful" "easy" "normal" "hard"}) ; set before the bot is landed
 (s/def :gym/fixture? true?)              ; a row that judges the landing alone: its --until puts no goal in play
 (s/def :gym/name string?)                ; a row's own name, for a row that shares its goal and --until with another (issues #262, #263)
+(s/def :gym/goals (s/coll-of keyword? :kind vector? :min-count 1)) ; the stages a chained row plays in order (issue #10)
 (s/def ::row
   (s/keys :req [:gym/goal :gym/until :gym/prereqs :gym/timeout-ms :gym/truth]
-          :opt [:gym/setup :gym/land :gym/summon :gym/difficulty :gym/fixture? :gym/name]))
+          :opt
+          [:gym/setup :gym/land :gym/summon :gym/difficulty :gym/fixture? :gym/name :gym/goals]))
 (s/def :gym/run pos-int?)
 (s/def :gym/landing (s/coll-of int? :kind vector? :count 3))
 (s/def :gym/landed? boolean?)
@@ -759,9 +761,10 @@
     :gym/truth [{:truth/cmd
                  "execute in minecraft:the_end unless entity @e[type=minecraft:end_crystal]"
                  :truth/re "Test passed"}]}
-   ;; the crystals gone and a dragon summoned at full health circling (the End's fight takes it
-   ;; for its own, its boss bar shown), the bot in iron with a sword, cobblestone and a pickaxe
-   ;; for any crystal left; judged by no dragon left in the End
+   ;; the crystals gone and the End fight's own dragon circling (the bot's arrival in the End starts
+   ;; the fight and spawns its dragon twenty ticks on; summoning a second raced that scan in gym
+   ;; dragon3-b run 1 and left two dragons in the End), the bot in iron with a sword, cobblestone
+   ;; and a pickaxe for any crystal left; judged by no dragon left in the End
    {:gym/goal :dragon
     :gym/until "dragon"
     :gym/land :end
@@ -769,8 +772,27 @@
     :gym/setup [no-crystals]
     :gym/prereqs ["minecraft:iron_sword 1" "minecraft:iron_helmet 1" "minecraft:iron_chestplate 1"
                   "minecraft:iron_leggings 1" "minecraft:iron_boots 1" "minecraft:cooked_beef 16"
-                  "minecraft:cobblestone 64" "minecraft:iron_pickaxe 1"]
-    :gym/summon (into [no-crystals] dragon)
+                  "minecraft:cobblestone 64" "minecraft:iron_pickaxe 1"
+                  "minecraft:carved_pumpkin 1"]
+    :gym/summon [no-crystals]
+    :gym/timeout-ms trial-ms
+    :gym/truth [{:truth/cmd
+                 "execute in minecraft:the_end unless entity @e[type=minecraft:ender_dragon]"
+                 :truth/re "Test passed"}]}
+   ;; issue #10, step 13: the post-pearls chain in one game, from the Nether-exit kit near the
+   ;; stronghold through eyes, the stronghold, the portal room, lighting and entering the End
+   ;; portal, bridging to the island, the crystals and the dragon
+   {:gym/name "chain"
+    :gym/goal :dragon
+    :gym/until "dragon"
+    :gym/goals [:eyes-of-ender :stronghold :portal-room :end-portal :enter-end :crystals :dragon]
+    :gym/land :near-stronghold
+    :gym/difficulty "normal"
+    :gym/prereqs ["minecraft:blaze_rod 7" "minecraft:ender_pearl 12" "minecraft:iron_sword 1"
+                  "minecraft:iron_pickaxe 4" "minecraft:iron_helmet 1" "minecraft:iron_chestplate 1"
+                  "minecraft:iron_leggings 1" "minecraft:iron_boots 1" "minecraft:cooked_beef 16"
+                  "minecraft:cobblestone 64" "minecraft:cobblestone 64" "minecraft:cobblestone 64"
+                  "minecraft:carved_pumpkin 1"]
     :gym/timeout-ms trial-ms
     :gym/truth [{:truth/cmd
                  "execute in minecraft:the_end unless entity @e[type=minecraft:ender_dragon]"
@@ -1443,6 +1465,14 @@
     (flush)
     judged-row))
 
+(defn go-event
+  "The :go event for row at landing at: a chained :go over :gym/goals when the row names a chain
+   of stages, else fixture/go-event for its single :gym/until."
+  [row at]
+  (if-let [gs (:gym/goals row)]
+    (cond-> {:event/kind :go :go/goals gs :go/chain? true} at (assoc :go/at at))
+    (fixture/go-event (:gym/until row) at)))
+
 (defn attempt!
   "One bot on a running server: start it as its own JVM (classpath cp, in bot-dir), land it
    (landing!) and send its :go through its stdin (none for a fixture row), judge it from its
@@ -1470,7 +1500,7 @@
     (cli/log "landed" (pr-str landed))
     (with-open [w (io/writer (.getOutputStream p))]
       (when-not (:gym/fixture? row) ; a fixture row plays nothing: a :go with no goals is no event
-        (.write w (str (pr-str (fixture/go-event (:gym/until row) (:gym/at landed))) "\n"))))
+        (.write w (str (pr-str (go-event row (:gym/at landed))) "\n"))))
     (let [tagged (merge (judge! {:goal goal
                                  :run run
                                  :name name

@@ -107,6 +107,7 @@
 (s/def :player/air (s/int-in 0 301))
 (s/def :plan/wet-ticks nat-int?)
 (s/def :plan/afloat-ticks nat-int?)
+(s/def :dragon/stand ::block-pos)
 (s/def :plan/dry-ticks nat-int?)
 (s/def :plan/trap #{:water :lava})
 (s/def :plan/trap-at (s/tuple int? int?))
@@ -215,6 +216,7 @@
   "Does v fit wire type t: a primitive, [:vec T], or a struct (a vector of [key type] pairs)?"
   [t v]
   (cond (and (vector? t) (vector? (first t))) (and (map? v) (fields-ok? t v))
+        (p/conditional? t) (value-ok? (nth t 3) v)
         (vector? t) (and (sequential? v) (every? #(value-ok? (second t) %) v))
         (empty? (str t)) false
         :else ((:valid? (p/wire-types t)) v)))
@@ -282,6 +284,8 @@
 (s/def :plan/retreat-unreachable (s/coll-of ::block-pos :kind set?))
 (s/def :plan/unreached (s/coll-of ::block-pos :kind set?))
 (s/def :plan/unwalkable nat-int?)
+(s/def :plan/trail (s/coll-of ::block-pos :kind vector?))
+(s/def :plan/failed map?)
 (s/def :backed-off/times pos-int?)
 (s/def :backed-off/pos (s/coll-of number? :count 3))
 (s/def :plan/backed-off ; creeper entity id → where it stood when first backed away from, and how often
@@ -422,6 +426,9 @@
 (s/def :server/time-at int?)
 (s/def :server/tick-ms number?)
 (s/def :player/health number?)
+(s/def :player/hurt-at int?)
+(s/def :player/attacker int?)
+(s/def :world/boss-health (s/map-of uuid? number?))
 (s/def :player/food int?)               ; 0-20 from a server; the wire allows any varint, and step is total over it
 (s/def :player/saturation number?)
 (s/def :intent/food-before int?)

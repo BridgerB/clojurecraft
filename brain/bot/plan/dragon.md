@@ -13,6 +13,9 @@ sourceRefs:
   - src/clojurecraft/dragon.clj#defn wall-gap
   - src/clojurecraft/dragon.clj#defn on-pillar?
   - src/clojurecraft/dragon.clj#defn on-spike?
+  - src/clojurecraft/dragon.clj#defn off-island?
+  - src/clojurecraft/dragon.clj#defn island-shore
+  - src/clojurecraft/dragon.clj#defn toward-island
   - src/clojurecraft/dragon.clj#defn pillar-top
   - src/clojurecraft/dragon.clj#defn toward-crystals
   - src/clojurecraft/dragon.clj#defn climb
@@ -27,10 +30,20 @@ sourceRefs:
   - src/clojurecraft/dragon.clj#defn breath-on-way?
   - src/clojurecraft/dragon.clj#defmethod plan/interrupts? :dragon
   - src/clojurecraft/dragon.clj#defn look-away
+  - src/clojurecraft/dragon.clj#defn wear-pumpkin
+  - src/clojurecraft/dragon.clj#defn looks-away
+  - src/clojurecraft/dragon.clj#defmethod plan/steer :crystals
+  - src/clojurecraft/armour.clj#def parts
+  - test/clojurecraft/dragon_test.clj#a-carved-pumpkin-held-is-worn-in-the-end-before-anything-else
+  - test/clojurecraft/armour_test.clj#a-carved-pumpkin-is-headwear-the-armour-row-leaves-alone
   - src/clojurecraft/dragon.clj#defmethod intent/run :perch
   - src/clojurecraft/entity.clj#defn hostile?
   - src/clojurecraft/dragon.clj#defn fountain-stand
+  - src/clojurecraft/dragon.clj#defn sheltered?
+  - src/clojurecraft/dragon.clj#defn recover
   - src/clojurecraft/dragon.clj#defn toward-dragon
+  - test/clojurecraft/dragon_test.clj#hurt-under-retreat-health-the-dragon-is-not-fought
+  - test/clojurecraft/armour_test.clj#a-wear-waits-for-the-cursor-the-clicks-answer-has-not-shown-yet
   - src/clojurecraft/dragon.clj#defn turned?
   - src/clojurecraft/dragon.clj#defn behind?
   - src/clojurecraft/dragon.clj#defn in-bite?
@@ -46,7 +59,9 @@ sourceRefs:
   - src/clojurecraft/dragon.clj#defn shelter-walk
   - src/clojurecraft/dragon.clj#defn escape
   - src/clojurecraft/dragon.clj#defmethod combat/answers :dragon
+  - src/clojurecraft/dragon.clj#defn pumpkin-worn?
   - src/clojurecraft/dragon.clj#defmethod combat/answering :dragon
+  - src/clojurecraft/dragon.clj#defmethod combat/answering :crystals
   - src/clojurecraft/combat.clj#defmulti answering
   - src/clojurecraft/dragon.clj#defmethod plan/steer :dragon
   - src/clojurecraft/dragon.clj#defn lull?
@@ -77,6 +92,9 @@ sourceRefs:
   - src/clojurecraft/gym.clj#def spike-crystals
   - "src/clojurecraft/gym.clj#{:gym/goal :crystals"
   - "src/clojurecraft/gym.clj#{:gym/goal :dragon"
+  - "src/clojurecraft/gym.clj#:gym/goals [:eyes-of-ender"
+  - src/clojurecraft/gym.clj#defn go-event
+  - test/clojurecraft/dragon_test.clj#the-platform-in-the-end-bridges-to-the-island-before-crystals
   - test/clojurecraft/dragon_test.clj#the-approach-stands-three-out-behind-a-wall
   - test/clojurecraft/dragon_test.clj#the-planner-walks-pillars-walls-strikes-and-digs-down
   - test/clojurecraft/dragon_test.clj#a-breath-on-the-way-to-the-stand-is-waited-out-where-the-feet-are
@@ -134,7 +152,7 @@ Every head death of dragon2-a and dragon2-b was a bot whose feet were up on the 
 
 ## Endermen and the meal
 
-`plan/steer`, a registry keyed by `:goal/plan` that `plan/steered` applies each tick to the running intent's row, turns every look of the `:dragon` row's intents with `look-away`: dragon-f run 3 stared at three endermen in turn on its walks to and from the stand and was slain by the third; dragon-e run 1 at one on its first walk. A walk steers by `:control/yaw`, so a look straight down changes nothing of the way. While a breath cloud or fireball reaches the feet, the row answers every hostile shown itself (`combat/answering`, a registry by `:goal/plan` over the world that `answered-kinds` reads, `answers` alone by default), so the `:defend` row fights nothing and the back-off from the breath runs: dragon2-a run 2 and dragon2-b runs 1 and 3 died in breath clouds, their back-offs cut by `:defend`'s fights with an enderman in the cloud. The `:heal` row (always, priority 0 after `:eat`, the End only) eats (`eat/food-held`, the `:eat` intent) when the bot is hurt, its food under `heal-below` (18, where natural regeneration stops; the `:eat` row eats only under 14) and in a lull (`lull?`: no breath near, the dragon not perched, no hostile within `calm-radius` 8).
+`plan/steer`, a registry keyed by `:goal/plan` that `plan/steered` applies each tick to the running intent's row, turns every look of the `:dragon` and `:crystals` rows' intents with `look-away` (`looks-away`): dragon-f run 3 stared at three endermen in turn on its walks to and from the stand and was slain by the third; dragon-e run 1 at one on its first walk. With no look set this tick (e.g. during the wear of the carved pumpkin), `looks-away` turns the standing look (`:player/look`) down as well, so a bot landing facing an enderman never stares into its eyes before the pumpkin is on (gym chain-w5 dragon run 1). And before anything else in the End, both rows put a held carved pumpkin on the head (`wear-pumpkin`, the `:wear` intent; `armour/parts` knows it as headwear the `:wear-armour` row never dresses the bot in): a look through a worn carved pumpkin never provokes an enderman, whatever it crosses. Gym chain-a3's dragon row lost all three runs to endermen (48, 424 and 506 s) with looks alone turned; the pumpkin is in the dragon and chain kits. The wear itself can lose the pumpkin on the cursor: gym chain-w1's dragon run 3 failed its wear `:not-picked-up` (the click's answer moved the state id before the set-cursor packet), `wear-pumpkin` then saw no pumpkin in the store slots and never asked again, and an enderman slew the bot at the perch; `wear-stage :put` now waits out `window/answer-timeout` for the cursor, `:pick` goes straight to `:put` with the piece on the cursor, and a pumpkin on the cursor counts as held. Hurt under `combat/retreat-health` the dragon is not fought at all: `toward-dragon` chooses `recover` (a meal the bar can take, else, while not yet in shelter outside the basin (`sheltered?`), the shelter walk to `escape`'s cell, else the wait `:low-health` where the feet are for the bar's own healing) and `interrupts?` ends a running `:perch` at that line; gym chain-w3's dragon runs 2 and 3 perched on at ten, then four and a half health, and the dragon slew both (the `:heal` row's lull never comes under a sitting dragon), while gym chain-w5's dragon run 3 oscillated between adjacent cells because `escape` excluded the feet's cell even once outside the basin. A walk steers by `:control/yaw`, so a look straight down changes nothing of the way. While a breath cloud or fireball reaches the feet, the row answers every hostile shown itself (`combat/answering`, a registry by `:goal/plan` over the world that `answered-kinds` reads, `answers` alone by default), so the `:defend` row fights nothing and the back-off from the breath runs: dragon2-a run 2 and dragon2-b runs 1 and 3 died in breath clouds, their back-offs cut by `:defend`'s fights with an enderman in the cloud. With the pumpkin worn (`pumpkin-worn?`), unprovoked endermen are not treated as threats by `:defend`, avoiding starting fights with endermen the dragon hit (gym chain-w4 dragon run 1). But when an enderman hits the bot (gym chain-w5 dragon run 1 took six hits unreturned with endermen suppressed), being damaged triggers fight-or-flee at once (`:player/hurt-at`, `combat/threats`). In `:perch`, when health drops below `combat/retreat-health` (10 HP), `:perch` ends at once and `toward-dragon` retreats to `recover` (gym chain-w5 dragon run 3 perched on at 5-12 HP); `:boss-event` action 2 decodes health so the dragon's HP is tracked. The `:heal` row (always, priority 0 after `:eat`, the End only) eats (`eat/food-held`, the `:eat` intent) when the bot is hurt, its food under `heal-below` (18, where natural regeneration stops; the `:eat` row eats only under 14) and in a lull (`lull?`: no breath near, the dragon not perched, no hostile within `calm-radius` 8).
 
 The dragon is struck by its box, not through `:fight`: its box is 16 by 8 with its feet on the fountain's pillar, four over the portal, and `:fight`'s reach to an aim point 0.9 over the feet is never met from a floor; the server's own test is the box. The body takes a quarter of a hit plus one (the head takes it all; its part's position is the client's to compute, not done), and a perched dragon takes off after 50 damage in one perch, so a kill takes several perches.
 
@@ -164,3 +182,4 @@ Rows `crystals` and `dragon`, both `land! :end` (the main island, ruststeve's En
 - Batch dragon2-b (plan run 39534976957, 0cbfe30: the walk in the basin straight and low, the dragon left to its row): crystals 1/3 (run 1 :no-path for one foot until the plan failed, run 2 out of time with one crystal left, run 3 982 s). Dragon 0/3: runs 1 and 3 killed in breath clouds (magic), run 3's back-offs again cut by :defend's fights; run 2, out on the rim 8 from the fountain at y 65, was touched by the landing dragon's head (phase 3, not a sitting phase, so no stand or way round was chosen against it), then walked in toward the stand under the head it had just turned there, four touches. The crystals failures were both a `:defend` fight with an enderman during a `:dig-down` (the fight walks off the pillar's column), after which the dig-down hung: a path round 2 did not touch.
 - Batch dragon3-a (plan run 39543030347, 6883aa1: the basin's floor kept while the dragon sits or lands, the scanning turn held, :defend put off while a breath reaches the feet): crystals 3/3. Dragon 0/3, every run killed by the dragon "using magic" (a breath cloud) while backing off from it (355, 88 and 328 s, longer than round 2's 135 to 219): run 2 backed off straight from a fireball and then its cloud on the stand into the fountain's pillar and jumped against it at x 1.3 inside the cloud for six seconds; runs 1 and 3 died during back-offs the same way, after many perches with the stand re-chosen as the landing dragon turned (walks between opposite stands every second and a half, unhurt). No head death.
 - Batch dragon3-b (plan run 39593702551, ff8a0aa: a breath near the feet left by a `shelter-walk` to `escape`, never combat's straight back-off): crystals 3/3 (644, 947 and 899 s). Dragon 3/3, the dragon killed in 413, 656 and 468 s, the first batch every run of which killed it.
+- Batch chain-w9 (plan run 40586737463): dragon 1/3 (run 2 ping-ponged between stand and escape flight under a grounded dragon until slain by dragon; run 3 stared at an enderman during wear clicks on landing and was slain by it under retreat-health); chain 0/3 (runs 2 and 3 stalled and timed out on keepalives during unbounded stand path searches in `:tunnel-to`). `build/reachable-stand` and `stronghold` routing now bound node expansions to `stand-max-nodes` (400), `end-portal` interrupts only checks frames within 6 blocks, `toward-dragon` commits to safe grounded stands with `shelter-walk`, `plan/steer :wear` steers looks down in the End, `armour/unworn` equips a held carved pumpkin before iron armour, and `:defend` backs off under `danger-health` (`retreat-health` 10.0).

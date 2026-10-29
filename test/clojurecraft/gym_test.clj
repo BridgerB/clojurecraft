@@ -25,7 +25,15 @@
     (is (= "blaze-7" (:gym/name (gym/gym "blaze-7"))))
     (is (= :blaze-rods (:gym/goal (gym/gym "blaze-fortress"))))
     (is (str/includes? (gym/plan-matrix ["blaze-7"] 1) "{\"goal\":\"blaze-7\",\"run\":1,"))
-    (is (apply distinct? (keep :gym/name gym/gyms)))))
+    (is (apply distinct? (keep :gym/name gym/gyms))))
+  (testing "a chained row sends a chained :go over its stages (issue #10)"
+    (let [row (gym/gym "chain")]
+      (is (= [:eyes-of-ender :stronghold :portal-room :end-portal :enter-end :crystals :dragon]
+             (:gym/goals row)))
+      (is (= {:event/kind :go :go/goals (:gym/goals row) :go/chain? true :go/at [10.0 64.0 20.0]}
+             (gym/go-event row [10.0 64.0 20.0])))
+      (is (= (fixture/go-event "dragon" [10.0 64.0 20.0])
+             (gym/go-event (gym/gym "dragon") [10.0 64.0 20.0]))))))
 
 (def ok-result {:ok true :reason :goal :stats {}})
 

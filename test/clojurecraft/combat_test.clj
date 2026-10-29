@@ -9,6 +9,7 @@
             [clojurecraft.blocks :as blocks]
             [clojurecraft.bytes :as b]
             [clojurecraft.combat :as combat]
+            [clojurecraft.dimension :as dimension]
             [clojurecraft.fixtures :as fx :refer [packet]]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
@@ -257,9 +258,12 @@
                         {7 (assoc (mob :enderman [11.0 64.0 8.5] 40.0) :entity/creepy? true)})
                        :plan/goals
                        #{:dragon})] ; the pearls rows, in play, answer endermen themselves
-      (is (= {:intent/kind :fight :intent/target 7 :intent/to-the-end? true}
+      (is (= {:intent/kind :back-off :intent/target 7}
              (plan/next-intent (assoc angry :player/health 6.0) (row :defend) plan/goals))
-          "an angry enderman is fought to the end, hurt or not: it cannot be outrun")
+          "under danger-health, an angry enderman is backed off from, never fought on to death")
+      (is (= {:intent/kind :fight :intent/target 7 :intent/to-the-end? true}
+             (plan/next-intent (assoc angry :player/health 20.0) (row :defend) plan/goals))
+          "healthy, an angry enderman is fought to the end: it cannot be outrun")
       (is (plan/done-by (standing {7 (mob :enderman [11.0 64.0 8.5] 40.0)}) (row :defend))
           "a calm one is no threat"))
     (is (plan/done-by (standing {9 (mob :pig [10.0 64.0 8.5] 10.0)}) (row :defend))
@@ -277,7 +281,11 @@
     (is (empty? (combat/threats walled)) "behind a wall, none")
     (is (plan/done-by walled (row :defend)))
     (is (empty? (combat/threats (standing {8 (mob :blaze [9.5 68.0 8.5] 20.0)})))
-        "a blaze four over the feet is out of reach from the floor")))
+        "a blaze four over the feet is out of reach from the floor")
+    (let [in-pit (standing {9 (mob :silverfish [8.5 62.0 11.0] 8.0)})]
+      (is
+       (empty? (combat/threats in-pit))
+       "a silverfish in a pit two below with no way down is not approachable and thus no threat"))))
 
 (deftest a-back-off-ends-eight-blocks-away
   (let [w (assoc (standing {8 (mob :creeper [10.5 64.0 8.5] 20.0)})
@@ -503,3 +511,108 @@
     (is (= (combat/hittable? w zombie) (combat/hittable? jumped zombie)) "the jump changes nothing")
     (is (not (combat/hittable? w zombie))
         "three and a half over the floor is out of reach, jumped or not")))
+
+(deftest silverfish-are-fought-holding-ground-without-leaving-safe-footing
+  ;; gym chain-w7 run 3: silverfish in the portal room must be fought without stepping
+  ;; off safe footing into the lava pool below
+  (let [silverfish (mob :silverfish [10.5 64.0 10.5] 8.0)
+        w (standing {12 silverfish})]
+    (is (= {:intent/kind :fight :intent/target 12 :intent/hold? true}
+           (plan/next-intent w {:goal/id :defend :goal/plan :defend} plan/goals))
+        "silverfish are fought with :intent/hold? true")
+    (is (not (combat/pressing? w silverfish)) "pressing? never walks toward silverfish")))
+
+(deftest nothing-is-fought-inside-the-dragons-breath
+  ;; gym chain-w11 run 4 (plan run 40741523320): an enderman fought at 14 health inside a breath
+  ;; cloud, six health every half second of magic, 14 to 0 in three seconds
+  (let [zombie {7 (mob :zombie [11.0 64.0 8.5] 20.0)}
+        cloud (fn [pos]
+                {8 {:entity/type (blocks/entity-types :area_effect_cloud)
+                    :entity/pos pos
+                    :entity/radius 3.0}})
+        end (fn [entities] (assoc (standing entities) :player/dimension dimension/end))]
+    (is (= #{7} (set (keys (combat/threats (end zombie)))))
+        "in the End, out of any cloud, a threat")
+    (is (empty? (combat/threats (end (merge zombie (cloud [9.5 64.0 8.5])))))
+        "inside a cloud, none")
+    (is (= #{7} (set (keys (combat/threats (end (merge zombie (cloud [30.5 64.0 8.5])))))))
+        "a cloud far off changes nothing")
+    (is (= #{7} (set (keys (combat/threats (standing (merge zombie (cloud [9.5 64.0 8.5])))))))
+        "outside the End a cloud is no reason to leave a fight")))
+
+(deftest a-back-off-that-ends-at-once-is-never-chosen-again-and-never-a-fight
+  ;; gym chain-w13 dragon run 2 (plan run 40798605016, job 4): an angry enderman on the End's
+  ;; island, the bot under 10 health, `intent :back-off 86` every 50 ms from 04:03:36.6 and
+  ;; each ended cornered in the tick it began; eight hits, four swings, dead. Under the line the
+  ;; bot never fights (#577): a meal, a block between, a pillar, a hole
+  (let [enderman (fn [pos] (assoc (mob :enderman pos 40.0) :entity/creepy? true))
+        at (fn [pos inv]
+             (assoc (standing {7 (enderman pos)})
+                    :plan/goals #{:dragon}
+                    :player/health 6.0
+                    :player/food 10
+                    :player/inventory inv))
+        defend (row :defend)
+        steak {0 (item :cooked_beef 4)}
+        stone {1 (item :cobblestone 8)}
+        close [11.0 64.0 8.5]
+        e #(get-in % [:world/entities 7])]
+    (is (= {:intent/kind :back-off :intent/target 7}
+           (plan/next-intent (at close {}) defend plan/goals))
+        "with room to back off to: backed away from")
+    (is (not (combat/back-off-pointless? (at close {}) (e (at close {})))) "room to go")
+    (is (not (combat/back-off-pointless? (assoc (at close {}) :plan/cornered #{7})
+                                         (e (at close {}))))
+        "a back-off that ran out its clock is tried again (issue #161)")
+    (testing "cover, never the fight"
+      (is (= {:intent/kind :eat :intent/item :cooked_beef}
+             (combat/cover (at [13.0 64.0 8.5] steak) (e (at [13.0 64.0 8.5] steak))))
+          "food held and the enderman out of attack-reach: the meal")
+      (is (= {:intent/kind :place :intent/item :cobblestone :intent/cell [9 64 8]}
+             (combat/cover (at close (merge steak stone)) (e (at close {}))))
+          "in reach: a block between, at the feet's height first, not the meal")
+      (is (= {:plan/wait :cornered} (combat/cover (at close {}) (e (at close {}))))
+          "nothing held at all: the wait that ends the plan, never the fight")
+      (let [pick (at close {2 (item :stone_pickaxe 1)})]
+        (is (= {:intent/kind :dig :intent/target [8 63 8]} (combat/cover pick (e pick)))
+            "a pickaxe and nothing to lay: a hole a block deep under the feet")))
+    (testing "the wall cell taken, a pillar"
+      (let [w (assoc-in (at close stone)
+               [:world/chunks [0 0]]
+               (world/column {[9 64 8] (blocks/default-state :stone)
+                              [9 65 8] (blocks/default-state :stone)}))
+            i (combat/cover w (e w))]
+        (is (= :pillar (:intent/kind i)))
+        (is (= 67 (:intent/top i)))))
+    (testing "a target back-off-to away needs no back-off: the meal or rest"
+      (let [far (at [17.0 64.0 8.5] steak)]
+        (is (combat/back-off-pointless? far (e far)))
+        (is (= {:intent/kind :eat :intent/item :cooked_beef} (combat/cover far (e far))))
+        (is (= {:plan/wait :resting}
+               (combat/cover (at [17.0 64.0 8.5] {}) (e (at [17.0 64.0 8.5] {})))))))))
+
+(deftest on-the-islands-rim-with-the-enderman-inland-the-bot-covers
+  ;; gym chain-w13 dragon run 2 (plan run 40798605016, job 4): the bot stood at [70.3 57 11.3] on
+  ;; the End island's outer part when `intent :back-off 86` came every 50 ms; the way straight
+  ;; away from an enderman inland is off the rim (void-retreat?), so each back-off ended cornered
+  ;; in its first tick. The rim here is x 13 of the chunk; the enderman two and a half inland.
+  (let [air (blocks/default-state :air)
+        rim {:world/chunks
+             {[0 0]
+              (world/column
+               (into {} (for [lx (range 13 16) lz (range 16) y (range 50 64)] [[lx y lz] air])))}}
+        w (-> (standing {7 (assoc (mob :enderman [10.5 64.0 8.5] 40.0) :entity/creepy? true)})
+              (merge rim)
+              (assoc :player/pos [12.5 64.0 8.5]
+                     :player/health 6.0
+                     :player/food 10
+                     :player/dimension dimension/end
+                     :plan/goals #{:dragon}
+                     :player/inventory {0 (item :cobblestone 8)}))
+        e (get-in w [:world/entities 7])]
+    (is (combat/void-retreat? w e) "away from it is off the rim")
+    (is (combat/back-off-pointless? w e)
+        "so a back-off is done at once, before anything is cornered")
+    (let [i (plan/next-intent w (row :defend) plan/goals)]
+      (is (= {:intent/kind :place :intent/item :cobblestone :intent/cell [11 64 8]} i)
+          "a block between instead, never the back-off and never the fight"))))

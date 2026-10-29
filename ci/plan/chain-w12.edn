@@ -1,0 +1,8 @@
+;; issue #10, batch w12: no walk asked for in the air, no fight inside the dragon's breath, a
+;; retreat walk never repeated; the chain row (6) and the dragon row (3)
+{:plans/label "chain-w12"
+ :plans/jobs 4
+ :plans/issue 10
+ :plans/experiments
+ [{:exp/name "dragon" :exp/kind :gym :exp/goal "dragon" :exp/runs 3 :exp/bots 1 :exp/est-s 1600}
+  {:exp/name "chain" :exp/kind :gym :exp/goal "chain" :exp/runs 6 :exp/bots 1 :exp/est-s 3600}]}
