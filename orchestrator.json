@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-29T01:54:27.340Z",
+  "at" : "2026-10-29T01:57:44.855Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -32,11 +32,6 @@
     "title" : "Bot stops at flint-and-steel: not-picked-up",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : true
-  }, {
-    "number" : 593,
-    "title" : "Bot stops at water-bucket: unsafe",
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
   }, {
     "number" : 605,
     "title" : "Bot stops at stone-pickaxe: boxed",
@@ -75,6 +70,11 @@
   }, {
     "number" : 595,
     "title" : "Bot stops at blaze-rods: unsafe",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 593,
+    "title" : "Bot stops at water-bucket: unsafe",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
