@@ -402,10 +402,10 @@
          ;; filled first; a retreat onto a cell already stood in is not asked
          fresh-ok? #(let [floor (plus (plus feet %) [0 -1 0])]
                       (or (not (thin-floor? world floor)) (underlay-possible? world floor)))
-         first-way? (cond dry-only? #(and (fresh-ok? %) (or (allowed? %) (bridge? world feet %)))
-                          bridge-ok?
-                          #(and (fresh-ok? %) (or (allowed? %) (bridge-over-void? world feet %)))
-                          :else #(and (fresh-ok? %) (allowed? %)))
+         any-way? (cond dry-only? #(or (allowed? %) (bridge? world feet %))
+                        bridge-ok? #(or (allowed? %) (bridge-over-void? world feet %))
+                        :else allowed?)
+         first-way? #(and (fresh-ok? %) (any-way? %))
          turn? (fn [move]
                  (let [floor (plus (plus feet move) [0 -1 0])
                        own-floor (plus feet [0 -1 0])]
@@ -424,6 +424,9 @@
          climb? #(climb-out? world feet % dry-only?)
          down? #(neg? (long (second %)))]
      (or (first (filter #(and (first-way? %) (or (not up?) (not (down? %)))) fresh))
+         ;; no reroute with a thick floor, or a block to fill under a thin one: the step as before
+         ;; (sim R1/37 seed 2 held soul sand only, and was blocked at y 31 for the refusal)
+         (first (filter #(and (any-way? %) (or (not up?) (not (down? %)))) fresh))
          (first (filter (fn [move]
                           (let [floor (plus (plus feet move) [0 -1 0])
                                 filled (assoc-in world
