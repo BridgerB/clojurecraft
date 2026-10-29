@@ -897,18 +897,23 @@
   "The intent while hurt under combat/retreat-health at the dragon, where the perch and
    the walk to its stand are never chosen (gym chain-w3's dragon runs 2 and 3 fought on
    at ten, then four and a half health, and the dragon slew them): a meal first when
-   food is held and the bar can take one, in shelter outside the basin (sheltered?) or with no
-   cell to go to, else, while not yet in shelter, the shelter walk to a cell out of every
-   breath's reach (escape), else the wait :low-health where the feet are for the bar's own
-   healing. Gym chain-w12 chain run 4 ate twice at the fountain at low health and died there.
+   food is held and the bar can take one, in shelter outside the basin (sheltered?) only;
+   not yet in shelter, the shelter walk to a cell out of every breath's reach (escape), else
+   combat's :back-off from the dragon, else the meal, else the wait :low-health where the feet
+   are for the bar's own healing. Gym chain-w12 chain run 4 ate twice at the fountain at low
+   health and died there, and chain-w17 dragon run 2 (plan run 40904439588) ate at 14.2 in the
+   head's reach: 8.4, 5.5, 0 in the next second.
    The :heal row's meal needs a lull (heal-food), which a sitting dragon never is, so
    the row eats here on its own line."
   [world]
   (let [food (when (< (:player/food world 20) 20) (eat/food-held world))
-        flight (escape world)]
-    (cond (and food (or (sheltered? world) (nil? flight))) {:intent/kind :eat :intent/item food}
-          (sheltered? world) {:plan/wait :low-health}
+        flight (escape world)
+        [eid _] (dragon world)]
+    (cond (sheltered? world)
+          (if food {:intent/kind :eat :intent/item food} {:plan/wait :low-health})
           flight (shelter-walk flight)
+          eid {:intent/kind :back-off :intent/target eid}
+          food {:intent/kind :eat :intent/item food}
           :else {:plan/wait :low-health})))
 
 (defn toward-dragon

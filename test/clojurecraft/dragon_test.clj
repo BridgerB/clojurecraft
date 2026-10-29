@@ -996,3 +996,19 @@
     (is (not (climb?
               (at 14.2 10 (merge cobblestone {1 {:item (recipe/item-id :cooked_beef) :count 4}}))))
         "a meal held: heal first")))
+
+(deftest hurt-in-the-heads-reach-with-no-cell-to-go-to-the-bot-backs-off-and-never-eats
+  ;; gym chain-w17 dragon run 2 (plan run 40904439588): `intent :perch 73`, two blows 20 -> 17.1 ->
+  ;; 14.2, then `intent :eat` in the head's reach, then 8.4, 5.5, 0 in the next second
+  (let [steak {1 {:item (recipe/item-id :cooked_beef) :count 4}}
+        w (assoc (standing {} [2.5 64.0 0.5] steak (sitting 270.0))
+                 :world/chunks {}
+                 :player/dimension dimension/end
+                 :player/health 14.2
+                 :player/food 18)]
+    (is (nil? (dragon/escape w)) "no ground loaded round the fountain: no cell out of reach")
+    (is (not (dragon/sheltered? w)) "in the basin")
+    (is (= {:intent/kind :back-off :intent/target dragon-eid} (dragon/recover w))
+        "away from the dragon, never a meal in its reach")
+    (is (= :eat (:intent/kind (dragon/recover (assoc w :player/pos [20.5 64.0 0.5]))))
+        "sheltered, far out: the meal")))
