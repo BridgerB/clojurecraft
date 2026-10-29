@@ -2395,9 +2395,10 @@
   ;; gym plan run 40839050567 jobs 1 to 4 (issue #263, pearls-12): five-hour timeouts, each a walk
   ;; between two cells a few blocks apart, 446, 784, 346 and 460 times, a lookout between every
   ;; two, so that no run of lookouts since the last walk ever reached wander-lookouts. The offsets
-  ;; between the two cells of jobs 1, 2 and 4: [0 0 2], [0 0 2] and [5 3 0] (job 3 shuffled the
-  ;; same way over 124 minutes)
-  (doseq [[job [dx dy dz]] {1 [0 0 2] 2 [0 0 2] 3 [0 0 2] 4 [5 3 0]}]
+  ;; between the two cells of the jobs: [0 0 2] (job 1, [2449 47 2198] and [2449 47 2200]), [0 0 2]
+  ;; (job 2, [2459 55 2202] and [2459 55 2204]), [0 0 2] (job 3, [2473 55 2210] and [2473 55 2212])
+  ;; and [5 3 0] (job 4, [2457 55 2195] and [2452 52 2195])
+  (doseq [[job [dx dy dz]] {1 [0 0 2] 2 [0 0 2] 3 [0 0 2] 4 [5 3 0]}] ; job 3: [2473 55 2210] and [2473 55 2212]
     (let [w (-> stranded
                 (assoc :player/pos [8.5 61.0 8.5])
                 (walked (take pearls/loiter-walks
