@@ -30,7 +30,6 @@
    (memory/landmark-kinds), however deep it lies. Every long walk goes in hops a route reaches
    (hop), as the pearl hunt's roam does."
   (:require [clojure.math :as math]
-            [clojure.string :as str]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.drops :as drops]
             [clojurecraft.fortress :as fortress]
@@ -625,11 +624,9 @@
                   (>= (:intent/taken l 0) (:intent/steps l 0))
                   (or (nil? from) (< (- (gone from) (gone (intent/feet world))) tunnel-gain))))))
 
-(defn infested?
-  "Is the block at cell an infested one (infested_stone, infested_stone_bricks ...)? Breaking one
-   lets a silverfish out, which calls the others out of their blocks."
-  [world cell]
-  (str/starts-with? (name (or (blocks/name-of (terrain/block-at world cell)) :air)) "infested_"))
+(def infested?
+  "Is the block at cell an infested one (fortress/infested?)? The tunnel refuses to open one."
+  fortress/infested?)
 
 (defn safe-portal-move?
   "Does move from feet open no cell that is or borders lava, have no lava floor, and open no

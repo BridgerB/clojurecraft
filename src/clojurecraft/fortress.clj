@@ -11,9 +11,11 @@
    neighbour behind a wall cannot be capped before the wall is dug, and Nether lava flows a block
    every half second), else another step is tried: up or down, the other axis, sideways."
   (:require [clojure.math :as math]
+            [clojure.string :as str]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.build :as build]
             [clojurecraft.dimension :as dimension]
+            [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.make :as make]
             [clojurecraft.memory :as memory]
@@ -136,6 +138,14 @@
                (path/floor? (assoc-in world [:world/blocks cell] (blocks/default-state item)) cell))
       item)))
 
+(defn infested?
+  "Is the block at cell an infested one (infested_stone, infested_stone_bricks ...)? Breaking one
+   lets a silverfish out, which calls the others out of their blocks: gym chain-w13 run 4 (job 4,
+   plan run 40798605016) dug one in a stronghold's wall and was bitten from 9.3 health to 0."
+  [world cell]
+  (let [n (blocks/name-of (terrain/block-at world cell))]
+    (boolean (and n (str/starts-with? (name n) "infested_")))))
+
 (defn safe-but-lava?
   "Can the step from feet by move be taken but for the lava beside the cells it opens (safe?
    with that one clause left out): every cell it opens and the floor loaded, none of them lava or
@@ -152,6 +162,7 @@
      (every? some? (map at (conj cells floor)))
      (not-any? lava? cells)
      (not-any? #(and (blocks/solid? (at %)) (contains? unbreakable (blocks/name-of (at %)))) cells)
+     (not-any? #(infested? world %) cells)
      (not-any? #(or (intent/fluid-over-falling? world %) (intent/bed-over-fluid? world %)) cells)
      (or (path/floor? world floor)
          (and filler
@@ -241,6 +252,16 @@
      (if (and (not (zero? dy)) (> (abs ddy) (+ (abs ddx) (abs ddz))))
        (for [dy ys [dx dz] dirs] [dx dy dz])
        (for [[dx dz] dirs dy ys] [dx dy dz])))))
+
+(defn infested-ahead
+  "[cell name] of the first infested block among the cells the moves toward target from feet
+   open, or nil: what the tunnel refused (safe-but-lava?), for the line it logs when it ends
+   :blocked."
+  [world feet target climb]
+  (some (fn [m]
+          (some #(when (infested? world %) [% (name (blocks/name-of (terrain/block-at world %)))])
+                (opens feet m)))
+        (moves feet target climb)))
 
 (defn choose-move
   "The first of moves from feet toward target (climbing past climb, climb-past when not given)
@@ -647,9 +668,11 @@
             m (or back undo ahead)
             retreated (if (and ahead (not fresh?) (not undo)) (inc (long retreats)) 0)]
         (cond (or (nil? m) (> retreated retreats-allowed))
-              (-> world
-                  (assoc :player/controls {})
-                  (intent/fail :blocked))
+              (let [[cell block] (when (nil? m) (infested-ahead world feet target climb))]
+                (cond-> (-> world
+                            (assoc :player/controls {})
+                            (intent/fail :blocked))
+                  cell (game/say (str "tunnel: refused " cell " " block " (infested)"))))
               :else
               (cond-> (intent/assoc-intent (assoc world :player/controls {})
                                            :intent/move m

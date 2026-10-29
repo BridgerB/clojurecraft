@@ -1346,3 +1346,16 @@
     (is (not (fortress/gaining? feet down [-40 80 0])))
     (is (= down (fortress/next-move w feet [-40 50 0] 3 false stood))
         "a target below still takes the stair down")))
+
+(deftest no-step-opens-an-infested-block
+  ;; gym chain-w13 run 4 (job 4, plan run 40798605016): the tunnel dug an infested stone brick in a
+  ;; stronghold's wall, a silverfish came out and bit the bot from 9.3 health to 0
+  (let [infested (blocks/default-state :infested_stone_bricks)
+        w (rock {[1 64 0] infested})]
+    (is (fortress/infested? w [1 64 0]))
+    (is (not (fortress/infested? w [2 64 0])))
+    (is (not (fortress/safe? w [0 64 0] [1 0 0])) "the cell itself")
+    (is (not (fortress/safe? (rock {[1 65 0] infested}) [0 64 0] [1 0 0])) "the one over the head")
+    (is (fortress/safe? (rock {}) [0 64 0] [1 0 0]) "plain rock is dug as before")
+    (is (= [[1 64 0] "infested_stone_bricks"] (fortress/infested-ahead w [0 64 0] [10 64 0] 3))
+        "the cell and block the refusal logs")))
