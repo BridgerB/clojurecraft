@@ -642,6 +642,12 @@
       (and (some? id) (some? at) e (not (entity/dead? e)) (<= (- (:time/now world 0) at) struck-ms))
       [id e])))
 
+(def never-fought
+  "Kinds the :defend row never makes a fight of: a ghast hovers out of a sword's reach and burns
+   the bot with fireballs, so a fight on it is a walk after it. Blaze-race-c job 4 (3a082f7b7, real)
+   `burned to a crisp while fighting Ghast` after 172 minutes. Cover or moving on, not a fight."
+  #{:ghast})
+
 (defn threats
   "{eid entity} of the hostiles (entity/hostiles) the :defend row answers, plus whoever last
    struck (striker) while that strike is fresh: within defend-radius of the feet, a creeper
@@ -663,6 +669,7 @@
      (filter
       (fn [[eid e]]
         (and (not (contains? bl eid))
+             (not (contains? never-fought (entity/kind e)))
              (not (contains? left (entity/kind e)))
              (not (given-up? world eid e))
              (<= (physics/distance pos (:entity/pos e))

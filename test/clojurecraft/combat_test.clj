@@ -325,6 +325,16 @@
     (is (empty? (combat/threats (standing {8 (mob :blaze [9.5 68.0 8.5] 20.0)})))
         "a blaze four over the feet is out of reach from the floor")))
 
+(deftest a-ghast-is-never-a-fight
+  ;; blaze-race-c job 4 (3a082f7b7, real): burned to a crisp while fighting a ghast
+  (let [ghast {8 (mob :ghast [11.0 65.0 8.5] 10.0)}]
+    (is (empty? (combat/threats (standing ghast))) "in reach, in sight, still not a fight")
+    (is (plan/done-by (standing ghast) (row :defend)))
+    (is (= #{7}
+           (set (keys (combat/threats (standing
+                                       (assoc ghast 7 (mob :zombie [11.0 64.0 8.5] 20.0)))))))
+        "a zombie beside it still is")))
+
 (deftest a-back-off-ends-eight-blocks-away
   (let [w (assoc (standing {8 (mob :creeper [10.5 64.0 8.5] 20.0)})
                  :plan/intent
