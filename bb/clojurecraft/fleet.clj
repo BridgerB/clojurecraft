@@ -17,7 +17,11 @@
      2. while another workflow's job is queued: queued lanes are cancelled, then the newest running
         lanes, as many as the queued jobs exceed the free runners, never a kind below its floor;
      3. while nothing waits: free runners get new lanes on main, the kind with fewer lanes first,
-        the lowest free lane number, up to each kind's max.
+        the lowest free lane number, up to each kind's max; for :fleet/cooldown-s after a lane was
+        given back for need, only up to each kind's floor. On 2026-10-28 gym plans and probes held
+        most runners, and every runner they freed for a minute got a lane that the next queued job
+        took back 3 to 20 minutes later, before its first 20-minute report: 20 real and 12 sim
+        lanes in three hours that reported nothing.
    A cancelled lane still runs its last report and upload (race.yml's always() steps), so it is
    counted as holding its runner until GitHub lists it completed.
 
@@ -113,13 +117,17 @@
 (defn decide
   "What one look does: {:cancel [lane ...] :dispatch [[kind lane] ...] :why {...}}, from the runs
    and jobs listed, the commits whose code main has replaced (stale-shas), the fleet's memory
-   ({:cancelling #{id} :dispatched [{:kind :lane :at}]}), the config, now (ms) and whether the
-   rounds continue. A lane with no number is a round of the old matrix: stale. Queued lanes hold no
-   runner, so only running lanes are given back for need; cancelled ones still running count as
-   runners on their way. Pure: rules 1 to 3 of the namespace doc."
+   ({:cancelling #{id} :dispatched [{:kind :lane :at}] :gave-back ms}), the config, now (ms) and
+   whether the rounds continue. A lane with no number is a round of the old matrix: stale. Queued
+   lanes hold no runner, so only running lanes are given back for need; cancelled ones still
+   running count as runners on their way. :given-back is the lanes given back for need, which
+   start the cooldown. Pure: rules 1 to 3 of the namespace doc."
   [{:keys [runs jobs stale-shas memory config now continuous]}]
-  (let [{:fleet/keys [cap floor dispatch-grace-s stale-after-minutes]} config
-        maxes (:fleet/max config)
+  (let [{:fleet/keys [cap floor dispatch-grace-s stale-after-minutes cooldown-s]} config
+        cooling? (boolean (some-> (:gave-back memory)
+                                  (#(< (- now %) (* 1000 (or cooldown-s 0))))))
+        maxes (cond cooling? (merge-with min (:fleet/max config) floor)
+                    :else (:fleet/max config))
         {:keys [busy demand]} (counts runs jobs)
         free (- cap busy)
         ls (lanes runs)
@@ -137,27 +145,36 @@
         live-counts
         (merge-with + (frequencies (map :kind current)) (frequencies (map :kind unseen)))
         used
-        (reduce (fn [m l] (update m (:kind l) (fnil conj #{}) (:lane l))) {} (concat ls unseen))]
-    {:why {:busy busy :demand demand :free free :live live-counts :stale (count stale)}
-     :cancel (vec (concat stale
-                          (when (pos? demand) queued-lanes)
-                          (when (pos? need) (victims running floor need))))
+        (reduce (fn [m l] (update m (:kind l) (fnil conj #{}) (:lane l))) {} (concat ls unseen))
+        given-back (when (pos? need) (victims running floor need))]
+    {:why {:busy busy
+           :demand demand
+           :free free
+           :live live-counts
+           :stale (count stale)
+           :cooling? cooling?}
+     :cancel (vec (concat stale (when (pos? demand) queued-lanes) given-back))
+     :given-back (vec given-back)
      :dispatch (cond (or (pos? demand) (seq stale) (not continuous)) []
                      :else (refills (- free (count unseen)) live-counts used maxes))}))
 
 (defn remember
   "The fleet's memory after a look's actions at now: cancelled ids kept until GitHub stops listing
-   them, dispatches kept for the grace period."
-  [memory {:keys [cancel dispatch]} runs config now]
+   them, dispatches kept for the grace period, and the time a lane was last given back for need
+   (:gave-back), which the cooldown counts from."
+  [memory {:keys [cancel dispatch given-back]} runs config now]
   (let [listed (set (map :id runs))]
-    {:cancelling (into (set (filter listed (:cancelling memory #{}))) (map :id cancel))
-     :dispatched (into (filterv #(< (- now (:at %)) (* 1000 (:fleet/dispatch-grace-s config)))
-                                (:dispatched memory))
-                       (map (fn [[kind lane]] {:kind kind :lane lane :at now}) dispatch))}))
+    (cond-> {:cancelling (into (set (filter listed (:cancelling memory #{}))) (map :id cancel))
+             :dispatched (into (filterv #(< (- now (:at %))
+                                            (* 1000 (:fleet/dispatch-grace-s config)))
+                                        (:dispatched memory))
+                               (map (fn [[kind lane]] {:kind kind :lane lane :at now}) dispatch))}
+      (:gave-back memory) (assoc :gave-back (:gave-back memory))
+      (seq given-back) (assoc :gave-back now))))
 
 (defn line
   "One look as a log line."
-  [{{:keys [busy demand free live stale]} :why :keys [cancel dispatch]}]
+  [{{:keys [busy demand free live stale cooling?]} :why :keys [cancel dispatch]}]
   (str "FLEET busy "
        busy
        " free "
@@ -169,6 +186,7 @@
        " sim "
        (live :sim 0)
        (when (pos? stale) (str " stale " stale))
+       (when cooling? " cooling")
        (when (seq cancel)
          (str " cancel " (str/join "," (map #(str (name (:kind %)) (:lane %) "/" (:id %)) cancel))))
        (when (seq dispatch)
