@@ -574,10 +574,14 @@
                 "item replace entity {name} armor.head with minecraft:iron_helmet"
                 "item replace entity {name} armor.chest with minecraft:iron_chestplate"
                 "item replace entity {name} armor.legs with minecraft:iron_leggings"
-                "item replace entity {name} armor.feet with minecraft:iron_boots"
-                "summon minecraft:zombie {x+2} {y} {z} {PersistenceRequired:1b}"
-                "summon minecraft:zombie {x-2} {y} {z+1} {PersistenceRequired:1b}"
-                "summon minecraft:zombie {x} {y} {z-2} {PersistenceRequired:1b}"]
+                "item replace entity {name} armor.feet with minecraft:iron_boots"]
+    ;; summoned once the bot stands in the landing with its kit, then the settle: chain-w18 defend
+    ;; run 3 (plan run 40914832722) had them summoned in the setup, before the teleport, in chunks
+    ;; unforceloaded a command later, and the bot saw none (:entities 0), found the row done 0.35 s
+    ;; after landing and failed the kill count
+    :gym/summon ["summon minecraft:zombie {x+2} {y} {z} {PersistenceRequired:1b}"
+                 "summon minecraft:zombie {x-2} {y} {z+1} {PersistenceRequired:1b}"
+                 "summon minecraft:zombie {x} {y} {z-2} {PersistenceRequired:1b}"]
     :gym/timeout-ms trial-ms
     :gym/truth [{:truth/cmd "scoreboard players get {name} zkills" :truth/re "has [1-9]"}
                 {:truth/cmd "data get entity {name} Health" :truth/re "data: [1-9]"}]}

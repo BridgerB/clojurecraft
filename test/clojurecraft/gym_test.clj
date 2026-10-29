@@ -441,3 +441,13 @@
     (is (not (:truth/ok? (gym/truth truth "cmd" "Could not find a structure" result))))
     (is (not (:truth/ok? (gym/truth truth "cmd" (at 600 800) {:ok true}))) "no throw kept")
     (is (< (gym/bearing-off [0.0 0.0 0.0] [-1.0 0.0] [-100 1]) 1.0) "across the half turn")))
+
+(deftest the-defend-rows-zombies-are-summoned-after-the-bot-lands
+  ;; gym chain-w18 defend run 3 (plan run 40914832722): the zombies summoned in the setup, before
+  ;; the teleport, were unforceloaded a command later; the bot saw none and the row was done 0.35 s
+  ;; after landing with no kill
+  (let [row (gym/gym "defend")]
+    (is (not-any? #(str/includes? % "summon") (:gym/setup row)) "none in the setup")
+    (is (= 3 (count (filter #(str/includes? % "summon minecraft:zombie") (:gym/summon row))))
+        "three, summoned with the kit given")
+    (is (= (:gym/summon row) (:gym/summon (gym/gym :defend))))))

@@ -481,7 +481,12 @@
             "no route to a cell across it: the swim to the nearest of them")
         (is (= {:intent/kind :walk :intent/target [8 64 2] :intent/for :retreat}
                (stronghold/to-room w2 [13 60 8]))
-            "one a route reaches is walked to")))
+            "one a route reaches is walked to")
+        (is
+         (= {:intent/kind :stairs-up :intent/to-y 72 :intent/for :retreat}
+            (stronghold/to-room (assoc w :plan/trail [[100 64 8] [8 64 8]]) [13 60 8]))
+         "a cell far off is no retreat (gym chain-w18 run 3 crossed to one 100 blocks away,
+             :stuck in five seconds): the staircase up")))
     (testing "every retreat cell out of reach on dry ground: a new staircase up, not a swim"
       ;; gym chain-w15 run 3: `intent :cross [14862 33 13582]` on dry ground failed :stuck in five
       ;; seconds, twice, and with the stairs-down :boxed before them the third failure in a row
@@ -711,3 +716,22 @@
         "back again: farther, so no hop, and the way falls through to the swim or the tunnel")
     (is (not (stronghold/progress? [0 64 0] [1 64 0] [100 0] 2.0)) "a step of one is no progress")
     (is (stronghold/progress? [0 64 0] [32 64 0] [100 0] 2.0))))
+
+(deftest a-swim-that-found-no-shore-is-not-asked-for-again
+  ;; gym chain-w18 run 2 (plan run 40914832722): `intent :cross [12864 65 16672]` failed
+  ;; :no-crossing, then [12864 67 16672] :stuck, then [12864 66 16672] :no-crossing, 5 minutes, and
+  ;; the plan ended with the dry tunnel under the sea never tried
+  (let [w (assoc (searching [8.5 8.5] []) :time/now 1000)
+        failed (fn [w id reason target]
+                 (memory/remember-intention
+                  w
+                  {:intent/id id :intent/kind :cross :intent/target target :intent/reason reason}
+                  :failed))]
+    (is (not (stronghold/cross-failed-near? w [12864 16672])) "none yet")
+    (let [w1 (failed w 1 :no-crossing [12864 65 16672])]
+      (is (stronghold/cross-failed-near? w1 [12864 16672]) "that point")
+      (is (stronghold/cross-failed-near? w1 [12840 16690]) "and the ones round it")
+      (is (not (stronghold/cross-failed-near? w1 [0 0])) "not another")
+      (is (stronghold/cross-failed-near? (failed w 2 :stuck [12864 67 16672]) [12864 16672]))
+      (is (not (stronghold/cross-failed-near? (failed w 3 :boxed [12864 65 16672]) [12864 16672]))
+          "another failure is no word on the water"))))

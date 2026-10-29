@@ -412,6 +412,23 @@
                   i)))
             hop-turns))))
 
+(def cross-failed-radius 48.0)        ; blocks round a point a failed swim toward it counts for
+
+(defn cross-failed-near?
+  "Did a :cross toward a cell within cross-failed-radius of the point [x z] fail :no-crossing or
+   :stuck, by the intentions on record? Gym chain-w18 run 2 (plan run 40914832722) swam toward the
+   crossing at [12864 16672] three times, each ended :no-crossing, :stuck, :no-crossing over
+   five minutes, and the third failed in a row ended the plan with the dry tunnel under the sea
+   never tried: a swim that found no far shore is not asked again for that point."
+  [world [x z]]
+  (boolean (some (fn [f]
+                   (and (= :cross (:intention/kind f))
+                        (= :failed (:intention/event f))
+                        (contains? #{:no-crossing :stuck} (:intention/reason f))
+                        (when-let [[tx _ tz] (:intention/target f)]
+                          (< (norm [(- tx x) (- tz z)]) cross-failed-radius))))
+                 (memory/intentions world))))
+
 (defn way
   "A way toward the far point [x z]: a hop; else, with open water toward it, a swim across it
    (swim's :cross, done on the far side's dry land); else a dry tunnel toward it at height y
@@ -423,7 +440,8 @@
   (let [feet (intent/feet world)
         target [(long (math/floor x)) y (long (math/floor z))]]
     (or (hop world [x z])
-        (when (wood/water-toward? world feet target (physics/y-of (game/eye world)))
+        (when (and (not (cross-failed-near? world [x z]))
+                   (wood/water-toward? world feet target (physics/y-of (game/eye world))))
           {:intent/kind :cross
            :intent/target (assoc target 1 (physics/y-of feet))
            :intent/for :stronghold})
@@ -666,6 +684,7 @@
                           (safe-portal-move? world feet m)))
                    (fortress/moves feet f fortress/climb-past)))))
 
+(def retreat-reach 24.0)              ; blocks on the plane a retreat cell may lie from the feet: a swim or a walk to one farther is not a way (gym chain-w15/w18 run 3 crossed to a trail cell 100 blocks off, :stuck in five seconds)
 (def retreat-tries 4)                 ; trail cells a retreat looks at for one a route reaches, nearest first
 
 (defn water-near?
@@ -701,7 +720,7 @@
    (through the stronghold's walls, never into its frames: fortress/unbreakable); else, still over
    room-over, the stairs; else with feet boxed or no move forward, a retreat step back along the
    plan trail to an earlier unboxed cell no walk failed at (:plan/blacklist) that a route reaches or whose chunk is not loaded
-   (retreat-tries of them looked at), else, with water at the feet, a swim (:cross) to the nearest, on dry ground a new staircase up a leg (:stairs-up: a swim there ends :stuck): gym chain-w11 to w14
+   (retreat-tries of them looked at), else, with water at the feet, a swim (:cross) to the nearest, else a new staircase up a leg (:stairs-up: a swim from dry ground or to a cell far off ends :stuck), the cells looked at being those within retreat-reach, nearest first: gym chain-w11 to w14
    run 1 stood on a bank at the bottom of its flooded staircase and asked for a walk to each
    trail cell in turn, fifty milliseconds apart, every one :no-path (the way up is under water),
    twelve of them failed the plan at 8 minutes; else the wait :no-way. Gym
@@ -726,11 +745,16 @@
         down (when (and high? (= start feet)) (downhill world f))
         stairs (stairs-toward feet f (max (+ y room-over) (- fy stair-leg)))
         tunnel-move (safe-tunnel-move world feet f)
-        retreats (when (or boxed? (nil? tunnel-move))
-                   (take retreat-tries
-                         (remove #(or (contains? (:plan/boxed-at world #{}) %)
-                                      (contains? (:plan/blacklist world #{}) %))
-                                 (rseq (:plan/trail world [])))))
+        needed? (or boxed? (nil? tunnel-move))
+        retreats
+        (when needed?
+          (->> (rseq (:plan/trail world []))
+               (remove #(or (contains? (:plan/boxed-at world #{}) %)
+                            (contains? (:plan/blacklist world #{}) %)))
+               (filter #(<= (physics/horizontal-distance (:player/pos world) (physics/centre %))
+                            retreat-reach))
+               (sort-by #(physics/horizontal-distance (:player/pos world) (physics/centre %)))
+               (take retreat-tries)))
         walkable (some #(when (or (not (terrain/chunk-loaded? world %))
                                   (intent/routable?
                                    world
@@ -753,8 +777,7 @@
           walkable {:intent/kind :walk :intent/target walkable :intent/for :retreat}
           (and (seq retreats) (water-near? world))
           {:intent/kind :cross :intent/target (first retreats) :intent/for :retreat}
-          (seq retreats)
-          {:intent/kind :stairs-up :intent/to-y (+ fy stair-leg) :intent/for :retreat}
+          needed? {:intent/kind :stairs-up :intent/to-y (+ fy stair-leg) :intent/for :retreat}
           :else {:plan/wait :no-way})))
 
 (defmethod plan/next-intent :portal-room
