@@ -494,10 +494,10 @@
         plug (into {} (for [y [64 65]] [[2 y 8] stone]))
         w (-> (standing {})
               (assoc :world/chunks {[0 0] (world/column (merge walls roof plug))})
-              (memory/observe [11 64 10] blaze/spawner))]
+              (memory/observe [11 64 8] blaze/spawner))]
     (is (= 2 (blaze/exposure w [5 64 8])) "the tunnel is one wide")
     (is (< 2 (blaze/exposure w [10 64 8])) "the room is not")
-    (is (= [6 64 8] (blaze/nook w [11 64 10]))
+    (is (= [6 64 8] (blaze/nook w [11 64 8]))
         "the nearest one-wide cell by walking outside the spawner's volume (5 on x)")
     (testing "a trail cell in the spawner's volume is never picked, however little it is exposed"
       (is (blaze/in-spawn-volume? [9 64 10] [6 64 8]) "3 on x and 2 on z")
@@ -519,28 +519,28 @@
                      (camp 2)
                      (camp 3))
             fought (memory/remember-intention idle {:intent/id 4 :intent/kind :fight} :done)]
-        (is (= [6 64 8] (blaze/nook w [11 64 10])))
+        (is (= [6 64 8] (blaze/nook w [11 64 8])))
         (is (blaze/idle? idle))
-        (is (nil? (blaze/nook idle [11 64 10])))
+        (is (nil? (blaze/nook idle [11 64 8])))
         (is (not (blaze/idle? fought)) "a fight in the spell ends it")
-        (is (= [6 64 8] (blaze/nook fought [11 64 10])))
+        (is (= [6 64 8] (blaze/nook fought [11 64 8])))
         (is (not (blaze/idle? (assoc idle :time/now (+ 100000 blaze/idle-ms 1000))))
             "and the spell passes")))
     (testing "within the spawner's wake"
-      (is (blaze/awake-from? [11 64 10] [6 64 8]))
+      (is (blaze/awake-from? [11 64 8] [6 64 8]))
       (is (not (blaze/awake-from? [30 64 10] [6 64 8])) "24 blocks off: it would not run")
       (is (nil? (blaze/nook w [30 64 10]))))
     (testing "at the room's end it walks back to the nook, there it camps"
       (let [at-end (assoc w :player/pos [8.5 64.0 8.5])
             in-nook (assoc w :player/pos [6.5 64.0 8.5])]
-        (is (blaze/at-spawner? at-end [11 64 10]))
+        (is (blaze/at-spawner? at-end [11 64 8]))
         (is (= {:intent/kind :walk
                 :intent/target [6 64 8]
                 :intent/for :nook
                 :intent/max-nodes blaze/corridor-nodes}
                (next-intent at-end)))
-        (is (blaze/at-nook? in-nook [11 64 10]))
-        (is (= {:intent/kind :camp :intent/spawner [11 64 10]} (next-intent in-nook)))))))
+        (is (blaze/at-nook? in-nook [11 64 8]))
+        (is (= {:intent/kind :camp :intent/spawner [11 64 8]} (next-intent in-nook)))))))
 
 (deftest the-tunnel-is-the-cover-it-knows-and-cover-that-churns-is-dropped
   ;; blaze-race-b (real, a33d2a96e): :walk [2344 57 2281], [2344 57 2280], [2344 57 2279], then
@@ -556,7 +556,7 @@
               (assoc :world/chunks {[0 0] (world/column (merge walls roof plug))}
                      :player/health 12.0
                      :time/now 100000)
-              (memory/observe [11 64 10] blaze/spawner))
+              (memory/observe [11 64 8] blaze/spawner))
         walked (fn [w n target]
                  (memory/remember-intention w
                                             {:intent/id n :intent/kind :walk :intent/target target}
