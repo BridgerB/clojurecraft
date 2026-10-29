@@ -744,8 +744,33 @@
           nook {:intent/kind :dig :intent/target nook}
           :else {:plan/wait :cornered})))
 
+(def weak-hitters
+  "{kind line}: the health under which :defend stops fighting a kind that hits for little. The
+   line retreat-health is one enderman hit (7) plus a margin (#577, danger-health); a silverfish
+   bites for 1 (0.4 through armour), so its line is one bite plus the same margin of 3."
+  {:silverfish 4.0})
+
+(defn danger-line
+  "The health under which :defend backs away from, covers against, and no longer fights, entity
+   e: its kind's line in weak-hitters, else retreat-health. Gym chain-w13 run 4 (job 4, run
+   40798605016) was bitten 25 times in 23 s by a silverfish at 9.3 health, backing away from
+   another mob a back-off at a time, fighting nothing, and died; a fight under 10 is for what hits
+   hard, not for what bites."
+  [e]
+  (get weak-hitters (entity/kind e) retreat-health))
+
+(defn defend-target
+  "The [eid entity] :defend answers among threats: the one that last hit the bot
+   (:player/attacker) when it is one, else the nearest. Gym chain-w13 run 4 backed away from the
+   nearest mob for 23 s while another one, the one biting, was never answered."
+  [world threats]
+  (let [attacker (:player/attacker world)]
+    (or (when-let [e (get threats attacker)] [attacker e])
+        (entity/nearest threats (:player/pos world)))))
+
 (defmethod plan/next-intent :defend
-  ;; the nearest threat: a creeper, or anything while the health is under retreat-health, is
+  ;; the attacker among the threats, else the nearest (defend-target): a creeper, or anything
+  ;; while the health is under its danger-line (retreat-health, less for a silverfish), is
   ;; backed away from; anything else fought. Silverfish are fought holding ground (:intent/hold?)
   ;; so the fight never walks off safe footing into portal-room lava. A neutral mob turned on the bot
   ;; (an angry enderman, entity/neutral) is fought to the end while healthy; under retreat-health
@@ -754,18 +779,15 @@
   ;; the back-off would end at once (back-off-pointless?): then the cover (a meal, a block laid
   ;; between, a pillar), never the fight under that line (#577).
   [world _ _]
-  (when-let [[eid e] (entity/nearest (threats world) (:player/pos world))]
-    (cond (and (not= :creeper (entity/kind e))
-               (< (:player/health world 20.0) retreat-health)
-               (back-off-pointless? world e))
-          (cover world e)
-          (or (= :creeper (entity/kind e)) (< (:player/health world 20.0) retreat-health))
-          {:intent/kind :back-off :intent/target eid}
-          (= :silverfish (entity/kind e))
-          {:intent/kind :fight :intent/target eid :intent/hold? true}
-          (or (contains? entity/neutral (entity/kind e)) (contains? (:plan/cornered world #{}) eid))
-          {:intent/kind :fight :intent/target eid :intent/to-the-end? true}
-          :else {:intent/kind :fight :intent/target eid})))
+  (when-let [[eid e] (defend-target world (threats world))]
+    (let [hurt? (< (:player/health world 20.0) (danger-line e))]
+      (cond
+        (and (not= :creeper (entity/kind e)) hurt? (back-off-pointless? world e)) (cover world e)
+        (or (= :creeper (entity/kind e)) hurt?) {:intent/kind :back-off :intent/target eid}
+        (= :silverfish (entity/kind e)) {:intent/kind :fight :intent/target eid :intent/hold? true}
+        (or (contains? entity/neutral (entity/kind e)) (contains? (:plan/cornered world #{}) eid))
+        {:intent/kind :fight :intent/target eid :intent/to-the-end? true}
+        :else {:intent/kind :fight :intent/target eid}))))
 
 (defn quarry
   "{eid entity} of the hostiles the gym's :attack row kills: within attack-radius, not
