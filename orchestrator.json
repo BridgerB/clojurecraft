@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-29T07:53:59.495Z",
+  "at" : "2026-10-29T07:59:47.392Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -27,6 +27,11 @@
     "title" : "Bot stops at flint-and-steel: not-picked-up",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : true
+  }, {
+    "number" : 538,
+    "title" : "Bot stops at fortress: blocked",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
   }, {
     "number" : 178,
     "title" : "Bot stops at portal: timeout",
@@ -86,11 +91,6 @@
     "number" : 579,
     "title" : "Bot stops at ender-pearls: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
-    "number" : 538,
-    "title" : "Bot stops at fortress: blocked",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 526,
@@ -189,6 +189,10 @@
     "move" : "wait",
     "why" : "session starting"
   }, {
+    "issue" : 538,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
     "issue" : 178,
     "move" : "leave",
     "why" : "hands-off label"
@@ -202,10 +206,6 @@
     "why" : "hands-off label"
   }, {
     "issue" : 579,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
-    "issue" : 538,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
