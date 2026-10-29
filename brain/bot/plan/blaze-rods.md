@@ -29,6 +29,15 @@ sourceRefs:
   - src/clojurecraft/blaze.clj#defn under-fire?
   - src/clojurecraft/blaze.clj#defn block
   - src/clojurecraft/blaze.clj#defn lower?
+  - src/clojurecraft/pocket.clj#defn pocket?
+  - src/clojurecraft/pocket.clj#defn dig-in
+  - src/clojurecraft/pocket.clj#defn site-near
+  - src/clojurecraft/blaze.clj#defn hold-intent
+  - src/clojurecraft/blaze.clj#defn refuge-needed?
+  - test/clojurecraft/pocket_test.clj#a-pocket-has-one-opening-and-a-roof
+  - test/clojurecraft/blaze_test.clj#burning-or-outnumbered-the-bot-takes-the-pocket
+  - test/clojurecraft/blaze_test.clj#in-the-pocket-it-holds-until-the-fire-is-out-and-the-health-is-up
+  - test/clojurecraft/blaze_test.clj#fire-at-the-feet-is-left-once-the-shield-is-down
   - test/clojurecraft/blaze_test.clj#a-shield-is-raised-against-watching-blazes-and-lowered-to-walk
   - test/clojurecraft/blaze_test.clj#a-blaze-at-hand-is-fought-first
   - test/clojurecraft/blaze_test.clj#only-a-blaze-the-bot-can-reach-is-fought
@@ -162,6 +171,9 @@ A fresh fortress tunnel step onto a solid floor with nothing solid under it for 
 
 ## The shield and the fire at the feet (issue #262, after blaze-race-f and -g)
 Damage by type (the damage_type registry is alphabetical: fireball 14, in_fire 21, mob_attack 28, on_fire 31) in the two rounds, both 10/10 deaths: on_fire 7 to 45 hits a run, in_fire up to 26, fireball only 3 to 10. The burning after a fireball and standing in fire killed more than the hits. Two answers. A shield (`armour/part` gives `:offhand`; `:wear-armour` puts it in slot 40; `gear/pieces` adds `[:shield 1]`, six planks and an ingot) stops a blaze's fireball from the front: `block` is chosen after the cover when a shield is held, blazes watch, none is at hand (it is swung at: a raised shield walks at a fifth of the pace), the bot is not hurt, and the last raise ended over `block-gap` ago or a fireball is in the air. `:block` sends use-item to the offhand once, faces the nearest watcher, and is done after `block-ms`, a blaze at hand, a hurt, or no watcher; `:lower` (player-action release-use-item, status 5) comes before every other intent (`lower?`), `:player/using-item?` being bit 0x01 of the own entity's living flags byte (metadata index 8). And fire in the feet or head cell is left before anything (`burning-here?`, no longer only with the on-fire flag). Gym: `blaze-fortress-geared` holds a shield in its prereqs; the race row has none (it would have to craft its own).
+
+## Fight from a pocket (issue #262, after blaze-race-g and -i)
+Twenty deaths read from the recordings (lead's hand-off `handoff-blaze-rods.md`): three stood frozen in a fire or a blaze's reach while one intent was cut and re-issued every tick (fixed in `plan/same-choice?`), nine fought or backed off in the open while burning or under a volley, one walked into fire, seven burned or were killed by another mob after an ignition. A fire block was at the feet in only three. So the bot fights from cover. `pocket.clj`: a pocket is a cell with exactly one opening (`openings`, a side shut only when both cells beside it at the feet and the head are solid), a firm roof (`roofed?`: not gravel or sand) and a standable floor (`pocket?`); `site-near` walks outward from the feet (12 steps, 400 cells) and takes the first cell that is a pocket, else a cell it can dig into a wall beside a standable cell (`dig-in`: the two cells to dig solid and not undiggable, their other three sides shut, the roof firm, the floor solid and not lava, so digging lets nothing in); `pocket-ok?` in blaze.clj keeps it outside the spawner's volume, within its wake and in sight of it, so the blazes that come see the bot through the opening only. The site is the fact `:pocket/site` ({:pocket/cell :pocket/stand :pocket/dig}), set by the first tick of the `:pocket` intent (the dig ops of `pocket/ops` worked through `build/work-op`, then the walk in) and dropped when it stops being valid. In the pocket (`pocket/in?`): a blaze within `combat/attack-reach` of the eye is the only one fought (`fightable-blaze`; the quarry further off is not walked out to); burning or under `engage-health` it eats (`meal`) or `:hold`s (`hold-intent`, until the fire is out and the health is back to `hold-to`); the shield is raised only here (`block`). Out of it, a burning bot, a volley (`outnumbered?`) or a hurt or wary one watched (`refuge-needed?`) goes to a site first (`pocket-go`), and the camp at the spawner is taken in a pocket in place of the nook. Fire is no way: `path/classify-id` gives it `:awkward`, so no route goes through a fire block.
 
 ## Limits
 - Fireballs are blocked only with a shield held and only from the front; without one they are not dodged, and the damage-event log is where to look when they kill.

@@ -115,6 +115,9 @@
    [:player/on-fire?
     "is the bot burning: bit 0x01 of the shared flags byte (metadata index 0) the server last sent for its own entity. A fireball sets it alight for seconds, and there is no water in the Nether to put it out"
     "after the first set-entity-data of its own entity"]
+   [:pocket/site
+    "the pocket the bot fights blazes from: {:pocket/cell the cell with one opening and solid blocks round it and overhead, :pocket/stand the cell it is dug into the wall from (nil for one that exists), :pocket/dig the solid cells still to dig}. Set by the first tick of a :pocket; dropped when it stops being one"
+    "after a :pocket began"]
    [:player/using-item?
     "does the bot hold its use key: bit 0x01 of the living flags byte (metadata index 8) the server last sent for its own entity. A shield is raised while it is true with the shield in hand; a meal sets it too"
     "after the first living-flags set-entity-data of its own entity"]
@@ -430,6 +433,10 @@
    [:intent/target-pos "where a :fight last saw its target; a hunt picks the drop up there"
     "fight, while its target is seen"]
    [:intent/spawner "the remembered spawner a :camp waits by for its blazes (issue #262)" "camp"]
+   [:intent/site "the pocket (a :pocket/site map) a :pocket digs out and walks into (issue #262)"
+    "pocket"]
+   [:intent/heal-to "the health a :hold in the pocket stays until, the fire out (issue #262)"
+    "hold"]
    [:intent/blazes
     "the blazes within fight range when a :camp began, or watching when a :rest began; a new one ends it"
     "camp, rest"]

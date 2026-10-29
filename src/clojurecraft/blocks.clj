@@ -265,6 +265,9 @@
 
 (def water-states "Every state of water." (states-where (fn [[n]] (= n :water))))
 (def lava-states "Every state of lava." (states-where (fn [[n]] (= n :lava))))
+(def fire-states
+  "Every state of fire and soul fire: a cell that burns whoever stands in it (in_fire, issue #262)."
+  (states-where (fn [[n]] (contains? #{:fire :soul_fire} n))))
 (def waterlogged-types
   "Definition types whose blocks are always waterlogged: full water to the physics."
   #{:waterlogged_transparent :bubble_column :kelp :kelp_plant :seagrass :tall_seagrass})
