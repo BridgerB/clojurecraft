@@ -1387,8 +1387,6 @@
   (wall-toward world (:entity/pos e) [0 1]))
 
 (def swarm-radius 8.0)                  ; blocks from the feet within which a monster counts toward a swarm
-(def ranged-radius 24.0)                ; blocks within which a ranged one counts: a crossbow's or a bow's reach
-(def ranged #{:piglin :skeleton :stray :bogged :blaze :pillager}) ; monsters that shoot: the burrow's seal is cover from them only closed at the head too
 
 (defn swarm
   "{eid entity} of the monsters (blocks/mobs category) alive within swarm-radius of pos (the feet when
@@ -1404,15 +1402,108 @@
                         (not= :enderman (entity/kind e))
                         (= :monster (:category (blocks/mobs (entity/kind e))))
                         (<= (physics/distance pos (:entity/pos e))
-                            (if (contains? ranged (entity/kind e)) ranged-radius swarm-radius)))))
+                            (or (:range (mob/kinds (entity/kind e))) swarm-radius)))))
          (:world/entities world))))
 
+(defn shot-at?
+  "Is a ghast within its :range (mob/kinds) with a clear line from the eye (combat/seen?)? Never
+   fought (it hovers out of the sword's reach); only covered from. Gym plan run 40839050567 job 6
+   (issue #263, pearls-12): five fireballs in 67 s of digging a staircase down in the open, then
+   burned to death."
+  [world]
+  (boolean (some (fn [[_ e]] (and (= :ghast (entity/kind e)) (combat/seen? world e)))
+                 (swarm world))))
+
 (defn swarmed?
-  "Are two or more monsters within swarm-radius (swarm), or one while health is under danger-health?
-   A lone one over that health is met by the fight rules (a magma cube is small and slow)."
+  "Are two or more monsters within their reach (swarm), a ghast in sight (shot-at?), or one monster
+   while health is under danger-health? A lone one over that health is met by the fight rules (a
+   magma cube is small and slow)."
   [world]
   (let [n (count (swarm world))]
-    (boolean (or (>= n 2) (and (= 1 n) (< (:player/health world 20.0) danger-health))))))
+    (boolean
+     (or (>= n 2) (and (= 1 n) (< (:player/health world 20.0) danger-health)) (shot-at? world)))))
+
+(def neighbours [[1 0 0] [-1 0 0] [0 0 1] [0 0 -1] [0 1 0] [0 -1 0]])
+
+(defn line-cell
+  "The first cell from the eye toward entity e's aim, a block to six along the line, that is open,
+   neither the feet's nor the head's, and has a solid neighbour to lay a block against (the walls
+   of a stair cut included), or nil. A fireball travels that line: gym plan run 40839050567 job 6
+   (issue #263) was shot five times down an open diagonal stair cut."
+  [world e]
+  (let [eye (game/eye world)
+        aim (combat/aim e)
+        d (physics/distance eye aim)
+        [fx fy fz] (intent/feet world)
+        own #{[fx fy fz] [fx (inc fy) fz]}]
+    (when (pos? d)
+      (some (fn [t]
+              (let [c (cell (mapv (fn [a b] (+ a (* t (/ (- b a) d)))) eye aim))]
+                (when (and (not (own c))
+                           (not (solid-at? world c))
+                           (some #(solid-at? world (mapv + c %)) neighbours))
+                  c)))
+            (range 1.0 (min 6.0 d) 0.5)))))
+
+(defn hide-cell
+  "A cell beside the feet that can be stood in (floor under it, open itself and over it) and from
+   whose eye the line to entity e's aim is blocked (combat/clear?), or nil: where a walk takes the
+   bot out of a ghast's sight."
+  [world e]
+  (let [[fx fy fz] (intent/feet world)]
+    (some (fn [[dx dz]]
+            (let [c [(+ fx dx) fy (+ fz dz)]
+                  eye [(+ (first c) 0.5) (+ fy 1.62) (+ (last c) 0.5)]]
+              (when (and (solid-at? world [(first c) (dec fy) (last c)])
+                         (not (solid-at? world c))
+                         (not (solid-at? world [(first c) (inc fy) (last c)]))
+                         (not (combat/clear? world eye (combat/aim e))))
+                c)))
+          [[1 0] [-1 0] [0 1] [0 -1]])))
+
+(defn dig-away
+  "A :dig of the first solid cell, the feet's level and then the head's, on the side of the feet
+   away from entity e, with a pickaxe held, or nil: a hole to stand in out of its sight."
+  [world e]
+  (when (pickaxe? world)
+    (let [[fx fy fz] (intent/feet world)
+          [ex _ ez] (:entity/pos e)
+          dx (- (+ fx 0.5) ex)
+          dz (- (+ fz 0.5) ez)
+          [hx hz] (if (>= (Math/abs dx) (Math/abs dz))
+                    [(long (math/signum dx)) 0]
+                    [0 (long (math/signum dz))])]
+      (some (fn [dy]
+              (let [c [(+ fx hx) (+ fy dy) (+ fz hz)]]
+                (when (solid-at? world c)
+                  {:intent/kind :dig :intent/target c :intent/for :pearls})))
+            [0 1]))))
+
+(defn cover-from
+  "The intent that covers the bot from the swarm: from a ghast in sight (shot-at?, never fought,
+   never out-ranged) a walk to a cell beside the feet out of its sight (hide-cell), else a block of
+   the filler held on the line from the eye to it (line-cell), else a dig into the solid side away
+   from it (dig-away) to stand in; from the others what combat/cover gives for the nearest (meal, a
+   block between, a pillar, a nook dug under the feet). Nil when it only waits (cover's :plan/wait
+   ends the plan) or nothing can be done."
+  [world]
+  (if (shot-at? world)
+    (when-let [[_ e] (entity/nearest
+                      (into {} (filter (fn [[_ e]] (= :ghast (entity/kind e)))) (swarm world))
+                      (:player/pos world))]
+      (let [item (stairs/filler world 1)
+            hide (hide-cell world e)
+            line (when item (line-cell world e))]
+        (cond hide {:intent/kind :walk :intent/target hide :intent/for :pearls :intent/wall? true}
+              line
+              {:intent/kind :place
+               :intent/item item
+               :intent/cell line
+               :intent/for :pearls
+               :intent/wall? true}
+              :else (dig-away world e))))
+    (when-let [[_ e] (entity/nearest (swarm world) (:player/pos world))]
+      (let [c (combat/cover world e)] (when (:intent/kind c) (assoc c :intent/for :pearls))))))
 
 (defn wandering?
   "Has the hunt stood wander-lookouts or more :lookout intents with no walk ended since (stuck?
@@ -1575,7 +1666,7 @@
         home (shelter world)
         in? (and home (= home (intent/feet world)))
         at-end? (= (:pearls/shelter world) (intent/feet world))
-        [tid _] (threat world)
+        [tid te] (threat world)
         [sid _] (struck-by world)
         swarmed? (swarmed? world)
         angry-close? (and ce (<= (physics/distance pos (:entity/pos ce)) strike-range))
@@ -1606,12 +1697,15 @@
     (cond
       (and home (not in?) (or ce near? hurt? tid aid swarmed?) (intent/routable? world way-home))
       way-home
+      (and swarmed? (not in?) (nil? home) (cover-from world)) (cover-from world)
       (and swarmed? in?)
       (or (when mouth (wall-toward world (physics/centre mouth) [0 1]))
           {:intent/kind :lookout :intent/for :pearls})
       (and hurt? in?) (or meal {:intent/kind :lookout :intent/for :pearls})
       (and cornered? hurt? (not in?) (or meal (wall-off world e))) (or meal (wall-off world e))
       (and near? hurt? (not in?)) {:intent/kind :back-off :intent/target eid :intent/for :pearls}
+      (and hurt? (not in?) tid (combat/back-off-pointless? world te) (cover-from world))
+      (cover-from world)
       (and hurt? (not in?) tid) {:intent/kind :back-off :intent/target tid :intent/for :pearls}
       (and hurt? (not in?)) (or meal {:intent/kind :lookout :intent/for :pearls})
       (and in? fight-id)
@@ -1621,6 +1715,8 @@
        :intent/yield? true
        :intent/for :pearls}
       (and sid (not hurt?) (not in?)) {:intent/kind :fight :intent/target sid :intent/for :pearls}
+      (and tid (not hurt?) (not in?) (nil? home) (not swarmed?))
+      {:intent/kind :fight :intent/target tid :intent/for :pearls}
       (and at-end? bid (blocked-out? world))
       (or (cut-out world) {:intent/kind :lookout :intent/for :pearls})
       (and near?
@@ -1760,7 +1856,10 @@
            (not (:intent/wall? i))
            (not (and (= :walk (:intent/kind i)) (= (:intent/target i) (:pearls/shelter world))))
            (not= (:pearls/shelter world) (intent/feet world))
-           (or (beset? world) (some? (first (struck-by world))))
+           (or (beset? world)
+               (some? (first (struck-by world)))
+               (shot-at? world)
+               (and (= :lookout (:intent/kind i)) (some? (first (threat world)))))
            (not (and (= :lookout (:intent/kind i))
                      (= :lookout (:intent/kind (plan/next-intent world goal plan/goals))))))))
 

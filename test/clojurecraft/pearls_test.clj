@@ -2278,3 +2278,53 @@
     (is (not= [:walk [3 64 8]]
               ((juxt :intent/kind :intent/target) (plan/next-intent cube row plan/goals)))
         "a magma cube at the mouth: the walk is not planned")))
+
+(def tunnel
+  "A tunnel two high cut east through the stone from x 8 to 13 at y 60 and 61, opening into a hall
+   (y 60 to 64) at x 14 and 15: the open line a stair cut gave a ghast in gym plan run 40839050567
+   job 6 (issue #263, pearls-12), the bot at [2229 96 2686] and the ghast at [2253 83 2703]."
+  (into {}
+        (concat (for [x (range 8 14) y [60 61]] [[x y 8] air])
+                (for [x [14 15] y (range 60 65)] [[x y 8] air]))))
+
+(deftest a-ghast-in-sight-is-covered-from-never-dug-under
+  (let [ghast (mob :ghast [15.5 60.0 8.5])
+        held {0 (item :iron_sword 1) 1 (item :iron_pickaxe 1) 2 (item :cobblestone 64)}
+        at (fn [entities blocks]
+             (-> (standing entities blocks)
+                 (assoc :player/pos [8.5 60.0 8.5] :player/inventory held)))
+        down-the-cut (at {7 ghast} tunnel)
+        stairs {:intent/kind :stairs-down
+                :intent/status :active
+                :intent/goal :ender-pearls
+                :intent/for :pearls}]
+    (is (pearls/shot-at? down-the-cut) "in sight down the tunnel")
+    (is (pearls/swarmed? down-the-cut))
+    (is (not (pearls/shot-at? (at {7 (mob :ghast [15.5 60.0 8.5])} {}))) "in solid stone: no line")
+    (is (plan/interrupts? down-the-cut row stairs) "a staircase is cut")
+    (is (nil? (pearls/hide-cell down-the-cut (get-in down-the-cut [:world/entities 7])))
+        "a tunnel two high with straight walls has no cell out of the line beside the feet")
+    (is (= {:intent/kind :place
+            :intent/item :cobblestone
+            :intent/cell [9 61 8]
+            :intent/for :pearls
+            :intent/wall? true}
+           (plan/next-intent down-the-cut row plan/goals))
+        "a block on the line, the first open cell with a wall beside it")
+    (testing "with no filler held, a hole is dug on the side away from it"
+      (let [no-filler (assoc down-the-cut :player/inventory {0 (item :iron_pickaxe 1)})]
+        (is (= {:intent/kind :dig :intent/target [7 60 8] :intent/for :pearls}
+               (pearls/cover-from no-filler)))))))
+
+(deftest a-zombie-at-hand-is-fought-at-full-health-and-never-looked-out-from
+  ;; the same plan run, after the death (overworld, zombie 4548): :fight, then :lookout and
+  ;; :back-off alternating every 0.4 to 2 s for 16 s, 86 back-off ticks, then death
+  (let [zombie (mob :zombie [11.5 64.0 8.5])
+        w (standing {7 zombie})
+        lookout {:intent/kind :lookout :intent/for :pearls :intent/goal :ender-pearls}]
+    (is (= {:intent/kind :fight :intent/target 7 :intent/for :pearls}
+           (plan/next-intent w row plan/goals))
+        "at full health with no burrow: fought")
+    (is (= :back-off (:intent/kind (plan/next-intent (assoc w :player/health 8.0) row plan/goals)))
+        "hurt: backed away from")
+    (is (plan/interrupts? w row lookout) "a lookout does not run with it at hand")))
