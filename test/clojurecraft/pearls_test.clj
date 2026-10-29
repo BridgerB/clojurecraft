@@ -2423,3 +2423,32 @@
     (is (pearls/crowded? w) "the calm one crowds the mouth")
     (is (nil? (pearls/vantage w (pearls/endermen w pearls/seek-radius))))
     (is (not= :walk (:intent/kind i)) (pr-str i))))
+
+(deftest a-fight-cut-three-times-in-ten-minutes-is-not-planned-again
+  ;; gym plan run 40860669235 job 3 (issue #263, pearls-12): :fight 65 held twelve seconds, cut,
+  ;; and planned again after thirty, every 47 seconds for 286 minutes, 80 of them in a fight with
+  ;; thirty-three attacks sent: an angry enderman six blocks off and three below that never came
+  (let [far (assoc (enderman [8.5 61.0 14.5]) :entity/creepy? true)
+        near (assoc far :entity/pos [10.5 64.0 8.5])
+        cut (fn [w at id]
+              (memory/remember-intention (assoc w :time/now at)
+                                         {:intent/id id :intent/kind :fight :intent/target 7}
+                                         :abandoned))
+        base (standing {7 far})
+        w (-> base
+              (cut 0 1)
+              (cut 50000 2)
+              (cut 100000 3)
+              (assoc :time/now 140000))]
+    (is (pearls/unfightable? w 7 far)
+        "three cuts in ten minutes, the last long past fight-retry-ms")
+    (is (not (pearls/unfightable? w 7 near)) "in reach, it is fought")
+    (is (not (pearls/unfightable? (-> base
+                                      (cut 0 1)
+                                      (cut 50000 2)
+                                      (assoc :time/now 140000))
+                                  7
+                                  far))
+        "two cuts: tried again")
+    (is (not (pearls/unfightable? (assoc w :time/now (+ 100000 pearls/fight-giveup-ms 1)) 7 far))
+        "ten minutes on, tried again")))

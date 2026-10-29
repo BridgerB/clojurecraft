@@ -1306,6 +1306,8 @@
 (def loiter-radius 8)                  ; blocks on the plane (path/octile) within which twelve walks' ends are one place
 (def wander-reach 64)                  ; blocks a wander looks for ground to walk to, on each of the headings
 (def hold-patience-ms 12000)             ; ms a held fight waits with its target past strike-range before the hunt plans again (combat/hold-timeout-ms is a minute)
+(def fight-giveups 3)                   ; fights on one enderman cut or failed within fight-giveup-ms, after which it is fought no more until it is in reach
+(def fight-giveup-ms 600000)           ; ms (ten minutes) over which those fights are counted
 (def fight-retry-ms 30000)             ; ms after a fight on an enderman failed that it is not fought again until within the sword's reach
 
 (def struck-health 14.0)                ; health under which an enderman at hand has landed a hit (7 on Normal off 20): fought back, fought out or not
@@ -1325,8 +1327,13 @@
   (or (fought-out? world eid)
       (combat/given-up? world eid e)
       (boolean (when-let [at (memory/last-failed-at world :fight eid)]
-                 (and (< (- (:time/now world 0) at) fight-retry-ms)
-                      (not (combat/in-reach? world e)))))))
+                 (and (not (combat/in-reach? world e))
+                      (or (< (- (:time/now world 0) at) fight-retry-ms)
+                          (>= (memory/failed-count-since world
+                                                         :fight
+                                                         eid
+                                                         (- (:time/now world 0) fight-giveup-ms))
+                              fight-giveups)))))))
 
 (defn struck-by
   "[eid e] of the nearest angry enderman (entity/creepy?) within the sword's reach (combat/in-reach?)

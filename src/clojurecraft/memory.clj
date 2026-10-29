@@ -375,6 +375,20 @@
        k
        t))
 
+(defn failed-count-since
+  "How many :failed or :abandoned facts of an intention of kind k on target t are stamped at ms
+   since or later: the fights on one enderman the hunt has cut or failed lately (pearls/
+   unfightable?)."
+  [world k t since]
+  (or (d/q '[:find (count ?e) . :in $ ?k ?t ?since :where [?e :intention/kind ?k]
+             [?e :intention/event ?ev] [(contains? #{:abandoned :failed} ?ev)]
+             [?e :intention/target ?t] [?e :intention/at ?at] [(>= ?at ?since)]]
+           (:world/facts world)
+           k
+           t
+           since)
+      0))
+
 (defn arrived
   "The set of targets of every walk that arrived (the :done facts of :walk intentions): the
    cells the bot has already walked to. A walk back to one changes nothing the first did not
