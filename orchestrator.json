@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-29T21:55:04.681Z",
+  "at" : "2026-10-29T21:56:10.323Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -46,6 +46,11 @@
     "number" : 613,
     "title" : "Bot stops at flint-and-steel: no-support",
     "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 538,
+    "title" : "Bot stops at fortress: blocked",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 612,
@@ -96,11 +101,6 @@
     "number" : 579,
     "title" : "Bot stops at ender-pearls: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
-    "number" : 538,
-    "title" : "Bot stops at fortress: blocked",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 461,
@@ -207,11 +207,11 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 579,
+    "issue" : 538,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 538,
+    "issue" : 579,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
