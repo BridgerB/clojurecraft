@@ -223,6 +223,8 @@ A provoke needs `provoke-line` health: `provoke-margin` (3) over two hits of `en
 
 A running intent is cut by a threat only when the hunt would choose a different one (`same-choice?`), cover from a ghast in sight comes before the walk home, and twelve walks that all ended within eight blocks of the feet (`loitering?`) wander like five minutes of lookouts (gym runs 40860669235 job 5 and 40839050567 jobs 1 to 4).
 
+A fight cut or failed `fight-giveups` (3) times within ten minutes is not planned again until the enderman is in reach, a loiter wanders whatever is tracked, and the walk out of a ghast's sight is a walk `:for :cover`, which ends only centred in its cell (gym run 40905321229 job 6).
+
 ## The burrow
 Gym batch pearls-263a (plan run 38892130785) put three live endermen round the bot in iron helmet and chestplate: five trials, five deaths. A replay of one (probe 38893413043) showed the hits landing at 5.74 a second, the sword's sweep pulling a second enderman in, and a break-off with nowhere to go. A sword needs seven hits against forty health; the open fight loses. The game says where it cannot lose: a mob's melee is its box grown 0.83 sideways and not at all up or down (`Mob.getAttackBoundingBox`, `isWithinMeleeAttackRange`, probe 38893918055), and an enderman needs three free cells to stand. `shelter?` is that rule over the terrain: the bot's own two cells open, and no cell an enderman could stand in (`stand?`: a floor, three open cells) in the nine columns round it, at the heights whose body would overlap the bot's (feet two under to one over).
 

@@ -2460,3 +2460,18 @@
     (is (not (pearls/wandering? (looked (wide (burrowed [8.5 61.0 8.5] {7 angry}))
                                         pearls/wander-lookouts)))
         "lookouts alone, with one routable: as before, it stays")))
+
+(deftest a-walk-out-of-a-ghasts-sight-ends-centred-in-the-cell
+  ;; gym plan run 40905321229 job 6 (issue #263, pearls-12): :walk [2241 83 2705], one cell from the
+  ;; feet, planned 45 times in 2.5 s: a walk for :pearls is over within reach of its target, so it
+  ;; ended where it began and was planned again
+  (let [wall (into {} (for [y (range 64 70)] [[11 y 9] stone]))
+        w (-> (standing {7 (mob :ghast [14.5 66.0 8.5])} wall)
+              (assoc :player/inventory {0 (item :iron_sword 1)}))
+        i (pearls/cover-from w)]
+    (is (pearls/shot-at? w))
+    (is (= [8 64 9] (pearls/hide-cell w (get-in w [:world/entities 7])))
+        "out of its line, beside the feet")
+    (is (= {:intent/kind :walk :intent/target [8 64 9] :intent/for :cover :intent/wall? true} i))
+    (is (not (intent/arrived? w i 1.0)) "from the cell beside it, a walk for :cover is not over")
+    (is (intent/arrived? (assoc w :player/pos [8.5 64.0 9.5]) i 0.0) "centred in the cell it is")))

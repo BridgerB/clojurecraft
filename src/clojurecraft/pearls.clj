@@ -1496,7 +1496,9 @@
 
 (defn cover-from
   "The intent that covers the bot from the swarm: from a ghast in sight (shot-at?, never fought,
-   never out-ranged) a walk to a cell beside the feet out of its sight (hide-cell), else a block of
+   never out-ranged) a walk to a cell beside the feet out of its sight (hide-cell; :intent/for
+   :cover, so the walk ends only centred in the cell: for :pearls it ended at once one cell
+   short and was planned again every 50 ms, gym plan run 40905321229 job 6), else a block of
    the filler held on the line from the eye to it (line-cell), else a dig into the solid side away
    from it (dig-away) to stand in; from the others what combat/cover gives for the nearest (meal, a
    block between, a pillar, a nook dug under the feet). Nil when it only waits (cover's :plan/wait
@@ -1509,7 +1511,7 @@
       (let [item (stairs/filler world 1)
             hide (hide-cell world e)
             line (when item (line-cell world e))]
-        (cond hide {:intent/kind :walk :intent/target hide :intent/for :pearls :intent/wall? true}
+        (cond hide {:intent/kind :walk :intent/target hide :intent/for :cover :intent/wall? true}
               line
               {:intent/kind :place
                :intent/item item
