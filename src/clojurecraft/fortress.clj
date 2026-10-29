@@ -16,6 +16,7 @@
             [clojurecraft.dimension :as dimension]
             [clojurecraft.eat :as eat]
             [clojurecraft.hunger :as hunger]
+            [clojurecraft.hunt :as hunt]
             [clojurecraft.intent :as intent]
             [clojurecraft.make :as make]
             [clojurecraft.memory :as memory]
@@ -870,15 +871,25 @@
       (not (contains? (:plan/reached world) :nether))
       (empty? (plan/undone world (filter #(= dimension/nether (:goal/dimension %)) plan/goals)))))
 
+(defn fed-for-nether?
+  "Does the bot hold hunt/entry-food-min edible items? Sim R1/1 (probe 40795259629) went back
+   through the portal with none, and the hunt row never ran in the forty minutes of the build that
+   took it there (foraging? is never out of a :build): the hunt comes first, so the build is not
+   started until the food is held."
+  [world]
+  (>= (hunt/edible-held world) hunt/entry-food-min))
+
 (defmethod plan/next-intent :return-nether
   ;; not ready: a rest while the food heals (food at the healing level), else the wait named for
   ;; what is missing, :no-food-to-return, after the meal and the hunt, always rows that come
-  ;; first, found nothing to eat
+  ;; first, found nothing to eat; healthy but without food for the Nether, the same wait
   [world goal table]
   (cond (plan/done-by world goal) nil
-        (ready-for-nether? world) (plan/next-intent world (assoc goal :goal/plan :build) table)
-        (>= (:player/food world 20) hunger/heal-level) {:intent/kind :rest}
-        (eat/scrap-held world) {:intent/kind :eat :intent/item (eat/scrap-held world)}
+        (not (ready-for-nether? world))
+        (cond (>= (:player/food world 20) hunger/heal-level) {:intent/kind :rest}
+              (eat/scrap-held world) {:intent/kind :eat :intent/item (eat/scrap-held world)}
+              :else {:plan/wait :no-food-to-return})
+        (fed-for-nether? world) (plan/next-intent world (assoc goal :goal/plan :build) table)
         :else {:plan/wait :no-food-to-return}))
 
 (defn back-target

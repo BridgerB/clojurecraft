@@ -177,9 +177,18 @@
       (let [w (back {} {} 8.0 14)]
         (is (= {:plan/wait :no-food-to-return}
                (plan/next-intent w (row :return-nether) plan/goals)))))
-    (testing "healed: the way back is the build's"
+    (testing "healed and fed for the Nether: the way back is the build's"
+      (is (fortress/fed-for-nether? (back {3 (item :bread 4)} {} 19.0 20)))
       (is (not= {:plan/wait :no-food-to-return}
-                (plan/next-intent (back {} {} 19.0 20) (row :return-nether) plan/goals))))))
+                (plan/next-intent (back {3 (item :bread 4)} {} 19.0 20)
+                                  (row :return-nether)
+                                  plan/goals))))
+    (testing "healed with fewer than four foods: the wait, after the hunt found none"
+      (is (not (fortress/fed-for-nether? (back {3 (item :bread 3)} {} 19.0 20))))
+      (is (= {:plan/wait :no-food-to-return}
+             (plan/next-intent (back {3 (item :bread 3)} {} 19.0 20)
+                               (row :return-nether)
+                               plan/goals))))))
 
 (deftest raw-meat-is-cooked-after-the-portal-kit
   (let [w (standing

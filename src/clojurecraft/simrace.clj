@@ -164,9 +164,11 @@
                                 (= :blaze)))
         every (if (= dimension/nether (:player/dimension after)) sample-ms overworld-sample-ms)
         sample? (not= (quot (:time/now before 0) every) (quot (:time/now after 0) every))
+        drop? (>= (- (hunt/edible-held before) (hunt/edible-held after)) 2)
         hit? (and (= dimension/nether (:player/dimension after))
                   (<= 2.0 (- (:player/health before 20.0) (:player/health after 20.0))))
         what (cond hit? :hit
+                   drop? :edible-drop
                    (= ib ia)
                    (cond (not= (:player/dimension before) (:player/dimension after)) :dimension
                          sample? :sample)
