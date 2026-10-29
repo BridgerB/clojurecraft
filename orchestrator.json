@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-29T15:41:07.967Z",
+  "at" : "2026-10-29T15:44:33.492Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -23,10 +23,20 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
+    "number" : 526,
+    "title" : "Bot stops at blaze-rods: blocked",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
     "number" : 151,
     "title" : "Bot stops at flint-and-steel: not-picked-up",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : true
+  }, {
+    "number" : 611,
+    "title" : "Bot stops at portal-kit: no-support",
+    "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
   }, {
     "number" : 605,
     "title" : "Bot stops at stone-pickaxe: boxed",
@@ -38,11 +48,6 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 526,
-    "title" : "Bot stops at blaze-rods: blocked",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 156,
     "title" : "Bot stops at portal-kit: stuck",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
@@ -51,11 +56,6 @@
     "number" : 71,
     "title" : "Bot stops at portal-kit: boxed",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
-    "number" : 611,
-    "title" : "Bot stops at portal-kit: no-support",
-    "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
     "number" : 612,
@@ -200,15 +200,15 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 526,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
     "issue" : 151,
     "move" : "wait",
     "why" : "session starting"
   }, {
     "issue" : 531,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
-    "issue" : 526,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
