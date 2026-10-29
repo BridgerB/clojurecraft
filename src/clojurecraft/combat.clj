@@ -723,9 +723,24 @@
 (def pillar-fill 3)                   ; filler a pillar of three needs
 (def pillar-height 3)                 ; blocks a pillar under a hurt bot rises
 
+(defn occupied?
+  "Does an entity (any in :world/entities) stand in cell [cx cy cz]: its feet within 0.8 of the
+   cell's middle on the plane and from a block under it to a block and a half over? The server
+   refuses a block placed into a cell an entity's box is in."
+  [world [cx cy cz]]
+  (boolean (some (fn [e]
+                   (let [[ex ey ez] (:entity/pos e)]
+                     (and (< (abs (- ex (+ cx 0.5))) 0.8)
+                          (< (abs (- ez (+ cz 0.5))) 0.8)
+                          (< (- cy 1.0) ey (+ cy 1.5)))))
+                 (vals (:world/entities world)))))
+
 (defn wall-cell
-  "The first cell clear (path/classify) of the two beside the feet toward entity e, at the feet's
-   height then the eye's, or nil when both are not clear: where a block goes between the bot and e."
+  "The first cell clear (path/classify) and unoccupied (occupied?) of the two beside the feet
+   toward entity e, at the feet's height then the eye's, or nil when neither is: where a block
+   goes between the bot and e. Gym chain-w16 run 3 (plan run 40863839525) laid a block three times
+   on the cell its silverfish stood in, the server refused each (`intent :place failed: :rejected
+   (attempt 3 of 3)`), and the plan failed."
   [world e]
   (let [[fx fy fz] (intent/feet world)
         [px _ pz] (:player/pos world)
@@ -733,7 +748,7 @@
         dx (- ex px)
         dz (- ez pz)
         [sx sz] (if (>= (abs dx) (abs dz)) [(long (math/signum dx)) 0] [0 (long (math/signum dz))])]
-    (first (filter #(= :clear (path/classify world %))
+    (first (filter #(and (= :clear (path/classify world %)) (not (occupied? world %)))
                    [[(+ fx sx) fy (+ fz sz)] [(+ fx sx) (inc fy) (+ fz sz)]]))))
 
 (defn nook-cell

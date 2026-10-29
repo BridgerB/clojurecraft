@@ -75,6 +75,7 @@
 (def tunnel-y 30)                     ; feet height a tunnel toward the crossing goes down to: under lakes and seas, where strongholds lie
 (def hop-reach 32)                    ; blocks a walk toward somewhere far goes at a time
 (def hop-rise 12)                     ; blocks over and under the feet a hop's end is looked for in its column
+(def hop-gain 2.0)                    ; blocks nearer the far point a hop must end than it began: a turned hop that ends no nearer is a step round a lake, back and forth
 (def hop-turns [0.0 30.0 -30.0 60.0 -60.0 90.0 -90.0]) ; degrees off the way a hop may turn when straight on has no route
 (def downhill-reaches [32 16 8])      ; blocks toward the frame a walk down the surface goes at a time, the farther first: a slope steeper than a stair's one in one is walked, never staired into the air
 (def downhill-drop 4)                 ; blocks lower than the feet such a walk must end: the ground's bumps are no slope
@@ -373,11 +374,20 @@
   [world x z y]
   (some #(when (path/standable? world [x % z]) [x % z]) (range (+ y hop-rise) (- y hop-rise 1) -1)))
 
+(defn progress?
+  "Does cell [cx _ cz] lie at least gain blocks nearer the point [x z] than the feet [fx _ fz] do,
+   on the plane?"
+  [[fx _ fz] [cx _ cz] [x z] gain]
+  (< (norm [(- x cx) (- z cz)]) (- (norm [(- x fx) (- z fz)]) gain)))
+
 (defn hop
   "A walk toward the far point [x z]: to a cell (stand-in) hop-reach blocks along the way, or
    nearer when the point is, that a route reaches (intent/routable?); straight on first, then
-   turned by each of hop-turns, never to a cell a walk failed at (:plan/blacklist). nil when none
-   is, or when the feet are there already. A walk to somewhere hundreds of blocks off is beyond a
+   turned by each of hop-turns, never to a cell a walk failed at (:plan/blacklist), and none that
+   ends less than hop-gain nearer the point (progress?: gym chain-w16 run 2 walked 67 times in 11
+   minutes between [13127 66 16728] and [13101 64 16752], each hop ending where only a turned one
+   had a route, back to where the other began, and the tunnel or swim after them never came). nil
+   when none is, or when the feet are there already. A walk to somewhere hundreds of blocks off is beyond a
    route's node budget, so it goes a hop at a time, the planner choosing the next from where the
    last ended. Gym batch stronghold-265a (plan run 38927120252) run 3 walked at one cell twelve
    times, each walk failing :no-path, the same hop chosen again after each."
@@ -396,6 +406,7 @@
                     i (when c {:intent/kind :walk :intent/target c :intent/for :stronghold})]
                 (when (and i
                            (not= c [fx fy fz])
+                           (progress? [fx fy fz] c [x z] hop-gain)
                            (not (contains? (:plan/blacklist world #{}) c))
                            (intent/routable? world (assoc i :intent/max-nodes 400)))
                   i)))

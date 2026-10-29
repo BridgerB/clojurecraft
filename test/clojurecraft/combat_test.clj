@@ -659,3 +659,13 @@
                                defend
                                plan/goals))
           "the silverfish that bit last is answered, not the nearer zombie"))))
+
+(deftest a-block-is-never-laid-in-the-cell-the-target-stands-in
+  ;; gym chain-w16 run 3 (plan run 40863839525): `intent :place` three times at 12:12:32-35, each
+  ;; `failed: :rejected`, on the cell above the portal room's spawner where its silverfish stood
+  (let [fish (mob :silverfish [9.5 64.0 8.5] 8.0)
+        w (assoc (standing {7 fish}) :player/health 3.0 :player/food 20)]
+    (is (combat/occupied? w [9 64 8]) "the silverfish is in the cell beside the feet")
+    (is (not (combat/occupied? w [10 64 8])))
+    (is (= [9 65 8] (combat/wall-cell w fish))
+        "the feet's height is taken, so the cell over it is the wall")))

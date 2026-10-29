@@ -11,7 +11,6 @@
    neighbour behind a wall cannot be capped before the wall is dug, and Nether lava flows a block
    every half second), else another step is tried: up or down, the other axis, sideways."
   (:require [clojure.math :as math]
-            [clojure.string :as str]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.build :as build]
             [clojurecraft.dimension :as dimension]
@@ -143,8 +142,7 @@
    lets a silverfish out, which calls the others out of their blocks: gym chain-w13 run 4 (job 4,
    plan run 40798605016) dug one in a stronghold's wall and was bitten from 9.3 health to 0."
   [world cell]
-  (let [n (blocks/name-of (terrain/block-at world cell))]
-    (boolean (and n (str/starts-with? (name n) "infested_")))))
+  (contains? blocks/infested-states (terrain/block-at world cell)))
 
 (defn safe-but-lava?
   "Can the step from feet by move be taken but for the lava beside the cells it opens (safe?

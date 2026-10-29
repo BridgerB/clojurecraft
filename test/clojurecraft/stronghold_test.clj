@@ -699,3 +699,15 @@
     (is (= frame (sim/block-at sim [40 40 8])) "the frame never dug")
     (is (not-any? #(= cobblestone (sim/block-at sim %)) over-slope) "no bridge into the air")
     (is (empty? (:sim/violations sim)))))
+
+(deftest a-hop-must-end-nearer-the-far-point
+  ;; gym chain-w16 run 2 (plan run 40863839525, job 2): `intent :walk [13127 66 16728]`, then
+  ;; `[13101 64 16752]`, then back, 67 times in 11 minutes with no throw between, the crossing
+  ;; 250 blocks west: from the first a turned hop ended at the second (19 nearer), from the second
+  ;; a turned hop ended at the first (19 farther)
+  (let [far [12864 16672]]
+    (is (stronghold/progress? [13127 66 16728] [13101 64 16752] far 2.0) "the first hop: nearer")
+    (is (not (stronghold/progress? [13101 64 16752] [13127 66 16728] far 2.0))
+        "back again: farther, so no hop, and the way falls through to the swim or the tunnel")
+    (is (not (stronghold/progress? [0 64 0] [1 64 0] [100 0] 2.0)) "a step of one is no progress")
+    (is (stronghold/progress? [0 64 0] [32 64 0] [100 0] 2.0))))
