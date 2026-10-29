@@ -1,0 +1,20 @@
+;; issue #10, batch w19: the first blow sends the bot out of the head's reach (a0ea3f829), the
+;; bed kill measured (dragon-beds: Resistance V) and real (dragon-beds-real: walled from the blast);
+;; dragon 6, each bed row 3
+{:plans/label "chain-w19"
+ :plans/jobs 4
+ :plans/issue 10
+ :plans/experiments
+ [{:exp/name "dragon" :exp/kind :gym :exp/goal "dragon" :exp/runs 6 :exp/bots 1 :exp/est-s 1600}
+  {:exp/name "dragon-beds"
+   :exp/kind :gym
+   :exp/goal "dragon-beds"
+   :exp/runs 3
+   :exp/bots 1
+   :exp/est-s 1600}
+  {:exp/name "dragon-beds-real"
+   :exp/kind :gym
+   :exp/goal "dragon-beds-real"
+   :exp/runs 3
+   :exp/bots 1
+   :exp/est-s 1600}]}

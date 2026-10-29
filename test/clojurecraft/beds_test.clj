@@ -37,3 +37,10 @@
     (is (= :dragon (:gym/goal row)))
     (is (some #(= "minecraft:white_bed 6" %) (:gym/prereqs row)))
     (is (some #(re-find #"resistance" %) (:gym/summon row)))))
+
+(deftest a-wall-between-takes-the-blast-down-to-a-point
+  (is (< 30.0 (beds/expected-damage 4.5 0)) "in the open at 4.5 blocks: a death")
+  (is (< (beds/expected-damage 4.5 1) (beds/expected-damage 4.5 0)) "one block: less")
+  (is (== 1.0 (beds/expected-damage 4.5 2)) "the feet's and the eye's cells: a point")
+  (is (== 1.0 (beds/expected-damage 4.5 5)) "more than two count as two")
+  (is (== (beds/expected-damage 4.5 0) (beds/expected-damage 4.5 -1)) "never less than none"))

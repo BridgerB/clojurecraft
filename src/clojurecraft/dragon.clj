@@ -51,10 +51,12 @@
             [clojurecraft.inventory :as inventory]
             [clojurecraft.mob :as mob]
             [clojurecraft.packet :as packet]
+            [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
             [clojurecraft.place :as place]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
+            [clojurecraft.stairs :as stairs]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.window :as window]))
 
@@ -954,13 +956,28 @@
           food {:intent/kind :eat :intent/item food}
           :else {:plan/wait :low-health})))
 
+(defn bed-wall
+  "The two cells, at the feet's height and the eye's, beside stand cell [x y z] toward site cell
+   [sx _ sz] along the axis with the farther way to go: where the blocks go that stand between the
+   bot and the bed, as a vector of cells."
+  [[x y z] [sx _ sz]]
+  (let [dx (- sx x)
+        dz (- sz z)
+        [ux uz] (if (>= (abs dx) (abs dz))
+                  [(long (math/signum (double dx))) 0]
+                  [0 (long (math/signum (double dz)))])]
+    [[(+ x ux) y (+ z uz)] [(+ x ux) (inc y) (+ z uz)]]))
+
 (defn bed-step
   "The intent of the bed kill, or nil: with a bed held (beds/held) and the dragon perched on the
-   ground, the walk to the cell beds/standoff beyond the ground under its head
-   (beds/head-point, beds/stand-point), then a :use-on laying the bed on the block there, then a
-   :use-on of the bed laid, which explodes it in the End (beds/blast-power); done when the bed
-   is gone. Its health is read from the boss bar's (:world/boss-health) before and after in the
-   recording. Only the gym row dragon-beds holds beds."
+   ground, the walk to the cell beds/standoff beyond the ground under its head (beds/head-point,
+   beds/stand-point); there, the two blocks of cobblestone between the bot and the site
+   (bed-wall), each a :place; then a :use-on laying the bed on the block under the site; then a
+   :use-on of the bed laid, which explodes it in the End (beds/blast-power); done when the bed is
+   gone. Never fired when the damage expected behind the walls that stand (beds/expected-damage)
+   is not under the health by two: with no cobblestone held or the wall cells not clear, the
+   bed's 30 at the stand is a death, not a plan. Its health on the boss bar (:world/boss-health) is
+   read before and after in the recording."
   [world]
   (let [bed (beds/held world)
         [eid d] (dragon world)
@@ -970,9 +987,15 @@
         stand (some-> head
                       (beds/stand-point fountain)
                       (->> (ground-cell world)))]
-    (when (and bed eid d site (grounded? d) (perched? d))
+    (when (and bed eid d site stand (grounded? d) (perched? d))
       (let [[sx sy sz] site
             under [sx (dec sy) sz]
+            wall (bed-wall stand site)
+            open (filter #(= :clear (path/classify world %)) wall)
+            stone (stairs/filler world 1)
+            standing (- (count wall) (count open))
+            dist (physics/horizontal-distance (physics/centre stand) (physics/centre site))
+            health (:player/health world full-health)
             laid? (str/ends-with? (name (or (some-> (terrain/block-at world site)
                                                     blocks/name-of)
                                             :air))
@@ -983,7 +1006,10 @@
                :intent/target site
                :intent/aim [(+ sx 0.5) (+ sy 0.5625) (+ sz 0.5)]
                :intent/expect [:or [:block site :air] [:block site :fire] [:block site :cave_air]]}
-              (and stand (not (at-stand? world stand))) (standing-walk stand)
+              (not (at-stand? world stand)) (standing-walk stand)
+              (not (< (+ 2.0 (beds/expected-damage dist (if stone (count wall) standing))) health))
+              nil
+              (seq open) {:intent/kind :place :intent/item stone :intent/cell (first open)}
               :else
               {:intent/kind :use-on
                :intent/item bed

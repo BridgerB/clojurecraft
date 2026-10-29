@@ -798,6 +798,23 @@
     :gym/truth [{:truth/cmd
                  "execute in minecraft:the_end unless entity @e[type=minecraft:ender_dragon]"
                  :truth/re "Test passed"}]}
+   ;; the same without the Resistance: the bot walls itself from the bed's blast (bed-wall, two
+   ;; blocks, beds/expected-damage) and takes what is left; its health is the measure
+   {:gym/name "dragon-beds-real"
+    :gym/goal :dragon
+    :gym/until "dragon"
+    :gym/land :end
+    :gym/difficulty "normal"
+    :gym/setup [no-crystals]
+    :gym/prereqs ["minecraft:iron_sword 1" "minecraft:iron_helmet 1" "minecraft:iron_chestplate 1"
+                  "minecraft:iron_leggings 1" "minecraft:iron_boots 1" "minecraft:cooked_beef 16"
+                  "minecraft:cobblestone 64" "minecraft:iron_pickaxe 1" "minecraft:carved_pumpkin 1"
+                  "minecraft:white_bed 6"]
+    :gym/summon [no-crystals]
+    :gym/timeout-ms trial-ms
+    :gym/truth [{:truth/cmd
+                 "execute in minecraft:the_end unless entity @e[type=minecraft:ender_dragon]"
+                 :truth/re "Test passed"}]}
    ;; issue #10, step 13: the post-pearls chain in one game, from the Nether-exit kit near the
    ;; stronghold through eyes, the stronghold, the portal room, lighting and entering the End
    ;; portal, bridging to the island, the crystals and the dragon

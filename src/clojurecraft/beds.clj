@@ -54,3 +54,17 @@
     (if (< d 1.0e-6)
       [(+ hx standoff) hz]
       [(+ hx (* standoff (/ dx d))) (+ hz (* standoff (/ dz d)))])))
+
+(def shield-exposure
+  "{wall cells between the bed and the bot: the share of the explosion's rays that reach the bot}:
+   no wall 1.0, a block at the feet's height only about half the body's silhouette (0.5), the
+   feet's and the eye's cells both 0.0 (Explosion.getSeenPercent counts the rays from the blast to
+   sample points of the body that no block stops; the damage is dealt before the blocks break)."
+  {0 1.0 1 0.5 2 0.0})
+
+(defn expected-damage
+  "The damage a bed's explosion dist blocks from the bot deals it behind walls cells of wall
+   (shield-exposure; more than two count as two), before armour: blast-damage with the exposure
+   the wall leaves. 30.8 at 4.5 blocks in the open, 1.0 behind two blocks."
+  [dist walls]
+  (blast-damage dist (get shield-exposure (min 2 (max 0 (long walls))) 1.0)))
