@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-29T02:35:03.417Z",
+  "at" : "2026-10-29T02:36:11.924Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -31,20 +31,10 @@
     "number" : 151,
     "title" : "Bot stops at flint-and-steel: not-picked-up",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
+    "copilot" : true
   }, {
     "number" : 605,
     "title" : "Bot stops at stone-pickaxe: boxed",
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
-  }, {
-    "number" : 594,
-    "title" : "Bot stops at portal: unsafe",
-    "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
-  }, {
-    "number" : 592,
-    "title" : "Bot stops at cast-one: unsafe",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
@@ -73,8 +63,18 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
+    "number" : 594,
+    "title" : "Bot stops at portal: unsafe",
+    "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
     "number" : 593,
     "title" : "Bot stops at water-bucket: unsafe",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 592,
+    "title" : "Bot stops at cast-one: unsafe",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
@@ -190,7 +190,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 151,
-    "move" : "assign"
+    "move" : "wait",
+    "why" : "session starting"
   }, {
     "issue" : 342,
     "move" : "leave",
