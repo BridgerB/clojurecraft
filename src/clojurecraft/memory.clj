@@ -365,6 +365,16 @@
          (take n)
          (mapv #(into {} (d/touch (d/entity db %)))))))
 
+(defn last-failed-at
+  "The ms the newest :failed fact of an intention of kind k on target t was stamped, or nil when
+   none: when a fight on an enderman last failed (pearls/unfightable?)."
+  [world k t]
+  (d/q '[:find (max ?at) . :in $ ?k ?t :where [?e :intention/kind ?k] [?e :intention/event :failed]
+         [?e :intention/target ?t] [?e :intention/at ?at]]
+       (:world/facts world)
+       k
+       t))
+
 (defn arrived
   "The set of targets of every walk that arrived (the :done facts of :walk intentions): the
    cells the bot has already walked to. A walk back to one changes nothing the first did not

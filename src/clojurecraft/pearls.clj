@@ -1295,17 +1295,29 @@
 
 (def provoke-home-reach 3.0)              ; blocks from the burrow's end within which an enderman is provoked from outside the mouth: a provoked one is at the bot in about a second, and four hits fell it in the 3.6 s a walk of six blocks home took (gym plan run 40747177526 run 6)
 
+(def wander-lookouts 60)                 ; lookouts (five seconds each, five minutes) stood with no walk taken since before the hunt goes elsewhere (wander)
+(def wander-reach 64)                  ; blocks a wander looks for ground to walk to, on each of the headings
+(def fight-retry-ms 30000)             ; ms after a fight on an enderman failed that it is not fought again until within the sword's reach
+
 (def struck-health 14.0)                ; health under which an enderman at hand has landed a hit (7 on Normal off 20): fought back, fought out or not
 
 (defn unfightable?
-  "Is enderman e (id eid) no fight's target now: fought out (fought-out?), or given up by a fight's
-   engage as not strikable (combat/given-up?: it is not within the sword's reach from here)?
+  "Is enderman e (id eid) no fight's target now: fought out (fought-out?), given up by a fight's
+   engage as not strikable (combat/given-up?: it is not within the sword's reach from here), or
+   failed a fight less than fight-retry-ms ago and not within the sword's reach now? A fight that
+   fails (:unreachable) blacklists its target, and an angry one is fought regardless of the
+   blacklist: runs 2 and 3 of gym plan run 40775811459 failed :fight :unreachable eight times and
+   held a fight thirteen minutes.
    Run 4 of gym plan run 40747177526 (issue #263, pearls-12) planned :fight on one eight blocks
    below it eight times in 10 ms, each given up and ended done at once, and the eight counted as
    fought out: the walk that followed was no longer cut by it, and the bot walked on while it
    took 20 health in five seconds, with no attack sent."
   [world eid e]
-  (or (fought-out? world eid) (combat/given-up? world eid e)))
+  (or (fought-out? world eid)
+      (combat/given-up? world eid e)
+      (boolean (when-let [at (memory/last-failed-at world :fight eid)]
+                 (and (< (- (:time/now world 0) at) fight-retry-ms)
+                      (not (combat/in-reach? world e)))))))
 
 (defn struck-by
   "[eid e] of the nearest angry enderman (entity/creepy?) within the sword's reach (combat/in-reach?)
@@ -1351,6 +1363,42 @@
                    :intent/for :pearls
                    :intent/wall? true})))
             [0 1]))))
+
+(defn wandering?
+  "Has the hunt stood wander-lookouts or more :lookout intents with no walk ended since (stuck?
+   counts the same, from stale-lookouts), and does no enderman tracked have a route to it
+   (routable), however near it is by the air? Run 1 of gym plan run 40775811459 (issue #263,
+   pearls-12) held five pearls at twelve minutes and then stood 2,210 lookouts to the five-hour
+   cap, twelve endermen tracked 16 to 100 blocks off on other levels, none with a route."
+  [world]
+  (boolean (and (>= (or (memory/done-since world :lookout :walk)
+                        (memory/done-since world :lookout :burrow)
+                        0)
+                    wander-lookouts)
+                (nil? (routable world (endermen world seek-radius))))))
+
+(defn wander
+  "A walk somewhere else to hunt from: to the end of the first of the eight headings (headings, from
+   one the clock picks) whose route reaches ground wander-reach out (path/plan :found, as roam
+   looks), else the farthest end of those routes that comes roam-reach or more from the feet. Not
+   roam: it refuses an end already walked to while an enderman is tracked within descend-radius,
+   and that stays true for hours. Nil when no heading has a route that leaves the feet."
+  [world]
+  (let [feet (intent/feet world)
+        start (mod (quot (:time/now world 0) roam-turn-ms) (count headings))
+        ends (for [k (range (count headings))
+                   :let [heading (nth headings (mod (+ start k) (count headings)))
+                         r (path/plan world
+                                      (path/feet-cell (:player/pos world))
+                                      (roam-goal feet heading wander-reach)
+                                      {})
+                         to (last (:path/waypoints r))]
+                   :when (and to (not= to feet))]
+               [(:path/status r) to (path/octile feet to)])
+        far (filter #(>= (nth % 2) roam-reach) ends)
+        best (or (first (filter #(= :found (first %)) far))
+                 (when (seq far) (apply max-key #(nth % 2) far)))]
+    (when best {:intent/kind :walk :intent/target (second best) :intent/for :pearls})))
 
 (defn shelter-walk
   "A :walk for :shelter to target, or nil when target is nil or in :plan/blacklist (a walk to it
@@ -1556,7 +1604,10 @@
        :intent/for :pearls}
       (and (not hurt?) ce (not (unfightable? world ceid ce)))
       {:intent/kind :fight :intent/target ceid :intent/for :pearls}
-      home (or (vantage world far) {:intent/kind :lookout :intent/for :pearls})
+      home
+      (or (vantage world far)
+          (when (wandering? world) (wander world))
+          {:intent/kind :lookout :intent/for :pearls})
       :else
       (or (if (pickaxe? world)
             (some (fn [[_ e]]
@@ -1576,6 +1627,7 @@
             (or (roam world)
                 (when (stuck? world) (climb-out world))
                 (when-not overworld-death? (dig-out world))))
+          (when (wandering? world) (wander world))
           {:intent/kind :lookout :intent/for :pearls}))))
 
 (defn look-off
@@ -1631,12 +1683,14 @@
   ;; six to ten seconds, the bot carried on away from it. Never in the burrow's end, where none
   ;; reaches: sim probe 39892490709 (worlds R1 and R4, seed 3) cut its lookout there every tick
   ;; for twenty minutes over one given up on by the mouth, and the lure never counted a lookout
-  [world _ i]
+  [world goal i]
   (and (not (contains? answers-to-hand (:intent/kind i)))
        (not (:intent/wall? i))
        (not (and (= :walk (:intent/kind i)) (= (:intent/target i) (:pearls/shelter world))))
        (not= (:pearls/shelter world) (intent/feet world))
-       (or (beset? world) (some? (first (struck-by world))))))
+       (or (beset? world) (some? (first (struck-by world))))
+       (not (and (= :lookout (:intent/kind i))
+                 (= :lookout (:intent/kind (plan/next-intent world goal plan/goals)))))))
 
 (defmethod combat/answers :pearls
   ;; the hunt provokes endermen and fights them from its burrow; an angry one (entity/creepy?)

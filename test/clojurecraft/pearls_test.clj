@@ -2113,3 +2113,66 @@
     (is (nil? (pearls/shelter-walk w nil)))
     (is (= {:intent/kind :walk :intent/target [1 64 1] :intent/for :shelter}
            (pearls/shelter-walk w [1 64 1])))))
+
+(defn wide
+  "w with flat stone floor chunks from -2 to 4 round its own, so routes and roams have ground."
+  [w]
+  (update w
+          :world/chunks
+          #(into (or % {})
+                 (for [cx (range -2 5)
+                       cz (range -2 5)
+                       :when (not= [0 0] [cx cz])]
+                   [[cx cz] (world/column {})]))))
+
+(def stranded
+  "Run 1 of gym plan run 40775811459 (issue #263, pearls-12): at its burrow's end with five
+   pearls, endermen tracked 22 blocks out and 14 down, and 16 out and 45 up: none with a route."
+  (wide (burrowed [8.5 61.0 8.5] {7 (enderman [30.5 50.0 8.5]) 9 (enderman [8.5 106.0 24.5])})))
+
+(deftest a-hunt-with-no-enderman-it-can-walk-to-goes-elsewhere-after-five-minutes
+  (testing "the lookouts stood: not yet, then enough"
+    (is (not (pearls/wandering? (looked stranded (dec pearls/wander-lookouts)))))
+    (is (pearls/wandering? (looked stranded pearls/wander-lookouts))))
+  (testing "an enderman with a route keeps the hunt where it is"
+    (let [w (looked (wide (burrowed [8.5 61.0 8.5] {7 (enderman [30.5 64.0 8.5])}))
+                    pearls/wander-lookouts)]
+      (is (not (pearls/wandering? w)))))
+  (testing "the walk is to ground at least roam-reach off"
+    (let [{:intent/keys [kind target for]} (pearls/wander (looked stranded pearls/wander-lookouts))]
+      (is (= [:walk :pearls] [kind for]))
+      (is (>= (path/octile (intent/feet stranded) target) pearls/roam-reach))))
+  (testing "and it is what the hunt does, not another lookout"
+    (is (= :walk
+           (:intent/kind
+            (plan/next-intent (looked stranded pearls/wander-lookouts) row plan/goals))))
+    (is (= :lookout
+           (:intent/kind
+            (plan/next-intent (looked stranded (dec pearls/wander-lookouts)) row plan/goals)))
+        "five minutes short of it, as before")))
+
+(deftest a-lookout-is-cut-only-when-the-hunt-would-do-something-else
+  ;; run 2 of the same plan run ended in 50,301 lookouts 75 ms apart: an angry enderman at hand
+  ;; cut each at once and the hunt chose another lookout
+  (let [angry (assoc (enderman [10.5 64.0 8.5]) :entity/creepy? true)
+        w (standing {7 angry})
+        lookout {:intent/kind :lookout :intent/for :pearls :intent/goal :ender-pearls}]
+    (is (pearls/beset? w))
+    (is (plan/interrupts? w row lookout) "the hunt fights it: cut")
+    (with-redefs [plan/next-intent (fn [& _] {:intent/kind :lookout :intent/for :pearls})]
+      (is (not (plan/interrupts? w row lookout)) "the hunt would lookout again: left to stand"))))
+
+(deftest a-fight-that-failed-is-not-planned-again-until-the-enderman-is-in-reach
+  ;; runs 2 and 3: :fight :unreachable eight times on one target, thirteen minutes of a held fight
+  (let [far (assoc (enderman [8.5 64.0 20.5]) :entity/creepy? true)
+        near (assoc far :entity/pos [10.5 64.0 8.5])
+        failed (fn [w]
+                 (memory/remember-intention (assoc w :time/now 1000)
+                                            {:intent/id 5 :intent/kind :fight :intent/target 7}
+                                            :failed))
+        w (failed (standing {7 far}))]
+    (is (pearls/unfightable? w 7 far) "out of reach, just failed")
+    (is (not (pearls/unfightable? w 7 near)) "within reach it is fought")
+    (is (not (pearls/unfightable? (assoc w :time/now (+ 1000 pearls/fight-retry-ms)) 7 far))
+        "after fight-retry-ms it is tried again")
+    (is (not (pearls/unfightable? (standing {7 far}) 7 far)) "never failed: fought")))
