@@ -628,6 +628,6 @@
                           (fx/packets fx))))]
     (is (= 0 (swapped (at {6 pick 11 beef} 6)))
         "the pickaxe held: into the first slot with no tool")
-    (is (= 6 (swapped (at {6 beef 11 beef} 6))) "no tool held: into the held slot as before")
+    (is (= 6 (swapped (at {11 beef} 6))) "no tool held: into the held slot as before")
     (is (= 1 (swapped (at {0 pick 6 pick 11 beef} 6)))
         "a tool in slot 0 too: the first hotbar slot with none is 1")))

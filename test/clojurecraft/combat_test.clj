@@ -636,9 +636,9 @@
       (is (= 4.0 (combat/danger-line (at {7 (fish 10.5)} 20.0))) "one silverfish: one bite and 3")
       (is (= 8.0 (combat/danger-line (at five 20.0))) "five: five bites and 3")
       (is (= 7.0 (combat/danger-line (at {7 (fish 10.5) 8 zombie} 20.0))) "a zombie's 3 and a bite")
-      (is (= 10
-             (combat/danger-line
-              (at {7 (assoc (mob :enderman [10.5 64.0 8.5] 40.0) :entity/creepy? true)} 20.0)))
+      (is (== 10
+              (combat/danger-line
+               (at {7 (assoc (mob :enderman [10.5 64.0 8.5] 40.0) :entity/creepy? true)} 20.0)))
           "an angry enderman: 7 and 3, retreat-health")
       (is (== 10 (combat/danger-line (at {7 (mob :creeper [10.5 64.0 8.5] 20.0)} 20.0)))
           "a creeper has no hit to add up: retreat-health"))
