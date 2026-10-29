@@ -2253,3 +2253,18 @@
                      (assoc :player/inventory held))]
         (is (= {:intent/kind :dig :intent/target [7 61 8] :intent/for :pearls}
                (plan/next-intent gone row plan/goals)))))))
+
+(deftest the-hunt-does-not-walk-out-to-a-mouth-a-monster-stands-at
+  ;; gym plan run 40825468783 run 4 (issue #263, pearls-12): the walk between the burrow's end and
+  ;; its mouth every ~2 s, forty-eight times in 3m40, a magma cube at the mouth landing seven hits
+  ;; of three each, 20 health to 3.7: home when it was near, out to the mouth when it was not
+  (let [held {0 (item :iron_sword 1) 1 (item :iron_pickaxe 1)}
+        end [8.5 61.0 8.5]
+        clear (assoc (burrowed end {}) :player/inventory held)
+        cube (assoc (burrowed end {7 (mob :magma_cube [3.5 64.0 8.5])}) :player/inventory held)]
+    (is (= {:intent/kind :walk :intent/target [3 64 8] :intent/for :shelter}
+           (plan/next-intent clear row plan/goals))
+        "nothing at the mouth: out to look round from it")
+    (is (not= [:walk [3 64 8]]
+              ((juxt :intent/kind :intent/target) (plan/next-intent cube row plan/goals)))
+        "a magma cube at the mouth: the walk is not planned")))

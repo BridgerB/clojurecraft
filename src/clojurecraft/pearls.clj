@@ -1390,19 +1390,20 @@
 (def swarm-radius 8.0)                  ; blocks from the feet within which a monster counts toward a swarm
 
 (defn swarm
-  "{eid entity} of the monsters (blocks/mobs category) alive within swarm-radius of the feet that are
+  "{eid entity} of the monsters (blocks/mobs category) alive within swarm-radius of pos (the feet when
+   not given) that are
    no enderman (the quarry, met its own way from the burrow): a zombified piglin counts, hostile
    on sight or not, as it comes in packs and one hit angers them all. Gym plan run 40825468783 run
    5 (issue #263, pearls-12): an enderman and two zombified piglins took 20 health in 1.5 s."
-  [world]
-  (let [pos (:player/pos world)]
-    (into {}
-          (filter (fn [[_ e]]
-                    (and (not (entity/dead? e))
-                         (not= :enderman (entity/kind e))
-                         (= :monster (:category (blocks/mobs (entity/kind e))))
-                         (<= (physics/distance pos (:entity/pos e)) swarm-radius))))
-          (:world/entities world))))
+  ([world] (swarm world (:player/pos world)))
+  ([world pos]
+   (into {}
+         (filter (fn [[_ e]]
+                   (and (not (entity/dead? e))
+                        (not= :enderman (entity/kind e))
+                        (= :monster (:category (blocks/mobs (entity/kind e))))
+                        (<= (physics/distance pos (:entity/pos e)) swarm-radius))))
+         (:world/entities world))))
 
 (defn swarmed?
   "Are two or more monsters within swarm-radius (swarm), or one while health is under danger-health?
@@ -1640,7 +1641,8 @@
       (and in? (crowded? world))
       (or (vantage world far) {:intent/kind :lookout :intent/for :pearls})
       (and in? mouth (not swarmed?) (unseal world mouth)) (unseal world mouth)
-      (and in? mouth (not angry-close?) @mouth-walk) @mouth-walk
+      (and in? mouth (not angry-close?) (empty? (swarm world (physics/centre mouth))) @mouth-walk)
+      @mouth-walk
       (and qid
            rested?
            (or (and (not (pickaxe? world)) (not (worn-out? world)))
