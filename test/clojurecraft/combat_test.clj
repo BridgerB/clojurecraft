@@ -539,3 +539,23 @@
         "a cloud far off changes nothing")
     (is (= #{7} (set (keys (combat/threats (standing (merge zombie (cloud [9.5 64.0 8.5])))))))
         "outside the End a cloud is no reason to leave a fight")))
+
+(deftest a-back-off-that-ends-at-once-is-never-chosen-again
+  ;; gym chain-w13 dragon run 2 (plan run 40798605016, job 4): an angry enderman on the End's
+  ;; island, the bot under 10 health, `intent :back-off 86` every 50 ms from 04:03:36.6 and
+  ;; each ended cornered in the tick it began; eight hits, four swings, dead
+  (let [angry (assoc (standing {7
+                                (assoc (mob :enderman [11.0 64.0 8.5] 40.0) :entity/creepy? true)})
+                     :plan/goals #{:dragon}
+                     :player/health 6.0)
+        defend (row :defend)]
+    (is (= {:intent/kind :back-off :intent/target 7} (plan/next-intent angry defend plan/goals))
+        "with room to back off to, under the line: backed away from")
+    (is (= {:intent/kind :fight :intent/target 7 :intent/to-the-end? true}
+           (plan/next-intent (assoc angry :plan/cornered #{7}) defend plan/goals))
+        "one back-off already ended on its clock: the fight, never the same back-off again")
+    (is (not (combat/back-off-pointless? angry 7 (get-in angry [:world/entities 7])))
+        "room to go: not pointless")
+    (is (combat/back-off-pointless? (assoc angry :plan/cornered #{7})
+                                    7
+                                    (get-in angry [:world/entities 7])))))

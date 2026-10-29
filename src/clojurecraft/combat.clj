@@ -669,16 +669,34 @@
 
 (defmethod plan/done-by :safe? [world _] (or (nil? (:player/pos world)) (empty? (threats world))))
 
+(defn back-off-pointless?
+  "Would a :back-off from entity eid (entity e) be done at once, getting the bot nowhere: it is
+   already back-off-to away, the way straight away is a drop no landing survives (void-retreat?)
+   or steps into or near lava (lava-retreat?), or a back-off from it already ended on its clock
+   (:plan/cornered)? Gym chain-w13 dragon run 2 (plan run 40798605016): an enderman on the End's
+   island at under 10 health, a back-off chosen every 50 ms and ended cornered in the tick it
+   began, the bot standing still under 8 hits and four swings."
+  [world eid e]
+  (boolean (or (>= (horizontal world e) back-off-to)
+               (contains? (:plan/cornered world #{}) eid)
+               (void-retreat? world e)
+               (lava-retreat? world e))))
+
 (defmethod plan/next-intent :defend
   ;; the nearest threat: a creeper, or anything while the health is under retreat-health, is
   ;; backed away from; anything else fought. Silverfish are fought holding ground (:intent/hold?)
   ;; so the fight never walks off safe footing into portal-room lava. A neutral mob turned on the bot
   ;; (an angry enderman, entity/neutral) is fought to the end while healthy; under retreat-health
   ;; (#577 danger-health) it is backed away from, never fought on to death. What a back-off could not get away
-  ;; from (:plan/cornered) is fought to the end too when healthy, else backed away from.
+  ;; from (:plan/cornered) is fought to the end too when healthy, else backed away from, unless
+  ;; the back-off would end at once (back-off-pointless?): then the fight, the one thing left.
   [world _ _]
   (when-let [[eid e] (entity/nearest (threats world) (:player/pos world))]
-    (cond (or (= :creeper (entity/kind e)) (< (:player/health world 20.0) retreat-health))
+    (cond (and (not= :creeper (entity/kind e))
+               (< (:player/health world 20.0) retreat-health)
+               (back-off-pointless? world eid e))
+          {:intent/kind :fight :intent/target eid :intent/to-the-end? true}
+          (or (= :creeper (entity/kind e)) (< (:player/health world 20.0) retreat-health))
           {:intent/kind :back-off :intent/target eid}
           (= :silverfish (entity/kind e))
           {:intent/kind :fight :intent/target eid :intent/hold? true}
