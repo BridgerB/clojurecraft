@@ -581,6 +581,20 @@
     (testing "a stand no longer open, or blacklisted, is not kept"
       (is (= north (blaze/stand (assoc (fact (at 2 4) west) :plan/blacklist #{west}) sp))))))
 
+(deftest a-rod-across-a-ledge-is-not-gone-for
+  ;; blaze-race-c job 1 (3a082f7b7): :collect-drops [2375 70 2338] 4060 times in 3 min 23 s (04:07:39
+  ;; on), 50 ms apart, the bot standing in fire (HIT type 21, 66 hits), burned to death at 04:13:02.
+  ;; The collect is done at once when the step toward the drop would be over a drop with no
+  ;; landing (intent/ledge-ahead?), and the planner chose it again for ever
+  (let [rod (entity :item [12.5 64.0 8.5] :entity/item (recipe/item-id :blaze_rod))
+        gap (into {} (for [y (range 40 64)] [[9 y 8] (blocks/default-state :air)]))
+        flat (standing {7 rod})
+        ledge (assoc (standing {7 rod}) :world/chunks {[0 0] (world/column gap)})]
+    (is (some? (blaze/rod-lying flat)) "on the flat: fetched")
+    (is (true? (intent/ledge-ahead? ledge [12.5 64.0 8.5])) "the step toward it is over a drop")
+    (is (nil? (blaze/rod-lying ledge)) "across the ledge: left")
+    (is (not= :collect-drops (:intent/kind (next-intent ledge))))))
+
 (deftest a-swarm-out-of-sight-is-waited-for-in-cover
   ;; sim R1/1 (probe 40761589784, TRACE): healed to 18 in cover, the bot walked out to the
   ;; spawner each time, was shot to 4 in the open and went back; sixteen foods, no kill

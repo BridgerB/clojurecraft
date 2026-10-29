@@ -137,9 +137,14 @@
   "Can the bot pick drop e up: its cell is not solid (a drop a block was placed over, no
    contact reaches), and it lies in reach of the pickup box from the floor, or a route walks
    onto its cell (under-reach?)? Never one hanging over a drop (drops/over-void?): a rod lost to
-   a lava sea, and a collect of it would be done at once, the planner choosing it again."
+   a lava sea, and a collect of it would be done at once, the planner choosing it again. Nor one
+   the walk to it would step off a ledge toward (intent/ledge-ahead?): :collect-drops is done at
+   once there too (blaze-race-c job 1, 3a082f7b7: `:collect-drops [2375 70 2338]` started 4060
+   times in 3 min 23 s, 50 ms apart, the bot standing in fire the whole while, `HIT type 21`, and
+   burned to death)."
   [world e]
   (and (not (drops/over-void? world e))
+       (not (intent/ledge-ahead? world (:entity/pos e)))
        (not (some-> (terrain/block-at world (hunt/cell (:entity/pos e)))
                     blocks/solid?))
        (or (not (drops/under-reach? world e)) (intent/routable? world (fetch-walk e)))))
