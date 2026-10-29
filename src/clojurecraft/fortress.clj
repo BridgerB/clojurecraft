@@ -292,7 +292,11 @@
    floor it steps onto air that the block under the feet holds (build/foundation), no water or
    lava under it within stairs/bridge-depth (stairs/over-fluid?: a causeway over a lake is no
    cave's floor, unless fluid-ok?: bridge-over-void? asks for ground itself), a filler carried,
-   the step dry? and, with that floor laid, safe?. The fortress's tunnel bridges only by
+   the step dry? and, with that floor laid, safe?. The block laid is one that stands as a floor
+   once laid (walk-filler: soul sand, the last resort of stairs/filler, is not), as the safe?
+   asked of it assumes cobblestone and the placing puts the carried filler there: sim R1/37 seed 2
+   (probe 40826098892) bridged the lava sea with soul sand and stood on five of its blocks, lava all
+   round, and was :blocked three times in four seconds. The fortress's tunnel bridges only by
    bridge-over-void?."
   ([world feet move] (bridge? world feet move false))
   ([world feet move fluid-ok?]
@@ -302,7 +306,7 @@
           (contains? #{:air :cave_air :void_air} (blocks/name-of (terrain/block-at world floor)))
           (= floor (build/foundation world floor))
           (or fluid-ok? (not (stairs/over-fluid? world floor)))
-          (some? (stairs/filler world 1))
+          (some? (walk-filler world floor))
           (dry? world feet move)
           (safe? (assoc-in world [:world/blocks floor] (blocks/default-state :cobblestone))
                  feet
@@ -342,7 +346,8 @@
          (bridge? world feet move true)
          (or (ground-below? world floor)
              (and (>= health bridge-lava-health) (ground-below? world floor true)))
-         (some? (stairs/filler world bridge-min-filler)))))
+         (some? (stairs/filler world bridge-min-filler))
+         (some? (walk-filler world floor)))))
 
 (defn climb-out?
   "May the up move from feet stand on a block laid beside the feet at their own height: the

@@ -203,7 +203,8 @@
             :intent/target [8 60 11]
             :intent/steps fortress/steps-per-tunnel
             :intent/reach blaze/spawner-reach
-            :intent/climb 0}
+            :intent/climb 0
+            :intent/bridge? true}
            (next-intent w))
         "within 8 of the eye, four under the feet, nothing open beside it: a tunnel down to it")
     (let [room (assoc w
@@ -214,7 +215,8 @@
               :intent/target [9 60 11]
               :intent/steps fortress/steps-per-tunnel
               :intent/reach 0.5
-              :intent/climb 0}
+              :intent/climb 0
+              :intent/bridge? true}
              (next-intent room))
           "with room beside it on its floor, into that cell")
       (is (= {:intent/kind :camp :intent/spawner [8 60 11]}

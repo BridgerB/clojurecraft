@@ -15,6 +15,7 @@
             [clojurecraft.path :as path]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
+            [clojurecraft.stairs :as stairs]
             [clojurecraft.terrain :as terrain]))
 
 (def netherrack (blocks/default-state :netherrack))
@@ -345,7 +346,7 @@
   ;; target [2209 60 1794] 52 out and one down, the tunnel went down the pillar [0 0 -1], [0 -1 -1]
   ;; from y 69 to y 32, above the lava sea, the only steps with ground; the stand tunnel did not
   ;; bridge. Cells shifted to feet [0 64 0], the target [52 63 0], ground at y 40
-  (let [air* (into {} (for [x (range -4 61) y (range 50 71) z (range -4 5)] [[x y z] air]))
+  (let [air* (into {} (for [x (range -4 61) y (range 41 71) z (range -4 5)] [[x y z] air]))
         ground (into {} (for [x (range -4 61) z (range -4 5)] [[x 40 z] netherrack]))
         w {:world/chunks {}
            :world/blocks (merge air* ground {[0 63 0] netherrack [0 62 0] netherrack})
@@ -357,7 +358,12 @@
     (is (= [1 0 0] (fortress/next-move w [0 64 0] target 0 false #{} true))
         "with bridging: the level step toward the target")
     (is (not= [1 0 0] (fortress/next-move w [0 64 0] target 0 false #{}))
-        "without it: the column's steps down, as before")))
+        "without it: the column's steps down, as before")
+    (testing "soul sand is no bridge (R1/37 seed 2: soul sand 207, lava all round, :blocked)"
+      (let [sand (assoc w :player/inventory {0 {:item (recipe/item-id :soul_sand) :count 207}})]
+        (is (some? (stairs/filler sand 16)) "it is the last resort filler")
+        (is (not (fortress/bridge-over-void? sand [0 64 0] [1 0 0])))
+        (is (not (fortress/bridge? sand [0 64 0] [1 0 0] true)))))))
 
 (deftest a-tunnel-drops-an-unsafe-in-flight-step
   (let [from [0 64 0]
