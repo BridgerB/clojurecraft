@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-29T00:58:20.996Z",
+  "at" : "2026-10-29T01:04:54.979Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -38,11 +38,6 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 592,
-    "title" : "Bot stops at cast-one: unsafe",
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
-  }, {
     "number" : 605,
     "title" : "Bot stops at stone-pickaxe: boxed",
     "labels" : [ "bot-failure", "real", "sim" ],
@@ -51,6 +46,11 @@
     "number" : 594,
     "title" : "Bot stops at portal: unsafe",
     "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 592,
+    "title" : "Bot stops at cast-one: unsafe",
+    "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
     "number" : 461,
