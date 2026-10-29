@@ -115,6 +115,9 @@
    [:player/on-fire?
     "is the bot burning: bit 0x01 of the shared flags byte (metadata index 0) the server last sent for its own entity. A fireball sets it alight for seconds, and there is no water in the Nether to put it out"
     "after the first set-entity-data of its own entity"]
+   [:player/using-item?
+    "does the bot hold its use key: bit 0x01 of the living flags byte (metadata index 8) the server last sent for its own entity. A shield is raised while it is true with the shield in hand; a meal sets it too"
+    "after the first living-flags set-entity-data of its own entity"]
    [:player/struck-at
     "ms (:time/now) of the last damage-event on the bot, beside :player/hurt-at in ticks: combat/striker ages the strike against struck-ms. A zombified piglin that hit is angry, and a hit angers its pack"
     "after a damage-event on the bot"] [:control/forward? "walk forward" "inside :player/controls"]
@@ -430,6 +433,9 @@
    [:intent/blazes
     "the blazes within fight range when a :camp began, or watching when a :rest began; a new one ends it"
     "camp, rest"]
+   [:intent/raised?
+    "true once a :block has sent the use key to the offhand shield, so it is sent once (issue #262)"
+    "block, after its first tick"]
    [:intent/health
     "the health when a :camp or a :rest began; a fall under it ends it, since nothing else ends a running intent (issue #262)"
     "camp, rest"]

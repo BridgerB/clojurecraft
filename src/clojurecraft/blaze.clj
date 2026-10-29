@@ -29,7 +29,8 @@
    Fireballs are not dodged: ruststeve never needed it with its break-off at 10 health; the
    damage-event log is where to look if they kill. The bot does not put itself out: no water
    works in the Nether, and the gym rows give Fire Resistance until potions exist."
-  (:require [clojurecraft.blocks :as blocks]
+  (:require [clojurecraft.armour :as armour]
+            [clojurecraft.blocks :as blocks]
             [clojurecraft.build :as build]
             [clojurecraft.combat :as combat]
             [clojurecraft.dimension :as dimension]
@@ -44,6 +45,7 @@
             [clojurecraft.inventory :as inventory]
             [clojurecraft.make :as make]
             [clojurecraft.memory :as memory]
+            [clojurecraft.packet :as packet]
             [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
@@ -1054,6 +1056,49 @@
            :intent/steps fortress/steps-per-tunnel
            :intent/search s}))))
 
+;; ---------------------------------------------------------------- the shield
+
+(def block-ms 4000)  ; ms one raise of the shield is held before the bot goes on to the blaze
+(def block-gap 2500) ; ms after a raise ended before the next, unless a fireball is in flight
+
+(defn shield-held?
+  "Is a shield in the offhand? It stops a blaze's fireball from the front: no damage and no
+   ignition. Damage by type in blaze-race-f and -g: on_fire 7 to 45 and in_fire up to 26 a run,
+   fireball hits only 3 to 10, so the burning after the hits killed more than the hits."
+  [world]
+  (= :shield (armour/worn world :offhand)))
+
+(defn fireballs-near
+  "{eid entity} of the blazes' fireballs (small_fireball) within cover-range of the feet."
+  [world]
+  (let [pos (:player/pos world)]
+    (into {}
+          (filter (fn [[_ e]]
+                    (and (= :small_fireball (entity/kind e))
+                         (<= (physics/distance pos (:entity/pos e)) cover-range))))
+          (:world/entities world))))
+
+(defn block
+  "A :block intent, or nil: a shield held, blazes watching (watchers), none at hand (it is
+   swung at: a raised shield walks at a fifth of the pace), the bot not hurt, and the last raise
+   over block-gap ago or a fireball in the air."
+  [world]
+  (let [last-end (:intention/at (memory/last-done world :block))]
+    (when (and (shield-held? world)
+               (seq (watchers world))
+               (nil? (at-hand-blaze world))
+               (not (hurt? world))
+               (or (nil? last-end)
+                   (> (- (:time/now world 0) last-end) block-gap)
+                   (seq (fireballs-near world))))
+      {:intent/kind :block})))
+
+(defn lower?
+  "Must the shield come down: the use key is held with a shield in the offhand and intent i (or
+   nil) is not a :block? A held use key slows the walk to a fifth and a meal cannot start."
+  [world i]
+  (boolean (and (:player/using-item? world) (shield-held? world) (not= :block (:intent/kind i)))))
+
 (defmethod plan/done-by :rods-held? [world _] (>= (rods world) rods-wanted))
 
 (defmethod combat/answers :blaze-rods [_] #{:blaze})
@@ -1065,7 +1110,7 @@
    10 off, past the at-hand radius, shot the bot from 16.8 health to none in ten seconds, since
    nothing ends a running intent but itself and the planner is asked only then."
   [world i]
-  (and (not (contains? #{:fight :eat :rest :back-off} (:intent/kind i)))
+  (and (not (contains? #{:fight :eat :rest :back-off :block :lower} (:intent/kind i)))
        (not= :cover (:intent/for i))
        (seq (watchers world))
        (some? (cond (hurt? world) (healing world false)
@@ -1097,13 +1142,17 @@
         away (delay (when (outnumbered? world) (hide world)))
         waiting (delay (ambush world))
         stock (delay (when-not (hurt? world) (stocking world)))
-        out (delay (when (and (:player/on-fire? world) (burning-here? world)) (leave-fire world)))
+        out (delay (when (burning-here? world) (leave-fire world)))
+        shield (delay (block world))
         fire (delay (when (and sp (at-spawner? world sp)) (put-out world sp)))
         pick (delay (when (build/pickaxe-at-hand? world)
                       (make/decide world (assoc goal :goal/provides {:tag/pickaxes 1}) table)))]
     (cond (not= dimension/nether (dimension/of world)) {:plan/wait :other-dimension}
-          @heal @heal
+          (and (lower? world nil) (not (and @shield (nil? @out) (nil? @heal))))
+          {:intent/kind :lower}
           @out @out
+          @heal @heal
+          @shield @shield
           (and (not (hurt? world)) heid (not (crowded? world)))
           {:intent/kind :fight :intent/target heid :intent/to-the-end? true :intent/yield? true}
           @wary @wary
@@ -1239,3 +1288,51 @@
           (intent/done world)
           (and (> (- now since) rest-ms) (heals? world)) (intent/fail world :no-heal)
           :else world)))
+
+;; ---------------------------------------------------------------- the :block and :lower intents
+
+(defmethod intent/run :block
+  ;; {:intent/kind :block}: stand still with the shield raised, facing the nearest watcher (it
+  ;; blocks only what comes from the front), the use key sent once to the offhand. Done when no
+  ;; blaze watches, one is at hand (it is swung at), the bot is hurt, the shield is gone, or
+  ;; block-ms have passed. The shield stays raised until a :lower, which the planner puts before
+  ;; any other intent (plan/next-intent): a :block that follows another keeps it up.
+  [world {:intent/keys [since raised?]} _]
+  (let [now (:time/now world)
+        since (or since now)
+        target (watcher world)
+        world (-> world
+                  (assoc :player/controls (if target (combat/face world (second target)) {}))
+                  (intent/assoc-intent :intent/since since))]
+    (cond (or (empty? (watchers world))
+              (some? (at-hand-blaze world))
+              (hurt? world)
+              (not (shield-held? world))
+              (> (- now since) block-ms))
+          (intent/done world)
+          (or raised? (:player/using-item? world)) (intent/assoc-intent world :intent/raised? true)
+          :else
+          (let [seq (inc (:bot/sequence world))
+                [yaw pitch] (:player/look world)]
+            (-> world
+                (assoc :bot/sequence seq)
+                (game/emit {:packet/name :use-item
+                            :hand (packet/value :hand :off-hand)
+                            :sequence seq
+                            :y-rot yaw
+                            :x-rot pitch})
+                (intent/assoc-intent :intent/raised? true))))))
+
+(defmethod intent/run :lower
+  ;; {:intent/kind :lower}: let go of the use key (player-action release-use-item), done at once;
+  ;; :player/using-item? is cleared here and corrected by the server's next flags byte
+  [world _ _]
+  (-> world
+      (assoc :player/controls {})
+      (game/emit {:packet/name :player-action
+                  :status (packet/value :dig :release-use-item)
+                  :pos [0 0 0]
+                  :face 0
+                  :sequence 0})
+      (assoc :player/using-item? false)
+      intent/done))

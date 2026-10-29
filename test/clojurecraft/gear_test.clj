@@ -41,15 +41,17 @@
 (defn row "The goal row named id." [id] (first (filter #(= id (:goal/id %)) plan/goals)))
 
 (deftest the-gear-is-a-sword-and-three-pieces-of-armour
-  (is (= [[:iron_helmet 5] [:iron_chestplate 8] [:iron_leggings 7] [:iron_sword 2]] (gear/pieces)))
-  (is (= 22 (gear/gear-cost (standing kit))))
-  (is (= 15
+  (is (= [[:iron_helmet 5] [:iron_chestplate 8] [:iron_leggings 7] [:iron_sword 2] [:shield 1]]
+         (gear/pieces)))
+  (is (= 23 (gear/gear-cost (standing kit))))
+  (is (= 16
          (gear/gear-cost (standing (merge kit {3 (item :iron_helmet 1) 4 (item :iron_sword 1)})))))
   (is (zero? (gear/gear-cost (standing (merge kit
                                               {3 (item :iron_helmet 1)
                                                4 (item :iron_chestplate 1)
                                                5 (item :iron_leggings 1)
-                                               6 (item :iron_sword 1)}))))))
+                                               6 (item :iron_sword 1)
+                                               7 (item :shield 1)}))))))
 
 (deftest the-gear-step-is-wanted-after-the-portal-kit-in-a-chain
   (testing "the portal kit reached, nothing worn: the step is undone"
@@ -63,7 +65,8 @@
                                        {3 (item :iron_helmet 1)
                                         4 (item :iron_chestplate 1)
                                         5 (item :iron_leggings 1)
-                                        6 (item :iron_sword 1)}))
+                                        6 (item :iron_sword 1)
+                                        7 (item :shield 1)}))
                       (row :gear))))
   (testing "a gym stage (no chain) never makes it"
     (is (plan/done-by (assoc (standing kit) :plan/chain? false) (row :gear))))
@@ -94,7 +97,8 @@
                                                                {3 (item :iron_helmet 1)
                                                                 4 (item :iron_chestplate 1)
                                                                 5 (item :iron_leggings 1)
-                                                                6 (item :iron_sword 1)}))
+                                                                6 (item :iron_sword 1)
+                                                                7 (item :shield 1)}))
                                               plan/goals))
                    :gear)
         "reached once it is held")))

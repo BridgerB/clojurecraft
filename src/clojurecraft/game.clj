@@ -417,7 +417,11 @@
     ;; the bot's own flags byte: bit 0x01 is on fire (gym blaze-fortress-race run 4: {0 1} at the
     ;; first fireball, {0 0} when it burned out)
     (and (= entity-id (:player/entity-id w)) (number? (get metadata entity/flags-index)))
-    (assoc :player/on-fire? (odd? (long (get metadata entity/flags-index))))))
+    (assoc :player/on-fire? (odd? (long (get metadata entity/flags-index))))
+    ;; the living flags byte: bit 0x01 is a held use key (a raised shield, a meal)
+    (and (= entity-id (:player/entity-id w)) (number? (get metadata entity/living-flags-index)))
+    (assoc :player/using-item?
+           (pos? (bit-and (long (get metadata entity/living-flags-index)) entity/using-item-bit)))))
 (defmethod on-packet [:play :move-entity-pos]
   [w {:keys [entity-id dx dy dz]}]
   (move-entity w entity-id dx dy dz))

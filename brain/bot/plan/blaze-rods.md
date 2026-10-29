@@ -27,6 +27,9 @@ sourceRefs:
   - src/clojurecraft/blaze.clj#defn at-hand-blaze
   - src/clojurecraft/blaze.clj#defmethod plan/interrupts? :blaze-rods
   - src/clojurecraft/blaze.clj#defn under-fire?
+  - src/clojurecraft/blaze.clj#defn block
+  - src/clojurecraft/blaze.clj#defn lower?
+  - test/clojurecraft/blaze_test.clj#a-shield-is-raised-against-watching-blazes-and-lowered-to-walk
   - test/clojurecraft/blaze_test.clj#a-blaze-at-hand-is-fought-first
   - test/clojurecraft/blaze_test.clj#only-a-blaze-the-bot-can-reach-is-fought
   - src/clojurecraft/blaze.clj#defn rod-lying
@@ -157,8 +160,11 @@ The camp is in the tunnel the bot dug (`blaze/nook`, searched by walking from th
 
 A fresh fortress tunnel step onto a solid floor with nothing solid under it for `deep-drop` (3) cells (`fortress/thin-floor?`) is not taken in `next-move` unless a filler is carried and the cell under can be placed against (`underlay-possible?`); then `underlay-ops` fills it first. A retreat onto a cell already stood in, an air floor (the cave bridge) and an unloaded cell under are not asked. Blaze-race-c geared run 5: ghast 202's fireball 239 exploded by the bot, the next section-blocks-update set the floor under it to air, and it fell 46 blocks onto lava. The `:explode` packet and the registry are still undecoded.
 
+## The shield and the fire at the feet (issue #262, after blaze-race-f and -g)
+Damage by type (the damage_type registry is alphabetical: fireball 14, in_fire 21, mob_attack 28, on_fire 31) in the two rounds, both 10/10 deaths: on_fire 7 to 45 hits a run, in_fire up to 26, fireball only 3 to 10. The burning after a fireball and standing in fire killed more than the hits. Two answers. A shield (`armour/part` gives `:offhand`; `:wear-armour` puts it in slot 40; `gear/pieces` adds `[:shield 1]`, six planks and an ingot) stops a blaze's fireball from the front: `block` is chosen after the cover when a shield is held, blazes watch, none is at hand (it is swung at: a raised shield walks at a fifth of the pace), the bot is not hurt, and the last raise ended over `block-gap` ago or a fireball is in the air. `:block` sends use-item to the offhand once, faces the nearest watcher, and is done after `block-ms`, a blaze at hand, a hurt, or no watcher; `:lower` (player-action release-use-item, status 5) comes before every other intent (`lower?`), `:player/using-item?` being bit 0x01 of the own entity's living flags byte (metadata index 8). And fire in the feet or head cell is left before anything (`burning-here?`, no longer only with the on-fire flag). Gym: `blaze-fortress-geared` holds a shield in its prereqs; the race row has none (it would have to craft its own).
+
 ## Limits
-- Fireballs are not dodged; the damage-event log is where to look when they kill.
+- Fireballs are blocked only with a shield held and only from the front; without one they are not dodged, and the damage-event log is where to look when they kill.
 - A blaze hovering higher than the eye can reach from under it is never hit (`pressing?` stops within 0.8 on the plane); the fight has no engage timeout, only `:ghost` after 25 swings in reach.
 - A blaze within approach-range below a wall the press would have to occupy, with no route down, is not fought (issue #564). One already engaged ends done.
 - A back-off whose way away is a drop no landing survives stops on the lip (issue #514). A hurt bot rests there instead of jumping it.

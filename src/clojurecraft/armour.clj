@@ -34,15 +34,18 @@
   [["_helmet" 0] ["_chestplate" 1] ["_leggings" 2] ["_boots" 3] ["carved_pumpkin" 0]])
 
 (defn part
-  "The armour slot n (0 head .. 3 feet) item name k is worn in, or nil when it is no armour."
+  "The armour slot n (0 head .. 3 feet) item name k is worn in, :offhand for a shield (held, not
+   worn: the same two clicks put it in the offhand), or nil when it is neither."
   [k]
-  (when k (some (fn [[suffix n]] (when (str/ends-with? (name k) suffix) n)) parts)))
+  (cond (nil? k) nil
+        (= "shield" (name k)) :offhand
+        :else (some (fn [[suffix n]] (when (str/ends-with? (name k) suffix) n)) parts)))
 
 (defn worn-slot
   "The player-inventory slot that shows armour slot n (inventory/head-slot down: 39 the head, 36
-   the feet)."
+   the feet), or the offhand's (inventory/offhand-slot) for :offhand."
   [n]
-  (- inventory/head-slot n))
+  (if (= :offhand n) inventory/offhand-slot (- inventory/head-slot n)))
 
 (defn worn
   "The item name worn in armour slot n, or nil."
@@ -76,7 +79,7 @@
                      (when (and (< -1 p store-slots)
                                 n
                                 (not= :carved_pumpkin k)
-                                (not (and in-end? (zero? n) (some? pumpkin)))
+                                (not (and in-end? (= 0 n) (some? pumpkin)))
                                 (nil? (worn world n)))
                        [p k]))))))))
 
@@ -203,7 +206,9 @@
   (cond (cursor-holds? world item)
         (-> world
             (window/click (window/view world :inventory)
-                          (inventory/left-click (inventory/slot [:armour (part item)])))
+                          (inventory/left-click (inventory/slot
+                                                 (let [p (part item)]
+                                                   (if (= :offhand p) [:offhand] [:armour p])))))
             (intent/assoc-intent :intent/stage :check))
         (> (- (:time/now world) (or since 0)) window/answer-timeout)
         (intent/fail world :not-picked-up)

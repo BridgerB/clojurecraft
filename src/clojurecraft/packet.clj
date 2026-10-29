@@ -29,11 +29,11 @@
   "The numbers some packet fields carry, by name: each enum as 26.1.2 numbers it (its ordinal in
    the game's own enum, named after it). Code writes (value :hand :main-hand) and the packet still
    carries the number, so a field says what it means without the wire changing."
-  {:hand {:main-hand 0 :off-hand 1}                         ; InteractionHand
-   :dig {:start-destroy 0 :abort-destroy 1 :stop-destroy 2} ; player-action's status
-   :face {:down 0 :up 1 :north 2 :south 3 :west 4 :east 5}  ; Direction
-   :next-state {:status 1 :login 2 :transfer 3}             ; intention, the handshake
-   :client-command {:perform-respawn 0 :request-stats 1}    ; client-command's action
+  {:hand {:main-hand 0 :off-hand 1} ; InteractionHand
+   :dig {:start-destroy 0 :abort-destroy 1 :stop-destroy 2 :release-use-item 5} ; player-action's status (5: the use key let go, a shield lowered)
+   :face {:down 0 :up 1 :north 2 :south 3 :west 4 :east 5} ; Direction
+   :next-state {:status 1 :login 2 :transfer 3}            ; intention, the handshake
+   :client-command {:perform-respawn 0 :request-stats 1}   ; client-command's action
    :game-event {:win-game 4} ; game-event's event: the credits after the exit portal (the rest unread)
    :boss-event {:add 0 :remove 1 :update-health 2} ; boss-event's action (BossEvent operation ordinals; the rest unread)
    :chat-mode {:enabled 0 :commands-only 1 :hidden 2} ; ChatVisiblity

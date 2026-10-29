@@ -28,12 +28,13 @@
 (def gear-ms 3000000) ; ms after the portal kit the gear is worked for: fifty minutes of mining, then the run goes on
 
 (def sword-cost "The iron ingots an iron sword costs." 2)
+(def shield-cost "The iron ingots a shield costs (beside its six planks)." 1)
 
 (defn pieces
   "The pieces the gear is, in the order they are made, as [item-name ingots]: the armour's, then
-   the sword."
+   the sword, then the shield (offhand; it stops a blaze's fireball from the front, issue #262)."
   []
-  (conj (vec armour/made) [:iron_sword sword-cost]))
+  (conj (vec armour/made) [:iron_sword sword-cost] [:shield shield-cost]))
 
 (defn missing
   "The pieces of the gear not held (armour/counts: worn, in a grid or on the cursor counts as

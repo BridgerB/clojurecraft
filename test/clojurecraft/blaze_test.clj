@@ -471,8 +471,9 @@
         (is (= :walk (:intent/kind i)))
         (is (= :fire-out (:intent/for i)))
         (is (not (blaze/burning-here? (assoc burning :world/chunks {[0 0] (world/column {})}))))
-        (is (not= :fire-out (:intent/for (next-intent (assoc burning :player/on-fire? false))))
-            "once the flag is clear it is not a fire-out")))
+        (is
+         (= :fire-out (:intent/for (next-intent (assoc burning :player/on-fire? false))))
+         "alight or not, fire at the feet is left first: in_fire hit up to 26 times a run (blaze-race-g)")))
     (testing "burning, it does not rest in cover"
       (let [sp [11 64 10]
             pillar {[6 64 8] (blocks/default-state :stone) [6 65 8] (blocks/default-state :stone)}
@@ -1097,3 +1098,55 @@
     (is (= :tunnel-to (:intent/kind i)))
     (is (not (:intent/search i)) "never runs the Nether spiral search when at fortress")
     (is (int? (second (:intent/target i))))))
+
+(def shielded {inventory/offhand-slot (item :shield 1)})
+
+(deftest a-shield-is-raised-against-watching-blazes-and-lowered-to-walk
+  ;; blaze-race-g geared run 4: blazes at range with sight of the bot, fireballs and the burning
+  ;; after them the damage (on_fire 7 to 45, fireball 3 to 10 a run)
+  (let [far (entity :blaze [13.5 65.0 8.5] :entity/health 20.0)
+        hand (entity :blaze [10.5 65.0 8.5] :entity/health 20.0)
+        tick (fn [w] (intent/run w (:plan/intent w) {:event/kind :tick :event/now 1000}))
+        sent-names (fn [w] (map :packet/name (map :effect/packet (:bot/effects w))))]
+    (testing "watched from range with a shield in the offhand: block"
+      (is (= {:intent/kind :block} (next-intent (standing shielded {7 far}))))
+      (is (not= :block (:intent/kind (next-intent (standing {7 far})))) "no shield, no block"))
+    (testing "a blaze at hand is swung at, not blocked"
+      (is (= :fight (:intent/kind (next-intent (standing shielded {7 hand}))))))
+    (testing "hurt, the cover first"
+      (is (not= :block
+                (:intent/kind (next-intent
+                               (assoc (standing shielded {7 far}) :player/health 8.0))))))
+    (testing "the block sends the use key once to the offhand, and a second tick does not"
+      (let [w (assoc (standing shielded {7 far}) :plan/intent {:intent/kind :block})
+            w1 (tick (assoc w :bot/effects []))
+            w2 (tick (assoc w1 :bot/effects []))]
+        (is (= [:use-item] (sent-names w1)))
+        (is (= 1 (:hand (:effect/packet (first (:bot/effects w1))))) "the offhand")
+        (is (true? (:intent/raised? (:plan/intent w1))))
+        (is (empty? (sent-names w2)))))
+    (testing "the block ends when the blaze is at hand"
+      (let [w (assoc (standing shielded {7 hand}) :plan/intent {:intent/kind :block})]
+        (is (nil? (:plan/intent (tick w))))))
+    (testing "a raised shield is lowered before anything but a block"
+      (let [up (assoc (standing shielded {7 hand}) :player/using-item? true)
+            low (next-intent up)
+            w (assoc up :plan/intent low :bot/effects [])
+            w' (tick w)]
+        (is (= {:intent/kind :lower} low))
+        (is (= [:player-action] (sent-names w')))
+        (is (= 5 (:status (:effect/packet (first (:bot/effects w'))))))
+        (is (false? (:player/using-item? w'))))
+      (is (= {:intent/kind :block}
+             (next-intent (assoc (standing shielded {7 far}) :player/using-item? true)))
+          "still watched: it stays up"))
+    (testing "the living flags byte is read off the bot's own entity"
+      (let [me (assoc (standing {}) :player/entity-id 27)
+            md (fn [w m]
+                 (game/step w
+                            {:event/kind :packet
+                             :event/packet
+                             {:packet/name :set-entity-data :entity-id 27 :metadata m}}))]
+        (is (true? (:player/using-item? (md me {8 1}))))
+        (is (false? (:player/using-item? (md (md me {8 1}) {8 0}))))
+        (is (nil? (:player/using-item? (md me {0 1}))))))))

@@ -435,6 +435,7 @@
 (s/def :player/food int?)               ; 0-20 from a server; the wire allows any varint, and step is total over it
 (s/def :player/saturation number?)
 (s/def :player/on-fire? boolean?)
+(s/def :player/using-item? boolean?)
 (s/def :player/struck-at number?)
 (s/def :intent/food-before int?)
 (s/def :intent/eat-by number?)
@@ -507,6 +508,7 @@
 (s/def :intent/swings pos-int?)
 (s/def :intent/target-pos ::vec3)
 (s/def :intent/spawner ::block-pos)
+(s/def :intent/raised? boolean?)
 (s/def :intent/blazes (s/coll-of int? :kind set?))
 (s/def :intent/health number?)
 (s/def :intent/hold? boolean?)
