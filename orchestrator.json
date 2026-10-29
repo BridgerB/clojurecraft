@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-29T21:39:56.066Z",
+  "at" : "2026-10-29T21:41:03.733Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -31,7 +31,7 @@
     "number" : 610,
     "title" : "Bot stops at cast-one: no-support",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
+    "copilot" : true
   }, {
     "number" : 178,
     "title" : "Bot stops at portal: timeout",
@@ -200,7 +200,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 610,
-    "move" : "assign"
+    "move" : "wait",
+    "why" : "session starting"
   }, {
     "issue" : 178,
     "move" : "leave",
