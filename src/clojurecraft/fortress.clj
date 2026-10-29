@@ -14,6 +14,7 @@
             [clojurecraft.blocks :as blocks]
             [clojurecraft.build :as build]
             [clojurecraft.dimension :as dimension]
+            [clojurecraft.hunger :as hunger]
             [clojurecraft.intent :as intent]
             [clojurecraft.make :as make]
             [clojurecraft.memory :as memory]
@@ -851,31 +852,32 @@
   (boolean (and (= dimension/nether (dimension/of world))
                 (some #(arrived? world %) (bricks world)))))
 
-(def return-health 18.0)   ; health a bot back in the overworld has before it goes through the portal again
-(def return-wait-ms 900000) ; ms after a death the bot waits to be ready, however it fares: the food may never come
+(def return-health 18.0) ; health a bot back in the overworld has before it goes through the portal again
 
 (defn ready-for-nether?
-  "May the bot go back through the portal: its health at return-health or over, or return-wait-ms
-   gone since its last death? Sim R1/1 (probe 40787504601) entered the Nether at 7.9 health, food 14
-   and nothing edible, and was dead within the half hour: the hunt, the meal and the regear are
-   always rows that come first while this waits."
+  "May the bot go back through the portal: its health at return-health or over? Sim R1/1 (probe
+   40787504601) entered the Nether at 7.9 health, food 14 and nothing edible, and was dead within
+   the half hour. Health is made: a meal (eat/hungry-under eats up to food 18 for a bot that
+   went to the Nether), the hunt for the food, then a rest. No timer ends the wait: a bot that
+   cannot heal has no use in the Nether either."
   [world]
-  (let [died (:answer/at (last (memory/answers world :death)))]
-    (or (>= (:player/health world 20.0) return-health)
-        (nil? died)
-        (>= (- (:time/now world 0) died) return-wait-ms))))
+  (>= (:player/health world 20.0) return-health))
 
 (defmethod plan/done-by :nether-access?
   [world _]
   (or (not= dimension/overworld (dimension/of world))
       (not (contains? (:plan/reached world) :nether))
-      (not (ready-for-nether? world))
       (empty? (plan/undone world (filter #(= dimension/nether (:goal/dimension %)) plan/goals)))))
 
 (defmethod plan/next-intent :return-nether
+  ;; not ready: a rest while the food heals (food at the healing level), else the wait named for
+  ;; what is missing, :no-food-to-return, after the meal and the hunt, always rows that come
+  ;; first, found nothing to eat
   [world goal table]
-  (when-not (plan/done-by world goal)
-    (plan/next-intent world (assoc goal :goal/plan :build) table)))
+  (cond (plan/done-by world goal) nil
+        (ready-for-nether? world) (plan/next-intent world (assoc goal :goal/plan :build) table)
+        (>= (:player/food world 20) hunger/heal-level) {:intent/kind :rest}
+        :else {:plan/wait :no-food-to-return}))
 
 (defn back-target
   "The cell to walk back to when a pickaxe must be remade and no ground is near: the oldest

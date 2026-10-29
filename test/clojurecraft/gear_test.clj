@@ -3,6 +3,8 @@
    and its raw meat cooked; after a death, again."
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [clojurecraft.armour :as armour]
+            [clojurecraft.blocks :as blocks]
+            [clojurecraft.eat :as eat]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.fortress :as fortress]
             [clojurecraft.game :as game]
@@ -122,18 +124,36 @@
       (is (= 5 (armour/spare-ingots (standing {3 (item :iron_ingot 5)} #{:nether}))))
       (is (zero? (armour/spare-ingots (standing {3 (item :iron_ingot 5)} #{})))))))
 
-(deftest the-way-back-waits-for-health-after-a-death
+(deftest the-way-back-waits-for-health-and-works-for-it
   ;; sim R1/1 (probe 40787504601, t 18078400): into the Nether at 7.9 health, food 14, edible 0,
-  ;; dead at t 19370500
-  (let [dead (memory/remember-answer (standing {} #{:portal-kit :gear :nether})
-                                     {:answer/kind :death})
-        hurt (assoc dead :player/health 7.92 :player/food 14 :time/now 2000)]
-    (is (not (fortress/ready-for-nether? hurt)))
-    (is (plan/done-by hurt (row :return-nether)) "the row waits, and the always rows come first")
-    (testing "healed, or the wait spent, or no death: ready"
-      (is (fortress/ready-for-nether? (assoc hurt :player/health 18.5)))
-      (is (fortress/ready-for-nether? (assoc hurt :time/now (+ 1000 fortress/return-wait-ms))))
-      (is (fortress/ready-for-nether? (assoc (standing {} #{:nether}) :player/health 7.0))))))
+  ;; dead at t 19370500. No timer ends the wait: the meal, the hunt and the rest are its work
+  (let [back (fn [inv entities health food]
+               (-> (standing inv #{:portal-kit :gear :nether})
+                   (assoc :player/health health :player/food food :world/entities entities)))
+        row-of (fn [w] (:goal/id (plan/choose w plan/goals)))]
+    (is (not (fortress/ready-for-nether? (back {} {} 7.92 14))))
+    (is (fortress/ready-for-nether? (back {} {} 18.5 20)))
+    (testing "food held: the meal first, up to food 18"
+      (let [w (back {3 (item :bread 4)} {} 8.0 14)]
+        (is (eat/hungry? w))
+        (is (= :eat (row-of w)))))
+    (testing "no food held, an animal in sight: the hunt, not the portal"
+      (let [cow {:entity/type (blocks/entity-types :cow)
+                 :entity/pos [11.5 64.0 8.5]
+                 :entity/seen-at 0
+                 :entity/health 10.0}
+            w (assoc (back {} {5 cow} 8.0 14) :time/tick 0)]
+        (is (= :hunt (row-of w)))))
+    (testing "fed, nothing to hunt: a rest while the food heals"
+      (let [w (back {3 (item :bread 4)} {} 8.0 20)]
+        (is (= {:intent/kind :rest} (plan/next-intent w (row :return-nether) plan/goals)))))
+    (testing "no food, none to be had: the named wait, not the portal"
+      (let [w (back {} {} 8.0 14)]
+        (is (= {:plan/wait :no-food-to-return}
+               (plan/next-intent w (row :return-nether) plan/goals)))))
+    (testing "healed: the way back is the build's"
+      (is (not= {:plan/wait :no-food-to-return}
+                (plan/next-intent (back {} {} 19.0 20) (row :return-nether) plan/goals))))))
 
 (deftest raw-meat-is-cooked-after-the-portal-kit
   (let [w (standing (merge kit {3 (item :beef 6) 4 (item :porkchop 2)}))]
