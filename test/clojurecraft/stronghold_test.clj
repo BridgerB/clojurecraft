@@ -514,6 +514,17 @@
                :player/dimension dimension/overworld}]
         (is (not (stronghold/safe-portal-move? w feet [0 0 1]))
             "a move opening or bordering lava in the portal room is refused")))
+    (testing "to-room refuses a move that opens an infested block"
+      ;; gym chain-w13 run 4: the tunnel dug an infested stone brick at [14775 -13 13507], a
+      ;; silverfish came out, and the bot died of its bites
+      (let [feet [10 21 7]
+            w {:world/chunks {[0 0] (world/column {[10 21 8] (blocks/default-state
+                                                              :infested_stone_bricks)})}
+               :player/pos [10.5 21.0 7.5]
+               :player/dimension dimension/overworld}]
+        (is (stronghold/infested? w [10 21 8]))
+        (is (not (stronghold/safe-portal-move? w feet [0 0 1])) "a step into it is refused")
+        (is (stronghold/safe-portal-move? w feet [0 0 -1]) "one away from it is not")))
     (testing "within 6 of it: there"
       (is (plan/done-by (assoc seen :player/pos [40.5 22.0 58.5]) room-row)))
     (testing "in water: out to the nearest bank first"

@@ -30,6 +30,7 @@
    (memory/landmark-kinds), however deep it lies. Every long walk goes in hops a route reaches
    (hop), as the pearl hunt's roam does."
   (:require [clojure.math :as math]
+            [clojure.string :as str]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.drops :as drops]
             [clojurecraft.fortress :as fortress]
@@ -624,17 +625,27 @@
                   (>= (:intent/taken l 0) (:intent/steps l 0))
                   (or (nil? from) (< (- (gone from) (gone (intent/feet world))) tunnel-gain))))))
 
+(defn infested?
+  "Is the block at cell an infested one (infested_stone, infested_stone_bricks ...)? Breaking one
+   lets a silverfish out, which calls the others out of their blocks."
+  [world cell]
+  (str/starts-with? (name (or (blocks/name-of (terrain/block-at world cell)) :air)) "infested_"))
+
 (defn safe-portal-move?
-  "Does move from feet open no cell that is or borders lava, and have no lava floor?
-   In the portal room the 3x3 pool under the frame is lava; stepping or digging into it
-   is a death."
+  "Does move from feet open no cell that is or borders lava, have no lava floor, and open no
+   infested block? In the portal room the 3x3 pool under the frame is lava; stepping or digging
+   into it is a death. A stronghold's walls hold infested stone bricks: gym chain-w13 run 4 (job 4,
+   plan run 40798605016) dug one at [14775 -13 13507] and a silverfish came out and bit it from
+   9.3 health to 0 in 23 s, and run 3 and 5 of that batch the same."
   [world feet move]
   (let [cells (fortress/opens feet move)
         floor (fortress/plus (fortress/plus feet move) [0 -1 0])
         lava? (fn [c]
                 (let [id (terrain/block-at world c)]
                   (or (contains? blocks/lava-states id) (= :lava (terrain/fluid-kind world c)))))]
-    (and (not-any? lava? (conj cells floor)) (empty? (fortress/lava-beside world feet move)))))
+    (and (not-any? lava? (conj cells floor))
+         (not-any? #(infested? world %) cells)
+         (empty? (fortress/lava-beside world feet move)))))
 
 (defn safe-tunnel-move
   "The first move toward f that is safe?, dry?, and has no lava in its opened cells,

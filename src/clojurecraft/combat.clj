@@ -26,6 +26,7 @@
             [clojurecraft.entity :as entity]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
+            [clojurecraft.mob :as mob]
             [clojurecraft.packet :as packet]
             [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
@@ -388,6 +389,41 @@
             intent/done)
         :else (assoc world :player/controls (intent/toward world (away-point world e) 0.0))))
 
+(def defend-radius 4.0)               ; a hostile this near preempts any plan
+
+(def danger-margin 3.0)               ; health beyond the next hits' damage the bot keeps (#577): the enderman's 7 + 3 is retreat-health
+
+(def extra-hits
+  "{kind damage}: one hit on Normal of the kinds mob/kinds does not carry."
+  {:silverfish 1.0 :cave_spider 2.0 :husk 3.0 :drowned 3.0 :zombie_villager 3.0 :stray 3.0})
+
+(defn hit-damage
+  "The damage of one hit of a mob kind on Normal: extra-hits, else mob/kinds' :melee, else its
+   :shoot; nil for a kind with none (a creeper's blast, an unknown mob)."
+  [kind]
+  (or (extra-hits kind) (get-in mob/kinds [kind :melee]) (get-in mob/kinds [kind :shoot])))
+
+(defn danger-line
+  "The health under which :defend backs away from, covers against, and no longer fights: the
+   danger-margin plus the damage of one hit of every hostile within defend-radius of the feet
+   (entity/hostiles), never more than retreat-health, and retreat-health itself when none is
+   near or any has no known hit (hit-damage nil: a creeper, an unknown kind). #577: never fight
+   when the next hits can kill. One silverfish is 4, five are 8, a zombie and a silverfish 7, one
+   enderman 10. Gym chain-w13 run 4 (job 4, run 40798605016) was bitten 25 times in 23 s by a
+   silverfish at 9.3 health, backing away from another mob a back-off at a time, fighting
+   nothing, and died: a line of 10 is for what hits hard, not for what bites. Armour is not
+   counted: the line errs high."
+  [world]
+  (let [near (vals (into {}
+                         (filter (fn [[_ e]]
+                                   (<= (physics/distance (:player/pos world) (:entity/pos e))
+                                       defend-radius)))
+                         (entity/hostiles world)))
+        hits (map (comp hit-damage entity/kind) near)]
+    (if (or (empty? hits) (some nil? hits))
+      retreat-health
+      (min retreat-health (+ danger-margin (reduce + hits))))))
+
 (defn breathed-on?
   "Does the bot stand in the dragon's breath (entity/in-breath?) in the End? A fight there is the
    bot's death: gym chain-w11 runs 3 and 4 fought an enderman inside a cloud, six health every
@@ -425,7 +461,7 @@
                (not (:intent/hold? i))
                (not (and (:intent/to-the-end? i) (not (contains? entity/neutral (entity/kind e)))))
                (not= :hunt (:intent/for i))
-               (< (:player/health world 20.0) retreat-health))
+               (< (:player/health world 20.0) (danger-line world)))
           (-> world
               (intent/dissoc-intent :intent/child)
               (intent/assoc-intent :intent/stage :retreat :intent/since now))
@@ -546,7 +582,6 @@
 
 ;; ---------------------------------------------------------------- the rows
 
-(def defend-radius 4.0)               ; a hostile this near preempts any plan
 (def over-feet 3.0)                   ; blocks a mob's feet may be over the bot's and be fought (its body, aim-height up, comes within reach)
 (def under-feet 2.0)                  ; blocks under the bot's feet a mob may be and be fought
 (def sight-step 0.25)                 ; blocks between the samples of a line of sight
@@ -744,21 +779,6 @@
           nook {:intent/kind :dig :intent/target nook}
           :else {:plan/wait :cornered})))
 
-(def weak-hitters
-  "{kind line}: the health under which :defend stops fighting a kind that hits for little. The
-   line retreat-health is one enderman hit (7) plus a margin (#577, danger-health); a silverfish
-   bites for 1 (0.4 through armour), so its line is one bite plus the same margin of 3."
-  {:silverfish 4.0})
-
-(defn danger-line
-  "The health under which :defend backs away from, covers against, and no longer fights, entity
-   e: its kind's line in weak-hitters, else retreat-health. Gym chain-w13 run 4 (job 4, run
-   40798605016) was bitten 25 times in 23 s by a silverfish at 9.3 health, backing away from
-   another mob a back-off at a time, fighting nothing, and died; a fight under 10 is for what hits
-   hard, not for what bites."
-  [e]
-  (get weak-hitters (entity/kind e) retreat-health))
-
 (defn defend-target
   "The [eid entity] :defend answers among threats: the one that last hit the bot
    (:player/attacker) when it is one, else the nearest. Gym chain-w13 run 4 backed away from the
@@ -770,7 +790,7 @@
 
 (defmethod plan/next-intent :defend
   ;; the attacker among the threats, else the nearest (defend-target): a creeper, or anything
-  ;; while the health is under its danger-line (retreat-health, less for a silverfish), is
+  ;; while the health is under the danger-line (the hits near, at most retreat-health), is
   ;; backed away from; anything else fought. Silverfish are fought holding ground (:intent/hold?)
   ;; so the fight never walks off safe footing into portal-room lava. A neutral mob turned on the bot
   ;; (an angry enderman, entity/neutral) is fought to the end while healthy; under retreat-health
@@ -780,7 +800,7 @@
   ;; between, a pillar), never the fight under that line (#577).
   [world _ _]
   (when-let [[eid e] (defend-target world (threats world))]
-    (let [hurt? (< (:player/health world 20.0) (danger-line e))]
+    (let [hurt? (< (:player/health world 20.0) (danger-line world))]
       (cond
         (and (not= :creeper (entity/kind e)) hurt? (back-off-pointless? world e)) (cover world e)
         (or (= :creeper (entity/kind e)) hurt?) {:intent/kind :back-off :intent/target eid}
