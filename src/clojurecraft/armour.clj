@@ -16,6 +16,7 @@
    shows it in the armour slot, which the inventory keeps at player slots 36-39 (feet to head),
    so a worn piece still counts as held."
   (:require [clojure.string :as str]
+            [clojurecraft.dimension :as dimension]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
@@ -28,8 +29,9 @@
 
 (def parts
   "Which armour slot (inventory/slot-in's [:armour n], head to feet) a piece goes in, by the end
-   of its name."
-  [["_helmet" 0] ["_chestplate" 1] ["_leggings" 2] ["_boots" 3]])
+   of its name. A carved pumpkin is no armour but is worn on the head (its equippable
+   component), the dragon row's hood against an enderman's stare."
+  [["_helmet" 0] ["_chestplate" 1] ["_leggings" 2] ["_boots" 3] ["carved_pumpkin" 0]])
 
 (defn part
   "The armour slot n (0 head .. 3 feet) item name k is worn in, or nil when it is no armour."
@@ -53,14 +55,30 @@
 
 (defn unworn
   "[player-slot name] of a piece of armour held in the hotbar or the main inventory whose armour
-   slot is empty, the lowest slot first; nil when there is none."
+   slot is empty, the lowest slot first; nil when there is none. A carved pumpkin is never
+   one in the overworld: it is the dragon row's to put on in the End, not dress for the whole run.
+   In the End, a held carved pumpkin is worn on the head first before an iron helmet."
   [world]
-  (->> (:player/inventory world)
-       (sort-by key)
-       (some (fn [[p {:keys [item]}]]
-               (let [k (recipe/item-name item)
-                     n (part k)]
-                 (when (and (< -1 p store-slots) n (nil? (worn world n))) [p k]))))))
+  (let [in-end? (= dimension/end (dimension/of world))
+        pumpkin (when in-end?
+                  (some (fn [[p {:keys [item]}]]
+                          (when (and (< -1 p store-slots)
+                                     (= :carved_pumpkin (recipe/item-name item)))
+                            [p :carved_pumpkin]))
+                        (:player/inventory world)))]
+    (if (and pumpkin (nil? (worn world 0)))
+      pumpkin
+      (->> (:player/inventory world)
+           (sort-by key)
+           (some (fn [[p {:keys [item]}]]
+                   (let [k (recipe/item-name item)
+                         n (part k)]
+                     (when (and (< -1 p store-slots)
+                                n
+                                (not= :carved_pumpkin k)
+                                (not (and in-end? (zero? n) (some? pumpkin)))
+                                (nil? (worn world n)))
+                       [p k]))))))))
 
 (def made
   "The pieces made from spare ingots, in order, with their cost in iron ingots (the game's
@@ -151,7 +169,8 @@
 
 (defmethod wear-stage :pick
   ;; a container open first closed (the server ignores window-0 clicks while one is its menu);
-  ;; then the piece picked up from its slot
+  ;; then the piece picked up from its slot, unless an earlier attempt left it on the cursor
+  ;; (clicking its slot then would only put it back)
   [world {:intent/keys [item]}]
   (let [v (window/view world :inventory)
         p (some (fn [[p {i :item}]] (when (and (< -1 p store-slots) (= i (recipe/item-id item))) p))
@@ -162,27 +181,37 @@
               (game/emit {:packet/name :container-close
                           :window-id (get-in world [:window/open :window/id])})
               (dissoc :window/open))
+          (cursor-holds? world item)
+          (intent/assoc-intent world :intent/stage :put :intent/since (:time/now world))
           (nil? p) (intent/fail world :not-held)
           :else
           (-> world
               (window/click v (inventory/left-click ((:view/slot-of v) p)))
-              (intent/assoc-intent :intent/stage :put)))))
+              (intent/assoc-intent :intent/stage :put :intent/since (:time/now world))))))
 
 (defmethod wear-stage :put
-  [world {:intent/keys [item]}]
-  (if (cursor-holds? world item)
-    (-> world
-        (window/click (window/view world :inventory)
-                      (inventory/left-click (inventory/slot [:armour (part item)])))
-        (intent/assoc-intent :intent/stage :check))
-    (intent/fail world :not-picked-up)))
+  ;; the click's answer can move the window's state id before its set-cursor packet lands:
+  ;; wait for the cursor to show the piece, a stage's answer-timeout at the most, rather
+  ;; than fail with the piece on its way to the cursor (gym chain-w1's dragon run 3: the
+  ;; pumpkin wear failed :not-picked-up, the pumpkin stayed off the head and an enderman
+  ;; slew the bot at the perch)
+  [world {:intent/keys [item since]}]
+  (cond (cursor-holds? world item)
+        (-> world
+            (window/click (window/view world :inventory)
+                          (inventory/left-click (inventory/slot [:armour (part item)])))
+            (intent/assoc-intent :intent/stage :check))
+        (> (- (:time/now world) (or since 0)) window/answer-timeout)
+        (intent/fail world :not-picked-up)
+        :else world))
 
 (defmethod wear-stage :check
-  ;; worn, or the armour slot refused it: then the cursor's piece goes back into a free slot
-  ;; before the intent fails, so nothing is left on the cursor
+  ;; worn with the cursor empty, done; anything on the cursor (the piece the slot refused,
+  ;; or the piece swapped off a full slot: a carved pumpkin over an iron helmet) goes back
+  ;; into a free slot first, so nothing is left on the cursor either way
   [world {:intent/keys [item]}]
-  (cond (worn? world item) (intent/done world)
-        (:window/cursor world) (intent/assoc-intent world :intent/stage :drop)
+  (cond (:window/cursor world) (intent/assoc-intent world :intent/stage :drop)
+        (worn? world item) (intent/done world)
         :else (intent/fail world :not-worn)))
 
 (defmethod wear-stage :drop

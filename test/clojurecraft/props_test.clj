@@ -48,6 +48,7 @@
   [t]
   (cond (and (vector? t) (vector? (first t)))
         (apply gen/hash-map (mapcat (fn [[k ft]] [k (field-gen ft)]) t))
+        (p/conditional? t) (field-gen (nth t 3))
         (vector? t) (gen/vector (field-gen (second t)) 0 3)
         :else
         (case t

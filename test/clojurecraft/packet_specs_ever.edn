@@ -85,7 +85,7 @@
                              [:source-direct :varint]]
  [:play :s2c :player-combat-kill] [[:player-id :varint]]
  [:play :s2c :game-event] [[:event :u8] [:param :f32]]
- [:play :s2c :boss-event] [[:uuid :uuid] [:action :varint]]
+ [:play :s2c :boss-event] [[:uuid :uuid] [:action :varint] [:health [:if :action 2 :f32]]]
  [:play :c2s :client-command] [[:action :varint]]
  [:play :s2c :section-blocks-update] [[:section :i64] [:blocks [:vec :varlong]]]
  [:play :s2c :set-cursor-item] [[:item :slot]]

@@ -3,8 +3,9 @@
 
    A packet is a flat map with a :packet/name; its fields are the wire's own names, unqualified,
    because they are scoped by the packet. A spec is a vector of [key type] pairs; a type is a
-   keyword for a primitive, [:vec T] for a varint-counted sequence, or a vector of pairs for a
-   nested struct. Ids come from resources/clojurecraft/packets.edn (generated from the vanilla
+   keyword for a primitive, [:vec T] for a varint-counted sequence, [:if k v T] for a T that
+   follows only when the earlier field k is v (a conditional tail; absent otherwise, never nil),
+   or a vector of pairs for a nested struct. Ids come from resources/clojurecraft/packets.edn (generated from the vanilla
    reports). Decoding reads only the listed fields and ignores the tail of the frame: that is
    how big packets (chunks) skip the parts we do not model. Unknown ids decode to
    {:packet/name :unknown ...}; nothing here throws on foreign data."
@@ -33,8 +34,8 @@
    :face {:down 0 :up 1 :north 2 :south 3 :west 4 :east 5}  ; Direction
    :next-state {:status 1 :login 2 :transfer 3}             ; intention, the handshake
    :client-command {:perform-respawn 0 :request-stats 1}    ; client-command's action
-   :game-event {:win-game 4}      ; game-event's event: the credits after the exit portal (the rest unread)
-   :boss-event {:add 0 :remove 1} ; boss-event's action (BossEvent operation ordinals; the rest unread)
+   :game-event {:win-game 4} ; game-event's event: the credits after the exit portal (the rest unread)
+   :boss-event {:add 0 :remove 1 :update-health 2} ; boss-event's action (BossEvent operation ordinals; the rest unread)
    :chat-mode {:enabled 0 :commands-only 1 :hidden 2} ; ChatVisiblity
    :main-hand {:left 0 :right 1}                      ; HumanoidArm
    :particle-status {:all 0 :decreased 1 :minimal 2}  ; ParticleStatus
@@ -148,8 +149,9 @@
    [:play :s2c :player-combat-kill] [[:player-id :varint]]
    [:play :s2c :game-event] [[:event :u8] [:param :f32]]
    ;; a boss bar shown or taken away: its id and the operation; what follows each operation (the
-   ;; name, an NBT component) is an unmodelled tail (ClientboundBossEventPacket, issue #267)
-   [:play :s2c :boss-event] [[:uuid :uuid] [:action :varint]]
+   ;; name, an NBT component) is an unmodelled tail, but the health update's float (operation 2)
+   ;; comes first and is read (ClientboundBossEventPacket, issue #267)
+   [:play :s2c :boss-event] [[:uuid :uuid] [:action :varint] [:health [:if :action 2 :f32]]]
    ;; play, client → server
    [:play :c2s :keep-alive] [[:id :i64]]
    [:play :c2s :pong] [[:id :i32]]
@@ -408,17 +410,35 @@
                 (if (truncating? v) (persistent! acc) (recur (inc i) acc))))))
         :else ((type-fn t :read) buf)))
 
+(def min-width
+  "Bytes a primitive wire type needs at least: its width when fixed, one for the varying ones."
+  {:bool 1 :i8 1 :u8 1 :i16 2 :u16 2 :i32 4 :u32 4 :i64 8 :f32 4 :f64 8 :uuid 16})
+
+(defn conditional?
+  "Is a spec type a conditional tail, [:if k v T]: a T present only when the earlier field k is v?"
+  [t]
+  (and (vector? t) (= :if (first t))))
+
 (defn read-fields
   "The struct's fields in order into a map; stops at a truncating value and marks
-   the map :truncated."
+   the map :truncated. A conditional field ([:if k v T], conditional?) is read when field k read
+   v and the frame has at least T's width (min-width) left, and left out of the map otherwise:
+   a short tail never throws."
   [buf fields]
   (loop [fields fields
          m {}]
-    (if-let [[k t] (first fields)]
-      (let [v (read-field t buf)
-            m (assoc m k v)]
-        (if (truncating? v) (assoc m :truncated true) (recur (rest fields) m)))
-      m)))
+    (let [[k t] (first fields)
+          cond? (conditional? t)
+          [_ ck cv ct] (when cond? t)
+          v (when (and k (not cond?)) (read-field t buf))]
+      (cond (nil? k) m
+            cond?
+            (recur (rest fields)
+                   (cond-> m
+                     (and (= cv (get m ck)) (>= (.remaining buf) (get min-width ct 1)))
+                     (assoc k (read-field ct buf))))
+            (truncating? v) (assoc m k v :truncated true)
+            :else (recur (rest fields) (assoc m k v))))))
 
 (defn decode
   "Bytes of one frame (after decompression) → packet map. Unknown or unmodelled ids decode to
@@ -443,11 +463,14 @@
         :else ((type-fn t :write) out v)))
 
 (defn write-fields
-  "Each field of the struct from m, in spec order; throws when m lacks one."
+  "Each field of the struct from m, in spec order; throws when m lacks one. A conditional field
+   (conditional?) is written when its condition holds in m, and then must be there."
   [out fields m]
   (doseq [[k t] fields]
-    (when-not (contains? m k) (throw (ex-info "missing field" {:field k :packet m})))
-    (write-field t out (get m k))))
+    (let [[t present?] (if (conditional? t) [(nth t 3) (= (nth t 2) (get m (nth t 1)))] [t true])]
+      (when present?
+        (when-not (contains? m k) (throw (ex-info "missing field" {:field k :packet m})))
+        (write-field t out (get m k))))))
 
 (defn encode
   "Packet map → bytes of one frame (id + fields), for the client→server direction."

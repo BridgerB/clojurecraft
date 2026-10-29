@@ -14,4 +14,5 @@
  :fleet/minutes 340            ; then the job hands over to the next fleet run (GitHub's 6 h job cap)
  :fleet/patience-s 90 ; a job queued less than this is not yet a reason to give a lane back (pages deploys, bursts)
  :fleet/dispatch-grace-s 180 ; a dispatched lane not yet listed still counts this long
+ :fleet/cooldown-s 1200 ; after a lane is given back for need, no lane above the floor for this long: lanes dispatched into a gap and cancelled 3 to 20 minutes later reported nothing (2026-10-28, 20 real and 12 sim)
  :fleet/stale-after-minutes 120} ; a lane on replaced code runs this long first: a real run needs about 30 minutes to the Nether, and merges came every 30 (2026-10-17)

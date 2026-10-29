@@ -246,7 +246,9 @@
         floor [nx (dec ny) nz]
         holder [x (dec ny) z]
         kind #(path/classify world %)]
-    (cond (= :solid (kind floor)) []
+    (cond (or (place/inside-player? world floor) (and holder (place/inside-player? world holder)))
+          nil
+          (= :solid (kind floor)) []
           (or (not= :clear (kind floor)) (and (over-fluid? world floor) (not (bridging? world))))
           nil
           (place/support world floor) [floor]
@@ -393,7 +395,7 @@
    :boxed twice, and twelve walks to that water failed :no-path."
   [world _feet cells]
   (when (and (up-safe? world cells) (not (up-sealed? world cells)) (not (water-over? world cells)))
-    (let [cells (vec (water-beside world cells))]
+    (let [cells (vec (remove #(place/inside-player? world %) (water-beside world cells)))]
       (when (and (seq cells) (every? #(place/support world %) cells) (filler world (count cells)))
         cells))))
 
@@ -1192,6 +1194,8 @@
   (let [next (first (remove #(= :solid (path/classify world %)) lay))
         item (filler world 1)]
     (cond (and child (intent/done? child)) (intent/dissoc-intent world :intent/child)
+          (and child (intent/failed? child) (place/inside-player? world (:intent/cell child)))
+          (intent/dissoc-intent (assoc world :player/controls {}) :intent/child)
           (and child (intent/failed? child))
           (refuse
            world

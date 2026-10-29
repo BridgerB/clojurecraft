@@ -19,6 +19,10 @@
    for its row to retreat (:intent/yield?). A row whose act answers a kind of hostile itself
    (answers) has the :defend row leave that kind to it."
   (:require [clojure.math :as math]
+            [clojure.string :as str]
+            [clojurecraft.armour :as armour]
+            [clojurecraft.dimension :as dimension]
+            [clojurecraft.eat :as eat]
             [clojurecraft.entity :as entity]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
@@ -28,6 +32,7 @@
             [clojurecraft.place :as place]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
+            [clojurecraft.stairs :as stairs]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.window :as window]))
 
@@ -215,15 +220,6 @@
                               :intent/best-tick)
         :else (intent/run-child world event)))
 
-(defn pressing?
-  "Should an engaged fight walk on toward entity e: its aim out of attack-reach of the eye while
-   it is still press-within or more away on the plane. A blaze hovers: two blocks over the floor,
-   its aim from approach-range on the plane was 3.3 from the eye, past attack-reach, and the engage
-   faced it and never attacked (issue #262, the server model's blaze)."
-  [world e]
-  (and (> (physics/distance (game/eye world) (aim e)) attack-reach)
-       (>= (horizontal world e) press-within)))
-
 (defn floor-pos
   "The bot's feet position with y at the floor it stands on or jumped from: the cell the feet are
    in (a hair over a whole number counts as that number), or the one under it when nothing solid
@@ -285,6 +281,17 @@
         here [(long (math/floor px)) (long (math/floor (+ (double py) 0.5)))
               (long (math/floor pz))]]
     (or (= c here) (path/standable? world c))))
+
+(defn pressing?
+  "Should an engaged fight walk on toward entity e: its aim out of attack-reach of the eye while
+   it is still press-within or more away on the plane, not leaving safe footing. A blaze hovers:
+   two blocks over the floor, its aim from approach-range on the plane was 3.3 from the eye, past
+   attack-reach, and the engage faced it and never attacked (issue #262, the server model's blaze)."
+  [world e]
+  (and (> (physics/distance (game/eye world) (aim e)) attack-reach)
+       (>= (horizontal world e) press-within)
+       (not= :silverfish (entity/kind e))
+       (press-stands? world e)))
 
 (defn strikable?
   "Can the sword reach entity e from here (in-reach?), or by pressing in to press-within onto
@@ -381,6 +388,13 @@
             intent/done)
         :else (assoc world :player/controls (intent/toward world (away-point world e) 0.0))))
 
+(defn breathed-on?
+  "Does the bot stand in the dragon's breath (entity/in-breath?) in the End? A fight there is the
+   bot's death: gym chain-w11 runs 3 and 4 fought an enderman inside a cloud, six health every
+   half second of magic, 20 to 0 in three seconds. The cloud is left first, whatever hits."
+  [world]
+  (and (= dimension/end (:player/dimension world)) (entity/in-breath? world)))
+
 (defmethod intent/run :fight
   ;; {:intent/kind :fight :intent/target eid}: done when the target is gone (a kill); below
   ;; retreat-health it breaks off and walks away (done once away: a fight left is not a failure).
@@ -402,13 +416,14 @@
             e (assoc :intent/target-pos (:entity/pos e)))
         world (assoc world :plan/intent i)]
     (cond (or (entity/gone? world (:intent/target i))
+              (breathed-on? world)
               (and (:intent/yield? i) (< (:player/health world 20.0) retreat-health)))
           (-> world
               (assoc :player/controls {})
               intent/done)
           (and (not= :retreat (:intent/stage i))
                (not (:intent/hold? i))
-               (not (:intent/to-the-end? i))
+               (not (and (:intent/to-the-end? i) (not (contains? entity/neutral (entity/kind e)))))
                (not= :hunt (:intent/for i))
                (< (:player/health world 20.0) retreat-health))
           (-> world
@@ -627,18 +642,28 @@
    a row in play answers itself (answered-kinds), only what can be fought from here
    (hittable?) and come to (approachable?: a mob in water two blocks below is seen but never
    strikable and no route reaches it, and a fight on it ends done at once, re-picked for the
-   whole stage, issues #69 and #62), and none given up as unreachable a while ago (given-up?)."
+   whole stage, issues #69 and #62), and none given up as unreachable a while ago (given-up?).
+   None at all while the bot stands in the dragon's breath (breathed-on?)."
   [world]
   (let [pos (:player/pos world)
         bl (:plan/blacklist world #{})
-        left (answered-kinds world)]
+        left (answered-kinds world)
+        pumpkin? (= :carved_pumpkin (armour/worn world 0))
+        hurt? (and (:player/hurt-at world)
+                   (<= (- (:time/tick world 0) (:player/hurt-at world)) 60))]
     (into
      {}
      (filter
       (fn [[eid e]]
-        (and (not (contains? bl eid))
-             (not (contains? left (entity/kind e)))
+        (and (not (breathed-on? world))
+             (not (contains? bl eid))
+             (not= :ender_dragon (entity/kind e))
+             (or (= eid (:player/attacker world)) (not (contains? left (entity/kind e))))
              (not (given-up? world eid e))
+             (or (not pumpkin?)
+                 (not= :enderman (entity/kind e))
+                 (= eid (:player/attacker world))
+                 (and hurt? (<= (physics/distance pos (:entity/pos e)) 3.5)))
              (<= (physics/distance pos (:entity/pos e))
                  (reach world eid e (if (= :creeper (entity/kind e)) creeper-radius defend-radius)))
              (hittable? world e)
@@ -647,28 +672,99 @@
 
 (defmethod plan/done-by :safe? [world _] (or (nil? (:player/pos world)) (empty? (threats world))))
 
+(defn back-off-pointless?
+  "Would a :back-off from entity e be done at once, getting the bot nowhere: it is already
+   back-off-to away, the way straight away is a drop no landing survives (void-retreat?) or
+   steps into or near lava (lava-retreat?)? A back-off that ran out its clock (:plan/cornered)
+   is not one: the target followed, and trying again is what the older rule asks (issue #161,
+   #563). Gym chain-w13 dragon run 2 (plan run 40798605016): an enderman on the End's island at
+   under 10 health, a back-off chosen every 50 ms and ended cornered in the tick it began, the
+   bot standing still under 8 hits and four swings."
+  [world e]
+  (boolean
+   (or (>= (horizontal world e) back-off-to) (void-retreat? world e) (lava-retreat? world e))))
+
+(def wall-fill 1)                     ; filler a wall cell needs
+(def pillar-fill 3)                   ; filler a pillar of three needs
+(def pillar-height 3)                 ; blocks a pillar under a hurt bot rises
+
+(defn wall-cell
+  "The first cell clear (path/classify) of the two beside the feet toward entity e, at the feet's
+   height then the eye's, or nil when both are not clear: where a block goes between the bot and e."
+  [world e]
+  (let [[fx fy fz] (intent/feet world)
+        [px _ pz] (:player/pos world)
+        [ex _ ez] (:entity/pos e)
+        dx (- ex px)
+        dz (- ez pz)
+        [sx sz] (if (>= (abs dx) (abs dz)) [(long (math/signum dx)) 0] [0 (long (math/signum dz))])]
+    (first (filter #(= :clear (path/classify world %))
+                   [[(+ fx sx) fy (+ fz sz)] [(+ fx sx) (inc fy) (+ fz sz)]]))))
+
+(defn nook-cell
+  "The cell under the feet when the bot holds a pickaxe and it and the one under it are solid
+   (path/classify): digging it leaves a hole a block deep to stand in, with floor under it, or nil."
+  [world]
+  (let [[fx fy fz] (intent/feet world)
+        below [fx (dec fy) fz]
+        pick? (some #(str/ends-with? (name %) "_pickaxe")
+                    (keys (recipe/counts (:player/inventory world))))]
+    (when (and pick?
+               (= :solid (path/classify world below))
+               (= :solid (path/classify world [fx (- fy 2) fz])))
+      below)))
+
+(defn cover
+  "The intent for a bot under retreat-health that no back-off from entity e would help
+   (back-off-pointless?), never a fight (#577, danger-health): with e back-off-to or more away, the
+   meal when food is held and the bar can take one, else the wait :resting; otherwise the meal
+   when food is held, the bar can take one and e is out of attack-reach, else a block laid
+   between (wall-cell, a filler of stairs/filler), else a pillar of pillar-height when
+   pillar-fill filler is held, else the meal, else the dig of a nook under the feet (nook-cell,
+   a pickaxe held) to stand in. Only with nothing at all held the wait :cornered, which ENDS THE
+   PLAN after wait-ticks: the one choice here that is a death or a failure, taken with nothing
+   to eat, lay or dig with. Gym chain-w13 dragon run 2 chose a back-off from an enderman every
+   50 ms for a second and died standing in it."
+  [world e]
+  (let [food (when (< (:player/food world 20) 20) (eat/food-held world))
+        near? (<= (physics/distance (game/eye world) (aim e)) attack-reach)
+        wall (wall-cell world e)
+        filler (stairs/filler world wall-fill)
+        nook (nook-cell world)
+        [_ fy _] (intent/feet world)]
+    (cond (>= (horizontal world e) back-off-to)
+          (if food {:intent/kind :eat :intent/item food} {:plan/wait :resting})
+          (and food (not near?)) {:intent/kind :eat :intent/item food}
+          (and wall filler) {:intent/kind :place :intent/item filler :intent/cell wall}
+          (stairs/filler world pillar-fill)
+          {:intent/kind :pillar
+           :intent/item (stairs/filler world pillar-fill)
+           :intent/top (+ fy pillar-height)}
+          food {:intent/kind :eat :intent/item food}
+          nook {:intent/kind :dig :intent/target nook}
+          :else {:plan/wait :cornered})))
+
 (defmethod plan/next-intent :defend
   ;; the nearest threat: a creeper, or anything while the health is under retreat-health, is
-  ;; backed away from; anything else fought. A neutral mob turned on the bot (an angry enderman,
-  ;; entity/neutral) is fought to the end whatever the health: it is faster than the bot and
-  ;; teleports after it, so a back-off from it is only hits taken. Gym dragon-e run 1 struck one
-  ;; five times (40 to 10) then backed away under 10 health and died in its hands. What a
-  ;; back-off could not get away from (:plan/cornered: the bot was in a dead end) is fought to the
-  ;; end too, unless the health is already under retreat-health (one hit plus a margin) and it is
-  ;; no neutral: then it is backed away from again, never fought on to death (issue #563, probe
-  ;; 40033104245: two zombies cornered by a void back-off were fought to the end at 7.3 health
-  ;; down to 1.3). Sim race 39593219246 (issue #161, world R3/41) backed away from a zombie two
-  ;; blocks off at under one health from the end of a one-wide tunnel, a quarter hour, never moving
+  ;; backed away from; anything else fought. Silverfish are fought holding ground (:intent/hold?)
+  ;; so the fight never walks off safe footing into portal-room lava. A neutral mob turned on the bot
+  ;; (an angry enderman, entity/neutral) is fought to the end while healthy; under retreat-health
+  ;; (#577 danger-health) it is backed away from, never fought on to death. What a back-off could not get away
+  ;; from (:plan/cornered) is fought to the end too when healthy, else backed away from, unless
+  ;; the back-off would end at once (back-off-pointless?): then the cover (a meal, a block laid
+  ;; between, a pillar), never the fight under that line (#577).
   [world _ _]
   (when-let [[eid e] (entity/nearest (threats world) (:player/pos world))]
-    (cond (or (= :creeper (entity/kind e))
-              (and (< (:player/health world 20.0) retreat-health)
-                   (contains? (:plan/cornered world #{}) eid)
-                   (not (contains? entity/neutral (entity/kind e)))))
+    (cond (and (not= :creeper (entity/kind e))
+               (< (:player/health world 20.0) retreat-health)
+               (back-off-pointless? world e))
+          (cover world e)
+          (or (= :creeper (entity/kind e)) (< (:player/health world 20.0) retreat-health))
           {:intent/kind :back-off :intent/target eid}
+          (= :silverfish (entity/kind e))
+          {:intent/kind :fight :intent/target eid :intent/hold? true}
           (or (contains? entity/neutral (entity/kind e)) (contains? (:plan/cornered world #{}) eid))
           {:intent/kind :fight :intent/target eid :intent/to-the-end? true}
-          (< (:player/health world 20.0) retreat-health) {:intent/kind :back-off :intent/target eid}
           :else {:intent/kind :fight :intent/target eid})))
 
 (defn quarry

@@ -77,6 +77,28 @@
         (is (= 1 (:iron_helmet (recipe/counts (:player/inventory w))))
             "and still counted as held")))))
 
+(deftest a-wear-waits-for-the-cursor-the-clicks-answer-has-not-shown-yet
+  ;; gym chain-w1's dragon run 3: the pumpkin wear failed :not-picked-up on the packet
+  ;; boundary and the bot fought bare-headed; :put waits out the answer-timeout for the
+  ;; set-cursor packet, and a piece already on the cursor goes straight to :put
+  (let [at (fn [now stage cursor]
+             (let [w (assoc (standing {})
+                            :time/now now
+                            :window/cursor cursor
+                            :plan/intent
+                            {:intent/kind :wear
+                             :intent/item :carved_pumpkin
+                             :intent/status :active
+                             :intent/stage stage
+                             :intent/since 1000})]
+               (:plan/intent (armour/wear-stage w (:plan/intent w)))))]
+    (is (= :put (:intent/stage (at 1500 :put nil))) "no cursor yet, within the wait: on")
+    (is (not= :failed (:intent/status (at 1500 :put nil))) "not failed on the boundary")
+    (is (= [:failed :not-picked-up] ((juxt :intent/status :intent/reason) (at 4500 :put nil)))
+        "past the answer-timeout with no cursor: failed")
+    (is (= :put (:intent/stage (at 1500 :pick (item :carved_pumpkin 1))))
+        "the piece on the cursor already: to :put without a click")))
+
 (deftest a-refused-piece-goes-back-before-the-wear-fails
   (let [w
         (assoc
@@ -99,6 +121,13 @@
     (is (plan/done-by (standing {3 (item :iron_helmet 1) 39 (item :iron_helmet 1)})
                       (row :wear-armour))
         "a spare helmet with one worn is not worn twice")))
+
+(deftest a-carved-pumpkin-is-headwear-the-armour-row-leaves-alone
+  ;; worn on the head like a helmet (the dragon row's hood in the End), but the always
+  ;; :wear-armour row never dresses the bot in it for the whole run
+  (is (= 0 (armour/part :carved_pumpkin)))
+  (is (plan/done-by (standing {3 (item :carved_pumpkin 1)}) (row :wear-armour))
+      "held over a bare head: still dressed"))
 
 (def kit
   {0 (item :flint_and_steel 1)

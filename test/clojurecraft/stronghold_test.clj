@@ -7,7 +7,9 @@
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]
             [clojurecraft.blocks :as blocks]
+            [clojurecraft.dimension :as dimension]
             [clojurecraft.fixtures :as fx]
+            [clojurecraft.fortress :as fortress]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.main :as main]
@@ -193,6 +195,16 @@
                         [(fx/packet {:packet/name :remove-entities :ids [90]})]
                         (fx/ticks 2950 3100))
         [w _] (fx/fold intent-step throwing removed)
+        [mid-air _] (fx/fold intent-step
+                             w
+                             (concat [(fx/packet {:packet/name :add-entity
+                                                  :entity-id 91
+                                                  :uuid nil
+                                                  :type blocks/item-entity-type
+                                                  :x 14.5
+                                                  :y 70.0
+                                                  :z 14.5})]
+                                     (fx/ticks 3100 3200)))
         [w2 _] (fx/fold intent-step
                         w
                         (concat [(fx/packet {:packet/name :add-entity
@@ -204,6 +216,8 @@
                                              :z 14.5})]
                                 (fx/ticks 3100 3200)))]
     (is (= :active (:intent/status (:plan/intent w))) "the eye gone, its drop not yet come")
+    (is (= :active (:intent/status (:plan/intent mid-air)))
+        "falling through air: not yet on the floor")
     (is (= :done (:intent/status (:plan/intent w2))) "done once the drop lies there")
     (is (= {:intent/kind :collect-drops
             :intent/item :ender_eye
@@ -407,6 +421,77 @@
         (is (stronghold/tunnel-spent? (assoc-in spent [:plan/last :intent/from-feet] [8 26 9])
                                       [40 20 60])
             "a block nearer is nowhere")))
+    (testing "within deep over the frame, tunnel move blocked: stairs down fallback"
+      (let [w (assoc seen :player/pos [8.5 26.0 8.5])]
+        (with-redefs [fortress/choose-move (constantly nil)]
+          (is (= :stairs-down (:intent/kind (plan/next-intent w room-row plan/goals)))
+              "when dry tunnel has no first step within deep, falls back to stairs"))))
+    (testing "when feet cell is in :plan/boxed-at, stairs down fallback is refused"
+      (let [w (assoc seen :player/pos [8.5 26.0 8.5] :plan/boxed-at #{[8 26 8]})]
+        (with-redefs [fortress/choose-move (constantly nil)]
+          (is (= {:plan/wait :no-way} (plan/next-intent w room-row plan/goals))
+              "a boxed feet cell never attempts stairs down again"))))
+    (testing "when feet cell is boxed, to-room retreats along trail to earlier unboxed cell"
+      ;; gym chain-w7 run 1: aquifer blocked tunnel-to, stairs-down boxed at [12985 3 16726];
+      ;; to-room must retreat along trail to a different stair start, not wait :no-way
+      (let [w (assoc seen
+                     :player/pos [12985.5 3.0 16726.5]
+                     :plan/boxed-at #{[12985 3 16726]}
+                     :plan/trail [[13008 8 16727] [12985 3 16726]])]
+        (with-redefs [fortress/choose-move (constantly nil)]
+          (is (= {:intent/kind :walk :intent/target [13008 8 16727] :intent/for :retreat}
+                 (stronghold/to-room w [12815 0 16673]))
+              "retreats along trail to earlier unboxed cell instead of waiting :no-way"))))
+    (testing "a retreat cell a walk failed at is not chosen again"
+      ;; gym chain-w11 run 1 (plan run 40741523320): the retreat walk to [12983 3 16726] failed
+      ;; :no-path twelve times in 0.6 s, the same cell each time, and the plan failed
+      (let [w (assoc seen
+                     :player/pos [12985.5 3.0 16726.5]
+                     :plan/boxed-at #{[12985 3 16726]}
+                     :plan/trail [[12983 3 16726] [13008 8 16727] [12985 3 16726]]
+                     :plan/blacklist #{[13008 8 16727]})]
+        (with-redefs [fortress/choose-move (constantly nil)]
+          (is (= {:intent/kind :walk :intent/target [12983 3 16726] :intent/for :retreat}
+                 (stronghold/to-room w [12815 0 16673]))
+              "the walk that failed is skipped for the next cell back")
+          (is (= {:plan/wait :no-way}
+                 (stronghold/to-room (update w :plan/blacklist conj [12983 3 16726])
+                                     [12815 0 16673]))
+              "every cell tried: the wait, never the same walk again"))))
+    (testing "every retreat cell across water: a swim, not a walk to each in turn"
+      ;; gym chain-w11 to w14 run 1: on the bank at the bottom of the flooded staircase
+      ;; ([12983 3 16726]), `intent :walk` to each trail cell in turn 50 ms apart, every one
+      ;; :no-path, twelve of them failed the run at 8 minutes. Here a band of water three wide
+      ;; between the bank and the trail's cells.
+      (let [band (world/column (into {}
+                                     (for [x (concat (range 5 8) (range 9 12))
+                                           z (range 16)
+                                           y (range 58 70)]
+                                       [[x y z] blocks/water-base])))
+            w (-> (searching [8.5 8.5] [])
+                  (assoc :world/chunks {[0 0] band}
+                         :plan/boxed-at #{[8 64 8]}
+                         :plan/trail [[13 64 8] [14 64 8] [8 64 8]]))
+            w2 (assoc w :plan/trail [[8 64 2] [13 64 8] [8 64 8]])]
+        ;; water in the columns either side of the bank's own (x 5-7 and 9-11): every step the
+        ;; tunnel could take, east, aside, back or down, opens a cell in or beside water, so
+        ;; (fortress/moves, aside included) leaves it no dry step and the retreat is reached
+        (is (= {:intent/kind :cross :intent/target [14 64 8] :intent/for :retreat}
+               (stronghold/to-room w [13 60 8]))
+            "no route to a cell across it: the swim to the nearest of them")
+        (is (= {:intent/kind :walk :intent/target [8 64 2] :intent/for :retreat}
+               (stronghold/to-room w2 [13 60 8]))
+            "one a route reaches is walked to")))
+    (testing "to-room refuses moves through or bordering lava in portal room"
+      ;; gym chain-w7 run 3: in portal room with lava pool under frame, tunnel-to
+      ;; must never step into or border lava
+      (let [feet [10 21 7]
+            lava (blocks/default-state :lava)
+            w {:world/chunks {[0 0] (world/column {[10 20 8] lava [10 19 8] lava})}
+               :player/pos [10.5 21.0 7.5]
+               :player/dimension dimension/overworld}]
+        (is (not (stronghold/safe-portal-move? w feet [0 0 1]))
+            "a move opening or bordering lava in the portal room is refused")))
     (testing "within 6 of it: there"
       (is (plan/done-by (assoc seen :player/pos [40.5 22.0 58.5]) room-row)))
     (testing "in water: out to the nearest bank first"
@@ -427,7 +512,15 @@
         (is (= :stairs-down
                (:intent/kind
                 (plan/next-intent (assoc shore :player/pos [7.5 64.0 9.5]) room-row plan/goals)))
-            "standing dry: the stairs")))
+            "standing dry: the stairs")
+        (is (= :stairs-down
+               (:intent/kind (plan/next-intent
+                              (assoc shore
+                                     :player/pos [7.5 52.0 9.5]
+                                     :plan/last {:intent/kind :stairs-down :intent/status :done})
+                              room-row
+                              plan/goals)))
+            "after stairs have begun: continues stairs down, never retreats to the shore")))
     (testing "water everywhere round: no dry start, the stairs where the feet are"
       (let [wet (assoc seen
                        :world/chunks
