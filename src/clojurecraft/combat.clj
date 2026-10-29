@@ -21,6 +21,7 @@
   (:require [clojure.math :as math]
             [clojurecraft.armour :as armour]
             [clojurecraft.dimension :as dimension]
+            [clojurecraft.eat :as eat]
             [clojurecraft.entity :as entity]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
@@ -30,6 +31,7 @@
             [clojurecraft.place :as place]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
+            [clojurecraft.stairs :as stairs]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.window :as window]))
 
@@ -682,6 +684,48 @@
                (void-retreat? world e)
                (lava-retreat? world e))))
 
+(def wall-fill 1)                     ; filler a wall cell needs
+(def pillar-fill 3)                   ; filler a pillar of three needs
+(def pillar-height 3)                 ; blocks a pillar under a hurt bot rises
+
+(defn wall-cell
+  "The first cell clear (path/classify) of the two beside the feet toward entity e, at the feet's
+   height then the eye's, or nil when both are not clear: where a block goes between the bot and e."
+  [world e]
+  (let [[fx fy fz] (intent/feet world)
+        [px _ pz] (:player/pos world)
+        [ex _ ez] (:entity/pos e)
+        dx (- ex px)
+        dz (- ez pz)
+        [sx sz] (if (>= (abs dx) (abs dz)) [(long (math/signum dx)) 0] [0 (long (math/signum dz))])]
+    (first (filter #(= :clear (path/classify world %))
+                   [[(+ fx sx) fy (+ fz sz)] [(+ fx sx) (inc fy) (+ fz sz)]]))))
+
+(defn cover
+  "The intent for a bot under retreat-health that no back-off from entity e would help
+   (back-off-pointless?), never a fight (#577, danger-health): with e back-off-to or more away, the
+   meal when food is held and the bar can take one, else the wait :resting; otherwise the meal
+   when food is held, the bar can take one and e is out of attack-reach, else a block laid
+   between (wall-cell, a filler of stairs/filler), else a pillar of pillar-height when
+   pillar-fill filler is held, else the wait :cornered. Gym chain-w13 dragon run 2 chose a
+   back-off from an enderman every 50 ms for a second and died standing in it."
+  [world e]
+  (let [food (when (< (:player/food world 20) 20) (eat/food-held world))
+        near? (<= (physics/distance (game/eye world) (aim e)) attack-reach)
+        wall (wall-cell world e)
+        filler (stairs/filler world wall-fill)
+        [_ fy _] (intent/feet world)]
+    (cond (>= (horizontal world e) back-off-to)
+          (if food {:intent/kind :eat :intent/item food} {:plan/wait :resting})
+          (and food (not near?)) {:intent/kind :eat :intent/item food}
+          (and wall filler) {:intent/kind :place :intent/item filler :intent/cell wall}
+          (stairs/filler world pillar-fill)
+          {:intent/kind :pillar
+           :intent/item (stairs/filler world pillar-fill)
+           :intent/top (+ fy pillar-height)}
+          food {:intent/kind :eat :intent/item food}
+          :else {:plan/wait :cornered})))
+
 (defmethod plan/next-intent :defend
   ;; the nearest threat: a creeper, or anything while the health is under retreat-health, is
   ;; backed away from; anything else fought. Silverfish are fought holding ground (:intent/hold?)
@@ -689,13 +733,14 @@
   ;; (an angry enderman, entity/neutral) is fought to the end while healthy; under retreat-health
   ;; (#577 danger-health) it is backed away from, never fought on to death. What a back-off could not get away
   ;; from (:plan/cornered) is fought to the end too when healthy, else backed away from, unless
-  ;; the back-off would end at once (back-off-pointless?): then the fight, the one thing left.
+  ;; the back-off would end at once (back-off-pointless?): then the cover (a meal, a block laid
+  ;; between, a pillar), never the fight under that line (#577).
   [world _ _]
   (when-let [[eid e] (entity/nearest (threats world) (:player/pos world))]
     (cond (and (not= :creeper (entity/kind e))
                (< (:player/health world 20.0) retreat-health)
                (back-off-pointless? world eid e))
-          {:intent/kind :fight :intent/target eid :intent/to-the-end? true}
+          (cover world e)
           (or (= :creeper (entity/kind e)) (< (:player/health world 20.0) retreat-health))
           {:intent/kind :back-off :intent/target eid}
           (= :silverfish (entity/kind e))
