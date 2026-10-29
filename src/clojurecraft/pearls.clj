@@ -1537,18 +1537,20 @@
 
 (defn wandering?
   "Has the hunt stood wander-lookouts or more :lookout intents with no walk ended since (stuck?
-   counts the same, from stale-lookouts), or is it loitering (loitering?), and does no enderman
-   tracked have a route to it
+   counts the same, from stale-lookouts), and does no enderman tracked have a route to it
    (routable), however near it is by the air? Run 1 of gym plan run 40775811459 (issue #263,
    pearls-12) held five pearls at twelve minutes and then stood 2,210 lookouts to the five-hour
-   cap, twelve endermen tracked 16 to 100 blocks off on other levels, none with a route."
+   cap, twelve endermen tracked 16 to 100 blocks off on other levels, none with a route. Or is it
+   loitering (loitering?), whatever is tracked: gym plan run 40905321229 job 6 shuffled 136 times
+   over 51 minutes on two cells with an angry enderman routable that never came, so the first
+   never held."
   [world]
-  (boolean (and (or (>= (or (memory/done-since world :lookout :walk)
+  (boolean (or (loitering? world)
+               (and (>= (or (memory/done-since world :lookout :walk)
                             (memory/done-since world :lookout :burrow)
                             0)
                         wander-lookouts)
-                    (loitering? world))
-                (nil? (routable world (endermen world seek-radius))))))
+                    (nil? (routable world (endermen world seek-radius)))))))
 
 (defn wander
   "A walk somewhere else to hunt from: to the end of the first of the eight headings (headings, from

@@ -2447,3 +2447,16 @@
         "two cuts: tried again")
     (is (not (pearls/unfightable? (assoc w :time/now (+ 100000 pearls/fight-giveup-ms 1)) 7 far))
         "ten minutes on, tried again")))
+
+(deftest a-shuffle-wanders-even-with-an-enderman-a-route-reaches
+  ;; gym plan run 40905321229 job 6 (issue #263, pearls-12): [2242 76 2701] and [2244 76 2701]
+  ;; walked 136 times over 51 minutes, an angry enderman routable and never coming
+  (let [angry (assoc (enderman [30.5 64.0 8.5]) :entity/creepy? true)
+        w (-> (wide (burrowed [8.5 61.0 8.5] {7 angry}))
+              (walked (take pearls/loiter-walks (cycle [[8 61 8] [10 61 8]]))))]
+    (is (some? (pearls/routable w (pearls/endermen w pearls/seek-radius))) "a route reaches it")
+    (is (pearls/loitering? w))
+    (is (pearls/wandering? w))
+    (is (not (pearls/wandering? (looked (wide (burrowed [8.5 61.0 8.5] {7 angry}))
+                                        pearls/wander-lookouts)))
+        "lookouts alone, with one routable: as before, it stays")))
