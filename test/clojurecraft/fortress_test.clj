@@ -309,18 +309,21 @@
         "lava under")
     (is (not (fortress/thin-floor? (assoc-in thin [:world/blocks [1 62 0]] nil) [1 63 0]))
         "an unloaded cell is no drop")
-    (testing "no block to put under it: the step is refused"
-      (is (not (fortress/safe? thin [0 64 0] [1 0 0])))
+    (testing "no block to put under it: a fresh step onto it is not taken"
+      (is (not= [1 0 0] (fortress/next-move thin [0 64 0] [20 64 0] 8 false #{})))
       (is (empty? (fortress/underlay-ops thin [0 64 0] [1 0 0]))))
+    (testing "a retreat onto a cell already stood in is not asked (the pacing ledge)"
+      (is (fortress/safe? thin [0 64 0] [1 0 0]) "the step itself is as safe as it was")
+      (is (not= [1 0 0] (fortress/next-move thin [0 64 0] [20 64 0] 8 false #{}))
+          "but not a fresh one"))
     (testing "a block in hand: the step is taken with the cell under the floor filled first"
-      (is (fortress/safe? held [0 64 0] [1 0 0]))
+      (is (= [1 0 0] (fortress/next-move held [0 64 0] [20 64 0] 8 false #{})))
       (let [ops (fortress/underlay-ops held [0 64 0] [1 0 0])]
         (is (= 1 (count ops)))
         (is (= {:build/op :place :build/pos [1 62 0] :build/step :under}
                (select-keys (first ops) [:build/op :build/pos :build/step])))
         (is (= [:solid [1 62 0]] (:build/done (first ops))))))
-    (testing "a thick floor within a step is taken before a thin one"
-      (is (= [0 0 -1] (fortress/next-move held [0 64 0] [5 64 -5] 8 false #{})))
+    (testing "a thick floor needs no underlay"
       (is (empty? (fortress/underlay-ops held [0 64 0] [0 0 -1]))))))
 
 (deftest a-tunnel-drops-an-unsafe-in-flight-step

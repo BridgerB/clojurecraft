@@ -139,17 +139,24 @@
                (path/floor? (assoc-in world [:world/blocks cell] (blocks/default-state item)) cell))
       item)))
 
+(def deep-drop 3) ; non-solid cells under a floor that make it thin
+
 (defn thin-floor?
-  "Is floor a floor with nothing solid under it: the cell directly under it loaded and air, lava,
-   or anything the body would fall through? Such a floor is one block thick over a drop, and a
-   ghast's fireball takes it out: blaze-race-c geared run 5 (plan 40805504891) stood at
+  "Is floor a solid cell with nothing solid under it for deep-drop cells (air, lava or anything the
+   body falls through, every one of them loaded)? Such a floor is one block thick over a drop, and
+   a ghast's fireball takes it out: blaze-race-c geared run 5 (plan 40805504891) stood at
    [2146.5 72.0 1758.4] on [2146 71 1758], a fireball (entity 239, the ghast 202's, damage type 14)
    exploded by it, the server's section-blocks-update set [2146 71 1758] and [2146 71 1759] to air
-   in the next tick, and the bot fell 46 blocks into the lava sea. An unloaded cell under it is no
-   drop: nothing is known of it."
+   in the next tick, and the bot fell 46 blocks into the lava sea. A floor that is not solid is
+   the floor op's business (the cave's bridge, an air floor filled), and an unloaded cell under it
+   is no drop: nothing is known of it."
   [world floor]
-  (let [under (terrain/block-at world (plus floor [0 -1 0]))]
-    (and (some? under) (not (blocks/solid? under)))))
+  (let [at #(terrain/block-at world %)
+        under (map #(at (plus floor [0 (- %) 0])) (range 1 (inc deep-drop)))]
+    (boolean (and (some? (at floor))
+                  (blocks/solid? (at floor))
+                  (every? some? under)
+                  (not-any? blocks/solid? under)))))
 
 (defn underlay-possible?
   "Can the cell under floor be filled from the stand before the floor is walked: a filler carried
@@ -185,7 +192,6 @@
      (not-any? lava? cells)
      (not-any? #(and (blocks/solid? (at %)) (contains? unbreakable (blocks/name-of (at %)))) cells)
      (not-any? #(or (intent/fluid-over-falling? world %) (intent/bed-over-fluid? world %)) cells)
-     (or (not (thin-floor? world floor)) (underlay-possible? world floor))
      (or (path/floor? world floor)
          (and filler
               (build/holds? world [:solid floor])
@@ -392,9 +398,14 @@
    (let [ways (moves feet target climb)
          fresh (remove #(contains? visited (plus feet %)) ways)
          allowed? #(and (safe? world feet %) (or (not dry-only?) (dry? world feet %)))
-         first-way? (cond dry-only? #(or (allowed? %) (bridge? world feet %))
-                          bridge-ok? #(or (allowed? %) (bridge-over-void? world feet %))
-                          :else allowed?)
+         ;; a fresh step onto a floor one block thick over a drop only with the cell under it
+         ;; filled first; a retreat onto a cell already stood in is not asked
+         fresh-ok? #(let [floor (plus (plus feet %) [0 -1 0])]
+                      (or (not (thin-floor? world floor)) (underlay-possible? world floor)))
+         first-way? (cond dry-only? #(and (fresh-ok? %) (or (allowed? %) (bridge? world feet %)))
+                          bridge-ok?
+                          #(and (fresh-ok? %) (or (allowed? %) (bridge-over-void? world feet %)))
+                          :else #(and (fresh-ok? %) (allowed? %)))
          turn? (fn [move]
                  (let [floor (plus (plus feet move) [0 -1 0])
                        own-floor (plus feet [0 -1 0])]
@@ -412,11 +423,7 @@
          up? (> (- (long (second target)) (long (second feet))) (long climb))
          climb? #(climb-out? world feet % dry-only?)
          down? #(neg? (long (second %)))]
-     (or (first (filter #(and (first-way? %)
-                              (not (thin-floor? world (plus (plus feet %) [0 -1 0])))
-                              (or (not up?) (not (down? %))))
-                        fresh))
-         (first (filter #(and (first-way? %) (or (not up?) (not (down? %)))) fresh))
+     (or (first (filter #(and (first-way? %) (or (not up?) (not (down? %)))) fresh))
          (first (filter (fn [move]
                           (let [floor (plus (plus feet move) [0 -1 0])
                                 filled (assoc-in world
