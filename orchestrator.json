@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-29T14:45:12.935Z",
+  "at" : "2026-10-29T14:48:37.247Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -41,6 +41,11 @@
     "number" : 71,
     "title" : "Bot stops at portal-kit: boxed",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 611,
+    "title" : "Bot stops at portal-kit: no-support",
+    "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
     "number" : 610,
