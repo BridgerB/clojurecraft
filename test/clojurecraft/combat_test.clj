@@ -544,7 +544,7 @@
   ;; gym chain-w13 dragon run 2 (plan run 40798605016, job 4): an angry enderman on the End's
   ;; island, the bot under 10 health, `intent :back-off 86` every 50 ms from 04:03:36.6 and
   ;; each ended cornered in the tick it began; eight hits, four swings, dead. Under the line the
-  ;; bot never fights (#577): a meal, a block between, a pillar
+  ;; bot never fights (#577): a meal, a block between, a pillar, a hole
   (let [enderman (fn [pos] (assoc (mob :enderman pos 40.0) :entity/creepy? true))
         at (fn [pos inv]
              (assoc (standing {7 (enderman pos)})
@@ -560,19 +560,22 @@
     (is (= {:intent/kind :back-off :intent/target 7}
            (plan/next-intent (at close {}) defend plan/goals))
         "with room to back off to: backed away from")
-    (testing "cornered: never the fight, never the same back-off"
-      (let [cornered #(assoc % :plan/cornered #{7})]
-        (is (= {:intent/kind :place :intent/item :cobblestone :intent/cell [9 64 8]}
-               (plan/next-intent (cornered (at close stone)) defend plan/goals))
-            "a block between, at the feet's height first")
-        (is (= {:intent/kind :eat :intent/item :cooked_beef}
-               (combat/cover (cornered (at [13.0 64.0 8.5] steak)) (e (at [13.0 64.0 8.5] steak))))
-            "food held and the enderman out of attack-reach: the meal")
-        (is (= {:intent/kind :place :intent/item :cobblestone :intent/cell [9 64 8]}
-               (combat/cover (cornered (at close (merge steak stone))) (e (at close {}))))
-            "in reach: the block, not the meal")
-        (is (= {:plan/wait :cornered} (combat/cover (cornered (at close {})) (e (at close {}))))
-            "nothing to eat nor lay: it waits, it does not fight")))
+    (is (not (combat/back-off-pointless? (at close {}) (e (at close {})))) "room to go")
+    (is (not (combat/back-off-pointless? (assoc (at close {}) :plan/cornered #{7})
+                                         (e (at close {}))))
+        "a back-off that ran out its clock is tried again (issue #161)")
+    (testing "cover, never the fight"
+      (is (= {:intent/kind :eat :intent/item :cooked_beef}
+             (combat/cover (at [13.0 64.0 8.5] steak) (e (at [13.0 64.0 8.5] steak))))
+          "food held and the enderman out of attack-reach: the meal")
+      (is (= {:intent/kind :place :intent/item :cobblestone :intent/cell [9 64 8]}
+             (combat/cover (at close (merge steak stone)) (e (at close {}))))
+          "in reach: a block between, at the feet's height first, not the meal")
+      (is (= {:plan/wait :cornered} (combat/cover (at close {}) (e (at close {}))))
+          "nothing held at all: the wait that ends the plan, never the fight")
+      (let [pick (at close {2 (item :stone_pickaxe 1)})]
+        (is (= {:intent/kind :dig :intent/target [8 63 8]} (combat/cover pick (e pick)))
+            "a pickaxe and nothing to lay: a hole a block deep under the feet")))
     (testing "the wall cell taken, a pillar"
       (let [w (assoc-in (at close stone)
                [:world/chunks [0 0]]
@@ -583,12 +586,10 @@
         (is (= 67 (:intent/top i)))))
     (testing "a target back-off-to away needs no back-off: the meal or rest"
       (let [far (at [17.0 64.0 8.5] steak)]
+        (is (combat/back-off-pointless? far (e far)))
         (is (= {:intent/kind :eat :intent/item :cooked_beef} (combat/cover far (e far))))
         (is (= {:plan/wait :resting}
-               (combat/cover (at [17.0 64.0 8.5] {}) (e (at [17.0 64.0 8.5] {})))))))
-    (is (not (combat/back-off-pointless? (at close {}) 7 (e (at close {})))) "room to go")
-    (is
-     (combat/back-off-pointless? (assoc (at close {}) :plan/cornered #{7}) 7 (e (at close {}))))))
+               (combat/cover (at [17.0 64.0 8.5] {}) (e (at [17.0 64.0 8.5] {})))))))))
 
 (deftest on-the-islands-rim-with-the-enderman-inland-the-bot-covers
   ;; gym chain-w13 dragon run 2 (plan run 40798605016, job 4): the bot stood at [70.3 57 11.3] on
@@ -610,7 +611,7 @@
                      :player/inventory {0 (item :cobblestone 8)}))
         e (get-in w [:world/entities 7])]
     (is (combat/void-retreat? w e) "away from it is off the rim")
-    (is (combat/back-off-pointless? w 7 e)
+    (is (combat/back-off-pointless? w e)
         "so a back-off is done at once, before anything is cornered")
     (let [i (plan/next-intent w (row :defend) plan/goals)]
       (is (= {:intent/kind :place :intent/item :cobblestone :intent/cell [11 64 8]} i)
