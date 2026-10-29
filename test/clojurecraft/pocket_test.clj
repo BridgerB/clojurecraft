@@ -108,12 +108,14 @@
     (is (intent/done? i))
     (is (pocket/in? (assoc w :pocket/site site)))
     (is (not (pocket/in? (assoc (world-of walled [5.5 64.0 8.5]) :pocket/site site))))
-    (testing "a site that stopped being one fails the intent"
+    (testing
+      "a site that stopped being one is done, not failed: the cell stood in is held to be sealed"
       (let [w (assoc (world-of (dissoc walled [8 66 8]))
                      :plan/intent
                      {:intent/kind :pocket :intent/site site})
             i (:plan/intent (intent/run w (:plan/intent w) {:event/kind :tick :event/now 1000}))]
-        (is (= :no-pocket (:intent/reason i)))))))
+        (is (intent/done? i))
+        (is (nil? (:intent/reason i)))))))
 
 (deftest a-pocket-is-sealed-with-blocks-in-its-opening-and-opened-again
   (let [w (world-of walled)
