@@ -826,16 +826,23 @@
 (def stalled-looked 4) ; the newest done tunnels asked where they ended
 
 (defn stalled
-  "The set of targets of the newest done :tunnel-to facts that ended in the cell the feet stand in
-   now (:intention/ended-at): a tunnel for that target begun here again would end here again.
-   R1/1 (probe 40640225673) tunnelled to the same stand from the same place until the window
-   closed, each one :done at the step cap."
+  "The set of targets of which the two newest done :tunnel-to facts (of the stalled-looked newest)
+   ended in the same cell (:intention/ended-at): a tunnel begun where the last one ended, ended
+   there again. R1/1 (probe 40640225673) tunnelled to the same stand from the same place until the
+   window closed, each one :done at the step cap. Not a tunnel's one done fact against the feet:
+   the decision after a done is made where it ended, so that excluded every target the moment its
+   tunnel ended, and the two stands beside a spawner were taken by turns, each tunnel a new one
+   with a new trail (blaze-race-d job 5, 9e111c23b, story-brd5: ids 2 to 5 alternated [2209 60
+   1794] and [2210 60 1793], each ended-at lower down the column)."
   [world]
-  (let [feet (intent/feet world)]
-    (->> (memory/newest-dones world :tunnel-to stalled-looked)
-         (filter #(= feet (:intention/ended-at %)))
-         (keep :intention/target)
-         set)))
+  (->> (memory/newest-dones world :tunnel-to stalled-looked)
+       (group-by :intention/target)
+       (keep (fn [[target [latest before]]]
+               (when (and before
+                          (some? (:intention/ended-at latest))
+                          (= (:intention/ended-at latest) (:intention/ended-at before)))
+                 target)))
+       set))
 
 (defn to-spawner
   "The way to spawner sp: a walk when it is walkable?, else a tunnel by the fortress's steps
@@ -853,14 +860,16 @@
            :intent/target at
            :intent/steps fortress/steps-per-tunnel
            :intent/reach 0.5
-           :intent/climb 0}
+           :intent/climb 0
+           :intent/bridge? true}
           (contains? dead sp) nil
           :else
           {:intent/kind :tunnel-to
            :intent/target sp
            :intent/steps fortress/steps-per-tunnel
            :intent/reach spawner-reach
-           :intent/climb 0})))
+           :intent/climb 0
+           :intent/bridge? true})))
 
 (defn visited-locations
   "The set of cell locations visited by completed walks or tunnels, plus the current feet."

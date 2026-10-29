@@ -948,24 +948,30 @@
 
 (deftest a-tunnel-that-ended-where-it-began-is-not-chosen-again
   ;; probe 40640225673, sim R1/1: tunnels to one stand, each :done at the step cap from the cell
-  ;; the last ended in. The stand it ended for is left; another is taken.
+  ;; the last ended in. And blaze-race-d job 5 (story-brd5): a done tunnel is not stalled for ending
+  ;; where the feet are now, or each target was left the moment its tunnel ended
   (let [sp [12 70 8]
         w (-> (standing {})
               (memory/observe sp blaze/spawner))
         feet (intent/feet w)
         first-stand (:intent/target (blaze/to-spawner w sp))
-        done (assoc w
-                    :world/facts
-                    (:world/facts (memory/remember-intention w
-                                                             {:intent/id 1
-                                                              :intent/kind :tunnel-to
-                                                              :intent/target first-stand
-                                                              :intent/ended-at feet}
-                                                             :done)))]
-    (is (= #{first-stand} (blaze/stalled done)))
-    (is (not= first-stand (:intent/target (blaze/to-spawner done sp))))
-    (testing "from another cell the same stand is fine"
-      (let [moved (assoc done :player/pos [9.5 64.0 8.5])] (is (= #{} (blaze/stalled moved)))))))
+        done
+        (fn [w id target ended-at]
+          (memory/remember-intention
+           w
+           {:intent/id id :intent/kind :tunnel-to :intent/target target :intent/ended-at ended-at}
+           :done))
+        once (done w 1 first-stand feet)
+        twice (done once 2 first-stand feet)
+        moved (done once 2 first-stand [3 64 3])]
+    (is (= #{} (blaze/stalled once))
+        "one done tunnel ended where the feet are: that is where it ends")
+    (is (= #{first-stand} (blaze/stalled twice)) "two in a row ended in one cell: no progress")
+    (is (= #{} (blaze/stalled moved)) "the second ended elsewhere: progress")
+    (is (= first-stand (:intent/target (blaze/to-spawner once sp))) "the target is kept")
+    (is (not= first-stand (:intent/target (blaze/to-spawner twice sp))) "another when stalled")
+    (testing "the tunnel to the stand bridges a cavern (landing 5: a column in open air)"
+      (is (true? (:intent/bridge? (blaze/to-spawner w sp)))))))
 
 (deftest a-corridor-with-no-route-tunnels-to-the-brick
   ;; probe 40634456698, sim R2/12, snapshot at 101.00 min (t 6060000): feet [979 69 450], the
