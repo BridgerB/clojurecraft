@@ -566,7 +566,9 @@
    backed away three times round a room seven square with the food at 17, where no back-off gets
    away, and burned to death without eating. The rest before a back-off off a lip: issue #514
    (sim R3-5-1) jumped the nether brick one cell north and fell 31 into lava, and a footing
-   found down there is not a survival. The rest is never chosen while a strike is fresh and the
+   found down there is not a survival. Never a back-off from a watcher already back-off-to
+   (8 blocks) away: it ends in the tick it begins and is chosen again, every 50 ms (gym
+   blaze-fortress-race run 3, `:back-off 485` a tick, on fire). The rest is never chosen while a strike is fresh and the
    way away from that attacker has a landing: blaze-wall-b (plan 40624888909) blaze-fortress run
    1 rested at 8 health while two zombified piglins hit it. test.yml 40624888901: a watched void
    retreat is still a rest, in the open or not, or the act searches. Probe 40634461444: a rest
@@ -585,7 +587,8 @@
            (and aid (not (combat/void-retreat? world ae)))
            {:intent/kind :back-off :intent/target aid}
            (and e (combat/void-retreat? world e)) rest-intent
-           weid {:intent/kind :back-off :intent/target weid}
+           (and weid (< (combat/horizontal world e) combat/back-off-to))
+           {:intent/kind :back-off :intent/target weid}
            @food @food
            (in-open? world) nil
            (heals? world) rest-intent

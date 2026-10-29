@@ -267,7 +267,10 @@
                (next-intent
                 (hurt (assoc (standing {7 near}) :world/chunks {[0 0] (world/column pillar)})))))
         (is (= {:intent/kind :back-off :intent/target 7} (next-intent (hurt (standing {7 near}))))
-            "in the open nothing hides: backed away from")))
+            "in the open nothing hides: backed away from")
+        (let [far (entity :blaze [20.5 65.0 8.5] :entity/health 20.0)]
+          (is (not= :back-off (:intent/kind (next-intent (hurt (standing {7 far})))))
+              "a watcher past back-off-to is not backed away from: the walk would end in a tick"))))
     (testing "a retreat off a lip into a drop no landing survives is a rest (issue #514)"
       (let [air (blocks/default-state :air)
             lip (blocks/default-state :nether_bricks)
