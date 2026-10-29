@@ -731,10 +731,10 @@
                              plan/goals))
         "at the end with it two off the mouth: a crowd, blacklisted or not")
     (is
-     (= [:walk :shelter]
-        ((juxt :intent/kind :intent/for)
-         (plan/next-intent (burrowed [8.5 61.0 8.5] {7 (enderman [0.5 64.0 8.5])}) row plan/goals)))
-     "a calm one three blocks from the mouth: out past it to a vantage to stare from")
+     (= {:intent/kind :lookout :intent/for :pearls}
+        (plan/next-intent (burrowed [8.5 61.0 8.5] {7 (enderman [0.5 64.0 8.5])}) row plan/goals))
+     "a calm one three blocks from the mouth: no vantage out past it (a vantage is only within
+         provoke-home-reach of the burrow's end, gym plan run 40860669235 job 4): the bot stays in")
     (is (=
          {:intent/kind :walk :intent/target [3 64 8] :intent/for :shelter}
          (plan/next-intent (burrowed [8.5 61.0 8.5] {7 (enderman [3.5 44.0 8.5])}) row plan/goals))
@@ -1698,14 +1698,9 @@
         {:intent/keys [kind target for]} (plan/next-intent stale row plan/goals)]
     (is (= 11 (memory/done-since (looked dug 11) :lookout :burrow)))
     (is (nil? (memory/done-since dug :lookout :burrow)) "no burrow ever cut")
-    (let [v (plan/next-intent (looked dug 11) row plan/goals)
-          c (:intent/target v)]
-      (is
-       (= [:walk :shelter] [(:intent/kind v) (:intent/for v)])
-       "eleven lookouts, open ground round the mouth: out to a vantage to stare from, ended
-           in that very cell")
-      (is (= 7 (first (pearls/quarry (assoc (looked dug 11) :player/pos (pearls/feet-at c)))))
-          "from which it can be stared at: no nearer than stare-from, with a clear line"))
+    (is (= {:intent/kind :lookout :intent/for :pearls}
+           (plan/next-intent (looked dug 11) row plan/goals))
+        "eleven lookouts: no vantage out past the crowder, the bot stays in until the minute is up")
     (is (pearls/stale? stale) "a minute of them: the burrow is given up")
     (is (nil? (pearls/shelter stale)))
     (is (and (= :walk kind) (= :shelter for) (not= [8 61 8] target) (not= [3 64 8] target))
@@ -2360,7 +2355,7 @@
   ;; while the same :walk was planned every 50 ms, each plan cut by the one before it, and no
   ;; cover was ever chosen (a burrow was cut, so the walk home came first)
   (let [held {0 (item :iron_sword 1) 1 (item :iron_pickaxe 1) 2 (item :cobblestone 64)}
-        w (-> (burrowed [3.5 64.0 8.5] {7 (mob :ghast [30.5 75.0 8.5])} {[4 66 8] stone})
+        w (-> (burrowed [3.5 64.0 8.5] {7 (mob :ghast [30.5 75.0 8.5])} {[4 64 8] stone})
               wide
               (assoc :player/inventory held))
         walk {:intent/kind :walk
