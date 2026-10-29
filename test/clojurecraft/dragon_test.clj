@@ -6,6 +6,7 @@
    killing the perched dragon, from behind its head when it faces the way in."
   (:require [clojure.math :as math]
             [clojure.test :refer [deftest is testing use-fixtures]]
+            [clojurecraft.beds :as beds]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.combat :as combat]
             [clojurecraft.dimension :as dimension]
@@ -1042,3 +1043,31 @@
                           {:intent/kind :perch :intent/target dragon-eid :intent/status :active})]
       (is (plan/interrupts? perching {:goal/plan :dragon} {:intent/kind :perch})
           "a perch running at 17 ends on the blow"))))
+
+(deftest with-beds-held-the-bot-lays-one-under-the-perched-head-and-uses-it
+  ;; the speedrunners' kill (issue #10), the gym row dragon-beds: a bed laid on the ground under the
+  ;; sitting dragon's head from standoff blocks beyond it, then used, which explodes it in the End
+  (let [bed {:item (recipe/item-id :white_bed) :count 6}
+        w0 (-> (round-fountain [0.5 64.0 0.5] (sitting 270.0))
+               (assoc :player/dimension dimension/end :player/health 20.0 :player/food 20)
+               (assoc :player/inventory {2 bed}))
+        [_ d] (dragon/dragon w0)
+        head (beds/head-point d)
+        site (dragon/ground-cell w0 head)
+        stand (dragon/ground-cell w0 (beds/stand-point head [0.5 0.5]))
+        at-stand (assoc w0 :player/pos (physics/centre stand))
+        under (update site 1 dec)]
+    (is (some? site))
+    (is (some? stand))
+    (is (nil? (dragon/bed-step (assoc w0 :player/inventory {}))) "no bed held: nothing")
+    (is (= {:intent/kind :walk :intent/target stand :intent/for :build} (dragon/bed-step w0))
+        "away from the stand: the walk to it")
+    (let [i (dragon/bed-step at-stand)]
+      (is (= [:use-on :white_bed under] [(:intent/kind i) (:intent/item i) (:intent/target i)])
+          "at the stand: the bed laid on the block under the site")
+      (is (= [:block site :white_bed] (:intent/expect i))))
+    (let [laid (assoc-in at-stand [:world/blocks site] (blocks/default-state :white_bed))
+          i (dragon/bed-step laid)]
+      (is (= [:use-on :white_bed site] [(:intent/kind i) (:intent/item i) (:intent/target i)])
+          "laid: the bed itself used")
+      (is (= :or (first (:intent/expect i))) "done when the bed is gone"))))

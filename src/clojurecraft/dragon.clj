@@ -38,7 +38,9 @@
    before any crystal (toward-island). Not done: the cages round two spikes (the strike
    through their bars is unproven; the gym takes them away), and the exit portal."
   (:require [clojure.math :as math]
+            [clojure.string :as str]
             [clojurecraft.armour :as armour]
+            [clojurecraft.beds :as beds]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.combat :as combat]
             [clojurecraft.dimension :as dimension]
@@ -952,6 +954,43 @@
           food {:intent/kind :eat :intent/item food}
           :else {:plan/wait :low-health})))
 
+(defn bed-step
+  "The intent of the bed kill, or nil: with a bed held (beds/held) and the dragon perched on the
+   ground, the walk to the cell beds/standoff beyond the ground under its head
+   (beds/head-point, beds/stand-point), then a :use-on laying the bed on the block there, then a
+   :use-on of the bed laid, which explodes it in the End (beds/blast-power); done when the bed
+   is gone. Its health is read from the boss bar's (:world/boss-health) before and after in the
+   recording. Only the gym row dragon-beds holds beds."
+  [world]
+  (let [bed (beds/held world)
+        [eid d] (dragon world)
+        head (when d (beds/head-point d))
+        site (some->> head
+                      (ground-cell world))
+        stand (some-> head
+                      (beds/stand-point fountain)
+                      (->> (ground-cell world)))]
+    (when (and bed eid d site (grounded? d) (perched? d))
+      (let [[sx sy sz] site
+            under [sx (dec sy) sz]
+            laid? (str/ends-with? (name (or (some-> (terrain/block-at world site)
+                                                    blocks/name-of)
+                                            :air))
+                                  "_bed")]
+        (cond laid?
+              {:intent/kind :use-on
+               :intent/item bed
+               :intent/target site
+               :intent/aim [(+ sx 0.5) (+ sy 0.5625) (+ sz 0.5)]
+               :intent/expect [:or [:block site :air] [:block site :fire] [:block site :cave_air]]}
+              (and stand (not (at-stand? world stand))) (standing-walk stand)
+              :else
+              {:intent/kind :use-on
+               :intent/item bed
+               :intent/target under
+               :intent/aim [(+ sx 0.5) (+ sy 0.0) (+ sz 0.5)]
+               :intent/expect [:block site bed]})))))
+
 (defn after-blow
   "The intent in the hit-hold-ticks after the dragon's blow (struck-by-dragon?): inside step-out-radius
    of the fountain, the shelter walk to the nearest cell beyond the head's reach (step-out-cell),
@@ -1011,6 +1050,7 @@
           (or (off-island? world) (seq (crystals world)) (on-pillar? world) (on-spike? world))
           (toward-crystals world)
           (struck-by-dragon? world) (after-blow world)
+          (bed-step world) (bed-step world)
           (< (:player/health world full-health) perch-line) (recover world)
           (and breath eid (holds? world)) {:intent/kind :perch :intent/target eid}
           (and breath eid d (grounded? d) (or (in-basin? world) (not blocked?)) far?)
