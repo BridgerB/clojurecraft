@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-29T22:00:30.797Z",
+  "at" : "2026-10-29T22:01:37.633Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -36,7 +36,7 @@
     "number" : 610,
     "title" : "Bot stops at cast-one: no-support",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : true
+    "copilot" : false
   }, {
     "number" : 178,
     "title" : "Bot stops at portal: timeout",
@@ -204,8 +204,7 @@
     "why" : "hands-off label"
   }, {
     "issue" : 610,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment"
+    "move" : "assign"
   }, {
     "issue" : 178,
     "move" : "leave",
@@ -264,11 +263,6 @@
     "why" : "hands-off label"
   } ],
   "log" : [ {
-    "issue" : 586,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment",
-    "at" : "2026-10-28T07:27:27.101Z"
-  }, {
     "issue" : 586,
     "move" : "assign",
     "at" : "2026-10-28T07:28:34.191Z"
@@ -1614,5 +1608,9 @@
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
     "at" : "2026-10-29T22:00:30.797Z"
+  }, {
+    "issue" : 610,
+    "move" : "assign",
+    "at" : "2026-10-29T22:01:37.633Z"
   } ]
 }
