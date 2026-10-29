@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-29T23:34:42.869Z",
+  "at" : "2026-10-29T23:35:49.234Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -38,13 +38,18 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
+    "number" : 178,
+    "title" : "Bot stops at portal: timeout",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
     "number" : 538,
     "title" : "Bot stops at fortress: blocked",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 178,
-    "title" : "Bot stops at portal: timeout",
+    "number" : 135,
+    "title" : "Bot stops at cast-one: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
@@ -63,18 +68,13 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : true
   }, {
-    "number" : 612,
-    "title" : "Bot stops at ender-pearls: no-support",
+    "number" : 613,
+    "title" : "Bot stops at flint-and-steel: no-support",
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
-    "number" : 135,
-    "title" : "Bot stops at cast-one: timeout",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
-    "number" : 613,
-    "title" : "Bot stops at flint-and-steel: no-support",
+    "number" : 612,
+    "title" : "Bot stops at ender-pearls: no-support",
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
@@ -199,11 +199,15 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 178,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
     "issue" : 538,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 178,
+    "issue" : 135,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -212,10 +216,6 @@
     "why" : "hands-off label"
   }, {
     "issue" : 348,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
-    "issue" : 135,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
