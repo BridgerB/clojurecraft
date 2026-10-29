@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-29T07:43:04.618Z",
+  "at" : "2026-10-29T07:44:51.894Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -31,7 +31,7 @@
     "number" : 151,
     "title" : "Bot stops at flint-and-steel: not-picked-up",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
+    "copilot" : true
   }, {
     "number" : 178,
     "title" : "Bot stops at portal: timeout",
@@ -190,7 +190,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 151,
-    "move" : "assign"
+    "move" : "wait",
+    "why" : "session starting"
   }, {
     "issue" : 178,
     "move" : "leave",
