@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-29T22:43:46.629Z",
+  "at" : "2026-10-29T22:44:53.434Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -36,7 +36,7 @@
     "number" : 597,
     "title" : "Bot stops at ingots: unsafe",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : true
+    "copilot" : false
   }, {
     "number" : 461,
     "title" : "Bot stops at portal: out-of-reach",
@@ -195,13 +195,12 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 151,
+    "move" : "assign"
+  }, {
     "issue" : 538,
     "move" : "leave",
     "why" : "hands-off label"
-  }, {
-    "issue" : 597,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment"
   }, {
     "issue" : 461,
     "move" : "leave",
@@ -264,11 +263,6 @@
     "why" : "hands-off label"
   } ],
   "log" : [ {
-    "issue" : 586,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment",
-    "at" : "2026-10-28T07:31:57.520Z"
-  }, {
     "issue" : 586,
     "move" : "assign",
     "at" : "2026-10-28T07:33:04.397Z"
@@ -1614,5 +1608,9 @@
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
     "at" : "2026-10-29T22:43:46.629Z"
+  }, {
+    "issue" : 151,
+    "move" : "assign",
+    "at" : "2026-10-29T22:44:53.434Z"
   } ]
 }
