@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-29T00:03:41.059Z",
+  "at" : "2026-10-29T00:04:48.494Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -53,11 +53,6 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 596,
-    "title" : "Bot stops at portal-kit: unsafe",
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
-  }, {
     "number" : 461,
     "title" : "Bot stops at portal: out-of-reach",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
@@ -86,6 +81,11 @@
     "number" : 597,
     "title" : "Bot stops at ingots: unsafe",
     "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 596,
+    "title" : "Bot stops at portal-kit: unsafe",
+    "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
     "number" : 586,
