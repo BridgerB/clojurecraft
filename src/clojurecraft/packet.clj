@@ -427,17 +427,18 @@
   [buf fields]
   (loop [fields fields
          m {}]
-    (if-let [[k t] (first fields)]
-      (if (conditional? t)
-        (let [[_ ck cv ct] t]
-          (recur (rest fields)
-                 (if (and (= cv (get m ck)) (>= (.remaining buf) (get min-width ct 1)))
-                   (assoc m k (read-field ct buf))
-                   m)))
-        (let [v (read-field t buf)
-              m (assoc m k v)]
-          (if (truncating? v) (assoc m :truncated true) (recur (rest fields) m))))
-      m)))
+    (let [[k t] (first fields)
+          cond? (conditional? t)
+          [_ ck cv ct] (when cond? t)
+          v (when (and k (not cond?)) (read-field t buf))]
+      (cond (nil? k) m
+            cond?
+            (recur (rest fields)
+                   (cond-> m
+                     (and (= cv (get m ck)) (>= (.remaining buf) (get min-width ct 1)))
+                     (assoc k (read-field ct buf))))
+            (truncating? v) (assoc m k v :truncated true)
+            :else (recur (rest fields) (assoc m k v))))))
 
 (defn decode
   "Bytes of one frame (after decompression) → packet map. Unknown or unmodelled ids decode to

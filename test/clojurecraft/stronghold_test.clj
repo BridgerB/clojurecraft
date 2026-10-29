@@ -463,21 +463,23 @@
       ;; ([12983 3 16726]), `intent :walk` to each trail cell in turn 50 ms apart, every one
       ;; :no-path, twelve of them failed the run at 8 minutes. Here a band of water three wide
       ;; between the bank and the trail's cells.
-      (let [band (world/column
-                  (into
-                   {}
-                   (for [x (range 9 12) z (range 16) y (range 58 70)] [[x y z] blocks/water-base])))
+      (let [band (world/column (into {}
+                                     (for [x (concat (range 5 8) (range 9 12))
+                                           z (range 16)
+                                           y (range 58 70)]
+                                       [[x y z] blocks/water-base])))
             w (-> (searching [8.5 8.5] [])
                   (assoc :world/chunks {[0 0] band}
                          :plan/boxed-at #{[8 64 8]}
                          :plan/trail [[13 64 8] [14 64 8] [8 64 8]]))
-            w2 (assoc w :plan/trail [[2 64 8] [13 64 8] [8 64 8]])]
-        ;; the water beside every cell a step east or aside would open leaves the tunnel no dry
-        ;; step (fortress/choose-move has nothing to choose), so the retreat is reached unredefined
+            w2 (assoc w :plan/trail [[8 64 2] [13 64 8] [8 64 8]])]
+        ;; water in the columns either side of the bank's own (x 5-7 and 9-11): every step the
+        ;; tunnel could take, east, aside, back or down, opens a cell in or beside water, so
+        ;; (fortress/moves, aside included) leaves it no dry step and the retreat is reached
         (is (= {:intent/kind :cross :intent/target [14 64 8] :intent/for :retreat}
                (stronghold/to-room w [13 60 8]))
             "no route to a cell across it: the swim to the nearest of them")
-        (is (= {:intent/kind :walk :intent/target [2 64 8] :intent/for :retreat}
+        (is (= {:intent/kind :walk :intent/target [8 64 2] :intent/for :retreat}
                (stronghold/to-room w2 [13 60 8]))
             "one a route reaches is walked to")))
     (testing "to-room refuses moves through or bordering lava in portal room"
