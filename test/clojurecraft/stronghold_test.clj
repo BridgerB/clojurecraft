@@ -458,6 +458,26 @@
                  (stronghold/to-room (update w :plan/blacklist conj [12983 3 16726])
                                      [12815 0 16673]))
               "every cell tried: the wait, never the same walk again"))))
+    (testing "every retreat cell across water: a swim, not a walk to each in turn"
+      ;; gym chain-w11 to w14 run 1: on the bank at the bottom of the flooded staircase
+      ;; ([12983 3 16726]), `intent :walk` to each trail cell in turn 50 ms apart, every one
+      ;; :no-path, twelve of them failed the run at 8 minutes. Here a band of water three wide
+      ;; between the bank and the trail's cells.
+      (let [band (world/column
+                  (into
+                   {}
+                   (for [x (range 9 12) z (range 16) y (range 58 64)] [[x y z] blocks/water-base])))
+            w (-> (searching [8.5 8.5] [])
+                  (assoc :world/chunks {[0 0] band}
+                         :plan/boxed-at #{[8 64 8]}
+                         :plan/trail [[13 64 8] [14 64 8] [8 64 8]]))
+            i (stronghold/to-room w [13 60 8])]
+        (is (= {:intent/kind :cross :intent/target [14 64 8] :intent/for :retreat} i)
+            "no route to a cell across it: the swim to the nearest of them")
+        (let [w2 (assoc w :plan/trail [[2 64 8] [13 64 8] [8 64 8]])]
+          (is (= {:intent/kind :walk :intent/target [2 64 8] :intent/for :retreat}
+                 (stronghold/to-room w2 [13 60 8]))
+              "one a route reaches is walked to"))))
     (testing "to-room refuses moves through or bordering lava in portal room"
       ;; gym chain-w7 run 3: in portal room with lava pool under frame, tunnel-to
       ;; must never step into or border lava

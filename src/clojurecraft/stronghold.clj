@@ -647,6 +647,8 @@
                           (safe-portal-move? world feet m)))
                    (fortress/moves feet f fortress/climb-past)))))
 
+(def retreat-tries 4)                 ; trail cells a retreat looks at for one a route reaches, nearest first
+
 (defn to-room
   "The way to the portal room's frame f, in order: in water, out to the nearest bank first
    (swim's :swim-out :retreat); from a shore, a walk to a dry start (dry-start) that ends
@@ -665,9 +667,11 @@
    through or bordering lava (safe-portal-move?), when its first step can be taken from the feet
    (through the stronghold's walls, never into its frames: fortress/unbreakable); else, still over
    room-over, the stairs; else with feet boxed or no move forward, a retreat step back along the
-   plan trail to an earlier unboxed cell no walk failed at (:plan/blacklist: gym chain-w11 run 1
-   walked to the same cell twelve times in 0.6 s, each :no-path, and the plan failed); else the
-   wait :no-way. Gym
+   plan trail to an earlier unboxed cell no walk failed at (:plan/blacklist) that a route reaches or whose chunk is not loaded
+   (retreat-tries of them looked at), else a swim (:cross) to the nearest: gym chain-w11 to w14
+   run 1 stood on a bank at the bottom of its flooded staircase and asked for a walk to each
+   trail cell in turn, fifty milliseconds apart, every one :no-path (the way up is under water),
+   twelve of them failed the plan at 8 minutes; else the wait :no-way. Gym
    batch stronghold-265b (plan run 38930188463) run 2 of the portal room: the frame at y 0
    under a lake, seen while the bot swam it, every first step of the tunnel from the water opened
    a cell by water and it failed :blocked."
@@ -689,11 +693,17 @@
         down (when (and high? (= start feet)) (downhill world f))
         stairs (stairs-toward feet f (max (+ y room-over) (- fy stair-leg)))
         tunnel-move (safe-tunnel-move world feet f)
-        retreat (when (or boxed? (nil? tunnel-move))
-                  (some #(when-not (or (contains? (:plan/boxed-at world #{}) %)
-                                       (contains? (:plan/blacklist world #{}) %))
-                           %)
-                        (rseq (:plan/trail world []))))]
+        retreats (when (or boxed? (nil? tunnel-move))
+                   (take retreat-tries
+                         (remove #(or (contains? (:plan/boxed-at world #{}) %)
+                                      (contains? (:plan/blacklist world #{}) %))
+                                 (rseq (:plan/trail world [])))))
+        walkable (some #(when (or (not (terrain/chunk-loaded? world %))
+                                  (intent/routable?
+                                   world
+                                   {:intent/kind :walk :intent/target % :intent/max-nodes 400}))
+                          %)
+                       retreats)]
     (cond (:player/in-water? world) {:intent/kind :swim-out :intent/for :retreat}
           (and start (not= start feet))
           {:intent/kind :walk :intent/target start :intent/for :retreat}
@@ -707,7 +717,8 @@
            :intent/dry? true
            :intent/from-feet feet}
           (and (not boxed?) (> fy (+ y room-over))) stairs
-          retreat {:intent/kind :walk :intent/target retreat :intent/for :retreat}
+          walkable {:intent/kind :walk :intent/target walkable :intent/for :retreat}
+          (seq retreats) {:intent/kind :cross :intent/target (first retreats) :intent/for :retreat}
           :else {:plan/wait :no-way})))
 
 (defmethod plan/next-intent :portal-room
