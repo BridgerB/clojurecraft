@@ -27,6 +27,7 @@
             [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
+            [clojurecraft.stronghold :as stronghold]
             [clojurecraft.terrain :as terrain]))
 
 (set! *warn-on-reflection* true)
@@ -134,28 +135,38 @@
 
 (defn next-op
   "The op to work now toward the lit portal, and with enter? into the End: an eye into the first
-   frame without one (eye-op), else with enter? the wait for the ring's middle to fill (lit-op)
-   and the step in (enter-op); nil when there is none left (every frame eyed, or the End
-   reached), or a keyword, why none can be worked: :no-stand (no cell reaches the frame),
-   :no-ring (the frames on record close no ring of twelve)."
+   empty frame with a reachable stand (eye-op), else with enter? the wait for the ring's middle
+   to fill (lit-op) and the step in (enter-op); nil when there is none left (every frame eyed, or
+   the End reached), or a keyword, why none can be worked: :no-stand (no cell reaches any empty
+   frame), :no-ring (the frames on record close no ring of twelve)."
   [world enter?]
   (let [empty (empty-frames world)
         m (when (and enter? (empty? empty)) (middle (frames world)))]
     (cond (= dimension/end (dimension/of world)) nil
-          (seq empty) (or (eye-op world (first empty)) :no-stand)
+          (seq empty) (or (some #(eye-op world %) empty) :no-stand)
           (not enter?) nil
           (nil? m) :no-ring
           (not (build/satisfied? world (lit-op world m))) (lit-op world m)
           :else (enter-op m))))
 
+(defn toward-frame
+  "The way through the stronghold's walls to an empty frame when none has a reachable stand
+   yet: the portal room's way (stronghold/to-room) toward the cell on top of frame, with a
+   tunnel reach of 1.5 and climb of 1 so a tunnel started within fortress/reach (6) outside
+   the room's wall or roof digs through into the room."
+  [world frame]
+  (let [way (stronghold/to-room world (update frame 1 inc))]
+    (if (= :tunnel-to (:intent/kind way)) (assoc way :intent/reach 1.5 :intent/climb 1) way)))
+
 ;; ---------------------------------------------------------------- the executor
 
 (defmethod intent/run :end-portal
   ;; work the op next-op names through build/work-op (its child a walk to the stand, the use-on,
-  ;; the await); done when none is left, failed for next-op's reason
+  ;; the await); done when none is left or when remaining empty frames need a tunnel through a
+  ;; wall (toward-frame), failed for next-op's reason otherwise
   [world {:intent/keys [enter?] :as i} event]
   (let [next (next-op world (boolean enter?))]
-    (cond (nil? next)
+    (cond (or (nil? next) (and (= :no-stand next) (seq (empty-frames world))))
           (-> world
               (assoc :player/controls {})
               intent/done)
@@ -169,18 +180,38 @@
 
 (defn next-toward
   "The next intent toward the lit portal, and with enter? into the End: the :end-portal intent
-   while a remembered frame lacks an eye or the End is still to enter; a wait :no-frames with no
-   frame on record, :no-eyes when fewer eyes are held than frames lack them (the eyes stage,
-   issue #264, is the one to look at), :lighting once every frame is eyed and the portal's
-   blocks are not yet on record; nil when nothing is left."
+   while a remembered frame without an eye has a reachable stand or the End is still to enter;
+   when empty frames remain and none has a reachable stand yet (the portal room's wall or roof
+   still between the feet and the frames after :portal-room arrived within 6), the way through
+   to the nearest empty frame (toward-frame); a wait :no-frames with no frame on record,
+   :no-eyes when fewer eyes are held than frames lack them (the eyes stage, issue #264, is the
+   one to look at), :lighting once every frame is eyed and the portal's blocks are not yet on
+   record; nil when nothing is left."
   [world enter?]
   (let [fs (frames world)
         empty (empty-frames world)]
     (cond (empty? fs) {:plan/wait :no-frames}
           (and (seq empty) (< (eyes-held world) (count empty))) {:plan/wait :no-eyes}
+          (and (seq empty) (nil? (some #(eye-op world %) empty))) (toward-frame world (first empty))
           (or (seq empty) enter?) {:intent/kind :end-portal :intent/enter? enter?}
           (empty? (portals world)) {:plan/wait :lighting}
           :else nil)))
+
+(defmethod plan/interrupts? :end-portal
+  [world _ i]
+  (and (not= :end-portal (:intent/kind i))
+       (let [f (stronghold/nearest-frame world)]
+         (and f
+              (<= (physics/distance (intent/feet world) f) 6.0)
+              (some? (some #(eye-op world %) (empty-frames world)))))))
+
+(defmethod plan/interrupts? :enter-end
+  [world _ i]
+  (and (not= :end-portal (:intent/kind i))
+       (let [f (stronghold/nearest-frame world)]
+         (and f
+              (<= (physics/distance (intent/feet world) f) 6.0)
+              (some? (some #(eye-op world %) (empty-frames world)))))))
 
 (defmethod plan/done-by :portal-lit? [world _] (boolean (seq (portals world))))
 

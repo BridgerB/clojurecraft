@@ -31,11 +31,14 @@
    of its reach (escape, never straight away into the fountain's pillar), it holds still
    through the dragon's scanning turn
    (scanning?), and the :defend row leaves every hostile to this row while a breath reaches the
-   feet (combat/answering); every look of the row's intents is turned from an enderman's eyes
-   (look-away, plan/steer); in a lull, the bot eats for health back (the :heal row). Not done: the cages
-   round two spikes (the strike through their bars is unproven; the gym takes them away), the
-   bridge from the End's platform to the main island, and the exit portal."
+   feet (combat/answering); every look of the rows' intents is turned from an enderman's eyes
+   (look-away, plan/steer), and a carved pumpkin held is worn on the head first
+   (wear-pumpkin), through which no look provokes one; in a lull, the bot eats for health
+   back (the :heal row). From the End's entry platform the bot bridges to the main island
+   before any crystal (toward-island). Not done: the cages round two spikes (the strike
+   through their bars is unproven; the gym takes them away), and the exit portal."
   (:require [clojure.math :as math]
+            [clojurecraft.armour :as armour]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.combat :as combat]
             [clojurecraft.dimension :as dimension]
@@ -78,15 +81,16 @@
 (def perch-below 70.0)                ; and under this height
 (def perch-ticks 10)                  ; ticks it holds there before it counts as perched
 (def stand-from 2)                    ; blocks from the fountain along an axis the bot waits, in the exit portal's basin
+(def stand-slack 1.0)                 ; blocks less behind the dragon's body the stand the bot already holds may be than one chosen anew (behind-by): the hysteresis that keeps a stand while the dragon turns marginally
 (def stand-near 1.0)                  ; blocks on the plane from that stand a wait counts as there
 (def sitting-phases #{5 6 7})         ; the dragon's phases on its perch (EnderDragonPhase: sitting flaming, scanning, attacking)
 (def landing-phases #{3})             ; its phase coming down onto the perch (DragonLandingPhase), its head already where a sitting one's is
 (def scanning-phase 6)                ; its phase turning on the perch toward a player (DragonSittingScanningPhase): the head sweeps the basin
 (def walk-in-to 3.0)                  ; blocks on the plane from the fountain a perch walks in to for reach, no nearer
 (def perch-hold-ms 60000)             ; a :perch hands back to the planner this often
-(def breath-radius 5.0)               ; a breath cloud's radius when its metadata has not said: the sitting dragon's flame cloud (DragonSittingFlamingPhase)
+(def breath-radius entity/breath-radius) ; a breath cloud's radius when its metadata has not said: the sitting dragon's flame cloud (DragonSittingFlamingPhase)
+(def breath-hold 2.0)                 ; blocks more than breath-reach the bot keeps from a cloud before it sets out for the stand again, so a cloud growing as it walks does not turn it back (gym chain-w12 dragon run 2: 24 swaps in 12 s between the stand and the cell out of the breath)
 (def breath-margin 1.5)               ; blocks beyond a breath cloud's radius (:entity/radius: a fireball's grows from 3 to 7) the bot keeps
-(def breath-kinds #{:area_effect_cloud :dragon_fireball})
 (def behind-by 1.0)                   ; blocks behind the sitting dragon's body (along its facing, mob/ahead) a stand must be: out of its head's and neck's way
 (def leave-by 0.5)                    ; blocks behind it the feet may come to, the dragon turning, before the :perch hands back for another stand
 (def clear-across 3.3)                ; blocks across its facing a way must keep: the neck's box (mob/bite-across), the body's half width, a half block
@@ -100,6 +104,8 @@
 (def heal-below 18)                  ; food under this stops natural regeneration (FoodData.tick): eat in the End's lulls
 (def calm-radius 8.0)                 ; blocks from the feet no hostile may be for a lull
 (def full-health 20.0)                ; the player's health when nothing is left to heal
+(def platform-west 98)                ; western x of the End's 5x5 obsidian spawn platform (x 98..102, z -2..2)
+(def island-search-east 95)           ; easternmost x scanned westward at z 0 for the main island's shore
 
 ;; ---------------------------------------------------------------- what is shown
 
@@ -117,7 +123,7 @@
 (defn breaths
   "{eid entity} of the dragon's breath clouds and fireballs the server shows."
   [world]
-  (into {} (filter (fn [[_ e]] (contains? breath-kinds (entity/kind e)))) (:world/entities world)))
+  (entity/breaths world))
 
 (defn pillar-block?
   "Is the state one of the pillar blocks?"
@@ -241,15 +247,73 @@
   [cell]
   {:intent/kind :walk :intent/target cell :intent/for :build})
 
+(def island-kinds
+  "Natural blocks of the End's main island, never the bridge laid across the void."
+  #{:end_stone :obsidian :bedrock})
+
+(defn island-ground
+  "The feet height of the highest natural End block in column x z down from sky, or nil when
+   the column is void or holds only placed bridge blocks."
+  [world x z]
+  (some #(let [id (terrain/block-at world [x % z])]
+           (when (and id (contains? island-kinds (blocks/name-of id))) (inc %)))
+        (range sky -1 -1)))
+
+(defn island-shore
+  "The easternmost natural ground cell [x y 0] of the main island west of the spawn platform,
+   scanning from island-search-east down to 0, or nil before the island's chunk loads."
+  [world]
+  (some #(when-let [y (island-ground world % 0)] [% y 0]) (range island-search-east -1 -1)))
+
+(defn off-island?
+  "Do the feet stand on the End's entry platform or the bridge from it across the void to the
+   main island: no natural ground immediately west of platform-west at z 0, and the feet still
+   east of island-shore?"
+  [world]
+  (let [[fx _ _] (intent/feet world)
+        shore (island-shore world)]
+    (and (nil? (island-ground world (dec platform-west) 0))
+         (if shore (> fx (first shore)) (>= fx platform-west)))))
+
+(defn toward-island
+  "The next intent to cross from the End's entry platform (100, 49, 0) to the main island's
+   eastern shore (island-shore): walk to the platform's western edge [platform-west y 0], pillar
+   up to the shore's height when lower, then lay a bridge of pillar-block westward along z 0
+   (two cells ahead of the feet so the body always steps onto a supported span) and walk it onto
+   the shore."
+  [world]
+  (let [[fx fy fz] (intent/feet world)
+        [ix iy _ :as shore] (island-shore world)
+        item (pillar-block world)
+        edge [platform-west (or (ground world platform-west 0 sky) fy) 0]
+        next-floor [(dec fx) (dec fy) 0]
+        ahead-floor [(- fx 2) (dec fy) 0]]
+    (cond (nil? shore) {:plan/wait :no-crystals}
+          (or (> fx platform-west) (not (zero? fz))) (standing-walk edge)
+          (and (< fy iy) item) {:intent/kind :pillar :intent/item item :intent/top iy}
+          (< fy iy) {:plan/wait :no-blocks}
+          (and (not (place/solid-at? world next-floor)) item)
+          {:intent/kind :place :intent/item item :intent/cell next-floor}
+          (not (place/solid-at? world next-floor)) {:plan/wait :no-blocks}
+          (and (> (dec fx) ix) (not (place/solid-at? world ahead-floor)) item)
+          {:intent/kind :place :intent/item item :intent/cell ahead-floor}
+          (and (> (dec fx) ix) (not (place/solid-at? world ahead-floor))) {:plan/wait :no-blocks}
+          (= (dec fx) ix) (standing-walk shore)
+          :else (standing-walk [(dec fx) fy 0]))))
+
 (defn toward-crystals
   "The next intent toward no crystal standing and the feet off every pillar, for the crystal
-   nearest the feet and its approach: at its stand, a block into the wall's gap (:place into the
-   given cell), then the strike; in its pillar's column under the top, the :pillar up; on the
-   pillar's top short of the stand, the walk onto the spike to it; else, on a spike's top, the walk
-   back to the pillar's top, on a pillar the :dig-down, on the ground the walk to the pillar's foot.
-   A wait :no-blocks with no pillar block held where one is needed, :no-approach for a crystal no
-   axis reaches, :stranded on a spike with no pillar back down; nil with no crystal and the feet
-   down."
+   nearest the feet and its approach: on the End's entry platform or its bridge across the void,
+   the way to the main island first (toward-island); at a crystal's stand, a block into the
+   wall's gap (:place into the given cell), then the strike; in its pillar's column under the top,
+   the :pillar up; on the pillar's top short of the stand, the walk onto the spike to it; else, on
+   a spike's top, the walk back to the pillar's top, on a pillar the :dig-down, on the ground the
+   walk to the pillar's foot. A wait :no-blocks with no pillar block held where one is needed,
+   :no-approach for a crystal no axis reaches, :stranded on a spike with no pillar back down; nil
+   with no crystal and the feet down. Falling (not :player/on-ground?, a hit's knockback off a
+   pillar or the way down it) the wait :falling: no route starts in the air, and gym chain-w11
+   runs 3 and 4 asked for a walk every tick, each failed :no-path, twelve in a row failed the
+   run in 0.6 s."
   [world]
   (let [[fx fy fz :as feet] (intent/feet world)
         [eid c] (entity/nearest (crystals world) (:player/pos world))
@@ -257,7 +321,9 @@
         [cx _ cz] (:column a)
         item (pillar-block world)
         gap (when a (wall-gap world a))]
-    (cond (and a (= feet (:stand a)) gap item)
+    (cond (off-island? world) (toward-island world)
+          (not (:player/on-ground? world true)) {:plan/wait :falling}
+          (and a (= feet (:stand a)) gap item)
           {:intent/kind :place :intent/item item :intent/cell gap}
           (and a (= feet (:stand a)) gap) {:plan/wait :no-blocks}
           (and a (= feet (:stand a))) {:intent/kind :strike :intent/target eid}
@@ -563,12 +629,16 @@
     (math/hypot (- px (+ ax (* t dx))) (- pz (+ az (* t dz))))))
 
 (defn breath-on-way?
-  "Does a breath cloud or fireball reach (breath-reach) the straight way on the plane from point
-   a to point b? A walk crosses it: gym dragon-d runs 1 and 3 walked back to the fountain's stand
-   through a fireball's cloud lying between and died in it, nothing ending a walk but itself."
-  [world a b]
-  (boolean (some #(<= (segment-distance (:entity/pos %) a b) (breath-reach %))
-                 (vals (breaths world)))))
+  "Does a breath cloud or fireball reach (breath-reach, and extra more when it is given) the
+   straight way on the plane from point a to point b? A walk crosses it: gym dragon-d runs 1 and 3
+   walked back to the fountain's stand through a fireball's cloud lying between and died in it,
+   nothing ending a walk but itself. The way back to the stand is asked with breath-hold more,
+   the walk away from the breath with none: a cloud grows (3 to 7) while the bot walks, and one
+   line for both turned it round every half second."
+  ([world a b] (breath-on-way? world a b 0.0))
+  ([world a b extra]
+   (boolean (some #(<= (segment-distance (:entity/pos %) a b) (+ (breath-reach %) extra))
+                  (vals (breaths world))))))
 
 (defn from-fountain
   "Blocks on the plane from the feet to the fountain."
@@ -595,7 +665,31 @@
       [(first look) 90.0]
       look)))
 
-(declare fountain-stand holds?)
+(defn pumpkin-worn?
+  "Is the carved pumpkin on the head: no look of the bot's can have provoked an enderman
+   since it went on (wear-pumpkin), so one the server calls creepy here is after the
+   dragon that hit it, not the bot."
+  [world]
+  (= :carved_pumpkin (armour/worn world 0)))
+
+(defn wear-pumpkin
+  "The :wear intent that puts a carved pumpkin held in the store slots on the head, or nil
+   when one is worn there already or none is held: a player's look through a worn carved
+   pumpkin never provokes an enderman (EnderMan.isBeingStaredBy), so the End's endermen
+   stay calm through the crystal walks and the perch whatever the looks cross (gym
+   chain-a3's dragon row: three runs slain by endermen, at 48, 424 and 506 s). The helmet
+   swapped off stays held, and look-away still turns the row's looks. A pumpkin an
+   earlier wear left on the cursor counts as held, so that wear is asked again instead
+   of the row going on bare-headed (gym chain-w1's dragon run 3)."
+  [world]
+  (when (and (not (pumpkin-worn? world))
+             (or (armour/cursor-holds? world :carved_pumpkin)
+                 (some (fn [[p {i :item}]]
+                         (and (< -1 p armour/store-slots) (= :carved_pumpkin (recipe/item-name i))))
+                       (:player/inventory world))))
+    {:intent/kind :wear :intent/item :carved_pumpkin}))
+
+(declare fountain-stand holds? in-basin? stand-cells)
 
 (defmethod intent/run :perch
   ;; {:intent/kind :perch :intent/target eid}: the best sword in hand, then by the fountain facing
@@ -605,27 +699,37 @@
   ;; gone (dead), a breath is near (the planner backs off) unless the bot holds through it in the
   ;; basin (holds?), its head has turned onto the feet (in-bite?) with a stand behind it to go
   ;; to (the planner walks there) unless the dragon is in its scanning turn (scanning?: the head
-  ;; sweeps on past a bot that holds still low), or after perch-hold-ms (the planner looks again)
+  ;; sweeps on past a bot that holds still low), outside the basin once a stand is open without
+  ;; breath on the way, or after perch-hold-ms (the planner looks again)
   [world {:intent/keys [target stage perched] :or {perched 0} :as i} _]
   (let [now (:time/now world)
         e (get-in world [:world/entities target])
         i (cond-> i (nil? stage) (assoc :intent/stage :arm :intent/since now))
         perched (if (and e (perched? e)) (inc perched) 0)
-        world (assoc world :plan/intent (assoc i :intent/perched perched))
-        sat? (>= perched perch-ticks)]
-    (cond
-      (or (entity/gone? world target)
-          (and (breath-near world) (not (holds? world)))
-          (and (in-bite? e (:player/pos world)) (not (scanning? e)) (some? (fountain-stand world)))
-          (> (- now (:intent/since i)) perch-hold-ms))
-      (-> world
-          (assoc :player/controls {})
-          intent/done)
-      :else
-      (case (window/waiting world i)
-        :overdue (window/lost world i :arm)
-        :waiting world
-        (cond (:intent/resync i) (window/resync world (window/view world :inventory))
+        world (cond-> (assoc world :plan/intent (assoc i :intent/perched perched))
+                (some #{(intent/feet world)} (stand-cells world))
+                (assoc :dragon/stand (intent/feet world)))
+        sat? (>= perched perch-ticks)
+        stand (fountain-stand world)
+        health (:player/health world full-health)]
+    (cond (or (< health combat/retreat-health)
+              (entity/gone? world target)
+              (and (breath-near world) (not (holds? world)))
+              (and (in-bite? e (:player/pos world)) (not (scanning? e)) (some? stand))
+              (and (not (in-basin? world))
+                   stand
+                   (not
+                    (breath-on-way? world (:player/pos world) (physics/centre stand) breath-hold)))
+              (> (- now (:intent/since i)) perch-hold-ms))
+          (-> world
+              (assoc :player/controls {})
+              intent/done)
+          :else
+          (case (window/waiting world i)
+            :overdue (window/lost world i :arm)
+            :waiting world
+            (cond
+              (:intent/resync i) (window/resync world (window/view world :inventory))
               (= :arm (:intent/stage i)) (arm world)
               (and sat? (<= (reach world e) strike-reach)) (hit world target e)
               (and sat?
@@ -645,11 +749,27 @@
                      {:control/look
                       (look-away world (physics/look-at (game/eye world) (:entity/pos e)))}))))))
 
+(defn stand-cells
+  "The feet cells on the ground stand-from out from the fountain along its four axes, those with
+   ground loaded: the places the bot waits for the dragon."
+  [world]
+  (let [[fx fz] fountain]
+    (keep (fn [[dx dz]]
+            (let [x (long (math/floor (+ fx (* dx stand-from))))
+                  z (long (math/floor (+ fz (* dz stand-from))))]
+              (when-let [y (ground world x z sky)] [x y z])))
+          [[1 0] [-1 0] [0 1] [0 -1]])))
+
 (defn fountain-stand
   "The feet cell on the ground stand-from out from the fountain along the axis nearest the feet,
    none within breath-reach of a breath cloud or fireball and, while the dragon sits there turned
    (turned?), none short of behind-by behind its body (behind?), where the bot waits for the
-   dragon to perch, or nil when no such column has ground loaded. In the exit portal's basin
+   dragon to perch, or nil when no such column has ground loaded. The stand the bot held last
+   (:dragon/stand, kept by the :perch) stays the stand while it is out of every breath's reach,
+   not in the head's bite (in-bite?) and not short of stand-slack less than behind-by behind the
+   body: the nearest stand is changed to only for a clear gain, not each time the turning dragon
+   makes the other one marginally nearer (gym chain-w13 dragon runs 1 and 3: [0 62 -2] and
+   [2 62 0] swapped every 0.8 s, nine health taken). In the exit portal's basin
    beside the pillar: the perched dragon turns its face to the bot, its head 6.5 out from the
    pillar and its neck 5.5, each hurting what it touches; gym dragon-a stood five out, under the
    head, and died in two seconds of its perch, its five hits 2.5 each on the body; dragon-e and
@@ -657,21 +777,25 @@
    the body only the tail is, which hurts nothing; the nearest stand behind is re-chosen as the
    dragon turns (the :perch hands back when its head comes onto the feet, in-bite?)."
   [world]
-  (let [[fx fz] fountain
-        [_ d] (dragon world)
-        clouds (vals (breaths world))]
-    (->> [[1 0] [-1 0] [0 1] [0 -1]]
-         (keep (fn [[dx dz]]
-                 (let [x (long (math/floor (+ fx (* dx stand-from))))
-                       z (long (math/floor (+ fz (* dz stand-from))))]
-                   (when-let [y (ground world x z sky)] [x y z]))))
-         (remove (fn [c]
-                   (some #(<= (physics/horizontal-distance (physics/centre c) (:entity/pos %))
-                              (breath-reach %))
-                         clouds)))
-         (filter #(behind? d (physics/centre %) behind-by))
-         (sort-by #(physics/horizontal-distance (:player/pos world) (physics/centre %)))
-         first)))
+  (let [[_ d] (dragon world)
+        clouds (vals (breaths world))
+        cells (stand-cells world)
+        breathed? (fn [c]
+                    (some #(<= (physics/horizontal-distance (physics/centre c) (:entity/pos %))
+                               (breath-reach %))
+                          clouds))
+        held (:dragon/stand world)]
+    (if (and held
+             (some #{held} cells)
+             (not (breathed? held))
+             (not (and d (in-bite? d (physics/centre held))))
+             (behind? d (physics/centre held) (- behind-by stand-slack)))
+      held
+      (->> cells
+           (remove breathed?)
+           (filter #(behind? d (physics/centre %) behind-by))
+           (sort-by #(physics/horizontal-distance (:player/pos world) (physics/centre %)))
+           first))))
 
 (defn in-basin?
   "Are the feet within walk-in-to of the fountain on the plane: in the exit portal's basin, under
@@ -683,10 +807,7 @@
   "Are the feet within a breath cloud's or fireball's own radius (:entity/radius, breath-radius
    when unsaid), where it hurts, not only within its breath-reach?"
   [world]
-  (let [pos (:player/pos world)]
-    (boolean (some #(<= (physics/horizontal-distance pos (:entity/pos %))
-                        (:entity/radius % breath-radius))
-                   (vals (breaths world))))))
+  (entity/in-breath? world))
 
 (defn at-stand?
   "Are the feet within stand-near of stand's middle on the plane?"
@@ -723,28 +844,66 @@
   {:intent/kind :walk :intent/target cell :intent/for :shelter})
 
 (defn escape
-  "The feet cell on the ground nearest the feet, of those escape-from to escape-to out from the
-   fountain in escape-ways directions, that no breath reaches (breathed?) and that is not before
-   the sitting dragon's head (before-head?), or nil when none has ground loaded. Combat's
-   :back-off walks straight away from the breath: gym dragon3-a run 2 backed off from a
-   fireball and its cloud on the stand into the fountain's pillar, jumped against it for six
-   seconds inside the cloud and died; a walk to a cell goes round the pillar by its route."
+  "The feet cell on the ground nearest the feet (other than the feet's own cell), of those
+   escape-from to escape-to out from the fountain in escape-ways directions, that no breath
+   reaches (breathed?) and that is not before the sitting dragon's head (before-head?), or nil
+   when none has ground loaded. Combat's :back-off walks straight away from the breath: gym
+   dragon3-a run 2 backed off from a fireball and its cloud on the stand into the fountain's
+   pillar, jumped against it for six seconds inside the cloud and died; a walk to a cell goes
+   round the pillar by its route."
   [world]
   (let [[_ d] (dragon world)
         [fx fz] fountain
-        pos (:player/pos world)]
+        pos (:player/pos world)
+        feet (intent/feet world)]
     (->> (for [r (range escape-from (inc escape-to))
                k (range escape-ways)
                :let [a (* k (/ (* 2.0 math/PI) escape-ways))]]
            [(+ fx (* r (math/cos a))) (+ fz (* r (math/sin a)))])
          (keep #(ground-cell world %))
+         (remove #{feet})
          (remove #(breathed? world %))
          (remove #(before-head? d (physics/centre %)))
+         (remove #(bite-on-way? d pos (physics/centre %)))
          (sort-by #(physics/horizontal-distance pos (physics/centre %)))
          first)))
 
+(defn sheltered?
+  "Is the bot standing in a safe shelter cell outside the fountain basin: at least escape-from
+   out from the fountain, no breath reaching the feet (breathed?), and not before the sitting
+   dragon's head (before-head?)?"
+  [world]
+  (let [[_ d] (dragon world)
+        [fx fz] fountain
+        pos (:player/pos world)
+        feet (intent/feet world)]
+    (and (>= (physics/horizontal-distance pos [fx 0.0 fz]) escape-from)
+         (not (breathed? world feet))
+         (not (before-head? d (physics/centre feet))))))
+
+(defn recover
+  "The intent while hurt under combat/retreat-health at the dragon, where the perch and
+   the walk to its stand are never chosen (gym chain-w3's dragon runs 2 and 3 fought on
+   at ten, then four and a half health, and the dragon slew them): a meal first when
+   food is held and the bar can take one, in shelter outside the basin (sheltered?) or with no
+   cell to go to, else, while not yet in shelter, the shelter walk to a cell out of every
+   breath's reach (escape), else the wait :low-health where the feet are for the bar's own
+   healing. Gym chain-w12 chain run 4 ate twice at the fountain at low health and died there.
+   The :heal row's meal needs a lull (heal-food), which a sitting dragon never is, so
+   the row eats here on its own line."
+  [world]
+  (let [food (when (< (:player/food world 20) 20) (eat/food-held world))
+        flight (escape world)]
+    (cond (and food (or (sheltered? world) (nil? flight))) {:intent/kind :eat :intent/item food}
+          (sheltered? world) {:plan/wait :low-health}
+          flight (shelter-walk flight)
+          :else {:plan/wait :low-health})))
+
 (defn toward-dragon
-  "The next intent toward the dragon dead: while a crystal stands or the feet are up a pillar or
+  "The next intent toward the dragon dead: on the ground in a breath cloud itself (in-breath?)
+   with a crystal standing, the shelter walk out of it (escape), first of all: gym chain-w11 runs
+   3 and 4 stood in one fighting an enderman, six health every half second of magic, and died;
+   while a crystal stands or the feet are up a pillar or
    a spike, the crystals' (toward-crystals); a breath near, combat's :back-off from it; away from
    the fountain's stand (fountain-stand), the walk there; there, the :perch, and with every stand
    under a breath, or one on the straight way to the stand (breath-on-way?), the :perch where
@@ -762,18 +921,32 @@
    head (escape), combat's straight :back-off only with no such cell loaded (gym dragon3-a run
    2 backed straight off into the fountain's pillar and died in the cloud against it); and
    through its scanning turn (scanning?) the :perch holds whatever stand the feet are at, the
-   stand re-chosen only in the phases the dragon does not turn in."
+   stand re-chosen only in the phases the dragon does not turn in. Hurt under
+   combat/retreat-health, none of the perch or the stands: recover's meal, shelter
+   walk or wait until the health is back over that line."
   [world]
   (let [[eid d] (dragon world)
         pos (:player/pos world)
         breath (breath-near world)
         stand (fountain-stand world)
         far? (and stand (> (physics/horizontal-distance pos (physics/centre stand)) stand-near))
-        blocked? (and far? (breath-on-way? world pos (physics/centre stand)))
+        blocked? (and far? (breath-on-way? world pos (physics/centre stand) breath-hold))
         flight (when breath (escape world))]
-    (cond (or (seq (crystals world)) (on-pillar? world) (on-spike? world)) (toward-crystals world)
+    (cond (and (seq (crystals world))
+               (in-breath? world)
+               (:player/on-ground? world true)
+               (not (or (off-island? world) (on-pillar? world) (on-spike? world)))
+               (escape world))
+          (shelter-walk (escape world))
+          (or (off-island? world) (seq (crystals world)) (on-pillar? world) (on-spike? world))
+          (toward-crystals world)
+          (< (:player/health world full-health) combat/retreat-health) (recover world)
           (and breath eid (holds? world)) {:intent/kind :perch :intent/target eid}
-          (and breath eid d (grounded? d) (in-basin? world) far?) (shelter-walk stand)
+          (and breath eid d (grounded? d) (or (in-basin? world) (not blocked?)) far?)
+          (shelter-walk (or (when-not (in-basin? world)
+                              (some->> (around d pos (physics/centre stand))
+                                       (ground-cell world)))
+                            stand))
           (and breath flight) (shelter-walk flight)
           breath {:intent/kind :back-off :intent/target (first breath)}
           (and (nil? stand) eid (some? (ground world 0 0 sky)))
@@ -817,41 +990,53 @@
 ;; ---------------------------------------------------------------- the goals
 
 (defmethod plan/done-by :crystals-gone?
-  ;; in the End, no end crystal shown and the feet down off every pillar and spike, standing on
-  ;; a block (the tick a dig-down's block breaks, the feet are over air and not yet down), once
-  ;; look-ms have passed since the plan began (the entities come a moment after the chunks)
+  ;; in the End, on the main island (not still on the entry platform or the bridge across the
+  ;; void), no end crystal shown and the feet down off every pillar and spike, standing on a
+  ;; block (the tick a dig-down's block breaks, the feet are over air and not yet down), once
+  ;; look-ms have passed since the plan began or entered the End (the entities come a moment
+  ;; after the chunks)
   [world _]
-  (boolean (and (:player/pos world)
-                (= dimension/end (dimension/of world))
-                (empty? (crystals world))
-                (:player/on-ground? world)
-                (place/solid-at? world (update (intent/feet world) 1 dec))
-                (not (on-pillar? world))
-                (not (on-spike? world))
-                (>= (- (:time/now world) (:plan/since world 0)) look-ms))))
+  (let [since (+ (:plan/since world 0) (get-in world [:plan/reached-after :enter-end] 0))]
+    (boolean (and (:player/pos world)
+                  (= dimension/end (dimension/of world))
+                  (empty? (crystals world))
+                  (:player/on-ground? world)
+                  (place/solid-at? world (update (intent/feet world) 1 dec))
+                  (not (off-island? world))
+                  (not (on-pillar? world))
+                  (not (on-spike? world))
+                  (>= (- (:time/now world) since) look-ms)))))
 
 (defmethod plan/done-by :dragon-dead? [world _] (boolean (:world/dragon-dead? world)))
 
 (defmethod plan/next-intent :crystals
-  ;; outside the End, a wait :other-dimension
+  ;; outside the End, a wait :other-dimension; in it, a held carved pumpkin on the head
+  ;; first (wear-pumpkin), then the crystals'
   [world _ _]
-  (if (= dimension/end (dimension/of world)) (toward-crystals world) {:plan/wait :other-dimension}))
+  (if (= dimension/end (dimension/of world))
+    (or (wear-pumpkin world) (toward-crystals world))
+    {:plan/wait :other-dimension}))
 
 (defmethod plan/interrupts? :dragon
-  ;; any running intent but a :back-off ends when a breath is near (breath-near) and the feet are
-  ;; down off the pillars and spikes: gym dragon-d runs 1 and 3 walked into a fireball's cloud
-  ;; and died in it, six a second, nothing else ending a walk; unless the intent is the walk
-  ;; from the breath to a cell out of its reach (shelter-walk, :intent/for :shelter) or the
-  ;; :perch held through it in the basin (holds?); and a walk whose straight way passes before
-  ;; the sitting dragon's head (bite-on-way?), from outside the basin, unless the feet are there
-  ;; already (the walk out from it) or it is the walk from a breath (its cell is not before the
-  ;; head, escape, and its route is the path's, not the straight way)
+  ;; a :perch ends at once hurt under combat/retreat-health (recover takes over: never
+  ;; fight the dragon under that line); any running intent but a :back-off ends when a breath is near (breath-near) and the feet are
+  ;; down off the pillars, spikes and entry bridge: gym dragon-d runs 1 and 3 walked into a
+  ;; fireball's cloud and died in it, six a second, nothing else ending a walk; unless the intent
+  ;; is the walk from the breath to a cell out of its reach (shelter-walk, :intent/for :shelter)
+  ;; or the :perch held through it in the basin (holds?); and a walk from outside the basin whose
+  ;; destination is before the sitting dragon's head (before-head?) or whose straight way passes
+  ;; before it (bite-on-way?) while the feet are not already there (the walk out from under the
+  ;; head to a safe cell continues; gym dragon3-b run 2 had the scanning head turn onto both the
+  ;; feet and the waypoint ahead, and walked into the head)
   [world _ i]
   (let [[_ d] (dragon world)
         pos (:player/pos world)
         shelter? (and (= :walk (:intent/kind i)) (= :shelter (:intent/for i)))]
-    (or (and (not= :back-off (:intent/kind i))
+    (or (and (= :perch (:intent/kind i))
+             (< (:player/health world full-health) combat/retreat-health))
+        (and (not= :back-off (:intent/kind i))
              (not shelter?)
+             (not (off-island? world))
              (not (on-pillar? world))
              (not (on-spike? world))
              (some? (breath-near world))
@@ -860,8 +1045,9 @@
              (not shelter?)
              (:intent/target i)
              (not (in-basin? world))
-             (not (before-head? d pos))
-             (bite-on-way? d pos (physics/centre (:intent/target i)))))))
+             (let [goal (physics/centre (:intent/target i))]
+               (or (before-head? d goal)
+                   (and (not (before-head? d pos)) (bite-on-way? d pos goal))))))))
 
 (defmethod combat/answers :dragon
   ;; the dragon is the row's own: gym dragon2-a run 1's :defend fought the perched dragon at hand
@@ -870,24 +1056,56 @@
   #{:ender_dragon})
 
 (defmethod combat/answering :dragon
-  ;; and every hostile shown while a breath cloud or fireball reaches the feet (breath-near):
-  ;; the row's back-off from the breath, six a second of magic through iron, comes before any
-  ;; fight. Gym dragon2-a run 2 and dragon2-b runs 1 and 3 died in breath clouds, their
-  ;; back-offs cut short by :defend's fights with an enderman in the cloud
+  ;; and every hostile shown while a breath cloud or fireball reaches the feet (breath-near),
+  ;; while the dragon sits or lands on its perch (grounded?: gym dragon3-b runs 1 and 2 had
+  ;; :defend chase an enderman the dragon had hit out of the basin up the rim into the sitting
+  ;; dragon's head), or while crossing from the entry platform (off-island?),
+  ;; unless health is under retreat-health where the dragon is not fought (recover takes over)
   [world _]
   (cond-> #{:ender_dragon}
-    (and (:player/pos world) (= dimension/end (dimension/of world)) (breath-near world))
+    (and (:player/pos world)
+         (= dimension/end (dimension/of world))
+         (>= (:player/health world full-health) combat/retreat-health)
+         (or (breath-near world)
+             (off-island? world)
+             (some-> (second (dragon world))
+                     grounded?)))
     (into (map entity/kind (vals (entity/hostiles world))))))
 
-(defmethod plan/steer :dragon
-  ;; every look the row's intents make, a walk's and a back-off's as well as the perch's, turned
-  ;; from an enderman's eyes (look-away): gym dragon-f run 3 stared at three endermen in turn on
-  ;; its walks to and from the stand and was slain by the third, dragon-e run 1 at one on its
-  ;; first walk there; a walk steers by :control/yaw, so the look's pitch is free
+(defmethod combat/answering :crystals [_ _] #{})
+
+(defn looks-away
+  "The world with its controls' look turned from an enderman's eyes (look-away), or as it
+   is when no look, set or standing, meets one: every look an End row's intents make, a
+   walk's and a back-off's as well as the perch's (gym dragon-f run 3 stared at three
+   endermen in turn on its walks to and from the stand and was slain by the third,
+   dragon-e run 1 at one on its first walk there); a walk steers by :control/yaw, so
+   the look's pitch is free. With no look set this tick the standing look
+   (:player/look) is turned too, by setting the controls' look to its turned form:
+   an intent that sends no look (the :wear that puts the pumpkin on) otherwise leaves
+   the landing look standing into whatever it faces for the whole wear, and gym
+   chain-w5's dragon run 1 was slain by an enderman at its stand eight seconds in,
+   the pumpkin on by then and no fight ever chosen."
+  [world]
+  (let [set (:control/look (:player/controls world))
+        turned (look-away world (or set (:player/look world [0.0 0.0])))]
+    (if (or set (not= turned (:player/look world [0.0 0.0])))
+      (assoc-in world [:player/controls :control/look] turned)
+      world)))
+
+(defmethod plan/steer :dragon [world _] (looks-away world))
+
+(defmethod plan/steer :crystals
+  ;; the crystal walks and pillars cross the whole island under the endermen's eyes, the
+  ;; chain's stage of them before the dragon's: the same turned looks as the dragon row's
   [world _]
-  (if-let [look (:control/look (:player/controls world))]
-    (assoc-in world [:player/controls :control/look] (look-away world look))
-    world))
+  (looks-away world))
+
+(defmethod plan/steer :wear
+  ;; in the End, wearing armour or the carved pumpkin on the head must turn looks away
+  ;; from endermen so the bot never stares during the clicks
+  [world _]
+  (if (= dimension/end (dimension/of world)) (looks-away world) world))
 
 (defmethod plan/done-by :healed? [world _] (nil? (heal-food world)))
 
@@ -897,4 +1115,6 @@
 
 (defmethod plan/next-intent :dragon
   [world _ _]
-  (if (= dimension/end (dimension/of world)) (toward-dragon world) {:plan/wait :other-dimension}))
+  (if (= dimension/end (dimension/of world))
+    (or (wear-pumpkin world) (toward-dragon world))
+    {:plan/wait :other-dimension}))

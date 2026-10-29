@@ -136,7 +136,10 @@
     (is (= [(first at-head) 90.0] (dragon/look-away w at-head)) "into its eyes: straight down")
     (is (= up (dragon/look-away w up)) "over its head: as it was")
     (is (= at-head (dragon/look-away (assoc w :world/entities {}) at-head))
-        "no enderman: as it was")))
+        "no enderman: as it was")
+    (is (= [(first at-head) 90.0]
+           (:control/look (:player/controls (dragon/looks-away (assoc w :player/look at-head)))))
+        "no look set this tick: the standing look is turned down too")))
 
 (deftest the-climb-jumps-and-puts-the-block-in-once-clear
   (let [w (-> (standing {} [8.5 64.0 8.5] cobblestone {})
@@ -190,12 +193,16 @@
         "a hurt is not a death")
     (is (true? (:world/dragon-dead? (told w {:packet/name :remove-entities :ids [dragon-eid]})))
         "removed near the bot with no boss bar")
-    (let [shown (told w {:packet/name :boss-event :uuid bar :action 0})]
+    (let [shown (told w {:packet/name :boss-event :uuid bar :action 0})
+          updated (told shown {:packet/name :boss-event :uuid bar :action 2 :health 0.75})]
       (is (= #{bar} (:world/boss-bars shown)))
+      (is (= 0.75 (get-in updated [:world/boss-health bar])) "boss bar health update is recorded")
       (is (nil? (:world/dragon-dead? (told shown
                                            {:packet/name :remove-entities :ids [dragon-eid]})))
           "removed with its boss bar still shown")
-      (is (= #{} (:world/boss-bars (told shown {:packet/name :boss-event :uuid bar :action 1})))))
+      (is (= #{} (:world/boss-bars (told shown {:packet/name :boss-event :uuid bar :action 1}))))
+      (is (= {} (:world/boss-health (told updated {:packet/name :boss-event :uuid bar :action 1})))
+          "boss bar removal clears its health"))
     (is (nil? (:world/dragon-dead? (told (with-dragon [200.5 80.0 0.5])
                                          {:packet/name :remove-entities :ids [dragon-eid]})))
         "removed out of sight: flown off, not dead")
@@ -482,20 +489,39 @@
           "beside it as it scans: no new stand")
       (is (= (dragon/standing-walk [2 64 0]) (at [0.5 64.0 2.5] (attacking 270.0)))
           "its yaw held: the stand behind"))
-    (testing ":defend leaves every hostile to the row while a breath reaches the feet"
+    (testing
+      ":defend leaves every hostile to the row while a breath reaches or the dragon is grounded"
       (let [angry {9 {:entity/type (mob/type-id :enderman)
                       :entity/pos [4.5 64.0 0.5]
                       :entity/creepy? true}}
+            circling {dragon-eid {:entity/type (mob/type-id :ender_dragon)
+                                  :entity/pos [20.5 80.0 0.5]
+                                  :entity/phase 0}}
             w (fn [es]
                 (assoc (round-fountain [2.5 64.0 0.5] es)
                        :player/dimension dimension/end
                        :plan/goals #{:dragon}))
-            breathed (w (merge (attacking 270.0) angry (cloud [2.5 64.0 3.4] 1.5)))
-            quiet (w (merge (attacking 270.0) angry))]
+            breathed (w (merge circling angry (cloud [2.5 64.0 3.4] 1.5)))
+            perched (w (merge (attacking 270.0) angry))
+            quiet (w (merge circling angry))]
         (is (contains? (combat/answering breathed :dragon) :enderman))
         (is (empty? (combat/threats breathed)) "the back-off from the breath comes first")
-        (is (= #{:ender_dragon} (combat/answering quiet :dragon)) "no breath: the dragon alone")
-        (is (= #{9} (set (keys (combat/threats quiet)))) "and the enderman is fought")))))
+        (is (contains? (combat/answering perched :dragon) :enderman)
+            "grounded dragon: stay in the basin")
+        (is (empty? (combat/threats perched)))
+        (is (= #{:ender_dragon} (combat/answering quiet :dragon))
+            "circling and no breath: the dragon alone")
+        (is (= #{9} (set (keys (combat/threats quiet)))) "and the enderman is fought")
+        (let [hooded (assoc quiet
+                            :player/inventory
+                            {39 {:item (recipe/item-id :carved_pumpkin) :count 1}})]
+          (is (empty? (combat/threats (assoc hooded :plan/goals #{:dragon})))
+              "the pumpkin worn: an unprovoked enderman is not a threat")
+          (is (= #{9}
+                 (set (keys
+                       (combat/threats
+                        (assoc hooded :plan/goals #{:dragon} :player/hurt-at 10 :time/tick 15)))))
+              "when hit by an enderman through the pumpkin, it is a threat at once"))))))
 
 (deftest every-look-of-the-dragon-row-is-away-from-an-endermans-eyes
   ;; gym dragon-f run 3: three endermen stared at in turn on the walks to and from the stand
@@ -516,6 +542,170 @@
            (:player/controls (plan/steered (assoc-in walking [:plan/intent :intent/goal] :wood)
                                            table)))
         "another row's: as it was")))
+
+(deftest a-carved-pumpkin-held-is-worn-in-the-end-before-anything-else
+  ;; gym chain-a3's dragon row: three runs slain by endermen; a look through a worn carved
+  ;; pumpkin never provokes one, so the End's rows put a held one on before walking anywhere
+  (let [hood {:item (recipe/item-id :carved_pumpkin) :count 1}
+        helmet {:item (recipe/item-id :iron_helmet) :count 1}
+        end #(assoc (standing {} [0.5 64.0 0.5] % {}) :player/dimension dimension/end)]
+    (is (= {:intent/kind :wear :intent/item :carved_pumpkin}
+           (dragon/wear-pumpkin (end {5 hood 39 helmet})))
+        "held, a helmet worn: swapped on")
+    (is (nil? (dragon/wear-pumpkin (end {39 hood}))) "worn already: nothing")
+    (is (nil? (dragon/wear-pumpkin (end {39 helmet}))) "none held: nothing")
+    (is (= {:intent/kind :wear :intent/item :carved_pumpkin}
+           (dragon/wear-pumpkin (assoc (end {39 helmet}) :window/cursor hood)))
+        "left on the cursor by a wear that failed: worn still")
+    (is (= {:intent/kind :wear :intent/item :carved_pumpkin}
+           (plan/next-intent (end {5 hood}) {:goal/plan :crystals} plan/goals))
+        "the crystals row first")
+    (is (= {:intent/kind :wear :intent/item :carved_pumpkin}
+           (plan/next-intent (end {5 hood}) {:goal/plan :dragon} plan/goals))
+        "the dragon row first")
+    (is
+     (= {:plan/wait :other-dimension}
+        (plan/next-intent (standing {} [0.5 64.0 0.5] {5 hood} {}) {:goal/plan :dragon} plan/goals))
+     "outside the End: never worn")
+    (let [w (assoc (end {39 hood})
+                   :player/controls {:control/look [10.0 -20.0]}
+                   :world/entities
+                   {9 {:entity/type (mob/type-id :enderman) :entity/pos [6.5 64.0 0.5]}})]
+      (is (= [10.0 -20.0] (:control/look (:player/controls (dragon/looks-away w))))
+          "a look not at an enderman's head is kept"))))
+
+(deftest hurt-under-retreat-health-the-dragon-is-not-fought
+  ;; gym chain-w3's dragon runs 2 and 3: the perch fought on at ten, then four and a
+  ;; half health, and the dragon slew both; under combat/retreat-health the row eats,
+  ;; shelters or waits, and a running perch ends at once
+  (let [steak {:item (recipe/item-id :cooked_beef) :count 4}
+        hurt (fn [food inv]
+               (assoc (round-fountain [2.5 64.0 0.5] (sitting 270.0))
+                      :player/health 9.0
+                      :player/food food
+                      :player/inventory inv))]
+    (let [i (dragon/toward-dragon (hurt 10 {0 steak}))]
+      (is
+       (= :shelter (:intent/for i))
+       "at the fountain: out of the basin first, the meal where it is sheltered (chain-w12 run 4)"))
+    (is (= {:intent/kind :eat :intent/item :cooked_beef}
+           (dragon/toward-dragon (assoc (hurt 10 {0 steak}) :player/pos [20.5 64.0 0.5])))
+        "food held and the bar short, sheltered: the meal, not the perch")
+    (is (not= :perch (:intent/kind (dragon/toward-dragon (hurt 20 {0 steak})))))
+    (is (not= :perch (:intent/kind (dragon/toward-dragon (hurt 20 {}))))
+        "nothing to eat: shelter or the wait, still never the perch")
+    (is (plan/interrupts? (hurt 20 {}) {:goal/plan :dragon} {:intent/kind :perch})
+        "a running perch ends under the line")
+    (let [perching
+          (assoc (hurt 20 {}) :plan/intent {:intent/kind :perch :intent/target dragon-eid})]
+      (is (intent/done? (:plan/intent (intent/run
+                                       perching
+                                       (:plan/intent perching)
+                                       {:event/kind :tick :event/now 1000 :event/rand 0.5})))
+          "perch intent yields at once under retreat health"))
+    (let [sheltered (assoc (hurt 20 {}) :player/pos [6.5 64.0 0.5])]
+      (is (= {:plan/wait :low-health} (dragon/toward-dragon sheltered))
+          "in shelter outside the basin: waiting for health back, not walking"))))
+
+(deftest an-attacker-enderman-is-answered-when-pumpkin-worn-and-dragon-grounded
+  ;; gym chain-w7 run 2 (at 2a3adb1): dragon grounded, carved pumpkin worn,
+  ;; an enderman struck the bot down to 2.7 health because answering :dragon
+  ;; suppressed all hostiles when grounded and threats excluded answered-kinds.
+  ;; When damaged by an attacker or under retreat-health, the enderman is answered.
+  (let [enderman {:entity/type (mob/type-id :enderman) :entity/pos [1.5 64.0 0.5]}
+        w (-> (round-fountain [0.5 64.0 0.5] (sitting 270.0))
+              (assoc :player/inventory {39 {:item (recipe/item-id :carved_pumpkin) :count 1}}
+                     :world/entities (merge (sitting 270.0) {309 enderman})
+                     :player/dimension dimension/end
+                     :player/health 8.0
+                     :player/attacker 309
+                     :player/hurt-at 100
+                     :time/tick 110))]
+    (is (not (contains? (combat/answering w :dragon) :enderman))
+        "under retreat health, answering :dragon does not suppress hostiles")
+    (is (contains? (combat/threats w) 309)
+        "an enderman attacking the bot is a threat even when carved pumpkin is worn")
+    (is (= {:intent/kind :back-off :intent/target 309}
+           (plan/next-intent w {:goal/id :defend :goal/plan :defend} plan/goals))
+        "under danger health, defend backs off from the attacking enderman")
+    (is (= {:intent/kind :fight :intent/target 309 :intent/to-the-end? true}
+           (plan/next-intent (assoc w :player/health 20.0)
+                             {:goal/id :defend :goal/plan :defend}
+                             plan/goals))
+        "healthy, defend fights the attacking enderman to the end")))
+
+(deftest holds-in-basin-when-breath-cloud-is-outside-actual-radius
+  ;; gym chain-w8: prematurely breaking holds? on breath clouds outside the basin drove
+  ;; the bot up the rim into the sitting dragon's head and wings. holds? holds as long as
+  ;; the breath cloud has not engulfed the feet.
+  (let [cloud {:entity/type (blocks/entity-types :area_effect_cloud)
+               :entity/pos [6.5 64.0 0.5]
+               :entity/radius 5.7}
+        w (-> (round-fountain [0.5 64.0 0.5] (sitting 270.0))
+              (assoc :world/entities (merge (sitting 270.0) {258 cloud})))]
+    (is (not (dragon/in-breath? w)) "feet outside cloud radius is not in-breath")
+    (is (dragon/holds? w) "the bot holds in the basin rather than fleeing up the rim")))
+
+(deftest when-dragon-attacks-the-bot-defend-never-claims-it-and-recover-takes-over
+  ;; gym chain-w8: dragon struck the bot down to 6.4 health; dragon must never be claimed by
+  ;; :defend as a threat (combat/threats excludes :ender_dragon), so the dragon row stays
+  ;; in control and recover takes over when health is under combat/retreat-health.
+  (let [w (-> (round-fountain [0.5 64.0 0.5] (sitting 270.0))
+              (assoc :player/dimension dimension/end
+                     :player/health 6.4
+                     :player/food 20
+                     :player/attacker 40
+                     :player/hurt-at 100
+                     :time/tick 110))]
+    (is (empty? (combat/threats w)) "the dragon is never a threat in combat/threats")
+    (is
+     (contains? #{:walk :low-health}
+                (let [i (dragon/toward-dragon w)] (or (:intent/kind i) (:plan/wait i))))
+     "dragon row executes recover (shelter walk or wait :low-health), never :fight or :back-off from defend")))
+
+(deftest escape-never-paths-through-the-sitting-dragons-head-or-bite-area
+  ;; gym chain-w8 run 3: escaping from [4 63 -9] toward [7 62 -3] crossed the dragon's head
+  ;; and bite path (bite-on-way?), dealing fatal contact damage in 0.35 s.
+  ;; escape must reject cells whose straight way crosses before the sitting dragon's head.
+  (let [d (sitting 270.0)
+        w (-> (round-fountain [4.5 63.0 -9.5] d)
+              (assoc :player/dimension dimension/end))]
+    (when-let [flight (dragon/escape w)]
+      (let [[_ dragon-ent] (dragon/dragon w)]
+        (is (not (dragon/bite-on-way? dragon-ent (:player/pos w) (physics/centre flight)))
+            "escape destination straight line never passes before the dragon's head")))))
+
+(deftest grounded-dragon-stand-approach-commits-to-safe-stand-without-escape-ping-pong
+  ;; gym chain-w9 run 2: approaching the fountain from outside the basin (distance 4.5) with a
+  ;; grounded dragon and breath near the fountain ping-ponged between the stand and escape flight.
+  ;; When the stand is safe and not blocked by breath on the way, the bot commits to it with a shelter-walk.
+  (let [d (sitting 270.0)
+        cloud {:entity/type (blocks/entity-types :area_effect_cloud)
+               :entity/pos [6.5 64.0 -4.0]
+               :entity/radius 2.0}
+        w (-> (round-fountain [5.0 64.0 -4.0] d)
+              (assoc :world/entities (merge d {258 cloud})
+                     :player/dimension dimension/end
+                     :player/health 20.0))]
+    (is (some? (dragon/breath-near w)) "breath cloud is near the player")
+    (is (not (dragon/in-basin? w)) "player is outside the basin")
+    (let [i (dragon/toward-dragon w)]
+      (is (= :walk (:intent/kind i)))
+      (is (= :shelter (:intent/for i)) "shelter-walk protects approach from breath interruption")
+      (is (= [2 64 -4] (:intent/target i))
+          "commits to the way round the dragon's head to the stand (around), never flight"))))
+
+(deftest steer-wear-looks-away-from-endermen-in-the-end
+  ;; gym chain-w9 run 3: landing in the End, wearing armour or pumpkin must steer looks away
+  ;; from endermen's eyes so staring aggro is never triggered during the wear clicks
+  (let [pos [6.5 64.0 0.5]
+        enderman {:entity/type (mob/type-id :enderman) :entity/pos pos}
+        w (-> (standing {} [0.5 64.0 0.5] {} {81 enderman})
+              (assoc :player/dimension dimension/end)
+              (#(assoc % :player/look (physics/look-at (game/eye %) (mob/head :enderman pos)))))
+        steered (plan/steer w {:goal/plan :wear})]
+    (is (= 90.0 (second (get-in steered [:player/controls :control/look])))
+        "looks down to avoid enderman eyes during wear")))
 
 (deftest in-a-lull-the-bot-eats-for-health-back
   ;; the hand-off of gym dragon-f: sixteen steak held, the food between 14 and 18, no healing
@@ -651,3 +841,122 @@
            (:intent/reason (:plan/intent (dragon/climb (assoc packed :player/inventory {})
                                                        (:plan/intent packed)))))
         "none anywhere: failed")))
+
+(deftest the-platform-in-the-end-bridges-to-the-island-before-crystals
+  (let [obs (blocks/default-state :obsidian)
+        stone (blocks/default-state :end_stone)
+        void (into {} (for [lx (range 16) lz (range 16) y (range 40 64)] [[lx y lz] blocks/air]))
+        plat (into {} (for [x (range 98 103) z (range -2 3)] [[x 48 z] obs]))
+        shore (into {} (for [x (range 60 73) z (range -2 3) y (range 48 53)] [[x y z] stone]))
+        cols (into {}
+                   (for [cx [3 4 5 6]]
+                     [[cx 0]
+                      (world/column (merge void
+                                           (into {}
+                                                 (for [[[x y z] id] (merge plat shore)
+                                                       :when (= cx (math/floor-div x 16))]
+                                                   [[(mod x 16) y (mod z 16)] id]))))]))
+        base (-> (standing {} [100.5 49.0 0.5] cobblestone {})
+                 (assoc :player/dimension dimension/end
+                        :world/chunks cols
+                        :time/now 5000
+                        :plan/since 0
+                        :plan/reached-after {:enter-end 4000}))]
+    (is (dragon/off-island? base) "on the obsidian platform at x 100")
+    (is (not (dragon/off-island? (assoc base :player/pos [70.5 53.0 0.5]))) "on the island")
+    (is (= [72 53 0] (dragon/island-shore base)) "the easternmost island column")
+    (is (= {:intent/kind :walk :intent/target [98 49 0] :intent/for :build}
+           (dragon/toward-island base))
+        "walks to the platform's western edge first")
+    (let [edge (assoc base :player/pos [98.5 49.0 0.5])]
+      (is (= {:intent/kind :pillar :intent/item :cobblestone :intent/top 53}
+             (dragon/toward-island edge))
+          "below the shore's y: pillar up to it first"))
+    (let [high (assoc base :player/pos [98.5 53.0 0.5])]
+      (is (= {:intent/kind :place :intent/item :cobblestone :intent/cell [97 52 0]}
+             (dragon/toward-island high))
+          "at the shore's y with air ahead: places floor west"))
+    (is (not (plan/done-by base {:goal/done? :crystals-gone?}))
+        "never done while still off the island or within 3s of entering the End")))
+
+(deftest a-bot-falling-from-a-pillar-waits-and-asks-for-no-walk
+  ;; gym chain-w11 runs 3 and 4 (plan run 40741523320): knocked off a pillar at y 79 by the
+  ;; dragon, the bot asked for a walk to the nearest crystal's foot and to the pillar's top every
+  ;; tick, 50 ms apart, each failed :no-path from the air, and twelve in a row failed the run.
+  (let [s (spike [8 8] 2 64 6)
+        w (-> (standing s [8.5 70.0 5.5] cobblestone crystal)
+              (assoc :player/on-ground? false))]
+    (is (= {:plan/wait :falling} (dragon/toward-crystals w)) "in the air, no route is asked for")
+    (is (= {:intent/kind :dig-down}
+           (dragon/toward-crystals
+            (assoc (standing (merge s (pillar [8 5] 64 69)) [8.5 70.0 5.5] cobblestone {})
+                   :player/on-ground?
+                   true)))
+        "on the pillar again with the crystal gone, the planner goes on")))
+
+(deftest in-the-breath-on-the-island-with-a-crystal-standing-the-bot-walks-out-and-fights-nothing
+  ;; gym chain-w11 run 4: an enderman fought at 14 health inside a breath cloud (type 23 damage,
+  ;; six every half second from the dragon's cloud), 14 -> 8.9 -> 3.4 -> 0 in three seconds.
+  (let [pos [8.5 64.0 0.5]
+        enderman
+        {99 {:entity/type (mob/type-id :enderman) :entity/pos [10.5 64.0 0.5] :entity/creepy? true}}
+        w (-> (round-fountain pos (merge (sitting 270.0) crystal (cloud pos 3.0) enderman))
+              (assoc :player/dimension dimension/end :player/health 14.0 :player/food 20))
+        out (assoc-in w [:world/entities 50 :entity/pos] [30.5 64.0 0.5])]
+    (is (entity/in-breath? w) "the feet are inside the cloud")
+    (is (combat/breathed-on? w))
+    (is (not (combat/breathed-on? out)))
+    (let [i (dragon/toward-dragon w)]
+      (is (= :walk (:intent/kind i)))
+      (is (= :shelter (:intent/for i)))
+      (is (not (dragon/breathed? w (:intent/target i))) "to a cell no breath reaches"))
+    (testing "a fight running when the cloud comes ends at once"
+      (let [fighting (-> w
+                         (assoc :plan/intent
+                                {:intent/kind :fight :intent/target 99 :intent/status :active})
+                         (assoc :time/now 5000))
+            after (intent/run fighting (:plan/intent fighting) {:event/kind :tick})]
+        (is (intent/done? (:plan/intent after)))))))
+
+(deftest a-cloud-growing-beside-the-way-to-the-stand-keeps-the-bot-where-it-is
+  ;; gym chain-w12 dragon run 2 (plan run 40776424398): 24 swaps in 12 s between the stand
+  ;; [2 62 0] and the cell out of the breath [0 64 -5], each walk cut after half a second by a
+  ;; cloud that had grown to the feet; then the dragon's head, three hits, 18.5 to 0 in 0.6 s
+  (let [pos [5.0 64.0 -4.0]
+        w (fn [entities]
+            (-> (round-fountain pos (merge (sitting 270.0) entities))
+                (assoc :player/dimension dimension/end :player/health 20.0 :player/food 20)))
+        clear (w {})
+        beside (w (cloud [5.0 64.0 -9.0] 2.0))]
+    (is (nil? (dragon/breath-near beside)) "the feet are out of its reach")
+    (is (not (dragon/breath-on-way? beside pos [2.5 64.0 0.5]))
+        "the way itself is out of its reach")
+    (is (dragon/breath-on-way? beside pos [2.5 64.0 0.5] dragon/breath-hold)
+        "but not out of its reach grown by breath-hold")
+    (is (= :walk (:intent/kind (dragon/toward-dragon clear))) "no cloud: the walk to the stand")
+    (is (= :perch (:intent/kind (dragon/toward-dragon beside)))
+        "a cloud beside the way: held where it is, not set out and turned back")))
+
+(deftest the-stand-held-stays-the-stand-while-the-dragon-turns-marginally
+  ;; gym chain-w13 dragon runs 1 and 3: [0 62 -2] and [2 62 0] swapped every 0.8 s as the turning
+  ;; dragon made each in turn the one behind it, nine health taken at the fountain
+  (let [w0 (round-fountain [8.5 64.0 0.5] (sitting 270.0))
+        held (first (filter #(= 2 (first %)) (dragon/stand-cells w0)))
+        centre (physics/centre held)
+        yaw (first (filter #(<= -0.9 (first (mob/ahead [0.5 66.0 0.5] % centre)) -0.6) (range 360)))
+        w (round-fountain [8.5 64.0 0.5] (sitting (double yaw)))]
+    (is (some? held))
+    (is (some? yaw) "a facing with the stand a little behind the body, past the bite")
+    (is (not= held (dragon/fountain-stand w)) "chosen anew, the stand is not far enough behind")
+    (is (= held (dragon/fountain-stand (assoc w :dragon/stand held)))
+        "held, it stays: the gain of another is not clear")
+    (is (not= held
+              (dragon/fountain-stand (assoc w
+                                            :dragon/stand held
+                                            :world/entities
+                                            (merge (:world/entities w) (cloud (vec centre) 2.0)))))
+        "but not into a cloud")
+    (is (not= held
+              (dragon/fountain-stand
+               (assoc (round-fountain [8.5 64.0 0.5] (sitting (+ 180.0 yaw))) :dragon/stand held)))
+        "nor under the head, turned onto it")))

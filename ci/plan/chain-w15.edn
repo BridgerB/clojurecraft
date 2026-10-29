@@ -1,0 +1,8 @@
+;; issue #10, batch w15: the retreat that swims to a trail cell no route reaches (to-room), the
+;; boss-event health as a conditional spec field; chain (4) and dragon (2)
+{:plans/label "chain-w15"
+ :plans/jobs 4
+ :plans/issue 10
+ :plans/experiments
+ [{:exp/name "dragon" :exp/kind :gym :exp/goal "dragon" :exp/runs 2 :exp/bots 1 :exp/est-s 1600}
+  {:exp/name "chain" :exp/kind :gym :exp/goal "chain" :exp/runs 4 :exp/bots 1 :exp/est-s 3600}]}

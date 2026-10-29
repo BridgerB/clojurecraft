@@ -246,7 +246,10 @@
   [world feet move]
   (let [cells (opens feet move)
         own (set cells)
-        water? #(contains? blocks/water-states (terrain/block-at world %))]
+        water? (fn [c]
+                 (let [id (terrain/block-at world c)]
+                   (or (contains? blocks/water-states id)
+                       (= :water (terrain/fluid-kind world c)))))]
     (and (not-any? water? cells) (not-any? water? (remove own (mapcat neighbours cells))))))
 
 (defn toward "The sign of d: -1, 0 or 1." [d] (long (math/signum (double d))))
@@ -664,8 +667,8 @@
   ;; down first past :intent/climb blocks off (climb-past when absent); with :intent/dry? only
   ;; steps that open no cell by water (dry?: the overworld's, issue #265)
   [world
-   {:intent/keys [target steps taken move from climb dry? tunnel-visited child search retreats
-                  airborne]
+   {:intent/keys [target steps taken move from climb tunnel-visited child search retreats airborne]
+    dry-only? :intent/dry?
     r :intent/reach
     :or {taken 0 r reach climb climb-past tunnel-visited #{} retreats 0 airborne 0}
     :as i} event]
@@ -691,11 +694,16 @@
             seen (-> tunnel-visited
                      (into (:trail/cells trail))
                      (into (:trail/dead trail)))
-            ahead
-            (when-not back
-              (next-move world feet target climb (boolean dry?) seen (boolean (:intent/bridge? i))))
+            ahead (when-not back
+                    (next-move world
+                               feet
+                               target
+                               climb
+                               (boolean dry-only?)
+                               seen
+                               (boolean (:intent/bridge? i))))
             fresh? (and ahead (or (gaining? feet ahead target) (not (retreat? feet ahead seen))))
-            undo (when-not (or back fresh?) (step-back world feet trail (boolean dry?)))
+            undo (when-not (or back fresh?) (step-back world feet trail (boolean dry-only?)))
             m (or back undo ahead)
             retreated (if (and ahead (not fresh?) (not undo)) (inc (long retreats)) 0)]
         (cond (or (nil? m) (> retreated retreats-allowed))
@@ -722,7 +730,8 @@
                intent/dissoc-intent
                (intent/assoc-intent (assoc world :player/controls {}) :intent/taken (inc taken))
                step-keys)
-              (and (#{:floor-clear :open :enter} (:build/step next)) (not (safe? world from move)))
+              (and (#{:floor-clear :open :enter} (:build/step next))
+                   (or (not (safe? world from move)) (and dry-only? (not (dry? world from move)))))
               (reduce intent/dissoc-intent (assoc world :player/controls {}) step-keys)
               ;; nothing to lay (the last block went into an earlier cell of this step), or
               ;; nothing that stands as a floor to lay in this step's floor (only soul sand
@@ -755,6 +764,20 @@
                           (assoc :player/controls {})
                           (intent/dissoc-intent :intent/reason)
                           intent/done)
+                      ;; a floor placement the server refused (:rejected, chain-a2 run 3 in
+                      ;; the portal room): the step is given up and its cell counted visited,
+                      ;; as a step with nothing to lay is, never the tunnel failed for one cell
+                      (and (intent/failed? i)
+                           (= :rejected (:intent/reason i))
+                           (= :place (:build/op next)))
+                      (reduce intent/dissoc-intent
+                              (-> world
+                                  (assoc :player/controls {})
+                                  (intent/assoc-intent :intent/status :active
+                                                       :intent/tunnel-visited
+                                                       (conj tunnel-visited (plus from move)))
+                                  (intent/dissoc-intent :intent/reason))
+                              step-keys)
                       :else world)))))))
 
 ;; ---------------------------------------------------------------- the goal
