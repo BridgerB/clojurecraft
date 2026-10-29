@@ -66,7 +66,7 @@
 (def spawner-reach 2.0)                ; blocks from the feet cell's centre to the spawner's a tunnel to it ends within: in its room, at the blazes' floor
 (def cover-range 16.0)                ; blazes this near that see the bot are the ones a hurt bot takes cover from (they shoot that far)
 (def at-hand combat/defend-radius)    ; blocks within which a blaze is fought first and to the end: it follows the bot into any cover and round any retreat
-(def eat-under 14.0)                  ; health under which a meal comes before the next fight, the food under the healing level: one volley takes 9
+(def engage-health 18.0)              ; health a fight with a blaze not at hand, and so the next after a rest, is begun at: one fireball and the fire it lights take 5 to 7, two blazes twice that (blaze-race-f geared run 1 began a fight at 10.5 and died in it)
 (def volley 3)                        ; blazes watching at once that send the bot to cover whatever its health: a natural spawner's burst is four, each hit 3.12 through iron armour
 (def rested 18.0)                     ; health a rest out of sight ends at: two volleys' hits over the wary line
 (def rest-ms 90000)                   ; a rest with no health coming back this long fails :no-heal (the slow heal is one point every four seconds)
@@ -689,6 +689,34 @@
 
 (def rest-intent {:intent/kind :rest})
 
+(def rest-churn 3)       ; rests done within rest-churn-ms after which a rest is not chosen again
+(def rest-churn-ms 2000)
+
+(defn rest-churning?
+  "Have rest-churn rests been done within rest-churn-ms? A rest that ends in the tick it begins
+   and is chosen again is no rest: blaze-race-f geared run 1 began :rest five times in 0.2 s at
+   6.01 min, in the blazes' sight, and was dead at 6.04."
+  [world]
+  (let [now (:time/now world 0)]
+    (>= (count (filter #(<= (- now (:intention/at %)) rest-churn-ms)
+                       (memory/newest-dones world :rest rest-churn)))
+        rest-churn)))
+
+(defn rest-here
+  "Where a bot that needs a rest takes it: nil when rests are churning; a walk into the nook
+   (nook, a cell out of the room, in the tunnel it dug) when there is one it is not in, else a
+   rest where it stands. Resting in the room is taking the next blaze's fireball: blaze-race-f
+   geared run 1 rested at the room's mouth to 10.5."
+  [world]
+  (cond
+    (rest-churning? world) nil
+    :else
+    (let [sp (nearest-spawner world)
+          n (and sp (nook world sp))]
+      (if (and n (not= n (intent/feet world)))
+        {:intent/kind :walk :intent/target n :intent/for :cover :intent/max-nodes corridor-nodes}
+        rest-intent))))
+
 (defn void-hold?
   "Is the retreat from a watcher a step off a lip (combat/void-retreat?): that rest stays even
    when it cannot heal. test.yml 40624888901: treating the open lip as no rest sent the search
@@ -734,7 +762,7 @@
            {:intent/kind :back-off :intent/target weid}
            @food @food
            (in-open? world) nil
-           (and (heals? world) (not (:player/on-fire? world))) rest-intent
+           (and (heals? world) (not (:player/on-fire? world))) (rest-here world)
            :else nil))))
 
 (defn crowded?
@@ -748,11 +776,13 @@
   (and (outnumbered? world) (< (:player/health world 20.0) rested) (nil? (at-hand-blaze world))))
 
 (defn wary?
-  "Is the health under eat-under: a meal then comes before the next fight. Gym blaze-7b run 2 (run
-   38893157426) fought on at 12.7 with the food at 17 and a blaze's volley took it to nothing in
-   two seconds, under combat/retreat-health only on the way down."
+  "Is the health under engage-health: a meal then comes before the next fight, and cover and a rest
+   when there is no meal. Gym blaze-7b run 2 (run 38893157426) fought on at 12.7 with the food at
+   17 and a blaze's volley took it to nothing in two seconds, under combat/retreat-health only on
+   the way down; blaze-race-f (real, 6e703362a) geared run 1 rested to 10.5, was walked out and
+   began :fight 524 at 10.5, and was dead at 6.04 min."
   [world]
-  (< (:player/health world 20.0) eat-under))
+  (< (:player/health world 20.0) engage-health))
 
 (defn warily
   "What a wary bot does before the next fight: out of the watching blazes' sight (hide); else
@@ -778,7 +808,7 @@
                 (nil? aid)
                 (empty? (watchers world))
                 (not (in-open? world)))
-           rest-intent
+           (rest-here world)
            :else nil))))
 
 (def fire-blocks #{:fire :soul_fire})
@@ -1074,7 +1104,7 @@
           {:intent/kind :collect-drops
            :intent/item :blaze_rod
            :intent/target (hunt/cell (:entity/pos lying))}
-          (and (not (hurt? world)) beid)
+          (and (not (hurt? world)) (not (wary? world)) beid)
           {:intent/kind :fight :intent/target beid :intent/yield? true}
           @waiting @waiting
           @stock @stock

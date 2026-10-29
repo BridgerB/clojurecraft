@@ -325,6 +325,22 @@
     (is (empty? (combat/threats (standing {8 (mob :blaze [9.5 68.0 8.5] 20.0)})))
         "a blaze four over the feet is out of reach from the floor")))
 
+(deftest a-wither-skeleton-is-not-fought-below-full-health-nor-two-of-them
+  ;; blaze-race-f (real, 6e703362a) race row runs 2 and 3: :fight 82 at 14.9, three wither skeletons
+  ;; (82, 83, 84) hit for 5 each within 0.03 min, dead at 2m42 and 2m52
+  (let [ws (fn [& xs]
+             (into {}
+                   (map-indexed (fn [i x] [(+ 80 i) (mob :wither_skeleton [x 64.0 8.5] 20.0)]) xs)))
+        defend (fn [entities health]
+                 (plan/next-intent (assoc (standing entities) :player/health health)
+                                   (row :defend)
+                                   plan/goals))]
+    (is (= :fight (:intent/kind (defend (ws 11.0) 20.0))) "one, at full health: fought")
+    (is (= :back-off (:intent/kind (defend (ws 11.0) 15.0))) "one, hurt: not")
+    (is (= :back-off (:intent/kind (defend (ws 11.0 12.0) 20.0))) "two: not")
+    (is (= :fight (:intent/kind (defend {7 (mob :zombie [11.0 64.0 8.5] 20.0)} 15.0)))
+        "a zombie is as before")))
+
 (deftest a-ghast-is-never-a-fight
   ;; blaze-race-c job 4 (3a082f7b7, real): burned to a crisp while fighting a ghast
   (let [ghast {8 (mob :ghast [11.0 65.0 8.5] 10.0)}]

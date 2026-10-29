@@ -616,6 +616,52 @@
     (is (nil? (blaze/rod-lying ledge)) "across the ledge: left")
     (is (not= :collect-drops (:intent/kind (next-intent ledge))))))
 
+(deftest a-fight-with-a-blaze-is-begun-at-engage-health
+  ;; blaze-race-f (real, 6e703362a) geared run 1: rested to 10.5, was walked out, and began :fight
+  ;; 524 at 10.5 (just over retreat-health 10); hit at 6.00 min, dead at 6.04
+  (let [far (entity :blaze [13.5 65.0 8.5] :entity/health 20.0)
+        w (standing {7 far})]
+    (is (= 18.0 blaze/engage-health))
+    (is (= :fight (:intent/kind (next-intent (assoc w :player/health 19.0)))) "healthy: fought")
+    (doseq [h [10.5 14.0 17.5]]
+      (is (not= :fight (:intent/kind (next-intent (assoc w :player/health h)))) (str "not at " h)))
+    (testing "a blaze at hand is still fought: it follows into any cover (blaze-fire-b)"
+      (let [near (entity :blaze [10.5 65.0 8.5] :entity/health 20.0)]
+        (is (= :fight
+               (:intent/kind (next-intent (assoc (standing {7 near}) :player/health 15.0)))))))))
+
+(deftest a-rest-is-taken-in-the-nook-and-not-chosen-in-a-storm
+  ;; blaze-race-f geared run 1: :rest began five times in 0.2 s at 6.01 min, in the blazes' sight;
+  ;; and rests at the room's mouth to 10.5
+  (let [stone (blocks/default-state :stone)
+        walls (into {} (for [x (range 3 8) y [64 65 66] z [7 9]] [[x y z] stone]))
+        roof (into {} (for [x (range 3 8)] [[x 66 8] stone]))
+        plug (into {} (for [y [64 65]] [[2 y 8] stone]))
+        w (-> (standing {})
+              (assoc :world/chunks {[0 0] (world/column (merge walls roof plug))}
+                     :player/health 12.0
+                     :time/now 100000)
+              (memory/observe [11 64 8] blaze/spawner))
+        rested (fn [w n] (memory/remember-intention w {:intent/id n :intent/kind :rest} :done))]
+    (testing "in the room: a walk into the nook; in the nook: the rest"
+      (is (= {:intent/kind :walk
+              :intent/target [6 64 8]
+              :intent/for :cover
+              :intent/max-nodes blaze/corridor-nodes}
+             (blaze/rest-here w)))
+      (is (= blaze/rest-intent (blaze/rest-here (assoc w :player/pos [6.5 64.0 8.5])))))
+    (testing "three rests done within two seconds: none chosen"
+      (let [storm (-> w
+                      (rested 1)
+                      (rested 2)
+                      (rested 3))]
+        (is (blaze/rest-churning? storm))
+        (is (nil? (blaze/rest-here storm)))
+        (is (not (blaze/rest-churning? (assoc storm :time/now (+ 100000 blaze/rest-churn-ms 100)))))
+        (is (not (blaze/rest-churning? (-> w
+                                           (rested 1)
+                                           (rested 2)))))))))
+
 (deftest a-swarm-out-of-sight-is-waited-for-in-cover
   ;; sim R1/1 (probe 40761589784, TRACE): healed to 18 in cover, the bot walked out to the
   ;; spawner each time, was shot to 4 in the open and went back; sixteen foods, no kill

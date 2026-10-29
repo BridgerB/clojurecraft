@@ -648,6 +648,15 @@
    `burned to a crisp while fighting Ghast` after 172 minutes. Cover or moving on, not a fight."
   #{:ghast})
 
+(def avoided
+  "Kinds the :defend row does not fight alone below full health, nor two of: a wither skeleton
+   hits for 5 and withers, and a fortress holds them in threes. Blaze-race-f (real, 6e703362a) race
+   row runs 2 and 3, the stone-sword kit, were slain at 2m42 and 2m52: :fight 82 at 14.9 health,
+   three hits of 5 from 82, 84 and 83 in 0.03 minutes."
+  #{:wither_skeleton})
+
+(def avoided-health 18.0) ; health a fight with one of avoided is begun at
+
 (defn threats
   "{eid entity} of the hostiles (entity/hostiles) the :defend row answers, plus whoever last
    struck (striker) while that strike is fresh: within defend-radius of the feet, a creeper
@@ -699,6 +708,12 @@
   (when-let [[eid e] (entity/nearest (threats world) (:player/pos world))]
     (cond (or (pack-neutral? e)
               (= :creeper (entity/kind e))
+              (and (contains? avoided (entity/kind e))
+                   (not (contains? (:plan/cornered world #{}) eid))
+                   (or (< (:player/health world 20.0) avoided-health)
+                       (< 1
+                          (count (filter #(contains? avoided (entity/kind %))
+                                         (vals (threats world)))))))
               (and (< (:player/health world 20.0) retreat-health)
                    (contains? (:plan/cornered world #{}) eid)
                    (not (contains? entity/neutral (entity/kind e)))))
