@@ -395,13 +395,27 @@
       (assoc world :plan/status :failed :plan/reason reason)
       (assoc world :plan/waiting-since since :plan/waiting-ticks ticks :plan/waiting reason))))
 
+(defn same-choice?
+  "Would the planner start intent next again as the running intent i: the same kind, target and
+   purpose (:intent/for)? False when next is nil or a wait. A cut that restarts what it cut ends
+   the intent's controls and its route each tick and moves nothing (WALK-RESTART: a walk to
+   [2345 58 2283] re-issued every 50 ms while a blaze stood at hand, the bot burning where it stood)."
+  [i next]
+  (boolean (and i
+                next
+                (not (:plan/wait next))
+                (= (:intent/kind i) (:intent/kind next))
+                (= (:intent/target i) (:intent/target next))
+                (= (:intent/for i) (:intent/for next)))))
+
 (defn plan-tick
   "One planning tick while :active. The goals are re-derived from the world every tick, even
    while an intent runs (docs/RICH-HICKEY.md: \"the planner runs every tick against the current
    value, so done is re-derived, regressions re-plan automatically\"): no target left means
    :done, whatever is running; a running intent that serves another target than the one chosen
-   now is preempted, as is one the chosen row's interrupts? cuts short; either waits while the
-   cursor holds an item. Otherwise the intent runs, or
+   now is preempted, as is one the chosen row's interrupts? cuts short, unless the row, planning again
+   without it, would start the same intent (same-choice?): that one keeps running. Either waits
+   while the cursor holds an item. Otherwise the intent runs, or
    the chosen target's next intent starts."
   [world event table]
   (let [world (cond-> world
@@ -411,7 +425,9 @@
         active? (= :active (:plan/status world))
         goal (when active? (choose world table))
         preempt? (and i goal (:intent/goal i) (not= (:goal/id goal) (:intent/goal i)))
-        cut? (and i goal (not preempt?) (interrupts? world goal i))
+        cut-world (when (and i goal (not preempt?) (interrupts? world goal i))
+                    (abandon-intent world i :interrupted))
+        cut? (and cut-world (not (same-choice? i (next-intent cut-world goal table))))
         next (when (and goal (nil? i)) (next-intent world goal table))
         feet (when (:player/pos world) (intent/feet world))
         failed (:plan/failed world)
@@ -433,7 +449,7 @@
               (assoc :plan/status :done :player/controls {})
               (dissoc :plan/intent))
           preempt? (plan-tick (abandon-intent world i :preempted) event table)
-          cut? (plan-tick (abandon-intent world i :interrupted) event table)
+          cut? (plan-tick cut-world event table)
           i (run-intent world i event table)
           (nil? next) (wait world :nothing-to-do)
           (:plan/wait next) (wait world (:plan/wait next))

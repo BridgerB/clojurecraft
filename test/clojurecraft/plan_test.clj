@@ -1596,3 +1596,57 @@
     (is (not= :stairs-up (:intent/kind (wood/climb-out (assoc w :plan/last leg))))
         "not up to the top of the world")
     (is (nil? (wood/trees-tunnel (assoc w :plan/last (assoc leg :intent/status :failed)))))))
+
+;;; WALK-RESTART: a cut the planner would answer with the same intent
+
+(defmethod plan/interrupts? :cut-always [_ _ _] true)
+
+(defn cut-at
+  "The world of walking, the walk to target for purpose for, under a row that interrupts it every
+   tick, with the controls held forward; plan-tick under next-intent returning next, the walk
+   itself a no-op (intent/run unchanged). Returns the world after one tick."
+  [target for next]
+  (let [goal {:goal/id :g :goal/done? :never :goal/plan :cut-always}
+        w (-> (walking [:g] :g)
+              (assoc-in [:plan/intent :intent/target] target)
+              (assoc-in [:plan/intent :intent/for] for)
+              (assoc :player/controls {:control/forward true}))]
+    (with-redefs [plan/choose (constantly goal)
+                  plan/next-intent (constantly next)
+                  intent/run (fn [world _ _] world)]
+      (plan/plan-tick w {:event/kind :tick :event/now 50 :event/rand 0.5} [goal]))))
+
+(deftest a-cut-that-would-restart-the-same-intent-keeps-it-running
+  ;; blaze-race-i geared run 3 (:walk [2345 58 2283] re-issued every 50 ms) and pearls-stuck-d job 5
+  ;; (:walk [2773 61 2502] under a ghast): the row's interrupts? was true each tick and its act chose
+  ;; the same walk, so the bot's controls were reset on every abandon and it never moved
+  (doseq [target [[2345 58 2283] [2773 61 2502]]]
+    (let [w (cut-at target nil {:intent/kind :walk :intent/target target})]
+      (is (= 1 (:plan/intents w)) "no new intent was started")
+      (is (= 1 (get-in w [:plan/intent :intent/id])) "the same intent is still running")
+      (is (= {:control/forward true} (:player/controls w)) "its controls were not reset"))))
+
+(deftest a-cut-whose-answer-differs-still-cuts
+  (let [target [2345 58 2283]
+        fight {:intent/kind :fight :intent/target 8}
+        w (cut-at target nil fight)]
+    (is (= :fight (get-in w [:plan/intent :intent/kind])) "another kind: cut and replaced")
+    (is (= 2 (:plan/intents w)))
+    (is (= :walk
+           (get-in (cut-at target nil {:intent/kind :walk :intent/target [1 58 1]})
+                   [:plan/intent :intent/kind]))
+        "a walk elsewhere starts anew")
+    (is (= 2 (:plan/intents (cut-at target nil {:intent/kind :walk :intent/target [1 58 1]}))))
+    (is (= 2
+           (:plan/intents
+            (cut-at target nil {:intent/kind :walk :intent/target target :intent/for :cover})))
+        "the same cell for another purpose is another intent")
+    (is (nil? (:plan/intent (cut-at target nil {:plan/wait :nothing-to-do}))) "a wait is a cut")))
+
+(deftest same-choice-compares-kind-target-and-purpose
+  (let [i {:intent/kind :walk :intent/target [1 2 3] :intent/id 4 :intent/goal :g}]
+    (is (plan/same-choice? i {:intent/kind :walk :intent/target [1 2 3]})
+        "id and goal do not count")
+    (is (not (plan/same-choice? i nil)))
+    (is (not (plan/same-choice? i {:plan/wait :x})))
+    (is (not (plan/same-choice? i {:intent/kind :dig :intent/target [1 2 3]})))))
