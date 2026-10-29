@@ -882,7 +882,8 @@
 (defmethod plan/next-intent :return-nether
   ;; not ready: a rest while the food heals (food at the healing level), else the wait named for
   ;; what is missing, :no-food-to-return, after the meal and the hunt, always rows that come
-  ;; first, found nothing to eat; healthy but without food for the Nether, the same wait
+  ;; first, found nothing to eat; healthy but without food for the Nether: a rest (done at once,
+  ;; asked again) while the hunt has yet to search, the wait only once it has (hunt/search-spent?)
   [world goal table]
   (cond (plan/done-by world goal) nil
         (not (ready-for-nether? world))
@@ -890,7 +891,8 @@
               (eat/scrap-held world) {:intent/kind :eat :intent/item (eat/scrap-held world)}
               :else {:plan/wait :no-food-to-return})
         (fed-for-nether? world) (plan/next-intent world (assoc goal :goal/plan :build) table)
-        :else {:plan/wait :no-food-to-return}))
+        (hunt/search-spent? world) {:plan/wait :no-food-to-return}
+        :else {:intent/kind :rest}))
 
 (defn back-target
   "The cell to walk back to when a pickaxe must be remade and no ground is near: the oldest

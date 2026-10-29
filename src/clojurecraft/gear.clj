@@ -17,6 +17,7 @@
             [clojurecraft.dimension :as dimension]
             [clojurecraft.eat :as eat]
             [clojurecraft.hunt :as hunt]
+            [clojurecraft.intent :as intent]
             [clojurecraft.make :as make]
             [clojurecraft.memory :as memory]
             [clojurecraft.plan :as plan]
@@ -168,7 +169,20 @@
                 (contains? (:plan/reached world #{}) :portal-kit)
                 (cook-at-hand? world))))
 
-(defmethod plan/done-by :cooked? [world _] (not (cook-wanted? world)))
+(defn cooking?
+  "Is a smelt for the :cook row running? The raw meat is in the furnace by then and none is held,
+   so the row would count itself done, and the planner would abandon the smelt as preempted
+   (plan-tick: an intent serving another target than the one chosen) with the food inside. Sim
+   R1/1 (probe 40795259629, :edible-drop lines): five raw items held at t 4815750 (:place, :cook),
+   none at t 4816550 (:smelt, :cook), and the Nether entered at t 5078950 with none."
+  [world]
+  (let [i (:plan/intent world)]
+    (boolean (and (= :cook (:intent/goal i))
+                  (= :smelt (:intent/kind i))
+                  (not (intent/done? i))
+                  (not (intent/failed? i))))))
+
+(defmethod plan/done-by :cooked? [world _] (and (not (cooking? world)) (not (cook-wanted? world))))
 
 (defmethod plan/next-intent :cook
   ;; all the raw meat of the kind held most, smelted: the cooked stack provided is what is held

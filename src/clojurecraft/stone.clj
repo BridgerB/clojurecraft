@@ -430,7 +430,9 @@
   "Stairs stair-depth below the feet when no tunnel can be cut here, the row's depth notwithstanding
    (ore lies below it too, no more than deeper-slack under it: sim R1/1, probe 40791377318, went
    six lower each time from y 3 to y -37 for iron, a row whose depth is 16, and tunnelled there
-   twenty minutes with none), when a stair from here can be cut at all and the bottom of the world is
+   twenty minutes with none; only once the portal kit is reached: the iron kit's own search
+   goes as deep as it must, snapshot #62 R1-12-1 found its iron below y -8 and timed out at the
+   ingots when bounded there), when a stair from here can be cut at all and the bottom of the world is
    not near; else nil, and nil from a feet cell in :plan/boxed-at, where a staircase died :boxed
    already, as stairs is: a descent from there dies the same way whatever its depth. Cut means
    dug too: no cell of the stair borders water or lava
@@ -448,7 +450,9 @@
                            (and (stairs/level-clear? world cells) (stairs/lay world feet cells)))))]
      (when (and (not (adjoins-boxed? world feet))
                 (> to (+ chunk/min-y floor-margin))
-                (or (nil? depth) (>= to (- depth deeper-slack)))
+                (or (nil? depth)
+                    (not (contains? (:plan/reached world #{}) :portal-kit))
+                    (>= to (- depth deeper-slack)))
                 (some cuttable? stairs/directions))
        {:intent/kind :stairs-down :intent/to-y to}))))
 

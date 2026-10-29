@@ -202,18 +202,14 @@
   [now]
   (assoc (standing 20 kit-held {}) :time/now now :time/tick 0))
 
-(deftest the-kit-search-has-no-budget-while-the-bot-has-no-food-for-the-nether
-  ;; sim R1/1 (probe 40795259629): in at t 5078950 with no edible item, failed
-  ;; :no-food-to-return forty minutes after. Below entry-food-min the search for animals goes on
-  ;; past forage-ms; at it, the budget ends it as before
-  (let [spent {:forage/since 1000 :forage/leg 3 :forage/phase :kit :forage/life 0}
-        w (-> (provisioning (+ 1000 hunt/forage-ms 100000))
-              (assoc :hunt/forage spent))
-        fed (assoc w :player/inventory (assoc kit-held 2 (item :bread hunt/entry-food-min)))]
-    (is (hunt/short-for-entry? w))
-    (is (hunt/foraging? w) "no food: on past the budget")
-    (is (not (hunt/short-for-entry? fed)))
-    (is (not (hunt/foraging? fed)) "four held: the budget ends it")))
+(deftest a-search-is-spent-when-its-budget-is
+  ;; sim R1/1 (probe 40798555286): the named wait failed the plan a minute after a respawn
+  (let [began {:forage/since 1000 :forage/leg 3 :forage/phase :kit :forage/life 0}
+        w (-> (provisioning 2000)
+              (assoc :hunt/forage began))]
+    (is (not (hunt/search-spent? w)))
+    (is (not (hunt/search-spent? (provisioning 2000))) "none begun")
+    (is (hunt/search-spent? (assoc w :time/now (+ 1000 hunt/forage-ms))))))
 
 (deftest before-the-descent-the-early-reserve-is-six
   ;; sim snapshot R3-27-1 (issue #69): sixteen at the stone-pickaxe stage kept the bot hunting at

@@ -151,7 +151,7 @@ The gym rows that get seven rods land with an iron sword, iron armour, Fire Resi
 
 The gear's iron: `stone/stairs` cuts nothing under a row's depth (iron 16), so below it a bot tunnels at its level or, when no tunnel can be cut, `stone/deeper` goes six lower; `deeper` now stops `deeper-slack` (24) under the row's depth (sim R1/1 reached y -37 for iron). `gear/without-stick-spares` drops the iron row's twenty-four stick spare from the table the gear is decided on, so the gear is not a climb to the trees (`make/spare-worth?`).
 
-The Nether is not entered, and the way back not begun, without `hunt/entry-food-min` (4) edible items (`fortress/fed-for-nether?`): the hunt row works first (its search has no budget below that, `hunt/short-for-entry?`), since `foraging?` is never out of a `:build`; with none to be had, the wait is `:no-food-to-return`.
+The Nether is not entered, and the way back not begun, without `hunt/entry-food-min` (4) edible items (`fortress/fed-for-nether?`): the hunt row works first, since `foraging?` is never out of a `:build`; the unfed bot rests until its search has run (`hunt/search-spent?`), then the wait is `:no-food-to-return`. A running `:smelt` for `:cook` keeps the row undone (`gear/cooking?`), or the planner preempts it with the food in the furnace. `stone/deeper`'s depth bound applies once the portal kit is reached (snapshot #62 R1-12-1 needs the iron kit's search deep).
 
 ## Limits
 - Fireballs are not dodged; the damage-event log is where to look when they kill.

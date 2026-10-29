@@ -9,6 +9,7 @@
             [clojurecraft.fortress :as fortress]
             [clojurecraft.game :as game]
             [clojurecraft.gear :as gear]
+            [clojurecraft.hunt :as hunt]
             [clojurecraft.memory :as memory]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
@@ -183,12 +184,34 @@
                 (plan/next-intent (back {3 (item :bread 4)} {} 19.0 20)
                                   (row :return-nether)
                                   plan/goals))))
-    (testing "healed with fewer than four foods: the wait, after the hunt found none"
+    (testing "healed with fewer than four foods: a rest while the hunt has yet to search"
       (is (not (fortress/fed-for-nether? (back {3 (item :bread 3)} {} 19.0 20))))
-      (is (= {:plan/wait :no-food-to-return}
+      (is (= {:intent/kind :rest}
              (plan/next-intent (back {3 (item :bread 3)} {} 19.0 20)
                                (row :return-nether)
-                               plan/goals))))))
+                               plan/goals))))
+    (testing "the search spent: the wait, with its own reason"
+      (let [w (assoc (back {3 (item :bread 3)} {} 19.0 20)
+                     :plan/since 0
+                     :time/now (+ 1000 hunt/forage-ms 100000)
+                     :hunt/forage
+                     {:forage/since 1000 :forage/leg 3 :forage/phase :return :forage/life 0})]
+        (is (= {:plan/wait :no-food-to-return}
+               (plan/next-intent w (row :return-nether) plan/goals)))))))
+
+(deftest a-running-cook-is-not-left-with-the-food-in-the-furnace
+  ;; probe 40795259629: edible 5 (:place, goal :cook) at t 4815750, 0 (:smelt, goal :cook) at
+  ;; t 4816550; the smelt was abandoned for the cast and the Nether entered with none
+  (let [running {:intent/kind :smelt :intent/goal :cook :intent/status :active}
+        w (assoc (standing kit) :plan/intent running)]
+    (is (nil? (gear/raw-held w)) "the raw meat is in the furnace")
+    (is (not (gear/cook-wanted? w)))
+    (is (gear/cooking? w))
+    (is (not (plan/done-by w (row :cook))) "so the row is chosen, and the smelt is not preempted")
+    (testing "done, failed, or another goal's smelt: the row is done"
+      (is (plan/done-by (assoc-in w [:plan/intent :intent/status] :done) (row :cook)))
+      (is (plan/done-by (assoc-in w [:plan/intent :intent/status] :failed) (row :cook)))
+      (is (plan/done-by (assoc-in w [:plan/intent :intent/goal] :gear) (row :cook))))))
 
 (deftest raw-meat-is-cooked-after-the-portal-kit
   (let [w (standing

@@ -234,19 +234,21 @@
                (= (:stats/deaths world 0) (:forage/life s 0)))
       s)))
 
-(def entry-food-min 4) ; edible items the Nether is not entered without: the search for animals goes on past its budget below this
-
-(defn short-for-entry?
-  "Is the bot in the :kit or :return phase with fewer than entry-food-min edible items held? Its
-   search for animals then has no budget: the Nether has no game and a bot there with none held
-   cannot heal (sim R1/1, probe 40795259629, entered it with none and failed :no-food-to-return)."
-  [world]
-  (and (contains? #{:kit :return} (provision-phase world)) (< (edible-held world) entry-food-min)))
+(def entry-food-min 4) ; edible items the Nether is not entered, nor the way back begun, without
 
 (defn forage-budget
   "The ms a search of provision-phase p goes on from its first leg."
   [p]
   (if (= :early p) early-forage-ms forage-ms))
+
+(defn search-spent?
+  "Has this life's search for animals run its forage-budget from its first leg? Then it has
+   looked, and nothing more is to be had by waiting for it (sim R1/1, probe 40798555286: the named
+   wait failed the plan a minute after a respawn, before the hunt had searched)."
+  [world]
+  (let [{:forage/keys [since]} (forage-state world)]
+    (boolean (and since
+                  (>= (- (:time/now world 0) since) (forage-budget (provision-phase world)))))))
 
 (defn afloat?
   "Is the body in water: :player/in-water?, or the box at :player/pos overlapping water
@@ -281,7 +283,6 @@
                   (>= (:player/health world 20.0) forage-health)
                   (nil? (entity/nearest (entity/hostiles world) (:player/pos world) forage-wary))
                   (or (nil? since)
-                      (short-for-entry? world)
                       (< (- (:time/now world 0) since) (forage-budget (provision-phase world))))
                   (terrain/under-sky? world (intent/feet world))))))
 
