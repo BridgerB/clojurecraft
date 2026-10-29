@@ -29,6 +29,12 @@
               :stale? (pearls/stale? w)
               :stuck? (pearls/stuck? w)
               :last (:intent/kind (:plan/last w))
+              :in? (= (pearls/shelter w) (intent/feet w))
+              :threat (pearls/threat w)
+              :angry-near (pearls/angry-near w)
+              :lure? (pearls/lure? w)
+              :at-hand (pearls/at-hand w)
+              :quarry (first (pearls/quarry w))
               :boxed-at (:plan/boxed-at w)
               :blacklist (count (:plan/blacklist w))
               :health (:player/health w)
@@ -55,7 +61,7 @@
 (defn -main
   "Folds the recording at path and reports at each minute given."
   [path & minutes]
-  (let [wanted (sort (map #(Long/parseLong %) minutes))
+  (let [wanted (sort (map #(Double/parseDouble %) minutes))
         state (atom {:todo wanted :t0 nil})]
     (record/reduce-entries (fn [acc line]
                              (let [acc (real/fold-step acc line)
