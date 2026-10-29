@@ -879,6 +879,8 @@
 (def vantage-tries 8)                 ; vantages, nearest the feet first, a route is asked for before none is taken: the route is the costly test
 (def vantage-nodes 1500)              ; expansions a route to or from a vantage may spend: it lies within shelter-reach, and sixteen such routes may be asked in one planner tick
 
+(def provoke-home-reach 3.0)              ; blocks from the burrow's end within which an enderman is provoked from outside the mouth: a provoked one is at the bot in about a second, and four hits fell it in the 3.6 s a walk of six blocks home took (gym plan run 40747177526 run 6)
+
 (defn vantage
   "A walk to look from within the burrow's reach, with none of ms provokable from here: a cell
    on the plane between stare-from and vantage-reach from the nearest of the candidates nearest
@@ -901,7 +903,10 @@
    from the mouth, too near to stare at from there and hidden from the end, giving the burrow
    up every minute and cutting the same one again beside it; run 4 walked from its mouth to an
    enderman's cell, back in and out again 130 times. Provoked from a vantage, the enderman
-   follows the bot home, and the fight is the burrow's."
+   follows the bot home, and the fight is the burrow's. Now only within provoke-home-reach of the
+   burrow's end: gym plan run 40860669235 job 4 walked to a vantage five blocks out over a calm
+   enderman crowding the mouth, with an angry one tracked, was fought in the open there at 11
+   health and was slain."
   [world ms]
   (let [pos (:player/pos world)
         feet (intent/feet world)
@@ -922,7 +927,7 @@
                         :let [c [(+ ex dx) (+ ey dy) (+ ez dz)]
                               on-plane (path/octile ec c)]
                         :when (and (<= stare-from on-plane vantage-reach)
-                                   (<= (physics/distance c home) shelter-reach)
+                                   (<= (physics/distance c home) provoke-home-reach)
                                    (<= (physics/distance c home)
                                        (physics/distance c (:entity/pos e)))
                                    (not (contains? spent c))
@@ -1295,9 +1300,10 @@
 
 (def danger-health combat/retreat-health) ; health under which the hunt never fights, provokes or goes toward an enderman: one enderman hit (7 on Normal, ns doc) plus a margin, the same line combat breaks a fight off at. At or under it the bot backs off, walks home, eats or rests where it stands until its health is back over it (issue #563, probe 40022662598: after the second stone sword was crafted the hunt re-fought an angry enderman it had just backed away from, again and again down to 1.3 health, one hit from death)
 
-(def provoke-home-reach 3.0)              ; blocks from the burrow's end within which an enderman is provoked from outside the mouth: a provoked one is at the bot in about a second, and four hits fell it in the 3.6 s a walk of six blocks home took (gym plan run 40747177526 run 6)
 
 (def wander-lookouts 60)                 ; lookouts (five seconds each, five minutes) stood with no walk taken since before the hunt goes elsewhere (wander)
+(def loiter-walks 12)                  ; walks ended whose targets all lie within loiter-radius of the feet: a hunt shuffling in one place
+(def loiter-radius 8)                  ; blocks on the plane (path/octile) within which twelve walks' ends are one place
 (def wander-reach 64)                  ; blocks a wander looks for ground to walk to, on each of the headings
 (def hold-patience-ms 12000)             ; ms a held fight waits with its target past strike-range before the hunt plans again (combat/hold-timeout-ms is a minute)
 (def fight-retry-ms 30000)             ; ms after a fight on an enderman failed that it is not fought again until within the sword's reach
@@ -1507,17 +1513,34 @@
     (when-let [[_ e] (entity/nearest (swarm world) (:player/pos world))]
       (let [c (combat/cover world e)] (when (:intent/kind c) (assoc c :intent/for :pearls))))))
 
+(defn loitering?
+  "Did the newest loiter-walks :walk intentions to end :done all end within loiter-radius of the
+   feet (memory/newest-dones, their targets)? Then the hunt has shuffled in one place however
+   many lookouts it stood between the walks: the two-block roams that gym plan run 40839050567
+   jobs 1 to 4 made 446, 784, 346 and 460 times over two to five hours (issue #263), each walk
+   resetting the count of lookouts since the last."
+  [world]
+  (let [feet (intent/feet world)
+        ds (memory/newest-dones world :walk loiter-walks)]
+    (and (= loiter-walks (count ds))
+         (every? (fn [d]
+                   (let [t (:intention/target d)]
+                     (and (vector? t) (<= (path/octile feet t) loiter-radius))))
+                 ds))))
+
 (defn wandering?
   "Has the hunt stood wander-lookouts or more :lookout intents with no walk ended since (stuck?
-   counts the same, from stale-lookouts), and does no enderman tracked have a route to it
+   counts the same, from stale-lookouts), or is it loitering (loitering?), and does no enderman
+   tracked have a route to it
    (routable), however near it is by the air? Run 1 of gym plan run 40775811459 (issue #263,
    pearls-12) held five pearls at twelve minutes and then stood 2,210 lookouts to the five-hour
    cap, twelve endermen tracked 16 to 100 blocks off on other levels, none with a route."
   [world]
-  (boolean (and (>= (or (memory/done-since world :lookout :walk)
-                        (memory/done-since world :lookout :burrow)
-                        0)
-                    wander-lookouts)
+  (boolean (and (or (>= (or (memory/done-since world :lookout :walk)
+                            (memory/done-since world :lookout :burrow)
+                            0)
+                        wander-lookouts)
+                    (loitering? world))
                 (nil? (routable world (endermen world seek-radius))))))
 
 (defn wander
@@ -1716,6 +1739,7 @@
                        (and (or angry? in-reach?) (not (unfightable? world eid e))) eid
                        :else tid)]
     (cond
+      (and (shot-at? world) (not in?) (cover-from world)) (cover-from world)
       (and home (not in?) (or ce near? hurt? tid aid swarmed?) (intent/routable? world way-home))
       way-home
       (and swarmed? (not in?) (nil? home) (cover-from world)) (cover-from world)
@@ -1870,6 +1894,15 @@
 
 (def answers-to-hand #{:fight :back-off :eat :dig}) ; intents a running hunt keeps with an angry enderman at hand: the answers to it, a meal, a fire put out
 
+(defn same-choice?
+  "Are running intent i and the intent again the hunt would choose now of one kind and target? Then
+   cutting i only starts it again: gym plan run 40860669235 job 5 (issue #263) planned the same
+   :walk every 50 ms for three seconds under a ghast's fire, each plan cutting the last, and never
+   moved."
+  [i again]
+  (= (select-keys i [:intent/kind :intent/target])
+     (select-keys again [:intent/kind :intent/target])))
+
 (defn held-idle?
   "Is intent i a held :fight (hold?) that has run hold-patience-ms or more with its target gone
    or past strike-range of the feet? Runs 4 and 5 of gym plan run 40825468783 (issue #263,
@@ -1902,8 +1935,7 @@
                (some? (first (struck-by world)))
                (shot-at? world)
                (and (= :lookout (:intent/kind i)) (some? (first (threat world)))))
-           (not (and (= :lookout (:intent/kind i))
-                     (= :lookout (:intent/kind (plan/next-intent world goal plan/goals))))))))
+           (not (same-choice? i (plan/next-intent world goal plan/goals))))))
 
 (defmethod combat/answers :pearls
   ;; the hunt provokes endermen and fights them from its burrow; an angry one (entity/creepy?)
