@@ -23,6 +23,9 @@ sourceRefs:
   - test/clojurecraft/plan_test.clj#a-cell-a-place-or-a-redig-chose-is-never-blacklisted
   - test/clojurecraft/plan_test.clj#a-walk-with-no-way-on-fails-no-path
   - src/clojurecraft/plan.clj#defn choose
+  - src/clojurecraft/plan.clj#defn note-churn
+  - src/clojurecraft/churn_guard.clj#defn violation
+  - test/clojurecraft/churn_guard_test.clj#a-choice-over-in-its-first-tick-is-a-violation
   - src/clojurecraft/plan.clj#defn through
   - src/clojurecraft/plan.clj#defn current-until
   - src/clojurecraft/plan.clj#defn step-over
@@ -61,6 +64,8 @@ The goal table is data in `resources/clojurecraft/goals.edn`: rows of `{:goal/id
 - Rows are retired, never rewritten: a superseded row (`:goal/superseded-by`) stays in the table and is never chosen, and a `:go` that names it is mapped to its replacement by `plan/current-id` ([[add-a-goal]]).
 - Completion is re-derived from the world each tick, so a lost log is simply planned for again; nothing remembers "done".
 - The planner re-chooses every active tick, even while an intent runs (`plan-tick`): no target left means `:done` and the running intent is abandoned `:goal-met`; a running intent whose `:intent/goal` is not the target chosen now (a higher-priority target regressed) is abandoned `:preempted` and the new target planned. Neither happens while the cursor holds an item (`can-abandon?`): the intent puts it down first; nor while one of the running intent's clicks is unanswered (`window/waiting`), since a click forgets the cursor as it sends and what it holds is unknown until the answer (issue #259: a `:wear` preempted between its pick-up and the answer left the helmet on the cursor, `a-helmet-and-chestplate-are-made-and-worn-against-the-model`). `abandon-intent` closes any open container, so the server is never left with one. A live pickaxe run ended with the craft abandoned `:goal-met` the tick the pickaxe arrived, and the table window closed. Escaping water is a target that preempts this way ([[water-escape]]): a running walk or dig yields to `:swim-out` the tick the trap is called. An abandon also drops `:plan/last`, so the next goal never continues a chain from it.
+
+- CHURN (issue #615): the planner's choice and an intent's own end check reading one state differently starts an intent that ends in its first tick, chosen again every 50 ms while the bot stands still (a cut restarted, `:perch`, `:hold`, a dragon `:back-off`, a ghast cover `:walk`: six times in a day). `plan-tick` marks the intent that ended (`mark-ended`, `:plan/ended`) and counts a start of the same kind, target and `:intent/for` the tick after (`churn-count`, `note-churn`, `:plan/churn`, a `churn <kind> <target> xN` line every `churn-log-every` 20 repeats): observation only. `churn-guard/violation` is the invariant over any world: the chosen intent run one tick is neither done nor failed unless its kind is in `instantaneous-kinds`; `clojure -M -m clojurecraft.churn-guard <snapshot>...` (a probe with the worlds restored) lists every recorded state that breaks it.
 
 ## See also
 - [[make-goals]] - the needs planner, the generated recipe rows and the acts.

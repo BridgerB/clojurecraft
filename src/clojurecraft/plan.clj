@@ -225,6 +225,49 @@
         (assoc world :plan/status :failed :plan/reason :no-landing)
         :else world))
 
+(def churn-log-every "Repeats of one intent between two `churn` log lines." 20)
+
+(defn mark-ended
+  "The world with :plan/ended set to the identity of intent i (kind, target, purpose) and the
+   ms it ended at: what start-intent compares the next intent with (churn-count)."
+  [world i]
+  (assoc world
+         :plan/ended
+         {:intent/kind (:intent/kind i)
+          :intent/target (:intent/target i)
+          :intent/for (:intent/for i)
+          :ended/at (:time/now world 0)}))
+
+(defn churn-count
+  "How many times in a row the planner has started the same intent (kind, target and :intent/for)
+   the tick after it ended, with i about to be the next one: 0 when i is not that repeat, else
+   one more than :plan/churn counted for the same intent. CHURN is the bug where the planner's
+   choice and the intent's own end check disagree about one state: the intent starts, ends in its
+   first tick, and the planner picks it again every 50 ms while the bot stands still (WALK-RESTART,
+   issue #615). Observation only: nothing reads it back."
+  [world i]
+  (let [e (:plan/ended world)
+        same? (fn [m]
+                (and (= (:intent/kind m) (:intent/kind i))
+                     (= (:intent/target m) (:intent/target i))
+                     (= (:intent/for m) (:intent/for i))))
+        repeat? (and e (same? e) (<= (- (:time/now world 0) (:ended/at e)) physics/tick-ms))]
+    (if repeat? (if (same? (:plan/churn world)) (inc (:churn/n (:plan/churn world))) 1) 0)))
+
+(defn note-churn
+  "The world with :plan/churn updated for the intent i about to start (churn-count), and, once
+   every churn-log-every repeats, a `churn <kind> <target> xN` line."
+  [world i]
+  (let [n (churn-count world i)]
+    (cond-> (assoc world
+                   :plan/churn
+                   {:intent/kind (:intent/kind i)
+                    :intent/target (:intent/target i)
+                    :intent/for (:intent/for i)
+                    :churn/n n})
+      (and (pos? n) (zero? (mod n churn-log-every)))
+      (game/say (str "churn " (:intent/kind i) " " (:intent/target i) " x" n)))))
+
 (defn finish-intent
   "An intent that succeeds ends any failure streak: attempts and unwalkable walks count
    consecutive failures, so a long goal is not killed by three unrelated hiccups an hour apart.
@@ -239,6 +282,7 @@
   [world i]
   (-> world
       (memory/remember-intention i :done)
+      (mark-ended i)
       (assoc :plan/last i :plan/attempts 0 :plan/unwalkable 0)
       (cond-> (and (= :collect (:intent/kind i)) (= :log (:intent/for i))) (dissoc :plan/surfaced))
       (dissoc :plan/intent)))
@@ -278,6 +322,7 @@
         feet (when (:player/pos world) (intent/feet world))]
     (-> world
         (memory/remember-intention i :failed)
+        (mark-ended i)
         (assoc :player/controls {})
         (assoc :plan/failed (cond-> i feet (assoc :intent/from-feet feet)))
         (cond-> (and (:intent/target i)
@@ -334,6 +379,7 @@
         (cond-> (and feet (not= feet (peek trail)))
                 (assoc :plan/trail (vec (take-last 128 (conj trail feet)))))
         (memory/remember-intention i :started)
+        (note-churn i)
         (cond-> (:intent/dead-end i) (update :plan/boxed-at (fnil conj #{}) (:intent/dead-end i)))
         (dissoc :plan/waiting :plan/waiting-since :plan/waiting-ticks :plan/failed)
         (game/say (str "intent " (:intent/kind i)
@@ -359,6 +405,7 @@
   [world i reason]
   (-> world
       (memory/remember-intention (assoc i :intent/reason reason) :abandoned)
+      (mark-ended i)
       (assoc :player/controls {})
       (dissoc :plan/last) ; the next goal's planner must not continue a chain from it
       (cond-> (:window/open world)
