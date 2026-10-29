@@ -3,6 +3,7 @@
    provoke tick by tick against vanilla's stare test, the kill's drop, and a hunt against the
    server model's enderman."
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
+            [clojurecraft.armour :as armour]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.combat :as combat]
             [clojurecraft.fixtures :as fx]
@@ -921,9 +922,10 @@
     (is (= {:intent/kind :walk :intent/target [8 61 8] :intent/for :shelter}
            (plan/next-intent (assoc at-mouth :player/health 15.0) row plan/goals))
         "hurt at the mouth: home first")
-    (is (=
-         {:intent/kind :provoke :intent/target 7 :intent/for :pearls}
-         (plan/next-intent (assoc at-mouth :player/health pearls/provoke-health) row plan/goals)))))
+    (is (= {:intent/kind :provoke :intent/target 7 :intent/for :pearls}
+           (plan/next-intent (assoc at-mouth :player/health (pearls/provoke-line at-mouth))
+                             row
+                             plan/goals)))))
 
 (deftest at-a-burrow-site-the-burrow-is-cut-with-the-quarry-hidden
   ;; sim probe 39861051222 (world R4): fifty-seven minutes between a site, from which the quarry
@@ -2341,3 +2343,35 @@
     (is (re-find #"ghast 7 at \[8 75 50\] shoots the bot at \[8 64 8\]: no cover"
                  (:effect/message (first (logged w)))))
     (is (empty? (logged (assoc w :time/tick 1))) "not every tick")))
+
+(deftest a-provoke-keeps-two-hits-of-health-and-no-walk-out-over-an-angry-one
+  ;; gym plan run 40860669235 job 4 (issue #263, pearls-12): provoked at about 11 health, then
+  ;; the walk between the burrow's end and its mouth ten times in 17 s, then a fight in the open
+  ;; and three hits of 5.7
+  (let [mail (fn [w]
+               (-> w
+                   (assoc-in [:player/inventory (armour/worn-slot 0)] (item :iron_helmet 1))
+                   (assoc-in [:player/inventory (armour/worn-slot 1)] (item :iron_chestplate 1))))
+        sighted (enderman [3.5 64.0 0.5])
+        at-mouth (-> (burrowed [3.5 64.0 8.5] {7 sighted})
+                     (assoc :player/food 20)
+                     mail)
+        calm-end (-> (burrowed [8.5 61.0 8.5] {})
+                     mail)
+        angry-end (-> (burrowed [8.5 61.0 8.5]
+                                {7 (assoc (enderman [3.5 64.0 14.5]) :entity/creepy? true)})
+                      mail)]
+    (is (< 5.7 (pearls/enderman-hit at-mouth) 5.8) "7 through iron helmet and chestplate")
+    (is (< 14.4 (pearls/provoke-line at-mouth) 14.6) "3 over two hits")
+    (is (= 7.0 (pearls/enderman-hit (burrowed [3.5 64.0 8.5] {}))) "no armour: all of it")
+    (is (= :provoke
+           (:intent/kind (plan/next-intent (assoc at-mouth :player/health 15.0) row plan/goals))))
+    (is (not= :provoke
+              (:intent/kind (plan/next-intent (assoc at-mouth :player/health 14.0) row plan/goals)))
+        "under the line: home, not a provoke")
+    (is (= [:walk [3 64 8]]
+           ((juxt :intent/kind :intent/target) (plan/next-intent calm-end row plan/goals)))
+        "nothing coming: out to look round from the mouth")
+    (is (not= [:walk [3 64 8]]
+              ((juxt :intent/kind :intent/target) (plan/next-intent angry-end row plan/goals)))
+        "an angry one tracked: the bot stays in, where the walk out sent it home again")))

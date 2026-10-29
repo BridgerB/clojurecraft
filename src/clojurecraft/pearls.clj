@@ -28,6 +28,7 @@
    rain and water: the trap rows already keep the bot from fighting while it stands in water."
   (:require [clojure.math :as math]
             [clojure.string :as str]
+            [clojurecraft.armour :as armour]
             [clojurecraft.blaze :as blaze]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.combat :as combat]
@@ -1289,6 +1290,7 @@
   (let [{:intent/keys [kind for status]} (:plan/last world)]
     (and (= :walk kind) (= :shelter for) (= :done status))))
 
+(def provoke-margin 3.0)                ; health a provoke keeps over the two hits it risks before the bot is back in its burrow
 (def provoke-health 18.0)             ; health under which no enderman is provoked, from the mouth or anywhere: the bot rests in its burrow first (sim-endermen3's probe 39847287615: in worlds R1, R2 and R4 the first death came of a provoke 4 to 8 blocks off at 10.8 to 17.8 health just outside the burrow, the enderman landing three to five blows in five seconds); away from the mouth (a vantage) only at full health
 
 (def danger-health combat/retreat-health) ; health under which the hunt never fights, provokes or goes toward an enderman: one enderman hit (7 on Normal, ns doc) plus a margin, the same line combat breaks a fight off at. At or under it the bot backs off, walks home, eats or rests where it stands until its health is back over it (issue #563, probe 40022662598: after the second stone sword was crafted the hunt re-fought an angry enderman it had just backed away from, again and again down to 1.3 health, one hit from death)
@@ -1541,6 +1543,26 @@
                  (when (seq far) (apply max-key #(nth % 2) far)))]
     (when best {:intent/kind :walk :intent/target (second best) :intent/for :pearls})))
 
+(defn enderman-hit
+  "The damage one enderman hit does the bot through the armour it wears (armour/worn over the four
+   slots, mob/armour-points, mob/absorbed) of the 7 it does on Normal (mob/kinds :melee): 5.74
+   through an iron helmet and chestplate, as gym plan run 40860669235 job 4 measured."
+  [world]
+  (let [[points toughness] (reduce (fn [[pt tg] n]
+                                     (let [[dp dt]
+                                           (get mob/armour-points (armour/worn world n) [0 0.0])]
+                                       [(+ pt dp) (+ tg dt)]))
+                                   [0 0.0]
+                                   (range 4))]
+    (mob/absorbed (:melee (mob/kinds :enderman)) points toughness)))
+
+(defn provoke-line
+  "The health under which no enderman is provoked: provoke-margin over two of its hits
+   (enderman-hit), at most provoke-health. Job 4 of that plan run provoked at 11.19 health and
+   was felled by the second and third hit of a fight in the open."
+  [world]
+  (min provoke-health (+ provoke-margin (* 2.0 (enderman-hit world)))))
+
 (defn shelter-walk
   "A :walk for :shelter to target, or nil when target is nil or in :plan/blacklist (a walk to it
    failed, plan/fail-intent). A walk is tried once before it is known to fail: a fence between
@@ -1661,7 +1683,7 @@
         in-reach? (and near?
                        (<= (physics/distance (game/eye world) (combat/aim e)) combat/attack-reach))
         hurt? (< (:player/health world 20.0) danger-health)
-        rested? (>= (:player/health world 20.0) provoke-health)
+        rested? (>= (:player/health world 20.0) (provoke-line world))
         meal (when-not rested? (blaze/meal world))
         home (shelter world)
         in? (and home (= home (intent/feet world)))
@@ -1669,7 +1691,6 @@
         [tid te] (threat world)
         [sid _] (struck-by world)
         swarmed? (swarmed? world)
-        angry-close? (and ce (<= (physics/distance pos (:entity/pos ce)) strike-range))
         cornered? (and near? eid (contains? (:plan/cornered world #{}) eid))
         [bid _] (when at-end? (blocking world))
         [aid _] (when home (angry-near world))
@@ -1739,7 +1760,7 @@
       (and in? (crowded? world))
       (or (vantage world far) {:intent/kind :lookout :intent/for :pearls})
       (and in? mouth (not swarmed?) (unseal world mouth)) (unseal world mouth)
-      (and in? mouth (not angry-close?) (empty? (swarm world (physics/centre mouth))) @mouth-walk)
+      (and in? mouth (nil? ce) (empty? (swarm world (physics/centre mouth))) @mouth-walk)
       @mouth-walk
       (and qid
            rested?
