@@ -8,6 +8,10 @@ status: verified
 lastUpdated: 2026-10-24
 verifiedAgainst: HEAD
 sourceRefs:
+  - src/clojurecraft/pearls.clj#defn swarmed?
+  - src/clojurecraft/pearls.clj#defn held-idle?
+  - src/clojurecraft/pearls.clj#defn unseal
+  - test/clojurecraft/pearls_test.clj#a-swarmed-hunt-goes-home-seals-the-mouth-and-opens-it-when-they-are-gone
   - src/clojurecraft/pearls.clj#defn wandering?
   - test/clojurecraft/pearls_test.clj#a-hunt-with-no-enderman-it-can-walk-to-goes-elsewhere-after-five-minutes
   - src/clojurecraft/pearls.clj#defn struck-by
@@ -210,6 +214,8 @@ A target a fight's engage gave up as not strikable is no fight's target until it
 Provoke only from the mouth, inside, or within `provoke-home-reach` (3) of the burrow's end: an angry enderman is at the bot in about a second on the real server, and the walk home from a vantage six blocks off took four hits (gym run 40747177526 run 6). Cornered (`:plan/cornered`) under `danger-health` with an enderman at hand, the hunt eats, else `wall-off` places a block at the feet's level and one over it between them; never a fight under `danger-health` (#577).
 
 With no enderman a route reaches (`routable`), after `wander-lookouts` (60, five minutes) of lookouts since the last walk the hunt `wander`s: a walk to ground `wander-reach` (64) out on the first heading with a route, farther each turn of the clock (gym run 40775811459 run 1: 2,210 lookouts at one burrow, endermen tracked on other levels). A running lookout is cut by an enderman at hand only when the hunt would plan something else, and a fight that failed is not planned again for `fight-retry-ms` unless the enderman is in reach (`unfightable?`).
+
+A held fight whose target is gone or past `strike-range` for `hold-patience-ms` (12 s) is cut (`held-idle?`) instead of failing `:unreachable` after a minute. Two monsters other than endermen within `swarm-radius` (8), or one under `danger-health` (`swarmed?`), send the hunt to its burrow's end, where it places one block at feet level toward the mouth (`wall-toward`) and looks out without fighting (#577); with the swarm gone the block is dug (`unseal`) when no route walks to the mouth. A lone magma cube at full health is the fight rules' (gym run 40825468783 runs 4 and 5).
 
 ## The burrow
 Gym batch pearls-263a (plan run 38892130785) put three live endermen round the bot in iron helmet and chestplate: five trials, five deaths. A replay of one (probe 38893413043) showed the hits landing at 5.74 a second, the sword's sweep pulling a second enderman in, and a break-off with nowhere to go. A sword needs seven hits against forty health; the open fight loses. The game says where it cannot lose: a mob's melee is its box grown 0.83 sideways and not at all up or down (`Mob.getAttackBoundingBox`, `isWithinMeleeAttackRange`, probe 38893918055), and an enderman needs three free cells to stand. `shelter?` is that rule over the terrain: the bot's own two cells open, and no cell an enderman could stand in (`stand?`: a floor, three open cells) in the nine columns round it, at the heights whose body would overlap the bot's (feet two under to one over).
