@@ -147,6 +147,10 @@
     (testing "fed, nothing to hunt: a rest while the food heals"
       (let [w (back {3 (item :bread 4)} {} 8.0 20)]
         (is (= {:intent/kind :rest} (plan/next-intent w (row :return-nether) plan/goals)))))
+    (testing "only rotten flesh held: eaten, as a bot that cannot heal does"
+      (let [w (back {3 (item :rotten_flesh 2)} {} 8.0 14)]
+        (is (= {:intent/kind :eat :intent/item :rotten_flesh}
+               (plan/next-intent w (row :return-nether) plan/goals)))))
     (testing "no food, none to be had: the named wait, not the portal"
       (let [w (back {} {} 8.0 14)]
         (is (= {:plan/wait :no-food-to-return}
@@ -156,11 +160,23 @@
                 (plan/next-intent (back {} {} 19.0 20) (row :return-nether) plan/goals))))))
 
 (deftest raw-meat-is-cooked-after-the-portal-kit
-  (let [w (standing (merge kit {3 (item :beef 6) 4 (item :porkchop 2)}))]
+  (let [w (standing
+           (merge
+            kit
+            {3 (item :beef 6) 4 (item :porkchop 2) 5 (item :coal 2) 6 (item :cobblestone 64)}))]
     (is (= [:beef :cooked_beef 6] (gear/raw-held w)) "the kind held most")
     (is (gear/cook-wanted? w))
     (is (not (plan/done-by w (row :cook))))
     (is (some? (plan/next-intent w (row :cook) plan/goals)))
+    (testing "no fuel held, or no furnace to be had: the cook is not a trip (probe 40791377318)"
+      (let [bare (standing (merge kit {3 (item :beef 6)}))
+            fueled (standing (merge kit
+                                    {3 (item :beef 6) 4 (item :coal 2) 5 (item :cobblestone 64)}))]
+        (is (not (gear/cook-wanted? bare)))
+        (is (plan/done-by bare (row :cook)))
+        (is (gear/cook-wanted? fueled) "coal for six, cobblestone for a furnace, a table held")
+        (is (not (gear/cook-wanted? (standing (merge kit {3 (item :beef 6) 4 (item :coal 2)}))))
+            "no furnace, no cobblestone to make one")))
     (testing "none raw: nothing to cook"
       (is (plan/done-by (standing (merge kit {3 (item :cooked_beef 6)})) (row :cook))))
     (testing "before the portal kit: not yet"

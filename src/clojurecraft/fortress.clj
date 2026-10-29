@@ -14,6 +14,7 @@
             [clojurecraft.blocks :as blocks]
             [clojurecraft.build :as build]
             [clojurecraft.dimension :as dimension]
+            [clojurecraft.eat :as eat]
             [clojurecraft.hunger :as hunger]
             [clojurecraft.intent :as intent]
             [clojurecraft.make :as make]
@@ -877,6 +878,7 @@
   (cond (plan/done-by world goal) nil
         (ready-for-nether? world) (plan/next-intent world (assoc goal :goal/plan :build) table)
         (>= (:player/food world 20) hunger/heal-level) {:intent/kind :rest}
+        (eat/scrap-held world) {:intent/kind :eat :intent/item (eat/scrap-held world)}
         :else {:plan/wait :no-food-to-return}))
 
 (defn back-target

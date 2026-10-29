@@ -126,14 +126,33 @@
          (sort-by (comp - last))
          first)))
 
+(def smelt-ticks 200) ; game ticks one cooked item takes
+(def furnace-cobblestone 8) ; cobblestone a furnace is crafted from
+
+(defn cook-at-hand?
+  "Can the raw meat held most be cooked without a trip: fuel held that burns it (make/burn:
+   coal, planks, logs but the reserve), and a furnace near or held, or the cobblestone and a
+   table (armour/table-at-hand?) to make one? Sim R1/1 (probe 40791377318) went stairs down for
+   trees and walked for an opening for half an hour with the cook row undone, and held ten coal
+   by the end. A cook that needs fetching is not made."
+  [world]
+  (let [[_ _ n] (raw-held world)
+        c (make/counts world)]
+    (boolean (and n
+                  (zero? (second (make/burn c (* n smelt-ticks))))
+                  (or (make/near world :furnace)
+                      (pos? (get c :furnace 0))
+                      (and (>= (get c :cobblestone 0) furnace-cobblestone)
+                           (armour/table-at-hand? world)))))))
+
 (defn cook-wanted?
   "Is raw meat to be cooked now: a chained run in the overworld, the portal kit reached, raw meat
-   held?"
+   held, and the cook at hand (cook-at-hand?)?"
   [world]
   (boolean (and (:plan/chain? world)
                 (= dimension/overworld (dimension/of world))
                 (contains? (:plan/reached world #{}) :portal-kit)
-                (raw-held world))))
+                (cook-at-hand? world))))
 
 (defmethod plan/done-by :cooked? [world _] (not (cook-wanted? world)))
 
