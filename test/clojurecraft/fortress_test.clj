@@ -295,6 +295,34 @@
       (is (fortress/safe? (assoc-in flooded [:world/blocks [1 66 0]] netherrack) [0 64 0] [1 0 0])
           "a non-falling roof keeps the fluid sealed"))))
 
+(deftest a-floor-with-air-under-it-is-no-floor
+  ;; blaze-race-c geared run 5 (plan 40805504891): the bot stood at [2146.5 72.0 1758.4] on the floor
+  ;; [2146 71 1758]; a ghast's fireball exploded by it, the next tick's section-blocks-update set
+  ;; [2146 71 1758] to air, and it fell 46 blocks onto the lava sea. The cells here are the same
+  ;; shifted by [-2146 -8 -1758]: feet [0 64 0], floor of the step east [1 63 0], the drop under
+  (let [thin (rock {[1 62 0] air [1 61 0] air [1 60 0] air})
+        cobble {0 {:item (recipe/item-id :cobblestone) :count 8}}
+        held (assoc thin :player/inventory cobble)]
+    (is (fortress/thin-floor? thin [1 63 0]) "air directly under")
+    (is (not (fortress/thin-floor? thin [0 63 0])) "rock under")
+    (is (fortress/thin-floor? (assoc-in thin [:world/blocks [1 62 0]] blocks/lava-base) [1 63 0])
+        "lava under")
+    (is (not (fortress/thin-floor? (assoc-in thin [:world/blocks [1 62 0]] nil) [1 63 0]))
+        "an unloaded cell is no drop")
+    (testing "no block to put under it: the step is refused"
+      (is (not (fortress/safe? thin [0 64 0] [1 0 0])))
+      (is (empty? (fortress/underlay-ops thin [0 64 0] [1 0 0]))))
+    (testing "a block in hand: the step is taken with the cell under the floor filled first"
+      (is (fortress/safe? held [0 64 0] [1 0 0]))
+      (let [ops (fortress/underlay-ops held [0 64 0] [1 0 0])]
+        (is (= 1 (count ops)))
+        (is (= {:build/op :place :build/pos [1 62 0] :build/step :under}
+               (select-keys (first ops) [:build/op :build/pos :build/step])))
+        (is (= [:solid [1 62 0]] (:build/done (first ops))))))
+    (testing "a thick floor within a step is taken before a thin one"
+      (is (= [0 0 -1] (fortress/next-move held [0 64 0] [5 64 -5] 8 false #{})))
+      (is (empty? (fortress/underlay-ops held [0 64 0] [0 0 -1]))))))
+
 (deftest a-tunnel-drops-an-unsafe-in-flight-step
   (let [from [0 64 0]
         move [1 0 0]

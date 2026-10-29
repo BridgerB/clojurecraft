@@ -139,6 +139,35 @@
                (path/floor? (assoc-in world [:world/blocks cell] (blocks/default-state item)) cell))
       item)))
 
+(defn thin-floor?
+  "Is floor a floor with nothing solid under it: the cell directly under it loaded and air, lava,
+   or anything the body would fall through? Such a floor is one block thick over a drop, and a
+   ghast's fireball takes it out: blaze-race-c geared run 5 (plan 40805504891) stood at
+   [2146.5 72.0 1758.4] on [2146 71 1758], a fireball (entity 239, the ghast 202's, damage type 14)
+   exploded by it, the server's section-blocks-update set [2146 71 1758] and [2146 71 1759] to air
+   in the next tick, and the bot fell 46 blocks into the lava sea. An unloaded cell under it is no
+   drop: nothing is known of it."
+  [world floor]
+  (let [under (terrain/block-at world (plus floor [0 -1 0]))]
+    (and (some? under) (not (blocks/solid? under)))))
+
+(defn underlay-possible?
+  "Can the cell under floor be filled from the stand before the floor is walked: a filler carried
+   (stairs/filler) and a solid neighbour to place against (build/foundation is the cell itself)?"
+  [world floor]
+  (let [under (plus floor [0 -1 0])]
+    (and (some? (stairs/filler world 1)) (= under (build/foundation world under)))))
+
+(defn underlay-ops
+  "The op that fills the cell under the floor of the step from feet by move, first, when that floor
+   is thin (thin-floor?) and the fill is possible (underlay-possible?); none otherwise. A route
+   with a thick floor is chosen before this is asked (next-move)."
+  [world feet move]
+  (let [floor (plus (plus feet move) [0 -1 0])]
+    (if (and (thin-floor? world floor) (underlay-possible? world floor))
+      [(build/place-op (plus floor [0 -1 0]) feet nil :under)]
+      [])))
+
 (defn safe-but-lava?
   "Can the step from feet by move be taken but for the lava beside the cells it opens (safe?
    with that one clause left out): every cell it opens and the floor loaded, none of them lava or
@@ -156,6 +185,7 @@
      (not-any? lava? cells)
      (not-any? #(and (blocks/solid? (at %)) (contains? unbreakable (blocks/name-of (at %)))) cells)
      (not-any? #(or (intent/fluid-over-falling? world %) (intent/bed-over-fluid? world %)) cells)
+     (or (not (thin-floor? world floor)) (underlay-possible? world floor))
      (or (path/floor? world floor)
          (and filler
               (build/holds? world [:solid floor])
@@ -382,7 +412,11 @@
          up? (> (- (long (second target)) (long (second feet))) (long climb))
          climb? #(climb-out? world feet % dry-only?)
          down? #(neg? (long (second %)))]
-     (or (first (filter #(and (first-way? %) (or (not up?) (not (down? %)))) fresh))
+     (or (first (filter #(and (first-way? %)
+                              (not (thin-floor? world (plus (plus feet %) [0 -1 0])))
+                              (or (not up?) (not (down? %))))
+                        fresh))
+         (first (filter #(and (first-way? %) (or (not up?) (not (down? %)))) fresh))
          (first (filter (fn [move]
                           (let [floor (plus (plus feet move) [0 -1 0])
                                 filled (assoc-in world
@@ -654,7 +688,10 @@
                                            :intent/tunnel-visited (conj tunnel-visited feet))
                 (or undo fresh?) (assoc :fortress/trail (leave-cell trail feet (some? undo))))))
       :else
-      (let [next (build/next-op world (into (seal-ops world from move) (step-plan from move)))
+      (let [next (build/next-op world
+                                (into (into (underlay-ops world from move)
+                                            (seal-ops world from move))
+                                      (step-plan from move)))
             next (cond-> next
                    (= :place (:build/op next))
                    (assoc :build/item (or (stairs/filler world 1) :cobblestone)))]
