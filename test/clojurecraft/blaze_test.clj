@@ -1148,7 +1148,13 @@
     (is (= [1000 12000] (:player/ignitions twice)))
     (is (blaze/reignited? twice))
     (is (not (blaze/reignited? far)) "forty-nine seconds apart: not")
-    (is (blaze/refuge-needed? (assoc me :player/health 11.0)) "under low-health, nothing in sight")
+    (is (blaze/refuge-needed? (-> me
+                                  (assoc :player/health 11.0)
+                                  (assoc-in [:world/entities 7]
+                                            (entity :blaze [3.5 65.0 8.5] :entity/health 20.0))))
+        "under low-health with a blaze about")
+    (is (not (blaze/refuge-needed? (assoc me :player/health 11.0)))
+        "under it with none: eat and rest")
     (is (not (blaze/refuge-needed? me)))))
 
 (deftest burning-or-outnumbered-the-bot-takes-the-pocket

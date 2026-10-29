@@ -1201,12 +1201,12 @@
 
 (defn refuge-needed?
   "Is a pocket wanted now: the bot burns or caught fire twice within reignite-ms (reignited?), is
-   under low-health, a volley of blazes watches it (outnumbered?), or it is hurt or under
+   under low-health with a blaze about (swarm), a volley of blazes watches it (outnumbered?), or it is hurt or under
    engage-health with blazes watching? Leave the fight to heal, as a human does."
   [world]
   (boolean (or (:player/on-fire? world)
                (reignited? world)
-               (< (:player/health world 20.0) low-health)
+               (and (< (:player/health world 20.0) low-health) (seq (swarm world)))
                (outnumbered? world)
                (and (seq (watchers world)) (or (hurt? world) (wary? world))))))
 
@@ -1215,6 +1215,12 @@
    :seal that follows, or nil when it is not standable: the refuge when no pocket is to be had."
   [world]
   (when-let [site (pocket/here-site world)] {:intent/kind :pocket :intent/site site}))
+
+(defn burning-twice?
+  "Is the bot alight or just was twice (reignited?): the fire emergency that seals it in where it
+   stands when no pocket is to be had (here-intent)."
+  [world]
+  (boolean (or (:player/on-fire? world) (reignited? world))))
 
 (def refuge-kinds
   "Intents that are the answer to a refuge: none of them is cut for one."
@@ -1227,7 +1233,7 @@
   (when (refuge-needed? world)
     (if (pocket/in? world)
       (hold-intent world)
-      (or (pocket-go world sp false) (here-intent world)))))
+      (or (pocket-go world sp false) (when (burning-twice? world) (here-intent world))))))
 
 (defmethod plan/done-by :rods-held? [world _] (>= (rods world) rods-wanted))
 
@@ -1276,7 +1282,8 @@
         away (delay (when (and (not in-pocket?) (outnumbered? world)) (hide world)))
         held (delay (hold-intent world))
         refuge (delay (when (and (not in-pocket?) (refuge-needed? world))
-                        (or (pocket-go world sp false) (here-intent world))))
+                        (or (pocket-go world sp false)
+                            (when (burning-twice? world) (here-intent world)))))
         prepare (delay (prepare-intent world sp))
         waiting (delay (ambush world))
         stock (delay (when-not (hurt? world) (stocking world)))
