@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-29T21:56:10.323Z",
+  "at" : "2026-10-29T21:58:20.876Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -28,6 +28,11 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
+    "number" : 538,
+    "title" : "Bot stops at fortress: blocked",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
     "number" : 610,
     "title" : "Bot stops at cast-one: no-support",
     "labels" : [ "bot-failure", "sim" ],
@@ -43,14 +48,14 @@
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
+    "number" : 461,
+    "title" : "Bot stops at portal: out-of-reach",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
     "number" : 613,
     "title" : "Bot stops at flint-and-steel: no-support",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
-  }, {
-    "number" : 538,
-    "title" : "Bot stops at fortress: blocked",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 612,
@@ -101,11 +106,6 @@
     "number" : 579,
     "title" : "Bot stops at ender-pearls: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
-    "number" : 461,
-    "title" : "Bot stops at portal: out-of-reach",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 348,
@@ -199,6 +199,10 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 538,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
     "issue" : 610,
     "move" : "wait",
     "why" : "session starting"
@@ -207,15 +211,11 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 538,
+    "issue" : 461,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
     "issue" : 579,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
-    "issue" : 461,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
