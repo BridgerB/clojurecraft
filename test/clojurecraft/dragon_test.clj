@@ -978,3 +978,21 @@
                           {:intent/kind :perch :intent/target dragon-eid :intent/status :active})]
       (is (plan/interrupts? perching {:goal/plan :dragon} {:intent/kind :perch})
           "a perch running at 14 ends"))))
+
+(deftest hurt-on-the-ground-the-crystals-wait-for-the-health
+  ;; gym chain-w16 run 1 (plan run 40863839525): the seventh crystal struck from a pillar's top at
+  ;; 14.2 health (timeline 25.93m), blast 13.7, then 11.8, 8.9, 6.0 by the dragon's blows and 0 by
+  ;; its breath, 1.2 s of `:dig-down`: nothing could cut the next blow from up there
+  (let [s (spike [8 8] 2 64 6)
+        at
+        (fn [health food inv]
+          (assoc (standing s [8.5 64.0 5.5] inv crystal) :player/health health :player/food food))
+        climb? (fn [w]
+                 (contains? #{:pillar :place :strike} (:intent/kind (dragon/toward-crystals w))))]
+    (is (climb? (at 20.0 20 cobblestone)) "healthy: the pillar up")
+    (is (not (climb? (at 14.2 19 cobblestone))) "14.2 with food to heal by: not up the pillar")
+    (is (climb? (at 14.2 10 cobblestone))
+        "nothing to heal by: it goes on, a wait would only end the plan")
+    (is (not (climb?
+              (at 14.2 10 (merge cobblestone {1 {:item (recipe/item-id :cooked_beef) :count 4}}))))
+        "a meal held: heal first")))

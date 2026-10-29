@@ -303,6 +303,8 @@
           (= (dec fx) ix) (standing-walk shore)
           :else (standing-walk [(dec fx) fy 0]))))
 
+(declare recover)
+
 (defn toward-crystals
   "The next intent toward no crystal standing and the feet off every pillar, for the crystal
    nearest the feet and its approach: on the End's entry platform or its bridge across the void,
@@ -315,7 +317,11 @@
    with no crystal and the feet down. Falling (not :player/on-ground?, a hit's knockback off a
    pillar or the way down it) the wait :falling: no route starts in the air, and gym chain-w11
    runs 3 and 4 asked for a walk every tick, each failed :no-path, twelve in a row failed the
-   run in 0.6 s."
+   run in 0.6 s. On the ground and hurt under perch-line, with food to heal by (food at
+   eat/regen-food or a meal held), recover's meal, shelter or wait before any climb: gym chain-w16
+   run 1 (plan run 40863839525) struck its seventh crystal from the top of a pillar at 14.2
+   health, and three blows of the dragon's (2 + 3 + 3) and its breath took the bot from 13.7 to 0
+   in 1.2 s of dig-down."
   [world]
   (let [[fx fy fz :as feet] (intent/feet world)
         [eid c] (entity/nearest (crystals world) (:player/pos world))
@@ -325,6 +331,10 @@
         gap (when a (wall-gap world a))]
     (cond (off-island? world) (toward-island world)
           (not (:player/on-ground? world true)) {:plan/wait :falling}
+          (and (< (:player/health world full-health) perch-line)
+               (not (or (on-pillar? world) (on-spike? world)))
+               (or (>= (:player/food world 20) eat/regen-food) (eat/food-held world)))
+          (recover world)
           (and a (= feet (:stand a)) gap item)
           {:intent/kind :place :intent/item item :intent/cell gap}
           (and a (= feet (:stand a)) gap) {:plan/wait :no-blocks}

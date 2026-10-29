@@ -29,6 +29,7 @@
 
 (def hungry-below 14)                 ; food under this is hunger to answer: six short of full, four below where natural healing stops (18)
 (def portal-fed 18)                   ; food under this is eaten once the portal kit is held, in the overworld: health comes back in the Nether only from food 18 (hunger/heal-level), which has no game
+(def regen-food 18)                   ; food from which health comes back by itself (hunger/heal-level)
 (def hit-quiet-ticks 40)               ; ticks (two seconds) after a hit in which no meal is begun: the meal stands the bot still for 1.6 s while whatever hit it hits again
 (def answer-ms 3000)                  ; past the eating time, how long the server's food may take to rise
 
