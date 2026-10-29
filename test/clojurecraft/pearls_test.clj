@@ -2225,7 +2225,13 @@
         "run 4: a lone magma cube at full health is the fight rules'")
     (is (not (pearls/swarmed? (standing {8 (mob :zombified_piglin [11.5 64.0 9.5])
                                          9 (mob :zombified_piglin [40.5 64.0 9.5])})))
-        "the second is past swarm-radius")))
+        "the second is past swarm-radius")
+    (testing "gym plan run 40839050567 job 5: two piglins shooting from past eight blocks"
+      (is (pearls/swarmed? (standing {8 (mob :piglin [20.5 64.0 9.5])
+                                      9 (mob :piglin [8.5 64.0 22.5])})))
+      (is (not (pearls/swarmed? (standing {8 (mob :zombified_piglin [20.5 64.0 9.5])
+                                           9 (mob :zombified_piglin [8.5 64.0 22.5])})))
+          "a zombified piglin has no bow"))))
 
 (deftest a-swarmed-hunt-goes-home-seals-the-mouth-and-opens-it-when-they-are-gone
   (let [held {0 (item :iron_sword 1) 1 (item :iron_pickaxe 1) 2 (item :cobblestone 64)}
@@ -2243,8 +2249,12 @@
             :intent/wall? true}
            (plan/next-intent inside row plan/goals))
         "in the burrow's end: one block between the bot and the mouth")
-    (testing "sealed, it waits and does not fight"
-      (let [sealed (-> (burrowed [8.5 61.0 8.5] burst {[7 61 8] stone})
+    (testing "the feet sealed, the head's level is next: a crossbow shoots over a block"
+      (let [feet-sealed (-> (burrowed [8.5 61.0 8.5] burst {[7 61 8] stone})
+                            (assoc :player/inventory held))]
+        (is (= [7 62 8] (:intent/cell (plan/next-intent feet-sealed row plan/goals))))))
+    (testing "sealed at both, it waits and does not fight"
+      (let [sealed (-> (burrowed [8.5 61.0 8.5] burst {[7 61 8] stone [7 62 8] stone})
                        (assoc :player/inventory held))]
         (is (= {:intent/kind :lookout :intent/for :pearls}
                (plan/next-intent sealed row plan/goals)))))

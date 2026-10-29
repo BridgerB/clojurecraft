@@ -1367,16 +1367,15 @@
           levels)))
 
 (defn unseal
-  "A :dig of the block at the feet's level toward the mouth, when it is solid and no route walks to
-   the mouth: the seal a swarm put there (wall-toward). Nil otherwise."
+  "A :dig of the block toward the mouth, the head's level and then the feet's, when it is solid and
+   no route walks to the mouth: the seal a swarm put there (wall-toward). Nil otherwise."
   [world mouth]
-  (let [c (cell-toward world (physics/centre mouth) 0)]
-    (when (and c
-               (solid-at? world c)
-               (not (intent/routable?
-                     world
-                     {:intent/kind :walk :intent/target mouth :intent/for :shelter})))
-      {:intent/kind :dig :intent/target c :intent/for :pearls})))
+  (when-not (intent/routable? world {:intent/kind :walk :intent/target mouth :intent/for :shelter})
+    (some (fn [dy]
+            (let [c (cell-toward world (physics/centre mouth) dy)]
+              (when (and c (solid-at? world c))
+                {:intent/kind :dig :intent/target c :intent/for :pearls})))
+          [1 0])))
 
 (defn wall-off
   "A wall-toward enderman e, the feet's level and then the head's: an enderman cannot reach through
@@ -1388,6 +1387,8 @@
   (wall-toward world (:entity/pos e) [0 1]))
 
 (def swarm-radius 8.0)                  ; blocks from the feet within which a monster counts toward a swarm
+(def ranged-radius 24.0)                ; blocks within which a ranged one counts: a crossbow's or a bow's reach
+(def ranged #{:piglin :skeleton :stray :bogged :blaze :pillager}) ; monsters that shoot: the burrow's seal is cover from them only closed at the head too
 
 (defn swarm
   "{eid entity} of the monsters (blocks/mobs category) alive within swarm-radius of pos (the feet when
@@ -1402,7 +1403,8 @@
                    (and (not (entity/dead? e))
                         (not= :enderman (entity/kind e))
                         (= :monster (:category (blocks/mobs (entity/kind e))))
-                        (<= (physics/distance pos (:entity/pos e)) swarm-radius))))
+                        (<= (physics/distance pos (:entity/pos e))
+                            (if (contains? ranged (entity/kind e)) ranged-radius swarm-radius)))))
          (:world/entities world))))
 
 (defn swarmed?
@@ -1605,7 +1607,7 @@
       (and home (not in?) (or ce near? hurt? tid aid swarmed?) (intent/routable? world way-home))
       way-home
       (and swarmed? in?)
-      (or (when mouth (wall-toward world (physics/centre mouth) [0]))
+      (or (when mouth (wall-toward world (physics/centre mouth) [0 1]))
           {:intent/kind :lookout :intent/for :pearls})
       (and hurt? in?) (or meal {:intent/kind :lookout :intent/for :pearls})
       (and cornered? hurt? (not in?) (or meal (wall-off world e))) (or meal (wall-off world e))
