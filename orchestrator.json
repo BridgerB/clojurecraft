@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-29T02:14:13.387Z",
+  "at" : "2026-10-29T02:18:35.860Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -63,11 +63,6 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 526,
-    "title" : "Bot stops at blaze-rods: blocked",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 595,
     "title" : "Bot stops at blaze-rods: unsafe",
     "labels" : [ "bot-failure", "real", "sim" ],
@@ -76,6 +71,11 @@
     "number" : 593,
     "title" : "Bot stops at water-bucket: unsafe",
     "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 526,
+    "title" : "Bot stops at blaze-rods: blocked",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 597,
