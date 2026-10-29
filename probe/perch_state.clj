@@ -37,25 +37,35 @@
     (println "  toward-dragon" (dragon/toward-dragon w))))
 
 (let [path (first *command-line-args*)
-      n (Long/parseLong (or (second *command-line-args*) "3"))
-      state (atom {:w (game/init {:host "replay" :port 0 :name "Clj_replay"}) :seen 0})]
-  (record/reduce-entries (fn [acc e]
-                           (if-not (:event/kind e)
-                             acc
-                             (let [before (:w @state)
-                                   stepped (main/step before e)
-                                   after (assoc stepped :bot/effects [])
-                                   perch? (some #(= "intent :perch 118" (:effect/message %))
-                                                (:bot/effects stepped))]
-                               (swap! state assoc :w after)
-                               (if perch?
-                                 (let [k (:seen (swap! state update :seen inc))]
-                                   (if (= k n)
-                                     (do (show "BEFORE the tick that started the perch" before)
-                                         (show "AFTER" after)
-                                         (println "event" (select-keys e [:event/kind :event/now]))
-                                         (reduced :done))
-                                     acc))
-                                 acc))))
-                         nil
-                         path))
+      from (Long/parseLong (or (second *command-line-args*) "3"))
+      state (atom {:w (game/init {:host "replay" :port 0 :name "Clj_replay"}) :seen 0 :printed 0})]
+  (record/reduce-entries
+   (fn [acc e]
+     (if-not (:event/kind e)
+       acc
+       (let [before (:w @state)
+             stepped (main/step before e)
+             after (assoc stepped :bot/effects [])
+             msgs (keep :effect/message (:bot/effects stepped))
+             perch? (some #(= "intent :perch 118" %) msgs)]
+         (swap! state assoc :w after)
+         (when perch? (swap! state update :seen inc))
+         (if (and (>= (:seen @state) from) (= :tick (:event/kind e)))
+           (let [n (:printed (swap! state update :printed inc))]
+             (println "tick"
+                      n
+                      (:event/now e)
+                      "before"
+                      (select-keys (:plan/intent before)
+                                   [:intent/kind :intent/status :intent/stage :intent/id])
+                      "after"
+                      (select-keys (:plan/intent after)
+                                   [:intent/kind :intent/status :intent/stage :intent/id])
+                      "msgs" (vec msgs)
+                      "wait" (:plan/waiting after)
+                      "status" (:plan/status after))
+             (when (= n 1) (show "BEFORE" before) (show "AFTER" after))
+             (if (>= n 8) (reduced :done) acc))
+           acc))))
+   nil
+   path))
