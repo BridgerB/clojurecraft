@@ -2199,3 +2199,57 @@
     (testing "and it is not planned again for a while"
       (let [cut (memory/remember-intention (at w 20000) (assoc fight :intent/id 5) :abandoned)]
         (is (pearls/unfightable? cut 7 far))))))
+
+(defn mob
+  "A tracked mob of kind k (a keyword) at pos."
+  [k pos]
+  {:entity/type (blocks/entity-types k) :entity/pos pos :entity/seen-at 0 :entity/health 20.0})
+
+(def burst
+  "Run 5 of gym plan run 40825468783 (issue #263, pearls-12): an angry enderman and two zombified
+   piglins within reach took 20 health in 1.5 s."
+  {7 (assoc (enderman [12.5 64.0 8.5]) :entity/creepy? true)
+   8 (mob :zombified_piglin [11.5 64.0 9.5])
+   9 (mob :zombified_piglin [5.5 64.0 6.5])})
+
+(deftest a-swarm-is-two-monsters-near-or-one-while-hurt
+  (let [w (standing burst)]
+    (is (= #{8 9} (set (keys (pearls/swarm w)))) "the enderman is the quarry, not the swarm")
+    (is (pearls/swarmed? w))
+    (is (not (pearls/swarmed? (standing {8 (mob :zombified_piglin [11.5 64.0 9.5])})))
+        "one, at full health")
+    (is (pearls/swarmed?
+         (assoc (standing {8 (mob :zombified_piglin [11.5 64.0 9.5])}) :player/health 8.0))
+        "one, under danger-health")
+    (is (not (pearls/swarmed? (standing {8 (mob :magma_cube [10.5 64.0 8.5])})))
+        "run 4: a lone magma cube at full health is the fight rules'")
+    (is (not (pearls/swarmed? (standing {8 (mob :zombified_piglin [11.5 64.0 9.5])
+                                         9 (mob :zombified_piglin [40.5 64.0 9.5])})))
+        "the second is past swarm-radius")))
+
+(deftest a-swarmed-hunt-goes-home-seals-the-mouth-and-opens-it-when-they-are-gone
+  (let [held {0 (item :iron_sword 1) 1 (item :iron_pickaxe 1) 2 (item :cobblestone 64)}
+        outside (-> (burrowed [3.5 64.0 2.5] burst)
+                    (assoc :player/inventory held))
+        inside (-> (burrowed [8.5 61.0 8.5] burst)
+                   (assoc :player/inventory held))]
+    (is (= {:intent/kind :walk :intent/target [8 61 8] :intent/for :shelter}
+           (plan/next-intent outside row plan/goals))
+        "out in the open: home")
+    (is (= {:intent/kind :place
+            :intent/item :cobblestone
+            :intent/cell [7 61 8]
+            :intent/for :pearls
+            :intent/wall? true}
+           (plan/next-intent inside row plan/goals))
+        "in the burrow's end: one block between the bot and the mouth")
+    (testing "sealed, it waits and does not fight"
+      (let [sealed (-> (burrowed [8.5 61.0 8.5] burst {[7 61 8] stone})
+                       (assoc :player/inventory held))]
+        (is (= {:intent/kind :lookout :intent/for :pearls}
+               (plan/next-intent sealed row plan/goals)))))
+    (testing "they gone, the seal is dug"
+      (let [gone (-> (burrowed [8.5 61.0 8.5] {} {[7 61 8] stone})
+                     (assoc :player/inventory held))]
+        (is (= {:intent/kind :dig :intent/target [7 61 8] :intent/for :pearls}
+               (plan/next-intent gone row plan/goals)))))))

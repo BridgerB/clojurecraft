@@ -1337,33 +1337,79 @@
                             (endermen (dissoc world :plan/blacklist) strike-range))
                       pos))))
 
-(defn wall-off
-  "A :place of one block of the filler held (stairs/filler) in the first open cell, the feet's
-   level and then the head's, on the side of the feet that enderman e stands on (the heading of the
-   larger offset on the plane), or nil when both are solid or none is held. An enderman cannot
-   reach through two full blocks. Run 1 of gym plan run 40747177526 (issue #263, pearls-12) stood
-   ninety seconds at 7.6 health with one beside it, backing off into a wall, forty-eight cooked
-   beef and 84 blocks held, and was slain: never fought under danger-health (#577), so what is left
-   is to eat, or to put a block between."
-  [world e]
-  (let [[fx fy fz :as feet] (intent/feet world)
-        [ex _ ez] (:entity/pos e)
+(defn cell-toward
+  "The cell beside the feet, dy above them, on the side point to lies on (the heading of the larger
+   offset on the plane), or nil when to is over the feet."
+  [world to dy]
+  (let [[fx fy fz] (intent/feet world)
+        [ex _ ez] to
         dx (- ex (+ fx 0.5))
         dz (- ez (+ fz 0.5))
         [hx hz] (if (>= (Math/abs dx) (Math/abs dz))
                   [(long (math/signum dx)) 0]
-                  [0 (long (math/signum dz))])
-        item (stairs/filler world 2)]
-    (when (and item feet (not= [0 0] [hx hz]))
-      (some (fn [dy]
-              (let [c [(+ fx hx) (+ fy dy) (+ fz hz)]]
-                (when-not (solid-at? world c)
-                  {:intent/kind :place
-                   :intent/item item
-                   :intent/cell c
-                   :intent/for :pearls
-                   :intent/wall? true})))
-            [0 1]))))
+                  [0 (long (math/signum dz))])]
+    (when (not= [0 0] [hx hz]) [(+ fx hx) (+ fy dy) (+ fz hz)])))
+
+(defn wall-toward
+  "A :place of one block of the filler held (stairs/filler) in the first open cell of levels (dy from
+   the feet) on the side of the feet that point to lies on (cell-toward), or nil when all are solid
+   or none is held. Marked :intent/wall?, so the hunt's interrupt does not cut it."
+  [world to levels]
+  (when-let [item (stairs/filler world 2)]
+    (some (fn [dy]
+            (when-let [c (cell-toward world to dy)]
+              (when-not (solid-at? world c)
+                {:intent/kind :place
+                 :intent/item item
+                 :intent/cell c
+                 :intent/for :pearls
+                 :intent/wall? true})))
+          levels)))
+
+(defn unseal
+  "A :dig of the block at the feet's level toward the mouth, when it is solid and no route walks to
+   the mouth: the seal a swarm put there (wall-toward). Nil otherwise."
+  [world mouth]
+  (let [c (cell-toward world (physics/centre mouth) 0)]
+    (when (and c
+               (solid-at? world c)
+               (not (intent/routable?
+                     world
+                     {:intent/kind :walk :intent/target mouth :intent/for :shelter})))
+      {:intent/kind :dig :intent/target c :intent/for :pearls})))
+
+(defn wall-off
+  "A wall-toward enderman e, the feet's level and then the head's: an enderman cannot reach through
+   two full blocks. Run 1 of gym plan run 40747177526 (issue #263, pearls-12) stood ninety seconds
+   at 7.6 health with one beside it, backing off into a wall, forty-eight cooked beef and 84 blocks
+   held, and was slain: never fought under danger-health (#577), so what is left is to eat, or to
+   put a block between."
+  [world e]
+  (wall-toward world (:entity/pos e) [0 1]))
+
+(def swarm-radius 8.0)                  ; blocks from the feet within which a monster counts toward a swarm
+
+(defn swarm
+  "{eid entity} of the monsters (blocks/mobs category) alive within swarm-radius of the feet that are
+   no enderman (the quarry, met its own way from the burrow): a zombified piglin counts, hostile
+   on sight or not, as it comes in packs and one hit angers them all. Gym plan run 40825468783 run
+   5 (issue #263, pearls-12): an enderman and two zombified piglins took 20 health in 1.5 s."
+  [world]
+  (let [pos (:player/pos world)]
+    (into {}
+          (filter (fn [[_ e]]
+                    (and (not (entity/dead? e))
+                         (not= :enderman (entity/kind e))
+                         (= :monster (:category (blocks/mobs (entity/kind e))))
+                         (<= (physics/distance pos (:entity/pos e)) swarm-radius))))
+          (:world/entities world))))
+
+(defn swarmed?
+  "Are two or more monsters within swarm-radius (swarm), or one while health is under danger-health?
+   A lone one over that health is met by the fight rules (a magma cube is small and slow)."
+  [world]
+  (let [n (count (swarm world))]
+    (boolean (or (>= n 2) (and (= 1 n) (< (:player/health world 20.0) danger-health))))))
 
 (defn wandering?
   "Has the hunt stood wander-lookouts or more :lookout intents with no walk ended since (stuck?
@@ -1528,6 +1574,7 @@
         at-end? (= (:pearls/shelter world) (intent/feet world))
         [tid _] (threat world)
         [sid _] (struck-by world)
+        swarmed? (swarmed? world)
         angry-close? (and ce (<= (physics/distance pos (:entity/pos ce)) strike-range))
         cornered? (and near? eid (contains? (:plan/cornered world #{}) eid))
         [bid _] (when at-end? (blocking world))
@@ -1554,7 +1601,11 @@
                        (and (or angry? in-reach?) (not (unfightable? world eid e))) eid
                        :else tid)]
     (cond
-      (and home (not in?) (or ce near? hurt? tid aid) (intent/routable? world way-home)) way-home
+      (and home (not in?) (or ce near? hurt? tid aid swarmed?) (intent/routable? world way-home))
+      way-home
+      (and swarmed? in?)
+      (or (when mouth (wall-toward world (physics/centre mouth) [0]))
+          {:intent/kind :lookout :intent/for :pearls})
       (and hurt? in?) (or meal {:intent/kind :lookout :intent/for :pearls})
       (and cornered? hurt? (not in?) (or meal (wall-off world e))) (or meal (wall-off world e))
       (and near? hurt? (not in?)) {:intent/kind :back-off :intent/target eid :intent/for :pearls}
@@ -1588,6 +1639,7 @@
       (and in? qid) {:intent/kind :lookout :intent/for :pearls}
       (and in? (crowded? world))
       (or (vantage world far) {:intent/kind :lookout :intent/for :pearls})
+      (and in? mouth (not swarmed?) (unseal world mouth)) (unseal world mouth)
       (and in? mouth (not angry-close?) @mouth-walk) @mouth-walk
       (and qid
            rested?
