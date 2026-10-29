@@ -589,3 +589,29 @@
     (is (not (combat/back-off-pointless? (at close {}) 7 (e (at close {})))) "room to go")
     (is
      (combat/back-off-pointless? (assoc (at close {}) :plan/cornered #{7}) 7 (e (at close {}))))))
+
+(deftest on-the-islands-rim-with-the-enderman-inland-the-bot-covers
+  ;; gym chain-w13 dragon run 2 (plan run 40798605016, job 4): the bot stood at [70.3 57 11.3] on
+  ;; the End island's outer part when `intent :back-off 86` came every 50 ms; the way straight
+  ;; away from an enderman inland is off the rim (void-retreat?), so each back-off ended cornered
+  ;; in its first tick. The rim here is x 13 of the chunk; the enderman two and a half inland.
+  (let [air (blocks/default-state :air)
+        rim {:world/chunks
+             {[0 0]
+              (world/column
+               (into {} (for [lx (range 13 16) lz (range 16) y (range 50 64)] [[lx y lz] air])))}}
+        w (-> (standing {7 (assoc (mob :enderman [10.5 64.0 8.5] 40.0) :entity/creepy? true)})
+              (merge rim)
+              (assoc :player/pos [12.5 64.0 8.5]
+                     :player/health 6.0
+                     :player/food 10
+                     :player/dimension dimension/end
+                     :plan/goals #{:dragon}
+                     :player/inventory {0 (item :cobblestone 8)}))
+        e (get-in w [:world/entities 7])]
+    (is (combat/void-retreat? w e) "away from it is off the rim")
+    (is (combat/back-off-pointless? w 7 e)
+        "so a back-off is done at once, before anything is cornered")
+    (let [i (plan/next-intent w (row :defend) plan/goals)]
+      (is (= {:intent/kind :place :intent/item :cobblestone :intent/cell [11 64 8]} i)
+          "a block between instead, never the back-off and never the fight"))))

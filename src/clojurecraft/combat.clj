@@ -19,6 +19,7 @@
    for its row to retreat (:intent/yield?). A row whose act answers a kind of hostile itself
    (answers) has the :defend row leave that kind to it."
   (:require [clojure.math :as math]
+            [clojure.string :as str]
             [clojurecraft.armour :as armour]
             [clojurecraft.dimension :as dimension]
             [clojurecraft.eat :as eat]
@@ -701,19 +702,36 @@
     (first (filter #(= :clear (path/classify world %))
                    [[(+ fx sx) fy (+ fz sz)] [(+ fx sx) (inc fy) (+ fz sz)]]))))
 
+(defn nook-cell
+  "The cell under the feet when the bot holds a pickaxe and it and the one under it are solid
+   (path/classify): digging it leaves a hole a block deep to stand in, with floor under it, or nil."
+  [world]
+  (let [[fx fy fz] (intent/feet world)
+        below [fx (dec fy) fz]
+        pick? (some #(str/ends-with? (name %) "_pickaxe")
+                    (keys (recipe/counts (:player/inventory world))))]
+    (when (and pick?
+               (= :solid (path/classify world below))
+               (= :solid (path/classify world [fx (- fy 2) fz])))
+      below)))
+
 (defn cover
   "The intent for a bot under retreat-health that no back-off from entity e would help
    (back-off-pointless?), never a fight (#577, danger-health): with e back-off-to or more away, the
    meal when food is held and the bar can take one, else the wait :resting; otherwise the meal
    when food is held, the bar can take one and e is out of attack-reach, else a block laid
    between (wall-cell, a filler of stairs/filler), else a pillar of pillar-height when
-   pillar-fill filler is held, else the wait :cornered. Gym chain-w13 dragon run 2 chose a
-   back-off from an enderman every 50 ms for a second and died standing in it."
+   pillar-fill filler is held, else the meal, else the dig of a nook under the feet (nook-cell,
+   a pickaxe held) to stand in. Only with nothing at all held the wait :cornered, which ENDS THE
+   PLAN after wait-ticks: the one choice here that is a death or a failure, taken with nothing
+   to eat, lay or dig with. Gym chain-w13 dragon run 2 chose a back-off from an enderman every
+   50 ms for a second and died standing in it."
   [world e]
   (let [food (when (< (:player/food world 20) 20) (eat/food-held world))
         near? (<= (physics/distance (game/eye world) (aim e)) attack-reach)
         wall (wall-cell world e)
         filler (stairs/filler world wall-fill)
+        nook (nook-cell world)
         [_ fy _] (intent/feet world)]
     (cond (>= (horizontal world e) back-off-to)
           (if food {:intent/kind :eat :intent/item food} {:plan/wait :resting})
@@ -724,6 +742,7 @@
            :intent/item (stairs/filler world pillar-fill)
            :intent/top (+ fy pillar-height)}
           food {:intent/kind :eat :intent/item food}
+          nook {:intent/kind :dig :intent/target nook}
           :else {:plan/wait :cornered})))
 
 (defmethod plan/next-intent :defend
