@@ -797,6 +797,10 @@
    (turned?), none short of behind-by behind its body (behind?), where the bot waits for the
    dragon to perch, or nil when no such column has ground loaded. The stand the bot held last
    (:dragon/stand, kept by the :perch) stays the stand while it is out of every breath's reach,
+   no stand the feet are at (stand-near) while the head is on the feet themselves (in-bite? of
+   the position, not the cell's middle: a :perch there ends at once, and a stand the walk had
+   arrived at asked for the :perch again, every tick, 180 times a run: gym chain-w18 dragon runs
+   1, 3 and 4, plan run 40914832722),
    not in the head's bite (in-bite?) and not short of stand-slack less than behind-by behind the
    body: the nearest stand is changed to only for a clear gain, not each time the turning dragon
    makes the other one marginally nearer (gym chain-w13 dragon runs 1 and 3: [0 62 -2] and
@@ -815,15 +819,23 @@
                     (some #(<= (physics/horizontal-distance (physics/centre c) (:entity/pos %))
                                (breath-reach %))
                           clouds))
+        pos (:player/pos world)
+        bitten-here? (fn [c]
+                       (and d
+                            (not (scanning? d))
+                            (<= (physics/horizontal-distance pos (physics/centre c)) stand-near)
+                            (in-bite? d pos)))
         held (:dragon/stand world)]
     (if (and held
              (some #{held} cells)
              (not (breathed? held))
+             (not (bitten-here? held))
              (not (and d (in-bite? d (physics/centre held))))
              (behind? d (physics/centre held) (- behind-by stand-slack)))
       held
       (->> cells
            (remove breathed?)
+           (remove bitten-here?)
            (filter #(behind? d (physics/centre %) behind-by))
            (sort-by #(physics/horizontal-distance (:player/pos world) (physics/centre %)))
            first))))

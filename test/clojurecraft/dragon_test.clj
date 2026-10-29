@@ -1084,3 +1084,24 @@
       (is (= [:use-on :white_bed site] [(:intent/kind i) (:intent/item i) (:intent/target i)])
           "laid: the bed itself used")
       (is (= :or (first (:intent/expect i))) "done when the bed is gone"))))
+
+(deftest a-stand-the-head-is-on-is-not-the-stand-the-perch-would-end-at
+  ;; gym chain-w18 dragon runs 1, 3 and 4 (plan run 40914832722): `intent :perch 118` every 50 ms,
+  ;; 178 times from 17:07:05.66 after `:back-off 328`: the stand held was behind the body by its
+  ;; middle, the feet 0.8 nearer the head than the middle were in its bite, so the :perch the
+  ;; planner chose ended at once (in-bite? of the feet) and was chosen again
+  (let [w0 (round-fountain [8.5 64.0 0.5] (sitting 270.0))
+        cell (first (filter #(= 2 (first %)) (dragon/stand-cells w0)))
+        centre (physics/centre cell)
+        yaw (first (filter #(<= -1.3 (first (mob/ahead [0.5 66.0 0.5] % centre)) -1.0) (range 360)))
+        w (round-fountain [8.5 64.0 0.5] (sitting (double yaw)))
+        [_ d] (dragon/dragon w)
+        [fx fz] (mob/facing yaw)
+        pos [(+ (first centre) (* 0.8 fx)) 64.0 (+ (nth centre 2) (* 0.8 fz))]
+        here (assoc w :player/pos pos :dragon/stand cell :player/dimension dimension/end)]
+    (is (some? yaw))
+    (is (not (dragon/in-bite? d centre)) "the middle of the stand is behind the body")
+    (is (dragon/in-bite? d pos) "the feet 0.8 nearer the head are in its bite")
+    (is (not= cell (dragon/fountain-stand here)) "that stand is not the stand")
+    (is (not= :perch (:intent/kind (dragon/toward-dragon here)))
+        "so the planner does not ask for the perch that would end at once")))
