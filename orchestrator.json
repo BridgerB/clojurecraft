@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-29T02:19:42.400Z",
+  "at" : "2026-10-29T02:20:48.854Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -46,11 +46,6 @@
     "number" : 592,
     "title" : "Bot stops at cast-one: unsafe",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
-  }, {
-    "number" : 461,
-    "title" : "Bot stops at portal: out-of-reach",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 342,
@@ -100,6 +95,11 @@
   }, {
     "number" : 538,
     "title" : "Bot stops at fortress: blocked",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 461,
+    "title" : "Bot stops at portal: out-of-reach",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
@@ -193,10 +193,6 @@
     "move" : "wait",
     "why" : "session starting"
   }, {
-    "issue" : 461,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
     "issue" : 342,
     "move" : "leave",
     "why" : "hands-off label"
@@ -214,6 +210,10 @@
     "why" : "hands-off label"
   }, {
     "issue" : 538,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 461,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
