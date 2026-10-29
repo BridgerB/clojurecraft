@@ -584,8 +584,13 @@
                       :player/health 9.0
                       :player/food food
                       :player/inventory inv))]
-    (is (= {:intent/kind :eat :intent/item :cooked_beef} (dragon/toward-dragon (hurt 10 {0 steak})))
-        "food held and the bar short: the meal, not the perch")
+    (let [i (dragon/toward-dragon (hurt 10 {0 steak}))]
+      (is
+       (= :shelter (:intent/for i))
+       "at the fountain: out of the basin first, the meal where it is sheltered (chain-w12 run 4)"))
+    (is (= {:intent/kind :eat :intent/item :cooked_beef}
+           (dragon/toward-dragon (assoc (hurt 10 {0 steak}) :player/pos [20.5 64.0 0.5])))
+        "food held and the bar short, sheltered: the meal, not the perch")
     (is (not= :perch (:intent/kind (dragon/toward-dragon (hurt 20 {0 steak})))))
     (is (not= :perch (:intent/kind (dragon/toward-dragon (hurt 20 {}))))
         "nothing to eat: shelter or the wait, still never the perch")
@@ -912,3 +917,22 @@
                          (assoc :time/now 5000))
             after (intent/run fighting (:plan/intent fighting) {:event/kind :tick})]
         (is (intent/done? (:plan/intent after)))))))
+
+(deftest a-cloud-growing-beside-the-way-to-the-stand-keeps-the-bot-where-it-is
+  ;; gym chain-w12 dragon run 2 (plan run 40776424398): 24 swaps in 12 s between the stand
+  ;; [2 62 0] and the cell out of the breath [0 64 -5], each walk cut after half a second by a
+  ;; cloud that had grown to the feet; then the dragon's head, three hits, 18.5 to 0 in 0.6 s
+  (let [pos [5.0 64.0 -4.0]
+        w (fn [entities]
+            (-> (round-fountain pos (merge (sitting 270.0) entities))
+                (assoc :player/dimension dimension/end :player/health 20.0 :player/food 20)))
+        clear (w {})
+        beside (w (cloud [5.0 64.0 -9.0] 2.0))]
+    (is (nil? (dragon/breath-near beside)) "the feet are out of its reach")
+    (is (not (dragon/breath-on-way? beside pos [2.5 64.0 0.5]))
+        "the way itself is out of its reach")
+    (is (dragon/breath-on-way? beside pos [2.5 64.0 0.5] dragon/breath-hold)
+        "but not out of its reach grown by breath-hold")
+    (is (= :walk (:intent/kind (dragon/toward-dragon clear))) "no cloud: the walk to the stand")
+    (is (= :perch (:intent/kind (dragon/toward-dragon beside)))
+        "a cloud beside the way: held where it is, not set out and turned back")))

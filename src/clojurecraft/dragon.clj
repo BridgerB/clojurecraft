@@ -88,6 +88,7 @@
 (def walk-in-to 3.0)                  ; blocks on the plane from the fountain a perch walks in to for reach, no nearer
 (def perch-hold-ms 60000)             ; a :perch hands back to the planner this often
 (def breath-radius entity/breath-radius) ; a breath cloud's radius when its metadata has not said: the sitting dragon's flame cloud (DragonSittingFlamingPhase)
+(def breath-hold 2.0)                 ; blocks more than breath-reach the bot keeps from a cloud before it sets out for the stand again, so a cloud growing as it walks does not turn it back (gym chain-w12 dragon run 2: 24 swaps in 12 s between the stand and the cell out of the breath)
 (def breath-margin 1.5)               ; blocks beyond a breath cloud's radius (:entity/radius: a fireball's grows from 3 to 7) the bot keeps
 (def behind-by 1.0)                   ; blocks behind the sitting dragon's body (along its facing, mob/ahead) a stand must be: out of its head's and neck's way
 (def leave-by 0.5)                    ; blocks behind it the feet may come to, the dragon turning, before the :perch hands back for another stand
@@ -627,12 +628,16 @@
     (math/hypot (- px (+ ax (* t dx))) (- pz (+ az (* t dz))))))
 
 (defn breath-on-way?
-  "Does a breath cloud or fireball reach (breath-reach) the straight way on the plane from point
-   a to point b? A walk crosses it: gym dragon-d runs 1 and 3 walked back to the fountain's stand
-   through a fireball's cloud lying between and died in it, nothing ending a walk but itself."
-  [world a b]
-  (boolean (some #(<= (segment-distance (:entity/pos %) a b) (breath-reach %))
-                 (vals (breaths world)))))
+  "Does a breath cloud or fireball reach (breath-reach, and extra more when it is given) the
+   straight way on the plane from point a to point b? A walk crosses it: gym dragon-d runs 1 and 3
+   walked back to the fountain's stand through a fireball's cloud lying between and died in it,
+   nothing ending a walk but itself. The way back to the stand is asked with breath-hold more,
+   the walk away from the breath with none: a cloud grows (3 to 7) while the bot walks, and one
+   line for both turned it round every half second."
+  ([world a b] (breath-on-way? world a b 0.0))
+  ([world a b extra]
+   (boolean (some #(<= (segment-distance (:entity/pos %) a b) (+ (breath-reach %) extra))
+                  (vals (breaths world))))))
 
 (defn from-fountain
   "Blocks on the plane from the feet to the fountain."
@@ -710,7 +715,8 @@
               (and (in-bite? e (:player/pos world)) (not (scanning? e)) (some? stand))
               (and (not (in-basin? world))
                    stand
-                   (not (breath-on-way? world (:player/pos world) (physics/centre stand))))
+                   (not
+                    (breath-on-way? world (:player/pos world) (physics/centre stand) breath-hold)))
               (> (- now (:intent/since i)) perch-hold-ms))
           (-> world
               (assoc :player/controls {})
@@ -856,19 +862,19 @@
   "The intent while hurt under combat/retreat-health at the dragon, where the perch and
    the walk to its stand are never chosen (gym chain-w3's dragon runs 2 and 3 fought on
    at ten, then four and a half health, and the dragon slew them): a meal first when
-   food is held and the bar can take one, else, while not yet in shelter outside the
-   basin (sheltered?), the shelter walk to a cell out of every breath's reach (escape),
-   else the wait :low-health where the feet are for the bar's own healing.
+   food is held and the bar can take one, in shelter outside the basin (sheltered?) or with no
+   cell to go to, else, while not yet in shelter, the shelter walk to a cell out of every
+   breath's reach (escape), else the wait :low-health where the feet are for the bar's own
+   healing. Gym chain-w12 chain run 4 ate twice at the fountain at low health and died there.
    The :heal row's meal needs a lull (heal-food), which a sitting dragon never is, so
    the row eats here on its own line."
   [world]
-  (let [food (when (< (:player/food world 20) 20) (eat/food-held world))]
-    (cond food {:intent/kind :eat :intent/item food}
+  (let [food (when (< (:player/food world 20) 20) (eat/food-held world))
+        flight (escape world)]
+    (cond (and food (or (sheltered? world) (nil? flight))) {:intent/kind :eat :intent/item food}
           (sheltered? world) {:plan/wait :low-health}
-          :else
-          (if-let [flight (escape world)]
-            (shelter-walk flight)
-            {:plan/wait :low-health}))))
+          flight (shelter-walk flight)
+          :else {:plan/wait :low-health})))
 
 (defn toward-dragon
   "The next intent toward the dragon dead: on the ground in a breath cloud itself (in-breath?)
@@ -901,7 +907,7 @@
         breath (breath-near world)
         stand (fountain-stand world)
         far? (and stand (> (physics/horizontal-distance pos (physics/centre stand)) stand-near))
-        blocked? (and far? (breath-on-way? world pos (physics/centre stand)))
+        blocked? (and far? (breath-on-way? world pos (physics/centre stand) breath-hold))
         flight (when breath (escape world))]
     (cond (and (seq (crystals world))
                (in-breath? world)
