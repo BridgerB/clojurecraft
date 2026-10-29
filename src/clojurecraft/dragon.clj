@@ -1031,6 +1031,14 @@
                :intent/aim [(+ sx 0.5) (+ sy 0.0) (+ sz 0.5)]
                :intent/expect [:block site bed]})))))
 
+(defn out-of-the-bite
+  "The intent that takes the feet from the head's bite: the shelter walk to the nearest cell
+   beyond its reach (step-out-cell), else combat's :back-off from the dragon."
+  [world]
+  (if-let [cell (step-out-cell world)]
+    (shelter-walk cell)
+    (let [[eid _] (dragon world)] {:intent/kind :back-off :intent/target eid})))
+
 (defn after-blow
   "The intent in the hit-hold-ticks after the dragon's blow (struck-by-dragon?): inside step-out-radius
    of the fountain, the shelter walk to the nearest cell beyond the head's reach (step-out-cell),
@@ -1054,7 +1062,10 @@
    a spike, the crystals' (toward-crystals); a breath near, combat's :back-off from it; away from
    the fountain's stand (fountain-stand), the walk there; there, the :perch, and with every stand
    under a breath, or one on the straight way to the stand (breath-on-way?), the :perch where
-   the feet are (gym dragon-b: a fireball's cloud on the basin after the dragon took off, and
+   the feet are, unless the head is on the feet themselves (in-bite?: the perch ends at once there
+   and the planner asked for it again each tick, 178 times a run, gym chain-w18 dragon runs 1, 3
+   and 4, plan run 40914832722), then the step out of the bite (out-of-the-bite) (gym dragon-b:
+   a fireball's cloud on the basin after the dragon took off, and
    the plan waited :no-fountain until it failed; gym dragon-d: the walk back to the stand went
    through a fireball's cloud lying between and died in it). A wait :no-fountain with no
    ground round the fountain loaded, :no-dragon with no dragon shown. From outside the basin
@@ -1103,6 +1114,7 @@
           (and (nil? stand) eid (some? (ground world 0 0 sky)))
           {:intent/kind :perch :intent/target eid}
           (nil? stand) {:plan/wait :no-fountain}
+          (and eid blocked? d (in-bite? d pos) (not (scanning? d)) stand) (out-of-the-bite world)
           (and eid (or blocked? (and (scanning? d) (in-basin? world))))
           {:intent/kind :perch :intent/target eid}
           far?

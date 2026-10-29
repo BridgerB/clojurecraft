@@ -1135,3 +1135,36 @@
       (is (= :active (:intent/status (:plan/intent after))) "the perch goes on")
       (is (nil? (:control/yaw (:player/controls after))) "holding: no walk toward the fountain")
       (is (not (:control/forward? (:player/controls after)))))))
+
+(deftest in-the-bite-with-the-way-to-the-stand-under-breath-the-bot-steps-out-and-keeps-one-intent
+  ;; gym chain-w18 dragon run 1 (plan run 40914832722, probe 40928077754): after `:back-off 328`
+  ;; the bot at [-4.0 65 -3.3], 20 health, the dragon at [0 65.86 0] yaw -109.7 phase 5, the stand
+  ;; [2 62 0] far, the head on the feet (in-bite?) and a breath on the way to the stand: the
+  ;; planner chose `:perch 118` where the feet are, the perch ended at once (in-bite? with a
+  ;; stand), and the planner chose it again, every tick
+  (let [cloud {50 {:entity/type (blocks/entity-types :area_effect_cloud)
+                   :entity/pos [-1.0 64.0 -1.5]
+                   :entity/radius 1.0}}
+        d {dragon-eid {:entity/type (mob/type-id :ender_dragon)
+                       :entity/pos [0.0 65.86 0.03]
+                       :entity/yaw -109.7
+                       :entity/phase 5}}
+        w (-> (round-fountain [-4.0 65.0 -3.3] (merge d cloud))
+              (assoc :player/dimension dimension/end
+                     :player/health 20.0
+                     :player/food 20
+                     :time/now 5000))
+        [_ ent] (dragon/dragon w)
+        i (dragon/toward-dragon w)]
+    (is (dragon/in-bite? ent [-4.0 65.0 -3.3]) "the head is on the feet")
+    (is (nil? (dragon/breath-near w)) "no cloud on the feet")
+    (is (dragon/breath-on-way? w
+                               [-4.0 65.0 -3.3]
+                               (physics/centre (dragon/fountain-stand w))
+                               dragon/breath-hold)
+        "but one on the way to the stand")
+    (is (not= :perch (:intent/kind i)) "not the perch that would end at once")
+    (is (contains? #{:walk :back-off} (:intent/kind i)) "the step out of the bite")
+    (testing "the intent it chose is not cut the next tick"
+      (let [running (assoc w :plan/intent (assoc i :intent/status :active :intent/id 7))]
+        (is (not (plan/interrupts? running {:goal/plan :dragon} (:plan/intent running))))))))
