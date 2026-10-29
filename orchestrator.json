@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-29T07:00:02.214Z",
+  "at" : "2026-10-29T07:04:26.048Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -28,6 +28,11 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
+    "number" : 151,
+    "title" : "Bot stops at flint-and-steel: not-picked-up",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : true
+  }, {
     "number" : 526,
     "title" : "Bot stops at blaze-rods: blocked",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
@@ -42,11 +47,6 @@
     "title" : "Bot stops at cast-one: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
-  }, {
-    "number" : 151,
-    "title" : "Bot stops at flint-and-steel: not-picked-up",
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : true
   }, {
     "number" : 605,
     "title" : "Bot stops at stone-pickaxe: boxed",
@@ -189,6 +189,10 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 151,
+    "move" : "wait",
+    "why" : "session starting"
+  }, {
     "issue" : 526,
     "move" : "leave",
     "why" : "hands-off label"
@@ -200,10 +204,6 @@
     "issue" : 135,
     "move" : "leave",
     "why" : "hands-off label"
-  }, {
-    "issue" : 151,
-    "move" : "wait",
-    "why" : "session starting"
   }, {
     "issue" : 579,
     "move" : "leave",
