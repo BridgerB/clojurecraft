@@ -316,22 +316,20 @@
       (is (fortress/safe? thin [0 64 0] [1 0 0]) "the step itself is as safe as it was")
       (is (not= [1 0 0] (fortress/next-move thin [0 64 0] [20 64 0] 8 false #{}))
           "a thick one is preferred to a fresh thin one"))
-    (testing
-      "but with no other way the thin step is taken, not a block (R1/37 seed 2: soul sand only)"
-      (let [pit (rock {[1 62 0] air
-                       [1 61 0] air
-                       [1 60 0] air
-                       [0 64 1] netherrack
-                       [0 63 1] air
-                       [0 62 1] air
-                       [0 61 1] air
-                       [0 60 1] air
-                       [0 64 -1] netherrack
-                       [0 63 -1] air
-                       [0 62 -1] air
-                       [0 61 -1] air
-                       [0 60 -1] air})]
-        (is (some? (fortress/next-move pit [0 64 0] [20 64 0] 8 false #{})))))
+    (testing "with no other way the thin step is taken, not a block (R1/37 seed 2: soul sand only)"
+      (let [open (into {} (for [x (range -4 5) y (range 58 71) z (range -4 5)] [[x y z] air]))
+            only-thin (assoc (rock {})
+                             :world/blocks
+                             (merge open
+                                    {[0 63 0] netherrack [0 62 0] netherrack [1 63 0] netherrack}))]
+        (is (fortress/thin-floor? only-thin [1 63 0]))
+        (is (= [1 0 0] (fortress/next-move only-thin [0 64 0] [20 64 0] 8 false #{}))
+            "the only step with a floor, thin: taken")
+        (testing "and a thick floor beside it is preferred"
+          (let [both (-> only-thin
+                         (assoc-in [:world/blocks [0 63 1]] netherrack)
+                         (assoc-in [:world/blocks [0 62 1]] netherrack))]
+            (is (= [0 0 1] (fortress/next-move both [0 64 0] [20 64 0] 8 false #{})))))))
     (testing "a block in hand: the step is taken with the cell under the floor filled first"
       (is (= [1 0 0] (fortress/next-move held [0 64 0] [20 64 0] 8 false #{})))
       (let [ops (fortress/underlay-ops held [0 64 0] [1 0 0])]
