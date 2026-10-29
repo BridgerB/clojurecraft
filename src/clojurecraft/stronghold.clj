@@ -649,6 +649,20 @@
 
 (def retreat-tries 4)                 ; trail cells a retreat looks at for one a route reaches, nearest first
 
+(defn water-near?
+  "Is there water at the feet, or in the cell beside them, at their height or one under? The place
+   a swim (:cross) starts from: on dry ground it ends :stuck at once (gym chain-w15 run 3: two
+   crosses in a row, five seconds each, and the third failure in a row failed the plan)."
+  [world]
+  (let [[fx fy fz] (intent/feet world)]
+    (boolean (some (fn [c]
+                     (let [id (terrain/block-at world c)]
+                       (or (contains? blocks/water-states id)
+                           (= :water (terrain/fluid-kind world c)))))
+                   (for [[dx dz] [[0 0] [1 0] [-1 0] [0 1] [0 -1]]
+                         dy [0 -1]]
+                     [(+ fx dx) (+ fy dy) (+ fz dz)])))))
+
 (defn to-room
   "The way to the portal room's frame f, in order: in water, out to the nearest bank first
    (swim's :swim-out :retreat); from a shore, a walk to a dry start (dry-start) that ends
@@ -668,7 +682,7 @@
    (through the stronghold's walls, never into its frames: fortress/unbreakable); else, still over
    room-over, the stairs; else with feet boxed or no move forward, a retreat step back along the
    plan trail to an earlier unboxed cell no walk failed at (:plan/blacklist) that a route reaches or whose chunk is not loaded
-   (retreat-tries of them looked at), else a swim (:cross) to the nearest: gym chain-w11 to w14
+   (retreat-tries of them looked at), else, with water at the feet, a swim (:cross) to the nearest, on dry ground a new staircase up a leg (:stairs-up: a swim there ends :stuck): gym chain-w11 to w14
    run 1 stood on a bank at the bottom of its flooded staircase and asked for a walk to each
    trail cell in turn, fifty milliseconds apart, every one :no-path (the way up is under water),
    twelve of them failed the plan at 8 minutes; else the wait :no-way. Gym
@@ -718,7 +732,10 @@
            :intent/from-feet feet}
           (and (not boxed?) (> fy (+ y room-over))) stairs
           walkable {:intent/kind :walk :intent/target walkable :intent/for :retreat}
-          (seq retreats) {:intent/kind :cross :intent/target (first retreats) :intent/for :retreat}
+          (and (seq retreats) (water-near? world))
+          {:intent/kind :cross :intent/target (first retreats) :intent/for :retreat}
+          (seq retreats)
+          {:intent/kind :stairs-up :intent/to-y (+ fy stair-leg) :intent/for :retreat}
           :else {:plan/wait :no-way})))
 
 (defmethod plan/next-intent :portal-room

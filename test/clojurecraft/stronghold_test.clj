@@ -482,6 +482,28 @@
         (is (= {:intent/kind :walk :intent/target [8 64 2] :intent/for :retreat}
                (stronghold/to-room w2 [13 60 8]))
             "one a route reaches is walked to")))
+    (testing "every retreat cell out of reach on dry ground: a new staircase up, not a swim"
+      ;; gym chain-w15 run 3: `intent :cross [14862 33 13582]` on dry ground failed :stuck in five
+      ;; seconds, twice, and with the stairs-down :boxed before them the third failure in a row
+      ;; ended the plan at 7 minutes. A ring of water two out from the bank keeps every tunnel
+      ;; step from being dry, and none of it is at the feet.
+      (let [ring (world/column (into {}
+                                     (for [x (range 6 11)
+                                           z (range 6 11)
+                                           :when (or (#{6 10} x) (#{6 10} z))
+                                           y (range 58 70)]
+                                       [[x y z] blocks/water-base])))
+            w (-> (searching [8.5 8.5] [])
+                  (assoc :world/chunks {[0 0] ring}
+                         :plan/boxed-at #{[8 64 8]}
+                         :plan/trail [[8 64 2] [8 64 8]]))]
+        (is (not (stronghold/water-near? w)) "no water at the feet")
+        (is (= {:intent/kind :stairs-up :intent/to-y 72 :intent/for :retreat}
+               (stronghold/to-room w [13 60 8]))
+            "unreachable cells and no water: the staircase up a leg")
+        (is (= {:intent/kind :walk :intent/target [9 64 9] :intent/for :retreat}
+               (stronghold/to-room (assoc w :plan/trail [[9 64 9] [8 64 2] [8 64 8]]) [13 60 8]))
+            "a cell a route reaches is still walked to")))
     (testing "to-room refuses moves through or bordering lava in portal room"
       ;; gym chain-w7 run 3: in portal room with lava pool under frame, tunnel-to
       ;; must never step into or border lava
