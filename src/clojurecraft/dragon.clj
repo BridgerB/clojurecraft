@@ -309,7 +309,7 @@
           (= (dec fx) ix) (standing-walk shore)
           :else (standing-walk [(dec fx) fy 0]))))
 
-(declare recover)
+(declare recover looks-away)
 
 (defn toward-crystals
   "The next intent toward no crystal standing and the feet off every pillar, for the crystal
@@ -742,6 +742,24 @@
              {:control/look (look-away world
                                        (physics/look-at (game/eye world) (:entity/pos e)))}))))
 
+(def rest-ms 5000)                    ; a :rest hands back to the planner this often
+
+(defmethod intent/run :rest
+  ;; {:intent/kind :rest}: stand where the feet are, the look turned from an enderman's eyes
+  ;; (look-away), until the health is back to perch-line or rest-ms have passed. A wait
+  ;; (:plan/wait :low-health) fails the plan after wait-ticks, 20 s: gym chain-w20 chain run 1
+  ;; (plan run 40928784091) failed :low-health at 31m9s with time left; a rest is an intent, run
+  ;; and replaced, never the wait that counts toward failing
+  [world {:intent/keys [since] :as i} _]
+  (let [now (:time/now world)
+        since (or since now)
+        world (assoc world :plan/intent (assoc i :intent/since since))]
+    (if (or (>= (:player/health world full-health) perch-line) (> (- now since) rest-ms))
+      (-> world
+          (assoc :player/controls {})
+          intent/done)
+      (looks-away (assoc world :player/controls {})))))
+
 (declare fountain-stand holds? in-basin? stand-cells)
 
 (defmethod intent/run :perch
@@ -970,13 +988,21 @@
          (not (breathed? world feet))
          (not (before-head? d (physics/centre feet))))))
 
+(defn back-off-from-dragon?
+  "Would a combat :back-off from the dragon get the bot anywhere: the dragon shown and the back-off
+   not pointless (combat/back-off-pointless?: it is already back-off-to away, a drop or lava
+   behind)? A back-off that is done in the tick it starts is chosen again the next: 49 times in
+   2.5 s in gym chain-w20 chain run 1 (plan run 40928784091)."
+  [world]
+  (let [[_ d] (dragon world)] (boolean (and d (not (combat/back-off-pointless? world d))))))
+
 (defn recover
   "The intent while hurt under combat/retreat-health at the dragon, where the perch and
    the walk to its stand are never chosen (gym chain-w3's dragon runs 2 and 3 fought on
    at ten, then four and a half health, and the dragon slew them): a meal first when
    food is held and the bar can take one, in shelter outside the basin (sheltered?) only;
    not yet in shelter, the shelter walk to a cell out of every breath's reach (escape), else
-   combat's :back-off from the dragon, else the meal, else the wait :low-health where the feet
+   combat's :back-off from the dragon (unless it would be done at once), else the meal, else a :rest where the feet
    are for the bar's own healing. Gym chain-w12 chain run 4 ate twice at the fountain at low
    health and died there, and chain-w17 dragon run 2 (plan run 40904439588) ate at 14.2 in the
    head's reach: 8.4, 5.5, 0 in the next second.
@@ -986,12 +1012,11 @@
   (let [food (when (< (:player/food world 20) 20) (eat/food-held world))
         flight (escape world)
         [eid _] (dragon world)]
-    (cond (sheltered? world)
-          (if food {:intent/kind :eat :intent/item food} {:plan/wait :low-health})
+    (cond (sheltered? world) (if food {:intent/kind :eat :intent/item food} {:intent/kind :rest})
           flight (shelter-walk flight)
-          eid {:intent/kind :back-off :intent/target eid}
+          (back-off-from-dragon? world) {:intent/kind :back-off :intent/target eid}
           food {:intent/kind :eat :intent/item food}
-          :else {:plan/wait :low-health})))
+          :else {:intent/kind :rest})))
 
 (defn bed-wall
   "The two cells, at the feet's height and the eye's, beside stand cell [x y z] toward site cell
@@ -1091,9 +1116,11 @@
   "The intent that takes the feet from the head's bite: the shelter walk to the nearest cell
    beyond its reach (step-out-cell), else combat's :back-off from the dragon."
   [world]
-  (if-let [cell (step-out-cell world)]
-    (shelter-walk cell)
-    (let [[eid _] (dragon world)] {:intent/kind :back-off :intent/target eid})))
+  (let [cell (step-out-cell world)
+        [eid _] (dragon world)]
+    (cond cell (shelter-walk cell)
+          (back-off-from-dragon? world) {:intent/kind :back-off :intent/target eid}
+          :else {:intent/kind :rest})))
 
 (defn after-blow
   "The intent in the hit-hold-ticks after the dragon's blow (struck-by-dragon?): inside step-out-radius
@@ -1106,7 +1133,8 @@
         cell (when-not out? (step-out-cell world))
         [eid _] (dragon world)]
     (cond cell (shelter-walk cell)
-          (not out?) {:intent/kind :back-off :intent/target eid}
+          (and (not out?) (back-off-from-dragon? world)) {:intent/kind :back-off :intent/target eid}
+          (not out?) {:intent/kind :rest}
           (< (:player/health world full-health) perch-line) (recover world)
           :else {:plan/wait :hit-hold})))
 

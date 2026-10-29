@@ -1,0 +1,11 @@
+;; issue #10, batch w21: the PR gate. A rest (an intent) where a wait would fail the plan, no
+;; back-off the dragon is already past, bed-step cheap and safe, the :hold only for a flying
+;; dragon; dragon 6, attack 3, defend 3, chain 3
+{:plans/label "chain-w21"
+ :plans/jobs 4
+ :plans/issue 10
+ :plans/experiments
+ [{:exp/name "dragon" :exp/kind :gym :exp/goal "dragon" :exp/runs 6 :exp/bots 1 :exp/est-s 1600}
+  {:exp/name "attack" :exp/kind :gym :exp/goal "attack" :exp/runs 3 :exp/bots 1 :exp/est-s 300}
+  {:exp/name "defend" :exp/kind :gym :exp/goal "defend" :exp/runs 3 :exp/bots 1 :exp/est-s 300}
+  {:exp/name "chain" :exp/kind :gym :exp/goal "chain" :exp/runs 3 :exp/bots 1 :exp/est-s 3600}]}

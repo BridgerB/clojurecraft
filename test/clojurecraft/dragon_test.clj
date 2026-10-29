@@ -606,7 +606,7 @@
                                        {:event/kind :tick :event/now 1000 :event/rand 0.5})))
           "perch intent yields at once under retreat health"))
     (let [sheltered (assoc (hurt 20 {}) :player/pos [6.5 64.0 0.5])]
-      (is (= {:plan/wait :low-health} (dragon/toward-dragon sheltered))
+      (is (= {:intent/kind :rest} (dragon/toward-dragon sheltered))
           "in shelter outside the basin: waiting for health back, not walking"))))
 
 (deftest an-attacker-enderman-is-answered-when-pumpkin-worn-and-dragon-grounded
@@ -662,7 +662,7 @@
     (is (empty? (combat/threats w)) "the dragon is never a threat in combat/threats")
     (let [i (dragon/toward-dragon w)]
       (is
-       (contains? #{:walk :low-health :back-off} (or (:intent/kind i) (:plan/wait i)))
+       (contains? #{:walk :rest :back-off} (or (:intent/kind i) (:plan/wait i)))
        "dragon row executes recover (shelter walk, wait :low-health, or the row's own back-off from the dragon when no cell is open), never :fight")
       (is (or (not= :back-off (:intent/kind i)) (= dragon-eid (:intent/target i)))
           "a back-off from the dragon, never defend's from another"))))
@@ -974,9 +974,9 @@
                     :player/health health
                     :player/food 20))]
     (is (< 16.0 dragon/perch-line 17.0) "two hits of 6.8 and the margin of 3")
-    (is (= {:plan/wait :low-health} (dragon/toward-dragon (at 14.0)))
+    (is (= {:intent/kind :rest} (dragon/toward-dragon (at 14.0)))
         "at 14, sheltered, no food to eat: it waits for its health, it does not walk in")
-    (is (not= {:plan/wait :low-health} (dragon/toward-dragon (at 17.5))) "above the line: on")
+    (is (not= {:intent/kind :rest} (dragon/toward-dragon (at 17.5))) "above the line: on")
     (let [perching (assoc (at 14.0)
                           :plan/intent
                           {:intent/kind :perch :intent/target dragon-eid :intent/status :active})]
@@ -1228,3 +1228,30 @@
     (is (not= :hold (:intent/kind (dragon/toward-dragon w0)))
         "the hold is for a dragon not yet sitting")
     (is (<= (starts w3) 1) (str "one intent started over three ticks, not " (starts w3)))))
+
+(deftest hurt-with-the-dragon-far-the-bot-rests-and-keeps-one-intent-over-three-ticks
+  ;; gym chain-w20 chain run 1 (plan run 40928784091): `intent :back-off 3391` every 50 ms, 49
+  ;; times from 18:45:22.865, the dragon already past back-off-to, each back-off done in the tick it
+  ;; began; and later the plan failed :low-health, the wait that counts to wait-ticks, at 31m9s
+  (let [flying {dragon-eid {:entity/type (mob/type-id :ender_dragon)
+                            :entity/pos [20.5 80.0 0.5]
+                            :entity/yaw 0.0
+                            :entity/phase 2}}
+        w0 (-> (round-fountain [2.5 64.0 0.5] flying)
+               (assoc :world/chunks {}
+                      :player/dimension dimension/end
+                      :player/health 8.0
+                      :player/food 20
+                      :plan/status :active
+                      :plan/goals #{:dragon}
+                      :time/now 5000))
+        tick (fn [t] {:event/kind :tick :event/now t :event/rand 0.5})
+        starts (fn [w]
+                 (count (filter #(and (= :log (:effect/kind %))
+                                      (str/starts-with? (str (:effect/message %)) "intent "))
+                                (:bot/effects w))))
+        w3 (reduce (fn [w t] (plan/step w (tick t))) (assoc w0 :bot/effects []) [5050 5100 5150])]
+    (is (not (dragon/back-off-from-dragon? w0)) "the dragon is past back-off-to: no back-off")
+    (is (= {:intent/kind :rest} (dragon/toward-dragon w0)) "a rest, not a wait that ends the plan")
+    (is (<= (starts w3) 1) (str "one intent over three ticks, not " (starts w3)))
+    (is (= :active (:plan/status w3)))))
