@@ -5,6 +5,7 @@
    eyes, the meal in a lull, and the whole bot against the model's End breaking a crystal and
    killing the perched dragon, from behind its head when it faces the way in."
   (:require [clojure.math :as math]
+            [clojure.string :as str]
             [clojure.test :refer [deftest is testing use-fixtures]]
             [clojurecraft.beds :as beds]
             [clojurecraft.blocks :as blocks]
@@ -659,10 +660,12 @@
                      :player/hurt-at 100
                      :time/tick 110))]
     (is (empty? (combat/threats w)) "the dragon is never a threat in combat/threats")
-    (is
-     (contains? #{:walk :low-health}
-                (let [i (dragon/toward-dragon w)] (or (:intent/kind i) (:plan/wait i))))
-     "dragon row executes recover (shelter walk or wait :low-health), never :fight or :back-off from defend")))
+    (let [i (dragon/toward-dragon w)]
+      (is
+       (contains? #{:walk :low-health :back-off} (or (:intent/kind i) (:plan/wait i)))
+       "dragon row executes recover (shelter walk, wait :low-health, or the row's own back-off from the dragon when no cell is open), never :fight")
+      (is (or (not= :back-off (:intent/kind i)) (= dragon-eid (:intent/target i)))
+          "a back-off from the dragon, never defend's from another"))))
 
 (deftest escape-never-paths-through-the-sitting-dragons-head-or-bite-area
   ;; gym chain-w8 run 3: escaping from [4 63 -9] toward [7 62 -3] crossed the dragon's head
@@ -1201,3 +1204,26 @@
                               (:plan/intent w)
                               {:event/kind :tick :event/now 5050 :event/rand 0.5})]
         (is (intent/done? (:plan/intent after)))))))
+
+(deftest with-beds-held-and-the-dragon-sitting-the-planner-keeps-one-intent-over-three-ticks
+  ;; gym chain-w21 (beds-w21, plan run 40931001659): `:hold` started 955, 1169, 698 and 303 times a
+  ;; run in four of six: the planner chose it, it ended at once (the dragon sat on the ground), and
+  ;; it was chosen again. With the dragon sitting the hold is not the choice; whatever is, runs
+  (let [bed {:item (recipe/item-id :white_bed) :count 6}
+        w0 (-> (round-fountain [12.5 64.0 0.5] (sitting 270.0))
+               (assoc :player/dimension dimension/end
+                      :player/health 20.0
+                      :player/food 20
+                      :player/inventory {2 bed}
+                      :plan/status :active
+                      :plan/goals #{:dragon}
+                      :time/now 5000))
+        tick (fn [t] {:event/kind :tick :event/now t :event/rand 0.5})
+        starts (fn [w]
+                 (count (filter #(and (= :log (:effect/kind %))
+                                      (str/starts-with? (str (:effect/message %)) "intent "))
+                                (:bot/effects w))))
+        w3 (reduce (fn [w t] (plan/step w (tick t))) (assoc w0 :bot/effects []) [5050 5100 5150])]
+    (is (not= :hold (:intent/kind (dragon/toward-dragon w0)))
+        "the hold is for a dragon not yet sitting")
+    (is (<= (starts w3) 1) (str "one intent started over three ticks, not " (starts w3)))))

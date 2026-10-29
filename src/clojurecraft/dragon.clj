@@ -1026,6 +1026,8 @@
                          (some #(breathed? world %) (cons c wall))))))
          (sort-by #(physics/horizontal-distance pos (physics/centre %))))))
 
+(declare bed-plan)
+
 (defn bed-step
   "The intent of the bed kill, or nil: with a bed held (beds/held) and the dragon perched on the
    ground, the walk to the nearest of bed-stands for the ground under its head (beds/head-point);
@@ -1037,13 +1039,25 @@
    death, not a plan. Its health on the boss bar (:world/boss-health) is read before and after in
    the recording."
   [world]
-  (let [bed (beds/held world)
-        [eid d] (dragon world)
-        head (when d (beds/head-point d))
-        site (some->> head
-                      (ground-cell world))
-        stand (when (and d site) (first (bed-stands world d site)))]
-    (when (and bed eid d site stand (grounded? d) (perched? d))
+  (when-let [bed (beds/held world)]
+    (let [[eid d] (dragon world)]
+      (when (and eid d (:entity/yaw d) (grounded? d) (perched? d)) (bed-plan world bed eid d)))))
+
+(defn bed-plan
+  "The bed-step intent for bed held, the perched dragon eid d: see bed-step."
+  [world bed _ d]
+  (let [head (beds/head-point d)
+        ground (ground-cell world head)
+        under-ground (some-> ground
+                             (update 1 dec))
+        bed-block? (fn [c]
+                     (some-> (terrain/block-at world c)
+                             blocks/name-of
+                             name
+                             (str/ends-with? "_bed")))
+        site (if (and under-ground (bed-block? under-ground)) under-ground ground)
+        stand (when site (first (bed-stands world d site)))]
+    (when (and site stand)
       (let [[sx sy sz] site
             under [sx (dec sy) sz]
             wall (bed-wall stand site)
@@ -1133,7 +1147,8 @@
         stand (fountain-stand world)
         far? (and stand (> (physics/horizontal-distance pos (physics/centre stand)) stand-near))
         blocked? (and far? (breath-on-way? world pos (physics/centre stand) breath-hold))
-        flight (when breath (escape world))]
+        flight (when breath (escape world))
+        bed-intent (bed-step world)]
     (cond (and (seq (crystals world))
                (in-breath? world)
                (:player/on-ground? world true)
@@ -1143,7 +1158,7 @@
           (or (off-island? world) (seq (crystals world)) (on-pillar? world) (on-spike? world))
           (toward-crystals world)
           (struck-by-dragon? world) (after-blow world)
-          (bed-step world) (bed-step world)
+          bed-intent bed-intent
           (< (:player/health world full-health) perch-line) (recover world)
           (and breath eid (holds? world)) {:intent/kind :perch :intent/target eid}
           (and breath eid d (grounded? d) (or (in-basin? world) (not blocked?)) far?)
@@ -1153,7 +1168,7 @@
                             stand))
           (and breath flight) (shelter-walk flight)
           breath {:intent/kind :back-off :intent/target (first breath)}
-          (and eid (beds/held world))
+          (and eid d (beds/held world) (not (and (grounded? d) (perched? d))))
           (if (< (from-fountain world) step-out-radius)
             (out-of-the-bite world)
             {:intent/kind :hold :intent/target eid})
