@@ -1225,10 +1225,8 @@
   ;; cell to walk to, so nothing; the fire is dug out
   (let [fire (blocks/default-state :fire)
         stone (blocks/default-state :stone)
-        shut (into {[8 64 8] fire}
-                   (for [c [[9 64 8] [9 65 8] [7 64 8] [7 65 8] [8 64 9] [8 65 9] [8 64 7] [8 65 7]
-                            [8 66 8]]]
-                     [c stone]))
+        shut (into {[8 64 8] fire [8 66 8] stone}
+                   (for [x [7 8 9] z [7 8 9] y [64 65] :when (not= [x z] [8 8])] [[x y z] stone]))
         w (-> (standing {})
               (assoc :world/chunks {[0 0] (world/column shut)} :player/on-fire? true))]
     (is (= {:intent/kind :dig :intent/target [8 64 8]} (next-intent w)))))
