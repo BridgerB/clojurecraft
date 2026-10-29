@@ -150,7 +150,8 @@
 
 (defn trace-note
   "The TRACE line for the tick that took world before to after, or nil: a :portal-home intent
-   starting or ending, a blaze :fight starting or ending, a change of dimension. It carries
+   starting or ending, a blaze :fight starting or ending, a change of dimension, a goal newly in
+   :plan/reached (:reached, with the time: when the gear and the portal kit were done). It carries
    when, the health, the food, the edible items held and the blazes within 16 of the feet, the
    facts a replay of the blaze stage is read by (issue #262). Not part of the run's result, and
    never read by the bot."
@@ -165,9 +166,11 @@
         every (if (= dimension/nether (:player/dimension after)) sample-ms overworld-sample-ms)
         sample? (not= (quot (:time/now before 0) every) (quot (:time/now after 0) every))
         drop? (>= (- (hunt/edible-held before) (hunt/edible-held after)) 2)
+        reached (sort (remove (set (:plan/reached before)) (:plan/reached after)))
         hit? (and (= dimension/nether (:player/dimension after))
                   (<= 2.0 (- (:player/health before 20.0) (:player/health after 20.0))))
         what (cond hit? :hit
+                   (seq reached) :reached
                    drop? :edible-drop
                    (= ib ia)
                    (cond (not= (:player/dimension before) (:player/dimension after)) :dimension
@@ -179,6 +182,7 @@
     (when what
       (let [pos (:player/pos after)]
         {:what what
+         :reached (vec reached)
          :set world-set
          :seed seed
          :t (:time/now after)
