@@ -312,10 +312,7 @@
    a spike's top, the walk back to the pillar's top, on a pillar the :dig-down, on the ground the
    walk to the pillar's foot. A wait :no-blocks with no pillar block held where one is needed,
    :no-approach for a crystal no axis reaches, :stranded on a spike with no pillar back down; nil
-   with no crystal and the feet down. On a pillar whose pickaxe has gone to the main inventory (a
-   meal swaps the hotbar), the :equip of it first: gym chain-w9 run 3 (plan run 40851746139) ate
-   at the top of a 28-high pillar, dug the rest of it by hand at 10 s a block, and the dragon
-   killed it on the way down. Falling (not :player/on-ground?, a hit's knockback off a
+   with no crystal and the feet down. Falling (not :player/on-ground?, a hit's knockback off a
    pillar or the way down it) the wait :falling: no route starts in the air, and gym chain-w11
    runs 3 and 4 asked for a walk every tick, each failed :no-path, twelve in a row failed the
    run in 0.6 s."
@@ -340,10 +337,7 @@
           (if-let [t (pillar-top world)]
             (standing-walk t)
             {:plan/wait :stranded})
-          (on-pillar? world)
-          (if-let [[_ tool] (intent/stowed-tool world (terrain/block-at world [fx (dec fy) fz]))]
-            {:intent/kind :equip :intent/item (recipe/item-name tool)}
-            {:intent/kind :dig-down})
+          (on-pillar? world) {:intent/kind :dig-down}
           a (standing-walk (:column a))
           c {:plan/wait :no-approach}
           :else nil)))
