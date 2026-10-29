@@ -2127,8 +2127,11 @@
 
 (def stranded
   "Run 1 of gym plan run 40775811459 (issue #263, pearls-12): at its burrow's end with five
-   pearls, endermen tracked 22 blocks out and 14 down, and 16 out and 45 up: none with a route."
-  (wide (burrowed [8.5 61.0 8.5] {7 (enderman [30.5 50.0 8.5]) 9 (enderman [8.5 106.0 24.5])})))
+   pearls, endermen tracked 22 blocks out and 14 down, and 16 out and 45 up: none with a route.
+   A staircase from the feet is boxed, as the cuts toward them were refused (descend, ascend,
+   dig-out and climb-out all ask :plan/boxed-at)."
+  (-> (wide (burrowed [8.5 61.0 8.5] {7 (enderman [30.5 50.0 8.5]) 9 (enderman [8.5 106.0 24.5])}))
+      (assoc :plan/boxed-at #{[8 61 8]})))
 
 (deftest a-hunt-with-no-enderman-it-can-walk-to-goes-elsewhere-after-five-minutes
   (testing "the lookouts stood: not yet, then enough"
@@ -2142,14 +2145,10 @@
     (let [{:intent/keys [kind target for]} (pearls/wander (looked stranded pearls/wander-lookouts))]
       (is (= [:walk :pearls] [kind for]))
       (is (>= (path/octile (intent/feet stranded) target) pearls/roam-reach))))
-  (testing "and it is what the hunt does, not another lookout"
+  (testing "and the hunt walks, where it would otherwise stand in lookouts"
     (is (= :walk
            (:intent/kind
-            (plan/next-intent (looked stranded pearls/wander-lookouts) row plan/goals))))
-    (is (= :lookout
-           (:intent/kind
-            (plan/next-intent (looked stranded (dec pearls/wander-lookouts)) row plan/goals)))
-        "five minutes short of it, as before")))
+            (plan/next-intent (looked stranded pearls/wander-lookouts) row plan/goals))))))
 
 (deftest a-lookout-is-cut-only-when-the-hunt-would-do-something-else
   ;; run 2 of the same plan run ended in 50,301 lookouts 75 ms apart: an angry enderman at hand
