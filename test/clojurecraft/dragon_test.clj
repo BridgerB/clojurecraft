@@ -1057,7 +1057,7 @@
         [_ d] (dragon/dragon w0)
         head (beds/head-point d)
         site (dragon/ground-cell w0 head)
-        stand (dragon/ground-cell w0 (beds/stand-point head [0.5 0.5]))
+        stand (first (dragon/bed-stands w0 d site))
         at-stand (assoc w0 :player/pos (physics/centre stand))
         under (update site 1 dec)
         wall (dragon/bed-wall stand site)
@@ -1168,3 +1168,36 @@
     (testing "the intent it chose is not cut the next tick"
       (let [running (assoc w :plan/intent (assoc i :intent/status :active :intent/id 7))]
         (is (not (plan/interrupts? running {:goal/plan :dragon} (:plan/intent running))))))))
+
+(deftest with-beds-held-and-the-dragon-flying-the-bot-holds-out-of-reach
+  ;; gym chain-w19 dragon-beds-real (plan run 40918096417): all three slain in 1m43s to 2m50s by
+  ;; the perch and the walk to the fountain's stand, before any bed; with beds the bot waits out of
+  ;; the head's reach for the dragon to sit
+  (let [bed {:item (recipe/item-id :white_bed) :count 6}
+        flying {dragon-eid {:entity/type (mob/type-id :ender_dragon)
+                            :entity/pos [0.0 80.0 0.0]
+                            :entity/yaw 0.0
+                            :entity/phase 2}}
+        at (fn [pos]
+             (-> (round-fountain pos flying)
+                 (assoc :player/dimension dimension/end
+                        :player/health 20.0
+                        :player/food 20
+                        :player/inventory {2 bed})))]
+    (is (= {:intent/kind :hold :intent/target dragon-eid}
+           (dragon/toward-dragon (at [12.5 64.0 0.5])))
+        "outside the head's reach: hold where the feet are")
+    (let [i (dragon/toward-dragon (at [3.5 64.0 0.5]))]
+      (is (contains? #{:walk :back-off} (:intent/kind i)) "inside it: out first"))
+    (testing "the hold hands back when the dragon sits on the ground"
+      (let [w (assoc (at [12.5 64.0 0.5])
+                     :plan/intent
+                     {:intent/kind :hold
+                      :intent/target dragon-eid
+                      :intent/status :active
+                      :intent/since 4000})
+            sat (merge-with merge (:world/entities w) (sitting 270.0))
+            after (intent/run (assoc w :world/entities sat :time/now 5000)
+                              (:plan/intent w)
+                              {:event/kind :tick :event/now 5050 :event/rand 0.5})]
+        (is (intent/done? (:plan/intent after)))))))

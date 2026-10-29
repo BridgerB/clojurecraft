@@ -719,6 +719,29 @@
         at (:player/hurt-at world)]
     (boolean (and eid a at (= a eid) (<= (- (:time/tick world 0) at) hit-hold-ticks)))))
 
+(def hold-ms 5000)                    ; a :hold hands back to the planner this often
+
+(defmethod intent/run :hold
+  ;; {:intent/kind :hold :intent/target eid}: stand where the feet are, looking at the dragon
+  ;; (look-away: never into an enderman's eyes), until it is gone, sits perched on the ground
+  ;; (the bed kill takes over, bed-step) or hold-ms have passed. No end condition of the :perch's
+  ;; (in-bite? with a stand) is its own, so the planner's choice of it never ends it at once.
+  [world {:intent/keys [target since] :as i} _]
+  (let [now (:time/now world)
+        since (or since now)
+        e (get-in world [:world/entities target])
+        world (assoc world :plan/intent (assoc i :intent/since since))]
+    (if (or (entity/gone? world target)
+            (and e (grounded? e) (perched? e))
+            (> (- now since) hold-ms))
+      (-> world
+          (assoc :player/controls {})
+          intent/done)
+      (assoc world
+             :player/controls
+             {:control/look (look-away world
+                                       (physics/look-at (game/eye world) (:entity/pos e)))}))))
+
 (declare fountain-stand holds? in-basin? stand-cells)
 
 (defmethod intent/run :perch
@@ -982,25 +1005,44 @@
                   [0 (long (math/signum (double dz)))])]
     [[(+ x ux) y (+ z uz)] [(+ x ux) (inc y) (+ z uz)]]))
 
+(defn bed-stands
+  "The cells to lay a bed at site cell [sx sy sz] from, nearest the feet first: the ground cells
+   beds/standoff out from the site in eight directions, those whose wall cells (bed-wall) lie
+   outside the dragon's box (beds/in-dragon-box?: the server refuses a block placed into it) and
+   outside every breath's reach, and where no entity stands."
+  [world d site]
+  (let [[sx _ sz] site
+        pos (:player/pos world)]
+    (->> (for [k (range 8)
+               :let [a (* k (/ math/PI 4))
+                     p [(+ sx 0.5 (* beds/standoff (math/cos a)))
+                        (+ sz 0.5 (* beds/standoff (math/sin a)))]]]
+           (ground-cell world p))
+         (remove nil?)
+         (remove (fn [c]
+                   (let [wall (bed-wall c site)]
+                     (or (some #(beds/in-dragon-box? d %) wall)
+                         (some #(combat/occupied? world %) wall)
+                         (some #(breathed? world %) (cons c wall))))))
+         (sort-by #(physics/horizontal-distance pos (physics/centre %))))))
+
 (defn bed-step
   "The intent of the bed kill, or nil: with a bed held (beds/held) and the dragon perched on the
-   ground, the walk to the cell beds/standoff beyond the ground under its head (beds/head-point,
-   beds/stand-point); there, the two blocks of cobblestone between the bot and the site
-   (bed-wall), each a :place; then a :use-on laying the bed on the block under the site; then a
-   :use-on of the bed laid, which explodes it in the End (beds/blast-power); done when the bed is
-   gone. Never fired when the damage expected behind the walls that stand (beds/expected-damage)
-   is not under the health by two: with no cobblestone held or the wall cells not clear, the
-   bed's 30 at the stand is a death, not a plan. Its health on the boss bar (:world/boss-health) is
-   read before and after in the recording."
+   ground, the walk to the nearest of bed-stands for the ground under its head (beds/head-point);
+   there, the two blocks of cobblestone between the bot and the site (bed-wall), each a :place;
+   then a :use-on laying the bed on the block under the site; then a :use-on of the bed laid,
+   which explodes it in the End (beds/blast-power); done when the bed is gone. Never fired when
+   the damage expected behind the walls that stand (beds/expected-damage) is not under the health
+   by two: with no cobblestone held or the wall cells not clear, the bed's 30 at the stand is a
+   death, not a plan. Its health on the boss bar (:world/boss-health) is read before and after in
+   the recording."
   [world]
   (let [bed (beds/held world)
         [eid d] (dragon world)
         head (when d (beds/head-point d))
         site (some->> head
                       (ground-cell world))
-        stand (some-> head
-                      (beds/stand-point fountain)
-                      (->> (ground-cell world)))]
+        stand (when (and d site) (first (bed-stands world d site)))]
     (when (and bed eid d site stand (grounded? d) (perched? d))
       (let [[sx sy sz] site
             under [sx (dec sy) sz]
@@ -1111,6 +1153,10 @@
                             stand))
           (and breath flight) (shelter-walk flight)
           breath {:intent/kind :back-off :intent/target (first breath)}
+          (and eid (beds/held world))
+          (if (< (from-fountain world) step-out-radius)
+            (out-of-the-bite world)
+            {:intent/kind :hold :intent/target eid})
           (and (nil? stand) eid (some? (ground world 0 0 sky)))
           {:intent/kind :perch :intent/target eid}
           (nil? stand) {:plan/wait :no-fountain}

@@ -68,3 +68,20 @@
    the wall leaves. 30.8 at 4.5 blocks in the open, 1.0 behind two blocks."
   [dist walls]
   (blast-damage dist (get shield-exposure (min 2 (max 0 (long walls))) 1.0)))
+
+(defn in-dragon-box?
+  "Does the cell [cx cy cz] overlap the box of the dragon e (:entity/pos, mob/kinds' 16 by 8,
+   centred on it on the plane and standing on its y)? The server refuses a block placed into a
+   living entity's box: gym chain-w19 dragon-beds run 2 (plan run 40918096417) laid a wall block
+   at [-8 65 6] three times, :rejected, the dragon at [0 65.86 0] and its box reaching -8 to 8 and
+   up from 65.86; its bed at [7 61 1], under the box, went off."
+  [e [cx cy cz]]
+  (let [[w h] (:box (mob/kinds :ender_dragon))
+        [ex ey ez] (:entity/pos e)
+        half (/ w 2.0)]
+    (and (< (- ex half) (inc cx))
+         (> (+ ex half) cx)
+         (< (- ez half) (inc cz))
+         (> (+ ez half) cz)
+         (< ey (inc cy))
+         (> (+ ey h) cy))))

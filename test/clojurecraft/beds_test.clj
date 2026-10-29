@@ -44,3 +44,12 @@
   (is (== 1.0 (beds/expected-damage 4.5 2)) "the feet's and the eye's cells: a point")
   (is (== 1.0 (beds/expected-damage 4.5 5)) "more than two count as two")
   (is (== (beds/expected-damage 4.5 0) (beds/expected-damage 4.5 -1)) "never less than none"))
+
+(deftest a-cell-in-the-dragons-box-is-no-place-for-a-block
+  ;; gym chain-w19 dragon-beds run 2 (plan run 40918096417): `:place` three times at [-8 65 6],
+  ;; :rejected, the dragon at [0 65.86 0]; its bed at [7 61 1], under its box, went off
+  (let [d {:entity/pos [0.0 65.86 0.0]}]
+    (is (beds/in-dragon-box? d [-8 65 6]) "the rim cell the wall was laid at")
+    (is (not (beds/in-dragon-box? d [7 61 1])) "the cell the bed was laid at: under the box")
+    (is (not (beds/in-dragon-box? d [-9 65 6])) "past the box's side")
+    (is (not (beds/in-dragon-box? d [0 74 0])) "over its top")))
