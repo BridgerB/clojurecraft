@@ -160,10 +160,15 @@
 
 (defn underlay-possible?
   "Can the cell under floor be filled from the stand before the floor is walked: a filler carried
-   (stairs/filler) and a solid neighbour to place against (build/foundation is the cell itself)?"
+   (stairs/filler), bridge-min-filler of them together so that the fill never eats a bridge's
+   reserve (landing 5 went from 64 cobblestone to 12 in 70 s, a floor and a fill under it at every
+   step down its own pillar), and a solid neighbour to place against (build/foundation is the cell
+   itself)?"
   [world floor]
   (let [under (plus floor [0 -1 0])]
-    (and (some? (stairs/filler world 1)) (= under (build/foundation world under)))))
+    (and (some? (stairs/filler world 1))
+         (>= (stairs/carried-filler world) bridge-min-filler)
+         (= under (build/foundation world under)))))
 
 (defn underlay-ops
   "The op that fills the cell under the floor of the step from feet by move, first, when that floor
@@ -337,7 +342,9 @@
    leaves only for the laid block) and, under that floor, ground-below? (over lava too only at
    bridge-lava-health, the sea under the Nether's caves: never bridged hurt), a filler reserve
    of bridge-min-filler and bridge-min-health: never over water, never hurt, never short of
-   blocks. Sim world R2/12 (issue #338) met a cavern sixty blocks across over the lava sea, the
+   blocks. The reserve is every filler carried together (stairs/carried-filler), not one kind of
+   it: blaze-race-e landing 5 (step-bre5, 23c96b453) held cobblestone 12 and netherrack 4 at 70 s,
+   neither 16 alone, and the level step across the void at [2157 67 1747] was refused for it. Sim world R2/12 (issue #338) met a cavern sixty blocks across over the lava sea, the
    basalt 26 blocks under its floor, that no step round its rim crossed in an hour."
   [world feet move]
   (let [health (double (or (:player/health world) 20.0))
@@ -346,7 +353,7 @@
          (bridge? world feet move true)
          (or (ground-below? world floor)
              (and (>= health bridge-lava-health) (ground-below? world floor true)))
-         (some? (stairs/filler world bridge-min-filler))
+         (>= (stairs/carried-filler world) bridge-min-filler)
          (some? (walk-filler world floor)))))
 
 (defn climb-out?

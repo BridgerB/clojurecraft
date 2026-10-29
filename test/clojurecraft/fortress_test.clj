@@ -302,7 +302,7 @@
   ;; [2146 71 1758] to air, and it fell 46 blocks onto the lava sea. The cells here are the same
   ;; shifted by [-2146 -8 -1758]: feet [0 64 0], floor of the step east [1 63 0], the drop under
   (let [thin (rock {[1 62 0] air [1 61 0] air [1 60 0] air})
-        cobble {0 {:item (recipe/item-id :cobblestone) :count 8}}
+        cobble {0 {:item (recipe/item-id :cobblestone) :count 16}}
         held (assoc thin :player/inventory cobble)]
     (is (fortress/thin-floor? thin [1 63 0]) "air directly under")
     (is (not (fortress/thin-floor? thin [0 63 0])) "rock under")
@@ -359,6 +359,19 @@
         "with bridging: the level step toward the target")
     (is (not= [1 0 0] (fortress/next-move w [0 64 0] target 0 false #{}))
         "without it: the column's steps down, as before")
+    (testing
+      "the reserve is every filler together (landing 5, step-bre5: cobblestone 12, netherrack 4)"
+      (let [mixed (assoc w
+                         :player/inventory
+                         {0 {:item (recipe/item-id :cobblestone) :count 12}
+                          1 {:item (recipe/item-id :netherrack) :count 4}})
+            short (assoc w
+                         :player/inventory
+                         {0 {:item (recipe/item-id :cobblestone) :count 12}
+                          1 {:item (recipe/item-id :netherrack) :count 3}})]
+        (is (fortress/bridge-over-void? mixed [0 64 0] [1 0 0]))
+        (is (= [1 0 0] (fortress/next-move mixed [0 64 0] target 0 false #{} true)))
+        (is (not (fortress/bridge-over-void? short [0 64 0] [1 0 0])) "15 together: short")))
     (testing "soul sand is no bridge (R1/37 seed 2: soul sand 207, lava all round, :blocked)"
       (let [sand (assoc w :player/inventory {0 {:item (recipe/item-id :soul_sand) :count 207}})]
         (is (some? (stairs/filler sand 16)) "it is the last resort filler")
