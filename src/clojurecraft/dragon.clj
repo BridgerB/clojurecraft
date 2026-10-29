@@ -725,7 +725,8 @@
   ;; {:intent/kind :perch :intent/target eid}: the best sword in hand, then by the fountain facing
   ;; the dragon (look-away: never into an enderman's eyes); once it has held perched (perched?)
   ;; for perch-ticks, hit it while its box is in reach, walking in toward the fountain while it
-  ;; is not (no nearer than walk-in-to, and never under its head: bite-on-way?). Done when it is
+  ;; is not (no nearer than walk-in-to, never under its head: bite-on-way?, and only with a stand
+  ;; open: none, every one under a breath cloud, it holds where it is). Done when it is
   ;; gone (dead), a breath is near (the planner backs off) unless the bot holds through it in the
   ;; basin (holds?), its head has turned onto the feet (in-bite?) with a stand behind it to go
   ;; to (the planner walks there) unless the dragon is in its scanning turn (scanning?: the head
@@ -764,6 +765,7 @@
               (= :arm (:intent/stage i)) (arm world)
               (and sat? (<= (reach world e) strike-reach)) (hit world target e)
               (and sat?
+                   (some? stand)
                    (> (from-fountain world) walk-in-to)
                    (not
                     (breath-on-way? world (:player/pos world) (let [[fx fz] fountain] [fx 0.0 fz])))

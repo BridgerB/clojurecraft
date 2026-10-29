@@ -1105,3 +1105,33 @@
     (is (not= cell (dragon/fountain-stand here)) "that stand is not the stand")
     (is (not= :perch (:intent/kind (dragon/toward-dragon here)))
         "so the planner does not ask for the perch that would end at once")))
+
+(deftest with-no-stand-open-the-perch-holds-and-does-not-walk-in
+  ;; gym chain-w18 dragon run 1 (plan run 40914832722, probe 40926973430): the dragon at
+  ;; [0 65.86 0] in phase 5, the bot at [0.80 65 11.5], 20 health, `stand nil`, and the perch, once
+  ;; it had held perched, walked in toward the fountain under the dragon's head from 11 blocks
+  (let [cloud-on-the-stands {50 {:entity/type (blocks/entity-types :area_effect_cloud)
+                                 :entity/pos [0.5 64.0 0.5]
+                                 :entity/radius 5.0}}
+        d {dragon-eid {:entity/type (mob/type-id :ender_dragon)
+                       :entity/pos [-0.0038 65.858 0.0299]
+                       :entity/yaw 140.625
+                       :entity/phase 5}}
+        w (-> (round-fountain [0.8 65.0 11.5] (merge d cloud-on-the-stands))
+              (assoc :player/dimension dimension/end
+                     :player/health 20.0
+                     :player/food 20
+                     :time/now 5000
+                     :plan/intent
+                     {:intent/kind :perch
+                      :intent/target dragon-eid
+                      :intent/status :active
+                      :intent/stage :hit
+                      :intent/since 4000
+                      :intent/perched 1000}))]
+    (is (nil? (dragon/fountain-stand w)) "every stand is under the cloud")
+    (is (not (dragon/breath-near w)) "and the bot is out of its reach")
+    (let [after (intent/run w (:plan/intent w) {:event/kind :tick :event/now 5050 :event/rand 0.5})]
+      (is (= :active (:intent/status (:plan/intent after))) "the perch goes on")
+      (is (nil? (:control/yaw (:player/controls after))) "holding: no walk toward the fountain")
+      (is (not (:control/forward? (:player/controls after)))))))
