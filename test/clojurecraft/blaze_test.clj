@@ -504,9 +504,28 @@
       (is (blaze/in-spawn-volume? [9 64 10] [5 65 8]) "4 on x, one up")
       (is (not (blaze/in-spawn-volume? [9 64 10] [5 66 8])) "two up is out")
       (is (not (blaze/in-spawn-volume? [9 64 10] [4 64 8])) "5 on x is out")
-      (is (= [4 64 8] (blaze/nook w [9 64 10])) "[6] and [5] are inside: the next back")
-      (is (= [3 64 8] (blaze/nook w [8 64 10])) "[6] [5] [4] are inside")
+      (is (= [4 64 8] (blaze/nook w [9 64 8])) "[6] and [5] are inside: the next back")
+      (is (= [3 64 8] (blaze/nook w [8 64 8])) "[6] [5] [4] are inside")
       (is (nil? (blaze/nook w [5 64 8])) "all inside: no nook, the camp is as before"))
+    (testing "a nook that does not see the spawner is none: the blazes would never come"
+      ;; blaze-race-c jobs 2 and 6: 4.9 hours in the nook, 12 blocks from six blazes that never saw it
+      (is (blaze/sees-spawner? w [11 64 8] [6 64 8]) "in line with the corridor")
+      (is (not (blaze/sees-spawner? w [9 64 14] [4 64 8])) "behind the corridor's wall")
+      (is (nil? (blaze/nook w [9 64 14]))))
+    (testing "camps done in a row with no fight leave the nook for the room"
+      (let [camp (fn [w n] (memory/remember-intention w {:intent/id n :intent/kind :camp} :done))
+            idle (-> (assoc w :time/now 100000)
+                     (camp 1)
+                     (camp 2)
+                     (camp 3))
+            fought (memory/remember-intention idle {:intent/id 4 :intent/kind :fight} :done)]
+        (is (= [6 64 8] (blaze/nook w [11 64 10])))
+        (is (blaze/idle? idle))
+        (is (nil? (blaze/nook idle [11 64 10])))
+        (is (not (blaze/idle? fought)) "a fight in the spell ends it")
+        (is (= [6 64 8] (blaze/nook fought [11 64 10])))
+        (is (not (blaze/idle? (assoc idle :time/now (+ 100000 blaze/idle-ms 1000))))
+            "and the spell passes")))
     (testing "within the spawner's wake"
       (is (blaze/awake-from? [11 64 10] [6 64 8]))
       (is (not (blaze/awake-from? [30 64 10] [6 64 8])) "24 blocks off: it would not run")

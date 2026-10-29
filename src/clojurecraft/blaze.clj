@@ -508,6 +508,30 @@
 (def nook-steps 12) ; cells of walk from the feet a nook is looked for within
 (def nook-nodes 400) ; cells one search for a nook visits at most
 
+(def idle-camps 3)       ; camps done in a row with no fight between, after which the nook is left for the room
+(def idle-ms 600000)     ; ms those camps are counted over, and the fight is looked for within
+
+(defn sees-spawner?
+  "Is the line from the eye over cell c to a point a block over the spawner at cell sp clear
+   (combat/clear?)? A blaze goes for a player it sees: out of its sight the bot is not a target."
+  [world sp c]
+  (let [[x y z] c]
+    (combat/clear? world
+                   [(+ x 0.5) (+ y physics/eye-height) (+ z 0.5)]
+                   (update (physics/centre sp) 1 + 1.0))))
+
+(defn idle?
+  "Have idle-camps camps been done within idle-ms of now and no fight in that time? Blaze-race-c
+   jobs 2 and 6 (3a082f7b7, real) sat in the nook 4.9 hours: the bot at [2338.6 60.0 2290.5], the
+   blazes (six, the spawner's cap) at [2346..2350 60..61 2280..2284], 12 to 13 blocks off and
+   never in its line, 29 added in 300 minutes, 0 attacks."
+  [world]
+  (let [now (:time/now world 0)
+        within? #(<= (- now (:intention/at %)) idle-ms)
+        camps (memory/newest-dones world :camp idle-camps)
+        fight (memory/last-done world :fight)]
+    (and (= idle-camps (count camps)) (every? within? camps) (not (and fight (within? fight))))))
+
 (defn nook
   "The cell, for the spawner at cell sp, to camp and take cover in instead of the room: the
    nearest by walking from the feet (within nook-steps, nook-nodes visited) that the body stands in
@@ -522,26 +546,30 @@
   [world sp]
   (let [at (path/cells world)
         ok? (fn [c]
-              (and (<= (exposure world c) 2) (not (in-spawn-volume? sp c)) (awake-from? sp c)))
+              (and (<= (exposure world c) 2)
+                   (not (in-spawn-volume? sp c))
+                   (awake-from? sp c)
+                   (sees-spawner? world sp c)))
         start (intent/feet world)]
-    (loop [frontier [start]
-           seen #{start}
-           depth 0
-           visited 0]
-      (let [hit (some #(when (ok? %) %) frontier)]
-        (cond hit hit
-              (or (empty? frontier) (>= depth nook-steps) (>= visited nook-nodes)) nil
-              :else
-              (let [next (into []
-                               (comp (mapcat (fn [[x y z]]
-                                               (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
-                                                     dy [0 -1 1]]
-                                                 [(+ x dx) (+ y dy) (+ z dz)])))
-                                     (remove seen)
-                                     (filter #(path/standable? at %))
-                                     (distinct))
-                               frontier)]
-                (recur next (into seen next) (inc depth) (+ visited (count next)))))))))
+    (when-not (idle? world)
+      (loop [frontier [start]
+             seen #{start}
+             depth 0
+             visited 0]
+        (let [hit (some #(when (ok? %) %) frontier)]
+          (cond hit hit
+                (or (empty? frontier) (>= depth nook-steps) (>= visited nook-nodes)) nil
+                :else
+                (let [next (into []
+                                 (comp (mapcat (fn [[x y z]]
+                                                 (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
+                                                       dy [0 -1 1]]
+                                                   [(+ x dx) (+ y dy) (+ z dz)])))
+                                       (remove seen)
+                                       (filter #(path/standable? at %))
+                                       (distinct))
+                                 frontier)]
+                  (recur next (into seen next) (inc depth) (+ visited (count next))))))))))
 
 (defn at-nook?
   "Are the feet in the cell nook names for the spawner at cell sp?"
