@@ -640,6 +640,25 @@
            :else nil))))
 
 (def nook-reach 5) ; trail cells back from the tunnel's end a nook is looked for in
+(def spawn-range 4)   ; cells each way on x and z from the spawner a blaze is placed in (BaseSpawner SpawnRange, vanilla's default; mob/spawner :box [9 3 9]); the gym arena spawner sets 2
+(def spawn-height 1)  ; cells over or under the spawner's own a blaze is placed at (nextInt(3) - 1)
+(def spawner-wake 16) ; blocks from the spawner's centre a player keeps it running within (RequiredPlayerRange, default 16; mob/spawner :wake)
+
+(defn in-spawn-volume?
+  "Is cell c in the volume a spawner at cell sp places its blazes in: spawn-range each way on x and
+   z and spawn-height on y? A bot there has them appear at its elbow: gym blaze-fortress-race run 4
+   had 497 and 498 added 1.5 and 0.9 blocks from it (the bot 3 blocks from the spawner), the first
+   hit in the same tenth of a minute."
+  [[sx sy sz] [x y z]]
+  (and (<= (abs (- x sx)) spawn-range)
+       (<= (abs (- z sz)) spawn-range)
+       (<= (abs (- y sy)) spawn-height)))
+
+(defn awake-from?
+  "Is cell c within spawner-wake of the centre of the spawner at cell sp: its blazes still come?"
+  [[sx sy sz] [x y z]]
+  (<= (physics/distance [(+ x 0.5) (+ y 0.5) (+ z 0.5)] [(+ sx 0.5) (+ sy 0.5) (+ sz 0.5)])
+      spawner-wake))
 
 (defn exposure
   "How many of the four horizontal neighbours of cell c are open to the body (open?: the cell and
@@ -648,24 +667,28 @@
   (count (filter (fn [[dx dz]] (open? world [(+ x dx) y (+ z dz)])) [[1 0] [-1 0] [0 1] [0 -1]])))
 
 (defn nook
-  "The cell in the tunnel the bot dug to the spawner (the fortress trail: the feet cells its steps
+  "The cell, for the spawner at cell sp, in the tunnel the bot dug to it (the fortress trail: the feet cells its steps
    began from, oldest first) to camp in instead of the room: the second to last trail cell or one
-   of the nook-reach before it, the latest standable one with an exposure of 2 or less, or nil
+   of the nook-reach before it, the latest standable one with an exposure of 2 or less outside the spawner volume (in-spawn-volume?) and within its wake (awake-from?), or nil
    when the bot walked in or the tunnel has no such cell. In a corridor one wide a blaze reaches
    the bot from the room along one line, one at a time, and the rest have no line. Gym
    blaze-fortress-race run 4 (run 40770939167) camped at the tunnel's end [2347 60 2282], in the
-   room: blazes 497 and 498 hovered at 1.4 and 1.9 blocks and took 18.3 health in five seconds."
-  [world]
+   room: blazes 497 and 498 were added 1.5 and 0.9 blocks from it and took 18.3 health in 5 s."
+  [world sp]
   (let [cells (:trail/cells (:fortress/trail world))]
     (->> (rest (reverse cells))
          (take nook-reach)
-         (filter (fn [c] (and (path/standable? world c) (<= (exposure world c) 2))))
+         (filter (fn [c]
+                   (and (path/standable? world c)
+                        (<= (exposure world c) 2)
+                        (not (in-spawn-volume? sp c))
+                        (awake-from? sp c))))
          first)))
 
 (defn at-nook?
-  "Are the feet in the cell nook names?"
-  [world]
-  (let [n (nook world)] (and (some? n) (= n (intent/feet world)))))
+  "Are the feet in the cell nook names for the spawner at cell sp?"
+  [world sp]
+  (let [n (nook world sp)] (and (some? n) (= n (intent/feet world)))))
 
 (def fire-blocks #{:fire :soul_fire})
 (def fire-out-reach 3) ; cells round the feet a burning bot looks for ground without fire in
@@ -958,12 +981,12 @@
           @fire @fire
           (and (hurt? world) (not (heals? world)) (food-trip world)) (food-trip world)
           (and (or (nil? sp) (not (at-spawner? world sp))) @pick) @pick
-          (and sp (not (at-spawner? world sp)) (not (at-nook? world))) (to-spawner world sp)
+          (and sp (not (at-spawner? world sp)) (not (at-nook? world sp))) (to-spawner world sp)
           (and sp
-               (or (at-spawner? world sp) (at-nook? world))
+               (or (at-spawner? world sp) (at-nook? world sp))
                (not (hurt? world))
                (not (:player/on-fire? world)))
-          (if-let [n (and (not (at-nook? world)) (nook world))]
+          (if-let [n (and (not (at-nook? world sp)) (nook world sp))]
             {:intent/kind :walk :intent/target n :intent/for :nook :intent/max-nodes corridor-nodes}
             {:intent/kind :camp :intent/spawner sp})
           :else (or (search world) {:plan/wait :no-blaze}))))

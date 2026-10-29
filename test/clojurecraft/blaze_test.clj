@@ -499,9 +499,21 @@
               (memory/observe [11 64 10] blaze/spawner))]
     (is (= 2 (blaze/exposure w [5 64 8])) "the tunnel is one wide")
     (is (< 2 (blaze/exposure w [10 64 8])) "the room is not")
-    (is (= [6 64 8] (blaze/nook w))
-        "the second to last trail cell: one back from the cell before the room")
-    (is (nil? (blaze/nook (dissoc w :fortress/trail))) "walked in: no nook")
+    (is (= [6 64 8] (blaze/nook w [11 64 10]))
+        "the second to last trail cell: outside the spawner's volume (5 on x)")
+    (is (nil? (blaze/nook (dissoc w :fortress/trail) [11 64 10])) "walked in: no nook")
+    (testing "a trail cell in the spawner's volume is never picked, however little it is exposed"
+      (is (blaze/in-spawn-volume? [9 64 10] [6 64 8]) "3 on x and 2 on z")
+      (is (blaze/in-spawn-volume? [9 64 10] [5 65 8]) "4 on x, one up")
+      (is (not (blaze/in-spawn-volume? [9 64 10] [5 66 8])) "two up is out")
+      (is (not (blaze/in-spawn-volume? [9 64 10] [4 64 8])) "5 on x is out")
+      (is (= [4 64 8] (blaze/nook w [9 64 10])) "[6] and [5] are inside: the next back")
+      (is (= [3 64 8] (blaze/nook w [8 64 10])) "[6] [5] [4] are inside")
+      (is (nil? (blaze/nook w [2 64 8])) "all inside: no nook, the camp is as before"))
+    (testing "within the spawner's wake"
+      (is (blaze/awake-from? [11 64 10] [6 64 8]))
+      (is (not (blaze/awake-from? [30 64 10] [6 64 8])) "24 blocks off: it would not run")
+      (is (nil? (blaze/nook w [30 64 10]))))
     (testing "at the room's end it walks back to the nook, there it camps"
       (let [at-end (assoc w :player/pos [8.5 64.0 8.5])
             in-nook (assoc w :player/pos [6.5 64.0 8.5])]
@@ -511,7 +523,7 @@
                 :intent/for :nook
                 :intent/max-nodes blaze/corridor-nodes}
                (next-intent at-end)))
-        (is (blaze/at-nook? in-nook))
+        (is (blaze/at-nook? in-nook [11 64 10]))
         (is (= {:intent/kind :camp :intent/spawner [11 64 10]} (next-intent in-nook)))))))
 
 (deftest a-swarm-out-of-sight-is-waited-for-in-cover
