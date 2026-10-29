@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-29T16:09:42.524Z",
+  "at" : "2026-10-29T16:10:52.852Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -9,11 +9,6 @@
     "copilot" : true
   }, {
     "number" : 535,
-    "title" : "Bot stops at blaze-rods: timeout",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
-    "number" : 527,
     "title" : "Bot stops at blaze-rods: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
@@ -31,7 +26,7 @@
     "number" : 151,
     "title" : "Bot stops at flint-and-steel: not-picked-up",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : true
+    "copilot" : false
   }, {
     "number" : 611,
     "title" : "Bot stops at portal-kit: no-support",
@@ -197,10 +192,6 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 527,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
     "issue" : 539,
     "move" : "leave",
     "why" : "hands-off label"
@@ -210,8 +201,7 @@
     "why" : "hands-off label"
   }, {
     "issue" : 151,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment"
+    "move" : "assign"
   }, {
     "issue" : 178,
     "move" : "leave",
@@ -282,10 +272,6 @@
     "why" : "hands-off label"
   } ],
   "log" : [ {
-    "issue" : 586,
-    "move" : "assign",
-    "at" : "2026-10-28T05:31:35.779Z"
-  }, {
     "issue" : 586,
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
@@ -1631,5 +1617,9 @@
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
     "at" : "2026-10-29T16:09:42.524Z"
+  }, {
+    "issue" : 151,
+    "move" : "assign",
+    "at" : "2026-10-29T16:10:52.852Z"
   } ]
 }
