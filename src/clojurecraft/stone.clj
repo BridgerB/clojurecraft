@@ -424,9 +424,13 @@
   [{:goal/keys [pos range]} node]
   (max 0.0 (- range (path/flat-distance node pos))))
 
+(def deeper-slack 24) ; blocks under a row's depth the stairs deeper go no farther: the ore lies below it too, but not at the bottom
+
 (defn deeper
   "Stairs stair-depth below the feet when no tunnel can be cut here, the row's depth notwithstanding
-   (ore lies below it too), when a stair from here can be cut at all and the bottom of the world is
+   (ore lies below it too, no more than deeper-slack under it: sim R1/1, probe 40791377318, went
+   six lower each time from y 3 to y -37 for iron, a row whose depth is 16, and tunnelled there
+   twenty minutes with none), when a stair from here can be cut at all and the bottom of the world is
    not near; else nil, and nil from a feet cell in :plan/boxed-at, where a staircase died :boxed
    already, as stairs is: a descent from there dies the same way whatever its depth. Cut means
    dug too: no cell of the stair borders water or lava
@@ -434,17 +438,19 @@
    (stairs/lay). Gym batch iron-a6 run 3 was sent down stairs that could not be cut and failed
    :boxed three times in a second; batch iron-a8 run 3 down stairs whose every cell bordered
    water, and failed :boxed twice in a second."
-  [world]
-  (let [feet (intent/feet world)
-        to (- (physics/y-of feet) stair-depth)
-        cuttable? (fn [d]
-                    (let [cells (stairs/stair-cells feet d)]
-                      (or (stairs/level-safe? world cells)
-                          (and (stairs/level-clear? world cells) (stairs/lay world feet cells)))))]
-    (when (and (not (adjoins-boxed? world feet))
-               (> to (+ chunk/min-y floor-margin))
-               (some cuttable? stairs/directions))
-      {:intent/kind :stairs-down :intent/to-y to})))
+  ([world] (deeper world nil))
+  ([world {:goal/keys [depth]}]
+   (let [feet (intent/feet world)
+         to (- (physics/y-of feet) stair-depth)
+         cuttable? (fn [d]
+                     (let [cells (stairs/stair-cells feet d)]
+                       (or (stairs/level-safe? world cells)
+                           (and (stairs/level-clear? world cells) (stairs/lay world feet cells)))))]
+     (when (and (not (adjoins-boxed? world feet))
+                (> to (+ chunk/min-y floor-margin))
+                (or (nil? depth) (>= to (- depth deeper-slack)))
+                (some cuttable? stairs/directions))
+       {:intent/kind :stairs-down :intent/to-y to}))))
 
 (defn retreat
   "Away from where nothing can be cut: out of water first when the feet are in it (a :swim-out for
@@ -659,7 +665,7 @@
                   (stairs world row)
                   (when-let [d (tunnel-heading world)]
                     {:intent/kind :tunnel :intent/dir d :intent/length tunnel-length})
-                  (deeper world)
+                  (deeper world row)
                   (walk-home world)
                   (dead-end-retreat world)
                   (cross-home world)

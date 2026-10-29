@@ -12,6 +12,7 @@
             [clojurecraft.memory :as memory]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
+            [clojurecraft.stone :as stone]
             [clojurecraft.world :as world]))
 
 (use-fixtures :once fx/instrumented)
@@ -123,6 +124,27 @@
     (testing "the kit is gone but the Nether was reached: every ingot is spare"
       (is (= 5 (armour/spare-ingots (standing {3 (item :iron_ingot 5)} #{:nether}))))
       (is (zero? (armour/spare-ingots (standing {3 (item :iron_ingot 5)} #{})))))))
+
+(deftest the-gear-is-mined-without-a-trip-for-sticks
+  (let [t (gear/without-stick-spares plan/goals)
+        row (fn [table id] (first (filter #(= id (:goal/id %)) table)))]
+    (is (contains? (:goal/spares (row plan/goals :mine-iron)) :item/stick))
+    (is (not (contains? (:goal/spares (row t :mine-iron)) :item/stick)))
+    (is (contains? (:goal/spares (row t :mine-iron)) :item/stone_pickaxe) "the spare pickaxe stays")
+    (is (= (count plan/goals) (count t)))
+    (is (= (row plan/goals :wood) (row t :wood)) "a row with no spares is as it was")))
+
+(deftest below-the-rows-depth-no-stairs-are-cut
+  ;; sim R1/1 (probe 40791377318): the gear step's feet were at y 3 under :mine-iron's depth 16,
+  ;; where stone/stairs has nothing to cut (to = max(feet - 6, 16) is not under the feet); what
+  ;; follows is a tunnel at that level or, when no tunnel can be cut, stone/deeper, which goes six
+  ;; lower each time and reached y -37
+  (let [iron (first (filter #(= :mine-iron (:goal/id %)) plan/goals))
+        w (assoc (standing {}) :player/pos [2002.5 3.0 2013.5])]
+    (is (= 16 (:goal/depth iron)))
+    (is (nil? (stone/stairs w iron)))
+    (is (some? (stone/stairs (assoc w :player/pos [2002.5 40.0 2013.5]) iron))
+        "above the depth they are cut, down to it")))
 
 (deftest the-way-back-waits-for-health-and-works-for-it
   ;; sim R1/1 (probe 40787504601, t 18078400): into the Nether at 7.9 health, food 14, edible 0,

@@ -355,6 +355,14 @@
                       [[(+ 5 (* 2 dx)) 15 (+ 5 (* 2 dz))] blocks/water-base]))
         w (assoc (standing 16 :stone_pickaxe) :world/chunks {[0 0] (world/column water)})]
     (is (some? (stone/deeper (standing 16 :stone_pickaxe))) "plain rock: stairs deeper")
+    (testing "a row's depth bounds the descent: deeper-slack under it, no farther"
+      (is (some? (stone/deeper (standing 16 :stone_pickaxe) {:goal/depth 16}))
+          "to y 10, within the slack")
+      (is (some? (stone/deeper (standing -17 :stone_pickaxe))) "unbounded: to y -23")
+      (is (nil? (stone/deeper (standing -17 :stone_pickaxe) {:goal/depth 16}))
+          "bounded: y -23 is past depth - 24")
+      (is (some? (stone/deeper (standing -17 :stone_pickaxe) {}))
+          "a row with no depth is as it was"))
     (is (nil? (stone/deeper w)) "water beside every stair: none")))
 
 (deftest a-boxed-pocket-retreats-along-a-short-route-to-new-rock

@@ -86,6 +86,18 @@
   [world _]
   (or (not (contains? (:plan/reached world #{}) :gear)) (not (wanted? world))))
 
+(defn without-stick-spares
+  "table with no row keeping spare sticks: the iron row spares twenty-four (twelve pickaxes'
+   handles for the Nether's tunnel), and with few held the needs planner climbs to the trees to
+   cut them (spare-worth?: a log can be started). Sim R1/1 (probe 40791377318) spent from 70 to 95
+   minutes in the gear step on stairs up to the surface and stairs down for trees, with the iron
+   not mined. The gear is mined with the sticks it has: a pickaxe worn out is still made from them."
+  [table]
+  (mapv (fn [row]
+          (cond-> row
+            (contains? (:goal/spares row) :item/stick) (update :goal/spares dissoc :item/stick)))
+        table))
+
 (defn gear-intent
   "The next intent toward the gear, or nil when none is wanted: the ingots for everything
    missing, mined through the needs planner; with them held, the next piece itself, for when no
@@ -96,7 +108,9 @@
           held (get (armour/counts world) :iron_ingot 0)
           [k _] (first (missing world))]
       (if (< held cost)
-        (make/decide world (assoc goal :goal/provides {:item/iron_ingot cost}) table)
+        (make/decide world
+                     (assoc goal :goal/provides {:item/iron_ingot cost})
+                     (without-stick-spares table))
         (make/decide world (assoc goal :goal/provides {(keyword "item" (name k)) 1}) table)))))
 
 (defmethod plan/next-intent :gear [world goal table] (gear-intent world goal table))

@@ -149,6 +149,8 @@ The gym rows that get seven rods land with an iron sword, iron armour, Fire Resi
 
 `:return-nether` waits (`fortress/ready-for-nether?`) until the health is at `return-health`, with no timer: the meal (`eat/returning?` eats up to food 18), the hunt and the regear come first, then a `:rest`; with no food to be had the wait is `:no-food-to-return`, its own reason.
 
+The gear's iron: `stone/stairs` cuts nothing under a row's depth (iron 16), so below it a bot tunnels at its level or, when no tunnel can be cut, `stone/deeper` goes six lower; `deeper` now stops `deeper-slack` (24) under the row's depth (sim R1/1 reached y -37 for iron). `gear/without-stick-spares` drops the iron row's twenty-four stick spare from the table the gear is decided on, so the gear is not a climb to the trees (`make/spare-worth?`).
+
 ## Limits
 - Fireballs are not dodged; the damage-event log is where to look when they kill.
 - A blaze hovering higher than the eye can reach from under it is never hit (`pressing?` stops within 0.8 on the plane); the fight has no engage timeout, only `:ghost` after 25 swings in reach.
