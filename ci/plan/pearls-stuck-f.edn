@@ -1,0 +1,12 @@
+;; Issue #263, branch feat/263-stuck-retry: a fight cut or failed three times in ten minutes not
+;; planned again, a loiter that wanders whatever is tracked, a hide walk that ends centred in its
+;; cell, and a provoke only with two hits of health (plan runs 40905321229 and 40860669235).
+{:plans/label "pearls-stuck-f"
+ :plans/jobs 6
+ :plans/issue 263
+ :plans/experiments [{:exp/name "pearls-12"
+                      :exp/kind :gym
+                      :exp/goal "pearls-12"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 18000}]}
