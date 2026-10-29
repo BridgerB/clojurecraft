@@ -1127,7 +1127,7 @@
         (is (empty? (sent-names w2)))))
     (testing "the block ends when the blaze is at hand"
       (let [w (assoc (standing shielded {7 hand}) :plan/intent {:intent/kind :block})]
-        (is (nil? (:plan/intent (tick w))))))
+        (is (= :done (:intent/status (:plan/intent (tick w)))))))
     (testing "a raised shield is lowered before anything but a block"
       (let [up (assoc (standing shielded {7 hand}) :player/using-item? true)
             low (next-intent up)
