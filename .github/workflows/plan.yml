@@ -42,31 +42,45 @@ jobs:
         env:
           INPUT: ${{ inputs.plan }}
           BEFORE: ${{ github.event.before }}
+        # A pushed plan is one the branch's own commits wrote: the first-parent, non-merge commits
+        # of the push. A merge brings the other side's plan files with it (main merged into a
+        # branch, or a pull request merged into main), and those already ran where they were
+        # written (2026-10-29: merging main started chain-w9 again on main and on a fix branch).
         run: |
           if [ -n "$INPUT" ]; then plan=$INPUT
-          elif git cat-file -e "$BEFORE" 2>/dev/null; then plan=$(git diff --name-only --diff-filter=AMR "$BEFORE" HEAD -- 'ci/plan/*.edn' | tail -n 1)
-          else plan=$(git diff --name-only --diff-filter=AMR HEAD~1 HEAD -- 'ci/plan/*.edn' | tail -n 1)
+          else
+            if git cat-file -e "$BEFORE" 2>/dev/null; then range="$BEFORE..HEAD"
+            else range="origin/main..HEAD"
+            fi
+            plan=$(git log --first-parent --no-merges --diff-filter=AMR --name-only --format= "$range" -- 'ci/plan/*.edn' | grep . | head -n 1 || true)
           fi
-          [ -f "$plan" ] || { echo "::error::no plan file ($plan)"; exit 1; }
-          echo "plan: $plan"
+          if [ -z "$plan" ]; then echo "no plan written by this push's own commits: nothing to run"
+          else
+            [ -f "$plan" ] || { echo "::error::no plan file ($plan)"; exit 1; }
+            echo "plan: $plan"
+          fi
           echo "plan=$plan" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-java@v6
+        if: steps.pick.outputs.plan != ''
         with:
           distribution: temurin
           java-version: '25'
       - name: Install the Clojure CLI and Babashka
+        if: steps.pick.outputs.plan != ''
         run: |
           curl -fsSL https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh -o /tmp/clj.sh
           sudo bash /tmp/clj.sh
           curl -fsSL https://raw.githubusercontent.com/babashka/babashka/master/install -o /tmp/bb.sh
           sudo bash /tmp/bb.sh --version 1.13.225
       - uses: actions/cache@v6
+        if: steps.pick.outputs.plan != ''
         with:
           path: |
             ~/.m2/repository
             ~/.gitlibs
           key: clj-${{ hashFiles('deps.edn') }}
       - id: plan
+        if: steps.pick.outputs.plan != ''
         name: The job matrix
         env:
           SALT: ${{ inputs.salt }}
@@ -75,12 +89,15 @@ jobs:
           cat plan.out >> "$GITHUB_OUTPUT"
 
   world:
+    needs: plan
+    if: needs.plan.outputs.plan != ''
     uses: ./.github/workflows/world.yml
     with:
       set: A
 
   job:
     needs: [plan, world]
+    if: needs.plan.outputs.plan != ''
     name: job-${{ matrix.job }}
     runs-on: ubuntu-26.04
     timeout-minutes: 355
@@ -130,7 +147,7 @@ jobs:
 
   aggregate:
     needs: [plan, job]
-    if: ${{ !cancelled() && needs.plan.result == 'success' }}
+    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.plan != '' }}
     runs-on: ubuntu-26.04
     timeout-minutes: 10
     steps:
