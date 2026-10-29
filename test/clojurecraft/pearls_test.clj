@@ -2175,3 +2175,27 @@
     (is (not (pearls/unfightable? (assoc w :time/now (+ 1000 pearls/fight-retry-ms)) 7 far))
         "after fight-retry-ms it is tried again")
     (is (not (pearls/unfightable? (standing {7 far}) 7 far)) "never failed: fought")))
+
+(deftest a-held-fight-with-nothing-coming-is-cut-after-twelve-seconds
+  ;; gym plan run 40825468783 runs 4 and 5 (issue #263): :fight 148 held from 06:51:41 to
+  ;; 06:52:41, failing :unreachable after combat/hold-timeout-ms, the enderman never in reach
+  (let [far (assoc (enderman [8.5 64.0 30.5]) :entity/creepy? true)
+        fight {:intent/kind :fight
+               :intent/target 7
+               :intent/hold? true
+               :intent/since 1000
+               :intent/status :active
+               :intent/goal :ender-pearls
+               :intent/for :pearls}
+        at (fn [w ms] (assoc w :time/now ms))
+        w (standing {7 far})]
+    (is (not (pearls/held-idle? (at w (+ 1000 pearls/hold-patience-ms)) fight)) "not yet")
+    (is (pearls/held-idle? (at w (+ 1001 pearls/hold-patience-ms)) fight) "then cut")
+    (is (plan/interrupts? (at w (+ 1001 pearls/hold-patience-ms)) row fight))
+    (is (not (pearls/held-idle? (at w 99999) (dissoc fight :intent/hold?))) "a fight that walks up")
+    (is (not (pearls/held-idle? (at (standing {7 (assoc far :entity/pos [10.5 64.0 8.5])}) 99999)
+                                fight))
+        "its target within strike-range: the fight goes on")
+    (testing "and it is not planned again for a while"
+      (let [cut (memory/remember-intention (at w 20000) (assoc fight :intent/id 5) :abandoned)]
+        (is (pearls/unfightable? cut 7 far))))))

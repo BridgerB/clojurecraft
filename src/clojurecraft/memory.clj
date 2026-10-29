@@ -366,11 +366,11 @@
          (mapv #(into {} (d/touch (d/entity db %)))))))
 
 (defn last-failed-at
-  "The ms the newest :failed fact of an intention of kind k on target t was stamped, or nil when
-   none: when a fight on an enderman last failed (pearls/unfightable?)."
+  "The ms the newest :failed or :abandoned fact of an intention of kind k on target t was stamped,
+   or nil when none: when a fight on an enderman last failed or was cut (pearls/unfightable?)."
   [world k t]
-  (d/q '[:find (max ?at) . :in $ ?k ?t :where [?e :intention/kind ?k] [?e :intention/event :failed]
-         [?e :intention/target ?t] [?e :intention/at ?at]]
+  (d/q '[:find (max ?at) . :in $ ?k ?t :where [?e :intention/kind ?k] [?e :intention/event ?ev]
+         [(contains? #{:abandoned :failed} ?ev)] [?e :intention/target ?t] [?e :intention/at ?at]]
        (:world/facts world)
        k
        t))

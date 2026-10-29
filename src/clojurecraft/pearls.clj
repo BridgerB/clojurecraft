@@ -1297,6 +1297,7 @@
 
 (def wander-lookouts 60)                 ; lookouts (five seconds each, five minutes) stood with no walk taken since before the hunt goes elsewhere (wander)
 (def wander-reach 64)                  ; blocks a wander looks for ground to walk to, on each of the headings
+(def hold-patience-ms 12000)             ; ms a held fight waits with its target past strike-range before the hunt plans again (combat/hold-timeout-ms is a minute)
 (def fight-retry-ms 30000)             ; ms after a fight on an enderman failed that it is not fought again until within the sword's reach
 
 (def struck-health 14.0)                ; health under which an enderman at hand has landed a hit (7 on Normal off 20): fought back, fought out or not
@@ -1675,6 +1676,20 @@
 
 (def answers-to-hand #{:fight :back-off :eat :dig}) ; intents a running hunt keeps with an angry enderman at hand: the answers to it, a meal, a fire put out
 
+(defn held-idle?
+  "Is intent i a held :fight (hold?) that has run hold-patience-ms or more with its target gone
+   or past strike-range of the feet? Runs 4 and 5 of gym plan run 40825468783 (issue #263,
+   pearls-12) held a fight a full minute (combat/hold-timeout-ms) on an enderman that did not
+   come, and failed :unreachable."
+  [world i]
+  (boolean (and (= :fight (:intent/kind i))
+                (:intent/hold? i)
+                (:intent/since i)
+                (> (- (:time/now world 0) (:intent/since i)) hold-patience-ms)
+                (let [e (get-in world [:world/entities (:intent/target i)])]
+                  (or (nil? e)
+                      (> (physics/distance (:player/pos world) (:entity/pos e)) strike-range))))))
+
 (defmethod plan/interrupts? :pearls
   ;; any running intent but an answer (answers-to-hand) or the walk home ends with an angry
   ;; enderman at hand (beset?), and the hunt plans again: home, the fight held there, or the
@@ -1684,13 +1699,14 @@
   ;; reaches: sim probe 39892490709 (worlds R1 and R4, seed 3) cut its lookout there every tick
   ;; for twenty minutes over one given up on by the mouth, and the lure never counted a lookout
   [world goal i]
-  (and (not (contains? answers-to-hand (:intent/kind i)))
-       (not (:intent/wall? i))
-       (not (and (= :walk (:intent/kind i)) (= (:intent/target i) (:pearls/shelter world))))
-       (not= (:pearls/shelter world) (intent/feet world))
-       (or (beset? world) (some? (first (struck-by world))))
-       (not (and (= :lookout (:intent/kind i))
-                 (= :lookout (:intent/kind (plan/next-intent world goal plan/goals)))))))
+  (or (held-idle? world i)
+      (and (not (contains? answers-to-hand (:intent/kind i)))
+           (not (:intent/wall? i))
+           (not (and (= :walk (:intent/kind i)) (= (:intent/target i) (:pearls/shelter world))))
+           (not= (:pearls/shelter world) (intent/feet world))
+           (or (beset? world) (some? (first (struck-by world))))
+           (not (and (= :lookout (:intent/kind i))
+                     (= :lookout (:intent/kind (plan/next-intent world goal plan/goals))))))))
 
 (defmethod combat/answers :pearls
   ;; the hunt provokes endermen and fights them from its burrow; an angry one (entity/creepy?)
