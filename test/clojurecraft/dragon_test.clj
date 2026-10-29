@@ -960,3 +960,37 @@
               (dragon/fountain-stand
                (assoc (round-fountain [8.5 64.0 0.5] (sitting (+ 180.0 yaw))) :dragon/stand held)))
         "nor under the head, turned onto it")))
+
+(deftest on-a-pillar-the-pickaxe-stowed-by-a-meal-is-equipped-before-the-way-down
+  ;; gym chain-w9 run 3 (main, plan run 40851746139): a meal at the top of its 28-high pillar moved
+  ;; the pickaxe (slot 6, then 11 damaged) out of the hotbar; the way down was dug by hand at
+  ;; 10 s a block (`digging [18 101 -40] face 1 10000ms`) and the dragon killed it at 10:10:01
+  (let [s (spike [8 8] 2 64 6)
+        up (merge s (pillar [8 5] 64 69))
+        pick {:item (recipe/item-id :stone_pickaxe) :count 1}
+        at (fn [inv] (standing up [8.5 70.0 5.5] inv {}))]
+    (is (= {:intent/kind :equip :intent/item :stone_pickaxe}
+           (dragon/toward-crystals (at {11 pick})))
+        "the pickaxe in the main inventory: in hand first")
+    (is (= {:intent/kind :dig-down} (dragon/toward-crystals (at {6 pick})))
+        "in the hotbar: the way down")
+    (is (= {:intent/kind :dig-down} (dragon/toward-crystals (at {})))
+        "none held at all: the way down by hand, as before")))
+
+(deftest the-bot-stands-in-the-dragons-reach-only-above-two-hits-and-the-margin
+  ;; gym chain-w9 dragon run 2 (main, plan run 40851746139): perching at 14 health, two hits of
+  ;; 6.5 in a second, 7.57 then 1.07 then 0; three hits in 0.6 s killed another at 18.5
+  (let [at (fn [health]
+             (assoc (round-fountain [20.5 64.0 0.5] (sitting 270.0))
+                    :player/dimension dimension/end
+                    :player/health health
+                    :player/food 20))]
+    (is (< 16.0 dragon/perch-line 17.0) "two hits of 6.8 and the margin of 3")
+    (is (= {:plan/wait :low-health} (dragon/toward-dragon (at 14.0)))
+        "at 14, sheltered, no food to eat: it waits for its health, it does not walk in")
+    (is (not= {:plan/wait :low-health} (dragon/toward-dragon (at 17.5))) "above the line: on")
+    (let [perching (assoc (at 14.0)
+                          :plan/intent
+                          {:intent/kind :perch :intent/target dragon-eid :intent/status :active})]
+      (is (plan/interrupts? perching {:goal/plan :dragon} {:intent/kind :perch})
+          "a perch running at 14 ends"))))

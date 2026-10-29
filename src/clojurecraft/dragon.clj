@@ -89,6 +89,8 @@
 (def walk-in-to 3.0)                  ; blocks on the plane from the fountain a perch walks in to for reach, no nearer
 (def perch-hold-ms 60000)             ; a :perch hands back to the planner this often
 (def breath-radius entity/breath-radius) ; a breath cloud's radius when its metadata has not said: the sitting dragon's flame cloud (DragonSittingFlamingPhase)
+(def dragon-hit 6.8)                  ; health one hit of the dragon's head takes on Normal (gym chain-w12/w9: 18.5 to 11.7 to 4.9, 7.57 to 1.07)
+(def perch-line (+ combat/danger-margin (* 2 dragon-hit))) ; health under which the bot stands in the dragon's reach no more: two hits, which land within a second (three in 0.6 s killed one at 18.5), and the margin
 (def breath-hold 2.0)                 ; blocks more than breath-reach the bot keeps from a cloud before it sets out for the stand again, so a cloud growing as it walks does not turn it back (gym chain-w12 dragon run 2: 24 swaps in 12 s between the stand and the cell out of the breath)
 (def breath-margin 1.5)               ; blocks beyond a breath cloud's radius (:entity/radius: a fireball's grows from 3 to 7) the bot keeps
 (def behind-by 1.0)                   ; blocks behind the sitting dragon's body (along its facing, mob/ahead) a stand must be: out of its head's and neck's way
@@ -310,7 +312,10 @@
    a spike's top, the walk back to the pillar's top, on a pillar the :dig-down, on the ground the
    walk to the pillar's foot. A wait :no-blocks with no pillar block held where one is needed,
    :no-approach for a crystal no axis reaches, :stranded on a spike with no pillar back down; nil
-   with no crystal and the feet down. Falling (not :player/on-ground?, a hit's knockback off a
+   with no crystal and the feet down. On a pillar whose pickaxe has gone to the main inventory (a
+   meal swaps the hotbar), the :equip of it first: gym chain-w9 run 3 (plan run 40851746139) ate
+   at the top of a 28-high pillar, dug the rest of it by hand at 10 s a block, and the dragon
+   killed it on the way down. Falling (not :player/on-ground?, a hit's knockback off a
    pillar or the way down it) the wait :falling: no route starts in the air, and gym chain-w11
    runs 3 and 4 asked for a walk every tick, each failed :no-path, twelve in a row failed the
    run in 0.6 s."
@@ -335,7 +340,10 @@
           (if-let [t (pillar-top world)]
             (standing-walk t)
             {:plan/wait :stranded})
-          (on-pillar? world) {:intent/kind :dig-down}
+          (on-pillar? world)
+          (if-let [[_ tool] (intent/stowed-tool world (terrain/block-at world [fx (dec fy) fz]))]
+            {:intent/kind :equip :intent/item (recipe/item-name tool)}
+            {:intent/kind :dig-down})
           a (standing-walk (:column a))
           c {:plan/wait :no-approach}
           :else nil)))
@@ -712,7 +720,7 @@
         sat? (>= perched perch-ticks)
         stand (fountain-stand world)
         health (:player/health world full-health)]
-    (cond (or (< health combat/retreat-health)
+    (cond (or (< health perch-line)
               (entity/gone? world target)
               (and (breath-near world) (not (holds? world)))
               (and (in-bite? e (:player/pos world)) (not (scanning? e)) (some? stand))
@@ -922,7 +930,9 @@
    2 backed straight off into the fountain's pillar and died in the cloud against it); and
    through its scanning turn (scanning?) the :perch holds whatever stand the feet are at, the
    stand re-chosen only in the phases the dragon does not turn in. Hurt under
-   combat/retreat-health, none of the perch or the stands: recover's meal, shelter
+   perch-line (two hits of the head and the margin, not combat/retreat-health: gym chain-w9
+   dragon run 2 perched at 14 and died to two hits in a second), none of the perch or the
+   stands: recover's meal, shelter
    walk or wait until the health is back over that line."
   [world]
   (let [[eid d] (dragon world)
@@ -940,7 +950,7 @@
           (shelter-walk (escape world))
           (or (off-island? world) (seq (crystals world)) (on-pillar? world) (on-spike? world))
           (toward-crystals world)
-          (< (:player/health world full-health) combat/retreat-health) (recover world)
+          (< (:player/health world full-health) perch-line) (recover world)
           (and breath eid (holds? world)) {:intent/kind :perch :intent/target eid}
           (and breath eid d (grounded? d) (or (in-basin? world) (not blocked?)) far?)
           (shelter-walk (or (when-not (in-basin? world)
@@ -1032,8 +1042,7 @@
   (let [[_ d] (dragon world)
         pos (:player/pos world)
         shelter? (and (= :walk (:intent/kind i)) (= :shelter (:intent/for i)))]
-    (or (and (= :perch (:intent/kind i))
-             (< (:player/health world full-health) combat/retreat-health))
+    (or (and (= :perch (:intent/kind i)) (< (:player/health world full-health) perch-line))
         (and (not= :back-off (:intent/kind i))
              (not shelter?)
              (not (off-island? world))
