@@ -466,19 +466,20 @@
       (let [band (world/column
                   (into
                    {}
-                   (for [x (range 9 12) z (range 16) y (range 58 64)] [[x y z] blocks/water-base])))
+                   (for [x (range 9 12) z (range 16) y (range 58 70)] [[x y z] blocks/water-base])))
             w (-> (searching [8.5 8.5] [])
                   (assoc :world/chunks {[0 0] band}
                          :plan/boxed-at #{[8 64 8]}
                          :plan/trail [[13 64 8] [14 64 8] [8 64 8]]))
             w2 (assoc w :plan/trail [[2 64 8] [13 64 8] [8 64 8]])]
-        (with-redefs [fortress/choose-move (constantly nil)]
-          (is (= {:intent/kind :cross :intent/target [14 64 8] :intent/for :retreat}
-                 (stronghold/to-room w [13 60 8]))
-              "no route to a cell across it: the swim to the nearest of them")
-          (is (= {:intent/kind :walk :intent/target [2 64 8] :intent/for :retreat}
-                 (stronghold/to-room w2 [13 60 8]))
-              "one a route reaches is walked to"))))
+        ;; the water beside every cell a step east or aside would open leaves the tunnel no dry
+        ;; step (fortress/choose-move has nothing to choose), so the retreat is reached unredefined
+        (is (= {:intent/kind :cross :intent/target [14 64 8] :intent/for :retreat}
+               (stronghold/to-room w [13 60 8]))
+            "no route to a cell across it: the swim to the nearest of them")
+        (is (= {:intent/kind :walk :intent/target [2 64 8] :intent/for :retreat}
+               (stronghold/to-room w2 [13 60 8]))
+            "one a route reaches is walked to")))
     (testing "to-room refuses moves through or bordering lava in portal room"
       ;; gym chain-w7 run 3: in portal room with lava pool under frame, tunnel-to
       ;; must never step into or border lava

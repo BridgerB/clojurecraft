@@ -410,6 +410,10 @@
                 (if (truncating? v) (persistent! acc) (recur (inc i) acc))))))
         :else ((type-fn t :read) buf)))
 
+(def min-width
+  "Bytes a primitive wire type needs at least: its width when fixed, one for the varying ones."
+  {:bool 1 :i8 1 :u8 1 :i16 2 :u16 2 :i32 4 :u32 4 :i64 8 :f32 4 :f64 8 :uuid 16})
+
 (defn conditional?
   "Is a spec type a conditional tail, [:if k v T]: a T present only when the earlier field k is v?"
   [t]
@@ -418,16 +422,18 @@
 (defn read-fields
   "The struct's fields in order into a map; stops at a truncating value and marks
    the map :truncated. A conditional field ([:if k v T], conditional?) is read when field k read
-   v and the frame has bytes left, and left out of the map otherwise."
+   v and the frame has at least T's width (min-width) left, and left out of the map otherwise:
+   a short tail never throws."
   [buf fields]
   (loop [fields fields
          m {}]
     (if-let [[k t] (first fields)]
       (if (conditional? t)
         (let [[_ ck cv ct] t]
-          (recur
-           (rest fields)
-           (if (and (= cv (get m ck)) (pos? (.remaining buf))) (assoc m k (read-field ct buf)) m)))
+          (recur (rest fields)
+                 (if (and (= cv (get m ck)) (>= (.remaining buf) (get min-width ct 1)))
+                   (assoc m k (read-field ct buf))
+                   m)))
         (let [v (read-field t buf)
               m (assoc m k v)]
           (if (truncating? v) (assoc m :truncated true) (recur (rest fields) m))))

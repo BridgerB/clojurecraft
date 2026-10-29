@@ -332,10 +332,15 @@
                               (b/write-varint o (get-in p/ids [:play :s2c :boss-event]))
                               (b/write-uuid o bar)
                               (b/write-varint o action)
-                              (when health (b/write-f32 o health)))))]
+                              (when health (b/write-f32 o health)))))
+        cut (fn [^bytes f n] (java.util.Arrays/copyOfRange f 0 (- (alength f) n)))]
     (is (= {:packet/name :boss-event :uuid bar :action 2 :health 0.75}
            (p/decode :play :s2c (frame 2 0.75))))
     (is (= {:packet/name :boss-event :uuid bar :action 1} (p/decode :play :s2c (frame 1 nil)))
         "remove: no health, and the key is absent, not nil")
     (is (= {:packet/name :boss-event :uuid bar :action 2} (p/decode :play :s2c (frame 2 nil)))
-        "a frame cut short of the float reads what is there")))
+        "a frame with no float: the key is absent")
+    (doseq [n [1 2 3]]
+      (is (= {:packet/name :boss-event :uuid bar :action 2}
+             (p/decode :play :s2c (cut (frame 2 0.75) n)))
+          (str "a float cut by " n " byte(s) is left out, never thrown over")))))
