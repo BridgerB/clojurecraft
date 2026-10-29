@@ -1795,6 +1795,26 @@
       [(first look) 90.0]
       look)))
 
+(defn uncovered-log
+  "The world with one log line naming the nearest ghast in sight, its position and the bot's, when a
+   ghast is shooting (shot-at?) and cover-from finds no cover, every hundred ticks at most (five
+   seconds): the open-ground case of issue #263 shows in the audit and can be counted before a
+   walk to cover is built. The world as it was otherwise."
+  [world]
+  (if (and (zero? (mod (:time/tick world 0) 100)) (shot-at? world) (nil? (cover-from world)))
+    (let [[eid e] (entity/nearest
+                   (into {} (filter (fn [[_ e]] (= :ghast (entity/kind e)))) (swarm world))
+                   (:player/pos world))]
+      (game/say world
+                (str "ghast "
+                     eid
+                     " at "
+                     (cell (:entity/pos e))
+                     " shoots the bot at "
+                     (intent/feet world)
+                     ": no cover")))
+    world))
+
 (defmethod plan/steer :pearls
   ;; out of the burrow's end, every look but a provoke's turned from a calm enderman's eyes
   ;; (look-off): a walk steers by :control/yaw and a dig or a place is judged by distance, so the
@@ -1803,7 +1823,8 @@
   ;; open. In the end a stare by chance is what the hunt wants: the enderman comes to the sword
   [world _]
   (let [look (:control/look (:player/controls world))
-        home (:pearls/shelter world)]
+        home (:pearls/shelter world)
+        world (uncovered-log world)]
     (cond (or (nil? look)
               (= :provoke (:intent/kind (:plan/intent world)))
               (and home (= home (intent/feet world))))

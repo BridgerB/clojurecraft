@@ -2328,3 +2328,16 @@
     (is (= :back-off (:intent/kind (plan/next-intent (assoc w :player/health 8.0) row plan/goals)))
         "hurt: backed away from")
     (is (plan/interrupts? w row lookout) "a lookout does not run with it at hand")))
+
+(deftest an-uncovered-ghast-is-logged-once-in-five-seconds
+  ;; the open-ground case: nothing to lay a block against, nothing to dig, no cell out of the line
+  (let [held {0 (item :iron_sword 1)}
+        w (-> (wide (standing {7 (mob :ghast [8.5 75.0 50.5])}))
+              (assoc :player/inventory held :time/tick 0))
+        logged (fn [w] (filter #(= :log (:effect/kind %)) (:bot/effects (pearls/uncovered-log w))))]
+    (is (pearls/shot-at? w))
+    (is (nil? (pearls/cover-from w)))
+    (is (= 1 (count (logged w))))
+    (is (re-find #"ghast 7 at \[8 75 50\] shoots the bot at \[8 64 8\]: no cover"
+                 (:effect/message (first (logged w)))))
+    (is (empty? (logged (assoc w :time/tick 1))) "not every tick")))
