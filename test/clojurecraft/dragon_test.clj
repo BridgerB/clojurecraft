@@ -936,3 +936,27 @@
     (is (= :walk (:intent/kind (dragon/toward-dragon clear))) "no cloud: the walk to the stand")
     (is (= :perch (:intent/kind (dragon/toward-dragon beside)))
         "a cloud beside the way: held where it is, not set out and turned back")))
+
+(deftest the-stand-held-stays-the-stand-while-the-dragon-turns-marginally
+  ;; gym chain-w13 dragon runs 1 and 3: [0 62 -2] and [2 62 0] swapped every 0.8 s as the turning
+  ;; dragon made each in turn the one behind it, nine health taken at the fountain
+  (let [w0 (round-fountain [8.5 64.0 0.5] (sitting 270.0))
+        held (first (filter #(= 2 (first %)) (dragon/stand-cells w0)))
+        centre (physics/centre held)
+        yaw (first (filter #(<= -0.9 (first (mob/ahead [0.5 66.0 0.5] % centre)) -0.6) (range 360)))
+        w (round-fountain [8.5 64.0 0.5] (sitting (double yaw)))]
+    (is (some? held))
+    (is (some? yaw) "a facing with the stand a little behind the body, past the bite")
+    (is (not= held (dragon/fountain-stand w)) "chosen anew, the stand is not far enough behind")
+    (is (= held (dragon/fountain-stand (assoc w :dragon/stand held)))
+        "held, it stays: the gain of another is not clear")
+    (is (not= held
+              (dragon/fountain-stand (assoc w
+                                            :dragon/stand held
+                                            :world/entities
+                                            (merge (:world/entities w) (cloud (vec centre) 2.0)))))
+        "but not into a cloud")
+    (is (not= held
+              (dragon/fountain-stand
+               (assoc (round-fountain [8.5 64.0 0.5] (sitting (+ 180.0 yaw))) :dragon/stand held)))
+        "nor under the head, turned onto it")))

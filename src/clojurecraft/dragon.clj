@@ -81,6 +81,7 @@
 (def perch-below 70.0)                ; and under this height
 (def perch-ticks 10)                  ; ticks it holds there before it counts as perched
 (def stand-from 2)                    ; blocks from the fountain along an axis the bot waits, in the exit portal's basin
+(def stand-slack 1.0)                 ; blocks less behind the dragon's body the stand the bot already holds may be than one chosen anew (behind-by): the hysteresis that keeps a stand while the dragon turns marginally
 (def stand-near 1.0)                  ; blocks on the plane from that stand a wait counts as there
 (def sitting-phases #{5 6 7})         ; the dragon's phases on its perch (EnderDragonPhase: sitting flaming, scanning, attacking)
 (def landing-phases #{3})             ; its phase coming down onto the perch (DragonLandingPhase), its head already where a sitting one's is
@@ -688,7 +689,7 @@
                        (:player/inventory world))))
     {:intent/kind :wear :intent/item :carved_pumpkin}))
 
-(declare fountain-stand holds? in-basin?)
+(declare fountain-stand holds? in-basin? stand-cells)
 
 (defmethod intent/run :perch
   ;; {:intent/kind :perch :intent/target eid}: the best sword in hand, then by the fountain facing
@@ -705,7 +706,9 @@
         e (get-in world [:world/entities target])
         i (cond-> i (nil? stage) (assoc :intent/stage :arm :intent/since now))
         perched (if (and e (perched? e)) (inc perched) 0)
-        world (assoc world :plan/intent (assoc i :intent/perched perched))
+        world (cond-> (assoc world :plan/intent (assoc i :intent/perched perched))
+                (some #{(intent/feet world)} (stand-cells world))
+                (assoc :dragon/stand (intent/feet world)))
         sat? (>= perched perch-ticks)
         stand (fountain-stand world)
         health (:player/health world full-health)]
@@ -746,11 +749,27 @@
                      {:control/look
                       (look-away world (physics/look-at (game/eye world) (:entity/pos e)))}))))))
 
+(defn stand-cells
+  "The feet cells on the ground stand-from out from the fountain along its four axes, those with
+   ground loaded: the places the bot waits for the dragon."
+  [world]
+  (let [[fx fz] fountain]
+    (keep (fn [[dx dz]]
+            (let [x (long (math/floor (+ fx (* dx stand-from))))
+                  z (long (math/floor (+ fz (* dz stand-from))))]
+              (when-let [y (ground world x z sky)] [x y z])))
+          [[1 0] [-1 0] [0 1] [0 -1]])))
+
 (defn fountain-stand
   "The feet cell on the ground stand-from out from the fountain along the axis nearest the feet,
    none within breath-reach of a breath cloud or fireball and, while the dragon sits there turned
    (turned?), none short of behind-by behind its body (behind?), where the bot waits for the
-   dragon to perch, or nil when no such column has ground loaded. In the exit portal's basin
+   dragon to perch, or nil when no such column has ground loaded. The stand the bot held last
+   (:dragon/stand, kept by the :perch) stays the stand while it is out of every breath's reach,
+   not in the head's bite (in-bite?) and not short of stand-slack less than behind-by behind the
+   body: the nearest stand is changed to only for a clear gain, not each time the turning dragon
+   makes the other one marginally nearer (gym chain-w13 dragon runs 1 and 3: [0 62 -2] and
+   [2 62 0] swapped every 0.8 s, nine health taken). In the exit portal's basin
    beside the pillar: the perched dragon turns its face to the bot, its head 6.5 out from the
    pillar and its neck 5.5, each hurting what it touches; gym dragon-a stood five out, under the
    head, and died in two seconds of its perch, its five hits 2.5 each on the body; dragon-e and
@@ -758,21 +777,25 @@
    the body only the tail is, which hurts nothing; the nearest stand behind is re-chosen as the
    dragon turns (the :perch hands back when its head comes onto the feet, in-bite?)."
   [world]
-  (let [[fx fz] fountain
-        [_ d] (dragon world)
-        clouds (vals (breaths world))]
-    (->> [[1 0] [-1 0] [0 1] [0 -1]]
-         (keep (fn [[dx dz]]
-                 (let [x (long (math/floor (+ fx (* dx stand-from))))
-                       z (long (math/floor (+ fz (* dz stand-from))))]
-                   (when-let [y (ground world x z sky)] [x y z]))))
-         (remove (fn [c]
-                   (some #(<= (physics/horizontal-distance (physics/centre c) (:entity/pos %))
-                              (breath-reach %))
-                         clouds)))
-         (filter #(behind? d (physics/centre %) behind-by))
-         (sort-by #(physics/horizontal-distance (:player/pos world) (physics/centre %)))
-         first)))
+  (let [[_ d] (dragon world)
+        clouds (vals (breaths world))
+        cells (stand-cells world)
+        breathed? (fn [c]
+                    (some #(<= (physics/horizontal-distance (physics/centre c) (:entity/pos %))
+                               (breath-reach %))
+                          clouds))
+        held (:dragon/stand world)]
+    (if (and held
+             (some #{held} cells)
+             (not (breathed? held))
+             (not (and d (in-bite? d (physics/centre held))))
+             (behind? d (physics/centre held) (- behind-by stand-slack)))
+      held
+      (->> cells
+           (remove breathed?)
+           (filter #(behind? d (physics/centre %) behind-by))
+           (sort-by #(physics/horizontal-distance (:player/pos world) (physics/centre %)))
+           first))))
 
 (defn in-basin?
   "Are the feet within walk-in-to of the fountain on the plane: in the exit portal's basin, under

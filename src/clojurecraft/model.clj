@@ -43,6 +43,9 @@
     "consecutive ticks off the ground over water with no deliberate swim (trap/afloat?)"
     "while planning"]
    [:plan/dry-ticks "consecutive ticks on dry land (trap/dry-land?)" "while planning"]
+   [:dragon/stand
+    "the fountain stand cell the :perch last held, kept while it stays safe (dragon/fountain-stand)"
+    "after the first :perch at a stand"]
    [:plan/trap "the trap the player is in, :water or :lava, with hysteresis (trap/trapped-tick)"
     "while trapped"] [:plan/trap-at "the [x z] column where the current trap began" "while trapped"]
    [:world/traps

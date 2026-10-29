@@ -107,6 +107,7 @@
 (s/def :player/air (s/int-in 0 301))
 (s/def :plan/wet-ticks nat-int?)
 (s/def :plan/afloat-ticks nat-int?)
+(s/def :dragon/stand ::block-pos)
 (s/def :plan/dry-ticks nat-int?)
 (s/def :plan/trap #{:water :lava})
 (s/def :plan/trap-at (s/tuple int? int?))
