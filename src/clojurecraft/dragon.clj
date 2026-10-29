@@ -955,25 +955,26 @@
          first)))
 
 (defn step-out-cell
-  "The feet cell on the ground nearest the feet, step-out-radius out from the fountain in any of
-   escape-ways directions, that no breath reaches and that is not before the sitting dragon's
-   head nor on a way past it; nil when none has ground loaded: the nearest place beyond the
-   head's reach along the rim."
-  [world]
-  (let [[_ d] (dragon world)
-        [fx fz] fountain
-        pos (:player/pos world)
-        feet (intent/feet world)]
-    (->> (for [k (range escape-ways)
-               :let [a (* k (/ (* 2.0 math/PI) escape-ways))]]
-           [(+ fx (* step-out-radius (math/cos a))) (+ fz (* step-out-radius (math/sin a)))])
-         (keep #(ground-cell world %))
-         (remove #{feet})
-         (remove #(breathed? world %))
-         (remove #(before-head? d (physics/centre %)))
-         (remove #(bite-on-way? d pos (physics/centre %)))
-         (sort-by #(physics/horizontal-distance pos (physics/centre %)))
-         first)))
+  "The feet cell on the ground nearest the feet, r (step-out-radius when not given) out from the
+   fountain in any of escape-ways directions, that no breath reaches and that is not before the
+   sitting dragon's head nor on a way past it; nil when none has ground loaded: the nearest place
+   beyond the head's reach along the rim."
+  ([world] (step-out-cell world step-out-radius))
+  ([world r]
+   (let [[_ d] (dragon world)
+         [fx fz] fountain
+         pos (:player/pos world)
+         feet (intent/feet world)]
+     (->> (for [k (range escape-ways)
+                :let [a (* k (/ (* 2.0 math/PI) escape-ways))]]
+            [(+ fx (* r (math/cos a))) (+ fz (* r (math/sin a)))])
+          (keep #(ground-cell world %))
+          (remove #{feet})
+          (remove #(breathed? world %))
+          (remove #(before-head? d (physics/centre %)))
+          (remove #(bite-on-way? d pos (physics/centre %)))
+          (sort-by #(physics/horizontal-distance pos (physics/centre %)))
+          first))))
 
 (defn sheltered?
   "Is the bot standing in a safe shelter cell outside the fountain basin: at least escape-from
@@ -995,6 +996,12 @@
    2.5 s in gym chain-w20 chain run 1 (plan run 40928784091)."
   [world]
   (let [[_ d] (dragon world)] (boolean (and d (not (combat/back-off-pointless? world d))))))
+
+(defn back-off-pointless-here?
+  "Is a combat :back-off from the dragon pointless where the feet are (combat/back-off-pointless?
+   of the dragon's entity)? True with the body back-off-to away, however near its head."
+  [world]
+  (let [[_ d] (dragon world)] (boolean (and d (combat/back-off-pointless? world d)))))
 
 (defn recover
   "The intent while hurt under combat/retreat-health at the dragon, where the perch and
@@ -1123,20 +1130,21 @@
           :else {:intent/kind :rest})))
 
 (defn after-blow
-  "The intent in the hit-hold-ticks after the dragon's blow (struck-by-dragon?): inside step-out-radius
-   of the fountain, the shelter walk to the nearest cell beyond the head's reach (step-out-cell),
-   else combat's :back-off from the dragon; outside it, recover while under perch-line, else the
-   wait :hit-hold: no stand, no perch and no strike until the quiet. Gym chain-w17 dragon runs 1
-   and 2 went from 20 to 0 in 2.4 s and 2 s on the perch."
+  "The intent in the hit-hold-ticks after the dragon's blow (struck-by-dragon?): always on, away
+   from it, never a rest, a meal or a wait where the blow fell: the shelter walk to the nearest
+   cell at least step-out-radius out from the fountain and four blocks further out than the feet
+   are (step-out-cell), else combat's :back-off from the dragon (unless it would be done at once),
+   else a :rest. The dragon's blows reach from its head and wings, well past the body that
+   back-off-pointless? measures: gym chain-w21 dragon runs 1, 4 and 5 (plan run 40939522210) were
+   hit at 8.5 blocks from the fountain, the body 8.5 off but the head two, rested there and were
+   slain, 19.5 -> 12.7 -> 5.9 -> 0 in three blows."
   [world]
-  (let [out? (>= (from-fountain world) step-out-radius)
-        cell (when-not out? (step-out-cell world))
+  (let [r (max step-out-radius (+ 4.0 (from-fountain world)))
+        cell (step-out-cell world r)
         [eid _] (dragon world)]
     (cond cell (shelter-walk cell)
-          (and (not out?) (back-off-from-dragon? world)) {:intent/kind :back-off :intent/target eid}
-          (not out?) {:intent/kind :rest}
-          (< (:player/health world full-health) perch-line) (recover world)
-          :else {:plan/wait :hit-hold})))
+          (back-off-from-dragon? world) {:intent/kind :back-off :intent/target eid}
+          :else {:intent/kind :rest})))
 
 (defn toward-dragon
   "The next intent toward the dragon dead: on the ground in a breath cloud itself (in-breath?)

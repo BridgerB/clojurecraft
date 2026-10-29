@@ -1037,9 +1037,12 @@
       (is (= [:walk :shelter] [(:intent/kind i) (:intent/for i)]) "out at once, at 17 health")
       (is (<= 7.0 (physics/horizontal-distance (physics/centre (:intent/target i)) [0.0 0.0 0.0]))
           "to a cell past the head's reach"))
-    (is (= {:plan/wait :hit-hold} (dragon/toward-dragon (at [9.5 64.0 0.5] 990)))
-        "already out: no stand, no perch, no strike until the quiet")
-    (is (not= {:plan/wait :hit-hold} (dragon/toward-dragon (at [9.5 64.0 0.5] 800)))
+    (let [i (dragon/toward-dragon (at [9.5 64.0 0.5] 990))]
+      (is (= [:walk :shelter] [(:intent/kind i) (:intent/for i)])
+          "already 9 out and struck: on, four further out, never a wait or a rest")
+      (is (<= 12.5
+              (physics/horizontal-distance (physics/centre (:intent/target i)) [0.0 0.0 0.0]))))
+    (is (not= :rest (:intent/kind (dragon/toward-dragon (at [9.5 64.0 0.5] 800))))
         "the quiet over: on as before")
     (let [perching (assoc in-basin
                           :plan/intent
@@ -1255,3 +1258,34 @@
     (is (= {:intent/kind :rest} (dragon/toward-dragon w0)) "a rest, not a wait that ends the plan")
     (is (<= (starts w3) 1) (str "one intent over three ticks, not " (starts w3)))
     (is (= :active (:plan/status w3)))))
+
+(deftest struck-eight-and-a-half-out-with-the-head-on-the-bot-it-keeps-moving-away
+  ;; gym chain-w21 dragon runs 1, 4 and 5 (plan run 40939522210): in job 2 run 5 the bot at
+  ;; [3.56 64 7.76], 8.5 from the fountain, the dragon in phase 7 with its head turned onto it,
+  ;; was struck 19.5 -> 12.7 -> 5.9 -> 0; `:back-off 164` then `:rest` twice, the body 8.5 off
+  ;; (back-off-pointless?) and the head two: it stood where the blows fell
+  (let [d {dragon-eid {:entity/type (mob/type-id :ender_dragon)
+                       :entity/pos [0.0 65.86 0.0]
+                       :entity/yaw 155.4
+                       :entity/phase 7}}
+        w0 (-> (round-fountain [3.56 64.0 7.76] d)
+               (assoc :player/dimension dimension/end
+                      :player/health 12.7
+                      :player/food 17
+                      :player/attacker dragon-eid
+                      :player/hurt-at 999
+                      :time/tick 1000
+                      :plan/status :active
+                      :plan/goals #{:dragon}
+                      :time/now 5000))
+        tick (fn [t] {:event/kind :tick :event/now t :event/rand 0.5})
+        w3 (reduce (fn [w t] (plan/step w (tick t))) (assoc w0 :bot/effects []) [5050 5100 5150])
+        logs (keep #(when (= :log (:effect/kind %)) (:effect/message %)) (:bot/effects w3))]
+    (is (dragon/struck-by-dragon? w0))
+    (is (dragon/back-off-pointless-here? w0) "the body is 8.5 off: a back-off would be pointless")
+    (let [i (dragon/toward-dragon w0)]
+      (is (= [:walk :shelter] [(:intent/kind i) (:intent/for i)]) "away, not a rest")
+      (is (< 8.5 (physics/horizontal-distance (physics/centre (:intent/target i)) [0.0 0.0 0.0]))
+          "further out than it stands"))
+    (is (not-any? #(str/starts-with? (str %) "intent :rest") logs) "no rest in three ticks")
+    (is (= :walk (:intent/kind (:plan/intent w3))) "moving away")))
