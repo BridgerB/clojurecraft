@@ -153,6 +153,8 @@ The gear's iron: `stone/stairs` cuts nothing under a row's depth (iron 16), so b
 
 The Nether is not entered, and the way back not begun, without `hunt/entry-food-min` (4) edible items (`fortress/fed-for-nether?`): the hunt row works first, since `foraging?` is never out of a `:build`; the unfed bot rests until its search has run (`hunt/search-spent?`), then the wait is `:no-food-to-return`. A running `:smelt` for `:cook` keeps the row undone (`gear/cooking?`), or the planner preempts it with the food in the furnace. `stone/deeper`'s depth bound applies once the portal kit is reached (snapshot #62 R1-12-1 needs the iron kit's search deep).
 
+The camp is in the tunnel the bot dug (`blaze/nook`, from `:fortress/trail`: the second to last trail cell or one of `nook-reach` (5) before it with `exposure` 2 or less), not in the room: gym blaze-fortress-race run 4 had two blazes at 1.4 and 1.9 blocks and lost 18.3 health in five seconds. A bot that walked in has no trail and camps as before. `:player/on-fire?` is bit 0x01 of the own entity's flags byte; burning, the bot leaves a fire block (`leave-fire`) and neither camps, rests nor ambushes.
+
 ## Limits
 - Fireballs are not dodged; the damage-event log is where to look when they kill.
 - A blaze hovering higher than the eye can reach from under it is never hit (`pressing?` stops within 0.8 on the plane); the fight has no engage timeout, only `:ghost` after 25 swings in reach.

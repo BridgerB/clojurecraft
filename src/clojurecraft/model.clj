@@ -106,6 +106,9 @@
     "after the first set_health"]
    [:player/saturation "food saturation from set_health: what drains before the food does"
     "after the first set_health"]
+   [:player/on-fire?
+    "is the bot burning: bit 0x01 of the shared flags byte (metadata index 0) the server last sent for its own entity. A fireball sets it alight for seconds, and there is no water in the Nether to put it out"
+    "after the first set-entity-data of its own entity"]
    [:player/attacker
     "entity id of whoever last struck the bot: a damage-event's source-cause minus one (0 on the wire is no entity). A zombified piglin that hit is angry, and a hit angers its pack"
     "for combat/struck-ms after a damage-event on the bot"]

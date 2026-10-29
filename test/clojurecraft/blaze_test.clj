@@ -438,6 +438,82 @@
       (is (blaze/collectable? (assoc w :player/health 19.0)))
       (is (blaze/collectable? (assoc (standing {7 rod}) :player/health 13.4))))))
 
+(deftest a-burning-bot-leaves-the-fire-and-neither-camps-nor-rests
+  ;; gym blaze-fortress-race run 4 (run 40770939167): the own entity's flags byte {0 1} at the first
+  ;; fireball, {0 0} when it burned out; `HIT type 31` between, while it camped; run 3 burned to
+  ;; death, no water in the Nether to put itself out
+  (let [step (fn [w md]
+               (game/step w
+                          {:event/kind :packet
+                           :event/packet
+                           {:packet/name :set-entity-data :entity-id 27 :metadata md}}))
+        me (assoc (standing {}) :player/entity-id 27)]
+    (testing "the flag is read off the bot's own entity, bit 0x01"
+      (is (true? (:player/on-fire? (step me {0 1 9 17.1}))))
+      (is (false? (:player/on-fire? (step (step me {0 1}) {0 0}))))
+      (is (true? (:player/on-fire? (step me {0 3}))) "on fire and crouching")
+      (is (nil? (:player/on-fire? (step me {9 17.1}))) "no flags byte: nothing learned")
+      (is (nil? (:player/on-fire? (game/step me
+                                             {:event/kind :packet
+                                              :event/packet {:packet/name :set-entity-data
+                                                             :entity-id 99
+                                                             :metadata {0 1}}})))
+          "another entity's"))
+    (testing "in a fire block it steps out, before a fight or a camp"
+      (let [burning (assoc (standing {})
+                           :player/on-fire? true
+                           :world/chunks
+                           {[0 0] (world/column {[8 64 8] (blocks/default-state :fire)})})
+            i (next-intent burning)]
+        (is (blaze/burning-here? burning))
+        (is (= :walk (:intent/kind i)))
+        (is (= :fire-out (:intent/for i)))
+        (is (not (blaze/burning-here? (assoc burning :world/chunks {[0 0] (world/column {})}))))
+        (is (not= :fire-out (:intent/for (next-intent (assoc burning :player/on-fire? false))))
+            "once the flag is clear it is not a fire-out")))
+    (testing "burning, it does not rest in cover"
+      (let [sp [11 64 10]
+            pillar {[6 64 8] (blocks/default-state :stone) [6 65 8] (blocks/default-state :stone)}
+            in-cover (-> (standing {})
+                         (assoc :world/chunks {[0 0] (world/column pillar)}
+                                :player/pos [5.5 64.0 8.5]
+                                :player/health 12.0)
+                         (memory/observe sp blaze/spawner))]
+        (is (= blaze/rest-intent (next-intent in-cover)))
+        (is (not= blaze/rest-intent (next-intent (assoc in-cover :player/on-fire? true))))))))
+
+(deftest the-camp-is-in-the-tunnel-one-wide-not-in-the-room
+  ;; gym blaze-fortress-race run 4 (run 40770939167): camped at the tunnel's end [2347 60 2282] in
+  ;; the room; blazes 497 [2347.2 61 2281.5] and 498 [2348.6 60.8 2283.8], 1.4 and 1.9 blocks from
+  ;; the bot at [2347.4 60 2282.5], took 18.3 health in five seconds (3.24m to 3.32m)
+  (let [stone (blocks/default-state :stone)
+        walls (into {} (for [x (range 3 8) y [64 65 66] z [7 9]] [[x y z] stone]))
+        roof (into {} (for [x (range 3 8) z [8]] [[x 66 z] stone]))
+        plug (into {} (for [y [64 65]] [[2 y 8] stone]))
+        w (-> (standing {})
+              (assoc :world/chunks {[0 0] (world/column (merge walls roof plug))}
+                     :fortress/trail
+                     {:trail/target [8 64 8]
+                      :trail/cells [[3 64 8] [4 64 8] [5 64 8] [6 64 8] [7 64 8]]
+                      :trail/dead #{}})
+              (memory/observe [11 64 10] blaze/spawner))]
+    (is (= 2 (blaze/exposure w [5 64 8])) "the tunnel is one wide")
+    (is (< 2 (blaze/exposure w [10 64 8])) "the room is not")
+    (is (= [6 64 8] (blaze/nook w))
+        "the second to last trail cell: one back from the cell before the room")
+    (is (nil? (blaze/nook (dissoc w :fortress/trail))) "walked in: no nook")
+    (testing "at the room's end it walks back to the nook, there it camps"
+      (let [at-end (assoc w :player/pos [8.5 64.0 8.5])
+            in-nook (assoc w :player/pos [6.5 64.0 8.5])]
+        (is (blaze/at-spawner? at-end [11 64 10]))
+        (is (= {:intent/kind :walk
+                :intent/target [6 64 8]
+                :intent/for :nook
+                :intent/max-nodes blaze/corridor-nodes}
+               (next-intent at-end)))
+        (is (blaze/at-nook? in-nook))
+        (is (= {:intent/kind :camp :intent/spawner [11 64 10]} (next-intent in-nook)))))))
+
 (deftest a-swarm-out-of-sight-is-waited-for-in-cover
   ;; sim R1/1 (probe 40761589784, TRACE): healed to 18 in cover, the bot walked out to the
   ;; spawner each time, was shot to 4 in the open and went back; sixteen foods, no kill

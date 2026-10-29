@@ -408,7 +408,11 @@
 (defmethod on-packet [:play :set-entity-data]
   ;; the skimmed metadata: shared flags, and a living entity's health (entity/metadata-facts)
   [w {:keys [entity-id metadata]}]
-  (track w entity-id (fn [e] (merge e (entity/metadata-facts (:entity/type e) metadata)))))
+  (cond-> (track w entity-id (fn [e] (merge e (entity/metadata-facts (:entity/type e) metadata))))
+    ;; the bot's own flags byte: bit 0x01 is on fire (gym blaze-fortress-race run 4: {0 1} at the
+    ;; first fireball, {0 0} when it burned out)
+    (and (= entity-id (:player/entity-id w)) (number? (get metadata entity/flags-index)))
+    (assoc :player/on-fire? (odd? (long (get metadata entity/flags-index))))))
 (defmethod on-packet [:play :move-entity-pos]
   [w {:keys [entity-id dx dy dz]}]
   (move-entity w entity-id dx dy dz))

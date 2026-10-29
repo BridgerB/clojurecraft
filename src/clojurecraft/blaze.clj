@@ -541,6 +541,7 @@
     (when (and (>= (count (swarm world)) volley)
                (not (in-open? world))
                (not (hurt? world))
+               (not (:player/on-fire? world))
                (or (nil? last-end) (> (- (:time/now world 0) last-end) ambush-cooldown)))
       {:intent/kind :ambush})))
 
@@ -591,7 +592,7 @@
            {:intent/kind :back-off :intent/target weid}
            @food @food
            (in-open? world) nil
-           (heals? world) rest-intent
+           (and (heals? world) (not (:player/on-fire? world))) rest-intent
            :else nil))))
 
 (defn crowded?
@@ -630,9 +631,80 @@
            (and aid (not (combat/void-retreat? world ae)))
            {:intent/kind :back-off :intent/target aid}
            @food @food
-           (and (heals? world) (nil? aid) (empty? (watchers world)) (not (in-open? world)))
+           (and (heals? world)
+                (not (:player/on-fire? world))
+                (nil? aid)
+                (empty? (watchers world))
+                (not (in-open? world)))
            rest-intent
            :else nil))))
+
+(def nook-reach 5) ; trail cells back from the tunnel's end a nook is looked for in
+
+(defn exposure
+  "How many of the four horizontal neighbours of cell c are open to the body (open?: the cell and
+   the one over it clear): 2 in a tunnel one wide, 3 or 4 in a room."
+  [world [x y z]]
+  (count (filter (fn [[dx dz]] (open? world [(+ x dx) y (+ z dz)])) [[1 0] [-1 0] [0 1] [0 -1]])))
+
+(defn nook
+  "The cell in the tunnel the bot dug to the spawner (the fortress trail: the feet cells its steps
+   began from, oldest first) to camp in instead of the room: the second to last trail cell or one
+   of the nook-reach before it, the latest standable one with an exposure of 2 or less, or nil
+   when the bot walked in or the tunnel has no such cell. In a corridor one wide a blaze reaches
+   the bot from the room along one line, one at a time, and the rest have no line. Gym
+   blaze-fortress-race run 4 (run 40770939167) camped at the tunnel's end [2347 60 2282], in the
+   room: blazes 497 and 498 hovered at 1.4 and 1.9 blocks and took 18.3 health in five seconds."
+  [world]
+  (let [cells (:trail/cells (:fortress/trail world))]
+    (->> (rest (reverse cells))
+         (take nook-reach)
+         (filter (fn [c] (and (path/standable? world c) (<= (exposure world c) 2))))
+         first)))
+
+(defn at-nook?
+  "Are the feet in the cell nook names?"
+  [world]
+  (let [n (nook world)] (and (some? n) (= n (intent/feet world)))))
+
+(def fire-blocks #{:fire :soul_fire})
+(def fire-out-reach 3) ; cells round the feet a burning bot looks for ground without fire in
+
+(defn burning-here?
+  "Does the cell the feet stand in, or the one over it, hold fire? A bot in a fire block is lit
+   again as it burns out."
+  [world]
+  (let [[x y z] (intent/feet world)]
+    (boolean (some (fn [c]
+                     (contains? fire-blocks
+                                (some-> (terrain/block-at world c)
+                                        blocks/name-of)))
+                   [[x y z] [x (inc y) z]]))))
+
+(defn leave-fire
+  "A walk to the nearest standable cell within fire-out-reach with no fire in it or over it, or
+   nil: a burning bot in a fire block steps out of it before anything else (the flag :player/on-fire?
+   clears seconds after it leaves the flames; there is no water here to put it out). One route of
+   corridor-nodes."
+  [world]
+  (let [[x y z] (intent/feet world)
+        clear? (fn [c]
+                 (not-any? #(contains? fire-blocks
+                                       (some-> (terrain/block-at world %)
+                                               blocks/name-of))
+                           [c (update c 1 inc)]))
+        stands (for [dx (range (- fire-out-reach) (inc fire-out-reach))
+                     dz (range (- fire-out-reach) (inc fire-out-reach))
+                     dy [-1 0 1]
+                     :let [c [(+ x dx) (+ y dy) (+ z dz)]]
+                     :when (and (not= c [x y z]) (path/standable? world c) (clear? c))]
+                 c)
+        to (memory/nearest-of (:player/pos world) (double (inc fire-out-reach)) stands)
+        walk {:intent/kind :walk
+              :intent/target to
+              :intent/for :fire-out
+              :intent/max-nodes corridor-nodes}]
+    (when (and to (intent/routable? world walk)) walk)))
 
 (defn fires
   "The cells within fire-radius of spawner sp on the plane, from a block under its height to two
@@ -863,11 +935,13 @@
         away (delay (when (outnumbered? world) (hide world)))
         waiting (delay (ambush world))
         stock (delay (when-not (hurt? world) (stocking world)))
+        out (delay (when (and (:player/on-fire? world) (burning-here? world)) (leave-fire world)))
         fire (delay (when (and sp (at-spawner? world sp)) (put-out world sp)))
         pick (delay (when (build/pickaxe-at-hand? world)
                       (make/decide world (assoc goal :goal/provides {:tag/pickaxes 1}) table)))]
     (cond (not= dimension/nether (dimension/of world)) {:plan/wait :other-dimension}
           @heal @heal
+          @out @out
           (and (not (hurt? world)) heid (not (crowded? world)))
           {:intent/kind :fight :intent/target heid :intent/to-the-end? true :intent/yield? true}
           @wary @wary
@@ -884,9 +958,14 @@
           @fire @fire
           (and (hurt? world) (not (heals? world)) (food-trip world)) (food-trip world)
           (and (or (nil? sp) (not (at-spawner? world sp))) @pick) @pick
-          (and sp (not (at-spawner? world sp))) (to-spawner world sp)
-          (and sp (at-spawner? world sp) (not (hurt? world)))
-          {:intent/kind :camp :intent/spawner sp}
+          (and sp (not (at-spawner? world sp)) (not (at-nook? world))) (to-spawner world sp)
+          (and sp
+               (or (at-spawner? world sp) (at-nook? world))
+               (not (hurt? world))
+               (not (:player/on-fire? world)))
+          (if-let [n (and (not (at-nook? world)) (nook world))]
+            {:intent/kind :walk :intent/target n :intent/for :nook :intent/max-nodes corridor-nodes}
+            {:intent/kind :camp :intent/spawner sp})
           :else (or (search world) {:plan/wait :no-blaze}))))
 
 ;; ---------------------------------------------------------------- the :portal-home intent
@@ -920,6 +999,7 @@
                   (assoc :player/controls {})
                   (intent/assoc-intent :intent/since since))]
     (cond (or (some? (at-hand-blaze world))
+              (:player/on-fire? world)
               (< (count (swarm world)) volley)
               (in-open? world)
               (hurt? world)
@@ -988,6 +1068,7 @@
             (assoc :player/controls {})
             (intent/assoc-intent :intent/since since :intent/blazes seen :intent/health health))]
     (cond (or (>= now-health rested)
+              (:player/on-fire? world)
               (and (not (heals? world)) (not (void-hold? world)))
               (< now-health health)
               (seq (remove seen here))
