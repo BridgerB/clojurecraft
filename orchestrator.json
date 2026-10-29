@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-29T19:10:03.011Z",
+  "at" : "2026-10-29T19:14:22.871Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -27,11 +27,6 @@
     "title" : "Bot stops at portal-kit: no-support",
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : true
-  }, {
-    "number" : 610,
-    "title" : "Bot stops at cast-one: no-support",
-    "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
   }, {
     "number" : 178,
     "title" : "Bot stops at portal: timeout",
@@ -65,6 +60,11 @@
   }, {
     "number" : 612,
     "title" : "Bot stops at ender-pearls: no-support",
+    "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 610,
+    "title" : "Bot stops at cast-one: no-support",
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
