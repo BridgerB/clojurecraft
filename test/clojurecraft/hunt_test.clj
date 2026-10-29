@@ -225,6 +225,19 @@
                                          1 (item :bread hunt/early-provision-wanted)}))))
     (is (= hunt/provision-wanted (hunt/provision-target (standing 20 kit-held {}))))))
 
+(deftest back-from-the-nether-with-a-stone-pickaxe-the-phase-is-the-returns
+  ;; probe 40801960382: the pickaxe was kept through the death, :early took the phase, its target
+  ;; of six and its two minutes, and :no-food-to-return came 142 s after the respawn
+  (let [w (-> (standing 20 {0 (item :stone_pickaxe 1)} {})
+              (assoc :plan/reached #{:nether} :time/now 1000 :time/tick 0))]
+    (is (= :return (hunt/provision-phase w)))
+    (is (= hunt/provision-wanted (hunt/provision-target w)))
+    (is (= hunt/forage-ms (hunt/forage-budget (hunt/provision-phase w))))
+    (is (= :early (hunt/provision-phase (assoc w :plan/reached #{})))
+        "the Nether never reached: the early phase as before")
+    (is (= :kit (hunt/provision-phase (assoc w :player/inventory kit-held)))
+        "the kit held: the kit's")))
+
 (deftest back-in-the-overworld-after-the-nether-the-bot-stocks-food-again
   ;; sim R1/1 (probe 40751212155): after a death the pickaxe and the kit were gone, no phase
   ;; applied, and the bot went back through its lit portal twelve times with no edible item

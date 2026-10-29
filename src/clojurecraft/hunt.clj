@@ -71,14 +71,18 @@
    #504): the kit was finished at y -29 and the bot never surfaced again, so the Nether leg began
    with no food. :return when the Nether was reached before and neither goods are held, the bot
    back in the overworld after a death: sim R1/1 (probe 40751212155) went back through its lit
-   portal twelve times with no edible item and no pickaxe, each time dead within the half hour."
+   portal twelve times with no edible item and no pickaxe, each time dead within the half hour.
+   :return before :early: a bot back from the Nether that still holds a stone pickaxe is in the
+   return's phase, with its reserve of sixteen and its six minutes, not the early one's six foods
+   and two minutes (sim R1/1, probe 40801960382, failed :no-food-to-return 142 s after the respawn:
+   the early budget, early-forage-ms 120 s, spent and the 20 s wait after it)."
   [world]
   (when (= dimension/overworld (dimension/of world))
     (cond (and (pos? (inventory/item-count world (recipe/item-id :flint_and_steel)))
                (pos? (inventory/item-count world (recipe/item-id :water_bucket))))
           :kit
-          (pos? (inventory/item-count world (recipe/item-id :stone_pickaxe))) :early
-          (contains? (:plan/reached world) :nether) :return)))
+          (contains? (:plan/reached world) :nether) :return
+          (pos? (inventory/item-count world (recipe/item-id :stone_pickaxe))) :early)))
 
 (defn provision-target
   "The edible items the provision-phase wants held: early-provision-wanted in :early (the
