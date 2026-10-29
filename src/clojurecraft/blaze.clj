@@ -499,11 +499,20 @@
   (<= (physics/distance [(+ x 0.5) (+ y 0.5) (+ z 0.5)] [(+ sx 0.5) (+ sy 0.5) (+ sz 0.5)])
       spawner-wake))
 
-(defn exposure
-  "How many of the four horizontal neighbours of cell c are open to the body (open?: the cell and
-   the one over it clear): 2 in a tunnel one wide, 3 or 4 in a room."
+(defn walled?
+  "Is cell c, or the one over it, a loaded solid block? An unloaded cell is not a wall: nothing is
+   known of it, and the edge of the loaded world is no tunnel."
   [world [x y z]]
-  (count (filter (fn [[dx dz]] (open? world [(+ x dx) y (+ z dz)])) [[1 0] [-1 0] [0 1] [0 -1]])))
+  (boolean (some #(some-> (terrain/block-at world %)
+                          blocks/solid?)
+                 [[x y z] [x (inc y) z]])))
+
+(defn exposure
+  "How many of the four horizontal neighbours of cell c are not walled (walled?): 2 in a tunnel
+   one wide, 3 or 4 in a room, and at the edge of the loaded chunks an unloaded neighbour counts
+   as open (the first cut of it found false nooks at a chunk's edge)."
+  [world [x y z]]
+  (count (remove (fn [[dx dz]] (walled? world [(+ x dx) y (+ z dz)])) [[1 0] [-1 0] [0 1] [0 -1]])))
 
 (def nook-steps 12) ; cells of walk from the feet a nook is looked for within
 (def nook-nodes 400) ; cells one search for a nook visits at most
@@ -1104,7 +1113,7 @@
           {:intent/kind :collect-drops
            :intent/item :blaze_rod
            :intent/target (hunt/cell (:entity/pos lying))}
-          (and (not (hurt? world)) (not (wary? world)) beid)
+          (and (not (hurt? world)) beid)
           {:intent/kind :fight :intent/target beid :intent/yield? true}
           @waiting @waiting
           @stock @stock

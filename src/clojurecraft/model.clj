@@ -115,11 +115,9 @@
    [:player/on-fire?
     "is the bot burning: bit 0x01 of the shared flags byte (metadata index 0) the server last sent for its own entity. A fireball sets it alight for seconds, and there is no water in the Nether to put it out"
     "after the first set-entity-data of its own entity"]
-   [:player/attacker
-    "entity id of whoever last struck the bot: a damage-event's source-cause minus one (0 on the wire is no entity). A zombified piglin that hit is angry, and a hit angers its pack"
-    "for combat/struck-ms after a damage-event on the bot"]
-   [:player/hurt-at "ms (:time/now) of that strike" "with :player/attacker"]
-   [:control/forward? "walk forward" "inside :player/controls"]
+   [:player/struck-at
+    "ms (:time/now) of the last damage-event on the bot, beside :player/hurt-at in ticks: combat/striker ages the strike against struck-ms. A zombified piglin that hit is angry, and a hit angers its pack"
+    "after a damage-event on the bot"] [:control/forward? "walk forward" "inside :player/controls"]
    [:control/jump? "jump when allowed" "inside :player/controls"]
    [:control/yaw "heading to walk on" "inside :player/controls"]
    [:control/look "[yaw pitch] to face" "inside :player/controls"]

@@ -497,6 +497,8 @@
               (memory/observe [11 64 8] blaze/spawner))]
     (is (= 2 (blaze/exposure w [5 64 8])) "the tunnel is one wide")
     (is (< 2 (blaze/exposure w [10 64 8])) "the room is not")
+    (is (< 2 (blaze/exposure w [15 64 8])) "the edge of the loaded chunk is not a tunnel")
+    (is (< 2 (blaze/exposure w [0 64 15])) "nor its corner")
     (is (= [6 64 8] (blaze/nook w [11 64 8]))
         "the nearest one-wide cell by walking outside the spawner's volume (5 on x)")
     (testing "a trail cell in the spawner's volume is never picked, however little it is exposed"
@@ -623,8 +625,12 @@
         w (standing {7 far})]
     (is (= 18.0 blaze/engage-health))
     (is (= :fight (:intent/kind (next-intent (assoc w :player/health 19.0)))) "healthy: fought")
-    (doseq [h [10.5 14.0 17.5]]
-      (is (not= :fight (:intent/kind (next-intent (assoc w :player/health h)))) (str "not at " h)))
+    (let [pillar-w (assoc w :world/chunks {[0 0] (world/column pillar)})]
+      (doseq [h [10.5 14.0 17.5]]
+        (is (= :cover (:intent/for (next-intent (assoc pillar-w :player/health h))))
+            (str "with cover to be had: cover first, not a fight at " h))))
+    (testing "with no cover, meal or rest to be had the nearest is fought: nothing better"
+      (is (= :fight (:intent/kind (next-intent (assoc w :player/health 14.0))))))
     (testing "a blaze at hand is still fought: it follows into any cover (blaze-fire-b)"
       (let [near (entity :blaze [10.5 65.0 8.5] :entity/health 20.0)]
         (is (= :fight
@@ -898,7 +904,7 @@
                  :player/health 13.0
                  :player/food 20
                  :player/attacker 7
-                 :player/hurt-at 1000
+                 :player/struck-at 1000
                  :time/now 1500
                  :plan/goals #{:blaze-rods})]
     (is (= {:intent/kind :back-off :intent/target 7} (next-intent w))

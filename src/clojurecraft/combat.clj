@@ -646,12 +646,12 @@
 
 (defn striker
   "[eid entity] that last struck the bot, while the strike is fresher than struck-ms and the
-   entity is still there; nil otherwise. :player/attacker and :player/hurt-at come from a
-   damage-event. A zombified piglin is not hostile until it hits (entity/hostile? wants
+   entity is still there; nil otherwise. :player/attacker and :player/struck-at (ms; hurt-at is
+   the tick) come from a damage-event. A zombified piglin is not hostile until it hits (entity/hostile? wants
    creepy?, which only an enderman sends), so the strike is the sign the pack is angry."
   [world]
   (let [id (:player/attacker world)
-        at (:player/hurt-at world)
+        at (:player/struck-at world)
         e (get-in world [:world/entities id])]
     (when
       (and (some? id) (some? at) e (not (entity/dead? e)) (<= (- (:time/now world 0) at) struck-ms))

@@ -278,7 +278,7 @@
                       :player/health 13.0
                       :player/entity-id 27
                       :player/attacker 7
-                      :player/hurt-at 1000
+                      :player/struck-at 1000
                       :time/now 1500)]
     (is (empty? (combat/threats calm)) "a calm one is no threat, and not a fight")
     (is (plan/done-by calm (row :defend)))
@@ -310,7 +310,7 @@
                           :source-cause 0
                           :source-direct 0})]
         (is (= 7 (:player/attacker (game/step w hit))))
-        (is (= 1500 (:player/hurt-at (game/step w hit))))
+        (is (= 1500 (:player/struck-at (game/step w hit))))
         (is (nil? (:player/attacker (game/step w other)))
             "a hit on the piglin is not one on the bot")
         (is (nil? (:player/attacker (game/step w none))) "source-cause 0 is no entity")))))

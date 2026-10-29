@@ -313,20 +313,12 @@
     (let [attacker (if (pos? (long (or source-direct 0)))
                      (dec (long source-direct))
                      (when (pos? (long (or source-cause 0))) (dec (long source-cause))))]
-      (cond-> (assoc w :player/hurt-at (:time/tick w 0))
+      ;; :player/hurt-at is in ticks (the dragon's rules read it); :player/struck-at is the same
+      ;; moment in ms (:time/now), which combat/striker ages against struck-ms (gym blaze-wall-b,
+      ;; plan 40624888909: zombified piglin 126 arrived as 127, 144 as 145)
+      (cond-> (assoc w :player/hurt-at (:time/tick w 0) :player/struck-at (:time/now w 0))
         attacker (assoc :player/attacker attacker)))
     w))
-
-(defmethod on-packet [:play :damage-event]
-  ;; ClientboundDamageEventPacket writes an optional entity id as 0 or id+1. source-cause 0 is
-  ;; no entity; otherwise the attacker is source-cause minus one (gym blaze-wall-b, plan
-  ;; 40624888909: zombified piglin 126 arrived as 127, 144 as 145). Only a strike on the bot
-  ;; itself is kept: the same packet reports every entity's hurt, including the blaze just hit.
-  [w {:keys [entity-id source-cause]}]
-  (cond (not= entity-id (:player/entity-id w)) w
-        (and (int? source-cause) (pos? source-cause))
-        (assoc w :player/attacker (dec source-cause) :player/hurt-at (:time/now w 0))
-        :else w))
 
 (defmethod on-packet [:play :container-set-content]
   [w {:keys [window-id state-id items carried]}]
