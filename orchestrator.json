@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-29T21:19:20.951Z",
+  "at" : "2026-10-29T21:21:31.749Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -48,13 +48,13 @@
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
-    "number" : 611,
-    "title" : "Bot stops at portal-kit: no-support",
+    "number" : 610,
+    "title" : "Bot stops at cast-one: no-support",
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
-    "number" : 610,
-    "title" : "Bot stops at cast-one: no-support",
+    "number" : 611,
+    "title" : "Bot stops at portal-kit: no-support",
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
