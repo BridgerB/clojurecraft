@@ -15,6 +15,7 @@
             [clojurecraft.memory :as memory]
             [clojurecraft.path :as path]
             [clojurecraft.plan :as plan]
+            [clojurecraft.pocket :as pocket]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.sim :as sim]
             [clojurecraft.world :as world]
@@ -533,17 +534,21 @@
       (is (blaze/awake-from? [11 64 8] [6 64 8]))
       (is (not (blaze/awake-from? [30 64 10] [6 64 8])) "24 blocks off: it would not run")
       (is (nil? (blaze/nook w [30 64 10]))))
-    (testing "at the room's end it walks back to the nook, there it camps"
+    (testing "at the room's end the tunnel's dead end is a pocket: walked to, there it camps"
+      ;; the plugged end [3 64 8] has one opening and a roof: a pocket (pocket.clj), which the
+      ;; camp is taken in in place of the nook
       (let [at-end (assoc w :player/pos [8.5 64.0 8.5])
-            in-nook (assoc w :player/pos [6.5 64.0 8.5])]
+            in-nook (assoc w :player/pos [6.5 64.0 8.5])
+            in-pocket (assoc w
+                             :player/pos [3.5 64.0 8.5]
+                             :pocket/site {:pocket/cell [3 64 8] :pocket/stand nil :pocket/dig []})]
         (is (blaze/at-spawner? at-end [11 64 8]))
-        (is (= {:intent/kind :walk
-                :intent/target [6 64 8]
-                :intent/for :nook
-                :intent/max-nodes blaze/corridor-nodes}
-               (next-intent at-end)))
+        (is (= :pocket (:intent/kind (next-intent at-end))))
+        (is (= [3 64 8] (:pocket/cell (:intent/site (next-intent at-end)))))
         (is (blaze/at-nook? in-nook [11 64 8]))
-        (is (= {:intent/kind :camp :intent/spawner [11 64 8]} (next-intent in-nook)))))))
+        (is (= :pocket (:intent/kind (next-intent in-nook))) "the nook is not the pocket")
+        (is (pocket/in? in-pocket))
+        (is (= {:intent/kind :camp :intent/spawner [11 64 8]} (next-intent in-pocket)))))))
 
 (deftest the-tunnel-is-the-cover-it-knows-and-cover-that-churns-is-dropped
   ;; blaze-race-b (real, a33d2a96e): :walk [2344 57 2281], [2344 57 2280], [2344 57 2279], then
