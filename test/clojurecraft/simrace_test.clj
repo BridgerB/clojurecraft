@@ -36,8 +36,9 @@
 (deftest a-goal-newly-reached-is-traced
   ;; the cost of the gear step is a number: the time :gear and :portal-kit were reached, and the
   ;; Nether entered (:dimension), read off the TRACE lines
-  (let [before {:time/now 1000 :plan/reached #{:portal-kit}}
-        after {:time/now 1050 :plan/reached #{:portal-kit :gear}}
+  (let [base {:world/entities {} :player/pos [0.5 64.0 0.5] :player/inventory {}}
+        before (assoc base :time/now 1000 :plan/reached #{:portal-kit})
+        after (assoc base :time/now 1050 :plan/reached #{:portal-kit :gear})
         note (simrace/trace-note before after "R1" 1)]
     (is (= :reached (:what note)))
     (is (= [:gear] (:reached note)))
