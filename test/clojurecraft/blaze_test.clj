@@ -560,6 +560,27 @@
                                       (walked 1 [3 64 8])
                                       (walked 2 [4 64 8])))))))))
 
+(deftest the-stand-is-kept-while-the-feet-move-in-the-pocket
+  ;; blaze-race-a run 5 (727b4c2b2) and blaze-race-c (3a082f7b7): :tunnel-to [2209 60 1794] and
+  ;; [2210 60 1793], the stands west and north of the spawner [2210 60 1794], by turns every 14.5 s
+  ;; for 140 minutes, as the feet moved and the nearer of the two changed
+  (let [sp [10 64 10]
+        west [9 64 10]
+        north [10 64 9]
+        at (fn [x z] (assoc (standing {}) :player/pos [(+ x 0.5) 64.0 (+ z 0.5)]))
+        fact (fn [w target]
+               (memory/remember-intention
+                (assoc w :time/now 5000)
+                {:intent/id 1 :intent/kind :tunnel-to :intent/target target}
+                :done))]
+    (is (= west (blaze/stand (at 2 4) sp)) "from here the west stand is nearer")
+    (is (= north (blaze/stand (at 4 2) sp)) "and from here the north one: the choice flipped")
+    (testing "a tunnel last done to a stand keeps it"
+      (is (= west (blaze/stand (fact (at 4 2) west) sp)))
+      (is (= north (blaze/stand (fact (at 2 4) north) sp))))
+    (testing "a stand no longer open, or blacklisted, is not kept"
+      (is (= north (blaze/stand (assoc (fact (at 2 4) west) :plan/blacklist #{west}) sp))))))
+
 (deftest a-swarm-out-of-sight-is-waited-for-in-cover
   ;; sim R1/1 (probe 40761589784, TRACE): healed to 18 in cover, the bot walked out to the
   ;; spawner each time, was shot to 4 in the open and went back; sixteen foods, no kill
