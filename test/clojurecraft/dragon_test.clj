@@ -1097,7 +1097,8 @@
         cell (first (filter #(= 2 (first %)) (dragon/stand-cells w0)))
         centre (physics/centre cell)
         yaw (first (filter #(<= -1.3 (first (mob/ahead [0.5 66.0 0.5] % centre)) -1.0) (range 360)))
-        w (round-fountain [8.5 64.0 0.5] (sitting (double yaw)))
+        w (round-fountain [8.5 64.0 0.5]
+                          (assoc-in (sitting (double yaw)) [dragon-eid :entity/phase] 5))
         [_ d] (dragon/dragon w)
         [fx fz] (mob/facing yaw)
         pos [(+ (first centre) (* 0.8 fx)) 64.0 (+ (nth centre 2) (* 0.8 fz))]

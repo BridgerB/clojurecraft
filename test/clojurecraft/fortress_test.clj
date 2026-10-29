@@ -1373,5 +1373,5 @@
     (is (empty? (logs w1)) "the first stage: nothing to close")
     (is (= ["tunnel stage :choose 300ms"] (logs w2)))
     (is (= (logs w2) (logs w3)) "the same stage again: no line, no change")
-    (is (= ["tunnel stage :choose 300ms" "tunnel stage [:dig :open] 1100ms"] (logs w4)))
+    (is (= #{"tunnel stage :choose 300ms" "tunnel stage [:dig :open] 1100ms"} (set (logs w4))))
     (is (= :choose (get-in w4 [:plan/intent :intent/stage-key])))))

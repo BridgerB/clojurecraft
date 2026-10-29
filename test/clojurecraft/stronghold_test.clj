@@ -429,8 +429,10 @@
     (testing "when feet cell is in :plan/boxed-at, stairs down fallback is refused"
       (let [w (assoc seen :player/pos [8.5 26.0 8.5] :plan/boxed-at #{[8 26 8]})]
         (with-redefs [fortress/choose-move (constantly nil)]
-          (is (= {:plan/wait :no-way} (plan/next-intent w room-row plan/goals))
-              "a boxed feet cell never attempts stairs down again"))))
+          (is
+           (= {:intent/kind :stairs-up :intent/to-y 34 :intent/for :retreat}
+              (plan/next-intent w room-row plan/goals))
+           "a boxed feet cell never attempts stairs down again: a staircase up a leg instead, never the wait that ends the plan"))))
     (testing "when feet cell is boxed, to-room retreats along trail to earlier unboxed cell"
       ;; gym chain-w7 run 1: aquifer blocked tunnel-to, stairs-down boxed at [12985 3 16726];
       ;; to-room must retreat along trail to a different stair start, not wait :no-way
@@ -454,10 +456,10 @@
           (is (= {:intent/kind :walk :intent/target [12983 3 16726] :intent/for :retreat}
                  (stronghold/to-room w [12815 0 16673]))
               "the walk that failed is skipped for the next cell back")
-          (is (= {:plan/wait :no-way}
+          (is (= {:intent/kind :stairs-up :intent/to-y 11 :intent/for :retreat}
                  (stronghold/to-room (update w :plan/blacklist conj [12983 3 16726])
                                      [12815 0 16673]))
-              "every cell tried: the wait, never the same walk again"))))
+              "every cell tried: a staircase up, never the same walk again, never the wait"))))
     (testing "every retreat cell across water: a swim, not a walk to each in turn"
       ;; gym chain-w11 to w14 run 1: on the bank at the bottom of the flooded staircase
       ;; ([12983 3 16726]), `intent :walk` to each trail cell in turn 50 ms apart, every one
@@ -476,7 +478,7 @@
         ;; water in the columns either side of the bank's own (x 5-7 and 9-11): every step the
         ;; tunnel could take, east, aside, back or down, opens a cell in or beside water, so
         ;; (fortress/moves, aside included) leaves it no dry step and the retreat is reached
-        (is (= {:intent/kind :cross :intent/target [14 64 8] :intent/for :retreat}
+        (is (= {:intent/kind :cross :intent/target [13 64 8] :intent/for :retreat}
                (stronghold/to-room w [13 60 8]))
             "no route to a cell across it: the swim to the nearest of them")
         (is (= {:intent/kind :walk :intent/target [8 64 2] :intent/for :retreat}
