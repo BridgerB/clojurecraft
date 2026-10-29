@@ -463,6 +463,90 @@
 
 (defmethod path/heuristic :unseen [_ _] 0.0)
 
+(def spawn-range 4)   ; cells each way on x and z from the spawner a blaze is placed in (BaseSpawner SpawnRange, vanilla's default; mob/spawner :box [9 3 9]); the gym arena spawner sets 2
+(def spawn-height 1)  ; cells over or under the spawner's own a blaze is placed at (nextInt(3) - 1)
+(def spawner-wake 16) ; blocks from the spawner's centre a player keeps it running within (RequiredPlayerRange, default 16; mob/spawner :wake)
+
+(defn in-spawn-volume?
+  "Is cell c in the volume a spawner at cell sp places its blazes in: spawn-range each way on x and
+   z and spawn-height on y? A bot there has them appear at its elbow: gym blaze-fortress-race run 4
+   had 497 and 498 added 1.5 and 0.9 blocks from it (the bot 3 blocks from the spawner), the first
+   hit in the same tenth of a minute."
+  [[sx sy sz] [x y z]]
+  (and (<= (abs (- x sx)) spawn-range)
+       (<= (abs (- z sz)) spawn-range)
+       (<= (abs (- y sy)) spawn-height)))
+
+(defn awake-from?
+  "Is cell c within spawner-wake of the centre of the spawner at cell sp: its blazes still come?"
+  [[sx sy sz] [x y z]]
+  (<= (physics/distance [(+ x 0.5) (+ y 0.5) (+ z 0.5)] [(+ sx 0.5) (+ sy 0.5) (+ sz 0.5)])
+      spawner-wake))
+
+(defn exposure
+  "How many of the four horizontal neighbours of cell c are open to the body (open?: the cell and
+   the one over it clear): 2 in a tunnel one wide, 3 or 4 in a room."
+  [world [x y z]]
+  (count (filter (fn [[dx dz]] (open? world [(+ x dx) y (+ z dz)])) [[1 0] [-1 0] [0 1] [0 -1]])))
+
+(def nook-steps 12) ; cells of walk from the feet a nook is looked for within
+(def nook-nodes 400) ; cells one search for a nook visits at most
+
+(defn nook
+  "The cell, for the spawner at cell sp, to camp and take cover in instead of the room: the
+   nearest by walking from the feet (within nook-steps, nook-nodes visited) that the body stands in
+   (path/standable?), with an exposure of 2 or less (a tunnel one wide: the bot's own dug one, not
+   a fortress's corridor three wide), outside the spawner's volume (in-spawn-volume?) and within its
+   wake (awake-from?), or nil. In a corridor one wide a blaze reaches the bot from the room along
+   one line, one at a time. Gym blaze-fortress-race run 4 (run 40770939167) camped at the tunnel's
+   end [2347 60 2282], in the room: blazes 497 and 498 were added 1.5 and 0.9 blocks from it and
+   took 18.3 health in 5 s. Searched from the feet and not read off the fortress trail, which is
+   kept for one tunnel target and starts afresh with every retreat and re-tunnel (blaze-race-b
+   runs re-tunnelled to [2346 60 2281] and [2347 60 2282] by turns)."
+  [world sp]
+  (let [at (path/cells world)
+        ok? (fn [c]
+              (and (<= (exposure world c) 2) (not (in-spawn-volume? sp c)) (awake-from? sp c)))
+        start (intent/feet world)]
+    (loop [frontier [start]
+           seen #{start}
+           depth 0
+           visited 0]
+      (let [hit (some #(when (ok? %) %) frontier)]
+        (cond hit hit
+              (or (empty? frontier) (>= depth nook-steps) (>= visited nook-nodes)) nil
+              :else
+              (let [next (into []
+                               (comp (mapcat (fn [[x y z]]
+                                               (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
+                                                     dy [0 -1 1]]
+                                                 [(+ x dx) (+ y dy) (+ z dz)])))
+                                     (remove seen)
+                                     (filter #(path/standable? at %))
+                                     (distinct))
+                               frontier)]
+                (recur next (into seen next) (inc depth) (+ visited (count next)))))))))
+
+(defn at-nook?
+  "Are the feet in the cell nook names for the spawner at cell sp?"
+  [world sp]
+  (let [n (nook world sp)] (and (some? n) (= n (intent/feet world)))))
+
+(def cover-churn 3)      ; walks done within cover-churn-ms after which the cover is no longer asked: it is not holding
+(def cover-churn-ms 8000) ; ms the walks are counted over
+
+(defn churning?
+  "Have cover-churn walks been done within cover-churn-ms? Each cover walk is a few cells, the next
+   cover excludes the last two cells walked to (`recent`), and the blazes move: the bot walked
+   between [2344 57 2279] and [2344 57 2294] every half second under fire (blaze-race-b runs 1, 2
+   and 3, bot.log 01:58:50 to 01:58:55). The cover that is not holding is not asked again for a
+   spell; what follows is the fight, the meal or the rest."
+  [world]
+  (let [now (:time/now world 0)]
+    (>= (count (filter #(<= (- now (:intention/at %)) cover-churn-ms)
+                       (memory/newest-dones world :walk cover-churn)))
+        cover-churn)))
+
 (defn cover
   "A walk into the nearest cell out of the sight of every blaze in es, the nearest first
    (path's :unseen goal; back round the tunnel's corner the bot came by), stood in, or nil when
@@ -480,7 +564,7 @@
                                   (physics/distance pos (physics/centre %))
                                   (physics/distance pos (:entity/pos %)))
                                es))
-        r (when c
+        r (when (and c (not (churning? world)))
             (path/plan world
                        (path/feet-cell pos)
                        {:goal/kind :unseen :goal/pos c :goal/cells (vec cs) :goal/exclude recent}
@@ -500,6 +584,20 @@
                           cover-range)
                       (top-in-sight? world sp))))))
 
+(defn nook-cover
+  "A walk to the nook (nook) when it is another cell than the feet and out of the sight of every
+   blaze in threats (the spawner's top, a cell, is not asked: a spawner shoots nothing), else nil:
+   the tunnel the bot dug is the cover it knows."
+  [world sp threats]
+  (let [blazes (remove vector? threats)]
+    (when-let [n (and sp (seq blazes) (not (churning? world)) (nook world sp))]
+      (when (and (not= n (intent/feet world))
+                 (every? (fn [e] (unseen-from? world n (hunt/cell (:entity/pos e)))) blazes))
+        {:intent/kind :walk
+         :intent/target n
+         :intent/for :cover
+         :intent/max-nodes corridor-nodes}))))
+
 (defn hide
   "The cover walk from every watcher, and from the remembered spawner if within sight: none watching,
    or no cell out of their sight."
@@ -511,7 +609,7 @@
                             cover-range)
                         (top-in-sight? world sp))
         threats (concat (vals (watchers world)) (when sp-threat? [(update sp 1 inc)]))]
-    (cover world threats)))
+    (or (nook-cover world sp threats) (cover world threats))))
 
 (def ambush-ms 45000)      ; ms an ambush holds a cover for the swarm to come to the bot
 (def ambush-cooldown 180000) ; ms after an ambush ended before the next: a swarm that does not come is gone to, as before
@@ -638,57 +736,6 @@
                 (not (in-open? world)))
            rest-intent
            :else nil))))
-
-(def nook-reach 5) ; trail cells back from the tunnel's end a nook is looked for in
-(def spawn-range 4)   ; cells each way on x and z from the spawner a blaze is placed in (BaseSpawner SpawnRange, vanilla's default; mob/spawner :box [9 3 9]); the gym arena spawner sets 2
-(def spawn-height 1)  ; cells over or under the spawner's own a blaze is placed at (nextInt(3) - 1)
-(def spawner-wake 16) ; blocks from the spawner's centre a player keeps it running within (RequiredPlayerRange, default 16; mob/spawner :wake)
-
-(defn in-spawn-volume?
-  "Is cell c in the volume a spawner at cell sp places its blazes in: spawn-range each way on x and
-   z and spawn-height on y? A bot there has them appear at its elbow: gym blaze-fortress-race run 4
-   had 497 and 498 added 1.5 and 0.9 blocks from it (the bot 3 blocks from the spawner), the first
-   hit in the same tenth of a minute."
-  [[sx sy sz] [x y z]]
-  (and (<= (abs (- x sx)) spawn-range)
-       (<= (abs (- z sz)) spawn-range)
-       (<= (abs (- y sy)) spawn-height)))
-
-(defn awake-from?
-  "Is cell c within spawner-wake of the centre of the spawner at cell sp: its blazes still come?"
-  [[sx sy sz] [x y z]]
-  (<= (physics/distance [(+ x 0.5) (+ y 0.5) (+ z 0.5)] [(+ sx 0.5) (+ sy 0.5) (+ sz 0.5)])
-      spawner-wake))
-
-(defn exposure
-  "How many of the four horizontal neighbours of cell c are open to the body (open?: the cell and
-   the one over it clear): 2 in a tunnel one wide, 3 or 4 in a room."
-  [world [x y z]]
-  (count (filter (fn [[dx dz]] (open? world [(+ x dx) y (+ z dz)])) [[1 0] [-1 0] [0 1] [0 -1]])))
-
-(defn nook
-  "The cell, for the spawner at cell sp, in the tunnel the bot dug to it (the fortress trail: the feet cells its steps
-   began from, oldest first) to camp in instead of the room: the second to last trail cell or one
-   of the nook-reach before it, the latest standable one with an exposure of 2 or less outside the spawner volume (in-spawn-volume?) and within its wake (awake-from?), or nil
-   when the bot walked in or the tunnel has no such cell. In a corridor one wide a blaze reaches
-   the bot from the room along one line, one at a time, and the rest have no line. Gym
-   blaze-fortress-race run 4 (run 40770939167) camped at the tunnel's end [2347 60 2282], in the
-   room: blazes 497 and 498 were added 1.5 and 0.9 blocks from it and took 18.3 health in 5 s."
-  [world sp]
-  (let [cells (:trail/cells (:fortress/trail world))]
-    (->> (rest (reverse cells))
-         (take nook-reach)
-         (filter (fn [c]
-                   (and (path/standable? world c)
-                        (<= (exposure world c) 2)
-                        (not (in-spawn-volume? sp c))
-                        (awake-from? sp c))))
-         first)))
-
-(defn at-nook?
-  "Are the feet in the cell nook names for the spawner at cell sp?"
-  [world sp]
-  (let [n (nook world sp)] (and (some? n) (= n (intent/feet world)))))
 
 (def fire-blocks #{:fire :soul_fire})
 (def fire-out-reach 3) ; cells round the feet a burning bot looks for ground without fire in

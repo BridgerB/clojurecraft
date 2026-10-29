@@ -641,6 +641,21 @@
     :gym/summon race-armour
     :gym/timeout-ms trial-ms
     :gym/truth [(rods-held 7)]}
+   ;; blaze-fortress-geared: the same landing with exactly what this branch's gear step makes
+   ;; (gear.clj) and its entry gate requires (fortress/fed-for-nether?, four foods): an iron sword,
+   ;; iron helmet, chestplate and leggings in the inventory for the :wear-armour row to put on, four
+   ;; cooked beef, no Fire Resistance. The honest test of the branch; blaze-fortress-race keeps the
+   ;; unarmoured kit it was judged with
+   {:gym/goal :blaze-rods
+    :gym/name "blaze-fortress-geared"
+    :gym/until "blaze-rods"
+    :gym/land :nether-fortress
+    :gym/difficulty "normal"
+    :gym/prereqs ["minecraft:iron_pickaxe 1" "minecraft:cobblestone 64" "minecraft:iron_sword 1"
+                  "minecraft:iron_helmet 1" "minecraft:iron_chestplate 1"
+                  "minecraft:iron_leggings 1" "minecraft:cooked_beef 4"]
+    :gym/timeout-ms trial-ms
+    :gym/truth [(rods-held 7)]}
    ;; issue #263: endermen in the sealed Nether room (#261's arena), the pearl kit given there;
    ;; judged by a pearl held. Five that never move or teleport (NoAI), each within the hunt's
    ;; strike range of the landing, since a kill drops a pearl only one time in two (the loot

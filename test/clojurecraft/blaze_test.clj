@@ -491,17 +491,12 @@
         roof (into {} (for [x (range 3 8) z [8]] [[x 66 z] stone]))
         plug (into {} (for [y [64 65]] [[2 y 8] stone]))
         w (-> (standing {})
-              (assoc :world/chunks {[0 0] (world/column (merge walls roof plug))}
-                     :fortress/trail
-                     {:trail/target [8 64 8]
-                      :trail/cells [[3 64 8] [4 64 8] [5 64 8] [6 64 8] [7 64 8]]
-                      :trail/dead #{}})
+              (assoc :world/chunks {[0 0] (world/column (merge walls roof plug))})
               (memory/observe [11 64 10] blaze/spawner))]
     (is (= 2 (blaze/exposure w [5 64 8])) "the tunnel is one wide")
     (is (< 2 (blaze/exposure w [10 64 8])) "the room is not")
     (is (= [6 64 8] (blaze/nook w [11 64 10]))
-        "the second to last trail cell: outside the spawner's volume (5 on x)")
-    (is (nil? (blaze/nook (dissoc w :fortress/trail) [11 64 10])) "walked in: no nook")
+        "the nearest one-wide cell by walking outside the spawner's volume (5 on x)")
     (testing "a trail cell in the spawner's volume is never picked, however little it is exposed"
       (is (blaze/in-spawn-volume? [9 64 10] [6 64 8]) "3 on x and 2 on z")
       (is (blaze/in-spawn-volume? [9 64 10] [5 65 8]) "4 on x, one up")
@@ -509,7 +504,7 @@
       (is (not (blaze/in-spawn-volume? [9 64 10] [4 64 8])) "5 on x is out")
       (is (= [4 64 8] (blaze/nook w [9 64 10])) "[6] and [5] are inside: the next back")
       (is (= [3 64 8] (blaze/nook w [8 64 10])) "[6] [5] [4] are inside")
-      (is (nil? (blaze/nook w [2 64 8])) "all inside: no nook, the camp is as before"))
+      (is (nil? (blaze/nook w [5 64 8])) "all inside: no nook, the camp is as before"))
     (testing "within the spawner's wake"
       (is (blaze/awake-from? [11 64 10] [6 64 8]))
       (is (not (blaze/awake-from? [30 64 10] [6 64 8])) "24 blocks off: it would not run")
@@ -525,6 +520,45 @@
                (next-intent at-end)))
         (is (blaze/at-nook? in-nook [11 64 10]))
         (is (= {:intent/kind :camp :intent/spawner [11 64 10]} (next-intent in-nook)))))))
+
+(deftest the-tunnel-is-the-cover-it-knows-and-cover-that-churns-is-dropped
+  ;; blaze-race-b (real, a33d2a96e): :walk [2344 57 2281], [2344 57 2280], [2344 57 2279], then
+  ;; 2281, 2280, 2283 ... every 0.35 to 0.6 s while being shot (run 1 bot.log 01:58:50 to 01:58:55):
+  ;; each cover excluded the last two cells walked to, and the blazes moved. And every run
+  ;; re-tunnelled to the room, never to the tunnel it came by
+  (let [stone (blocks/default-state :stone)
+        walls (into {} (for [x (range 3 8) y [64 65 66] z [7 9]] [[x y z] stone]))
+        roof (into {} (for [x (range 3 8)] [[x 66 8] stone]))
+        plug (into {} (for [y [64 65]] [[2 y 8] stone]))
+        shooter (entity :blaze [12.5 65.0 12.5] :entity/health 20.0)
+        w (-> (standing {7 shooter})
+              (assoc :world/chunks {[0 0] (world/column (merge walls roof plug))}
+                     :player/health 12.0
+                     :time/now 100000)
+              (memory/observe [11 64 10] blaze/spawner))
+        walked (fn [w n target]
+                 (memory/remember-intention w
+                                            {:intent/id n :intent/kind :walk :intent/target target}
+                                            :done))]
+    (is (seq (blaze/watchers w)) "seen in the room")
+    (testing "the tunnel it came by is the cover: out of the shooter's sight"
+      (is (= {:intent/kind :walk
+              :intent/target [6 64 8]
+              :intent/for :cover
+              :intent/max-nodes blaze/corridor-nodes}
+             (blaze/hide w))))
+    (testing "three walks in eight seconds: the cover is not holding, not asked again"
+      (let [churned (-> w
+                        (walked 1 [3 64 8])
+                        (walked 2 [4 64 8])
+                        (walked 3 [5 64 8]))]
+        (is (blaze/churning? churned))
+        (is (nil? (blaze/hide churned)))
+        (is (not (blaze/churning? (assoc churned :time/now (+ 100000 blaze/cover-churn-ms 1000))))
+            "and asked again once the spell is over")
+        (is (not (blaze/churning? (-> w
+                                      (walked 1 [3 64 8])
+                                      (walked 2 [4 64 8])))))))))
 
 (deftest a-swarm-out-of-sight-is-waited-for-in-cover
   ;; sim R1/1 (probe 40761589784, TRACE): healed to 18 in cover, the bot walked out to the

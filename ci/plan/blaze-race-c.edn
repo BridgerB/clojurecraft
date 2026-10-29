@@ -1,0 +1,19 @@
+;; Issue #262: both race-kit rows, six runs each, after the nook is searched from the feet, the
+;; cover that churns is dropped, and the nook is the cover the bot takes. blaze-fortress-race is the
+;; unarmoured kit blaze-race-b was judged with; blaze-fortress-geared lands with what the gear
+;; step makes (sword, helmet, chestplate, leggings, four cooked beef), no Fire Resistance.
+{:plans/label "blaze-race-c"
+ :plans/jobs 6
+ :plans/issue 262
+ :plans/experiments [{:exp/name "blaze-fortress-race"
+                      :exp/kind :gym
+                      :exp/goal "blaze-fortress-race"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 1800}
+                     {:exp/name "blaze-fortress-geared"
+                      :exp/kind :gym
+                      :exp/goal "blaze-fortress-geared"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 1800}]}
