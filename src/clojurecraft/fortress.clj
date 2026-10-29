@@ -616,6 +616,22 @@
                                     :intent/top (inc (long (second feet)))
                                     :intent/status :active}))))))
 
+(defn stage-clock
+  "The world with the running intent's stage key set to key (:choose, or an op and step), and,
+   when the key differs from the last one, one log line, `tunnel stage <last key> <ms>ms`, the
+   time that stage took by the clock the events carry. Logging only: it changes no decision.
+   Chain-w9..w17 tunnels took 2.5 to 3 s a step of which two digs were 1.15 s; this names where
+   the rest goes (the walk into the cell, the settle, the confirm and the choice of the move)."
+  [world key]
+  (let [i (:plan/intent world)
+        now (:time/now world)
+        prev (:intent/stage-key i)]
+    (if (= prev key)
+      world
+      (cond-> (intent/assoc-intent world :intent/stage-key key :intent/stage-at now)
+        prev
+        (game/say (str "tunnel stage " (pr-str prev) " " (- now (:intent/stage-at i now)) "ms"))))))
+
 (defmethod intent/run :tunnel-to
   ;; one step at a time toward :intent/target: a step's move is chosen when it starts and its ops
   ;; worked until the bot stands in the cell stepped into; done at the target (within
@@ -648,7 +664,8 @@
       (and (nil? move) (false? (:player/on-ground? world)) (< airborne air-grace))
       (intent/assoc-intent (assoc world :player/controls {}) :intent/airborne (inc airborne))
       (nil? move)
-      (let [back (recentre world feet)
+      (let [world (stage-clock world :choose)
+            back (recentre world feet)
             trail (trail-of world target)
             seen (-> tunnel-visited
                      (into (:trail/cells trail))
@@ -715,7 +732,10 @@
                    (intent/routable? world child))
               (intent/dissoc-intent (assoc world :player/controls {}) :intent/child)
               :else
-              (let [world (build/work-op world i next event)
+              (let [world (build/work-op (stage-clock world [(:build/op next) (:build/step next)])
+                                         i
+                                         next
+                                         event)
                     i (:plan/intent world)]
                 (cond (and (intent/failed? i) (= :no-pickaxe (:intent/reason i)))
                       (-> world

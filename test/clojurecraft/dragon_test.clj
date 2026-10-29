@@ -1012,3 +1012,33 @@
         "away from the dragon, never a meal in its reach")
     (is (= :eat (:intent/kind (dragon/recover (assoc w :player/pos [20.5 64.0 0.5]))))
         "sheltered, far out: the meal")))
+
+(deftest the-first-blow-of-the-dragon-sends-the-bot-out-of-its-reach
+  ;; gym chain-w17 dragon run 1 (plan run 40904439588): 20 -> 17.1 -> 14.8 -> 11.9 -> 9.5 -> 3.3
+  ;; -> 0 in 2.4 s on the perch, the walk away begun at the third blow; a line that waits for
+  ;; three is too late
+  (let [at (fn [pos hurt-at]
+             (assoc (round-fountain pos (sitting 270.0))
+                    :player/dimension dimension/end
+                    :player/health 17.1
+                    :player/food 20
+                    :player/attacker dragon-eid
+                    :player/hurt-at hurt-at
+                    :time/tick 1000))
+        in-basin (at [2.5 64.0 0.5] 990)]
+    (is (dragon/struck-by-dragon? in-basin))
+    (is (not (dragon/struck-by-dragon? (at [2.5 64.0 0.5] 800))) "five seconds ago: quiet")
+    (is (not (dragon/struck-by-dragon? (assoc in-basin :player/attacker 99))) "not the dragon's")
+    (let [i (dragon/toward-dragon in-basin)]
+      (is (= [:walk :shelter] [(:intent/kind i) (:intent/for i)]) "out at once, at 17 health")
+      (is (<= 7.0 (physics/horizontal-distance (physics/centre (:intent/target i)) [0.0 0.0 0.0]))
+          "to a cell past the head's reach"))
+    (is (= {:plan/wait :hit-hold} (dragon/toward-dragon (at [9.5 64.0 0.5] 990)))
+        "already out: no stand, no perch, no strike until the quiet")
+    (is (not= {:plan/wait :hit-hold} (dragon/toward-dragon (at [9.5 64.0 0.5] 800)))
+        "the quiet over: on as before")
+    (let [perching (assoc in-basin
+                          :plan/intent
+                          {:intent/kind :perch :intent/target dragon-eid :intent/status :active})]
+      (is (plan/interrupts? perching {:goal/plan :dragon} {:intent/kind :perch})
+          "a perch running at 17 ends on the blow"))))

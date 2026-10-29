@@ -1359,3 +1359,19 @@
     (is (fortress/safe? (rock {}) [0 64 0] [1 0 0]) "plain rock is dug as before")
     (is (= [[1 64 0] "infested_stone_bricks"] (fortress/infested-ahead w [0 64 0] [10 64 0] 3))
         "the cell and block the refusal logs")))
+
+(deftest the-tunnels-stages-are-logged-with-their-times
+  ;; chain-w9..w17: a one-block step took 2.5 to 3 s, two digs 1.15 s of it; the stage lines say
+  ;; where the rest goes
+  (let [w (-> (rock {})
+              (assoc :time/now 1000 :plan/intent {:intent/kind :tunnel-to :intent/status :active}))
+        w1 (fortress/stage-clock w :choose)
+        w2 (fortress/stage-clock (assoc w1 :time/now 1300) [:dig :open])
+        w3 (fortress/stage-clock (assoc w2 :time/now 2050) [:dig :open])
+        w4 (fortress/stage-clock (assoc w3 :time/now 2400) :choose)
+        logs (fn [w] (keep #(when (= :log (:effect/kind %)) (:effect/message %)) (:bot/effects w)))]
+    (is (empty? (logs w1)) "the first stage: nothing to close")
+    (is (= ["tunnel stage :choose 300ms"] (logs w2)))
+    (is (= (logs w2) (logs w3)) "the same stage again: no line, no change")
+    (is (= ["tunnel stage :choose 300ms" "tunnel stage [:dig :open] 1100ms"] (logs w4)))
+    (is (= :choose (get-in w4 [:plan/intent :intent/stage-key])))))

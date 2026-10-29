@@ -91,6 +91,8 @@
 (def breath-radius entity/breath-radius) ; a breath cloud's radius when its metadata has not said: the sitting dragon's flame cloud (DragonSittingFlamingPhase)
 (def dragon-hit 6.8)                  ; health one hit of the dragon's head takes on Normal (gym chain-w12/w9: 18.5 to 11.7 to 4.9, 7.57 to 1.07)
 (def perch-line (+ combat/danger-margin (* 2 dragon-hit))) ; health under which the bot stands in the dragon's reach no more: two hits, which land within a second (three in 0.6 s killed one at 18.5), and the margin
+(def hit-hold-ticks 100)               ; ticks (five seconds) after the dragon's blow that the bot stays out of its reach and strikes no more
+(def step-out-radius 8.0)             ; blocks from the fountain a step out of the head's reach goes to: past mob/bite-out and the margin
 (def breath-hold 2.0)                 ; blocks more than breath-reach the bot keeps from a cloud before it sets out for the stand again, so a cloud growing as it walks does not turn it back (gym chain-w12 dragon run 2: 24 swaps in 12 s between the stand and the cell out of the breath)
 (def breath-margin 1.5)               ; blocks beyond a breath cloud's radius (:entity/radius: a fireball's grows from 3 to 7) the bot keeps
 (def behind-by 1.0)                   ; blocks behind the sitting dragon's body (along its facing, mob/ahead) a stand must be: out of its head's and neck's way
@@ -701,6 +703,18 @@
                        (:player/inventory world))))
     {:intent/kind :wear :intent/item :carved_pumpkin}))
 
+(defn struck-by-dragon?
+  "Did the dragon itself hit the bot within hit-hold-ticks: the last attacker (:player/attacker,
+   from a damage event's direct source) is the dragon's id and health fell (:player/hurt-at) that
+   recently? Not its breath (a cloud's id). Gym chain-w17 dragon run 1 (plan run 40904439588) went
+   20 -> 17.1 -> 14.8 -> 11.9 -> 9.5 -> 3.3 -> 0 in 2.4 s of blows on the perch; a line that waits
+   for three of them is too late."
+  [world]
+  (let [[eid _] (dragon world)
+        a (:player/attacker world)
+        at (:player/hurt-at world)]
+    (boolean (and eid a at (= a eid) (<= (- (:time/tick world 0) at) hit-hold-ticks)))))
+
 (declare fountain-stand holds? in-basin? stand-cells)
 
 (defmethod intent/run :perch
@@ -725,6 +739,7 @@
         stand (fountain-stand world)
         health (:player/health world full-health)]
     (cond (or (< health perch-line)
+              (struck-by-dragon? world)
               (entity/gone? world target)
               (and (breath-near world) (not (holds? world)))
               (and (in-bite? e (:player/pos world)) (not (scanning? e)) (some? stand))
@@ -880,6 +895,27 @@
          (sort-by #(physics/horizontal-distance pos (physics/centre %)))
          first)))
 
+(defn step-out-cell
+  "The feet cell on the ground nearest the feet, step-out-radius out from the fountain in any of
+   escape-ways directions, that no breath reaches and that is not before the sitting dragon's
+   head nor on a way past it; nil when none has ground loaded: the nearest place beyond the
+   head's reach along the rim."
+  [world]
+  (let [[_ d] (dragon world)
+        [fx fz] fountain
+        pos (:player/pos world)
+        feet (intent/feet world)]
+    (->> (for [k (range escape-ways)
+               :let [a (* k (/ (* 2.0 math/PI) escape-ways))]]
+           [(+ fx (* step-out-radius (math/cos a))) (+ fz (* step-out-radius (math/sin a)))])
+         (keep #(ground-cell world %))
+         (remove #{feet})
+         (remove #(breathed? world %))
+         (remove #(before-head? d (physics/centre %)))
+         (remove #(bite-on-way? d pos (physics/centre %)))
+         (sort-by #(physics/horizontal-distance pos (physics/centre %)))
+         first)))
+
 (defn sheltered?
   "Is the bot standing in a safe shelter cell outside the fountain basin: at least escape-from
    out from the fountain, no breath reaching the feet (breathed?), and not before the sitting
@@ -915,6 +951,21 @@
           eid {:intent/kind :back-off :intent/target eid}
           food {:intent/kind :eat :intent/item food}
           :else {:plan/wait :low-health})))
+
+(defn after-blow
+  "The intent in the hit-hold-ticks after the dragon's blow (struck-by-dragon?): inside step-out-radius
+   of the fountain, the shelter walk to the nearest cell beyond the head's reach (step-out-cell),
+   else combat's :back-off from the dragon; outside it, recover while under perch-line, else the
+   wait :hit-hold: no stand, no perch and no strike until the quiet. Gym chain-w17 dragon runs 1
+   and 2 went from 20 to 0 in 2.4 s and 2 s on the perch."
+  [world]
+  (let [out? (>= (from-fountain world) step-out-radius)
+        cell (when-not out? (step-out-cell world))
+        [eid _] (dragon world)]
+    (cond cell (shelter-walk cell)
+          (not out?) {:intent/kind :back-off :intent/target eid}
+          (< (:player/health world full-health) perch-line) (recover world)
+          :else {:plan/wait :hit-hold})))
 
 (defn toward-dragon
   "The next intent toward the dragon dead: on the ground in a breath cloud itself (in-breath?)
@@ -959,6 +1010,7 @@
           (shelter-walk (escape world))
           (or (off-island? world) (seq (crystals world)) (on-pillar? world) (on-spike? world))
           (toward-crystals world)
+          (struck-by-dragon? world) (after-blow world)
           (< (:player/health world full-health) perch-line) (recover world)
           (and breath eid (holds? world)) {:intent/kind :perch :intent/target eid}
           (and breath eid d (grounded? d) (or (in-basin? world) (not blocked?)) far?)
@@ -1051,7 +1103,8 @@
   (let [[_ d] (dragon world)
         pos (:player/pos world)
         shelter? (and (= :walk (:intent/kind i)) (= :shelter (:intent/for i)))]
-    (or (and (= :perch (:intent/kind i)) (< (:player/health world full-health) perch-line))
+    (or (and (= :perch (:intent/kind i))
+             (or (< (:player/health world full-health) perch-line) (struck-by-dragon? world)))
         (and (not= :back-off (:intent/kind i))
              (not shelter?)
              (not (off-island? world))
