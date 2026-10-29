@@ -471,10 +471,11 @@
                   (assoc :world/chunks {[0 0] band}
                          :plan/boxed-at #{[8 64 8]}
                          :plan/trail [[13 64 8] [14 64 8] [8 64 8]]))
-            i (stronghold/to-room w [13 60 8])]
-        (is (= {:intent/kind :cross :intent/target [14 64 8] :intent/for :retreat} i)
-            "no route to a cell across it: the swim to the nearest of them")
-        (let [w2 (assoc w :plan/trail [[2 64 8] [13 64 8] [8 64 8]])]
+            w2 (assoc w :plan/trail [[2 64 8] [13 64 8] [8 64 8]])]
+        (with-redefs [fortress/choose-move (constantly nil)]
+          (is (= {:intent/kind :cross :intent/target [14 64 8] :intent/for :retreat}
+                 (stronghold/to-room w [13 60 8]))
+              "no route to a cell across it: the swim to the nearest of them")
           (is (= {:intent/kind :walk :intent/target [2 64 8] :intent/for :retreat}
                  (stronghold/to-room w2 [13 60 8]))
               "one a route reaches is walked to"))))

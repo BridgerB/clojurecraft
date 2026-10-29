@@ -216,6 +216,7 @@
   "Does v fit wire type t: a primitive, [:vec T], or a struct (a vector of [key type] pairs)?"
   [t v]
   (cond (and (vector? t) (vector? (first t))) (and (map? v) (fields-ok? t v))
+        (p/conditional? t) (value-ok? (nth t 3) v)
         (vector? t) (and (sequential? v) (every? #(value-ok? (second t) %) v))
         (empty? (str t)) false
         :else ((:valid? (p/wire-types t)) v)))
