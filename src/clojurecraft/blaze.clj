@@ -1072,28 +1072,72 @@
          (sort-by (fn [[_ e]] (physics/distance eye (combat/aim e))))
          first)))
 
+(defn sealed?
+  "Is the bot in its pocket with the opening sealed (pocket/sealed?)?"
+  [world]
+  (and (pocket/in? world) (pocket/sealed? world (:pocket/site world))))
+
 (defn fightable-blaze
   "[eid entity] of the blaze fought before anything else: in the pocket (pocket/in?) the nearest
-   within reach (reach-blaze), elsewhere the one at hand (at-hand-blaze)."
+   within reach (reach-blaze), none when the opening is sealed (a blaze at the block is no target:
+   the seal is opened first), elsewhere the one at hand (at-hand-blaze)."
   [world]
-  (if (pocket/in? world) (reach-blaze world) (at-hand-blaze world)))
+  (cond (sealed? world) nil
+        (pocket/in? world) (reach-blaze world)
+        :else (at-hand-blaze world)))
 
 (defn pocket-ok?
   "The predicate of a pocket cell for the spawner at cell sp (nil: any cell): outside the volume
-   its blazes spawn in (in-spawn-volume?), within its wake (awake-from?), and with a clear line
-   to it (sees-spawner?), so the blazes that come see the bot only through the opening."
-  [world sp]
+   its blazes spawn in (in-spawn-volume?), within its wake (awake-from?), and, when see? (the
+   camp's, so the blazes come), with a clear line to it (sees-spawner?). A refuge asks no line
+   (see? false): the nearest pocket is the one to get into, sighted or not."
+  [world sp see?]
   (fn [c]
     (or (nil? sp)
-        (and (not (in-spawn-volume? sp c)) (awake-from? sp c) (sees-spawner? world sp c)))))
+        (and (not (in-spawn-volume? sp c))
+             (awake-from? sp c)
+             (or (not see?) (sees-spawner? world sp c))))))
 
 (defn pocket-go
-  "A :pocket intent for the nearest site (pocket/current), or nil when the feet are in the pocket
-   already or none is found: a pocket that exists is walked into, a wall is dug into."
-  [world sp]
+  "A :pocket intent for the nearest site (pocket/current, with the line to the spawner asked when
+   see?), or nil when the feet are in the pocket already or none is found: a pocket that exists
+   is walked into, a wall is dug into."
+  [world sp see?]
   (when-not (pocket/in? world)
-    (when-let [site (pocket/current world (intent/feet world) (pocket-ok? world sp))]
+    (when-let [site (pocket/current world (intent/feet world) (pocket-ok? world sp see?))]
       {:intent/kind :pocket :intent/site site})))
+
+(def pocket-approach 24.0) ; blocks from the spawner within which a pocket is made ready before the tunnel goes on
+(def approach-nodes 150)   ; cells the search for it visits at most when asked every tick (interrupts?)
+(def press-ms 8000)        ; ms after a hit a blaze in line but out of reach still presses the bot
+
+(defn prepare-intent
+  "A :pocket intent that makes a pocket ready ahead (:intent/prepare?: dug, not entered), or nil:
+   a spawner within pocket-approach, the bot not in a pocket and none held that is valid?, and a
+   site found within approach-nodes. The tunnel's last blocks are opened only after it: the first
+   volley came at the tunnel's end in 6 of blaze-race-j's 10 runs (+150 s, 4 blazes within 8)."
+  [world sp]
+  (when (and sp
+             (not (pocket/in? world))
+             (nil? (pocket/held-valid world))
+             (<= (physics/distance (physics/centre (intent/feet world)) (physics/centre sp))
+                 pocket-approach))
+    (when-let [site (pocket/current world
+                                    (intent/feet world)
+                                    (pocket-ok? world sp false)
+                                    approach-nodes)]
+      {:intent/kind :pocket :intent/site site :intent/prepare? true})))
+
+(defn pressed?
+  "Does a blaze in line press the bot out of reach: the bot burns, or blazes watch it and none is
+   in reach and it was struck within press-ms? Blaze-race-j race 3 held 18 s with the nearest at
+   4.0 against a reach of 3.2, race 1 37 s with the nearest at 5.4: fireballs through the
+   opening."
+  [world]
+  (boolean (or (:player/on-fire? world)
+               (and (seq (watchers world))
+                    (nil? (reach-blaze world))
+                    (<= (- (:time/now world 0) (:player/struck-at world -1000000)) press-ms)))))
 
 (defn hold-to
   "The health a hold in the pocket stays until: engage-health when a rest can heal (heals?), else
@@ -1102,16 +1146,24 @@
   (if (heals? world) engage-health combat/retreat-health))
 
 (defn hold-intent
-  "What a bot in its pocket does when it burns or is under hold-to: eat when the food is under
-   what heals (meal), else a :hold that stays out of every line until the fire is out and the
-   health is up; nil when it burns not and is not under, or a blaze is in reach (reach-blaze:
-   struck when the bot is not hurt, else the cover and the back-off as out of the pocket; a hold
-   that ended for it and was chosen again would restart every tick)."
+  "What a bot in its pocket does, or nil: SEALED, while it burns or is under hold-to, eat when the
+   food is under what heals (meal) else a :hold, until the fire is out, the health is up and the
+   last hit older than press-ms, then an :unseal; OPEN, a blaze in reach is struck (nil here),
+   while it is pressed? and can seal a :seal (a block in the opening, at the feet and the head,
+   over the head when it has no roof), else while it burns or is under hold-to a meal or a :hold
+   in the open (no filler held). Blaze-race-j race 3 and race 1 held open and died in it."
   [world]
-  (when (and (pocket/in? world)
-             (or (:player/on-fire? world) (< (:player/health world 20.0) (hold-to world)))
-             (nil? (reach-blaze world)))
-    (or (meal world) {:intent/kind :hold :intent/heal-to (hold-to world)})))
+  (when (pocket/in? world)
+    (let [site (:pocket/site world)
+          need? (or (:player/on-fire? world) (< (:player/health world 20.0) (hold-to world)))
+          struck? (<= (- (:time/now world 0) (:player/struck-at world -1000000)) press-ms)]
+      (cond (pocket/sealed? world site)
+            (if (or need? struck?)
+              (or (meal world) {:intent/kind :hold :intent/heal-to (hold-to world)})
+              {:intent/kind :unseal})
+            (reach-blaze world) nil
+            (and (pressed? world) (pocket/can-seal? world site)) {:intent/kind :seal}
+            need? (or (meal world) {:intent/kind :hold :intent/heal-to (hold-to world)})))))
 
 (defn refuge-needed?
   "Is a pocket wanted now: the bot burns, a volley of blazes watches it (outnumbered?), or it is
@@ -1152,6 +1204,7 @@
   (let [last-end (:intention/at (memory/last-done world :block))]
     (when (and (shield-held? world)
                (pocket/in? world)
+               (not (sealed? world))
                (seq (watchers world))
                (nil? (fightable-blaze world))
                (not (hurt? world))
@@ -1177,7 +1230,8 @@
    10 off, past the at-hand radius, shot the bot from 16.8 health to none in ten seconds, since
    nothing ends a running intent but itself and the planner is asked only then."
   [world i]
-  (and (not (contains? #{:fight :eat :rest :back-off :block :lower :hold :pocket} (:intent/kind i)))
+  (and (not (contains? #{:fight :eat :rest :back-off :block :lower :hold :pocket :seal :unseal}
+                       (:intent/kind i)))
        (not= :cover (:intent/for i))
        (seq (watchers world))
        (some? (cond (hurt? world) (healing world false)
@@ -1189,7 +1243,8 @@
   ;; from 20 health to 13.8, since nothing else ends a running intent; never interrupt cover or healing when hurt (#577);
   ;; and one hurt and watched (under-fire?) by blazes further off, whatever the intent but the answer to it
   [world _ i]
-  (or (and (not (hurt? world))
+  (or (and (= :tunnel-to (:intent/kind i)) (some? (prepare-intent world (nearest-spawner world))))
+      (and (not (hurt? world))
            (not= :fight (:intent/kind i))
            (not (and (= :cover (:intent/for i)) (crowded? world)))
            (some? (fightable-blaze world)))
@@ -1209,7 +1264,9 @@
         wary (delay (when (and (not in-pocket?) (wary? world)) (warily world)))
         away (delay (when (and (not in-pocket?) (outnumbered? world)) (hide world)))
         held (delay (hold-intent world))
-        refuge (delay (when (and (not in-pocket?) (refuge-needed? world)) (pocket-go world sp)))
+        refuge (delay (when (and (not in-pocket?) (refuge-needed? world))
+                        (pocket-go world sp false)))
+        prepare (delay (prepare-intent world sp))
         waiting (delay (ambush world))
         stock (delay (when-not (hurt? world) (stocking world)))
         out (delay (when (burning-here? world) (leave-fire world)))
@@ -1240,6 +1297,7 @@
       @fire @fire
       (and (hurt? world) (not (heals? world)) (food-trip world)) (food-trip world)
       (and (or (nil? sp) (not (at-spawner? world sp))) @pick) @pick
+      @prepare @prepare
       (and sp (not in-pocket?) (not (at-spawner? world sp)) (not (at-nook? world sp)))
       (to-spawner world sp)
       (and sp
@@ -1247,7 +1305,7 @@
            (not (hurt? world))
            (not (:player/on-fire? world)))
       (or
-       (pocket-go world sp)
+       (pocket-go world sp true)
        (when-let [n (and (not in-pocket?) (not (at-nook? world sp)) (nook world sp))]
          {:intent/kind :walk :intent/target n :intent/for :nook :intent/max-nodes corridor-nodes})
        {:intent/kind :camp :intent/spawner sp})
@@ -1415,9 +1473,10 @@
 
 (defmethod intent/run :hold
   ;; {:intent/kind :hold :intent/heal-to h}: stand still in the pocket, out of every line but the
-  ;; opening's, until the fire is out and the health is at h (done), a blaze comes within reach
-  ;; (done: it is struck), the cell is no pocket now or burns (done: the planner chooses), or
-  ;; hold-ms have passed (done: it is asked again)
+  ;; opening's, until the fire is out and the health is at h (and, sealed, the last hit older than
+  ;; press-ms: done), a blaze comes within reach of an open pocket (done: it is struck), the cell is
+  ;; no pocket now or burns (done: the planner chooses), or hold-ms have passed (done: it is asked
+  ;; again)
   [world {:intent/keys [since heal-to]} _]
   (let [now (:time/now world)
         since (or since now)
@@ -1425,8 +1484,10 @@
                   (assoc :player/controls {})
                   (intent/assoc-intent :intent/since since))]
     (cond (or (and (not (:player/on-fire? world))
-                   (>= (:player/health world 20.0) (or heal-to engage-health)))
-              (some? (reach-blaze world))
+                   (>= (:player/health world 20.0) (or heal-to engage-health))
+                   (or (not (sealed? world))
+                       (> (- now (:player/struck-at world -1000000)) press-ms)))
+              (and (some? (reach-blaze world)) (not (sealed? world)))
               (not (pocket/in? world))
               (burning-here? world)
               (> (- now since) hold-ms))

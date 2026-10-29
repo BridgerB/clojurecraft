@@ -435,6 +435,15 @@
    [:intent/spawner "the remembered spawner a :camp waits by for its blazes (issue #262)" "camp"]
    [:intent/site "the pocket (a :pocket/site map) a :pocket digs out and walks into (issue #262)"
     "pocket"]
+   [:intent/prepare?
+    "true for a :pocket made ready ahead of the tunnel's last blocks: dug, not entered (issue #262)"
+    "pocket"]
+   [:pocket/placed
+    "inside :pocket/site: the cells a :seal placed blocks in, empty while the pocket is open; the pocket is sealed while every one is solid. An :unseal digs them and empties it"
+    "after a :seal began"]
+   [:pocket/here?
+    "inside :pocket/site: true for the cell the feet stand in, sealed in place when no way to a pocket was found (a :pocket never fails the plan)"
+    "after a :pocket fell back"]
    [:intent/heal-to "the health a :hold in the pocket stays until, the fire out (issue #262)"
     "hold"]
    [:intent/blazes

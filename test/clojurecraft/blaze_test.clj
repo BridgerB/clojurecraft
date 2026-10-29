@@ -1229,3 +1229,104 @@
     (is (= {:intent/kind :lower} up) "the raised shield comes down first: it walks at a fifth")
     (is (= :fire-out (:intent/for down)) "then the walk out of the fire")
     (is (= :walk (:intent/kind down)))))
+
+(def cobble (blocks/default-state :cobblestone))
+
+(defn sealed-walls
+  "pocket-walls with the opening sealed: cobblestone west of the cell at the feet and the head."
+  []
+  (assoc pocket-walls [7 64 8] cobble [7 65 8] cobble))
+
+(deftest an-open-pocket-under-fire-is-sealed-and-a-sealed-one-is-held-then-opened
+  ;; blaze-race-j race 3 at 17:24:36 (:hold, burning, the nearest of five blazes at 4.0 against a
+  ;; reach of 3.2, 20 hp to 1.6 in 18 s) and race 1 at 17:32:51 (:hold, nearest 5.4, 37 s, hp 20 to
+  ;; 0.5): holding open under fire through the opening was the death
+  (let [line (entity :blaze [4.5 65.0 8.5] :entity/health 20.0)
+        loaded (fn [w] (assoc-in w [:player/inventory 9] (item :cobblestone 62)))
+        base (-> (standing {7 line})
+                 in-pocket
+                 loaded)
+        burning (assoc base :player/on-fire? true)]
+    (testing "burning, a blaze in line out of reach, filler held: a block in the opening"
+      (is (= {:intent/kind :seal} (next-intent burning))))
+    (testing "struck within press-ms by a blaze in line out of reach, not burning: the same"
+      (is (= {:intent/kind :seal}
+             (next-intent (assoc base :player/struck-at (- (:time/now base 0) 1000))))))
+    (testing "no filler held: the old hold in the open"
+      (is (= :hold
+             (:intent/kind (next-intent (assoc (standing {7 line})
+                                               :player/on-fire? true
+                                               :pocket/site pocket-site
+                                               :world/chunks
+                                               {[0 0] (world/column pocket-walls)}))))))
+    (testing "a blaze in reach is struck, not sealed out"
+      (is (= :fight
+             (:intent/kind (next-intent (-> (standing {7 (entity :blaze [6.5 65.0 8.5]
+                                                                 :entity/health 20.0)})
+                                            in-pocket
+                                            loaded
+                                            (assoc :player/on-fire? true)))))))
+    (testing "sealed and burning: the hold, with the blaze at the block no target"
+      (let [sealed (-> base
+                       (assoc :world/chunks {[0 0] (world/column (sealed-walls))}
+                              :pocket/site (assoc pocket-site :pocket/placed [[7 64 8] [7 65 8]])
+                              :player/on-fire? true)
+                       (assoc-in [:world/entities 7]
+                                 (entity :blaze [6.5 65.0 8.5] :entity/health 20.0)))]
+        (is (pocket/sealed? sealed (:pocket/site sealed)))
+        (is (= :hold (:intent/kind (next-intent sealed))))
+        (is (nil? (blaze/fightable-blaze sealed)) "a blaze at the seal is not fought")
+        (testing "fire out, health up, the last hit old: the seal is opened"
+          (is (= {:intent/kind :unseal}
+                 (next-intent (assoc sealed :player/on-fire? false :player/struck-at -1000000)))))
+        (testing "fire out but struck a second ago: still held"
+          (is (= :hold
+                 (:intent/kind (next-intent (assoc sealed
+                                                   :player/on-fire? false
+                                                   :player/struck-at (:time/now sealed 0)))))))))))
+
+(deftest a-pocket-that-cannot-be-reached-is-sealed-where-the-bot-stands-not-failed
+  ;; blaze-race-j geared 4 at 17:14:57 (:pocket failed :no-path x3 in 0.4 s at 17 hp, then the
+  ;; plan failed) and race 2 at 17:35:38
+  (let [site {:pocket/cell [3 64 3] :pocket/stand [2 64 3] :pocket/dig [[3 64 3] [3 65 3]]}
+        w (assoc (standing {}) :plan/intent {:intent/kind :pocket :intent/site site})
+        out (intent/run w (:plan/intent w) {:event/kind :tick :event/now 1000})
+        i (:plan/intent out)]
+    (is (intent/done? i) "the site is no pocket here: done, not failed")
+    (is (not (intent/failed? i)))
+    (is (= [8 64 8] (:pocket/cell (:pocket/site out)))
+        "the cell the feet stand in is held to be sealed")
+    (is (true? (:pocket/here? (:pocket/site out))))
+    (testing
+      "and there the openings are the cells to seal, every open side at the feet and the head"
+      (is (= #{[7 64 8] [9 64 8] [8 64 7] [8 64 9] [7 65 8] [9 65 8] [8 65 7] [8 65 9] [8 66 8]}
+             (set (pocket/seal-cells out [8 64 8])))))))
+
+(def rock
+  "Solid rock two thick all round a tunnel along z 8 from x 4 to 8 at the feet and the head, roofed,
+   plugged at x 3."
+  (into {}
+        (for [x (range 3 9)
+              y [64 65 66]
+              z (range 5 12)
+              :when (or (= y 66) (not= z 8) (= x 3))]
+          [[x y z] (blocks/default-state :stone)])))
+
+(deftest the-pocket-is-dug-ahead-of-the-tunnels-last-blocks
+  ;; blaze-race-j: 6 of 10 runs took the first volley at the tunnel's end at +150 s with 4 blazes
+  ;; within 8 blocks; the pocket is made ready when the spawner is within pocket-approach
+  (let [w (-> (standing {})
+              (assoc :world/chunks {[0 0] (world/column rock)} :player/pos [5.5 64.0 8.5])
+              with-spawner)
+        tunnel {:intent/kind :tunnel-to :intent/target [10 64 8]}
+        i (next-intent w)]
+    (is (= :pocket (:intent/kind i)))
+    (is (true? (:intent/prepare? i)) "dug, not entered")
+    (is (plan/interrupts? w row tunnel) "the running tunnel is cut for it")
+    (testing "a pocket held and valid: the tunnel goes on"
+      (let [held (assoc w :pocket/site (:intent/site i))]
+        (is (not (plan/interrupts? (assoc held :world/chunks {[0 0] (world/column rock)})
+                                   row
+                                   tunnel)))))
+    (testing "far from the spawner: not yet"
+      (is (not (plan/interrupts? (assoc w :world/facts (memory/empty-facts)) row tunnel))))))

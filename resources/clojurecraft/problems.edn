@@ -405,6 +405,7 @@
   ["Fireballs: five a hit on Normal, and fire; a bot that fights on under 10 health dies with the blaze (ruststeve)"
    "The burning after a fireball and standing in fire kill more than the hits (blaze-race-f and -g, damage by type: on_fire 7 to 45, in_fire up to 26, fireball 3 to 10 a run): a shield in the offhand blocks from the front, and fire at the feet is left first"
    "Fighting in the open: nine of twenty deaths in blaze-race-g and -i fought or backed off while burning or under a volley, three stood frozen: the bot fights from a pocket, a cell with one opening and a firm roof found or dug into a wall (pocket.clj), holds there while burning or under engage-health, strikes only what comes to reach, raises the shield only there, and routes through no fire block"
+   "A hold open in the pocket under fire (blaze-race-j race 3 and race 1: blazes at 4.0 and 5.4, out of reach, in line): the pocket is sealed with cobblestone while it burns or is pressed, held, then opened; a failed :pocket is a here-site sealed in place, never a failed plan; the pocket is dug in the tunnel's wall before its last blocks open"
    "A blaze hovering out of reach, never attacked"
    "A spawner's delay (natural ones 10 to 40 s) longer than a planner wait, failing a plan that only had to stand there"
    "A rod lying where no walk reaches it: on the spawner, in lava"

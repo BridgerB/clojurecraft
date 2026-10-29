@@ -616,12 +616,17 @@
                        (summon "blaze" [-2 1 -2] "{PersistenceRequired:1b}")])
     :gym/timeout-ms trial-ms
     :gym/truth [(rods-held 7)]}
-   ;; blaze-fortress: from the fortress row's pad 48 west of a located fortress, the spawner found
-   ;; in the chunks loaded round it, tunnelled to, camped by, seven rods from its blazes. Fire
-   ;; Resistance as blaze-7 has it: blaze-fortress-f and -g (runs 38902306126, 38904048480) burned
-   ;; to death by the spawner in four runs of six, its blazes' fire all round it
+   ;; blaze-fortress-fireproof: from the fortress row's pad 48 west of a located fortress, the spawner
+   ;; found in the chunks loaded round it, tunnelled to, camped by, seven rods from its blazes. It
+   ;; measures the FIGHT only, not the bot's survival: Fire Resistance (a fireball and the burning
+   ;; after it cost nothing, as blaze-7 has it: blaze-fortress-f and -g, runs 38902306126 and
+   ;; 38904048480, burned to death by the spawner in four runs of six) and four pieces of armour.
+   ;; Its passes are not evidence that a race bot lives there: main's two on 2026-10-29
+   ;; (walk-restart-a, 40908896872) took 0 fireball and 0 on_fire damage events in 7 minutes where
+   ;; blaze-race-j's ten took 2 to 9 and 1 to 22 and eight died. The race rows below are the truth.
+   ;; Named blaze-fortress until then, and read as a pass for the race.
    {:gym/goal :blaze-rods
-    :gym/name "blaze-fortress"
+    :gym/name "blaze-fortress-fireproof"
     :gym/until "blaze-rods"
     :gym/land :nether-fortress
     :gym/difficulty "normal"
@@ -632,7 +637,7 @@
     :gym/truth [(rods-held 7)]}
    ;; blaze-fortress-race: the same landing with what the race bot brings (gear.clj), not what
    ;; the gym is generous with: an iron sword, iron helmet, chestplate and leggings, sixteen
-   ;; cooked beef, no Fire Resistance. blaze-fortress stays as the mechanics check
+   ;; cooked beef, no Fire Resistance. blaze-fortress-fireproof stays as the mechanics check
    {:gym/goal :blaze-rods
     :gym/name "blaze-fortress-race"
     :gym/until "blaze-rods"

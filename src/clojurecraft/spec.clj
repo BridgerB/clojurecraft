@@ -511,7 +511,11 @@
 (s/def :pocket/cell ::block-pos)
 (s/def :pocket/stand (s/nilable ::block-pos))
 (s/def :pocket/dig (s/coll-of ::block-pos :kind vector?))
-(s/def :pocket/site (s/keys :req [:pocket/cell :pocket/dig] :opt [:pocket/stand]))
+(s/def :pocket/placed (s/coll-of ::block-pos :kind vector?))
+(s/def :pocket/here? boolean?)
+(s/def :pocket/site
+  (s/keys :req [:pocket/cell :pocket/dig] :opt [:pocket/stand :pocket/placed :pocket/here?]))
+(s/def :intent/prepare? boolean?)
 (s/def :intent/site :pocket/site)
 (s/def :intent/heal-to number?)
 (s/def :intent/raised? boolean?)

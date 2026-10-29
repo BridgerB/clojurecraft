@@ -23,7 +23,7 @@
   (is (= :kit (:gym/goal (gym/gym :kit))) "or by its goal")
   (testing "several rows of one goal are found by their own names (issue #262)"
     (is (= "blaze-7" (:gym/name (gym/gym "blaze-7"))))
-    (is (= :blaze-rods (:gym/goal (gym/gym "blaze-fortress"))))
+    (is (= :blaze-rods (:gym/goal (gym/gym "blaze-fortress-fireproof"))))
     (is (= :blaze-rods (:gym/goal (gym/gym "blaze-fortress-race"))))
     (is (= :blaze-rods (:gym/goal (gym/gym "blaze-fortress-geared"))))
     (is (not-any? #(str/includes? % "fire_resistance")

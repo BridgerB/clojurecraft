@@ -14,7 +14,9 @@
   (:require [clojurecraft.blocks :as blocks]
             [clojurecraft.build :as build]
             [clojurecraft.intent :as intent]
+            [clojurecraft.inventory :as inventory]
             [clojurecraft.path :as path]
+            [clojurecraft.recipe :as recipe]
             [clojurecraft.terrain :as terrain]))
 
 (set! *warn-on-reflection* true)
@@ -77,6 +79,12 @@
   [world at c]
   (and (path/standable? at c) (roofed? world c) (= 1 (count (openings world c)))))
 
+(defn shape?
+  "Is cell c shaped like a pocket or a sealed one: standable (at, the cells of the world), roofed
+   and at most one side open? A pocket whose opening has a block placed in it has none."
+  [world at c]
+  (and (path/standable? at c) (roofed? world c) (<= (count (openings world c)) 1)))
+
 (defn dig-in
   "The site of a pocket dug into the wall from the standable cell stand toward side [dx dz], or
    nil: the cell beside stand and the one over it each solid and diggable (or dug already), the
@@ -94,14 +102,20 @@
                (roofed? world pf)
                (solid-at? world floor)
                (not (contains? blocks/lava-states (terrain/block-at world floor))))
-      {:pocket/cell pf :pocket/stand stand :pocket/dig (filterv #(solid-at? world %) [pf ph])})))
+      {:pocket/cell pf
+       :pocket/stand stand
+       :pocket/dig (filterv #(solid-at? world %) [pf ph])
+       :pocket/placed []})))
 
 (defn valid?
-  "Is the site still one: a pocket now (pocket?), or a dig-in from its stand toward its cell that
-   still holds? A fire or a lava next to it, or a wall dug through, makes it none."
-  [world at {:pocket/keys [cell stand] :as site}]
+  "Is the site still one: a cell shaped like a pocket (shape?: at most one side open, so a sealed
+   one holds), a cell the bot stands in to be sealed in place (:pocket/here?, standable), or a
+   dig-in from its stand toward its cell that still holds? A fire or a lava next to it, or a
+   wall dug through, makes it none."
+  [world at {:pocket/keys [cell stand here?] :as site}]
   (boolean (and site
-                (or (pocket? world at cell)
+                (or (shape? world at cell)
+                    (and here? (path/standable? at cell))
                     (and stand
                          (path/standable? at stand)
                          (let [[sx _ sz] stand
@@ -114,78 +128,209 @@
    dig), or else has a wall to dig a pocket into (dig-in), at each distance an existing pocket
    before a dug one. ok? is asked of the cell of a site: false drops it (outside a spawner's
    volume, within its wake)."
-  [world feet ok?]
-  (let [at (path/cells world)]
-    (loop [frontier [feet]
-           seen #{feet}
-           depth 0
-           visited 0]
-      (let [here (fn [c]
-                   (when (and (pocket? world at c) (ok? c))
-                     {:pocket/cell c :pocket/stand nil :pocket/dig []}))
-            dug (fn [c]
-                  (some (fn [s]
-                          (let [site (dig-in world c s)]
-                            (when (and site (ok? (:pocket/cell site))) site)))
-                        sides))
-            hit (or (some here frontier) (some dug frontier))]
-        (cond hit hit
-              (or (empty? frontier) (>= depth search-steps) (>= visited search-nodes)) nil
-              :else
-              (let [next (into []
-                               (comp (mapcat (fn [[x y z]]
-                                               (for [[dx dz] sides
-                                                     dy [0 -1 1]]
-                                                 [(+ x dx) (+ y dy) (+ z dz)])))
-                                     (remove seen)
-                                     (filter #(path/standable? at %))
-                                     (distinct))
-                               frontier)]
-                (recur next (into seen next) (inc depth) (+ visited (count next)))))))))
+  ([world feet ok?] (site-near world feet ok? search-nodes))
+  ([world feet ok? nodes]
+   (let [at (path/cells world)]
+     (loop [frontier [feet]
+            seen #{feet}
+            depth 0
+            visited 0]
+       (let [here (fn [c]
+                    (when (and (pocket? world at c) (ok? c))
+                      {:pocket/cell c :pocket/stand nil :pocket/dig [] :pocket/placed []}))
+             dug (fn [c]
+                   (some (fn [s]
+                           (let [site (dig-in world c s)]
+                             (when (and site (ok? (:pocket/cell site))) site)))
+                         sides))
+             hit (or (some here frontier) (some dug frontier))]
+         (cond hit hit
+               (or (empty? frontier) (>= depth search-steps) (>= visited nodes)) nil
+               :else
+               (let [next (into []
+                                (comp (mapcat (fn [[x y z]]
+                                                (for [[dx dz] sides
+                                                      dy [0 -1 1]]
+                                                  [(+ x dx) (+ y dy) (+ z dz)])))
+                                      (remove seen)
+                                      (filter #(path/standable? at %))
+                                      (distinct))
+                                frontier)]
+                 (recur next (into seen next) (inc depth) (+ visited (count next))))))))))
+
+(defn held-valid
+  "The site the world holds (:pocket/site) while it is valid?, else nil."
+  [world]
+  (let [held (:pocket/site world)] (when (valid? world (path/cells world) held) held)))
 
 (defn current
-  "The site to use now: the one the world holds (:pocket/site) while it is valid?, else the nearest
-   found (site-near), else nil."
-  [world feet ok?]
-  (let [held (:pocket/site world)]
-    (if (valid? world (path/cells world) held) held (site-near world feet ok?))))
+  "The site to use now: the one the world holds while it is valid? (held-valid) and ok? of its
+   cell, else the nearest found (site-near, within nodes cells visited), else nil."
+  ([world feet ok?] (current world feet ok? search-nodes))
+  ([world feet ok? nodes]
+   (let [held (held-valid world)]
+     (if (and held (ok? (:pocket/cell held))) held (site-near world feet ok? nodes)))))
 
 (defn in?
-  "Are the feet in the held site's cell, and is it a pocket? The bot is in cover: one opening."
+  "Are the feet in the held site's cell, and is it still a valid? one? The bot is in cover: one
+   opening, none when sealed, or a cell it is to seal."
   [world]
   (let [{:pocket/keys [cell] :as site} (:pocket/site world)]
-    (boolean (and site (= cell (intent/feet world)) (pocket? world (path/cells world) cell)))))
+    (boolean (and site (= cell (intent/feet world)) (valid? world (path/cells world) site)))))
+
+(defn here-site
+  "The site that seals the cell the feet stand in, in place, or nil when it is not standable: a
+   cell with no dig, sealed by seal-ops on every open side and over the head. What a :pocket falls
+   back to when no way to a pocket is found (blaze-race-j geared 4 and race 2: three
+   :pocket no-path failures in 0.4 s ended the run at 17 hp)."
+  [world]
+  (let [c (intent/feet world)]
+    (when (path/standable? (path/cells world) c)
+      {:pocket/cell c :pocket/stand nil :pocket/dig [] :pocket/placed [] :pocket/here? true})))
+
+;; ---------------------------------------------------------------- sealing
+
+(def seal-item "The block a pocket is sealed with." :cobblestone)
+
+(defn seal-cells
+  "The cells a seal of the pocket at cell c places a block in, in order: for each open side
+   (openings) the cell beside c at the feet, then the one over it; then the cell over the head when
+   it is no firm block."
+  [world c]
+  (vec (concat (for [s (openings world c)
+                     dy [0 1]
+                     :let [p (plus c [(first s) dy (second s)])]
+                     :when (not (solid-at? world p))]
+                 p)
+               (when-not (roofed? world c) [(plus c [0 2 0])]))))
+
+(defn sealed?
+  "Is the site sealed: it names cells it placed blocks in (:pocket/placed) and every one is solid?"
+  [world {:pocket/keys [placed]}]
+  (boolean (and (seq placed) (every? #(solid-at? world %) placed))))
+
+(defn seal-ops
+  "The ops that seal the cell: a place of seal-item in each of cells, standing in the cell."
+  [c cells]
+  (mapv #(build/place-op % c nil :seal) cells))
+
+(defn unseal-ops
+  "The ops that open the pocket again: a dig of each placed cell, the highest first, from the cell."
+  [c placed]
+  (mapv #(build/dig-op % c nil :unseal) (reverse placed)))
+
+(defn filler-held
+  "How many of seal-item the bot holds."
+  [world]
+  (inventory/item-count world (recipe/item-id seal-item)))
+
+(defn can-seal?
+  "Is the pocket at the feet sealable now: its cells (seal-cells) fewer than the filler held?"
+  [world {:pocket/keys [cell]}]
+  (let [n (count (seal-cells world cell))] (and (pos? n) (<= n (filler-held world)))))
 
 (defn ops
-  "The site as build ops: a dig of each cell still to dig, from the stand, then standing in the
-   cell. A pocket that exists is the one stand-in."
-  [{:pocket/keys [cell stand dig]}]
-  (conj (mapv #(build/dig-op % stand nil :pocket-dig) dig)
-        {:build/op :stand-in
-         :build/pos cell
-         :build/stand cell
-         :build/step :pocket
-         :build/done [:feet cell]}))
+  "The site as build ops: a dig of each cell still to dig, from the stand, then (unless prepare?:
+   the pocket is dug ahead and not entered) standing in the cell. A pocket that exists is the one
+   stand-in."
+  ([site] (ops site false))
+  ([{:pocket/keys [cell stand dig]} prepare?]
+   (let [digs (mapv #(build/dig-op % stand nil :pocket-dig) dig)]
+     (if prepare?
+       digs
+       (conj digs
+             {:build/op :stand-in
+              :build/pos cell
+              :build/stand cell
+              :build/step :pocket
+              :build/done [:feet cell]})))))
 
-;; ---------------------------------------------------------------- the :pocket intent
+;; ---------------------------------------------------------------- the intents
+
+(defn finished
+  "world with its running intent done, whatever its child did: a failure of a pocket's work is
+   not the plan's failure, a pocket is a refuge and the run goes on without it. The site is the
+   cell the feet stand in (here-site) to be sealed in place, or none."
+  [world]
+  (let [site (here-site world)]
+    (-> world
+        (assoc :player/controls {})
+        (cond-> site (assoc :pocket/site site))
+        (cond-> (nil? site) (dissoc :pocket/site))
+        intent/done)))
 
 (defmethod intent/run :pocket
-  ;; {:intent/kind :pocket :intent/site site}: dig the pocket's cells from the stand (build ops,
-  ;; as :build works them) and walk in; done when the feet are in its cell. The site is held in
-  ;; the world (:pocket/site) from the first tick. Failed :no-pocket when it stopped being one
-  ;; (valid?): a fire, a lava, a wall gone.
-  [world {:intent/keys [site] :as i} event]
+  ;; {:intent/kind :pocket :intent/site site :intent/prepare? bool}: dig the pocket's cells from
+  ;; the stand (build ops, as :build works them) and, unless prepare? (the pocket made ahead of the
+  ;; tunnel's last blocks), walk in; done when the feet are in its cell. The site is held in the
+  ;; world (:pocket/site) from the first tick. When it stops being one (valid?) or the work fails
+  ;; (no way to the stand, a dig refused) the intent is done with the cell the feet stand in held to
+  ;; be sealed there (finished), never a failure: blaze-race-j geared 4 and race 2 failed :pocket
+  ;; three times in 0.4 s and the plan with it
+  [world {:intent/keys [site prepare?] :as i} event]
   (let [at (path/cells world)
         world (assoc world :pocket/site site)]
-    (cond (not (valid? world at site))
+    (if-not (valid? world at site)
+      (finished world)
+      (let [plan (ops site (boolean prepare?))
+            next (when (seq plan) (build/next-op world plan))]
+        (if (nil? next)
           (-> world
               (assoc :player/controls {})
-              (dissoc :pocket/site)
-              (intent/fail :no-pocket))
-          :else
-          (let [next (build/next-op world (ops site))]
-            (if (nil? next)
-              (-> world
-                  (assoc :player/controls {})
-                  intent/done)
-              (build/work-op world i next event))))))
+              intent/done)
+          (let [w (build/work-op world i next event)]
+            (if (intent/failed? (:plan/intent w)) (finished w) w)))))))
+
+(defn work-ops
+  "One tick of the running intent i working ops (a vector), through build/work-op; done when every
+   one holds, and also when the work fails: a seal that cannot be laid is not the plan's failure."
+  [world i ops event]
+  (let [next (build/next-op world ops)]
+    (if (nil? next)
+      (-> world
+          (assoc :player/controls {})
+          intent/done)
+      (let [w (build/work-op world i next event)]
+        (if (intent/failed? (:plan/intent w))
+          (-> w
+              (assoc :player/controls {})
+              intent/done)
+          w)))))
+
+(defmethod intent/run :seal
+  ;; {:intent/kind :seal}: place seal-item in every open side of the pocket at the feet, at the feet
+  ;; and the head, and over the head when it has no roof, standing in it; the cells are noted in the
+  ;; held site (:pocket/placed) from the first tick, so sealed? and the unseal know them. Done when
+  ;; they are all solid.
+  [world i event]
+  (let [site (:pocket/site world)
+        cells (if (seq (:pocket/placed site))
+                (:pocket/placed site)
+                (seal-cells world (:pocket/cell site)))
+        world (cond-> world
+                (and site (empty? (:pocket/placed site)))
+                (assoc-in [:pocket/site :pocket/placed] cells))]
+    (if (and site (seq cells) (= (:pocket/cell site) (intent/feet world)))
+      (work-ops world i (seal-ops (:pocket/cell site) cells) event)
+      (-> world
+          (assoc :player/controls {})
+          intent/done))))
+
+(defmethod intent/run :unseal
+  ;; {:intent/kind :unseal}: dig every cell the seal placed, the highest first, standing in the
+  ;; pocket, and forget them (:pocket/placed empty) once none is solid. Done then.
+  [world i event]
+  (let [site (:pocket/site world)
+        placed (:pocket/placed site)
+        cell (:pocket/cell site)
+        open? (every? #(not (solid-at? world %)) placed)]
+    (cond (or (nil? site) (not= cell (intent/feet world)))
+          (-> world
+              (assoc :player/controls {})
+              intent/done)
+          open?
+          (-> world
+              (assoc :player/controls {})
+              (assoc-in [:pocket/site :pocket/placed] [])
+              intent/done)
+          :else (work-ops world i (unseal-ops cell placed) event))))

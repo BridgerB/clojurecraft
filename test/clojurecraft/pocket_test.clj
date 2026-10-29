@@ -9,6 +9,7 @@
             [clojurecraft.intent :as intent]
             [clojurecraft.path :as path]
             [clojurecraft.pocket :as pocket]
+            [clojurecraft.recipe :as recipe]
             [clojurecraft.world :as world]))
 
 (use-fixtures :once fx/instrumented)
@@ -58,7 +59,10 @@
 
 (deftest a-pocket-is-dug-into-a-wall-whose-other-faces-are-solid
   (let [w (world-of wall [5.5 64.0 8.5])]
-    (is (= {:pocket/cell [6 64 8] :pocket/stand [5 64 8] :pocket/dig [[6 64 8] [6 65 8]]}
+    (is (= {:pocket/cell [6 64 8]
+            :pocket/stand [5 64 8]
+            :pocket/dig [[6 64 8] [6 65 8]]
+            :pocket/placed []}
            (pocket/dig-in w [5 64 8] [1 0])))
     (is (nil? (pocket/dig-in w [5 64 8] [-1 0])) "toward open air: nothing to dig")
     (testing "a side that is open lets lava or a fall in: none"
@@ -77,7 +81,7 @@
 (deftest the-site-is-the-nearest-pocket-or-a-wall-to-dig-into
   (let [any (constantly true)
         w (world-of walled)]
-    (is (= {:pocket/cell [8 64 8] :pocket/stand nil :pocket/dig []}
+    (is (= {:pocket/cell [8 64 8] :pocket/stand nil :pocket/dig [] :pocket/placed []}
            (pocket/site-near w [8 64 8] any))
         "a pocket the feet stand in")
     (is (= [8 64 8] (:pocket/cell (pocket/site-near (world-of walled [5.5 64.0 8.5]) [5 64 8] any)))
@@ -110,3 +114,28 @@
                      {:intent/kind :pocket :intent/site site})
             i (:plan/intent (intent/run w (:plan/intent w) {:event/kind :tick :event/now 1000}))]
         (is (= :no-pocket (:intent/reason i)))))))
+
+(deftest a-pocket-is-sealed-with-blocks-in-its-opening-and-opened-again
+  (let [w (world-of walled)
+        site {:pocket/cell [8 64 8] :pocket/stand nil :pocket/dig [] :pocket/placed []}]
+    (is (= [[7 64 8] [7 65 8]] (pocket/seal-cells w [8 64 8]))
+        "the opening at the feet, then the head")
+    (is (not (pocket/sealed? w site)))
+    (testing
+      "the cells placed, all solid: sealed; the pocket is still a pocket (at most one side open)"
+      (let [placed [[7 64 8] [7 65 8]]
+            sealed (world-of (merge walled (solid [7 64 8] [7 65 8])))
+            site (assoc site :pocket/placed placed)]
+        (is (pocket/sealed? sealed site))
+        (is (empty? (pocket/openings sealed [8 64 8])))
+        (is (pocket/valid? sealed (path/cells sealed) site))
+        (is (pocket/in? (assoc sealed :pocket/site site)))
+        (is (not (pocket/sealed? w site)) "the placed cells open: not sealed")))
+    (testing "the ops place the feet cell first, dig the head cell first"
+      (is (= [[7 64 8] [7 65 8]] (map :build/pos (pocket/seal-ops [8 64 8] [[7 64 8] [7 65 8]]))))
+      (is (= [[7 65 8] [7 64 8]]
+             (map :build/pos (pocket/unseal-ops [8 64 8] [[7 64 8] [7 65 8]])))))
+    (testing "filler: sealable only with the blocks held"
+      (is (not (pocket/can-seal? w site)))
+      (let [w (assoc-in w [:player/inventory 9] {:item (recipe/item-id :cobblestone) :count 62})]
+        (is (pocket/can-seal? w site))))))
