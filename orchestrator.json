@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-29T03:41:11.818Z",
+  "at" : "2026-10-29T03:42:20.787Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -31,7 +31,7 @@
     "number" : 605,
     "title" : "Bot stops at stone-pickaxe: boxed",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
+    "copilot" : true
   }, {
     "number" : 342,
     "title" : "Bot stops at furnace: boxed",
@@ -190,7 +190,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 605,
-    "move" : "assign"
+    "move" : "wait",
+    "why" : "session starting"
   }, {
     "issue" : 342,
     "move" : "leave",
