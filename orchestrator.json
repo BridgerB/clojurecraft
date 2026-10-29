@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-29T23:19:36.903Z",
+  "at" : "2026-10-29T23:21:47.006Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -48,11 +48,6 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 135,
-    "title" : "Bot stops at cast-one: timeout",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 597,
     "title" : "Bot stops at ingots: unsafe",
     "labels" : [ "bot-failure", "sim" ],
@@ -71,6 +66,11 @@
     "number" : 612,
     "title" : "Bot stops at ender-pearls: no-support",
     "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 135,
+    "title" : "Bot stops at cast-one: timeout",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 613,
@@ -207,15 +207,15 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 135,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
     "issue" : 461,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
     "issue" : 348,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 135,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
