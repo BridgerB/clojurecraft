@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-29T00:02:33.542Z",
+  "at" : "2026-10-29T00:03:41.059Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -33,9 +33,9 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 594,
-    "title" : "Bot stops at portal: unsafe",
-    "labels" : [ "bot-failure", "sim" ],
+    "number" : 151,
+    "title" : "Bot stops at flint-and-steel: not-picked-up",
+    "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
     "number" : 531,
@@ -43,8 +43,13 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 151,
-    "title" : "Bot stops at flint-and-steel: not-picked-up",
+    "number" : 594,
+    "title" : "Bot stops at portal: unsafe",
+    "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 605,
+    "title" : "Bot stops at stone-pickaxe: boxed",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
@@ -76,11 +81,6 @@
     "number" : 526,
     "title" : "Bot stops at blaze-rods: blocked",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
-    "number" : 605,
-    "title" : "Bot stops at stone-pickaxe: boxed",
-    "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
     "number" : 597,
