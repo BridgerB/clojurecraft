@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-29T06:14:06.571Z",
+  "at" : "2026-10-29T06:15:14.415Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -46,7 +46,7 @@
     "number" : 605,
     "title" : "Bot stops at stone-pickaxe: boxed",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : true
+    "copilot" : false
   }, {
     "number" : 597,
     "title" : "Bot stops at ingots: unsafe",
@@ -202,8 +202,7 @@
     "why" : "hands-off label"
   }, {
     "issue" : 605,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment"
+    "move" : "assign"
   }, {
     "issue" : 579,
     "move" : "leave",
@@ -262,10 +261,6 @@
     "why" : "hands-off label"
   } ],
   "log" : [ {
-    "issue" : 586,
-    "move" : "assign",
-    "at" : "2026-10-28T04:30:58.386Z"
-  }, {
     "issue" : 586,
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
@@ -1611,5 +1606,9 @@
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
     "at" : "2026-10-29T06:14:06.571Z"
+  }, {
+    "issue" : 605,
+    "move" : "assign",
+    "at" : "2026-10-29T06:15:14.415Z"
   } ]
 }
