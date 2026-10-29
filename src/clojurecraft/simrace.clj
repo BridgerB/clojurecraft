@@ -191,7 +191,7 @@
          :food (:player/food after)
          :edible (hunt/edible-held after)
          :sword (sword/serviceable after)
-         :worn (into [] (keep #(armour/worn after %)) (range 4))
+         :worn (into [] (keep #(armour/worn after %)) [0 1 2 3 :offhand])
          :ingots (get (armour/counts after) :iron_ingot 0)
          :blazes (count (for [[_ e] (entity/hostiles after)
                               :when (and pos
