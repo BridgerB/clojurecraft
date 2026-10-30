@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-30T02:54:45.418Z",
+  "at" : "2026-10-30T02:55:53.268Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -21,7 +21,7 @@
     "number" : 611,
     "title" : "Bot stops at portal-kit: no-support",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
+    "copilot" : true
   }, {
     "number" : 610,
     "title" : "Bot stops at cast-one: no-support",
@@ -192,7 +192,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 611,
-    "move" : "assign"
+    "move" : "wait",
+    "why" : "session starting"
   }, {
     "issue" : 538,
     "move" : "leave",
