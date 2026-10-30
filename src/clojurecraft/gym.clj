@@ -234,6 +234,10 @@
    "item replace entity {name} armor.legs with minecraft:iron_leggings"
    "item replace entity {name} armor.feet with minecraft:iron_boots"])
 
+(def race-armour
+  "The armour the race bot makes (gear.clj): iron helmet, chestplate and leggings, no boots."
+  (vec (take 3 iron-armour)))
+
 (def no-fire
   "A :gym/summon entry: the blazes' fireballs set no blocks alight (SmallFireball places fire only
    when mob griefing is on). A fire lights the cells round it past 11, and a spawner's blaze
@@ -630,6 +634,19 @@
     :gym/summon (conj iron-armour fire-resistance)
     :gym/timeout-ms trial-ms
     :gym/truth [(rods-held 7)]}
+   ;; blaze-fortress-race: the same landing with what the race bot brings (gear.clj), not what the
+   ;; gym is generous with: an iron sword, iron helmet, chestplate and leggings, sixteen cooked
+   ;; beef, no Fire Resistance (copied from feat/262-blaze-wall for the FLIP-FLOP rounds)
+   {:gym/goal :blaze-rods
+    :gym/name "blaze-fortress-race"
+    :gym/until "blaze-rods"
+    :gym/land :nether-fortress
+    :gym/difficulty "normal"
+    :gym/prereqs ["minecraft:iron_pickaxe 1" "minecraft:cobblestone 64" "minecraft:iron_sword 1"
+                  "minecraft:cooked_beef 16"]
+    :gym/summon race-armour
+    :gym/timeout-ms trial-ms
+    :gym/truth [(rods-held 7)]}
    ;; issue #263: endermen in the sealed Nether room (#261's arena), the pearl kit given there;
    ;; judged by a pearl held. Five that never move or teleport (NoAI), each within the hunt's
    ;; strike range of the landing, since a kill drops a pearl only one time in two (the loot
@@ -662,6 +679,17 @@
     :gym/land :warped-forest
     :gym/difficulty "normal"
     :gym/prereqs (conj pearl-kit "minecraft:cooked_beef 32")
+    :gym/timeout-ms trial-ms
+    :gym/truth [(pearls-held "(1[2-9]|[2-9][0-9]|[1-9][0-9][0-9])")]}
+   ;; issue #263: the same twelve pearls from where the race leaves the bot, at a fortress in the
+   ;; Nether wastes with seven rods in the pack and no warped forest in view: the stage must find
+   ;; one itself (pearls/travel). No fire resistance (copied from feat/263-stuck-retry)
+   {:gym/goal :ender-pearls
+    :gym/name "pearls-12-from-fortress"
+    :gym/until "pearls-12"
+    :gym/land :nether-fortress
+    :gym/difficulty "normal"
+    :gym/prereqs (into pearl-kit ["minecraft:cooked_beef 32" "minecraft:blaze_rod 7"])
     :gym/timeout-ms trial-ms
     :gym/truth [(pearls-held "(1[2-9]|[2-9][0-9]|[1-9][0-9][0-9])")]}
    ;; issue #264: twelve eyes of ender crafted from what the two stages before make, given on a
