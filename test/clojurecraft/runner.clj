@@ -55,13 +55,13 @@
 
 (defn run-split
   "The result of running vars with the synchronized ones first and alone, then the rest in parallel,
-   the counts of the two runs added."
+   the counts of the two runs added (a summary's other keys, its :type, are not numbers)."
   [vars opts]
   (let [alone (filterv synchronized? vars)
         others (filterv (complement synchronized?) vars)
         run (fn [vs multithread?]
               (if (seq vs) (eftest/run-tests vs (assoc opts :multithread? multithread?)) {}))]
-    (merge-with + (run alone false) (run others true))))
+    (merge-with (fn [x y] (if (number? x) (+ x y) y)) (run alone false) (run others true))))
 
 (defn -main
   "Run the selected tests in parallel and exit with the verdict."
