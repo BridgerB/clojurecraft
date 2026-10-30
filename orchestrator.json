@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-30T04:43:59.285Z",
+  "at" : "2026-10-30T04:54:45.579Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -23,14 +23,14 @@
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : true
   }, {
-    "number" : 610,
-    "title" : "Bot stops at cast-one: no-support",
-    "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
-  }, {
     "number" : 135,
     "title" : "Bot stops at cast-one: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 610,
+    "title" : "Bot stops at cast-one: no-support",
+    "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
     "number" : 617,
