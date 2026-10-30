@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-30T00:56:54.656Z",
+  "at" : "2026-10-30T01:05:32.231Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -23,6 +23,11 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
+    "number" : 135,
+    "title" : "Bot stops at cast-one: timeout",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
     "number" : 526,
     "title" : "Bot stops at blaze-rods: blocked",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
@@ -41,11 +46,6 @@
     "number" : 538,
     "title" : "Bot stops at fortress: blocked",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
-    "number" : 135,
-    "title" : "Bot stops at cast-one: timeout",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 597,
@@ -188,10 +188,14 @@
     "why" : "hands-off label"
   }, {
     "issue" : 611,
-    "move" : "wait",
-    "why" : "session starting"
+    "move" : "unassign",
+    "why" : "no pull request and no session since the assignment"
   }, {
     "issue" : 178,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 135,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -200,10 +204,6 @@
     "why" : "hands-off label"
   }, {
     "issue" : 538,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
-    "issue" : 135,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -264,10 +264,6 @@
     "why" : "hands-off label"
   } ],
   "log" : [ {
-    "issue" : 151,
-    "move" : "assign",
-    "at" : "2026-10-28T10:52:27.110Z"
-  }, {
     "issue" : 151,
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
@@ -1613,5 +1609,10 @@
     "issue" : 611,
     "move" : "assign",
     "at" : "2026-10-30T00:45:03.171Z"
+  }, {
+    "issue" : 611,
+    "move" : "unassign",
+    "why" : "no pull request and no session since the assignment",
+    "at" : "2026-10-30T01:05:32.231Z"
   } ]
 }
