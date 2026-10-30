@@ -398,3 +398,32 @@
     (is (= 120 (:player/hurt-at w2)))
     (is (= 168 (:player/attacker w3)))))
 
+
+(deftest in-the-end-the-arrival-looks-down-until-a-pumpkin-is-worn
+  ;; gym main dragon-main-a run 1 (plan run 41092662823) and chain-w16 dragon run 3: the End's
+  ;; arrival faces yaw 0, pitch 0, the bot's first sent move echoed it, straight at endermen thirty
+  ;; blocks off (35 south, 0.8 degrees off the line), and enderman 105 was angry (metadata 17) before the
+  ;; pumpkin was worn; a look at an enderman provokes it from the first tick
+  (let [tp (packet {:packet/name :player-position
+                    :teleport-id 3
+                    :x 9.0
+                    :y 62.0
+                    :z 1.0
+                    :dx 0.0
+                    :dy 0.0
+                    :dz 0.0
+                    :yaw 0.0
+                    :pitch 0.0
+                    :flags 0})
+        pumpkin {:item (blocks/items :carved_pumpkin) :count 1}
+        sent (fn [w]
+               (last (filter #(= :move-player-pos-rot (:packet/name %))
+                             (packets (second (run w [tp]))))))]
+    (is (= 0.0 (:pitch (sent (in-play)))) "the overworld: as the server set it")
+    (is (= 90.0 (:pitch (sent (assoc (in-play) :player/dimension "minecraft:the_end"))))
+        "the End, bare-headed: straight down")
+    (is (= 0.0
+           (:pitch (sent (-> (in-play)
+                             (assoc :player/dimension "minecraft:the_end")
+                             (assoc-in [:player/inventory inventory/head-slot] pumpkin)))))
+        "the End with the pumpkin on: as the server set it")))

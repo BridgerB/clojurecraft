@@ -731,6 +731,11 @@
 
 (defmethod plan/done-by :safe? [world _] (or (nil? (:player/pos world)) (empty? (threats world))))
 
+(def teleporters
+  "Kinds a back-off never gets away from: they teleport to the bot (an enderman: gym main
+   dragon-main-a run 1, plan run 41092662823, backed off from two at 9.3 health and was slain)."
+  #{:enderman})
+
 (defn back-off-pointless?
   "Would a :back-off from entity e be done at once, getting the bot nowhere: it is already
    back-off-to away, the way straight away is a drop no landing survives (void-retreat?) or
@@ -818,6 +823,14 @@
           nook {:intent/kind :dig :intent/target nook}
           :else {:plan/wait :cornered})))
 
+(defn teleport-cover
+  "The cover against e when it is one of teleporters, which no back-off gets away from, and a
+   cover is to be had: nil for any other kind, and nil with nothing held to make one (cover's
+   wait :cornered ends the plan; the back-off, the older answer, at least moves)."
+  [world e]
+  (when (contains? teleporters (entity/kind e))
+    (let [c (cover world e)] (when-not (= {:plan/wait :cornered} c) c))))
+
 (defn defend-target
   "The [eid entity] :defend answers among threats: the one that last hit the bot
    (:player/attacker) when it is one, else the nearest. Gym chain-w13 run 4 backed away from the
@@ -835,13 +848,16 @@
   ;; (an angry enderman, entity/neutral) is fought to the end while healthy; under retreat-health
   ;; (#577 danger-health) it is backed away from, never fought on to death. What a back-off could not get away
   ;; from (:plan/cornered) is fought to the end too when healthy, else backed away from, unless
-  ;; the back-off would end at once (back-off-pointless?): then the cover (a meal, a block laid
-  ;; between, a pillar), never the fight under that line (#577).
+  ;; the back-off would end at once (back-off-pointless?) or e teleports and a cover is held
+  ;; (teleport-cover): then the cover (a meal, a block laid between, a pillar), never the fight
+  ;; under that line (#577).
   [world _ _]
   (when-let [[eid e] (defend-target world (threats world))]
-    (let [hurt? (< (:player/health world 20.0) (danger-line world))]
+    (let [hurt? (< (:player/health world 20.0) (danger-line world))
+          shelter (when hurt? (teleport-cover world e))]
       (cond
         (and (not= :creeper (entity/kind e)) hurt? (back-off-pointless? world e)) (cover world e)
+        shelter shelter
         (or (= :creeper (entity/kind e)) hurt?) {:intent/kind :back-off :intent/target eid}
         (= :silverfish (entity/kind e)) {:intent/kind :fight :intent/target eid :intent/hold? true}
         (or (contains? entity/neutral (entity/kind e)) (contains? (:plan/cornered world #{}) eid))

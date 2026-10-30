@@ -1,0 +1,14 @@
+;; issue #10, the gate for combat/teleporters (an angry enderman under the danger line is covered
+;; against, not backed off from): the pearl hunt provokes and fights endermen on purpose, so
+;; pearls-12 shows whether :cornered waits end runs or enderman deaths rise; defend as a check
+{:plans/label "enderman-end-b"
+ :plans/jobs 4
+ :plans/issue 10
+ :plans/experiments
+ [{:exp/name "pearls-12"
+   :exp/kind :gym
+   :exp/goal "pearls-12"
+   :exp/runs 3
+   :exp/bots 1
+   :exp/est-s 18000}
+  {:exp/name "defend" :exp/kind :gym :exp/goal "defend" :exp/runs 2 :exp/bots 1 :exp/est-s 300}]}
