@@ -555,3 +555,18 @@
     (is (= :tunnel-to (:intent/kind (blaze/to-spawner w sp))) "tunnelled to its stand instead")
     (testing "a spawner with every stand blacklisted is given up"
       (is (nil? (blaze/nearest-spawner (update w :plan/blacklist into (blaze/cells-beside sp))))))))
+
+(deftest the-blaze-row-takes-the-table-it-placed-along
+  ;; race lane 4 (run 40980342194) s1 r15: a pickaxe made at a placed table, the tunnel went on and
+  ;; the table stayed; with 598 cobblestone and 13 sticks and no table the next pickaxe could not be
+  ;; made, and 4,100 netherrack were dug by hand at 2.05 s each
+  (let [pick {:item (recipe/item-id :stone_pickaxe) :count 1}
+        table {:item (recipe/item-id :crafting_table) :count 1}
+        sp [40 64 8]
+        w (-> (standing {1 pick} {})
+              (memory/observe [9 64 8] (blocks/default-state :crafting_table))
+              (memory/observe sp blaze/spawner))]
+    (is (= {:intent/kind :dig :intent/target [9 64 8] :intent/for :take-table} (next-intent w))
+        "the pickaxe made, the placed table within reach is dug before the tunnel goes on")
+    (is (not= :take-table (:intent/for (next-intent (assoc-in w [:player/inventory 2] table))))
+        "a table held already: on to the spawner")))

@@ -467,6 +467,10 @@
   ;; a tunnel to the spawner or on the search first makes the pickaxe it lacks from what is held
   ;; (the :fortress row's rule): sim race 39742401798 R4-6-2 (issue #504) tunnelled 25 blocks in
   ;; fifteen minutes by hand, each :no-pickaxe step ended the tunnel and the act asked again
+  ;; then takes the table it placed along, as the :fortress row does: race lane 4 (run 40980342194)
+  ;; s1 r15 made its pickaxe at a table, tunnelled on and left it, held 598 cobblestone and 13 sticks
+  ;; with no table when the pickaxe broke, and dug 4,100 netherrack by hand at 2.05 s each (8 of 9
+  ;; stuck bots dug by hand)
   [world goal table]
   (let [[heid] (at-hand-blaze world)
         [beid] (quarry world)
@@ -476,6 +480,10 @@
         wary (delay (when (wary? world) (warily world)))
         away (delay (when (outnumbered? world) (hide world)))
         fire (delay (when (and sp (at-spawner? world sp)) (put-out world sp)))
+        table-along (delay (when (or (nil? sp) (not (at-spawner? world sp)))
+                             (or
+                              (intent/chain-next (:plan/last world) :take-table make/table-drops {})
+                              (make/take-table-along world))))
         pick (delay (when (build/pickaxe-at-hand? world)
                       (make/decide world (assoc goal :goal/provides {:tag/pickaxes 1}) table)))]
     (cond (not= dimension/nether (dimension/of world)) {:plan/wait :other-dimension}
@@ -491,6 +499,7 @@
           beid {:intent/kind :fight :intent/target beid :intent/yield? true}
           @fire @fire
           (and (or (nil? sp) (not (at-spawner? world sp))) @pick) @pick
+          @table-along @table-along
           (and sp (not (at-spawner? world sp))) (to-spawner world sp)
           sp {:intent/kind :camp :intent/spawner sp}
           :else (or (search world) {:plan/wait :no-blaze}))))
