@@ -460,3 +460,14 @@
     (is (= 3 (count (filter #(str/includes? % "summon minecraft:zombie") (:gym/summon row))))
         "three, summoned with the kit given")
     (is (= (:gym/summon row) (:gym/summon (gym/gym :defend))))))
+
+(deftest the-race-row-carries-what-the-race-bot-has-at-the-fortress
+  ;; race lane 4: 265 to 830 cobblestone and 9 to 24 sticks, a table since #628, one iron pickaxe;
+  ;; a spare pickaxe in the row hid the worn-out one (blaze-race-r jobs 1 and 4: 250 netherrack, then
+  ;; boxed / no-path)
+  (let [pre (:gym/prereqs (gym/gym "blaze-fortress-race"))]
+    (is (some #{"minecraft:iron_pickaxe 1"} pre))
+    (is (some #{"minecraft:crafting_table 1"} pre))
+    (is (some #{"minecraft:stick 8"} pre))
+    (is (some #{"minecraft:cobblestone 64"} pre))
+    (is (not-any? #{"minecraft:iron_pickaxe 2"} pre))))

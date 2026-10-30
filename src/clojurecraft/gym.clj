@@ -647,8 +647,8 @@
     :gym/until "blaze-rods"
     :gym/land :nether-fortress
     :gym/difficulty "normal"
-    :gym/prereqs ["minecraft:iron_pickaxe 2" "minecraft:cobblestone 64" "minecraft:iron_sword 1"
-                  "minecraft:cooked_beef 16"]
+    :gym/prereqs ["minecraft:iron_pickaxe 1" "minecraft:crafting_table 1" "minecraft:stick 8"
+                  "minecraft:cobblestone 64" "minecraft:iron_sword 1" "minecraft:cooked_beef 16"]
     :gym/summon race-armour
     :gym/timeout-ms trial-ms
     :gym/truth [(rods-held 7)]}
