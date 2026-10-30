@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-30T07:33:24.472Z",
+  "at" : "2026-10-30T07:34:34.429Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -26,7 +26,7 @@
     "number" : 151,
     "title" : "Bot stops at flint-and-steel: not-picked-up",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : true
+    "copilot" : false
   }, {
     "number" : 610,
     "title" : "Bot stops at cast-one: no-support",
@@ -211,8 +211,7 @@
     "why" : "hands-off label"
   }, {
     "issue" : 151,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment"
+    "move" : "assign"
   }, {
     "issue" : 531,
     "move" : "leave",
@@ -287,11 +286,6 @@
     "why" : "hands-off label"
   } ],
   "log" : [ {
-    "issue" : 593,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment",
-    "at" : "2026-10-29T00:00:12.366Z"
-  }, {
     "issue" : 593,
     "move" : "assign",
     "at" : "2026-10-29T00:01:22.570Z"
@@ -1636,5 +1630,9 @@
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
     "at" : "2026-10-30T07:33:24.472Z"
+  }, {
+    "issue" : 151,
+    "move" : "assign",
+    "at" : "2026-10-30T07:34:34.429Z"
   } ]
 }
