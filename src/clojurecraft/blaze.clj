@@ -1170,18 +1170,24 @@
 (def low-health 12.0)  ; under it the bot goes to its pocket to heal, whoever is in sight
 (def reignite-ms 30000) ; a second ignition within this of the first sends it too
 
+(def unseal-health 13.0) ; the health a hold stays until when a rest cannot heal: over low-health, or the seal opens and the next blaze in reach seals it again
+
 (defn hold-to
   "The health a hold in the pocket stays until: full-health when a rest can heal (heals?), else
-   combat/retreat-health, the line under which nothing is fought (#577). A human banks health
-   between fights; blaze-race-k's ten fought until they died."
+   unseal-health, one over low-health (the line under which a blaze in reach is sealed out). It was
+   combat/retreat-health, 10, under low-health, 12: blaze-race-p job 4 at 22:42:01 unsealed at
+   10.5 and sealed again at once, :unseal and :seal flipping every 0.6 s, four times, and died.
+   A human banks health between fights; blaze-race-k's ten fought until they died."
   [world]
-  (if (heals? world) full-health combat/retreat-health))
+  (if (heals? world) full-health unseal-health))
 
 (defn reignited?
   "Did the bot catch fire twice within reignite-ms (:player/ignitions)?"
   [world]
   (let [[a b] (take-last 2 (:player/ignitions world))]
     (boolean (and a b (<= (- b a) reignite-ms)))))
+
+(declare near-rod)
 
 (defn hold-intent
   "What a bot in its pocket does, or nil: SEALED, while it burns or is under hold-to, eat when the
@@ -1200,7 +1206,8 @@
           need? (or (:player/on-fire? world) (< (:player/health world 20.0) (hold-to world)))
           struck? (<= (- (:time/now world 0) (:player/struck-at world -1000000)) press-ms)]
       (cond (pocket/sealed? world site)
-            (if (or need? struck?)
+            (if (and (or need? struck?)
+                     (not (and (near-rod world) (not (:player/on-fire? world)) (not struck?))))
               (or (meal world) {:intent/kind :pocket-hold :intent/heal-to (hold-to world)})
               {:intent/kind :unseal})
             (and (reach-blaze world) (>= (:player/health world 20.0) low-health)) nil
@@ -1208,20 +1215,25 @@
             {:intent/kind :seal}
             (reach-blaze world)
             (let [[_ e] (reach-blaze world) c (combat/cover world e)] (when (:intent/kind c) c))
-            (and (pressed? world) (watcher world))
-            (let [[_ e] (watcher world) c (combat/cover world e)] (when (:intent/kind c) c))
+            (and (pressed? world)
+                 (watcher world)
+                 (:intent/kind (combat/cover world (second (watcher world)))))
+            (combat/cover world (second (watcher world)))
+            (and (near-rod world) (not (:player/on-fire? world)) (not (pressed? world))) nil
             need? (or (meal world) {:intent/kind :pocket-hold :intent/heal-to (hold-to world)})))))
 
 (defn refuge-needed?
   "Is a pocket wanted now: the bot burns or caught fire twice within reignite-ms (reignited?), is
-   under low-health with a blaze about (swarm), a volley of blazes watches it (outnumbered?), or it is hurt or under
-   engage-health with blazes watching? Leave the fight to heal, as a human does."
+   under low-health with a blaze about (swarm), a volley of blazes watches it (outnumbered?), or it
+   is hurt (under retreat-health) with blazes watching? Not merely under engage-health: the pocket
+   and a rod to pick up flipped every 0.35 s for 13 s (blaze-race-p job 4, 22:41:40, 37 times) and
+   five rods lay till they despawned. Leave the fight to heal, as a human does."
   [world]
   (boolean (or (:player/on-fire? world)
                (reignited? world)
                (and (< (:player/health world 20.0) low-health) (seq (swarm world)))
                (outnumbered? world)
-               (and (seq (watchers world)) (or (hurt? world) (wary? world))))))
+               (and (seq (watchers world)) (hurt? world)))))
 
 (defn here-intent
   "A :pocket intent for the cell the feet stand in (pocket/here-site), sealed in place by the

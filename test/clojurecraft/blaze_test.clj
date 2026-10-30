@@ -1510,3 +1510,39 @@
            (:plan/attempts (plan/fail-intent
                             (plan/begin (standing {}) {:go/goals [:wood]} plan/goals)
                             {:intent/kind :fight :intent/target 14 :intent/reason :ghost}))))))
+
+(deftest a-sealed-bot-that-cannot-heal-holds-until-over-low-health
+  ;; blaze-race-p job 4 at 22:42:01 to 22:42:06: :unseal at 10.5 hp (hold-to was retreat-health, 10),
+  ;; :seal at once (a blaze in reach under low-health, 12), four times 0.6 s apart, then dead
+  (let [hand (entity :blaze [6.5 65.0 8.5] :entity/health 20.0)
+        sealed (-> (in-pocket (standing {7 hand}))
+                   (assoc-in [:player/inventory 9] (item :cobblestone 62))
+                   (assoc-in [:player/inventory 10] (item :iron_pickaxe 1))
+                   (assoc :world/chunks {[0 0] (world/column (sealed-walls))}
+                          :pocket/site (assoc pocket-site :pocket/placed [[7 64 8] [7 65 8]])
+                          :player/food 10
+                          :time/now 100000
+                          :player/struck-at 0))
+        at (fn [hp] (assoc sealed :player/health hp))]
+    (is (not (blaze/heals? sealed)) "no food and the bar is low: a rest cannot heal")
+    (is (= 13.0 (blaze/hold-to sealed)))
+    (is (= :pocket-hold (:intent/kind (next-intent (at 10.5)))) "10.5: held, not unsealed")
+    (is (= :pocket-hold (:intent/kind (next-intent (at 12.5)))))
+    (is (= {:intent/kind :unseal} (next-intent (at 13.5))) "over low-health: the seal opens")))
+
+(deftest the-pocket-is-not-wanted-for-the-wary-and-a-near-rod-is-picked-up-from-the-hold
+  ;; blaze-race-p job 4 at 22:41:40: :collect-drops [2346 58 2285] and :pocket alternated every
+  ;; 0.35 s for 13 s (37 times) at 12 to 18 hp with blazes watching, and five rods despawned
+  (let [rod (entity :item [10.5 64.0 9.5] :entity/item blaze/rod)
+        far (entity :blaze [3.5 65.0 8.5] :entity/health 20.0)
+        w (-> (standing {40 rod 7 far})
+              (assoc :player/health 15.0))]
+    (is (seq (blaze/watchers w)))
+    (is (not (blaze/refuge-needed? w)) "wary (under 18) with blazes watching is not hurt")
+    (is (= :collect-drops (:intent/kind (next-intent w))) "the rod, not the pocket")
+    (testing "in the pocket, healing, the near rod is still gone for"
+      (let [held (in-pocket (assoc w :player/food 20))]
+        (is (= :collect-drops (:intent/kind (next-intent held))))))
+    (testing "burning, the pocket first"
+      (is (not= :collect-drops
+                (:intent/kind (next-intent (assoc (in-pocket w) :player/on-fire? true))))))))
