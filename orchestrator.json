@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-30T22:48:09.688Z",
+  "at" : "2026-10-30T22:51:27.873Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -18,15 +18,15 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 611,
-    "title" : "Bot stops at portal-kit: no-support",
-    "labels" : [ "bot-failure", "sim" ],
-    "copilot" : true
-  }, {
     "number" : 618,
     "title" : "Bot stops at ingots: no-support",
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
+  }, {
+    "number" : 611,
+    "title" : "Bot stops at portal-kit: no-support",
+    "labels" : [ "bot-failure", "sim" ],
+    "copilot" : true
   }, {
     "number" : 514,
     "title" : "Bot stops at blaze-rods: no-footing",
