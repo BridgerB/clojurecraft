@@ -373,6 +373,8 @@
                       :plan/reached #{:nether}))]
     (is (= :hunt (:goal/id (plan/choose (home kit-held) plan/goals))) "no food: the animals first")
     (is (= :return-nether
-           (:goal/id (plan/choose (home (assoc kit-held 2 (item :bread hunt/provision-wanted)))
-                                  plan/goals)))
+           (:goal/id
+            (plan/choose
+             (assoc (home (assoc kit-held 2 (item :bread hunt/provision-wanted))) :player/food 20)
+             plan/goals)))
         "provisioned: back through the portal")))
