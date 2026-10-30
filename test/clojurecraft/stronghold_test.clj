@@ -429,8 +429,10 @@
     (testing "when feet cell is in :plan/boxed-at, stairs down fallback is refused"
       (let [w (assoc seen :player/pos [8.5 26.0 8.5] :plan/boxed-at #{[8 26 8]})]
         (with-redefs [fortress/choose-move (constantly nil)]
-          (is (= {:plan/wait :no-way} (plan/next-intent w room-row plan/goals))
-              "a boxed feet cell never attempts stairs down again"))))
+          (is
+           (= {:intent/kind :stairs-up :intent/to-y 34 :intent/for :retreat}
+              (plan/next-intent w room-row plan/goals))
+           "a boxed feet cell never attempts stairs down again: a staircase up a leg instead, never the wait that ends the plan"))))
     (testing "when feet cell is boxed, to-room retreats along trail to earlier unboxed cell"
       ;; gym chain-w7 run 1: aquifer blocked tunnel-to, stairs-down boxed at [12985 3 16726];
       ;; to-room must retreat along trail to a different stair start, not wait :no-way
@@ -454,10 +456,10 @@
           (is (= {:intent/kind :walk :intent/target [12983 3 16726] :intent/for :retreat}
                  (stronghold/to-room w [12815 0 16673]))
               "the walk that failed is skipped for the next cell back")
-          (is (= {:plan/wait :no-way}
+          (is (= {:intent/kind :stairs-up :intent/to-y 11 :intent/for :retreat}
                  (stronghold/to-room (update w :plan/blacklist conj [12983 3 16726])
                                      [12815 0 16673]))
-              "every cell tried: the wait, never the same walk again"))))
+              "every cell tried: a staircase up, never the same walk again, never the wait"))))
     (testing "every retreat cell across water: a swim, not a walk to each in turn"
       ;; gym chain-w11 to w14 run 1: on the bank at the bottom of the flooded staircase
       ;; ([12983 3 16726]), `intent :walk` to each trail cell in turn 50 ms apart, every one
@@ -476,12 +478,39 @@
         ;; water in the columns either side of the bank's own (x 5-7 and 9-11): every step the
         ;; tunnel could take, east, aside, back or down, opens a cell in or beside water, so
         ;; (fortress/moves, aside included) leaves it no dry step and the retreat is reached
-        (is (= {:intent/kind :cross :intent/target [14 64 8] :intent/for :retreat}
+        (is (= {:intent/kind :cross :intent/target [13 64 8] :intent/for :retreat}
                (stronghold/to-room w [13 60 8]))
             "no route to a cell across it: the swim to the nearest of them")
         (is (= {:intent/kind :walk :intent/target [8 64 2] :intent/for :retreat}
                (stronghold/to-room w2 [13 60 8]))
-            "one a route reaches is walked to")))
+            "one a route reaches is walked to")
+        (is
+         (= {:intent/kind :stairs-up :intent/to-y 72 :intent/for :retreat}
+            (stronghold/to-room (assoc w :plan/trail [[100 64 8] [8 64 8]]) [13 60 8]))
+         "a cell far off is no retreat (gym chain-w18 run 3 crossed to one 100 blocks away,
+             :stuck in five seconds): the staircase up")))
+    (testing "every retreat cell out of reach on dry ground: a new staircase up, not a swim"
+      ;; gym chain-w15 run 3: `intent :cross [14862 33 13582]` on dry ground failed :stuck in five
+      ;; seconds, twice, and with the stairs-down :boxed before them the third failure in a row
+      ;; ended the plan at 7 minutes. A ring of water two out from the bank keeps every tunnel
+      ;; step from being dry, and none of it is at the feet.
+      (let [ring (world/column (into {}
+                                     (for [x (range 6 11)
+                                           z (range 6 11)
+                                           :when (or (#{6 10} x) (#{6 10} z))
+                                           y (range 58 70)]
+                                       [[x y z] blocks/water-base])))
+            w (-> (searching [8.5 8.5] [])
+                  (assoc :world/chunks {[0 0] ring}
+                         :plan/boxed-at #{[8 64 8]}
+                         :plan/trail [[8 64 2] [8 64 8]]))]
+        (is (not (stronghold/water-near? w)) "no water at the feet")
+        (is (= {:intent/kind :stairs-up :intent/to-y 72 :intent/for :retreat}
+               (stronghold/to-room w [13 60 8]))
+            "unreachable cells and no water: the staircase up a leg")
+        (is (= {:intent/kind :walk :intent/target [9 64 9] :intent/for :retreat}
+               (stronghold/to-room (assoc w :plan/trail [[9 64 9] [8 64 2] [8 64 8]]) [13 60 8]))
+            "a cell a route reaches is still walked to")))
     (testing "to-room refuses moves through or bordering lava in portal room"
       ;; gym chain-w7 run 3: in portal room with lava pool under frame, tunnel-to
       ;; must never step into or border lava
@@ -492,6 +521,17 @@
                :player/dimension dimension/overworld}]
         (is (not (stronghold/safe-portal-move? w feet [0 0 1]))
             "a move opening or bordering lava in the portal room is refused")))
+    (testing "to-room refuses a move that opens an infested block"
+      ;; gym chain-w13 run 4: the tunnel dug an infested stone brick at [14775 -13 13507], a
+      ;; silverfish came out, and the bot died of its bites
+      (let [feet [10 21 7]
+            w {:world/chunks {[0 0] (world/column {[10 21 8] (blocks/default-state
+                                                              :infested_stone_bricks)})}
+               :player/pos [10.5 21.0 7.5]
+               :player/dimension dimension/overworld}]
+        (is (stronghold/infested? w [10 21 8]))
+        (is (not (stronghold/safe-portal-move? w feet [0 0 1])) "a step into it is refused")
+        (is (stronghold/safe-portal-move? w feet [0 0 -1]) "one away from it is not")))
     (testing "within 6 of it: there"
       (is (plan/done-by (assoc seen :player/pos [40.5 22.0 58.5]) room-row)))
     (testing "in water: out to the nearest bank first"
@@ -666,3 +706,34 @@
     (is (= frame (sim/block-at sim [40 40 8])) "the frame never dug")
     (is (not-any? #(= cobblestone (sim/block-at sim %)) over-slope) "no bridge into the air")
     (is (empty? (:sim/violations sim)))))
+
+(deftest a-hop-must-end-nearer-the-far-point
+  ;; gym chain-w16 run 2 (plan run 40863839525, job 2): `intent :walk [13127 66 16728]`, then
+  ;; `[13101 64 16752]`, then back, 67 times in 11 minutes with no throw between, the crossing
+  ;; 250 blocks west: from the first a turned hop ended at the second (19 nearer), from the second
+  ;; a turned hop ended at the first (19 farther)
+  (let [far [12864 16672]]
+    (is (stronghold/progress? [13127 66 16728] [13101 64 16752] far 2.0) "the first hop: nearer")
+    (is (not (stronghold/progress? [13101 64 16752] [13127 66 16728] far 2.0))
+        "back again: farther, so no hop, and the way falls through to the swim or the tunnel")
+    (is (not (stronghold/progress? [0 64 0] [1 64 0] [100 0] 2.0)) "a step of one is no progress")
+    (is (stronghold/progress? [0 64 0] [32 64 0] [100 0] 2.0))))
+
+(deftest a-swim-that-found-no-shore-is-not-asked-for-again
+  ;; gym chain-w18 run 2 (plan run 40914832722): `intent :cross [12864 65 16672]` failed
+  ;; :no-crossing, then [12864 67 16672] :stuck, then [12864 66 16672] :no-crossing, 5 minutes, and
+  ;; the plan ended with the dry tunnel under the sea never tried
+  (let [w (assoc (searching [8.5 8.5] []) :time/now 1000)
+        failed (fn [w id reason target]
+                 (memory/remember-intention
+                  w
+                  {:intent/id id :intent/kind :cross :intent/target target :intent/reason reason}
+                  :failed))]
+    (is (not (stronghold/cross-failed-near? w [12864 16672])) "none yet")
+    (let [w1 (failed w 1 :no-crossing [12864 65 16672])]
+      (is (stronghold/cross-failed-near? w1 [12864 16672]) "that point")
+      (is (stronghold/cross-failed-near? w1 [12840 16690]) "and the ones round it")
+      (is (not (stronghold/cross-failed-near? w1 [0 0])) "not another")
+      (is (stronghold/cross-failed-near? (failed w 2 :stuck [12864 67 16672]) [12864 16672]))
+      (is (not (stronghold/cross-failed-near? (failed w 3 :boxed [12864 65 16672]) [12864 16672]))
+          "another failure is no word on the water"))))

@@ -574,10 +574,14 @@
                 "item replace entity {name} armor.head with minecraft:iron_helmet"
                 "item replace entity {name} armor.chest with minecraft:iron_chestplate"
                 "item replace entity {name} armor.legs with minecraft:iron_leggings"
-                "item replace entity {name} armor.feet with minecraft:iron_boots"
-                "summon minecraft:zombie {x+2} {y} {z} {PersistenceRequired:1b}"
-                "summon minecraft:zombie {x-2} {y} {z+1} {PersistenceRequired:1b}"
-                "summon minecraft:zombie {x} {y} {z-2} {PersistenceRequired:1b}"]
+                "item replace entity {name} armor.feet with minecraft:iron_boots"]
+    ;; summoned once the bot stands in the landing with its kit, then the settle: chain-w18 defend
+    ;; run 3 (plan run 40914832722) had them summoned in the setup, before the teleport, in chunks
+    ;; unforceloaded a command later, and the bot saw none (:entities 0), found the row done 0.35 s
+    ;; after landing and failed the kill count
+    :gym/summon ["summon minecraft:zombie {x+2} {y} {z} {PersistenceRequired:1b}"
+                 "summon minecraft:zombie {x-2} {y} {z+1} {PersistenceRequired:1b}"
+                 "summon minecraft:zombie {x} {y} {z-2} {PersistenceRequired:1b}"]
     :gym/timeout-ms trial-ms
     :gym/truth [{:truth/cmd "scoreboard players get {name} zkills" :truth/re "has [1-9]"}
                 {:truth/cmd "data get entity {name} Health" :truth/re "data: [1-9]"}]}
@@ -774,6 +778,42 @@
                   "minecraft:iron_leggings 1" "minecraft:iron_boots 1" "minecraft:cooked_beef 16"
                   "minecraft:cobblestone 64" "minecraft:iron_pickaxe 1"
                   "minecraft:carved_pumpkin 1"]
+    :gym/summon [no-crystals]
+    :gym/timeout-ms trial-ms
+    :gym/truth [{:truth/cmd
+                 "execute in minecraft:the_end unless entity @e[type=minecraft:ender_dragon]"
+                 :truth/re "Test passed"}]}
+   ;; the speedrunners' kill, measured (issue #10): the dragon row with six beds and the bot
+   ;; invulnerable (Resistance V, Fire Resistance), so the damage a bed deals the perched dragon
+   ;; is read from the boss bar (boss-event update-health) before and after each, not the bot's
+   ;; survival; a bed explodes in the End and, in the open at 4.5 blocks, would kill the bot
+   {:gym/name "dragon-beds"
+    :gym/goal :dragon
+    :gym/until "dragon"
+    :gym/land :end
+    :gym/difficulty "normal"
+    :gym/setup [no-crystals]
+    :gym/prereqs ["minecraft:iron_sword 1" "minecraft:iron_helmet 1" "minecraft:iron_chestplate 1"
+                  "minecraft:iron_leggings 1" "minecraft:iron_boots 1" "minecraft:cooked_beef 16"
+                  "minecraft:cobblestone 64" "minecraft:iron_pickaxe 1" "minecraft:carved_pumpkin 1"
+                  "minecraft:white_bed 6"]
+    :gym/summon (into [no-crystals] invulnerable)
+    :gym/timeout-ms trial-ms
+    :gym/truth [{:truth/cmd
+                 "execute in minecraft:the_end unless entity @e[type=minecraft:ender_dragon]"
+                 :truth/re "Test passed"}]}
+   ;; the same without the Resistance: the bot walls itself from the bed's blast (bed-wall, two
+   ;; blocks, beds/expected-damage) and takes what is left; its health is the measure
+   {:gym/name "dragon-beds-real"
+    :gym/goal :dragon
+    :gym/until "dragon"
+    :gym/land :end
+    :gym/difficulty "normal"
+    :gym/setup [no-crystals]
+    :gym/prereqs ["minecraft:iron_sword 1" "minecraft:iron_helmet 1" "minecraft:iron_chestplate 1"
+                  "minecraft:iron_leggings 1" "minecraft:iron_boots 1" "minecraft:cooked_beef 16"
+                  "minecraft:cobblestone 64" "minecraft:iron_pickaxe 1" "minecraft:carved_pumpkin 1"
+                  "minecraft:white_bed 6"]
     :gym/summon [no-crystals]
     :gym/timeout-ms trial-ms
     :gym/truth [{:truth/cmd

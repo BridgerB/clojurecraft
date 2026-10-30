@@ -435,7 +435,8 @@
             cond?
             (recur (rest fields)
                    (cond-> m
-                     (and (= cv (get m ck)) (>= (.remaining buf) (get min-width ct 1)))
+                     (and (= cv (get m ck))
+                          (>= (.remaining ^java.nio.ByteBuffer buf) (get min-width ct 1)))
                      (assoc k (read-field ct buf))))
             (truncating? v) (assoc m k v :truncated true)
             :else (recur (rest fields) (assoc m k v))))))

@@ -603,3 +603,31 @@
     (is (place/drop-beyond? short-bridge [0 64 0] [0 64 1]) "the bridge ends past the cell ahead")
     (is (not= [0 64 1] (first (place/spot short-bridge false #{} true)))
         "never the cell at the end of the bridge, where the pickup carries on over the drop")))
+
+(deftest a-meal-swapped-into-the-hand-does-not-push-the-pickaxe-out-of-the-hotbar
+  ;; gym chain-w9 run 3 (main, plan run 40851746139): `digging [18 101 -40] ... with pickaxe in 6
+  ;; 500ms`, then `intent :eat`, and the recording's slot 11 holds item 934 with damage 69: the meal
+  ;; went into the held slot 6 and the pickaxe into the main inventory, where no dig looks; the
+  ;; way down a 28-high pillar was dug by hand, ten seconds a block
+  (let [pick {:item (recipe/item-id :stone_pickaxe) :count 1}
+        beef {:item (recipe/item-id :cooked_beef) :count 4}
+        at (fn [inventory held]
+             (assoc (standing [5.5 64.0 5.5])
+                    :window/state-id 5
+                    :player/held-slot held
+                    :player/inventory inventory))
+        swapped (fn [w]
+                  (let [[_ fx] (fx/fold intent-step
+                                        (assoc w
+                                               :plan/intent
+                                               {:intent/kind :equip
+                                                :intent/item :cooked_beef
+                                                :intent/status :active})
+                                        [{:event/kind :tick :event/now 50 :event/rand 0.5}])]
+                    (some #(when (= :container-click (:packet/name %)) (:button %))
+                          (fx/packets fx))))]
+    (is (= 0 (swapped (at {6 pick 11 beef} 6)))
+        "the pickaxe held: into the first slot with no tool")
+    (is (= 6 (swapped (at {11 beef} 6))) "no tool held: into the held slot as before")
+    (is (= 1 (swapped (at {0 pick 6 pick 11 beef} 6)))
+        "a tool in slot 0 too: the first hotbar slot with none is 1")))

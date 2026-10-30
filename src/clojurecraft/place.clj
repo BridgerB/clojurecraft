@@ -9,6 +9,7 @@
    Nothing is predicted; a rejected placement comes back as a block update with the old state
    and an ack, and the intent fails rather than believing the block is there."
   (:require [clojure.math :as math]
+            [clojure.string :as str]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
@@ -211,10 +212,34 @@
   {:arglists '([world intent])}
   (fn [_world i] (:intent/stage i)))
 
+(defn tool-slot?
+  "Does hotbar slot p hold a tool or a sword (blocks/tool, blocks/tool-kinds' sword)? What a swap
+   into the hand must not push out of the hotbar."
+  [world p]
+  (let [item (some-> (get-in world [:player/inventory p :item])
+                     recipe/item-name
+                     name)]
+    (boolean (and item
+                  (or (blocks/tool (get-in world [:player/inventory p :item]))
+                      (str/ends-with? item "_sword"))))))
+
+(defn swap-slot
+  "The hotbar slot a stack from the main inventory is swapped into to be held: the held slot when
+   it holds no tool, else the first hotbar slot with none, else the held slot. A meal swapped into
+   the hand of a bot holding its pickaxe sent the pickaxe to the main inventory, where no dig looks:
+   gym chain-w9 run 3 (plan run 40851746139) dug the way down a 28-high pillar by hand, ten seconds
+   a block, and the dragon killed it on the way."
+  [world]
+  (let [held (:player/held-slot world)]
+    (if (tool-slot? world held)
+      (or (first (remove #(tool-slot? world %) (range inventory/hotbar-slots))) held)
+      held)))
+
 (defn equip
   "One step toward holding item (a name) in the hand, for an intent whose next stage is then:
    already held, go on; in the hotbar, select it and go on; in the main inventory, swap it into
-   the held slot with a window-0 click and stay (the answer moves it); held nowhere, fail
+   a hotbar slot (swap-slot: the held one unless that holds a tool) with a window-0 click and stay
+   (the answer moves it); held nowhere, fail
    :not-held. With a container open, the swap waits a tick for it to close: the server ignores a
    window-0 click while a container is its open menu, as a craft in window 0 closes one first.
    Race 38805920624 runner 5 (issues #131, #132): 20 bots whose smelt failed :not-cooked left
@@ -237,10 +262,10 @@
               (dissoc :window/open))
           :else
           (window/click world
-                        (window/view world :inventory) ; swap into the held slot
+                        (window/view world :inventory) ; swap into a hotbar slot
                         (inventory/swap-click
                          (inventory/player->window-slot (inventory/layouts :inventory) p)
-                         held)))))
+                         (swap-slot world))))))
 
 (defmethod place-stage :equip [world {:intent/keys [item]}] (equip world item :spot))
 
