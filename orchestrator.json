@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-30T22:44:46.071Z",
+  "at" : "2026-10-30T22:45:55.855Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -8,20 +8,20 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : true
   }, {
-    "number" : 539,
-    "title" : "Bot stops at fortress: timeout",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 531,
     "title" : "Bot stops at ingots: boxed",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
+    "number" : 539,
+    "title" : "Bot stops at fortress: timeout",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
     "number" : 611,
     "title" : "Bot stops at portal-kit: no-support",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
+    "copilot" : true
   }, {
     "number" : 618,
     "title" : "Bot stops at ingots: no-support",
@@ -233,16 +233,17 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 539,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
     "issue" : 531,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 539,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
     "issue" : 611,
-    "move" : "assign"
+    "move" : "wait",
+    "why" : "session starting"
   }, {
     "issue" : 514,
     "move" : "leave",
