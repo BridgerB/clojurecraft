@@ -19,6 +19,7 @@
    emitted, so it has one source of truth: clojurecraft.packet/transitions."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
+            [clojurecraft.blocks :as blocks]
             [clojurecraft.bytes :as b]
             [clojurecraft.chunk :as chunk]
             [clojurecraft.dimension :as dimension]
@@ -131,16 +132,31 @@
   [flags bit old new]
   (if (pos? (bit-and flags bit)) (+ old new) new))
 
+(defn stare-safe-look
+  "The look [yaw pitch] to send in world after a teleport: the one the server set, or in the End,
+   with no carved pumpkin on the head, straight down (pitch 90). An enderman is provoked by a
+   look at it from the first tick the player is there, and the End's arrival faces yaw 0, pitch 0:
+   in the dragon gym that is straight at endermen thirty blocks off. Gym chain-w22 and main's
+   dragon-main-a run 1 (plan run 41092662823) had enderman 105 angry (metadata 17 true) before the
+   pumpkin was worn, with the first sent look [0 0], and was slain by two of them."
+  [world [yaw _ :as look]]
+  (let [worn (get-in world [:player/inventory inventory/head-slot :item])]
+    (if (and (= dimension/end (:player/dimension world)) (not= (blocks/items :carved_pumpkin) worn))
+      [yaw 90.0]
+      look)))
+
 (defn apply-teleport
-  "The server moved the player: set pos and look (relative per flags), stop, accept the
-   teleport and echo the position. The first teleport also sends player-loaded."
+  "The server moved the player: set pos and look (relative per flags; stare-safe-look), stop,
+   accept the teleport and echo the position. The first teleport also sends player-loaded."
   [world {:keys [teleport-id x y z yaw pitch flags]}]
   (let [[ox oy oz] (or (:player/pos world) [0.0 0.0 0.0])
         [oyaw opitch] (:player/look world)
         loaded? (:player/loaded? world)]
     (-> world
         (assoc :player/pos [(relative flags 1 ox x) (relative flags 2 oy y) (relative flags 4 oz z)]
-               :player/look [(relative flags 8 oyaw yaw) (relative flags 16 opitch pitch)]
+               :player/look
+               (stare-safe-look world
+                                [(relative flags 8 oyaw yaw) (relative flags 16 opitch pitch)])
                :player/vel [0.0 0.0 0.0]
                :player/on-ground? false
                :player/teleport-id teleport-id
