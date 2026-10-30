@@ -14,6 +14,7 @@
             [clojurecraft.main]
             [clojurecraft.memory :as memory]
             [clojurecraft.path :as path]
+            [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.sim :as sim]
@@ -573,3 +574,22 @@
     (testing "a stand no longer open, or blacklisted, is not kept"
       (is (= north (blaze/stand (assoc (fact (at 2 4) west) :plan/blacklist #{west}) sp))))))
 
+
+(deftest a-walk-to-a-spawner-already-in-reach-is-not-chosen-every-tick
+  ;; snapshot test/issues/514/b10231346-R4-21-1.edn.gz (churn-guard scan): the bot at [540.5 57 201.5],
+  ;; the spawner at [544 57 203] 3.96 from the eye, its top out of sight: :walk [544 57 203] ended in
+  ;; its first tick (within reach) with at-spawner? still false, and was chosen again every tick.
+  ;; The same geometry from the fixture's floor: the spawner at [11 64 10], a pillar between
+  (let [sp [11 64 10]
+        stone (blocks/default-state :stone)
+        pillar (into {} (for [y [64 65 66]] [[10 y 9] stone]))
+        w (-> (standing {})
+              (assoc :world/chunks {[0 0] (world/column pillar)})
+              (memory/observe sp blaze/spawner))
+        walk {:intent/kind :walk :intent/target sp}
+        d (physics/distance (game/eye w) (physics/centre sp))]
+    (is (blaze/walkable? w sp))
+    (is (blaze/at-spawner? w sp)
+        "within reach of the eye with the spawner walkable: where it camps")
+    (is (intent/arrived? w walk d) "the walk would be done at once")
+    (is (not= walk (next-intent w)) "so the walk is not chosen: the act goes on to the camp")))

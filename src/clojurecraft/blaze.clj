@@ -199,13 +199,19 @@
 (defn at-spawner?
   "Is the bot where it camps by spawner sp: the feet within spawner-reach of it and level-with?
    it (where a tunnel to it ends), or the eye within camp-range with the spawner walkable? (on its
-   floor, not in a tunnel beside its room) and its top-in-sight?. Gym blaze-fortress-b (run
+   floor, not in a tunnel beside its room) and its top-in-sight?, or the eye within intent/reach
+   of it with the spawner walkable? (a walk to it is done in its first tick and chosen again every
+   tick: snapshot test/issues/514/b10231346-R4-21-1, the bot 3.96 from the spawner at
+   [544 57 203]; race lane 4 s2 r08 and r09 flipped :tunnel-to between [543 57 203] and
+   [544 57 203] at that spawner). Gym blaze-fortress-b (run
    38893941350) tunnelled to within 6 of its spawner, four blocks over it in the wall, and
    camped there ten minutes: the blazes the spawner made in its room below were out of reach,
    every run; blaze-fortress-c (run 38895759229) run 3 came up under its spawner, three below
    its floor, killed eight blazes from there and every rod lay on the floor over it."
   [world sp]
   (or (and (fortress/arrived? world sp spawner-reach) (level-with? world sp))
+      (and (<= (physics/distance (game/eye world) (physics/centre sp)) intent/reach)
+           (walkable? world sp))
       (and (<= (physics/distance (game/eye world) (physics/centre sp)) camp-range)
            (walkable? world sp)
            (top-in-sight? world sp))))
