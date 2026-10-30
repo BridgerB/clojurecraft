@@ -1354,3 +1354,20 @@
                                    tunnel)))))
     (testing "far from the spawner: not yet"
       (is (not (plan/interrupts? (assoc w :world/facts (memory/empty-facts)) row tunnel))))))
+
+(deftest a-fireball-in-flight-is-dodged-whatever-the-bot-was-doing
+  ;; blaze-race-l race 2 at +210.4 s (fireball 542, hit 450 ms after its spawn): the planner steps
+  ;; out of the line, and a running tunnel or camp is cut for it
+  (let [fb {:entity/type (blocks/entity-types :small_fireball)
+            :entity/pos [11.7 66.4 6.0]
+            :entity/vel [-0.064 -0.020 0.074]
+            :entity/seen-at 0}
+        w (-> (standing {7 fb})
+              (assoc :player/pos [8.6 64.0 8.5] :time/now 0))
+        i (next-intent w)]
+    (is (= :dodge (:intent/kind i)))
+    (is (plan/interrupts? w row {:intent/kind :camp :intent/spawner [15 64 15]}))
+    (is (not (plan/interrupts? w row {:intent/kind :dodge :intent/target (:intent/target i)}))
+        "the dodge is not cut for itself")
+    (is (not= :dodge (:intent/kind (next-intent (assoc w :world/entities {}))))
+        "none in flight: no dodge")))

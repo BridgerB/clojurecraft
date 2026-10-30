@@ -33,6 +33,7 @@
             [clojurecraft.build :as build]
             [clojurecraft.combat :as combat]
             [clojurecraft.dimension :as dimension]
+            [clojurecraft.dodge :as dodge]
             [clojurecraft.drops :as drops]
             [clojurecraft.eat :as eat]
             [clojurecraft.entity :as entity]
@@ -1224,7 +1225,15 @@
 
 (def refuge-kinds
   "Intents that are the answer to a refuge: none of them is cut for one."
-  #{:pocket :seal :unseal :hold :eat :fight :back-off :rest})
+  #{:pocket :seal :unseal :hold :eat :fight :back-off :rest :dodge})
+
+(defn dodge-intent
+  "A :dodge intent out of the line of the fireballs in flight toward the bot (dodge/intent-for), or
+   nil: none when it stands sealed in its pocket (a block stops them) or no cell is clear in time.
+   Blaze-race-k and -l: 3.5 to 4 fireball hits a kill, each lighting the bot, half of all damage the
+   burning after; the lines are known the tick a fireball spawns."
+  [world]
+  (when-not (sealed? world) (dodge/intent-for world)))
 
 (defn refuge-now
   "What the bot does for its refuge now, or nil: the hold, seal or unseal in the pocket (hold-intent),
@@ -1246,7 +1255,8 @@
    10 off, past the at-hand radius, shot the bot from 16.8 health to none in ten seconds, since
    nothing ends a running intent but itself and the planner is asked only then."
   [world i]
-  (and (not (contains? #{:fight :eat :rest :back-off :hold :pocket :seal :unseal} (:intent/kind i)))
+  (and (not (contains? #{:fight :eat :rest :back-off :hold :pocket :seal :unseal :dodge}
+                       (:intent/kind i)))
        (not= :cover (:intent/for i))
        (seq (watchers world))
        (some? (cond (hurt? world) (healing world false)
@@ -1258,7 +1268,8 @@
   ;; from 20 health to 13.8, since nothing else ends a running intent; never interrupt cover or healing when hurt (#577);
   ;; and one hurt and watched (under-fire?) by blazes further off, whatever the intent but the answer to it
   [world _ i]
-  (or (and (= :tunnel-to (:intent/kind i)) (some? (prepare-intent world (nearest-spawner world))))
+  (or (and (not= :dodge (:intent/kind i)) (some? (dodge-intent world)))
+      (and (= :tunnel-to (:intent/kind i)) (some? (prepare-intent world (nearest-spawner world))))
       (and (not (contains? refuge-kinds (:intent/kind i)))
            (some? (refuge-now world (nearest-spawner world))))
       (and (not (hurt? world))
@@ -1285,6 +1296,7 @@
                         (or (pocket-go world sp false)
                             (when (burning-twice? world) (here-intent world)))))
         prepare (delay (prepare-intent world sp))
+        dodging (delay (dodge-intent world))
         waiting (delay (ambush world))
         stock (delay (when-not (hurt? world) (stocking world)))
         out (delay (when (burning-here? world) (leave-fire world)))
@@ -1294,6 +1306,7 @@
     (cond
       (not= dimension/nether (dimension/of world)) {:plan/wait :other-dimension}
       @out @out
+      @dodging @dodging
       @held @held
       @refuge @refuge
       @heal @heal
