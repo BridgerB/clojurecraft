@@ -129,12 +129,13 @@
     (is (= combat/max-swings (count (attacks fx))))
     (is (= [:failed :ghost] ((juxt :intent/status :intent/reason) (:plan/intent w))))))
 
-(deftest under-ten-health-the-fight-breaks-off-and-walks-away
+(deftest under-the-danger-line-the-fight-breaks-off-and-walks-away
+  ;; a zombie's line is its hit (3) and the margin (3): 6 (combat/danger-line), no longer 10
   (let [[w fx] (fx/fold intent-step
                         (fighting 2.0)
                         (concat (map tick (range 50 200 50))
                                 [(packet
-                                  {:packet/name :set-health :health 8.0 :food 20 :saturation 5.0})]
+                                  {:packet/name :set-health :health 5.0 :food 20 :saturation 5.0})]
                                 (map tick (range 200 4000 50))))]
     (is (= 1 (count (attacks fx))) "one attack before the hurt, none after")
     (is (= :done (:intent/status (:plan/intent w))) "a fight broken off is not a failure")
@@ -251,8 +252,11 @@
         "a creeper five blocks off is a threat, and never fought")
     (is (plan/done-by far (row :defend)) "a zombie four and a half blocks off is not yet one")
     (is (= {:intent/kind :back-off :intent/target 7}
-           (plan/next-intent (assoc zombie :player/health 6.0) (row :defend) plan/goals))
-        "hurt, the bot backs away instead")
+           (plan/next-intent (assoc zombie :player/health 5.0) (row :defend) plan/goals))
+        "under a zombie's line (its hit and the margin, 6), the bot backs away instead")
+    (is (= {:intent/kind :fight :intent/target 7}
+           (plan/next-intent (assoc zombie :player/health 8.0) (row :defend) plan/goals))
+        "at 8, over it: fought")
     (is (plan/done-by (assoc zombie :plan/blacklist #{7}) (row :defend)) "a ghost is left alone")
     (let [angry (assoc (standing
                         {7 (assoc (mob :enderman [11.0 64.0 8.5] 40.0) :entity/creepy? true)})
@@ -688,3 +692,52 @@
     (let [i (plan/next-intent w (row :defend) plan/goals)]
       (is (= {:intent/kind :place :intent/item :cobblestone :intent/cell [11 64 8]} i)
           "a block between instead, never the back-off and never the fight"))))
+
+(deftest the-danger-line-is-the-next-hits-and-a-margin
+  ;; gym chain-w13 run 4 (job 4, plan run 40798605016): bitten 25 times in 23 s from 9.3 health by
+  ;; silverfish 2194 while backing away, a back-off at a time, from mob 2193; dead at 14.13 min.
+  ;; #577: never fight when the next hits can kill; the line is the hits near plus a margin of 3,
+  ;; at most retreat-health
+  (let [at (fn [entities health] (assoc (standing entities) :player/health health))
+        fish (fn [x] (mob :silverfish [x 64.0 8.5] 8.0))
+        five (into {} (map (fn [k] [(+ 20 k) (fish (+ 10.0 (* 0.2 k)))]) (range 5)))
+        zombie (mob :zombie [9.5 64.0 8.5] 20.0)
+        defend (row :defend)]
+    (testing "the line"
+      (is (== 10 (combat/danger-line (at {} 20.0))) "none near: retreat-health")
+      (is (= 4.0 (combat/danger-line (at {7 (fish 10.5)} 20.0))) "one silverfish: one bite and 3")
+      (is (= 8.0 (combat/danger-line (at five 20.0))) "five: five bites and 3")
+      (is (= 7.0 (combat/danger-line (at {7 (fish 10.5) 8 zombie} 20.0))) "a zombie's 3 and a bite")
+      (is (== 10
+              (combat/danger-line
+               (at {7 (assoc (mob :enderman [10.5 64.0 8.5] 40.0) :entity/creepy? true)} 20.0)))
+          "an angry enderman: 7 and 3, retreat-health")
+      (is (== 10 (combat/danger-line (at {7 (mob :creeper [10.5 64.0 8.5] 20.0)} 20.0)))
+          "a creeper has no hit to add up: retreat-health"))
+    (testing "the choice"
+      (is (= {:intent/kind :fight :intent/target 7 :intent/hold? true}
+             (plan/next-intent (at {7 (fish 10.5)} 9.3) defend plan/goals))
+          "one silverfish at 9.3: fought holding ground, not backed away from")
+      (is (= {:intent/kind :back-off :intent/target 7}
+             (plan/next-intent (at {7 (fish 10.5)} 3.0) defend plan/goals))
+          "under its line: backed away from")
+      (is (= :back-off (:intent/kind (plan/next-intent (at five 6.0) defend plan/goals)))
+          "five silverfish at 6: under 8, backed away from")
+      (is (= :fight
+             (:intent/kind (plan/next-intent (at {7 (fish 10.5) 8 zombie} 9.3) defend plan/goals)))
+          "a zombie and a silverfish at 9.3: over their 7, fought")
+      (is (= {:intent/kind :fight :intent/target 7 :intent/hold? true}
+             (plan/next-intent (assoc (at {7 (fish 10.5) 8 zombie} 9.3) :player/attacker 7)
+                               defend
+                               plan/goals))
+          "the silverfish that bit last is answered, not the nearer zombie"))))
+
+(deftest a-block-is-never-laid-in-the-cell-the-target-stands-in
+  ;; gym chain-w16 run 3 (plan run 40863839525): `intent :place` three times at 12:12:32-35, each
+  ;; `failed: :rejected`, on the cell above the portal room's spawner where its silverfish stood
+  (let [fish (mob :silverfish [9.5 64.0 8.5] 8.0)
+        w (assoc (standing {7 fish}) :player/health 3.0 :player/food 20)]
+    (is (combat/occupied? w [9 64 8]) "the silverfish is in the cell beside the feet")
+    (is (not (combat/occupied? w [10 64 8])))
+    (is (= [9 65 8] (combat/wall-cell w fish))
+        "the feet's height is taken, so the cell over it is the wall")))

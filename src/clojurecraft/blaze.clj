@@ -926,8 +926,18 @@
                  target)))
        set))
 
+(defn within-reach?
+  "Is the eye within intent/reach of the middle of spawner sp: a walk to it would be done in its
+   first tick (intent/arrived?), standing where at-spawner? is still false (the spawner's top out of
+   sight, the feet beyond spawner-reach)? Snapshot test/issues/514/b10231346-R4-21-1 (R4/21): the
+   bot at [540.5 57 201.5], the spawner at [544 57 203], 3.96 off, chose `:walk [544 57 203]` every
+   tick."
+  [world sp]
+  (<= (physics/distance (game/eye world) (physics/centre sp)) intent/reach))
+
 (defn to-spawner
-  "The way to spawner sp: a walk when it is walkable?, else a tunnel by the fortress's steps
+  "The way to spawner sp: a walk when it is walkable? and not already within reach of it
+   (within-reach?: that walk ends in its first tick and is chosen again), else a tunnel by the fortress's steps
    (which never open a cell beside lava nor the spawner itself), climbing first, to its stand
    (into it), or with no stand known to within spawner-reach of it. A target a tunnel already
    ended on this very cell for (stalled) is not chosen again: another stand, else the spawner
@@ -936,7 +946,7 @@
   (let [dead (stalled world)
         walk {:intent/kind :walk :intent/target sp}
         at (stand (update world :plan/blacklist (fnil into #{}) dead) sp)]
-    (cond (walkable? world sp) walk
+    (cond (and (walkable? world sp) (not (within-reach? world sp))) walk
           at
           {:intent/kind :tunnel-to
            :intent/target at
@@ -1180,11 +1190,11 @@
 
 (defn hold-intent
   "What a bot in its pocket does, or nil: SEALED, while it burns or is under hold-to, eat when the
-   food is under what heals (meal) else a :hold, until the fire is out, the health is up and the
+   food is under what heals (meal) else a :pocket-hold, until the fire is out, the health is up and the
    last hit older than press-ms, then an :unseal; OPEN, a blaze in reach is struck (nil here) unless
    the health is under low-health (then sealed out: it hits for 3.6 a second),
    while it is pressed? and can seal a :seal (a block in the opening, at the feet and the head,
-   over the head when it has no roof), else while it burns or is under hold-to a meal or a :hold
+   over the head when it has no roof), else while it burns or is under hold-to a meal or a :pocket-hold
    in the open (no filler held). Blaze-race-j race 3 and race 1 held open and died in it."
   [world]
   (when (pocket/in? world)
@@ -1193,12 +1203,12 @@
           struck? (<= (- (:time/now world 0) (:player/struck-at world -1000000)) press-ms)]
       (cond (pocket/sealed? world site)
             (if (or need? struck?)
-              (or (meal world) {:intent/kind :hold :intent/heal-to (hold-to world)})
+              (or (meal world) {:intent/kind :pocket-hold :intent/heal-to (hold-to world)})
               {:intent/kind :unseal})
             (and (reach-blaze world) (>= (:player/health world 20.0) low-health)) nil
             (and (or (pressed? world) (reach-blaze world)) (pocket/can-seal? world site))
             {:intent/kind :seal}
-            need? (or (meal world) {:intent/kind :hold :intent/heal-to (hold-to world)})))))
+            need? (or (meal world) {:intent/kind :pocket-hold :intent/heal-to (hold-to world)})))))
 
 (defn refuge-needed?
   "Is a pocket wanted now: the bot burns or caught fire twice within reignite-ms (reignited?), is
@@ -1225,7 +1235,7 @@
 
 (def refuge-kinds
   "Intents that are the answer to a refuge: none of them is cut for one."
-  #{:pocket :seal :unseal :hold :eat :fight :back-off :rest :dodge})
+  #{:pocket :seal :unseal :pocket-hold :eat :fight :back-off :rest :dodge})
 
 (defn dodge-intent
   "A :dodge intent out of the line of the fireballs in flight toward the bot (dodge/intent-for), or
@@ -1255,7 +1265,7 @@
    10 off, past the at-hand radius, shot the bot from 16.8 health to none in ten seconds, since
    nothing ends a running intent but itself and the planner is asked only then."
   [world i]
-  (and (not (contains? #{:fight :eat :rest :back-off :hold :pocket :seal :unseal :dodge}
+  (and (not (contains? #{:fight :eat :rest :back-off :pocket-hold :pocket :seal :unseal :dodge}
                        (:intent/kind i)))
        (not= :cover (:intent/for i))
        (seq (watchers world))
@@ -1449,10 +1459,10 @@
           (and (> (- now since) rest-ms) (heals? world)) (intent/fail world :no-heal)
           :else world)))
 
-;; ---------------------------------------------------------------- the :hold intent
+;; ---------------------------------------------------------------- the :pocket-hold intent
 
-(defmethod intent/run :hold
-  ;; {:intent/kind :hold :intent/heal-to h}: stand still in the pocket, out of every line but the
+(defmethod intent/run :pocket-hold
+  ;; {:intent/kind :pocket-hold :intent/heal-to h}: stand still in the pocket, out of every line but the
   ;; opening's, until the fire is out and the health is at h (and, sealed, the last hit older than
   ;; press-ms: done), a blaze comes within reach of an open pocket (done: it is struck), the cell is
   ;; no pocket now or burns (done: the planner chooses), or hold-ms have passed (done: it is asked

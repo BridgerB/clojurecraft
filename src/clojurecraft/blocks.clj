@@ -268,6 +268,10 @@
 (def fire-states
   "Every state of fire and soul fire: a cell that burns whoever stands in it (in_fire, issue #262)."
   (states-where (fn [[n]] (contains? #{:fire :soul_fire} n))))
+(def infested-states
+  "Every state of an infested block (infested_stone, infested_stone_bricks ...): breaking one
+   lets a silverfish out."
+  (states-where (fn [[n]] (str/starts-with? (name n) "infested_"))))
 (def waterlogged-types
   "Definition types whose blocks are always waterlogged: full water to the physics."
   #{:waterlogged_transparent :bubble_column :kelp :kelp_plant :seagrass :tall_seagrass})

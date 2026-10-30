@@ -112,23 +112,32 @@
     starving-radius
     hunt-radius))
 
+(defn fightable-from?
+  "Can a fight reach animal e from the end of a route of status status (:found or not): a route
+   not found yet (chunks still loading) is not held against it, a found one ending no more than
+   intent/pickup-rise under the animal's feet. The pure half of fightable-from-route?, which the
+   test asks without redefining the planner: path/plan redefined globally under the parallel
+   suite reached every test that routes (chain-w16's test.yml 40863839694, eight failures, green
+   on a rerun)."
+  [e status end]
+  (or (not= :found status)
+      (<= (- (physics/y-of (:entity/pos e)) (physics/y-of end)) intent/pickup-rise)))
+
 (defn fightable-from-route?
   "Can a fight reach animal e, and its drop be picked up, from where a walk to it ends: the end of
    the planned route (the feet when it is already there) no more than intent/pickup-rise under
-   its feet. A route that is not found yet (chunks still loading) is not held against it. Sim
-   race 39768347249 (issue #515, R2/30): three sheep stood on a spruce crown at y 82; the route
-   ended at 79 and the walk, in reach of a straight line, at 77, under a wall the bot pressed
-   against: the first sheep fell to a blow and its meat lay above the pickup box, the other two
-   fights failed :unreachable, and three failures ended the plan."
+   its feet (fightable-from?). A route that is not found yet (chunks still loading) is not held
+   against it. Sim race 39768347249 (issue #515, R2/30): three sheep stood on a spruce crown at y
+   82; the route ended at 79 and the walk, in reach of a straight line, at 77, under a wall the
+   bot pressed against: the first sheep fell to a blow and its meat lay above the pickup box, the
+   other two fights failed :unreachable, and three failures ended the plan."
   [world e]
   (let [c (cell (:entity/pos e))
         {:path/keys [status waypoints]} (path/plan world
                                                    (path/feet-cell (:player/pos world))
                                                    (intent/goal-of {:intent/kind :walk
-                                                                    :intent/target c}))
-        end (or (last waypoints) (intent/feet world))]
-    (or (not= :found status)
-        (<= (- (physics/y-of (:entity/pos e)) (physics/y-of end)) intent/pickup-rise))))
+                                                                    :intent/target c}))]
+    (fightable-from? e status (or (last waypoints) (intent/feet world)))))
 
 (defn game
   "[eid entity] of the nearest animal of game-kinds, alive, not blacklisted, none a fight

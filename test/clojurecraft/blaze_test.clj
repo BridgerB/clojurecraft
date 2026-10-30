@@ -14,6 +14,7 @@
             [clojurecraft.main]
             [clojurecraft.memory :as memory]
             [clojurecraft.path :as path]
+            [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
             [clojurecraft.pocket :as pocket]
             [clojurecraft.recipe :as recipe]
@@ -1180,11 +1181,13 @@
   (let [far (entity :blaze [3.5 65.0 8.5] :entity/health 20.0)
         hand (entity :blaze [6.5 65.0 8.5] :entity/health 20.0)
         w (in-pocket (standing {7 far}))]
-    (is (= {:intent/kind :hold :intent/heal-to 20.0} (next-intent (assoc w :player/on-fire? true)))
+    (is (= {:intent/kind :pocket-hold :intent/heal-to 20.0}
+           (next-intent (assoc w :player/on-fire? true)))
         "burning: stay out of every line but the opening's")
-    (is (= {:intent/kind :hold :intent/heal-to 20.0} (next-intent (assoc w :player/health 14.0)))
+    (is (= {:intent/kind :pocket-hold :intent/heal-to 20.0}
+           (next-intent (assoc w :player/health 14.0)))
         "under engage-health")
-    (is (not= :hold (:intent/kind (next-intent w))) "healthy and not burning: no hold")
+    (is (not= :pocket-hold (:intent/kind (next-intent w))) "healthy and not burning: no hold")
     (testing "a blaze in reach is struck, burning or not"
       (let [w (in-pocket (standing {7 hand}))]
         (is (= :fight (:intent/kind (next-intent w))))
@@ -1193,7 +1196,7 @@
       (let [w (in-pocket (standing {7 (entity :blaze [4.5 65.0 8.5] :entity/health 20.0)}))]
         (is (not= :fight (:intent/kind (next-intent w))))))
     (testing "the hold ends when the fire is out and the health up, or a blaze is in reach"
-      (let [i {:intent/kind :hold :intent/heal-to 20.0}
+      (let [i {:intent/kind :pocket-hold :intent/heal-to 20.0}
             run (fn [w]
                   (:plan/intent (intent/run (assoc w :plan/intent i :time/now 1000)
                                             i
@@ -1249,7 +1252,7 @@
               (assoc :player/on-fire? true))
         tunnel {:intent/kind :tunnel-to :intent/target [2346 60 2281]}]
     (is (plan/interrupts? w row tunnel))
-    (is (not (plan/interrupts? (assoc w :player/on-fire? false) row {:intent/kind :hold}))
+    (is (not (plan/interrupts? (assoc w :player/on-fire? false) row {:intent/kind :pocket-hold}))
         "the hold is the answer, not cut for itself")
     (is (= :pocket (:intent/kind (next-intent w))) "the cell stood in is sealed in place")
     (is (true? (:pocket/here? (:intent/site (next-intent w)))))))
@@ -1262,8 +1265,8 @@
   (assoc pocket-walls [7 64 8] cobble [7 65 8] cobble))
 
 (deftest an-open-pocket-under-fire-is-sealed-and-a-sealed-one-is-held-then-opened
-  ;; blaze-race-j race 3 at 17:24:36 (:hold, burning, the nearest of five blazes at 4.0 against a
-  ;; reach of 3.2, 20 hp to 1.6 in 18 s) and race 1 at 17:32:51 (:hold, nearest 5.4, 37 s, hp 20 to
+  ;; blaze-race-j race 3 at 17:24:36 (:pocket-hold, burning, the nearest of five blazes at 4.0 against a
+  ;; reach of 3.2, 20 hp to 1.6 in 18 s) and race 1 at 17:32:51 (:pocket-hold, nearest 5.4, 37 s, hp 20 to
   ;; 0.5): holding open under fire through the opening was the death
   (let [line (entity :blaze [4.5 65.0 8.5] :entity/health 20.0)
         loaded (fn [w] (assoc-in w [:player/inventory 9] (item :cobblestone 62)))
@@ -1277,7 +1280,7 @@
       (is (= {:intent/kind :seal}
              (next-intent (assoc base :player/struck-at (- (:time/now base 0) 1000))))))
     (testing "no filler held: the old hold in the open"
-      (is (= :hold
+      (is (= :pocket-hold
              (:intent/kind (next-intent (assoc (standing {7 line})
                                                :player/on-fire? true
                                                :pocket/site pocket-site
@@ -1298,13 +1301,13 @@
                        (assoc-in [:world/entities 7]
                                  (entity :blaze [6.5 65.0 8.5] :entity/health 20.0)))]
         (is (pocket/sealed? sealed (:pocket/site sealed)))
-        (is (= :hold (:intent/kind (next-intent sealed))))
+        (is (= :pocket-hold (:intent/kind (next-intent sealed))))
         (is (nil? (blaze/fightable-blaze sealed)) "a blaze at the seal is not fought")
         (testing "fire out, health up, the last hit old: the seal is opened"
           (is (= {:intent/kind :unseal}
                  (next-intent (assoc sealed :player/on-fire? false :player/struck-at -1000000)))))
         (testing "fire out but struck a second ago: still held"
-          (is (= :hold
+          (is (= :pocket-hold
                  (:intent/kind (next-intent (assoc sealed
                                                    :player/on-fire? false
                                                    :player/struck-at (:time/now sealed 0)))))))))))
@@ -1371,3 +1374,24 @@
         "the dodge is not cut for itself")
     (is (not= :dodge (:intent/kind (next-intent (assoc w :world/entities {}))))
         "none in flight: no dodge")))
+
+(deftest a-walk-to-a-spawner-already-in-reach-is-not-chosen-every-tick
+  ;; snapshot test/issues/514/b10231346-R4-21-1.edn.gz (churn-guard scan): the bot at [540.5 57 201.5],
+  ;; the spawner at [544 57 203] 3.96 from the eye, its top out of sight: :walk [544 57 203] ended in
+  ;; its first tick (within reach) with at-spawner? still false, and was chosen again every tick.
+  ;; The same geometry from the fixture's floor: the spawner at [11 64 10], a pillar between
+  (let [sp [11 64 10]
+        stone (blocks/default-state :stone)
+        pillar (into {} (for [y [64 65 66]] [[10 y 9] stone]))
+        w (-> (standing {})
+              (assoc :world/chunks {[0 0] (world/column pillar)})
+              (memory/observe sp blaze/spawner))
+        walk {:intent/kind :walk :intent/target sp}
+        d (physics/distance (game/eye w) (physics/centre sp))]
+    (is (blaze/walkable? w sp))
+    (is (not (blaze/at-spawner? w sp)) "the feet beyond spawner-reach, its top not in sight")
+    (is (intent/arrived? w walk d) "the walk would be done at once")
+    (is (blaze/within-reach? w sp))
+    (is (not= walk (blaze/to-spawner w sp)) "so it is not the way chosen")
+    (testing "farther off the walk is still the way"
+      (is (= walk (blaze/to-spawner (assoc w :player/pos [3.5 64.0 3.5]) sp))))))

@@ -9,7 +9,6 @@
             [clojurecraft.hunt :as hunt]
             [clojurecraft.intent :as intent]
             [clojurecraft.memory :as memory]
-            [clojurecraft.path :as path]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.sim :as sim]
@@ -169,17 +168,13 @@
 (deftest an-animal-up-a-tree-is-not-game-from-beneath-it
   ;; sim race 39768347249 (issue #515, R2/30): sheep on a spruce crown five over the walk's end
   ;; were fought three times from beneath and the third :unreachable ended the plan. The route is
-  ;; given (a flat floor has none to a cell in the air): found, ending at [11 64 8].
-  (let [on (fn [y] (standing 20 {} {5 (animal :sheep [11.5 y 8.5])}))
-        fightable? (fn [y]
-                     (let [w (on y)]
-                       (with-redefs [path/plan (constantly {:path/status :found
-                                                            :path/waypoints [[10 64 8] [11 64 8]]})]
-                         (hunt/fightable-from-route? w (get-in w [:world/entities 5])))))]
+  ;; given (a flat floor has none to a cell in the air): found, ending at [11 64 8]. The pure half
+  ;; is asked, never path/plan redefined: a global redef reaches every test routing in parallel.
+  (let [sheep (fn [y] (animal :sheep [11.5 y 8.5]))
+        fightable? (fn [y] (hunt/fightable-from? (sheep y) :found [11 64 8]))]
     (is (fightable? 65.0) "a step up is within a blow and the meat's pickup")
     (is (not (fightable? 69.5)) "five over is out of reach from where the walk ends")
-    (is (with-redefs [path/plan (constantly {:path/status :none :path/waypoints []})]
-          (let [w (on 69.5)] (hunt/fightable-from-route? w (get-in w [:world/entities 5]))))
+    (is (hunt/fightable-from? (sheep 69.5) :none [11 64 8])
         "no route found yet is not held against it")))
 
 (deftest a-fight-that-left-the-animal-alive-is-no-kill
