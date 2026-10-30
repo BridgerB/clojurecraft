@@ -707,17 +707,24 @@
 
 (defmethod plan/done-by :safe? [world _] (or (nil? (:player/pos world)) (empty? (threats world))))
 
+(def teleporters
+  "Kinds a back-off never gets away from: they teleport to the bot (an enderman: gym main
+   dragon-main-a run 1, plan run 41092662823, backed off from two at 9.3 health and was slain)."
+  #{:enderman})
+
 (defn back-off-pointless?
-  "Would a :back-off from entity e be done at once, getting the bot nowhere: it is already
-   back-off-to away, the way straight away is a drop no landing survives (void-retreat?) or
+  "Would a :back-off from entity e be done at once, getting the bot nowhere: it teleports to the
+   bot (teleporters), it is already back-off-to away, the way straight away is a drop no landing survives (void-retreat?) or
    steps into or near lava (lava-retreat?)? A back-off that ran out its clock (:plan/cornered)
    is not one: the target followed, and trying again is what the older rule asks (issue #161,
    #563). Gym chain-w13 dragon run 2 (plan run 40798605016): an enderman on the End's island at
    under 10 health, a back-off chosen every 50 ms and ended cornered in the tick it began, the
    bot standing still under 8 hits and four swings."
   [world e]
-  (boolean
-   (or (>= (horizontal world e) back-off-to) (void-retreat? world e) (lava-retreat? world e))))
+  (boolean (or (contains? teleporters (entity/kind e))
+               (>= (horizontal world e) back-off-to)
+               (void-retreat? world e)
+               (lava-retreat? world e))))
 
 (def wall-fill 1)                     ; filler a wall cell needs
 (def pillar-fill 3)                   ; filler a pillar of three needs
