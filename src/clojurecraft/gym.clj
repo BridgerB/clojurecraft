@@ -234,6 +234,10 @@
    "item replace entity {name} armor.legs with minecraft:iron_leggings"
    "item replace entity {name} armor.feet with minecraft:iron_boots"])
 
+(def race-armour
+  "The armour the race bot makes (gear.clj): iron helmet, chestplate and leggings, no boots."
+  (vec (take 3 iron-armour)))
+
 (def no-fire
   "A :gym/summon entry: the blazes' fireballs set no blocks alight (SmallFireball places fire only
    when mob griefing is on). A fire lights the cells round it past 11, and a spawner's blaze
@@ -628,6 +632,19 @@
     :gym/prereqs ["minecraft:iron_pickaxe 1" "minecraft:cobblestone 64" "minecraft:iron_sword 1"
                   "minecraft:cooked_beef 16"]
     :gym/summon (conj iron-armour fire-resistance)
+    :gym/timeout-ms trial-ms
+    :gym/truth [(rods-held 7)]}
+   ;; blaze-fortress-race: the same landing with what the race bot brings (gear.clj), not what
+   ;; the gym is generous with: an iron sword, iron helmet, chestplate and leggings, sixteen
+   ;; cooked beef, no Fire Resistance. blaze-fortress-fireproof stays as the mechanics check
+   {:gym/goal :blaze-rods
+    :gym/name "blaze-fortress-race"
+    :gym/until "blaze-rods"
+    :gym/land :nether-fortress
+    :gym/difficulty "normal"
+    :gym/prereqs ["minecraft:iron_pickaxe 1" "minecraft:cobblestone 64" "minecraft:iron_sword 1"
+                  "minecraft:cooked_beef 16"]
+    :gym/summon race-armour
     :gym/timeout-ms trial-ms
     :gym/truth [(rods-held 7)]}
    ;; issue #263: endermen in the sealed Nether room (#261's arena), the pearl kit given there;
