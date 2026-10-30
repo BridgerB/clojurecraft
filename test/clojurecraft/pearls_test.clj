@@ -2028,3 +2028,93 @@
     (is (pearls/shelter? w (:pearls/shelter w)) (pr-str (:pearls/shelter w)))
     (is (pos? (:sim/health sim)) "and the bot lived")
     (is (= [] (:sim/violations sim)))))
+
+(deftest an-enderman-that-hit-the-bot-near-its-burrow-is-the-hunts-not-defends
+  ;; churn-a pearls-12 runs 2 and 3, enderman-end-b runs 1 and 2 (plan runs 41096292443 and
+  ;; 41103285823): provoked from the mouth, hit once on the way in (20 to 14.3), and 0.05 s later
+  ;; the :defend row began a fight to the end where the bot stood, 2 to 4 blocks from the burrow's
+  ;; end: four hits in 3 to 5 s. The hit enderman is the hunt's, whose first branch walks home.
+  (let [angry (assoc (enderman [4.5 64.0 8.5]) :entity/creepy? true)
+        hit (fn [w] (assoc w :player/attacker 9 :player/health 14.26))
+        at-mouth (hit (burrowed [3.5 64.0 8.5] {9 angry}))
+        no-burrow (-> at-mouth
+                      (dissoc :pearls/shelter :pearls/mouth)
+                      (update :player/inventory dissoc 1))]
+    (is (empty? (combat/threats at-mouth)) "the attacker is not :defend's with a burrow to walk to")
+    (is (= :ender-pearls (:goal/id (plan/choose at-mouth plan/goals)))
+        "the hunt's row is worked, so its walk home is not cut")
+    (is (= {:intent/kind :walk :intent/target [8 61 8] :intent/for :shelter}
+           (plan/next-intent at-mouth row plan/goals))
+        "and it walks home")
+    (is (= [9] (keys (combat/threats no-burrow)))
+        "with no burrow near and no pickaxe for a pit the attacker is :defend's as before")
+    (is (empty? (combat/threats (hit (burrowed [8.5 61.0 8.5]
+                                               {9 (assoc angry :entity/pos [5.5 61.0 8.5])}))))
+        "in the burrow's end it stays the hunt's: a held fight")))
+
+(deftest a-pit-two-deep-is-a-shelter-where-the-ground-is-solid
+  ;; an enderman standing on the surface over a bot two cells down is wholly above it: a mob's
+  ;; melee reaches its box grown 0.83 sideways and not up or down (Mob.getAttackBoundingBox)
+  (let [w (-> (standing {})
+              (assoc-in [:player/inventory 1] (item :iron_pickaxe 1)))
+        feet (intent/feet w)]
+    (is (= [[8 63 8] [8 62 8]] (pearls/pit-cells feet)))
+    (is (pearls/pit-ok? w feet) "flat stone: the bottom is a shelter")
+    (is (not (pearls/pit-ok? (assoc w :player/on-ground? false) feet)) "not in the air")
+    (is (not (pearls/pit-ok? (assoc-in w [:world/blocks [8 62 8]] air) feet))
+        "the second cell already open: a floor of rock is not under the bottom's feet")
+    (is (not (pearls/pit-ok? (assoc-in w [:world/blocks [9 62 8]] air) feet))
+        "a cell open beside the bottom: an enderman could stand there")))
+
+(deftest an-angry-enderman-on-a-bot-far-from-its-burrow-is-met-from-a-pit
+  ;; churn-a pearls-12 runs 1 and 4 (plan run 41096292443), enderman-end-b runs 1 and 2
+  ;; (41103285823): the angry one turned up 0.9 to 5 s after it was provoked or seen, the burrow's
+  ;; end 4 to 12 blocks off, and four hits at 5.74 killed each bot on the way or in the open
+  (let [angry (assoc (enderman [14.5 64.0 8.5]) :entity/creepy? true)
+        w (-> (burrowed [11.5 64.0 8.5] {9 angry})
+              (assoc :player/pos [11.5 64.0 8.5]))
+        pit {:intent/kind :burrow :intent/pit? true :intent/for :pearls}
+        no-burrow (dissoc w :pearls/shelter :pearls/mouth)]
+    (is (= pit (plan/next-intent no-burrow row plan/goals)) "no burrow: a pit under the feet")
+    (is (= pit (plan/next-intent w row plan/goals))
+        "the burrow's end is four blocks off and three down: a pit is quicker")
+    (is (= :walk
+           (:intent/kind (plan/next-intent (assoc w :player/pos [7.5 61.0 8.5]) row plan/goals)))
+        "and from the first step of the tunnel, a block from the end, the walk home")
+    (is (pearls/pit-wanted? no-burrow))
+    (is (not (pearls/pit-wanted? (update no-burrow :player/inventory dissoc 1)))
+        "no pickaxe, no pit")
+    (is (not (pearls/pit-wanted? (assoc-in w [:world/entities 9 :entity/creepy?] false)))
+        "a calm one is no reason")))
+
+(deftest a-pit-is-dug-under-the-feet-from-the-cell-the-bot-began-in
+  (let [w (-> (standing {})
+              (assoc-in [:player/inventory 1] (item :iron_pickaxe 1)))
+        start (assoc w :plan/intent {:intent/kind :burrow :intent/pit? true :intent/status :active})
+        ran (intent/run start (:plan/intent start) (tick 100))]
+    (is (= :dig (get-in ran [:plan/intent :intent/child :intent/kind]))
+        "a child digs under the feet")
+    (is (= [8 63 8] (get-in ran [:plan/intent :intent/child :intent/target])))
+    (is (= [8 64 8] (get-in ran [:plan/intent :intent/mouth]))
+        "the mouth is the cell it began in")))
+
+(deftest an-angry-enderman-on-a-bot-in-the-open-is-killed-from-a-pit-against-the-model
+  ;; the model's enderman already turned on the bot (sim/anger) eleven blocks off, and no burrow:
+  ;; the bot digs down two cells where it stands, the enderman comes to the rim and cannot reach
+  ;; it (mob/in-reach?: the feet within 1.5 in height), the bot kills it from below, digs the
+  ;; notch out and takes the twelfth pearl
+  (let [s0 (sim/init (assoc arena :seed (pearl-seed)))
+        eid (first (keys (:sim/mobs s0)))
+        [w sim] (sim/run step
+                         (game/init fx/opts)
+                         (sim/anger s0 eid)
+                         #(or (plan/done? %) (plan/failed? %))
+                         120000
+                         {:event/kind :go :go/goals [:ender-pearls]})
+        story (mapv (juxt :intention/kind :intention/event :intention/reason)
+                    (memory/intentions w))]
+    (is (plan/done? w) (pr-str (plan/summary w) story))
+    (is (pos? (:sim/health sim)) "the bot lived")
+    (is (>= (get (recipe/counts (:player/inventory w)) :ender_pearl 0) 12))
+    (is (some #(= [:burrow :done nil] %) story) "it dug a pit")
+    (is (= [] (:sim/violations sim)))))

@@ -1206,7 +1206,153 @@
          :intent/to-height? true
          :intent/for :pearls}))))
 
-(defmethod intent/run :burrow
+;; ---------------------------------------------------------------- the pit
+
+(def pit-radius danger-radius)        ; blocks an angry enderman may stand from the feet for a pit to be dug (menaced?)
+(def pit-near 4.0)                    ; blocks from the burrow's end within which the walk home beats a pit: a pit is two digs and two falls, about a second, and the angry one arrives in 0.9
+
+(defn pit-cells
+  "The two cells a pit under feet [x y z] opens, the one under the feet and the one under that:
+   the last is where the bot ends, its head at the first's top, a block under the surface it
+   dug from."
+  [[x y z]]
+  [[x (dec y) z] [x (- y 2) z]])
+
+(defn pit-ok?
+  "Could the bot dig straight down two cells from its feet and stand in a shelter? It stands on
+   the ground over two solid cells, no water or lava in or beside them (stairs/safe?: a floor
+   lies under the new feet), and the cells opened on the overlay make the bottom a shelter?. An
+   enderman is wholly above a bot that deep: a mob's melee reaches its box grown 0.83 sideways
+   and not at all up or down (Mob.getAttackBoundingBox), and the model's in-reach? needs the
+   feet within 1.5 in height."
+  [world feet]
+  (let [cells (pit-cells feet)
+        dug (reduce #(assoc-in %1 [:world/blocks %2] blocks/air) world cells)]
+    (boolean (and (:player/on-ground? world)
+                  (every? #(solid-at? world %) cells)
+                  (stairs/safe? world cells)
+                  (shelter? dug (last cells))))))
+
+(defn exposure
+  "[eid entity] of the nearest angry enderman (entity/creepy?) within pit-radius of the feet and
+   danger-rise of their height, blacklisted or not (menaced?'s test), else the enderman that hit
+   the bot within the last 60 ticks, else nil."
+  [world]
+  (let [p (:player/pos world)
+        near (into {}
+                   (filter (fn [[_ e]]
+                             (let [q (:entity/pos e)]
+                               (and (entity/creepy? e)
+                                    (<= (physics/distance p q) pit-radius)
+                                    (<= (abs (- (physics/y-of q) (physics/y-of p))) danger-rise)))))
+                   (endermen (dissoc world :plan/blacklist) stare-range))
+        hit (get (:world/entities world) (:player/attacker world))]
+    (or (entity/nearest near p)
+        (when (and hit
+                   (= :enderman (entity/kind hit))
+                   (:player/hurt-at world)
+                   (<= (- (:time/tick world 0) (:player/hurt-at world)) 60))
+          [(:player/attacker world) hit]))))
+
+(defn pit-digs?
+  "Does a held pickaxe have the six digs a pit and the notch out of it cost (digs-left), or are
+   its digs unknown?"
+  [world]
+  (let [d (digs-left world)] (or (nil? d) (>= d 6))))
+
+(defn pit-wanted?
+  "Should the bot dig a pit now: an angry enderman is on it (exposure), it is not in its shelter,
+   the burrow's end is farther than pit-near or there is none, a pickaxe is held and a pit can be
+   dug here (pit-ok?)? The hits that killed five of six bots in churn-a and enderman-end-b (plan
+   runs 41096292443 and 41103285823) landed 0.9 s to 5 s after the enderman turned angry, from
+   2 to 12 blocks of the shelter, and the bot needed 2 to 7 s to reach it."
+  [world]
+  (let [feet (intent/feet world)
+        home (shelter world)]
+    (boolean (and (exposure world)
+                  (not= home feet)
+                  (or (nil? home) (> (physics/distance feet home) pit-near))
+                  (pickaxe? world)
+                  (pit-digs? world)
+                  (pit-ok? world feet)))))
+
+(defn pit-notch
+  "The cell to dig to walk out of a pit whose bottom is feet: the wall cell at the height of the
+   bottom's head, on the side whose surface cell over it is open and whose next surface cell
+   stands (a floor under it, two clear over), or nil. Digging it makes a step up and a step up
+   out; the pit is then no shelter."
+  [world [x y z]]
+  (some (fn [[dx dz]]
+          (let [n [(+ x dx) (inc y) (+ z dz)]
+                over [(+ x dx) (+ y 2) (+ z dz)]
+                beyond [(+ x dx dx) (+ y 2) (+ z dz dz)]]
+            (when (and (solid-at? world n)
+                       (= :solid (path/classify world n))
+                       (= :clear (path/classify world over))
+                       (standable? world beyond))
+              n)))
+        stairs/directions))
+
+(defn pit-exit
+  "The intent that leaves the pit the hunt is in (:pearls/pit): a :burrow :intent/out? digging
+   its notch (pit-notch), else stairs up out of it (climb-out), else nil."
+  [world]
+  (let [feet (intent/feet world)]
+    (if-let [notch (pit-notch world feet)]
+      {:intent/kind :burrow :intent/out? true :intent/target notch :intent/for :pearls}
+      (climb-out world))))
+
+(defn pit-run
+  "One tick of a :burrow with :intent/pit?: the cell under the feet dug (a child :dig, its drop
+   wanted or not) and the fall waited out, twice, then the bottom kept as :pearls/shelter and the
+   cell it began from as :pearls/mouth, the hunt's burrow it was in kept under :pearls/pit
+   (:pit/shelter, :pit/mouth) to come back to; failed :no-shelter when the bottom is not one."
+  [world {:intent/keys [child mouth] :as i} event]
+  (let [[x y z :as feet] (intent/feet world)
+        mouth (or mouth feet)
+        i (assoc i :intent/mouth mouth)
+        world (assoc world :plan/intent i)]
+    (cond (and child (intent/failed? child)) (intent/fail world (:intent/reason child))
+          (and child (not (intent/done? child))) (intent/run-child world event)
+          (not (:player/on-ground? world)) (assoc world :player/controls {})
+          (<= y (- (physics/y-of mouth) 2))
+          (if (shelter? world feet)
+            (-> world
+                (assoc :pearls/pit
+                       (cond-> {}
+                         (:pearls/shelter world) (assoc :pit/shelter (:pearls/shelter world))
+                         (:pearls/mouth world) (assoc :pit/mouth (:pearls/mouth world)))
+                       :pearls/shelter feet
+                       :pearls/mouth mouth
+                       :player/controls {})
+                intent/done)
+            (intent/fail world :no-shelter))
+          :else
+          (intent/assoc-intent world
+                               :intent/child
+                               (assoc (intent/child-dig [x (dec y) z]) :intent/drop-ok? true)))))
+
+(defn out-run
+  "One tick of a :burrow with :intent/out?: the notch (:intent/target) dug by a child :dig, then
+   the burrow the pit was dug from (:pearls/pit) is the hunt's again, if the bot had one, and
+   the intent is done."
+  [world {:intent/keys [child target]} event]
+  (cond (and child (intent/failed? child)) (intent/fail world (:intent/reason child))
+        (and child (not (intent/done? child))) (intent/run-child world event)
+        (and child (intent/done? child))
+        (let [{:pit/keys [shelter mouth]} (:pearls/pit world)]
+          (-> world
+              (dissoc :pearls/pit)
+              (cond-> shelter (assoc :pearls/shelter shelter)
+                      (not shelter) (dissoc :pearls/shelter)
+                      mouth (assoc :pearls/mouth mouth)
+                      (not mouth) (dissoc :pearls/mouth))
+              (assoc :player/controls {})
+              intent/done))
+        :else (intent/assoc-intent world :intent/child (intent/child-dig target))))
+
+(defn stairs-run
+  "One tick of a :burrow cutting stairs and a tunnel (the intent's comments say how)."
   ;; {:intent/kind :burrow :intent/dir [dx dz]}: stairs down burrow-depth (stairs.clj, refusing
   ;; water, lava and drops, turning where refused), then a tunnel burrow-length on along the
   ;; heading the stairs ended on: the stairs are four high (:intent/tall, mob/tall), so an
@@ -1255,6 +1401,15 @@
                                 (assoc :pearls/shelter feet :pearls/mouth mouth :player/controls {})
                                 intent/done)
                             :else (intent/fail w :no-shelter))))))))
+
+(defmethod intent/run :burrow
+  ;; the hunt's shelter: stairs and a tunnel (stairs-run), or with :intent/pit? a pit dug straight
+  ;; down where the bot stands (pit-run), or with :intent/out? the notch that walks out of one
+  ;; (out-run)
+  [world {:intent/keys [pit? out?] :as i} event]
+  (cond pit? (pit-run world i event)
+        out? (out-run world i event)
+        :else (stairs-run world i event)))
 
 ;; ---------------------------------------------------------------- the lookout
 
@@ -1423,6 +1578,11 @@
                 (crowd-site world))
         mouth (:pearls/mouth world)
         way-home {:intent/kind :walk :intent/target home :intent/for :shelter}
+        pit? (pit-wanted? world)
+        in-pit? (and (:pearls/pit world) (= (:pearls/shelter world) (intent/feet world)))
+        leave (if (and in? (:pearls/pit world))
+                (or (pit-exit world) {:intent/kind :lookout :intent/for :pearls})
+                {:intent/kind :walk :intent/target mouth :intent/for :shelter})
         overworld-death? (and (pos? (:stats/deaths world 0))
                               (= dimension/overworld (dimension/of world)))
         far (endermen world seek-radius)
@@ -1430,6 +1590,8 @@
                        (and (or angry? in-reach?) (not (fought-out? world eid))) eid
                        :else tid)]
     (cond
+      pit? {:intent/kind :burrow :intent/pit? true :intent/for :pearls}
+      (and in-pit? (not in?)) (or (pit-exit world) {:intent/kind :lookout :intent/for :pearls})
       (and home (not in?) (or ce near? hurt? tid aid) (intent/routable? world way-home)) way-home
       (and hurt? in?) (or meal {:intent/kind :lookout :intent/for :pearls})
       (and near? hurt? (not in?)) {:intent/kind :back-off :intent/target eid :intent/for :pearls}
@@ -1453,7 +1615,7 @@
       {:intent/kind :fight :intent/target eid :intent/for :pearls}
       meal meal
       (or hurt? (and in? bid)) {:intent/kind :lookout :intent/for :pearls}
-      (and in? aid (lure? world)) {:intent/kind :walk :intent/target mouth :intent/for :shelter}
+      (and in? aid (lure? world)) leave
       (and in? aid) {:intent/kind :lookout :intent/for :pearls}
       csite {:intent/kind :walk :intent/target csite :intent/for :shelter}
       digs? {:intent/kind :burrow :intent/dir dir :intent/for :pearls}
@@ -1462,7 +1624,7 @@
       (and in? qid) {:intent/kind :lookout :intent/for :pearls}
       (and in? (crowded? world))
       (or (vantage world far) {:intent/kind :lookout :intent/for :pearls})
-      (and in? mouth) {:intent/kind :walk :intent/target mouth :intent/for :shelter}
+      (and in? mouth) leave
       (and qid
            rested?
            (or (and (not (pickaxe? world)) (not (worn-out? world)))
@@ -1557,6 +1719,7 @@
   [world _ i]
   (and (not (contains? answers-to-hand (:intent/kind i)))
        (not (and (= :walk (:intent/kind i)) (= (:intent/target i) (:pearls/shelter world))))
+       (not (and (= :burrow (:intent/kind i)) (or (:intent/pit? i) (:intent/out? i))))
        (not= (:pearls/shelter world) (intent/feet world))
        (beset? world)))
 
@@ -1574,6 +1737,22 @@
   (cond-> (combat/answers :pearls)
     (shelter world)
     (into (comp (map (comp entity/kind val)) (remove shunned)) (entity/hostiles world))))
+
+(defmethod combat/claims-attacker? :pearls
+  ;; an enderman that hit the bot, with a burrow near and a way to it (or the bot in it), is the
+  ;; hunt's: its first branch walks home. Churn-a runs 2 and 3 and enderman-end-b runs 1 and 2
+  ;; (plan runs 41096292443 and 41103285823) were hit once, 0.05 s later the :defend row began a
+  ;; fight to the end where they stood, two to four blocks from the burrow's end, and four hits
+  ;; at 5.74 killed each in 3 to 5 s, the walk home cut and the hunt unable to cut the fight
+  ;; (answers-to-hand)
+  [world _ e]
+  (and (= :enderman (entity/kind e))
+       (some? (shelter world))
+       (or (= (shelter world) (intent/feet world))
+           (intent/routable?
+            world
+            {:intent/kind :walk :intent/target (shelter world) :intent/for :shelter}))))
+
 
 (def sword-acts
   "Intents that make a sword from what is already held: placing or opening a table, the craft,

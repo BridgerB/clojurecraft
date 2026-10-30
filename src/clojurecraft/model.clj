@@ -245,6 +245,11 @@
     "after the hunt dug one"]
    [:pearls/mouth "where the pearl hunt's burrow began, on the surface its stairs go down from"
     "after the hunt dug one"]
+   [:pearls/pit
+    "set while the hunt stands in an emergency pit (pearls/pit-run) that is its shelter and mouth: the burrow it was in, {:pit/shelter :pit/mouth}, to come back to when the notch out is dug (issue #263)"
+    "after the hunt dug a pit"]
+   [:pit/shelter "the burrow's end the hunt was in when it dug a pit" "inside :pearls/pit"]
+   [:pit/mouth "the burrow's mouth the hunt had when it dug a pit" "inside :pearls/pit"]
    [:stronghold/throws
     "every eye of ender thrown and followed, oldest first: {:throw/from :throw/dir :throw/at}; two from places apart cross at the stronghold (stronghold/triangulate, issue #265)"
     "after the first throw"]
@@ -466,6 +471,12 @@
     "a :stairs-up that ends only at :intent/to-y: the open sky over a pit's floor is not out"
     "a climb out of a pit under the sky"]
    [:intent/dir "[dx dz] heading the next stair is cut toward" "stairs-down, once planned"]
+   [:intent/pit?
+    "true on a :burrow that digs straight down two cells where the bot stands, the hunt's emergency shelter (pearls/pit-run)"
+    "a pit :burrow"]
+   [:intent/out?
+    "true on a :burrow that digs the notch out of a pit (pearls/out-run); :intent/target is the notch cell"
+    "an exit :burrow"]
    [:intent/turns "quarter turns taken after refused stairs; four fail :boxed"
     "stairs-down, after a refusal"]
    [:intent/rejections
