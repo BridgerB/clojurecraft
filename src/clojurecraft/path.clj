@@ -417,10 +417,12 @@
 
 (defn wary-cost
   "The extra move cost of entering [x y z]: the larger of the floor block's and the cell's own
-   wary-states entry, 0.0 when neither is in wary-extra. Nil blocks (unloaded) cost nothing."
+   wary-states entry, 0.0 when neither is in wary-extra. Nil blocks (unloaded) cost nothing, and a world with no chunks (the End's void in a test) costs nothing."
   [world [x y z]]
-  (max (get wary-states (terrain/block-at world [x (dec y) z]) 0.0)
-       (get wary-states (terrain/block-at world [x y z]) 0.0)))
+  (if (:world/chunks world)
+    (max (get wary-states (terrain/block-at world [x (dec y) z]) 0.0)
+         (get wary-states (terrain/block-at world [x y z]) 0.0))
+    0.0))
 
 (def lava-trap-reach 4)                ; cells on the plane round a lava trap's column a mine leaves alone
 
