@@ -1,0 +1,8 @@
+;; issue #10, batch w23: the head (3969ee212): the dragon's own rest kind (:dragon-rest; :rest is
+;; the blaze row's), a breath past back-off-to waited out, not backed off from; the dragon row
+;; alone, 6 runs, the baseline for the phase-7 rule (w24)
+{:plans/label "chain-w23"
+ :plans/jobs 4
+ :plans/issue 10
+ :plans/experiments
+ [{:exp/name "dragon" :exp/kind :gym :exp/goal "dragon" :exp/runs 6 :exp/bots 1 :exp/est-s 1600}]}
