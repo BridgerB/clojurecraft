@@ -9,7 +9,12 @@
 
    The tests are pure functions over values (a world in, a world out), so they share nothing
    and run side by side; the serial suite took eight minutes on a runner and most of it was
-   one namespace. Exit code 1 when anything fails or errors."
+   one namespace. A test marked ^:eftest/synchronized (it redefines a var for the whole JVM,
+   with-redefs) is run alone: all of them first, one at a time, then everything else in
+   parallel. eftest alone only serialises them within their own namespace, and namespaces run
+   side by side, so a redefined plan/choose or rcon/command! in one reached the tests of another
+   (a-restored-block-after-finish-is-a-refused-break, a-forceload-is-released-even-when-the-work-throws
+   failed at random). Exit code 1 when anything fails or errors."
   (:require [clojure.string :as str]
             [clojurecraft.fixtures :as fixtures]
             [eftest.report.pretty]
@@ -41,17 +46,30 @@
     ;; vars are walked, and a defmethod on an instrumented multimethod var cannot cast it
     (vec (remove (fn [v] (contains? exclude (ns-name (:ns (meta v))))) found))))
 
+(defn synchronized?
+  "Is test var v to run alone: marked ^:eftest/synchronized itself or by its namespace?"
+  [v]
+  (or (true? (:eftest/synchronized (meta v))) (true? (:eftest/synchronized (meta (:ns (meta v)))))))
+
 ;;;; I/O: the run ;;;;
+
+(defn run-split
+  "The result of running vars with the synchronized ones first and alone, then the rest in parallel,
+   the counts of the two runs added."
+  [vars opts]
+  (let [alone (filterv synchronized? vars)
+        others (filterv (complement synchronized?) vars)
+        run (fn [vs multithread?]
+              (if (seq vs) (eftest/run-tests vs (assoc opts :multithread? multithread?)) {}))]
+    (merge-with + (run alone false) (run others true))))
 
 (defn -main
   "Run the selected tests in parallel and exit with the verdict."
   [& args]
   (let [vars (selected (parse args))
         _ (fixtures/instrument!)
-        {:keys [fail error] :as result} (eftest/run-tests vars
-                                                          {:multithread? true
-                                                           :report eftest.report.pretty/report
-                                                           :test-warn-time 60000})]
+        {:keys [fail error] :as result}
+        (run-split vars {:report eftest.report.pretty/report :test-warn-time 60000})]
     (println (str/join " "
                        (for [[k v] (select-keys result [:test :pass :fail :error :duration])]
                          (str (name k) " " v))))

@@ -1616,7 +1616,7 @@
                   intent/run (fn [world _ _] world)]
       (plan/plan-tick w {:event/kind :tick :event/now 50 :event/rand 0.5} [goal]))))
 
-(deftest a-cut-that-would-restart-the-same-intent-keeps-it-running
+(deftest ^:eftest/synchronized a-cut-that-would-restart-the-same-intent-keeps-it-running
   ;; blaze-race-i geared run 3 (:walk [2345 58 2283] re-issued every 50 ms) and pearls-stuck-d job 5
   ;; (:walk [2773 61 2502] under a ghast): the row's interrupts? was true each tick and its act chose
   ;; the same walk, so the bot's controls were reset on every abandon and it never moved
@@ -1626,7 +1626,7 @@
       (is (= 1 (get-in w [:plan/intent :intent/id])) "the same intent is still running")
       (is (= {:control/forward true} (:player/controls w)) "its controls were not reset"))))
 
-(deftest a-cut-whose-answer-differs-still-cuts
+(deftest ^:eftest/synchronized a-cut-whose-answer-differs-still-cuts
   (let [target [2345 58 2283]
         fight {:intent/kind :fight :intent/target 8}
         w (cut-at target nil fight)]
