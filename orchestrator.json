@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-30T08:58:33.831Z",
+  "at" : "2026-10-30T08:59:44.038Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -18,18 +18,18 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 151,
-    "title" : "Bot stops at flint-and-steel: not-picked-up",
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
-  }, {
-    "number" : 135,
-    "title" : "Bot stops at cast-one: timeout",
+    "number" : 526,
+    "title" : "Bot stops at blaze-rods: blocked",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 526,
-    "title" : "Bot stops at blaze-rods: blocked",
+    "number" : 151,
+    "title" : "Bot stops at flint-and-steel: not-picked-up",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : true
+  }, {
+    "number" : 135,
+    "title" : "Bot stops at cast-one: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
@@ -211,14 +211,15 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 151,
-    "move" : "assign"
-  }, {
-    "issue" : 135,
+    "issue" : 526,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 526,
+    "issue" : 151,
+    "move" : "unassign",
+    "why" : "no pull request and no session since the assignment"
+  }, {
+    "issue" : 135,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -291,10 +292,6 @@
     "why" : "hands-off label"
   } ],
   "log" : [ {
-    "issue" : 605,
-    "move" : "assign",
-    "at" : "2026-10-29T13:17:25.551Z"
-  }, {
     "issue" : 605,
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
@@ -1639,5 +1636,10 @@
     "issue" : 151,
     "move" : "assign",
     "at" : "2026-10-30T08:58:33.831Z"
+  }, {
+    "issue" : 151,
+    "move" : "unassign",
+    "why" : "no pull request and no session since the assignment",
+    "at" : "2026-10-30T08:59:44.038Z"
   } ]
 }
