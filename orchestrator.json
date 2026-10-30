@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-30T08:46:52.383Z",
+  "at" : "2026-10-30T08:48:02.054Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -21,6 +21,11 @@
     "number" : 151,
     "title" : "Bot stops at flint-and-steel: not-picked-up",
     "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : true
+  }, {
+    "number" : 135,
+    "title" : "Bot stops at cast-one: timeout",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 526,
@@ -28,18 +33,13 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 135,
-    "title" : "Bot stops at cast-one: timeout",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "number" : 610,
+    "title" : "Bot stops at cast-one: no-support",
+    "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
     "number" : 611,
     "title" : "Bot stops at portal-kit: no-support",
-    "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
-  }, {
-    "number" : 610,
-    "title" : "Bot stops at cast-one: no-support",
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
@@ -212,13 +212,14 @@
     "why" : "hands-off label"
   }, {
     "issue" : 151,
-    "move" : "assign"
+    "move" : "unassign",
+    "why" : "no pull request and no session since the assignment"
   }, {
-    "issue" : 526,
+    "issue" : 135,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 135,
+    "issue" : 526,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -291,10 +292,6 @@
     "why" : "hands-off label"
   } ],
   "log" : [ {
-    "issue" : 151,
-    "move" : "assign",
-    "at" : "2026-10-29T11:27:34.514Z"
-  }, {
     "issue" : 151,
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
@@ -1639,5 +1636,10 @@
     "issue" : 151,
     "move" : "assign",
     "at" : "2026-10-30T08:46:52.383Z"
+  }, {
+    "issue" : 151,
+    "move" : "unassign",
+    "why" : "no pull request and no session since the assignment",
+    "at" : "2026-10-30T08:48:02.054Z"
   } ]
 }
