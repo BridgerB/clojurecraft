@@ -1305,3 +1305,43 @@
     (is (= {:intent/kind :back-off :intent/target 50}
            (dragon/back-off-breath (assoc w :player/pos [6.5 64.0 0.5]) (near 7.0)))
         "2 out: a back-off gets somewhere")))
+
+(deftest the-attacking-phase-sends-the-bot-out-before-the-first-blow
+  ;; gym chain-w22 job 1 run 4 (plan run 40972357217): at 4.31m on the perch at [0 62 2], 20
+  ;; health, the dragon's phase 7: 20 -> 13.2 -> 7.0 -> 0.7 -> 0 in 1.3 s, `:back-off 124` begun
+  ;; after the first blow. The phase begins; the bot leaves bite-out plus phase-margin
+  (let [d {dragon-eid {:entity/type (mob/type-id :ender_dragon)
+                       :entity/pos [0.0 65.86 0.0]
+                       :entity/yaw 168.7
+                       :entity/phase 7}}
+        w (-> (round-fountain [0.5 62.0 2.5] d)
+              (assoc :player/dimension dimension/end
+                     :player/health 20.0
+                     :player/food 20
+                     :time/tick 1000))
+        scanning (assoc-in w [:world/entities dragon-eid :entity/phase] 6)]
+    (is (dragon/attacking? (second (dragon/dragon w))))
+    (is (dragon/in-attack-reach? w) "2.5 from the body, inside bite-out plus the margin")
+    (let [i (dragon/toward-dragon w)]
+      (is (= [:walk :shelter] [(:intent/kind i) (:intent/for i)])
+          "out at 20 health, before any blow")
+      (is (<= 10.5 (physics/horizontal-distance (physics/centre (:intent/target i)) [0.0 0.0 0.0]))
+          "past the head's reach and the margin"))
+    (let [perching (assoc w
+                          :plan/intent
+                          {:intent/kind :perch :intent/target dragon-eid :intent/status :active})]
+      (is (plan/interrupts? perching {:goal/plan :dragon} {:intent/kind :perch})
+          "a perch running when the phase begins ends"))
+    (is (not= [:walk :shelter]
+              (let [i (dragon/toward-dragon scanning)] [(:intent/kind i) (:intent/for i)]))
+        "in the scanning phase it is as before")))
+
+(deftest the-bot-strikes-in-the-scan-or-at-full-strength-three-quiet-seconds
+  (let [e {:entity/phase 5}
+        base (assoc (round-fountain [0.5 62.0 2.5] {}) :player/health 20.0 :time/tick 1000)
+        hurt (fn [health tick] (assoc base :player/health health :player/hurt-at tick))]
+    (is (dragon/strike-ok? (hurt 13.0 999) {:entity/phase 6}) "scanning: any health")
+    (is (dragon/strike-ok? base e) "full health, never struck")
+    (is (not (dragon/strike-ok? (hurt 19.0 100) e)) "not at full health")
+    (is (not (dragon/strike-ok? (hurt 20.0 970) e)) "a blow 30 ticks ago")
+    (is (dragon/strike-ok? (hurt 20.0 900) e) "a blow 100 ticks ago")))

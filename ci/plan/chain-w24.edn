@@ -1,0 +1,8 @@
+;; issue #10, batch w24: the phase-7 rule (leave bite-out + 2 before the first blow of the
+;; attacking phase; strike only in the scan or at full health with no blow in three seconds), on
+;; feat/10-phase7 against w23 on the head: the dragon row, 6 runs
+{:plans/label "chain-w24"
+ :plans/jobs 4
+ :plans/issue 10
+ :plans/experiments
+ [{:exp/name "dragon" :exp/kind :gym :exp/goal "dragon" :exp/runs 6 :exp/bots 1 :exp/est-s 1600}]}

@@ -89,6 +89,9 @@
 (def stand-near 1.0)                  ; blocks on the plane from that stand a wait counts as there
 (def sitting-phases #{5 6 7})         ; the dragon's phases on its perch (EnderDragonPhase: sitting flaming, scanning, attacking)
 (def landing-phases #{3})             ; its phase coming down onto the perch (DragonLandingPhase), its head already where a sitting one's is
+(def attacking-phase 7)               ; its phase biting at whoever is in the basin (DragonSittingAttackingPhase): the head lunges, a blow every 0.3 to 0.5 s
+(def phase-margin 2.0)                ; blocks past the head's bite-out the bot leaves the basin to when the attack begins
+(def blow-quiet-ticks 60)             ; ticks (three seconds) after a blow before the bot strikes again at less than full strength
 (def scanning-phase 6)                ; its phase turning on the perch toward a player (DragonSittingScanningPhase): the head sweeps the basin
 (def walk-in-to 3.0)                  ; blocks on the plane from the fountain a perch walks in to for reach, no nearer
 (def perch-hold-ms 60000)             ; a :perch hands back to the planner this often
@@ -309,7 +312,7 @@
           (= (dec fx) ix) (standing-walk shore)
           :else (standing-walk [(dec fx) fy 0]))))
 
-(declare recover looks-away)
+(declare recover looks-away in-attack-reach? strike-ok?)
 
 (defn toward-crystals
   "The next intent toward no crystal standing and the feet off every pillar, for the crystal
@@ -555,6 +558,14 @@
   [e]
   (= scanning-phase (:entity/phase e)))
 
+
+(defn attacking?
+  "Is the dragon e biting at whoever is in the basin (attacking-phase)? Gym chain-w22 job 1 run 4
+   (plan run 40972357217) took 20 -> 13.2 -> 7.0 -> 0.7 -> 0 in 1.3 s at 4.31m on the perch,
+   the first blow of the phase."
+  [e]
+  (= attacking-phase (:entity/phase e)))
+
 (defn turned?
   "Is the dragon e on its perch or landing on it (grounded?) with a yaw the server said
    (:entity/yaw): then its head and neck are on one side of it (mob/facing)."
@@ -786,6 +797,7 @@
         health (:player/health world full-health)]
     (cond (or (< health perch-line)
               (struck-by-dragon? world)
+              (and (attacking? e) (in-attack-reach? world))
               (entity/gone? world target)
               (and (breath-near world) (not (holds? world)))
               (and (in-bite? e (:player/pos world)) (not (scanning? e)) (some? stand))
@@ -804,7 +816,7 @@
             (cond
               (:intent/resync i) (window/resync world (window/view world :inventory))
               (= :arm (:intent/stage i)) (arm world)
-              (and sat? (<= (reach world e) strike-reach)) (hit world target e)
+              (and sat? (<= (reach world e) strike-reach) (strike-ok? world e)) (hit world target e)
               (and sat?
                    (some? stand)
                    (> (from-fountain world) walk-in-to)
@@ -1130,6 +1142,37 @@
           (back-off-from-dragon? world) {:intent/kind :back-off :intent/target eid}
           :else {:intent/kind :dragon-rest})))
 
+(defn in-attack-reach?
+  "Is the bot within the head's bite-out plus phase-margin of the dragon's body on the plane,
+   wherever its head turns?"
+  [world]
+  (let [[_ d] (dragon world)]
+    (boolean (and d
+                  (< (physics/horizontal-distance (:player/pos world) (:entity/pos d))
+                     (+ mob/bite-out phase-margin))))))
+
+(defn leave-attack
+  "The intent that takes the feet past the head's reach before the first blow of the dragon's
+   attacking phase: the shelter walk to the nearest cell beyond bite-out and phase-margin (and a
+   half) from the fountain, else combat's :back-off from the dragon (unless it would be done at
+   once), else a :dragon-rest."
+  [world]
+  (let [cell (step-out-cell world (+ mob/bite-out phase-margin 0.5))
+        [eid _] (dragon world)]
+    (cond cell (shelter-walk cell)
+          (back-off-from-dragon? world) {:intent/kind :back-off :intent/target eid}
+          :else {:intent/kind :dragon-rest})))
+
+(defn strike-ok?
+  "May the bot strike the dragon e now: it is scanning (scanning?), the head turning onto whoever
+   stands in the basin, or the bot has full health and no blow landed in blow-quiet-ticks? A
+   strike under that is a stand in reach for the next blow."
+  [world e]
+  (boolean (or (scanning? e)
+               (and (>= (:player/health world full-health) full-health)
+                    (let [at (:player/hurt-at world)]
+                      (or (nil? at) (> (- (:time/tick world 0) at) blow-quiet-ticks)))))))
+
 (defn after-blow
   "The intent in the hit-hold-ticks after the dragon's blow (struck-by-dragon?): always on, away
    from it, never a rest, a meal or a wait where the blow fell: the shelter walk to the nearest
@@ -1206,6 +1249,7 @@
           (or (off-island? world) (seq (crystals world)) (on-pillar? world) (on-spike? world))
           (toward-crystals world)
           (struck-by-dragon? world) (after-blow world)
+          (and d (attacking? d) (in-attack-reach? world)) (leave-attack world)
           bed-intent bed-intent
           (< (:player/health world full-health) perch-line) (recover world)
           (and breath eid (holds? world)) {:intent/kind :perch :intent/target eid}
@@ -1305,7 +1349,9 @@
         pos (:player/pos world)
         shelter? (and (= :walk (:intent/kind i)) (= :shelter (:intent/for i)))]
     (or (and (= :perch (:intent/kind i))
-             (or (< (:player/health world full-health) perch-line) (struck-by-dragon? world)))
+             (or (< (:player/health world full-health) perch-line)
+                 (struck-by-dragon? world)
+                 (and d (attacking? d) (in-attack-reach? world))))
         (and (not= :back-off (:intent/kind i))
              (not shelter?)
              (not (off-island? world))
