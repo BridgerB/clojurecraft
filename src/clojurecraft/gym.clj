@@ -662,14 +662,14 @@
     :gym/truth [(pearls-held "(1[2-9]|[2-9][0-9]|[1-9][0-9][0-9])")]}
    ;; issue #263: the same twelve pearls from where the race leaves the bot, at a fortress in the
    ;; Nether wastes with seven rods in the pack and no warped forest in view: the stage must find
-   ;; one itself (pearls/travel). pearls-12 above lands in a forest, which the race never does
+   ;; one itself (pearls/travel). pearls-12 above lands in a forest, which the race never does. No
+   ;; fire resistance: the race's bot has none at this stage
    {:gym/goal :ender-pearls
     :gym/name "pearls-12-from-fortress"
     :gym/until "pearls-12"
     :gym/land :nether-fortress
     :gym/difficulty "normal"
     :gym/prereqs (into pearl-kit ["minecraft:cooked_beef 32" "minecraft:blaze_rod 7"])
-    :gym/summon [fire-resistance]
     :gym/timeout-ms trial-ms
     :gym/truth [(pearls-held "(1[2-9]|[2-9][0-9]|[1-9][0-9][0-9])")]}
    ;; issue #264: twelve eyes of ender crafted from what the two stages before make, given on a
