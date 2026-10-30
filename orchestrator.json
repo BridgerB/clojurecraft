@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-30T13:33:42.142Z",
+  "at" : "2026-10-30T13:34:50.969Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -31,7 +31,7 @@
     "number" : 618,
     "title" : "Bot stops at ingots: no-support",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
+    "copilot" : true
   }, {
     "number" : 71,
     "title" : "Bot stops at portal-kit: boxed",
@@ -235,7 +235,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 618,
-    "move" : "assign"
+    "move" : "wait",
+    "why" : "session starting"
   }, {
     "issue" : 71,
     "move" : "leave",
