@@ -1188,8 +1188,9 @@
    food is under what heals (meal) else a :pocket-hold, until the fire is out, the health is up and the
    last hit older than press-ms, then an :unseal; OPEN, a blaze in reach is struck (nil here) unless
    the health is under low-health (then sealed out: it hits for 3.6 a second; when the seal cannot
-   be laid, fought to the end: backing off flipped with the seal every 0.2 s, blaze-race-n jobs 2,
-   4 and 6),
+   be laid or is marked unsealable, combat/cover: a meal out of reach, a block laid toward it, a
+   pillar, a nook dug; never a fight under danger-health, #577, and a plain back-off only when
+   cover has nothing: it flipped with the seal every 0.2 s, blaze-race-n jobs 2, 4 and 6),
    while it is pressed? and can seal a :seal (a block in the opening, at the feet and the head,
    over the head when it has no roof), else while it burns or is under hold-to a meal or a :pocket-hold
    in the open (no filler held). Blaze-race-j race 3 and race 1 held open and died in it."
@@ -1206,9 +1207,7 @@
             (and (or (pressed? world) (reach-blaze world)) (pocket/can-seal? world site))
             {:intent/kind :seal}
             (reach-blaze world)
-            {:intent/kind :fight
-             :intent/target (first (reach-blaze world))
-             :intent/to-the-end? true}
+            (let [[_ e] (reach-blaze world) c (combat/cover world e)] (when (:intent/kind c) c))
             need? (or (meal world) {:intent/kind :pocket-hold :intent/heal-to (hold-to world)})))))
 
 (defn refuge-needed?

@@ -1436,7 +1436,7 @@
         (is (not (plan/interrupts? low row {:intent/kind :seal})))
         (is (not (plan/interrupts? low row {:intent/kind :pocket})))))))
 
-(deftest a-seal-that-cannot-be-laid-is-not-tried-again-and-the-cornered-bot-fights
+(deftest a-seal-that-cannot-be-laid-is-not-tried-again-and-the-bot-takes-cover
   ;; blaze-race-n jobs 2, 4 and 6: :pocket, :seal and :place flipped with :back-off every 0.2 to 0.5 s
   ;; while burning, :place failed :no-support, and the bot died at 8 hits taken
   (let [hand (entity :blaze [6.5 65.0 8.5] :entity/health 20.0)
@@ -1446,6 +1446,8 @@
         stuck (assoc-in w [:pocket/site :pocket/unsealable?] true)]
     (is (= {:intent/kind :seal} (next-intent w)) "sealable: the seal")
     (is (not (pocket/can-seal? stuck (:pocket/site stuck))))
-    (is
-     (= {:intent/kind :fight :intent/target 7 :intent/to-the-end? true} (next-intent stuck))
-     "not sealable, a blaze in reach, nowhere to back off to: fought to the end, not backed away from")))
+    (let [i (next-intent stuck)]
+      (is (contains? #{:place :pillar :eat :dig} (:intent/kind i))
+          "not sealable, a blaze in reach: combat/cover, a block laid or a pillar, never a fight")
+      (is (not= :fight (:intent/kind i)) "no fight under danger-health (#577)")
+      (is (not= :back-off (:intent/kind i)) "and not the back-off that flipped with the seal"))))
