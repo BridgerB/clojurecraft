@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-30T06:06:37.652Z",
+  "at" : "2026-10-30T06:08:51.942Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -58,6 +58,11 @@
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
+    "number" : 579,
+    "title" : "Bot stops at ender-pearls: timeout",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
     "number" : 538,
     "title" : "Bot stops at fortress: blocked",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
@@ -111,11 +116,6 @@
     "number" : 586,
     "title" : "Bot stops at furnace: stuck",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
-  }, {
-    "number" : 579,
-    "title" : "Bot stops at ender-pearls: timeout",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 461,
@@ -206,14 +206,18 @@
     "why" : "hands-off label"
   }, {
     "issue" : 611,
-    "move" : "wait",
-    "why" : "session starting"
+    "move" : "unassign",
+    "why" : "no pull request and no session since the assignment"
   }, {
     "issue" : 531,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
     "issue" : 526,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 579,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -226,10 +230,6 @@
     "why" : "hands-off label"
   }, {
     "issue" : 62,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
-    "issue" : 579,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -278,11 +278,6 @@
     "why" : "hands-off label"
   } ],
   "log" : [ {
-    "issue" : 593,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment",
-    "at" : "2026-10-28T15:58:21Z"
-  }, {
     "issue" : 593,
     "move" : "assign",
     "at" : "2026-10-28T15:59:28.931Z"
@@ -1627,5 +1622,10 @@
     "issue" : 611,
     "move" : "assign",
     "at" : "2026-10-30T05:47:45.665Z"
+  }, {
+    "issue" : 611,
+    "move" : "unassign",
+    "why" : "no pull request and no session since the assignment",
+    "at" : "2026-10-30T06:08:51.942Z"
   } ]
 }
