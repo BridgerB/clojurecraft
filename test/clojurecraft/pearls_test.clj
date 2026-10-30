@@ -2562,7 +2562,11 @@
                  (plan/next-intent (assoc known :plan/blacklist #{[480 71 8]}) row plan/goals)))))
     (testing "in one: the hunt, no travel"
       (is (nil? (pearls/travel here)))
-      (is (pearls/in-forest? here)))
+      (is (pearls/in-forest? here))
+      (is
+       (= {:intent/kind :lookout :intent/for :pearls} (plan/next-intent here row plan/goals))
+       "in a forest with no enderman yet: the hunt stands where it is, no walk out (a walk
+           out of a forest it reached was job 5's 13 minutes of walking in pearls-travel-a)"))
     (testing "the overworld has no such search"
       (is (nil? (pearls/travel (assoc base :player/dimension "minecraft:overworld")))))
     (testing "an enderman tracked: hunted, not travelled from"
@@ -2582,7 +2586,17 @@
            (plan/next-intent w row plan/goals))
         "none angry: provoked from the mouth")
     (is (not= :provoke (:intent/kind (plan/next-intent busy row plan/goals)))
-        "another angry and coming: not a second")))
+        "another angry and coming: not a second")
+    (let [given-up (-> busy
+                       (assoc :plan/given-up {8 0})
+                       (assoc-in [:world/entities 8 :entity/pos] [3.5 64.0 30.5]))]
+      (is (pearls/coming? busy))
+      (is (not (pearls/coming? given-up)) "given up on and out of reach: it is not coming")
+      (is
+       (= {:intent/kind :walk :intent/target [8 61 8] :intent/for :shelter}
+          (plan/next-intent given-up row plan/goals))
+       "so it blocks nothing; at the mouth the bot goes home first (an angry one tracked sends
+           it there), where the next plan provokes"))))
 
 (deftest only-a-weak-mob-at-hand-is-fought-with-no-burrow
   ;; gym plan run 41109441111 (pearls-travel-a) job 5: `walk [2396 72 2184]`, `fight 744`, three

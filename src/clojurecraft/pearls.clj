@@ -1654,6 +1654,17 @@
   (let [k (mob/kinds (entity/kind e))]
     (boolean (and k (:melee k) (nil? (:shoot k)) (<= (:melee k) weak-melee)))))
 
+(defn coming?
+  "Is the nearest angry enderman (entity/creepy?) within stare-range one the hunt still fights
+   (not unfightable?: given up, fought out, cut or failed lately)? No other is provoked while it
+   is: churn-a (plan 41096292443) run 3 provoked 1310, 1561 and 1691 in 14 s and had three within
+   2.5 blocks of the bot."
+  [world]
+  (let [[ceid ce] (entity/nearest
+                   (into {} (filter (comp entity/creepy? val)) (endermen world stare-range))
+                   (:player/pos world))]
+    (boolean (and ce (not (unfightable? world ceid ce))))))
+
 (defn shelter-walk
   "A :walk for :shelter to target, or nil when target is nil or in :plan/blacklist (a walk to it
    failed, plan/fail-intent). A walk is tried once before it is known to fail: a fence between
@@ -1788,7 +1799,7 @@
         [quarry-id q] (quarry world)
         ;; one enderman at a time: none is provoked while an angry one is coming (churn-a run 3,
         ;; issue #263: 1310, 1561 and 1691 provoked in 14 s, three at the bot at once)
-        coming? (and ce (not (unfightable? world ceid ce)))
+        coming? (coming? world)
         qid (when-not coming? quarry-id)
         ghost? (and near? (not angry?) (contains? (:plan/blacklist world #{}) eid))
         dir (when (and (nil? home)
