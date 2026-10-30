@@ -1138,7 +1138,7 @@
                                   {:intent/kind :dig :intent/reason :target-gone :intent/id 2})))
         "any other failure breaks the streak")))
 
-(deftest an-identical-failed-intent-steps-back-instead-of-repeating
+(deftest ^:eftest/synchronized an-identical-failed-intent-steps-back-instead-of-repeating
   ;; findings 2026-10-27 item 1: stairs-down or end-portal failing from feet must not be retried
   ;; identically in a loop to fail the plan in under a second; it steps back to the previous cell
   (let [active (-> (plan/begin (world-state [5.5 64.0 5.5]) {:go/goals [:wood]} plan/goals)
@@ -1155,7 +1155,7 @@
         (is (= :walk (get-in w [:plan/intent :intent/kind])) "steps back via walk")
         (is (= [0 64 0] (get-in w [:plan/intent :intent/target])) "walks back to previous cell")))))
 
-(deftest run-3-boxed-stairs-down-steps-back-and-never-fails-in-retry-storm
+(deftest ^:eftest/synchronized run-3-boxed-stairs-down-steps-back-and-never-fails-in-retry-storm
   ;; gym chain-w6 run 3 (17:47:19): stairs-down boxed at [14828 31 13564] failed attempts 1, 2, 3
   ;; in 0.4s because turned dir [-1 0] did not match planned dir [0 -1]. An identical stairs-down
   ;; must step back along trail and never repeat the identical intent nor fail while time remains.
@@ -1572,7 +1572,7 @@
     (is (= [0 -1] (dir (first far))) "or the far one, whichever it began for")
     (is (= (first far) (:intent/trunk pick)) "the intent names the trunk it is for")))
 
-(deftest a-descent-that-ends-level-with-the-trunk-tunnels-on
+(deftest ^:eftest/synchronized a-descent-that-ends-level-with-the-trunk-tunnels-on
   ;; sim snapshot R2-43-1 (issue #135): stairs down inside a hill ended level with a trunk fifteen
   ;; blocks off; out? is false there, so the climb-out cut stairs up to the top of the world, and
   ;; the bot walked down its own stairs and cut the same descent again for the whole window
@@ -1616,7 +1616,7 @@
                   intent/run (fn [world _ _] world)]
       (plan/plan-tick w {:event/kind :tick :event/now 50 :event/rand 0.5} [goal]))))
 
-(deftest a-cut-that-would-restart-the-same-intent-keeps-it-running
+(deftest ^:eftest/synchronized a-cut-that-would-restart-the-same-intent-keeps-it-running
   ;; blaze-race-i geared run 3 (:walk [2345 58 2283] re-issued every 50 ms) and pearls-stuck-d job 5
   ;; (:walk [2773 61 2502] under a ghast): the row's interrupts? was true each tick and its act chose
   ;; the same walk, so the bot's controls were reset on every abandon and it never moved
@@ -1626,7 +1626,7 @@
       (is (= 1 (get-in w [:plan/intent :intent/id])) "the same intent is still running")
       (is (= {:control/forward true} (:player/controls w)) "its controls were not reset"))))
 
-(deftest a-cut-whose-answer-differs-still-cuts
+(deftest ^:eftest/synchronized a-cut-whose-answer-differs-still-cuts
   (let [target [2345 58 2283]
         fight {:intent/kind :fight :intent/target 8}
         w (cut-at target nil fight)]

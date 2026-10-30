@@ -309,7 +309,15 @@
    [:plan/failed "the last failed intent with its feet position" "after an intent fails"]
    [:plan/trail "feet positions of recently started intents, oldest first" "while planning"]
    [:plan/last "the last intent that ended, with its outcome" "after one ends"]
-   [:plan/reason "why the plan failed" "after it failed"]
+   [:plan/ended
+    "{:intent/kind :intent/target :intent/for :ended/at} of the intent that ended last (finished, failed or abandoned) and the ms it did: churn detection compares the next start with it"
+    "after one ends"]
+   [:plan/churn
+    "{:intent/kind :intent/target :intent/for :churn/n} of the intent last started, n the times in a row the planner started it the tick after it ended (0: not a repeat): CHURN, the planner's choice and the intent's own end check disagreeing about one state (issue #615); logged `churn <kind> <target> xN` every 20 repeats; observation only"
+    "after the first intent"]
+   [:ended/at "ms the intent in :plan/ended ended at" "inside :plan/ended"]
+   [:churn/n "times in a row the intent in :plan/churn started the tick after it ended"
+    "inside :plan/churn"] [:plan/reason "why the plan failed" "after it failed"]
    [:plan/waiting "why the planner is waiting" "after the first wait"]
    [:plan/waiting-since "ms the current wait began" "while waiting"]
    [:plan/waiting-ticks "planner ticks the current wait has lasted; past plan/wait-ticks it fails"
@@ -317,7 +325,7 @@
    [:plan/wait "a planner answer meaning: nothing to do yet, for this reason"
     "returned by next-intent, never stored"]
    [:intent/kind
-    "executor: :walk :dig :collect :craft :place :open-container :stairs-down :stairs-up :tunnel :tunnel-to :smelt :redig :scoop :equip :build :pour :use-on :await :toss :eat :wear :fight :back-off :provoke :burrow :lookout :throw-eye :end-portal :pillar :dig-down :strike :perch :hold :dragon-rest"
+    "executor: :walk :dig :collect :craft :place :open-container :stairs-down :stairs-up :tunnel :tunnel-to :smelt :redig :scoop :equip :build :pour :use-on :await :toss :eat :wear :fight :back-off :provoke :burrow :lookout :throw-eye :end-portal :pillar :dig-down :strike :perch :hold :dragon-rest :camp :collect-drops :cross :flee :forage :rest :swim-out :wade"
     "every intent"] [:intent/status ":active, :done or :failed" "every intent"]
    [:intent/top "feet height a :pillar climbs to (issue #267)" "a :pillar intent"]
    [:intent/under
@@ -463,6 +471,9 @@
    [:intent/rejections
     "digs of the current stair (or level step, or a build's op) the server did not do, each dug again; stairs/max-rejections fail :rejected"
     "stairs-down or a build, after a child dig rejected"]
+   [:intent/body-refusals
+    "placements of the running intent the server refused with the bot's own body in the cell, each tried again from a new stand; place/max-body-refusals fail it :rejected (issue #615)"
+    "a build or stairs-up, after a placement refused for the body"]
    [:intent/cells
     "the cells the current stair opens, top first: three, or four for a stair cut for a taller body (:intent/tall)"
     "stairs-down, while a stair is cut"]

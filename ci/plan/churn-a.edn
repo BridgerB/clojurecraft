@@ -1,0 +1,20 @@
+;; issue #615, branch fix/615-churn-guard: the churn counter and the body-refusal ceiling must not
+;; change the rows that fight, hunt and build
+{:plans/label "churn-a"
+ :plans/jobs 4
+ :plans/issue 615
+ :plans/experiments
+ [{:exp/name "pearls-12"
+   :exp/kind :gym
+   :exp/goal "pearls-12"
+   :exp/runs 3
+   :exp/bots 1
+   :exp/est-s 1800}
+  {:exp/name "blaze-fortress"
+   :exp/kind :gym
+   :exp/goal "blaze-fortress"
+   :exp/runs 3
+   :exp/bots 1
+   :exp/est-s 1800}
+  {:exp/name "attack" :exp/kind :gym :exp/goal "attack" :exp/runs 2 :exp/bots 1 :exp/est-s 300}
+  {:exp/name "defend" :exp/kind :gym :exp/goal "defend" :exp/runs 2 :exp/bots 1 :exp/est-s 300}]}

@@ -969,7 +969,8 @@
            (plan/next-intent (update w :player/inventory dissoc 1) row plan/goals))
         "with no pickaxe to cut one, up to it as before")))
 
-(deftest with-a-pickaxe-held-no-walk-goes-to-an-endermans-feet-without-a-stare-site
+(deftest ^:eftest/synchronized
+         with-a-pickaxe-held-no-walk-goes-to-an-endermans-feet-without-a-stare-site
   ;; gym batch pearls-m10-a (plan run 40106206590) run 3: with stare-site nil, the bot walked straight
   ;; to an enderman's feet with a pickaxe held and died in the open
   (let [e (enderman [8.5 64.0 15.5])
@@ -1000,7 +1001,8 @@
       (is (pearls/reaches? w-far far (:pearls/mouth w-far)) "past 16 blocks it teleports")
       (is (= 8 (first (pearls/quarry w-far))) "so the distant one is quarry"))))
 
-(deftest a-distant-angry-enderman-is-met-standing-not-charged-with-a-pickaxe-held
+(deftest ^:eftest/synchronized
+         a-distant-angry-enderman-is-met-standing-not-charged-with-a-pickaxe-held
   ;; gym batch pearls-m10-a (plan run 40106206590) run 3: charged across the open to fight an
   ;; angry enderman 15 blocks off with no burrow shelter and fell into lava on the way; a
   ;; lookout there instead stood the hunt still while any angry one was tracked, never
