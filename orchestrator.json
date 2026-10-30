@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-30T15:36:16.367Z",
+  "at" : "2026-10-30T15:39:35.795Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -43,6 +43,11 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
+    "number" : 613,
+    "title" : "Bot stops at flint-and-steel: no-support",
+    "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
     "number" : 610,
     "title" : "Bot stops at cast-one: no-support",
     "labels" : [ "bot-failure", "sim" ],
@@ -70,11 +75,6 @@
   }, {
     "number" : 619,
     "title" : "Bot stops at water-bucket: no-support",
-    "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
-  }, {
-    "number" : 613,
-    "title" : "Bot stops at flint-and-steel: no-support",
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
