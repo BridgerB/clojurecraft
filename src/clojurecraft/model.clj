@@ -177,6 +177,13 @@
    [:sight/pos "an observation's block position" "a fact in :world/facts"]
    [:sight/state "the state id observed there" "a fact in :world/facts"]
    [:sight/at "ms of the observation" "a fact in :world/facts"]
+   [:forest/chunk "the chunk [cx cz] a warped forest fact summarises (memory/forest-fact)"
+    "a fact in :world/facts"] [:forest/kind "the forest's kind, :warped" "a fact in :world/facts"]
+   [:forest/count "warped nylium blocks the chunk held when seen: forest-min or more"
+    "a fact in :world/facts"]
+   [:forest/pos "the nylium block nearest the chunk's centre" "a fact in :world/facts"]
+   [:forest/at "ms the chunk was seen" "a fact in :world/facts"]
+   [:forest/dimension "the dimension it was seen in" "a fact in :world/facts"]
    [:pool/chunk "the chunk [cx cz] a pool fact summarises" "a fact in :world/facts"]
    [:pool/kind "the pool's fluid, :water or :lava" "a fact in :world/facts"]
    [:pool/pos "the chunk's highest surface source of that fluid, nearest its centre"

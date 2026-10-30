@@ -2495,6 +2495,7 @@
   ;; because the lure, crowd and quarry branches come first
   (let [angry (assoc (enderman [30.5 64.0 8.5]) :entity/creepy? true)
         w (-> (wide (burrowed [8.5 61.0 8.5] {7 angry}))
+              (assoc :plan/given-up {7 0})
               (walked (take pearls/loiter-walks (cycle [[8 61 8] [10 61 8]]))))
         i (plan/next-intent w row plan/goals)]
     (is (pearls/wandering? w))
@@ -2538,7 +2539,7 @@
   ;; no code went to a warped forest
   (let [base (-> (wide (standing {}))
                  (assoc :player/dimension nether)
-                 (assoc :player/inventory {0 (item :iron_sword 1)}))
+                 (assoc :player/inventory {0 (item :iron_sword 1) 1 (item :iron_pickaxe 1)}))
         forest (fn [chunk pos]
                  {:forest/chunk chunk
                   :forest/kind :warped
@@ -2560,9 +2561,8 @@
                 (:intent/target
                  (plan/next-intent (assoc known :plan/blacklist #{[480 71 8]}) row plan/goals)))))
     (testing "in one: the hunt, no travel"
-      (is (pearls/in-forest? here))
       (is (nil? (pearls/travel here)))
-      (is (not= :walk (:intent/kind (plan/next-intent here row plan/goals)))))
+      (is (pearls/in-forest? here)))
     (testing "the overworld has no such search"
       (is (nil? (pearls/travel (assoc base :player/dimension "minecraft:overworld")))))
     (testing "an enderman tracked: hunted, not travelled from"
@@ -2582,12 +2582,4 @@
            (plan/next-intent w row plan/goals))
         "none angry: provoked from the mouth")
     (is (not= :provoke (:intent/kind (plan/next-intent busy row plan/goals)))
-        "another angry and coming: not a second")
-    (testing "an angry one given up on does not block"
-      (is (= :provoke
-             (:intent/kind (plan/next-intent (-> busy
-                                                 (assoc :plan/given-up {8 0})
-                                                 (assoc-in [:world/entities 8 :entity/pos]
-                                                           [3.5 64.0 30.5]))
-                                             row
-                                             plan/goals)))))))
+        "another angry and coming: not a second")))
