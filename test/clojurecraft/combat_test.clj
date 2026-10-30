@@ -263,9 +263,9 @@
                        :plan/goals
                        #{:dragon})] ; the pearls rows, in play, answer endermen themselves
       (is
-       (= {:plan/wait :cornered}
+       (= {:intent/kind :back-off :intent/target 7}
           (plan/next-intent (assoc angry :player/health 6.0) (row :defend) plan/goals))
-       "under danger-health, an angry enderman is no back-off (it teleports) and never fought on to death: cover, and with nothing to eat, lay or dig with, the wait that ends the plan")
+       "under danger-health, an angry enderman with nothing held to cover with is backed off from, never fought on to death, never the wait that ends the plan")
       (is (= {:intent/kind :fight :intent/target 7 :intent/to-the-end? true}
              (plan/next-intent (assoc angry :player/health 20.0) (row :defend) plan/goals))
           "healthy, an angry enderman is fought to the end: it cannot be outrun")
@@ -684,7 +684,8 @@
                      :player/food 20
                      :player/inventory kit)
         i (plan/next-intent angry (row :defend) plan/goals)]
-    (is (combat/back-off-pointless? angry (get-in angry [:world/entities 105])) "it teleports")
+    (is (some? (combat/teleport-cover angry (get-in angry [:world/entities 105])))
+        "it teleports and a cover is held")
     (is (not= :back-off (:intent/kind i)) "no back-off")
     (is (not= :fight (:intent/kind i)) "no fight under the line")
     (is (contains? #{:place :pillar :dig :eat} (:intent/kind i)) "a cover")))
