@@ -38,7 +38,7 @@
   (is (= 17 (count fixture/landing-offsets)))
   (is (apply distinct? fixture/landing-offsets)))
 
-(deftest a-forceload-is-released-even-when-the-work-throws
+(deftest ^:eftest/synchronized a-forceload-is-released-even-when-the-work-throws
   (let [sent (atom [])]
     (with-redefs [rcon/command! (fn [_ s] (swap! sent conj s) "")]
       (is (= :done (fixture/with-forceload {:next-id (atom 0)} [1 2] (constantly :done))))

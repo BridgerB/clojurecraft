@@ -380,7 +380,7 @@
 
 (def room-row (first (filter #(= :portal-room (:goal/id %)) plan/goals)))
 
-(deftest the-portal-room-is-tunnelled-to-once-a-frame-is-remembered
+(deftest ^:eftest/synchronized the-portal-room-is-tunnelled-to-once-a-frame-is-remembered
   (let [frame (blocks/default-state :end_portal_frame)
         w (searching [8.5 8.5] [])
         seen (memory/observe w [40 20 60] frame)]
