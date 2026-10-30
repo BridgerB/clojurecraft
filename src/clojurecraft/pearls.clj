@@ -1774,7 +1774,11 @@
         cornered? (and near? eid (contains? (:plan/cornered world #{}) eid))
         [bid _] (when at-end? (blocking world))
         [aid _] (when home (angry-near world))
-        [qid q] (quarry world)
+        [quarry-id q] (quarry world)
+        ;; one enderman at a time: none is provoked while an angry one is coming (churn-a run 3,
+        ;; issue #263: 1310, 1561 and 1691 provoked in 14 s, three at the bot at once)
+        coming? (and ce (not (unfightable? world ceid ce)))
+        qid (when-not coming? quarry-id)
         ghost? (and near? (not angry?) (contains? (:plan/blacklist world #{}) eid))
         dir (when (and (nil? home)
                        (pickaxe? world)

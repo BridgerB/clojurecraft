@@ -2569,3 +2569,25 @@
       (let [w (assoc-in base [:world/entities 7] (enderman [10.5 64.0 8.5]))]
         (is (not= [:walk :pearls]
                   ((juxt :intent/kind :intent/for) (plan/next-intent w row plan/goals))))))))
+
+(deftest one-enderman-at-a-time-is-provoked
+  ;; churn-a (plan 41096292443) pearls-12 run 3 at 59.47 to 59.69 min (issue #263): :provoke 1310,
+  ;; :provoke 1561 half a second on, :provoke 1691 0.2 min later; at 59.73 the three stood within
+  ;; 2.5 blocks of the bot, and the last of them struck it five times in five seconds
+  (let [sighted (enderman [3.5 64.0 0.5])
+        coming (assoc (enderman [3.5 64.0 20.5]) :entity/creepy? true)
+        w (assoc (burrowed [3.5 64.0 8.5] {7 sighted}) :player/food 20)
+        busy (assoc-in w [:world/entities 8] coming)]
+    (is (= {:intent/kind :provoke :intent/target 7 :intent/for :pearls}
+           (plan/next-intent w row plan/goals))
+        "none angry: provoked from the mouth")
+    (is (not= :provoke (:intent/kind (plan/next-intent busy row plan/goals)))
+        "another angry and coming: not a second")
+    (testing "an angry one given up on does not block"
+      (is (= :provoke
+             (:intent/kind (plan/next-intent (-> busy
+                                                 (assoc :plan/given-up {8 0})
+                                                 (assoc-in [:world/entities 8 :entity/pos]
+                                                           [3.5 64.0 30.5]))
+                                             row
+                                             plan/goals)))))))
