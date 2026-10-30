@@ -561,6 +561,15 @@
     (testing "a tunnel last done to a stand keeps it"
       (is (= west (blaze/stand (fact (at 4 2) west) sp)))
       (is (= north (blaze/stand (fact (at 2 4) north) sp))))
+    (testing "the tunnel running keeps its stand, as race lane 4 s2 r08 [543/544 57 203] flipped"
+      (is (= west
+             (blaze/stand
+              (assoc (at 4 2) :plan/intent {:intent/kind :tunnel-to :intent/target west})
+              sp)))
+      (is (= north
+             (blaze/stand
+              (assoc (at 2 4) :plan/intent {:intent/kind :tunnel-to :intent/target north})
+              sp))))
     (testing "a stand no longer open, or blacklisted, is not kept"
       (is (= north (blaze/stand (assoc (fact (at 2 4) west) :plan/blacklist #{west}) sp))))))
 
