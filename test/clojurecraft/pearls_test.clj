@@ -2039,8 +2039,12 @@
         at-mouth (hit (burrowed [3.5 64.0 8.5] {9 angry}))
         no-burrow (dissoc at-mouth :pearls/shelter :pearls/mouth)]
     (is (empty? (combat/threats at-mouth)) "the attacker is not :defend's with a burrow to walk to")
-    (is (= :ender-pearls (:goal/id (plan/choose at-mouth plan/goals)))
-        "the hunt's row is worked, so its walk home is not cut")
+    (is (not= :defend
+              (:goal/id (plan/choose (assoc at-mouth :plan/goals #{:ender-pearls}) plan/goals)))
+        "the :defend row is done, so the hunt's walk home is not cut")
+    (is (= :defend
+           (:goal/id (plan/choose (assoc no-burrow :plan/goals #{:ender-pearls}) plan/goals)))
+        "and with no burrow it is :defend's turn as before")
     (is (= {:intent/kind :walk :intent/target [8 61 8] :intent/for :shelter}
            (plan/next-intent at-mouth row plan/goals))
         "and it walks home")
