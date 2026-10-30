@@ -1239,11 +1239,47 @@
 
 (defn dodge-intent
   "A :dodge intent out of the line of the fireballs in flight toward the bot (dodge/intent-for), or
-   nil: none when it stands sealed in its pocket (a block stops them) or no cell is clear in time.
+   nil: none when it stands sealed in its pocket (a block stops them), is under low-health or alight
+   (the refuge comes first: blaze-race-m race 4 at 17:30:30 alternated :fight, :dodge, :pocket and
+   :seal in six seconds, a dodge cutting the seal each time, and died), or no cell is clear in time.
    Blaze-race-k and -l: 3.5 to 4 fireball hits a kill, each lighting the bot, half of all damage the
    burning after; the lines are known the tick a fireball spawns."
   [world]
-  (when-not (sealed? world) (dodge/intent-for world)))
+  (when (and (not (sealed? world))
+             (>= (:player/health world 20.0) low-health)
+             (not (:player/on-fire? world)))
+    (dodge/intent-for world)))
+
+(def no-dodge-kinds
+  "Intents a dodge is never cut for: the refuge's own and a meal."
+  #{:pocket :seal :unseal :pocket-hold :eat :dodge})
+
+(def grab-range 3.0) ; blocks on the plane within which a rod lying is picked up before the next swing
+
+(defn near-rod
+  "The rod entity lying within grab-range of the feet (a step or two), the health at low-health or
+   more, or nil, blazes watching or not. Blaze-race-m race 4 (22 min, 26 kills) held at most 4 of
+   about 11 rods dropped: eight lay within 2 to 3 blocks of its camp [2347 60 2280] until they
+   despawned at 300 s, 39 :collect-drops begun and each cut within a second by the next :fight
+   (six to eight blazes hovering in reach), which also comes before a rod in the act's order."
+  [world]
+  (when (>= (:player/health world 20.0) low-health)
+    (let [[_ e] (rod-lying world)
+          p (:player/pos world)]
+      (when (and e
+                 (<= (physics/horizontal-distance p (:entity/pos e)) grab-range)
+                 (<= (abs (- (second (:entity/pos e)) (second p))) 2.0))
+        e))))
+
+(defn rod-intent
+  "The way to the rod entity e lying: a walk onto it when a :collect-drops cannot reach
+   (drops/under-reach?), else the :collect-drops of its cell."
+  [world e]
+  (if (drops/under-reach? world e)
+    (fetch-walk e)
+    {:intent/kind :collect-drops
+     :intent/item :blaze_rod
+     :intent/target (hunt/cell (:entity/pos e))}))
 
 (defn refuge-now
   "What the bot does for its refuge now, or nil: the hold, seal or unseal in the pocket (hold-intent),
@@ -1278,13 +1314,14 @@
   ;; from 20 health to 13.8, since nothing else ends a running intent; never interrupt cover or healing when hurt (#577);
   ;; and one hurt and watched (under-fire?) by blazes further off, whatever the intent but the answer to it
   [world _ i]
-  (or (and (not= :dodge (:intent/kind i)) (some? (dodge-intent world)))
+  (or (and (not (contains? no-dodge-kinds (:intent/kind i))) (some? (dodge-intent world)))
       (and (= :tunnel-to (:intent/kind i)) (some? (prepare-intent world (nearest-spawner world))))
       (and (not (contains? refuge-kinds (:intent/kind i)))
            (some? (refuge-now world (nearest-spawner world))))
       (and (not (hurt? world))
            (not= :fight (:intent/kind i))
            (not (and (= :cover (:intent/for i)) (crowded? world)))
+           (not (and (= :collect-drops (:intent/kind i)) (some? (near-rod world))))
            (some? (fightable-blaze world)))
       (under-fire? world i)))
 
@@ -1307,6 +1344,7 @@
                             (when (burning-twice? world) (here-intent world)))))
         prepare (delay (prepare-intent world sp))
         dodging (delay (dodge-intent world))
+        grab (delay (when-let [e (near-rod world)] (rod-intent world e)))
         waiting (delay (ambush world))
         stock (delay (when-not (hurt? world) (stocking world)))
         out (delay (when (burning-here? world) (leave-fire world)))
@@ -1320,6 +1358,7 @@
       @held @held
       @refuge @refuge
       @heal @heal
+      @grab @grab
       (and (not (hurt? world)) heid (not (crowded? world)))
       {:intent/kind :fight :intent/target heid :intent/to-the-end? true :intent/yield? true}
       @wary @wary

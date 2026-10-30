@@ -1395,3 +1395,44 @@
     (is (not= walk (blaze/to-spawner w sp)) "so it is not the way chosen")
     (testing "farther off the walk is still the way"
       (is (= walk (blaze/to-spawner (assoc w :player/pos [3.5 64.0 3.5]) sp))))))
+
+(deftest a-rod-within-a-step-is-picked-up-before-the-next-swing
+  ;; blaze-race-m race 4 (22 min, 26 kills): about 11 rods dropped and at most 4 held. Eight lay 2 to
+  ;; 3 blocks from its camp until they despawned at 300 s; 39 :collect-drops were begun, each cut
+  ;; within a second by the next :fight (six to eight blazes hovering in reach)
+  (let [rod (entity :item [10.5 64.0 9.5] :entity/item blaze/rod)
+        far-rod (entity :item [15.5 64.0 9.5] :entity/item blaze/rod)
+        hand (entity :blaze [6.5 65.0 8.5] :entity/health 20.0)
+        collect {:intent/kind :collect-drops :intent/item :blaze_rod :intent/target [10 64 9]}]
+    (is (= collect (next-intent (standing {40 rod 7 hand}))) "the rod, with a blaze in reach")
+    (is (= :fight (:intent/kind (next-intent (standing {40 far-rod 7 hand}))))
+        "five off: the swing")
+    (is (not= collect (next-intent (assoc (standing {40 rod 7 hand}) :player/health 11.0)))
+        "under low-health the refuge comes first")
+    (testing "a running pickup is not cut for the blaze in reach, a camp is"
+      (let [w (standing {40 rod 7 hand})]
+        (is (not (plan/interrupts? w row collect)))
+        (is (plan/interrupts? w row {:intent/kind :camp :intent/spawner [11 64 10]}))
+        (is (plan/interrupts? (assoc w :world/entities {7 hand}) row collect)
+            "no rod near: it is cut as any intent")))))
+
+(deftest at-low-health-the-refuge-comes-before-a-dodge-and-no-dodge-cuts-it
+  ;; blaze-race-m race 4 at 17:30:30 to 17:30:36: :fight 965, :dodge, :fight, :dodge, :pocket, :seal,
+  ;; :dodge [2349 60 2282] (cutting the seal, two cells out of the pocket), :pocket, :seal, then
+  ;; :back-off and a :pillar that failed :boxed, dead at hp 2.2
+  (let [fb {:entity/type (blocks/entity-types :small_fireball)
+            :entity/pos [11.7 66.4 6.0]
+            :entity/vel [-0.064 -0.020 0.074]
+            :entity/seen-at 0}
+        hand (entity :blaze [6.5 65.0 8.5] :entity/health 20.0)
+        w (-> (standing {7 hand 8 fb})
+              (assoc :player/pos [8.6 64.0 8.5] :time/now 0))]
+    (is (= :dodge (:intent/kind (next-intent w))) "tick 1, hp 20: step out of the line")
+    (let [low (assoc w :player/health 11.4 :player/on-fire? true)]
+      (is (not= :dodge (:intent/kind (next-intent low))) "tick 2, hp 11.4 and alight: not a dodge")
+      (is (= :pocket (:intent/kind (next-intent low)))
+          "the refuge: the cell stood in, sealed there"))
+    (testing "tick 3: a seal under way is not cut for the next fireball"
+      (let [low (assoc w :player/health 8.0 :player/on-fire? true)]
+        (is (not (plan/interrupts? low row {:intent/kind :seal})))
+        (is (not (plan/interrupts? low row {:intent/kind :pocket})))))))

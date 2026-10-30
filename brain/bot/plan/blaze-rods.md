@@ -32,6 +32,11 @@ sourceRefs:
   - src/clojurecraft/pocket.clj#defn site-near
   - src/clojurecraft/blaze.clj#defn hold-intent
   - src/clojurecraft/dodge.clj#defn incoming
+  - src/clojurecraft/blaze.clj#defn near-rod
+  - src/clojurecraft/blaze.clj#defn within-reach?
+  - test/clojurecraft/blaze_test.clj#a-rod-within-a-step-is-picked-up-before-the-next-swing
+  - test/clojurecraft/blaze_test.clj#at-low-health-the-refuge-comes-before-a-dodge-and-no-dodge-cuts-it
+  - test/clojurecraft/blaze_test.clj#a-walk-to-a-spawner-already-in-reach-is-not-chosen-every-tick
   - src/clojurecraft/dodge.clj#defn dodge-cell
   - src/clojurecraft/blaze.clj#defn dodge-intent
   - test/clojurecraft/dodge_test.clj#the-bot-steps-clear-of-the-line-before-it-arrives
@@ -199,6 +204,9 @@ Blaze-race-k, 10 of 10 dead at 4 to 25 minutes, on_fire 5 to 64 a run, the two t
 
 ## Dodging the fireballs (issue #262, after blaze-race-l)
 The two runs of l and k that collected rods (l race 2, k race 1) killed 7 and 5 blazes at 23 and 30 hp lost per kill: 3.5 to 4 fireball hits a kill, each lighting the bot, half of all damage the burning after (`blazekills.ts`). Seven rods need about fourteen kills, over 300 hp. So the number to move is fireball hits per kill. `dodge.clj` reads the lines from what the world keeps of every entity (`:entity/pos`, `:entity/vel` of a `:small_fireball`). In l race 2's recording (`volleys.ts`) 212 fireballs spawned within 30 blocks and 24 hit; all 24 passed within 1.4 blocks of the body, none of the 76 that passed 1.5 or more away did; they take 300 to 750 ms to arrive; the velocity of the packet is about 5.5 times too small. `incoming` is the fireballs whose line passes the body within `danger-radius` (1.6); `dodge-cell` the standable cell within two steps, reached before the first fireball arrives (`move-base-ms` + `move-ms-per-block` per block against its ETA), where the nearest line passes the body farthest and at `worth-radius` (1.15) at least (a shot aimed dead at the body cannot be cleared by a step or two: the best diagonal passes 1.3 away, where one in ten of l race 2's still hit); `blaze/dodge-intent` is that as a `:dodge` intent, chosen after fire at the feet and before everything else, and cutting any running intent but a dodge (`plan/interrupts?`); none when sealed in the pocket. The executor walks straight at the cell and ends centred in it or after `dodge-ms`. A tunnel one wide has no cell: no dodge. The blaze's charge flag (metadata index 16) is set 1.4 to 3.5 s before its fireballs spawn and carries no direction, so it is not used yet. Not built: strike between volleys, and a spot where one blaze at a time has a line.
+
+## Collecting the rods, and the order at low health (issue #262, after blaze-race-m)
+The dodge works where the bot gets to fight: m race 4 lived 22 min, 45 blazes seen, 26 killed at 7 hp a kill (under the bar of 10), 28 `:dodge`. The wall moved to collection: about 11 rods dropped, at most 4 held. Eight lay 2 to 3 blocks from the camp `[2347 60 2280]` until they despawned at 300 s (`rods.ts`: min distance to the bot 2.1 to 2.9, removed without a pickup), with 39 `:collect-drops` begun and each cut inside a second: six to eight blazes hover in reach, `plan/interrupts?` cuts any intent but a fight for a blaze in reach, and `:fight` also comes before a rod in the act's order. `near-rod` is a rod within `grab-range` (3) on the plane, the health at `low-health` or more, blazes watching or not; `rod-intent` picks it up before the next swing (`@grab`, after the heal and before the fight), and a running `:collect-drops` is not cut for a blaze while one is near. At low health the order was `:fight`, `:dodge`, `:pocket`, `:seal`, a `:dodge` two cells out cutting the seal, then `:back-off` and a `:pillar` that failed `:boxed` (m race 4, 17:30:30 to 36): `dodge-intent` is now nil under `low-health` or alight (the refuge first), and a dodge never cuts the refuge's own intents or a meal (`no-dodge-kinds`). A walk to a spawner within reach of the eye is not chosen (`within-reach?`, `to-spawner`): it ended in its first tick with `at-spawner?` still false (snapshot test/issues/514/b10231346-R4-21-1).
 
 ## Limits
 - Fireballs are not dodged or blocked: the bot is out of their line, in a pocket or sealed in one.
