@@ -93,12 +93,13 @@
 (def landing-timeout 30000)           ; a :go that names a landing waits this long for the bot to be there
 (def landing-reach 2.0)               ; horizontal distance from :go/at that counts as landed
 
-(def uncounted-kinds
-  "Intents of the blaze row (:intent/goal :blaze-rods) whose failure is no strike against the plan:
-   a fight that cannot reach its blaze and a pickup that found no rod. Each blacklists its target,
-   so the row goes on without it (blaze-race-p job 6: two :collect-drops :not-picked-up and a
-   :fight :unreachable ended the plan at 6m24s, health 16, fifteen beef and full iron)."
-  #{:fight :collect-drops})
+(def target-scoped-failures
+  "[kind reason] pairs of failures that concern one target and no more: a fight that cannot reach
+   its mob, a pickup that found nothing. fail-intent blacklists the target, which bounds the retry
+   (the choice skips a blacklisted target), and counts no strike against the plan, for any goal.
+   Blaze-race-p job 6 ended at 6m24s with 16 hp, fifteen beef and full iron on two
+   :collect-drops :not-picked-up and a :fight :unreachable."
+  #{[:fight :unreachable] [:collect-drops :not-picked-up]})
 
 (def max-attempts 3)                  ; consecutive failed intents before the plan fails
 (def max-unwalkable 12)               ; consecutive walks that failed :no-path before the plan fails
@@ -322,8 +323,8 @@
   [world i]
   (let [unwalkable? (and (contains? #{:walk :end-portal} (:intent/kind i))
                          (= :no-path (:intent/reason i)))
-        uncounted? (and (= :blaze-rods (:intent/goal i))
-                        (contains? uncounted-kinds (:intent/kind i)))
+        uncounted? (and (some? (:intent/target i))
+                        (contains? target-scoped-failures [(:intent/kind i) (:intent/reason i)]))
         attempts (cond-> (:plan/attempts world 0) (not (or unwalkable? uncounted?)) inc)
         unwalkable (if unwalkable? (inc (:plan/unwalkable world 0)) 0)
         feet (when (:player/pos world) (intent/feet world))]

@@ -1464,7 +1464,6 @@
         failed (fn [w kind reason]
                  (plan/fail-intent w
                                    {:intent/kind kind
-                                    :intent/goal :blaze-rods
                                     :intent/target (if (= kind :fight) 537 [10 64 9])
                                     :intent/reason reason}))
         w (-> active
@@ -1488,3 +1487,26 @@
     (is (= :seal
            (:intent/kind (next-intent (assoc-in w [:player/inventory 10] (item :iron_pickaxe 1)))))
         "with one it is")))
+
+(deftest a-failure-about-one-target-is-no-strike-for-any-goal
+  ;; plan/target-scoped-failures is data, not a blaze exception: the same fight and pickup under the
+  ;; wood goal and the ender-pearl goal (an enderman out of reach) strike nothing and blacklist
+  (doseq [goal [:wood :ender-pearl :blaze-rods]]
+    (let [active (plan/begin (standing {}) {:go/goals [goal]} plan/goals)
+          w (-> active
+                (plan/fail-intent {:intent/kind :fight
+                                   :intent/target 14
+                                   :intent/reason :unreachable
+                                   :intent/goal goal})
+                (plan/fail-intent {:intent/kind :collect-drops
+                                   :intent/target [3 64 3]
+                                   :intent/reason :not-picked-up
+                                   :intent/goal goal}))]
+      (is (zero? (:plan/attempts w)) (str goal))
+      (is (not= :failed (:plan/status w)) (str goal))
+      (is (every? (:plan/blacklist w) [14 [3 64 3]]) (str goal))))
+  (testing "a fight that failed for another reason still strikes"
+    (is (= 1
+           (:plan/attempts (plan/fail-intent
+                            (plan/begin (standing {}) {:go/goals [:wood]} plan/goals)
+                            {:intent/kind :fight :intent/target 14 :intent/reason :ghost}))))))
