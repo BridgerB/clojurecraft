@@ -656,6 +656,36 @@
               w
               {:intent/kind :place :intent/reason :rejected :intent/cell [8 63 5]})))))
 
+(deftest a-placement-the-body-keeps-refusing-fails-the-build
+  ;; blaze-race-l geared job 5 (issue #615): :seal ran five hours on `placing [2147 73 1757]
+  ;; refused with the body in it`, about 6000 times
+  (let [w (standing-at (open-ground {}) [5.5 63.0 5.5])
+        head [5 64 5]
+        op (first (build/plan-for :cast-one [8 40 4] :south 1))
+        i {:intent/kind :build
+           :intent/build :cast-one
+           :intent/origin [8 40 4]
+           :intent/facing :south
+           :intent/access 1
+           :intent/status :active
+           :intent/op op
+           :intent/child
+           {:intent/kind :place :intent/status :failed :intent/reason :rejected :intent/cell head}}
+        step (fn [i]
+               (:plan/intent
+                (build/work-op (assoc w :plan/intent i) i op {:event/kind :tick :event/now 0})))
+        runs (iterate (fn [i]
+                        (let [i' (step i)]
+                          (cond-> i'
+                            (nil? (:intent/child i')) (assoc :intent/child (:intent/child i)))))
+                      i)]
+    (is (= :active (:intent/status (step i))) "the first refusal tries another stand")
+    (is (= 1 (:intent/body-refusals (step i))))
+    (is (= :active (:intent/status (nth runs 5))) "five refusals in, still trying")
+    (is (= :failed (:intent/status (nth runs 6))) "the sixth fails the build")
+    (is (= :rejected (:intent/reason (nth runs 6))))))
+
+
 (deftest a-build-never-digs-rock-by-hand
   ;; sim race 38669750355 (issue #135): the last pickaxe broke in the cast's room at y -20 and
   ;; the build dug deepslate by hand, fifteen seconds a block, for the last half hour

@@ -158,7 +158,7 @@
     (is (= (:gym/setup (gym/gym "end-portal")) (:gym/setup (gym/gym "enter-end")) gym/portal-room))
     (is (= [:portal] (:truth/at (first (:gym/truth (gym/gym "end-portal"))))))))
 
-(deftest each-landing-names-its-dimension
+(deftest ^:eftest/synchronized each-landing-names-its-dimension
   (is (= "minecraft:the_nether" (gym/dimension-of (gym/gym :fortress))))
   (is (= "minecraft:the_nether" (gym/dimension-of (gym/gym :arena-nether))))
   (is (= "minecraft:the_end" (gym/dimension-of (gym/gym :arena-end))))

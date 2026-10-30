@@ -1194,8 +1194,11 @@
   (let [next (first (remove #(= :solid (path/classify world %)) lay))
         item (filler world 1)]
     (cond (and child (intent/done? child)) (intent/dissoc-intent world :intent/child)
-          (and child (intent/failed? child) (place/inside-player? world (:intent/cell child)))
-          (intent/dissoc-intent (assoc world :player/controls {}) :intent/child)
+          (and child
+               (intent/failed? child)
+               (place/inside-player? world (:intent/cell child))
+               (not (place/body-refusals-spent? i)))
+          (intent/dissoc-intent (place/count-body-refusal world) :intent/child)
           (and child (intent/failed? child))
           (refuse
            world

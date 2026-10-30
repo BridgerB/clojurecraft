@@ -499,7 +499,7 @@
   :problem/done
   "On every runner a RESULT line per bot and a RACE summary; a bot that reached the target is confirmed by the server (data get entity <name> Dimension reads the Nether); no cell granted twice."
   :problem/last-failure
-  "clojurecraft has never raced. steve raced five bots per runner from a forest grid and its best race put 22 of 140 bots into the Nether; ruststeve raced five per server on a shared box, lanes on land placed by RCON. Neither shared anything but the server between its bots, and neither had claims: lanes were fixed by the bot's index."
+  "clojurecraft has never raced. steve raced five bots per runner from a forest grid and its best race put 22 of 140 bots into the Nether; ruststeve raced five per server on a shared box, lanes on land placed by RCON. Neither shared anything but the server between its bots, and neither had claims: lanes were fixed by the bot's index. CHURN (issue #615), the bug class where the planner's choice and an intent's own end check disagree about one state, so the intent starts, ends in its first tick and is chosen again every 50 ms while the bot stands still: six times on 2026-10-29 (a cut restarted, :perch, :hold, a dragon :back-off, a ghast cover :walk, fights). plan-tick now counts it (:plan/churn, logged churn <kind> <target> xN every 20 repeats) and churn-guard checks the invariant over every recorded snapshot (probe, not the unit suite: it needs the captured worlds)."
   :problem/decisions
   ["One JVM per runner, a thread per bot (main/run-bot!): one bot's whole life is a function, so many run side by side, each its own atom; no process per bot"
    "The fixture claims for each bot, through the claims channel, and speaks to the bot only through its own bounded event queue"
