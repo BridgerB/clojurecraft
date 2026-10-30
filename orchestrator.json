@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-30T16:42:03.746Z",
+  "at" : "2026-10-30T16:48:39.935Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -33,6 +33,11 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
+    "number" : 610,
+    "title" : "Bot stops at cast-one: no-support",
+    "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
     "number" : 71,
     "title" : "Bot stops at portal-kit: boxed",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
@@ -45,11 +50,6 @@
   }, {
     "number" : 613,
     "title" : "Bot stops at flint-and-steel: no-support",
-    "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
-  }, {
-    "number" : 610,
-    "title" : "Bot stops at cast-one: no-support",
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
