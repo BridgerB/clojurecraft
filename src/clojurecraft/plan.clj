@@ -227,16 +227,17 @@
 
 (def churn-log-every "Repeats of one intent between two `churn` log lines." 20)
 
+(defn identity-of
+  "The kind, and the target and :intent/for when the intent has them, of intent i: what makes two
+   intents the same one for churn detection. Absent keys stay absent (an attribute is never nil)."
+  [i]
+  (select-keys i [:intent/kind :intent/target :intent/for]))
+
 (defn mark-ended
   "The world with :plan/ended set to the identity of intent i (kind, target, purpose) and the
    ms it ended at: what start-intent compares the next intent with (churn-count)."
   [world i]
-  (assoc world
-         :plan/ended
-         {:intent/kind (:intent/kind i)
-          :intent/target (:intent/target i)
-          :intent/for (:intent/for i)
-          :ended/at (:time/now world 0)}))
+  (assoc world :plan/ended (assoc (identity-of i) :ended/at (:time/now world 0))))
 
 (defn churn-count
   "How many times in a row the planner has started the same intent (kind, target and :intent/for)
@@ -259,12 +260,7 @@
    every churn-log-every repeats, a `churn <kind> <target> xN` line."
   [world i]
   (let [n (churn-count world i)]
-    (cond-> (assoc world
-                   :plan/churn
-                   {:intent/kind (:intent/kind i)
-                    :intent/target (:intent/target i)
-                    :intent/for (:intent/for i)
-                    :churn/n n})
+    (cond-> (assoc world :plan/churn (assoc (identity-of i) :churn/n n))
       (and (pos? n) (zero? (mod n churn-log-every)))
       (game/say (str "churn " (:intent/kind i) " " (:intent/target i) " x" n)))))
 

@@ -40,13 +40,16 @@
   120000)
 
 (defn violation
-  "Does the planner, over table, choose in world an intent that is done or failed after one tick of
-   running and is not of an instantaneous kind? Returns nil when not, or {:intent/kind
-   :intent/target :intent/for :churn/status :churn/reason :goal/id} of that intent. The world
-   is looked at as the planner would at its next tick: a running intent is dropped (abandon-intent)
-   when the cursor allows, the goals re-derived (plan/reach), the first intent of the row chosen
-   (plan/next-intent) started (plan/start-intent) and run once (intent/run) one tick on. Nil
-   too for a plan not :active, a state with no goal, a wait, or a cursor holding an item."
+  "Does the planner, over table, churn in world: choose an intent that is done or failed after one
+   tick of running, and, once it has ended (plan/finish-intent, plan/fail-intent), choose the same
+   one again (plan/same-choice?: same kind, target and :intent/for)? Returns nil when not, or
+   {:intent/kind :intent/target :intent/for :churn/status :churn/reason :goal/id} of that intent.
+   A walk already in reach of its target ends at once and is no churn when the next choice is the
+   dig; an instantaneous kind (instantaneous-kinds) is never reported. The world is looked at as
+   the planner would at its next tick: a running intent is dropped (plan/abandon-intent) when the
+   cursor allows, the goals re-derived (plan/reach), the first intent of the row chosen
+   (plan/next-intent), started (plan/start-intent) and run once (intent/run) one tick on. Nil too
+   for a plan not :active, a state with no goal, a wait, or a cursor holding an item."
   [world table]
   (let [i (:plan/intent world)
         free? (plan/can-abandon? world)
@@ -62,8 +65,15 @@
                 ran (intent/run (assoc started :time/now now)
                                 i
                                 {:event/kind :tick :event/now now :event/rand 0.5})
-                end (:plan/intent ran)]
-            (when (and (or (intent/done? end) (intent/failed? end))
+                end (:plan/intent ran)
+                ended? (or (intent/done? end) (intent/failed? end))
+                after
+                (when ended?
+                  (if (intent/done? end) (plan/finish-intent ran end) (plan/fail-intent ran end)))
+                goal2 (when after (plan/choose after table))
+                again (when goal2 (plan/next-intent after goal2 table))]
+            (when (and ended?
+                       (plan/same-choice? end again)
                        (not (contains? instantaneous-kinds (:intent/kind i))))
               {:goal/id (:goal/id goal)
                :intent/kind (:intent/kind i)

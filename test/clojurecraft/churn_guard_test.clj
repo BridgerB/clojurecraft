@@ -1,6 +1,8 @@
 (ns clojurecraft.churn-guard-test
   (:require [clojure.test :refer [deftest is testing]]
             [clojurecraft.churn-guard :as churn]
+            [clojurecraft.fixtures :as fx]
+            [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.plan :as plan]))
 
@@ -21,7 +23,9 @@
    :goal/kind kind})
 
 (def world
-  {:plan/status :active :plan/goals #{:churn-test} :player/pos [0.5 64.0 0.5] :time/now 1000})
+  (merge
+   (game/init fx/opts)
+   {:plan/status :active :plan/goals #{:churn-test} :player/pos [0.5 64.0 0.5] :time/now 1000}))
 
 (deftest a-choice-over-in-its-first-tick-is-a-violation
   (let [v (churn/violation world [(row :churn-done)])]
