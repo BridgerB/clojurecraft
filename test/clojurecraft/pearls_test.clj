@@ -2487,3 +2487,18 @@
     (is (= {:intent/kind :walk :intent/target [8 64 9] :intent/for :cover :intent/wall? true} i))
     (is (not (intent/arrived? w i 1.0)) "from the cell beside it, a walk for :cover is not over")
     (is (intent/arrived? (assoc w :player/pos [8.5 64.0 9.5]) i 0.0) "centred in the cell it is")))
+
+(deftest a-wander-comes-before-the-lookouts-of-a-burrow-with-an-angry-one-near
+  ;; gym plan run 40973173654 (pearls-stuck-f) jobs 2, 4, 5 and 6: the fold at 120, 200, 60 and 105
+  ;; minutes had wandering? and wander both true and next-intent :lookout or the walk to the mouth,
+  ;; because the lure, crowd and quarry branches come first
+  (let [angry (assoc (enderman [30.5 64.0 8.5]) :entity/creepy? true)
+        w (-> (wide (burrowed [8.5 61.0 8.5] {7 angry}))
+              (walked (take pearls/loiter-walks (cycle [[8 61 8] [10 61 8]]))))
+        i (plan/next-intent w row plan/goals)]
+    (is (pearls/wandering? w))
+    (is (some? (pearls/wander w)))
+    (is (not (pearls/menaced? w)) "the angry one is not at the feet")
+    (is (= [:walk :pearls] [(:intent/kind i) (:intent/for i)]) (pr-str i))
+    (is (not= [10 61 8] (:intent/target i)))
+    (is (>= (path/octile (intent/feet w) (:intent/target i)) pearls/roam-reach))))

@@ -1741,6 +1741,9 @@
         mouth (:pearls/mouth world)
         way-home {:intent/kind :walk :intent/target home :intent/for :shelter}
         mouth-walk (delay (shelter-walk world mouth))
+        wander-walk
+        (delay (when (and (not hurt?) (not swarmed?) (not (menaced? world)) (wandering? world))
+                 (wander world)))
         csite-walk (delay (shelter-walk world csite))
         site-walk (delay (shelter-walk world site))
         overworld-death? (and (pos? (:stats/deaths world 0))
@@ -1784,6 +1787,7 @@
                     (not (contains? (:plan/blacklist world #{}) eid)))))
       {:intent/kind :fight :intent/target eid :intent/for :pearls}
       meal meal
+      @wander-walk @wander-walk
       (or hurt? (and in? bid)) {:intent/kind :lookout :intent/for :pearls}
       (and in? aid (lure? world) @mouth-walk) @mouth-walk
       (and in? aid) {:intent/kind :lookout :intent/for :pearls}
