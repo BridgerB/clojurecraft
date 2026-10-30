@@ -74,8 +74,9 @@
           c (:intent/target i)]
       (is (= :dodge (:intent/kind i)))
       (is (some? c))
-      (is (>= (dodge/miss-at [fb] c) dodge/clear-radius)
-          "every line passes 2 blocks from the new cell")
+      (is (>= (dodge/miss-at [fb] c) dodge/worth-radius)
+          "the line passes farther from the new cell")
+      (is (> (dodge/miss-at [fb] c) (:miss (first (dodge/incoming w)))) "than from where it stood")
       (is (<= (+ dodge/move-base-ms (* dodge/move-ms-per-block (path/octile (intent/feet w) c)))
               (+ (:eta-ms (first (dodge/incoming w))) dodge/slack-ms))
           "it gets there in time"))))
@@ -86,7 +87,8 @@
         roof (into {} (for [x (range 3 14)] [[x 66 8] stone]))
         w (standing (:pos volley-1) {1 (:fb volley-1)} (merge walls roof))]
     (is (seq (dodge/incoming w)) "the line still passes the body")
-    (is (nil? (dodge/intent-for w)) "no cell beside the tunnel; none along it is clear in time")))
+    (is (nil? (dodge/intent-for w))
+        "no cell beside the tunnel; none along it passes farther in time")))
 
 (deftest a-fireball-in-flight-is-dodged-before-anything-but-fire-at-the-feet
   (let [w (standing (:pos volley-1) {1 (:fb volley-1)})

@@ -12,8 +12,10 @@
    direction in it.
 
    incoming lists the fireballs whose line passes the body within danger-radius; dodge-cell is the
-   nearest standable cell within two steps where every one of them passes clear-radius away and the
-   bot gets there before the first arrives; intent-for is the :dodge intent for it. The :dodge
+   standable cell within two steps the bot reaches before the first arrives where the nearest line
+   passes farthest, at worth-radius at least (a shot aimed dead at the body cannot be cleared by a
+   step or two: the best diagonal passes 1.3 away, where one in ten still hit); intent-for is the
+   :dodge intent for it. The :dodge
    executor walks straight at the cell (a route is planned for no more than a step or two) and ends
    centred in it or after dodge-ms."
   (:require [clojure.math :as math]
@@ -25,7 +27,7 @@
 (set! *warn-on-reflection* true)
 
 (def danger-radius 1.6)   ; blocks a fireball's line passes the body within to be a hit (none hit at 1.5 or more)
-(def clear-radius 2.0)    ; blocks every line must pass the dodge cell's body at
+(def worth-radius 1.15)   ; blocks the nearest line must pass a dodge cell's body at, least: of l race 2's fireballs 10 of 45 hit at 0.5 to 1, 7 of 68 at 1 to 1.5, none of 76 beyond
 (def horizon 24.0)        ; blocks from the bot within which a fireball is looked at
 (def vel-scale 5.5)       ; blocks a tick a fireball flies per unit of its packet velocity (|vel| 0.1 is 0.55)
 (def body-rise 0.9)       ; blocks over the feet the body's middle is
@@ -102,21 +104,23 @@
          (sort-by #(+ (path/octile feet %) (* 0.1 (abs (- (second %) y))))))))
 
 (defn dodge-cell
-  "The nearest cell (candidates) where every fireball's line passes the body at clear-radius or
-   more and the bot is there before the first of them would arrive (move time against its eta, with
-   slack-ms), or nil when none is: a tunnel one wide has none, and no dodge is tried."
+  "The cell (candidates) the bot reaches before the first fireball would arrive (move time against
+   its eta, with slack-ms) where the nearest line passes the body farthest, the nearer of equals,
+   and at worth-radius or more; nil when none is: a tunnel one wide has none, and no dodge is
+   tried."
   [world]
   (let [hits (incoming world)]
     (when (seq hits)
       (let [es (vals (fireballs world))
             first-eta (:eta-ms (first hits))
-            feet (intent/feet world)]
-        (some (fn [c]
-                (when (and (>= (miss-at es c) clear-radius)
-                           (<= (+ move-base-ms (* move-ms-per-block (path/octile feet c)))
-                               (+ first-eta slack-ms)))
-                  c))
-              (candidates world))))))
+            feet (intent/feet world)
+            in-time? (fn [c]
+                       (<= (+ move-base-ms (* move-ms-per-block (path/octile feet c)))
+                           (+ first-eta slack-ms)))
+            best (reduce (fn [acc c] (let [m (miss-at es c)] (if (> m (second acc)) [c m] acc)))
+                         [nil 0.0]
+                         (filter in-time? (candidates world)))]
+        (when (>= (second best) worth-radius) (first best))))))
 
 (defn intent-for
   "The :dodge intent for the cell dodge-cell finds, or nil."
