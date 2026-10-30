@@ -37,7 +37,7 @@
 (def starving-radius 48)              ; blocks a starving bot hunts within (a server shows animals this far, and the model populates three chunks round the player)
 (def strike-range 4.5)                ; blocks on the plane from which a hunt fights instead of walking: past a walk's reach (intent/reach 4), so a walk that arrived is never asked again
 (def candidates 3)                    ; nearest animals asked for a route, as the other acts ask
-(def provision-wanted 6)              ; edible items held before the portal is lit: the Nether has no animals, and health comes back there only from food held (issue #501: three raw meats were eaten to the bar's 18 before the portal, and the Nether leg began with none)
+(def provision-wanted 16)             ; edible items held before the portal is lit: the Nether has no animals, and health comes back there only from food held (issue #501: three raw meats were eaten to the bar's 18 before the portal, and the Nether leg began with none)
 (def early-forage-ms 120000)          ; ms the search goes on before the descent, from its first leg: the stone pickaxe is made on the surface among animals, and the iron kit's search still has its own forage-ms
 (def forage-ms 360000)                ; ms the search for animals goes on, from its first leg, however many legs: then the bot goes on with what it holds, never holding the portal up
 (def forage-reach 48)                 ; blocks the first two forage legs walk from the feet: a server shows animals this far (starving-radius)
