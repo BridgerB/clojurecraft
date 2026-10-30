@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-30T05:05:39.047Z",
+  "at" : "2026-10-30T05:15:18.532Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -31,6 +31,11 @@
     "number" : 135,
     "title" : "Bot stops at cast-one: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 531,
+    "title" : "Bot stops at ingots: boxed",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 617,
@@ -101,11 +106,6 @@
     "number" : 579,
     "title" : "Bot stops at ender-pearls: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
-    "number" : 531,
-    "title" : "Bot stops at ingots: boxed",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 526,
@@ -209,6 +209,10 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 531,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
     "issue" : 538,
     "move" : "leave",
     "why" : "hands-off label"
@@ -218,10 +222,6 @@
     "why" : "hands-off label"
   }, {
     "issue" : 579,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
-    "issue" : 531,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
