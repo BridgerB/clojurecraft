@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-30T03:49:49.306Z",
+  "at" : "2026-10-30T03:56:17.989Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -23,11 +23,6 @@
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : true
   }, {
-    "number" : 538,
-    "title" : "Bot stops at fortress: blocked",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 151,
     "title" : "Bot stops at flint-and-steel: not-picked-up",
     "labels" : [ "bot-failure", "real", "sim" ],
@@ -36,6 +31,11 @@
     "number" : 610,
     "title" : "Bot stops at cast-one: no-support",
     "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 538,
+    "title" : "Bot stops at fortress: blocked",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 135,
