@@ -1669,7 +1669,7 @@
 (def pearls-row {:goal/id :ender-pearls :goal/done? :never :goal/plan :flip-test})
 (def defend-row {:goal/id :defend :goal/done? :never :goal/plan :flip-test})
 
-(deftest a-back-off-is-not-cut-by-the-row-chosen-when-the-threat-flickers-out
+(deftest ^:eftest/synchronized a-back-off-is-not-cut-by-the-row-chosen-when-the-threat-flickers-out
   ;; pearls-travel-b job 1 (run 41134469333) 4.55-9.10 s: :back-off 885 (:defend) and :eat
   ;; (:ender-pearls) alternated every 50-100 ms as the hoglin crossed the defend radius, the
   ;; chosen row :defend, :ender-pearls, :defend ..., no meal and no back-off ever finished
@@ -1680,7 +1680,7 @@
     (is (= 1 (:plan/intents w)) "no intent started")
     (is (= {:control/forward true} (:player/controls w)) "its controls were not reset")))
 
-(deftest a-pocket-or-seal-is-not-taken-by-defend-when-a-new-attacker-is-named
+(deftest ^:eftest/synchronized a-pocket-or-seal-is-not-taken-by-defend-when-a-new-attacker-is-named
   ;; blaze-race-n job 6 (run 41105083204) 663.579-663.678: :seal (:blaze-rods) running, the attacker
   ;; became blaze 511, :defend was chosen and took it with :back-off 511, then :place; dead in 2 s
   (doseq [k [:pocket :seal :unseal :pocket-hold]]
@@ -1690,7 +1690,7 @@
       (is (= k (get-in w [:plan/intent :intent/kind])) (str k " goes on"))
       (is (= 1 (:plan/intents w))))))
 
-(deftest what-is-not-a-defence-is-still-preempted
+(deftest ^:eftest/synchronized what-is-not-a-defence-is-still-preempted
   (let [back {:intent/kind :back-off :intent/target 885 :intent/goal :defend}
         meal {:intent/kind :eat :intent/item :cooked_beef :intent/goal :ender-pearls}]
     (is (= :back-off
