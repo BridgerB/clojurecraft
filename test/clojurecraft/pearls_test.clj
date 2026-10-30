@@ -2529,7 +2529,7 @@
                   (memory/remember-column [2 -1] (col 12))
                   (memory/remember-column [2 -1] (col 12))
                   (memory/remember-column [2 -1] (col 14)))]
-        (is (= [[2 -1] 14] (map (juxt :forest/chunk :forest/count) (memory/warped-chunks w))))
+        (is (= [[[2 -1] 14]] (map (juxt :forest/chunk :forest/count) (memory/warped-chunks w))))
         (is (= 2 (count (d/q '[:find [?e ...] :where [?e :forest/chunk]] (:world/facts w))))
             "an unchanged reload adds no fact")))))
 
