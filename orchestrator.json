@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-30T15:40:42.757Z",
+  "at" : "2026-10-30T15:41:50.358Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -148,6 +148,11 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
+    "number" : 514,
+    "title" : "Bot stops at blaze-rods: no-footing",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
     "number" : 461,
     "title" : "Bot stops at portal: out-of-reach",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
@@ -268,6 +273,10 @@
     "why" : "hands-off label"
   }, {
     "issue" : 538,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 514,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
