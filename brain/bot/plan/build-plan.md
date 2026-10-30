@@ -8,6 +8,8 @@ status: verified
 lastUpdated: 2026-10-23
 verifiedAgainst: HEAD
 sourceRefs:
+  - src/clojurecraft/place.clj#defn body-refusals-spent?
+  - test/clojurecraft/build_test.clj#a-placement-the-body-keeps-refusing-fails-the-build
   - test/clojurecraft/build_test.clj#the-lava-hunt-passes-sources-it-is-already-beside
   - src/clojurecraft/build.clj#defn lit-entry
   - test/clojurecraft/build_test.clj#a-lit-portal-is-entered-without-rebuilding-or-fetching-tools
@@ -306,3 +308,4 @@ Entry walks directly into the portal when a route reaches it; otherwise `approac
 - **Blocks counted are the walls the cast opens, not its holes**: a cell dug as a hole is obsidian after (`blocks-needed`); counting it as a missing wall made every sealed-pool site ten blocks and none was chosen.
 - **No lava loaded at the sea's depth: tunnel away.** With no source in the 160 blocks the server sent and the feet already at `lava-depth`, `toward-lava` has neither a stair nor a tunnel target; `explore-lava` cuts level steps (`stone/tunnel-length` a call) along the plane axis away from the landing, so the chunks ahead load and the hunt asks again, instead of waiting `:no-site` out. Real race 39318301246 (issue #41, Clj_r21) stood at y -54 in deepslate with no lava loaded (`the-lava-hunt-tunnels-away-from-the-landing-when-no-lava-is-loaded`). A boxed feet cell takes the way out first, as a tunnel toward a source does.
 - **Out of the ground below the stand, the way is level.** `surface-climb?`: the feet below the stand's height, on the ground and already out (`stairs/out?`), so stairs up end the tick they start; `toward-stand` then takes the way it takes at the stand's height (a corner, a dig, a floor, a walk), not `to-height`. Sim snapshot R2-39-2 (issue #135): on a snowy slope at y 95 with the landing's stand a block higher and sixty blocks off, the build chose the stairs up, done at once, every tick of the window (`out-of-the-ground-below-the-stand-the-way-is-not-the-stairs-up`).
+- **A placement the body keeps refusing fails the intent** (`a-placement-the-body-keeps-refusing-fails-the-build`, issue #615): a placement the server refused with the bot's own cell in it (`refused-for-the-body?`) is tried again from a new stand, counted in `:intent/body-refusals` (`place/count-body-refusal`), and the sixth fails the build `:rejected` (`place/body-refusals-spent?`), so the planner chooses something else; `:stairs-up`'s `:lay` stage counts the same way. blaze-race-l geared job 5's `:seal` repeated one refusal about 6000 times in five hours.

@@ -1694,12 +1694,13 @@
         (game/say (str "build: swimming out never leaves the water, a new site, not "
                        (:intent/origin i))))
     (and child (intent/done? child))
-    (cond-> (intent/dissoc-intent world :intent/child :intent/rejections)
+    (cond-> (intent/dissoc-intent world :intent/child :intent/rejections :intent/body-refusals)
       (= :swim-out (:intent/kind child)) swum)
-    (and child (refused-for-the-body? world child))
-    ;; the server refused a block into the bot's own body: the stand was wrong, not the op
+    (and child (refused-for-the-body? world child) (not (place/body-refusals-spent? i)))
+    ;; the server refused a block into the bot's own body: the stand was wrong, not the op; the sixth
+    ;; refusal fails the build (place/body-refusals-spent?)
     (-> world
-        (assoc :player/controls {})
+        place/count-body-refusal
         (intent/dissoc-intent :intent/child)
         (game/say (str "build: placing " (:intent/cell child) " refused with the body in it")))
     (and child (intent/failed? child) (found-open? child))

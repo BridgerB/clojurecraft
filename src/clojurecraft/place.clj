@@ -52,6 +52,29 @@
   (let [[x0 y0 z0 x1 y1 z1] (physics/aabb (:player/pos world))]
     (and (< x0 (inc x)) (> x1 x) (< y0 (inc y)) (> y1 y) (< z0 (inc z)) (> z1 z))))
 
+(def max-body-refusals
+  "Placements of a running intent the server refused with the bot's own body in the cell, each
+   tried again from a new stand: 5, the sixth fails the intent."
+  5)
+
+(defn body-refusals-spent?
+  "Has the running intent i already had max-body-refusals placements refused for the body? It
+   must fail then, so the planner chooses something else: blaze-race-l geared job 5's :seal ran
+   five hours on `build: placing [2147 73 1757] refused with the body in it` about 6000 times,
+   and pearls-stuck-f job 3's :stairs-up five hours on one refused cell (issue #615)."
+  [i]
+  (>= (:intent/body-refusals i 0) max-body-refusals))
+
+(defn count-body-refusal
+  "The world with the running intent's :intent/body-refusals one more (body-refusals-spent?),
+   its controls stopped."
+  [world]
+  (-> world
+      (assoc :player/controls {})
+      (intent/assoc-intent :intent/body-refusals
+                           (inc (:intent/body-refusals (:plan/intent world) 0)))))
+
+
 (def sides [[1 0] [-1 0] [0 1] [0 -1]]) ; the four horizontal neighbours of a cell
 
 (defn solid-at?
