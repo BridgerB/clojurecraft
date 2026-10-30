@@ -225,9 +225,12 @@
   (inventory/item-count world (recipe/item-id seal-item)))
 
 (defn can-seal?
-  "Is the pocket at the feet sealable now: its cells (seal-cells) fewer than the filler held?"
-  [world {:pocket/keys [cell]}]
-  (let [n (count (seal-cells world cell))] (and (pos? n) (<= n (filler-held world)))))
+  "Is the pocket at the feet sealable now: its cells (seal-cells) fewer than the filler held, and
+   no seal of this site has failed (:pocket/unsealable?: a block that could not be laid, no
+   support or the body in the cell, is not tried every tick while a blaze hits)?"
+  [world {:pocket/keys [cell unsealable?]}]
+  (let [n (count (seal-cells world cell))]
+    (and (not unsealable?) (pos? n) (<= n (filler-held world)))))
 
 (defn ops
   "The site as build ops: a dig of each cell still to dig, from the stand, then (unless prepare?:
@@ -283,19 +286,23 @@
 
 (defn work-ops
   "One tick of the running intent i working ops (a vector), through build/work-op; done when every
-   one holds, and also when the work fails: a seal that cannot be laid is not the plan's failure."
-  [world i ops event]
-  (let [next (build/next-op world ops)]
-    (if (nil? next)
-      (-> world
-          (assoc :player/controls {})
-          intent/done)
-      (let [w (build/work-op world i next event)]
-        (if (intent/failed? (:plan/intent w))
-          (-> w
-              (assoc :player/controls {})
-              intent/done)
-          w)))))
+   one holds, and also when the work fails: a seal that cannot be laid is not the plan's failure.
+   A failure notes the held site :pocket/unsealable? (when on-fail? is true), so the seal is not
+   chosen again for it."
+  ([world i ops event] (work-ops world i ops event false))
+  ([world i ops event on-fail?]
+   (let [next (build/next-op world ops)]
+     (if (nil? next)
+       (-> world
+           (assoc :player/controls {})
+           intent/done)
+       (let [w (build/work-op world i next event)]
+         (if (intent/failed? (:plan/intent w))
+           (cond-> w
+             true (assoc :player/controls {})
+             (and on-fail? (:pocket/site w)) (assoc-in [:pocket/site :pocket/unsealable?] true)
+             true intent/done)
+           w))))))
 
 (defmethod intent/run :seal
   ;; {:intent/kind :seal}: place seal-item in every open side of the pocket at the feet, at the feet
@@ -311,7 +318,7 @@
                 (and site (empty? (:pocket/placed site)))
                 (assoc-in [:pocket/site :pocket/placed] cells))]
     (if (and site (seq cells) (= (:pocket/cell site) (intent/feet world)))
-      (work-ops world i (seal-ops (:pocket/cell site) cells) event)
+      (work-ops world i (seal-ops (:pocket/cell site) cells) event true)
       (-> world
           (assoc :player/controls {})
           intent/done))))

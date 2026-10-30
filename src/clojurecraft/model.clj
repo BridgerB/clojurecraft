@@ -452,6 +452,9 @@
    [:pocket/placed
     "inside :pocket/site: the cells a :seal placed blocks in, empty while the pocket is open; the pocket is sealed while every one is solid. An :unseal digs them and empties it"
     "after a :seal began"]
+   [:pocket/unsealable?
+    "inside :pocket/site: true once a :seal of the pocket failed to lay a block (no support, the body in the cell): not tried again for this site"
+    "after a :seal failed"]
    [:pocket/here?
     "inside :pocket/site: true for the cell the feet stand in, sealed in place when no way to a pocket was found (a :pocket never fails the plan)"
     "after a :pocket fell back"]

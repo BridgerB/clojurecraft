@@ -212,13 +212,18 @@
 (defn at-spawner?
   "Is the bot where it camps by spawner sp: the feet within spawner-reach of it and level-with?
    it (where a tunnel to it ends), or the eye within camp-range with the spawner walkable? (on its
-   floor, not in a tunnel beside its room) and its top-in-sight?. Gym blaze-fortress-b (run
+   floor, not in a tunnel beside its room) and its top-in-sight?, or the eye within
+   intent/reach of it with the spawner walkable? (a walk to it would be done in its first tick
+   and chosen again every tick: snapshot test/issues/514/b10231346-R4-21-1, the bot 3.96 from it;
+   made a tunnel to the stand instead in blaze-race-n, `:tunnel-to` ×23 for 11 minutes). Gym blaze-fortress-b (run
    38893941350) tunnelled to within 6 of its spawner, four blocks over it in the wall, and
    camped there ten minutes: the blazes the spawner made in its room below were out of reach,
    every run; blaze-fortress-c (run 38895759229) run 3 came up under its spawner, three below
    its floor, killed eight blazes from there and every rod lay on the floor over it."
   [world sp]
   (or (and (fortress/arrived? world sp spawner-reach) (level-with? world sp))
+      (and (<= (physics/distance (game/eye world) (physics/centre sp)) intent/reach)
+           (walkable? world sp))
       (and (<= (physics/distance (game/eye world) (physics/centre sp)) camp-range)
            (walkable? world sp)
            (top-in-sight? world sp))))
@@ -926,18 +931,8 @@
                  target)))
        set))
 
-(defn within-reach?
-  "Is the eye within intent/reach of the middle of spawner sp: a walk to it would be done in its
-   first tick (intent/arrived?), standing where at-spawner? is still false (the spawner's top out of
-   sight, the feet beyond spawner-reach)? Snapshot test/issues/514/b10231346-R4-21-1 (R4/21): the
-   bot at [540.5 57 201.5], the spawner at [544 57 203], 3.96 off, chose `:walk [544 57 203]` every
-   tick."
-  [world sp]
-  (<= (physics/distance (game/eye world) (physics/centre sp)) intent/reach))
-
 (defn to-spawner
-  "The way to spawner sp: a walk when it is walkable? and not already within reach of it
-   (within-reach?: that walk ends in its first tick and is chosen again), else a tunnel by the fortress's steps
+  "The way to spawner sp: a walk when it is walkable?, else a tunnel by the fortress's steps
    (which never open a cell beside lava nor the spawner itself), climbing first, to its stand
    (into it), or with no stand known to within spawner-reach of it. A target a tunnel already
    ended on this very cell for (stalled) is not chosen again: another stand, else the spawner
@@ -946,7 +941,7 @@
   (let [dead (stalled world)
         walk {:intent/kind :walk :intent/target sp}
         at (stand (update world :plan/blacklist (fnil into #{}) dead) sp)]
-    (cond (and (walkable? world sp) (not (within-reach? world sp))) walk
+    (cond (walkable? world sp) walk
           at
           {:intent/kind :tunnel-to
            :intent/target at
@@ -1192,7 +1187,9 @@
   "What a bot in its pocket does, or nil: SEALED, while it burns or is under hold-to, eat when the
    food is under what heals (meal) else a :pocket-hold, until the fire is out, the health is up and the
    last hit older than press-ms, then an :unseal; OPEN, a blaze in reach is struck (nil here) unless
-   the health is under low-health (then sealed out: it hits for 3.6 a second),
+   the health is under low-health (then sealed out: it hits for 3.6 a second; when the seal cannot
+   be laid, fought to the end: backing off flipped with the seal every 0.2 s, blaze-race-n jobs 2,
+   4 and 6),
    while it is pressed? and can seal a :seal (a block in the opening, at the feet and the head,
    over the head when it has no roof), else while it burns or is under hold-to a meal or a :pocket-hold
    in the open (no filler held). Blaze-race-j race 3 and race 1 held open and died in it."
@@ -1208,6 +1205,10 @@
             (and (reach-blaze world) (>= (:player/health world 20.0) low-health)) nil
             (and (or (pressed? world) (reach-blaze world)) (pocket/can-seal? world site))
             {:intent/kind :seal}
+            (reach-blaze world)
+            {:intent/kind :fight
+             :intent/target (first (reach-blaze world))
+             :intent/to-the-end? true}
             need? (or (meal world) {:intent/kind :pocket-hold :intent/heal-to (hold-to world)})))))
 
 (defn refuge-needed?

@@ -1390,12 +1390,10 @@
         walk {:intent/kind :walk :intent/target sp}
         d (physics/distance (game/eye w) (physics/centre sp))]
     (is (blaze/walkable? w sp))
-    (is (not (blaze/at-spawner? w sp)) "the feet beyond spawner-reach, its top not in sight")
+    (is (blaze/at-spawner? w sp)
+        "within reach of the eye with the spawner walkable: where it camps")
     (is (intent/arrived? w walk d) "the walk would be done at once")
-    (is (blaze/within-reach? w sp))
-    (is (not= walk (blaze/to-spawner w sp)) "so it is not the way chosen")
-    (testing "farther off the walk is still the way"
-      (is (= walk (blaze/to-spawner (assoc w :player/pos [3.5 64.0 3.5]) sp))))))
+    (is (not= walk (next-intent w)) "so the walk is not chosen: the act goes on to the camp")))
 
 (deftest a-rod-within-a-step-is-picked-up-before-the-next-swing
   ;; blaze-race-m race 4 (22 min, 26 kills): about 11 rods dropped and at most 4 held. Eight lay 2 to
@@ -1437,3 +1435,17 @@
       (let [low (assoc w :player/health 8.0 :player/on-fire? true)]
         (is (not (plan/interrupts? low row {:intent/kind :seal})))
         (is (not (plan/interrupts? low row {:intent/kind :pocket})))))))
+
+(deftest a-seal-that-cannot-be-laid-is-not-tried-again-and-the-cornered-bot-fights
+  ;; blaze-race-n jobs 2, 4 and 6: :pocket, :seal and :place flipped with :back-off every 0.2 to 0.5 s
+  ;; while burning, :place failed :no-support, and the bot died at 8 hits taken
+  (let [hand (entity :blaze [6.5 65.0 8.5] :entity/health 20.0)
+        w (-> (in-pocket (standing {7 hand}))
+              (assoc-in [:player/inventory 9] (item :cobblestone 62))
+              (assoc :player/health 8.0))
+        stuck (assoc-in w [:pocket/site :pocket/unsealable?] true)]
+    (is (= {:intent/kind :seal} (next-intent w)) "sealable: the seal")
+    (is (not (pocket/can-seal? stuck (:pocket/site stuck))))
+    (is
+     (= {:intent/kind :fight :intent/target 7 :intent/to-the-end? true} (next-intent stuck))
+     "not sealable, a blaze in reach, nowhere to back off to: fought to the end, not backed away from")))
