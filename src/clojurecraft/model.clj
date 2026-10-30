@@ -471,6 +471,9 @@
    [:intent/rejections
     "digs of the current stair (or level step, or a build's op) the server did not do, each dug again; stairs/max-rejections fail :rejected"
     "stairs-down or a build, after a child dig rejected"]
+   [:intent/body-refusals
+    "placements of the running intent the server refused with the bot's own body in the cell, each tried again from a new stand; place/max-body-refusals fail it :rejected (issue #615)"
+    "a build or stairs-up, after a placement refused for the body"]
    [:intent/cells
     "the cells the current stair opens, top first: three, or four for a stair cut for a taller body (:intent/tall)"
     "stairs-down, while a stair is cut"]
