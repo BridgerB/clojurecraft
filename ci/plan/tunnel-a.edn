@@ -1,0 +1,13 @@
+;; Issue #262: the tunnel to a spawner keeps its stand. Race lane 4 (run 40980342194) s2 r08 and r09
+;; sent :tunnel-to [543 57 203] and [544 57 203] by turns every 12 s (539 and 681 intents, none done);
+;; the stand is now the running tunnel's target, or a done one's, while it is open. Judged on the
+;; bot reaching the spawner and on rods held.
+{:plans/label "tunnel-a"
+ :plans/jobs 6
+ :plans/issue 262
+ :plans/experiments [{:exp/name "blaze-fortress-race"
+                      :exp/kind :gym
+                      :exp/goal "blaze-fortress-race"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 1800}]}
