@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-30T22:45:55.855Z",
+  "at" : "2026-10-30T22:48:09.688Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -35,11 +35,6 @@
   }, {
     "number" : 623,
     "title" : "Bot stops at blaze-rods: no-support",
-    "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
-  }, {
-    "number" : 610,
-    "title" : "Bot stops at cast-one: no-support",
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
@@ -100,6 +95,11 @@
   }, {
     "number" : 612,
     "title" : "Bot stops at ender-pearls: no-support",
+    "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 610,
+    "title" : "Bot stops at cast-one: no-support",
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
