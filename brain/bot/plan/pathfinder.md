@@ -8,6 +8,8 @@ status: verified
 lastUpdated: 2026-10-18
 verifiedAgainst: HEAD
 sourceRefs:
+  - src/clojurecraft/path.clj#def wary-extra
+  - test/clojurecraft/path_test.clj#a-short-detour-round-crimson-ground-beats-a-way-through-it
   - src/clojurecraft/path.clj#defn plan
   - src/clojurecraft/path.clj#defn on-ice?
   - test/clojurecraft/path_test.clj#a-bot-on-a-sheet-of-ice-walks-off-it-but-never-onto-it
@@ -65,6 +67,8 @@ The `:surface` goal is registered in `stairs`: `out?` requires usable open groun
 3. `:found` when a node satisfies the goal. `:partial` when `max-nodes` (default 6000) expansions are spent, `:none` when the open set empties; both return the route to the nearest node seen, which is what a walker should follow before planning again as chunks load.
 4. `:unknown` cells are never floor and never clear, so a route stops at the loaded frontier; a goal in an unloaded chunk comes back `:none` or `:partial` toward it.
 5. On the lake fixture a plan takes 3-13 ms, well inside one 50 ms tick, so the walk plans synchronously in its tick.
+
+Wary ground: entering a cell whose floor or itself is crimson nylium, crimson fungus or roots, or a nether wart block costs `wary-extra` (1.0) more (`wary-cost`, added in the search next to the trap factor), so a short detour round a crimson patch beats a way through it and a patch with no way round is still crossed (gym run 41134469333: both finished jobs died crossing to a warped forest).
 
 ## What the tests hold
 - Five fixtures: a cliff is descended by its three-step stair, never the six-block drop; a trench is crossed at its ramp and is `:none` without it; a lake is skirted on its dry strip and never waded; a hill is climbed by four jumps and descended by four drops; a one-high gap is `:none`.
