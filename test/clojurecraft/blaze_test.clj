@@ -1241,6 +1241,7 @@
   (let [hand (entity :blaze [6.5 65.0 8.5] :entity/health 20.0)
         w (-> (in-pocket (standing {7 hand}))
               (assoc-in [:player/inventory 9] (item :cobblestone 62))
+              (assoc-in [:player/inventory 10] (item :iron_pickaxe 1))
               (assoc :player/health 8.0))]
     (is (= {:intent/kind :seal} (next-intent w)))
     (testing "healthy it is struck, as before"
@@ -1270,7 +1271,10 @@
   ;; reach of 3.2, 20 hp to 1.6 in 18 s) and race 1 at 17:32:51 (:pocket-hold, nearest 5.4, 37 s, hp 20 to
   ;; 0.5): holding open under fire through the opening was the death
   (let [line (entity :blaze [4.5 65.0 8.5] :entity/health 20.0)
-        loaded (fn [w] (assoc-in w [:player/inventory 9] (item :cobblestone 62)))
+        loaded (fn [w]
+                 (-> w
+                     (assoc-in [:player/inventory 9] (item :cobblestone 62))
+                     (assoc-in [:player/inventory 10] (item :iron_pickaxe 1))))
         base (-> (standing {7 line})
                  in-pocket
                  loaded)
@@ -1442,6 +1446,7 @@
   (let [hand (entity :blaze [6.5 65.0 8.5] :entity/health 20.0)
         w (-> (in-pocket (standing {7 hand}))
               (assoc-in [:player/inventory 9] (item :cobblestone 62))
+              (assoc-in [:player/inventory 10] (item :iron_pickaxe 1))
               (assoc :player/health 8.0))
         stuck (assoc-in w [:pocket/site :pocket/unsealable?] true)]
     (is (= {:intent/kind :seal} (next-intent w)) "sealable: the seal")
@@ -1451,3 +1456,35 @@
           "not sealable, a blaze in reach: combat/cover, a block laid or a pillar, never a fight")
       (is (not= :fight (:intent/kind i)) "no fight under danger-health (#577)")
       (is (not= :back-off (:intent/kind i)) "and not the back-off that flipped with the seal"))))
+
+(deftest a-fight-that-cannot-reach-and-a-pickup-that-found-nothing-do-not-end-the-plan
+  ;; blaze-race-p job 6 (6m24s, health 16, fifteen beef, full iron): :collect-drops :not-picked-up
+  ;; twice and :fight 537 :unreachable were three strikes, and the plan failed :unreachable
+  (let [active (plan/begin (standing {}) {:go/goals [:blaze-rods]} plan/goals)
+        failed (fn [w kind reason]
+                 (plan/fail-intent w
+                                   {:intent/kind kind
+                                    :intent/goal :blaze-rods
+                                    :intent/target (if (= kind :fight) 537 [10 64 9])
+                                    :intent/reason reason}))
+        w (-> active
+              (failed :collect-drops :not-picked-up)
+              (failed :collect-drops :not-picked-up)
+              (failed :fight :unreachable))]
+    (is (zero? (:plan/attempts w)) "no strike against the plan")
+    (is (not= :failed (:plan/status w)))
+    (is (contains? (:plan/blacklist w) 537) "the blaze is left alone")
+    (testing "another kind of the row still counts"
+      (is (= 1 (:plan/attempts (failed active :walk :stuck)))))))
+
+(deftest sealed-in-with-no-pickaxe-is-never-chosen
+  ;; blaze-race-p job 2: :unseal dug four placed blocks at 10000 ms each (44 s) with no pickaxe in
+  ;; the inventory while fireballs came through the half-open pocket
+  (let [hand (entity :blaze [4.5 65.0 8.5] :entity/health 20.0)
+        w (-> (in-pocket (standing {7 hand}))
+              (assoc-in [:player/inventory 9] (item :cobblestone 62))
+              (assoc :player/on-fire? true))]
+    (is (not= :seal (:intent/kind (next-intent w))) "filler held, no pickaxe: no seal")
+    (is (= :seal
+           (:intent/kind (next-intent (assoc-in w [:player/inventory 10] (item :iron_pickaxe 1)))))
+        "with one it is")))

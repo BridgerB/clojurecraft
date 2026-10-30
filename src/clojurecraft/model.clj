@@ -452,6 +452,9 @@
    [:pocket/placed
     "inside :pocket/site: the cells a :seal placed blocks in, empty while the pocket is open; the pocket is sealed while every one is solid. An :unseal digs them and empties it"
     "after a :seal began"]
+   [:pocket/seal-failed-at
+    "ms (:time/now) of the last :seal that failed to lay a block, anywhere: no seal is tried for a minute after it (pocket/seal-retry-ms)"
+    "after a :seal failed"]
    [:pocket/unsealable?
     "inside :pocket/site: true once a :seal of the pocket failed to lay a block (no support, the body in the cell): not tried again for this site"
     "after a :seal failed"]

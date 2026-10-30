@@ -1208,6 +1208,8 @@
             {:intent/kind :seal}
             (reach-blaze world)
             (let [[_ e] (reach-blaze world) c (combat/cover world e)] (when (:intent/kind c) c))
+            (and (pressed? world) (watcher world))
+            (let [[_ e] (watcher world) c (combat/cover world e)] (when (:intent/kind c) c))
             need? (or (meal world) {:intent/kind :pocket-hold :intent/heal-to (hold-to world)})))))
 
 (defn refuge-needed?

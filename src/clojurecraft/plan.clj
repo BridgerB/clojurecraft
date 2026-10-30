@@ -93,6 +93,13 @@
 (def landing-timeout 30000)           ; a :go that names a landing waits this long for the bot to be there
 (def landing-reach 2.0)               ; horizontal distance from :go/at that counts as landed
 
+(def uncounted-kinds
+  "Intents of the blaze row (:intent/goal :blaze-rods) whose failure is no strike against the plan:
+   a fight that cannot reach its blaze and a pickup that found no rod. Each blacklists its target,
+   so the row goes on without it (blaze-race-p job 6: two :collect-drops :not-picked-up and a
+   :fight :unreachable ended the plan at 6m24s, health 16, fifteen beef and full iron)."
+  #{:fight :collect-drops})
+
 (def max-attempts 3)                  ; consecutive failed intents before the plan fails
 (def max-unwalkable 12)               ; consecutive walks that failed :no-path before the plan fails
 (def wait-ticks 400)                  ; a goal that has nothing to do for this many planner ticks has failed: 20 s at 20 ticks a second
@@ -315,7 +322,9 @@
   [world i]
   (let [unwalkable? (and (contains? #{:walk :end-portal} (:intent/kind i))
                          (= :no-path (:intent/reason i)))
-        attempts (cond-> (:plan/attempts world 0) (not unwalkable?) inc)
+        uncounted? (and (= :blaze-rods (:intent/goal i))
+                        (contains? uncounted-kinds (:intent/kind i)))
+        attempts (cond-> (:plan/attempts world 0) (not (or unwalkable? uncounted?)) inc)
         unwalkable (if unwalkable? (inc (:plan/unwalkable world 0)) 0)
         feet (when (:player/pos world) (intent/feet world))]
     (-> world

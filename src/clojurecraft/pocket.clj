@@ -11,7 +11,8 @@
    cell (dig-in), its other five faces solid, loaded and not falling, never beside lava (every
    cell round the two dug is a block, so nothing flows in). plan is the site as build ops: the
    digs, then standing in the cell. The :pocket intent works that plan the way :build does."
-  (:require [clojurecraft.blocks :as blocks]
+  (:require [clojure.string :as str]
+            [clojurecraft.blocks :as blocks]
             [clojurecraft.build :as build]
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
@@ -224,13 +225,33 @@
   [world]
   (inventory/item-count world (recipe/item-id seal-item)))
 
+(def seal-retry-ms 60000) ; ms after a seal failed anywhere before another is tried
+
+(defn pickaxe-held?
+  "Is a pickaxe in the inventory? A seal is opened by digging its blocks, ten seconds a block by
+   hand: blaze-race-p job 2 was sealed in without one, `:unseal` dug four placed blocks for 44 s
+   (10000 ms each) while fireballs came through the half-open pocket, and burned to death."
+  [world]
+  (boolean (some (fn [{:keys [item]}]
+                   (some-> (recipe/item-name item)
+                           name
+                           (str/ends-with? "_pickaxe")))
+                 (vals (:player/inventory world)))))
+
 (defn can-seal?
-  "Is the pocket at the feet sealable now: its cells (seal-cells) fewer than the filler held, and
-   no seal of this site has failed (:pocket/unsealable?: a block that could not be laid, no
-   support or the body in the cell, is not tried every tick while a blaze hits)?"
+  "Is the pocket at the feet sealable now: its cells (seal-cells) fewer than the filler held, a
+   pickaxe to open it again (pickaxe-held?), no seal of this site failed (:pocket/unsealable?) and
+   none anywhere within seal-retry-ms (:pocket/seal-failed-at: a block that could not be laid, no
+   support or the body in the cell, is not tried at the next cell either while a blaze hits:
+   blaze-race-p job 3 sealed, failed :no-support, walked 26 blocks and sealed again)?"
   [world {:pocket/keys [cell unsealable?]}]
-  (let [n (count (seal-cells world cell))]
-    (and (not unsealable?) (pos? n) (<= n (filler-held world)))))
+  (let [n (count (seal-cells world cell))
+        failed (:pocket/seal-failed-at world)]
+    (and (not unsealable?)
+         (or (nil? failed) (> (- (:time/now world 0) failed) seal-retry-ms))
+         (pickaxe-held? world)
+         (pos? n)
+         (<= n (filler-held world)))))
 
 (defn ops
   "The site as build ops: a dig of each cell still to dig, from the stand, then (unless prepare?:
@@ -301,6 +322,7 @@
            (cond-> w
              true (assoc :player/controls {})
              (and on-fail? (:pocket/site w)) (assoc-in [:pocket/site :pocket/unsealable?] true)
+             on-fail? (assoc :pocket/seal-failed-at (:time/now w 0))
              true intent/done)
            w))))))
 

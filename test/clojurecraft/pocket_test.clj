@@ -137,7 +137,15 @@
       (is (= [[7 64 8] [7 65 8]] (map :build/pos (pocket/seal-ops [8 64 8] [[7 64 8] [7 65 8]]))))
       (is (= [[7 65 8] [7 64 8]]
              (map :build/pos (pocket/unseal-ops [8 64 8] [[7 64 8] [7 65 8]])))))
-    (testing "filler: sealable only with the blocks held"
+    (testing "filler and a pickaxe to open it again: sealable only with both held"
       (is (not (pocket/can-seal? w site)))
-      (let [w (assoc-in w [:player/inventory 9] {:item (recipe/item-id :cobblestone) :count 62})]
-        (is (pocket/can-seal? w site))))))
+      (let [w (assoc-in w [:player/inventory 9] {:item (recipe/item-id :cobblestone) :count 62})
+            picked
+            (assoc-in w [:player/inventory 10] {:item (recipe/item-id :iron_pickaxe) :count 1})]
+        (is (not (pocket/can-seal? w site)) "no pickaxe: sealed in, ten seconds a block by hand")
+        (is (pocket/can-seal? picked site))
+        (testing "none within a minute of a seal that failed, anywhere"
+          (is (not (pocket/can-seal? (assoc picked :pocket/seal-failed-at 1000 :time/now 30000)
+                                     site)))
+          (is (pocket/can-seal? (assoc picked :pocket/seal-failed-at 1000 :time/now 70000)
+                                site)))))))
