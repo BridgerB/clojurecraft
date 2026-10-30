@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-30T21:18:34.375Z",
+  "at" : "2026-10-30T21:29:31.374Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -46,6 +46,11 @@
     "number" : 538,
     "title" : "Bot stops at fortress: blocked",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 526,
+    "title" : "Bot stops at blaze-rods: blocked",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 71,
@@ -153,11 +158,6 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 526,
-    "title" : "Bot stops at blaze-rods: blocked",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 461,
     "title" : "Bot stops at portal: out-of-reach",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
@@ -253,6 +253,10 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 526,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
     "issue" : 71,
     "move" : "leave",
     "why" : "hands-off label"
@@ -278,10 +282,6 @@
     "why" : "hands-off label"
   }, {
     "issue" : 579,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
-    "issue" : 526,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
