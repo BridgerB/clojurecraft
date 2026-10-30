@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-30T04:15:49.217Z",
+  "at" : "2026-10-30T04:17:59.162Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -42,6 +42,11 @@
     "title" : "Bot stops at flint-and-steel: stuck",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : true
+  }, {
+    "number" : 617,
+    "title" : "Bot stops at blaze-rods: no-log",
+    "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
   }, {
     "number" : 613,
     "title" : "Bot stops at flint-and-steel: no-support",
