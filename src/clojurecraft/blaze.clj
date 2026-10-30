@@ -166,14 +166,20 @@
   [world sp]
   (let [bl (:plan/blacklist world #{})] (>= (count (filter bl (cells-beside sp))) stands-tried)))
 
+(declare stand)
+
 (defn nearest-spawner
   "The spawner on record in the bot's dimension nearest the eye, within spawner-radius and not
-   blacklisted (no walk nor tunnel reached it) nor given-up?, or nil."
+   given-up?, or nil; one blacklisted (a walk to it failed) is kept while a stand beside it is
+   open, to be tunnelled to. Race lane 4 (run 40980342194) s1 r15, at its fortress, had
+   `:walk [544 57 203]` fail :no-path with the spawner a block off, lost the spawner to the
+   blacklist and searched far spirals for 4 hours ([-330 88 483] ...); s1 r16 `:walk failed :stuck`
+   there; s2 r08 and r09 never arrived."
   [world]
   (let [bl (:plan/blacklist world #{})]
     (memory/nearest-of (game/eye world)
                        spawner-radius
-                       (remove #(or (bl %) (given-up? world %))
+                       (remove #(or (and (bl %) (nil? (stand world %))) (given-up? world %))
                                (memory/positions-now world [spawner])))))
 
 (defn level-with?
@@ -183,9 +189,11 @@
 
 (defn walkable?
   "Can the bot walk to spawner sp: level-with? it (a route judges the plane only,
-   intent/routable?) and a route to it."
+   intent/routable?), a route to it, and no walk to it failed (blacklisted)."
   [world sp]
-  (and (level-with? world sp) (intent/routable? world {:intent/kind :walk :intent/target sp})))
+  (and (level-with? world sp)
+       (not (contains? (:plan/blacklist world #{}) sp))
+       (intent/routable? world {:intent/kind :walk :intent/target sp})))
 
 (defn top-in-sight?
   "Is the line from the eye to the point a block over spawner sp's centre, where its blazes
@@ -497,6 +505,10 @@
   ;; a tunnel to the spawner or on the search first makes the pickaxe it lacks from what is held
   ;; (the :fortress row's rule): sim race 39742401798 R4-6-2 (issue #504) tunnelled 25 blocks in
   ;; fifteen minutes by hand, each :no-pickaxe step ended the tunnel and the act asked again
+  ;; then takes the table it placed along, as the :fortress row does: race lane 4 (run 40980342194)
+  ;; s1 r15 made its pickaxe at a table, tunnelled on and left it, held 598 cobblestone and 13 sticks
+  ;; with no table when the pickaxe broke, and dug 4,100 netherrack by hand at 2.05 s each (8 of 9
+  ;; stuck bots dug by hand)
   [world goal table]
   (let [[heid] (at-hand-blaze world)
         [beid] (quarry world)
@@ -506,6 +518,10 @@
         wary (delay (when (wary? world) (warily world)))
         away (delay (when (outnumbered? world) (hide world)))
         fire (delay (when (and sp (at-spawner? world sp)) (put-out world sp)))
+        table-along (delay (when (or (nil? sp) (not (at-spawner? world sp)))
+                             (or
+                              (intent/chain-next (:plan/last world) :take-table make/table-drops {})
+                              (make/take-table-along world))))
         pick (delay (when (build/pickaxe-at-hand? world)
                       (make/decide world (assoc goal :goal/provides {:tag/pickaxes 1}) table)))]
     (cond (not= dimension/nether (dimension/of world)) {:plan/wait :other-dimension}
@@ -521,6 +537,7 @@
           beid {:intent/kind :fight :intent/target beid :intent/yield? true}
           @fire @fire
           (and (or (nil? sp) (not (at-spawner? world sp))) @pick) @pick
+          @table-along @table-along
           (and sp (not (at-spawner? world sp))) (to-spawner world sp)
           sp {:intent/kind :camp :intent/spawner sp}
           :else (or (search world) {:plan/wait :no-blaze}))))
