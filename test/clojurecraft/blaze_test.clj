@@ -432,7 +432,8 @@
 (deftest a-rod-by-the-spawner-is-not-gone-for-under-fire
   ;; sim R1/1 (probe 40779151074): :collect-drops [317 77 238] at 13.4, 13.6 and 8.0 health with
   ;; blazes alive; each was hit, two died
-  (let [rod (entity :item [10.5 64.0 9.5] :entity/item (recipe/item-id :blaze_rod))
+  ;; a rod farther than grab-range: one within a step is picked up from low-health (near-rod)
+  (let [rod (entity :item [14.5 64.0 9.5] :entity/item (recipe/item-id :blaze_rod))
         watchers {8 (entity :blaze [13.5 65.0 8.5] :entity/health 20.0)}
         w (assoc (standing (assoc watchers 7 rod)) :player/health 13.4)]
     (is (seq (blaze/watchers w)))
