@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-30T04:20:09.419Z",
+  "at" : "2026-10-30T04:21:16.571Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -21,11 +21,6 @@
     "number" : 611,
     "title" : "Bot stops at portal-kit: no-support",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : true
-  }, {
-    "number" : 151,
-    "title" : "Bot stops at flint-and-steel: not-picked-up",
-    "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
     "number" : 610,
@@ -38,10 +33,10 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 348,
-    "title" : "Bot stops at flint-and-steel: stuck",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : true
+    "number" : 151,
+    "title" : "Bot stops at flint-and-steel: not-picked-up",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
   }, {
     "number" : 617,
     "title" : "Bot stops at blaze-rods: no-log",
@@ -128,6 +123,11 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
+    "number" : 348,
+    "title" : "Bot stops at flint-and-steel: stuck",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : true
+  }, {
     "number" : 342,
     "title" : "Bot stops at furnace: boxed",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
@@ -202,14 +202,9 @@
     "why" : "hands-off label"
   }, {
     "issue" : 611,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment"
+    "move" : "assign"
   }, {
     "issue" : 135,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
-    "issue" : 348,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -234,6 +229,10 @@
     "why" : "hands-off label"
   }, {
     "issue" : 461,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 348,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -278,11 +277,6 @@
     "why" : "hands-off label"
   } ],
   "log" : [ {
-    "issue" : 593,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment",
-    "at" : "2026-10-28T14:30:23.356Z"
-  }, {
     "issue" : 593,
     "move" : "assign",
     "at" : "2026-10-28T14:31:31.298Z"
@@ -1628,5 +1622,9 @@
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
     "at" : "2026-10-30T04:20:09.419Z"
+  }, {
+    "issue" : 611,
+    "move" : "assign",
+    "at" : "2026-10-30T04:21:16.571Z"
   } ]
 }
