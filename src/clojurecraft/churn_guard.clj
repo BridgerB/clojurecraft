@@ -39,7 +39,7 @@
   "Simulated ms a snapshot is played on at most: the checks need the states, not the run."
   120000)
 
-(defn violation
+(defn violation-with
   "Does the planner, over table, churn in world: choose an intent that is done or failed after one
    tick of running, and, once it has ended (plan/finish-intent, plan/fail-intent), choose the same
    one again (plan/same-choice?: same kind, target and :intent/for)? Returns nil when not, or
@@ -49,15 +49,17 @@
    the planner would at its next tick: a running intent is dropped (plan/abandon-intent) when the
    cursor allows, the goals re-derived (plan/reach), the first intent of the row chosen
    (plan/next-intent), started (plan/start-intent) and run once (intent/run) one tick on. Nil too
-   for a plan not :active, a state with no goal, a wait, or a cursor holding an item."
-  [world table]
+   for a plan not :active, a state with no goal, a wait, or a cursor holding an item. next-fn plans
+   the next intent of a goal as plan/next-intent does (a test passes its own, the registry stays
+   the shipped one)."
+  [world table next-fn]
   (let [i (:plan/intent world)
         free? (plan/can-abandon? world)
         world (cond-> world (and i free?) (plan/abandon-intent i :interrupted))]
     (when (and (= :active (:plan/status world)) (or free? (nil? i)) (:player/pos world))
       (let [world (plan/reach world table)
             goal (plan/choose world table)
-            next (when goal (plan/next-intent world goal table))]
+            next (when goal (next-fn world goal table))]
         (when (and next (not (:plan/wait next)))
           (let [started (plan/start-intent world (assoc next :intent/goal (:goal/id goal)))
                 now (+ (:time/now world 0) physics/tick-ms)
@@ -71,7 +73,7 @@
                 (when ended?
                   (if (intent/done? end) (plan/finish-intent ran end) (plan/fail-intent ran end)))
                 goal2 (when after (plan/choose after table))
-                again (when goal2 (plan/next-intent after goal2 table))]
+                again (when goal2 (next-fn after goal2 table))]
             (when (and ended?
                        (plan/same-choice? end again)
                        (not (contains? instantaneous-kinds (:intent/kind i))))
@@ -81,6 +83,11 @@
                :intent/for (:intent/for i)
                :churn/status (:intent/status end)
                :churn/reason (:intent/reason end)})))))))
+
+(defn violation
+  "violation-with over the shipped planner (plan/next-intent): the churn of world, or nil."
+  [world table]
+  (violation-with world table plan/next-intent))
 
 (defn state-summary
   "A world in a few words, for a CHURN line: simulated ms, feet, health and the intent running."

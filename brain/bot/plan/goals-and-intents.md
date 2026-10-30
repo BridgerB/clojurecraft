@@ -24,7 +24,7 @@ sourceRefs:
   - test/clojurecraft/plan_test.clj#a-walk-with-no-way-on-fails-no-path
   - src/clojurecraft/plan.clj#defn choose
   - src/clojurecraft/plan.clj#defn note-churn
-  - src/clojurecraft/churn_guard.clj#defn violation
+  - src/clojurecraft/churn_guard.clj#defn violation-with
   - test/clojurecraft/churn_guard_test.clj#a-choice-over-in-its-first-tick-is-a-violation
   - src/clojurecraft/plan.clj#defn through
   - src/clojurecraft/plan.clj#defn current-until

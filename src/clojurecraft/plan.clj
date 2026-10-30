@@ -253,7 +253,9 @@
                      (= (:intent/target m) (:intent/target i))
                      (= (:intent/for m) (:intent/for i))))
         repeat? (and e (same? e) (<= (- (:time/now world 0) (:ended/at e)) physics/tick-ms))]
-    (if repeat? (if (same? (:plan/churn world)) (inc (:churn/n (:plan/churn world))) 1) 0)))
+    (cond (not repeat?) 0
+          (same? (:plan/churn world)) (inc (:churn/n (:plan/churn world)))
+          :else 1)))
 
 (defn note-churn
   "The world with :plan/churn updated for the intent i about to start (churn-count), and, once

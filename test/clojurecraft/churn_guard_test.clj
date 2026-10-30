@@ -7,7 +7,8 @@
             [clojurecraft.plan :as plan]))
 
 ;; A goal whose intent is chosen in a state its own end check already calls done: the CHURN class.
-(defmethod plan/next-intent :churn-test
+(defn next-fn
+  "A planner that always answers the goal's own kind, aimed at one cell."
   [_ goal _]
   {:intent/kind (:goal/kind goal) :intent/target [1 64 1]})
 (defmethod intent/run :churn-done [world _ _] (intent/done world))
@@ -15,12 +16,7 @@
 
 (defn row
   [kind]
-  {:goal/id :churn-test
-   :goal/target? true
-   :goal/priority 1
-   :goal/done? :never
-   :goal/plan :churn-test
-   :goal/kind kind})
+  {:goal/id :churn-test :goal/target? true :goal/priority 1 :goal/done? :never :goal/kind kind})
 
 (def world
   (merge
@@ -28,17 +24,18 @@
    {:plan/status :active :plan/goals #{:churn-test} :player/pos [0.5 64.0 0.5] :time/now 1000}))
 
 (deftest a-choice-over-in-its-first-tick-is-a-violation
-  (let [v (churn/violation world [(row :churn-done)])]
+  (let [v (churn/violation-with world [(row :churn-done)] next-fn)]
     (is (= :churn-done (:intent/kind v)))
     (is (= :done (:churn/status v)))
     (is (= :churn-test (:goal/id v)))))
 
-(deftest a-choice-that-takes-time-is-not (is (nil? (churn/violation world [(row :churn-slow)]))))
+(deftest a-choice-that-takes-time-is-not
+  (is (nil? (churn/violation-with world [(row :churn-slow)] next-fn))))
 
 (deftest an-instantaneous-kind-is-not
   (let [place-row (row :place)]
     (is (contains? churn/instantaneous-kinds :place))
-    (is (nil? (churn/violation world [place-row])))))
+    (is (nil? (churn/violation-with world [place-row] next-fn)))))
 
 (deftest a-repeat-the-tick-after-it-ended-is-counted-and-logged
   (let [i {:intent/kind :walk :intent/target [1 64 1] :intent/for :cover}
