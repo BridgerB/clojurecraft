@@ -742,13 +742,13 @@
              {:control/look (look-away world
                                        (physics/look-at (game/eye world) (:entity/pos e)))}))))
 
-(def rest-ms 5000)                    ; a :rest hands back to the planner this often
+(def rest-ms 5000)                    ; a :dragon-rest hands back to the planner this often
 
-(defmethod intent/run :rest
-  ;; {:intent/kind :rest}: stand where the feet are, the look turned from an enderman's eyes
+(defmethod intent/run :dragon-rest
+  ;; {:intent/kind :dragon-rest}: stand where the feet are, the look turned from an enderman's eyes
   ;; (look-away), until the health is back to perch-line or rest-ms have passed. A wait
   ;; (:plan/wait :low-health) fails the plan after wait-ticks, 20 s: gym chain-w20 chain run 1
-  ;; (plan run 40928784091) failed :low-health at 31m9s with time left; a rest is an intent, run
+  ;; (plan run 40928784091) failed :low-health at 31m9s with time left; a rest is an intent of its own kind (:rest is the blaze row's, with other ends), run
   ;; and replaced, never the wait that counts toward failing
   [world {:intent/keys [since] :as i} _]
   (let [now (:time/now world)
@@ -1009,7 +1009,7 @@
    at ten, then four and a half health, and the dragon slew them): a meal first when
    food is held and the bar can take one, in shelter outside the basin (sheltered?) only;
    not yet in shelter, the shelter walk to a cell out of every breath's reach (escape), else
-   combat's :back-off from the dragon (unless it would be done at once), else the meal, else a :rest where the feet
+   combat's :back-off from the dragon (unless it would be done at once), else the meal, else a :dragon-rest where the feet
    are for the bar's own healing. Gym chain-w12 chain run 4 ate twice at the fountain at low
    health and died there, and chain-w17 dragon run 2 (plan run 40904439588) ate at 14.2 in the
    head's reach: 8.4, 5.5, 0 in the next second.
@@ -1019,11 +1019,12 @@
   (let [food (when (< (:player/food world 20) 20) (eat/food-held world))
         flight (escape world)
         [eid _] (dragon world)]
-    (cond (sheltered? world) (if food {:intent/kind :eat :intent/item food} {:intent/kind :rest})
+    (cond (sheltered? world)
+          (if food {:intent/kind :eat :intent/item food} {:intent/kind :dragon-rest})
           flight (shelter-walk flight)
           (back-off-from-dragon? world) {:intent/kind :back-off :intent/target eid}
           food {:intent/kind :eat :intent/item food}
-          :else {:intent/kind :rest})))
+          :else {:intent/kind :dragon-rest})))
 
 (defn bed-wall
   "The two cells, at the feet's height and the eye's, beside stand cell [x y z] toward site cell
@@ -1127,14 +1128,14 @@
         [eid _] (dragon world)]
     (cond cell (shelter-walk cell)
           (back-off-from-dragon? world) {:intent/kind :back-off :intent/target eid}
-          :else {:intent/kind :rest})))
+          :else {:intent/kind :dragon-rest})))
 
 (defn after-blow
   "The intent in the hit-hold-ticks after the dragon's blow (struck-by-dragon?): always on, away
    from it, never a rest, a meal or a wait where the blow fell: the shelter walk to the nearest
    cell at least step-out-radius out from the fountain and four blocks further out than the feet
    are (step-out-cell), else combat's :back-off from the dragon (unless it would be done at once),
-   else a :rest. The dragon's blows reach from its head and wings, well past the body that
+   else a :dragon-rest. The dragon's blows reach from its head and wings, well past the body that
    back-off-pointless? measures: gym chain-w21 dragon runs 1, 4 and 5 (plan run 40939522210) were
    hit at 8.5 blocks from the fountain, the body 8.5 off but the head two, rested there and were
    slain, 19.5 -> 12.7 -> 5.9 -> 0 in three blows."
@@ -1144,7 +1145,18 @@
         [eid _] (dragon world)]
     (cond cell (shelter-walk cell)
           (back-off-from-dragon? world) {:intent/kind :back-off :intent/target eid}
-          :else {:intent/kind :rest})))
+          :else {:intent/kind :dragon-rest})))
+
+(defn back-off-breath
+  "The intent for a breath cloud or fireball [eid entity] near the feet (breath-near) that nothing
+   else answered: combat's :back-off from it while it is nearer than combat/back-off-to, else a
+   :dragon-rest. A cloud grown to 7 is near out to 8.5 (breath-reach), past the 8 a back-off ends
+   at: gym chain-w22 job 3 run 6 started `:back-off 385` 38 times from 23:58:08.07, each done in
+   the tick it began."
+  [world [eid e]]
+  (if (< (combat/horizontal world e) combat/back-off-to)
+    {:intent/kind :back-off :intent/target eid}
+    {:intent/kind :dragon-rest}))
 
 (defn toward-dragon
   "The next intent toward the dragon dead: on the ground in a breath cloud itself (in-breath?)
@@ -1203,7 +1215,7 @@
                                        (ground-cell world)))
                             stand))
           (and breath flight) (shelter-walk flight)
-          breath {:intent/kind :back-off :intent/target (first breath)}
+          breath (back-off-breath world breath)
           (and eid d (beds/held world) (not (and (grounded? d) (perched? d))))
           (if (< (from-fountain world) step-out-radius)
             (out-of-the-bite world)

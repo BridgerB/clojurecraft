@@ -606,7 +606,7 @@
                                        {:event/kind :tick :event/now 1000 :event/rand 0.5})))
           "perch intent yields at once under retreat health"))
     (let [sheltered (assoc (hurt 20 {}) :player/pos [6.5 64.0 0.5])]
-      (is (= {:intent/kind :rest} (dragon/toward-dragon sheltered))
+      (is (= {:intent/kind :dragon-rest} (dragon/toward-dragon sheltered))
           "in shelter outside the basin: waiting for health back, not walking"))))
 
 (deftest an-attacker-enderman-is-answered-when-pumpkin-worn-and-dragon-grounded
@@ -662,7 +662,7 @@
     (is (empty? (combat/threats w)) "the dragon is never a threat in combat/threats")
     (let [i (dragon/toward-dragon w)]
       (is
-       (contains? #{:walk :rest :back-off} (or (:intent/kind i) (:plan/wait i)))
+       (contains? #{:walk :dragon-rest :back-off} (or (:intent/kind i) (:plan/wait i)))
        "dragon row executes recover (shelter walk, wait :low-health, or the row's own back-off from the dragon when no cell is open), never :fight")
       (is (or (not= :back-off (:intent/kind i)) (= dragon-eid (:intent/target i)))
           "a back-off from the dragon, never defend's from another"))))
@@ -974,9 +974,9 @@
                     :player/health health
                     :player/food 20))]
     (is (< 16.0 dragon/perch-line 17.0) "two hits of 6.8 and the margin of 3")
-    (is (= {:intent/kind :rest} (dragon/toward-dragon (at 14.0)))
+    (is (= {:intent/kind :dragon-rest} (dragon/toward-dragon (at 14.0)))
         "at 14, sheltered, no food to eat: it waits for its health, it does not walk in")
-    (is (not= {:intent/kind :rest} (dragon/toward-dragon (at 17.5))) "above the line: on")
+    (is (not= {:intent/kind :dragon-rest} (dragon/toward-dragon (at 17.5))) "above the line: on")
     (let [perching (assoc (at 14.0)
                           :plan/intent
                           {:intent/kind :perch :intent/target dragon-eid :intent/status :active})]
@@ -1042,7 +1042,7 @@
           "already 9 out and struck: on, four further out, never a wait or a rest")
       (is (<= 12.5
               (physics/horizontal-distance (physics/centre (:intent/target i)) [0.0 0.0 0.0]))))
-    (is (not= :rest (:intent/kind (dragon/toward-dragon (at [9.5 64.0 0.5] 800))))
+    (is (not= :dragon-rest (:intent/kind (dragon/toward-dragon (at [9.5 64.0 0.5] 800))))
         "the quiet over: on as before")
     (let [perching (assoc in-basin
                           :plan/intent
@@ -1255,7 +1255,8 @@
                                 (:bot/effects w))))
         w3 (reduce (fn [w t] (plan/step w (tick t))) (assoc w0 :bot/effects []) [5050 5100 5150])]
     (is (not (dragon/back-off-from-dragon? w0)) "the dragon is past back-off-to: no back-off")
-    (is (= {:intent/kind :rest} (dragon/toward-dragon w0)) "a rest, not a wait that ends the plan")
+    (is (= {:intent/kind :dragon-rest} (dragon/toward-dragon w0))
+        "a rest, not a wait that ends the plan")
     (is (<= (starts w3) 1) (str "one intent over three ticks, not " (starts w3)))
     (is (= :active (:plan/status w3)))))
 
@@ -1287,5 +1288,20 @@
       (is (= [:walk :shelter] [(:intent/kind i) (:intent/for i)]) "away, not a rest")
       (is (< 8.5 (physics/horizontal-distance (physics/centre (:intent/target i)) [0.0 0.0 0.0]))
           "further out than it stands"))
-    (is (not-any? #(str/starts-with? (str %) "intent :rest") logs) "no rest in three ticks")
+    (is (not-any? #(str/starts-with? (str %) "intent :dragon-rest") logs) "no rest in three ticks")
     (is (= :walk (:intent/kind (:plan/intent w3))) "moving away")))
+
+(deftest a-breath-nearer-than-its-reach-but-past-back-off-to-is-waited-out-not-backed-off-from
+  ;; gym chain-w22 job 3 run 6 (plan run 40972357217): `:back-off 385` 38 times from 23:58:08.07
+  ;; and 11 times in job 2 run 5: a cloud grown to radius 7 is near out to 8.5, a back-off from it
+  ;; ends at 8, so it was done in the tick it began and chosen again
+  (let [near (fn [r] [50
+                      {:entity/type (blocks/entity-types :area_effect_cloud)
+                       :entity/pos [8.5 64.0 0.5]
+                       :entity/radius r}])
+        w (assoc (round-fountain [0.5 64.0 0.5] {}) :player/dimension dimension/end)]
+    (is (= {:intent/kind :dragon-rest} (dragon/back-off-breath w (near 7.0)))
+        "8 out: past back-off-to")
+    (is (= {:intent/kind :back-off :intent/target 50}
+           (dragon/back-off-breath (assoc w :player/pos [6.5 64.0 0.5]) (near 7.0)))
+        "2 out: a back-off gets somewhere")))
