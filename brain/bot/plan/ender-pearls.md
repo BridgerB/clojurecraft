@@ -8,6 +8,9 @@ status: verified
 lastUpdated: 2026-10-24
 verifiedAgainst: HEAD
 sourceRefs:
+  - src/clojurecraft/memory.clj#defn forest-fact
+  - src/clojurecraft/pearls.clj#defn travel
+  - test/clojurecraft/pearls_test.clj#a-hunt-with-no-warped-forest-near-travels-or-explores
   - src/clojurecraft/pearls.clj#defn swarmed?
   - src/clojurecraft/pearls.clj#defn held-idle?
   - src/clojurecraft/pearls.clj#defn unseal
@@ -224,6 +227,8 @@ A provoke needs `provoke-line` health: `provoke-margin` (3) over two hits of `en
 A running intent is cut by a threat only when the hunt would choose a different one (`same-choice?`), cover from a ghast in sight comes before the walk home, and twelve walks that all ended within eight blocks of the feet (`loitering?`) wander like five minutes of lookouts (gym runs 40860669235 job 5 and 40839050567 jobs 1 to 4).
 
 A fight cut or failed `fight-giveups` (3) times within ten minutes is not planned again until the enderman is in reach, a loiter wanders whatever is tracked, and the walk out of a ghast's sight is a walk `:for :cover`, which ends only centred in its cell (gym run 40905321229 job 6).
+
+Travel: a chunk with `forest-min` (12) or more warped nylium blocks is a fact (`memory/forest-fact`, one a chunk like a pool, kept after the chunk unloads, `memory/warped-chunks`). In the Nether and not in a forest (`in-forest?`: a known forest chunk within `forest-reach` chunks), with no enderman tracked and the bot not hurt, swarmed or menaced, the hunt `travel`s: a walk to the cell over the nearest known forest's nylium, else `explore` (a far-walk along a heading, never to ground arrived at). The gym row `pearls-12-from-fortress` starts at a fortress as the race does (real race 40980342194, Clj_r13: two hours round a fortress, no pearl).
 
 ## The burrow
 Gym batch pearls-263a (plan run 38892130785) put three live endermen round the bot in iron helmet and chestplate: five trials, five deaths. A replay of one (probe 38893413043) showed the hits landing at 5.74 a second, the sword's sweep pulling a second enderman in, and a break-off with nowhere to go. A sword needs seven hits against forty health; the open fight loses. The game says where it cannot lose: a mob's melee is its box grown 0.83 sideways and not at all up or down (`Mob.getAttackBoundingBox`, `isWithinMeleeAttackRange`, probe 38893918055), and an enderman needs three free cells to stand. `shelter?` is that rule over the terrain: the bot's own two cells open, and no cell an enderman could stand in (`stand?`: a floor, three open cells) in the nine columns round it, at the heights whose body would overlap the bot's (feet two under to one over).

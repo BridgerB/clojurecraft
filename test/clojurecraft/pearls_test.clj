@@ -20,7 +20,8 @@
             [clojurecraft.sim :as sim]
             [clojurecraft.stairs :as stairs]
             [clojurecraft.sword :as sword]
-            [clojurecraft.world :as world]))
+            [clojurecraft.world :as world]
+            [datascript.core :as d]))
 
 (use-fixtures :once fx/instrumented)
 
@@ -2502,3 +2503,69 @@
     (is (= [:walk :pearls] [(:intent/kind i) (:intent/for i)]) (pr-str i))
     (is (not= [10 61 8] (:intent/target i)))
     (is (>= (path/octile (intent/feet w) (:intent/target i)) pearls/roam-reach))))
+
+(def nether "minecraft:the_nether")
+
+(deftest a-chunk-of-warped-nylium-is-a-forest-fact
+  (let [nylium (blocks/default-state :warped_nylium)
+        col (fn [n] (world/column (into {} (for [x (range n)] [[x 64 3] nylium]))))
+        fact (fn [n dim] (memory/forest-fact [2 -1] (col n) 77 dim))]
+    (is (= {:forest/chunk [2 -1]
+            :forest/kind :warped
+            :forest/count 12
+            :forest/pos [40 64 -13]
+            :forest/at 77
+            :forest/dimension nether}
+           (select-keys (fact memory/forest-min nether)
+                        [:forest/chunk :forest/kind :forest/count :forest/pos :forest/at
+                         :forest/dimension]))
+        "the block nearest the chunk's centre (40, -8), twelve of them")
+    (is (nil? (fact (dec memory/forest-min) nether)) "eleven: no forest")
+    (is (nil? (fact memory/forest-min "minecraft:overworld")) "only the Nether has them")
+    (testing "remembered on load, known after, and the newest per chunk"
+      (let [w (-> (game/init fx/opts)
+                  (assoc :player/dimension nether :time/now 5)
+                  (memory/remember-column [2 -1] (col 12))
+                  (memory/remember-column [2 -1] (col 12))
+                  (memory/remember-column [2 -1] (col 14)))]
+        (is (= [[2 -1] 14] (map (juxt :forest/chunk :forest/count) (memory/warped-chunks w))))
+        (is (= 2 (count (d/q '[:find [?e ...] :where [?e :forest/chunk]] (:world/facts w))))
+            "an unchanged reload adds no fact")))))
+
+(deftest a-hunt-with-no-warped-forest-near-travels-or-explores
+  ;; real race 40980342194, Clj_r13 (issue #263): two hours of lookouts and walks round a fortress
+  ;; at x 4250-4440, z 1700-1750, no pearl, 0 pearls in all of the race's 6 to 7 bots with rods:
+  ;; no code went to a warped forest
+  (let [base (-> (wide (standing {}))
+                 (assoc :player/dimension nether)
+                 (assoc :player/inventory {0 (item :iron_sword 1)}))
+        forest (fn [chunk pos]
+                 {:forest/chunk chunk
+                  :forest/kind :warped
+                  :forest/count 40
+                  :forest/pos pos
+                  :forest/at 0
+                  :forest/dimension nether})
+        known (memory/remember-forest base (forest [30 0] [480 70 8]))
+        here (memory/remember-forest base (forest [0 0] [8 63 8]))]
+    (testing "none known: explores, as far as the loaded ground goes"
+      (let [i (plan/next-intent base row plan/goals)]
+        (is (= [:walk :pearls] [(:intent/kind i) (:intent/for i)]) (pr-str i))
+        (is (>= (path/octile (intent/feet base) (:intent/target i)) pearls/roam-reach))))
+    (testing "one known: the cell over its nylium"
+      (is (= {:intent/kind :walk :intent/target [480 71 8] :intent/for :pearls}
+             (plan/next-intent known row plan/goals))))
+    (testing "one failed (blacklisted): not again"
+      (is (not= [480 71 8]
+                (:intent/target
+                 (plan/next-intent (assoc known :plan/blacklist #{[480 71 8]}) row plan/goals)))))
+    (testing "in one: the hunt, no travel"
+      (is (pearls/in-forest? here))
+      (is (nil? (pearls/travel here)))
+      (is (not= :walk (:intent/kind (plan/next-intent here row plan/goals)))))
+    (testing "the overworld has no such search"
+      (is (nil? (pearls/travel (assoc base :player/dimension "minecraft:overworld")))))
+    (testing "an enderman tracked: hunted, not travelled from"
+      (let [w (assoc-in base [:world/entities 7] (enderman [10.5 64.0 8.5]))]
+        (is (not= [:walk :pearls]
+                  ((juxt :intent/kind :intent/for) (plan/next-intent w row plan/goals))))))))

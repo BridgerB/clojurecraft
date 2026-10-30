@@ -1554,15 +1554,13 @@
                         wander-lookouts)
                     (nil? (routable world (endermen world seek-radius)))))))
 
-(defn wander
-  "A walk somewhere else to hunt from: to the end of the first of the eight headings (headings, from
-   one the clock picks) whose route reaches ground wander-reach out (path/plan :found, as roam
-   looks), else the farthest end of those routes that comes roam-reach or more from the feet. Not
-   roam: it refuses an end already walked to while an enderman is tracked within descend-radius,
-   and that stays true for hours. Nil when no heading has a route that leaves the feet."
-  [world]
+(defn far-walk
+  "A walk to ground far from the feet: to the end of the first of the eight headings (headings,
+   from index start) whose route reaches ground wander-reach out (path/plan :found, as roam looks)
+   and is not in spent, else the farthest end of those routes that comes roam-reach or more from
+   the feet and is not in spent. Nil when no heading has a route that leaves the feet."
+  [world start spent]
   (let [feet (intent/feet world)
-        start (mod (quot (:time/now world 0) roam-turn-ms) (count headings))
         ends (for [k (range (count headings))
                    :let [heading (nth headings (mod (+ start k) (count headings)))
                          r (path/plan world
@@ -1570,12 +1568,60 @@
                                       (roam-goal feet heading wander-reach)
                                       {})
                          to (last (:path/waypoints r))]
-                   :when (and to (not= to feet))]
+                   :when (and to (not= to feet) (not (contains? spent to)))]
                [(:path/status r) to (path/octile feet to)])
         far (filter #(>= (nth % 2) roam-reach) ends)
         best (or (first (filter #(= :found (first %)) far))
                  (when (seq far) (apply max-key #(nth % 2) far)))]
     (when best {:intent/kind :walk :intent/target (second best) :intent/for :pearls})))
+
+(defn wander
+  "A far-walk from the heading the clock picks, nothing spent. Not roam: it refuses an end already
+   walked to while an enderman is tracked within descend-radius, and that stays true for hours."
+  [world]
+  (far-walk world (mod (quot (:time/now world 0) roam-turn-ms) (count headings)) #{}))
+
+(def forest-reach 2)                   ; chunks round the feet's own within which the bot is in a warped forest
+
+(defn in-forest?
+  "Is a warped forest chunk known (memory/warped-chunks) within forest-reach chunks of the feet's
+   chunk, in the Nether? The hunt's ground: its endermen spawn there and nowhere near a fortress."
+  [world]
+  (let [[fx _ fz] (intent/feet world)
+        cx (math/floor-div (long fx) 16)
+        cz (math/floor-div (long fz) 16)]
+    (boolean (some (fn [{[x z] :forest/chunk}]
+                     (<= (max (abs (- x cx)) (abs (- z cz))) forest-reach))
+                   (memory/warped-chunks world)))))
+
+(defn nearest-forest
+  "The pos [x y z] of the nylium block of the nearest known warped forest chunk to the feet whose
+   cell above it is not in :plan/blacklist (a walk to it failed), or nil."
+  [world]
+  (let [feet (intent/feet world)
+        bl (:plan/blacklist world #{})]
+    (->> (memory/warped-chunks world)
+         (map :forest/pos)
+         (remove #(contains? bl (update % 1 inc)))
+         (sort-by #(path/octile feet %))
+         first)))
+
+(defn explore
+  "A far-walk that sets out along the heading the count of walks arrived at gives, to ground not
+   arrived at (memory/arrived): the widening search for a warped forest none is known of."
+  [world]
+  (let [spent (memory/arrived world)] (far-walk world (mod (count spent) (count headings)) spent)))
+
+(defn travel
+  "The walk to a warped forest, or nil: none in the Nether when the bot is in one (in-forest?);
+   to the cell over the nylium nearest of the nearest known forest chunk (nearest-forest), else
+   explore for one. Real race 40980342194, Clj_r13 (issue #263): two hours of lookouts and
+   wandering round a fortress at x 4250-4440, no pearl, no code that went to a forest."
+  [world]
+  (when (and (= dimension/nether (dimension/of world)) (not (in-forest? world)))
+    (if-let [pos (nearest-forest world)]
+      {:intent/kind :walk :intent/target (update pos 1 inc) :intent/for :pearls}
+      (explore world))))
 
 (defn enderman-hit
   "The damage one enderman hit does the bot through the armour it wears (armour/worn over the four
@@ -1741,6 +1787,11 @@
         mouth (:pearls/mouth world)
         way-home {:intent/kind :walk :intent/target home :intent/for :shelter}
         mouth-walk (delay (shelter-walk world mouth))
+        travel-walk (delay (when (and (not hurt?)
+                                      (not swarmed?)
+                                      (not (menaced? world))
+                                      (empty? (endermen world seek-radius)))
+                             (travel world)))
         wander-walk
         (delay (when (and (not hurt?) (not swarmed?) (not (menaced? world)) (wandering? world))
                  (wander world)))
@@ -1787,6 +1838,7 @@
                     (not (contains? (:plan/blacklist world #{}) eid)))))
       {:intent/kind :fight :intent/target eid :intent/for :pearls}
       meal meal
+      @travel-walk @travel-walk
       @wander-walk @wander-walk
       (or hurt? (and in? bid)) {:intent/kind :lookout :intent/for :pearls}
       (and in? aid (lure? world) @mouth-walk) @mouth-walk

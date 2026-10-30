@@ -508,20 +508,22 @@
    "Whether a look at an enderman provokes it, and when an angry one teleports, from the game's classes"
    "A clear line from the eye to an enderman's head, from the terrain"
    "Where a kill fell, to pick its drop up"
-   "Armour worn and a sword in hand before the first fight (#259)"]
+   "Armour worn and a sword in hand before the first fight (#259)"
+   "Where the warped forests are: a fact a chunk (memory/forest-fact: forest-min or more blocks of warped nylium), kept after the chunk unloads. The race leaves the bot at a fortress; only the gym lands it in a forest (RCON locate biome)"]
   :problem/decisions
   ["Hunt, never barter (issue #263): a stack of gold per twelve pearls is a mine the run never makes"
    "The loot table is one roll of ender_pearl, count uniform 0 to 1, plus 0 to 1 a level of looting (probe run 38889277228): a pearl a kill one time in two"
    "A warped forest is the hunting ground: its only monster spawner is the enderman, four at a time (the same probe)"
    "Provoke by a stare at the head from 6 blocks or more, then look at its legs: an angry enderman stared at within 4 teleports away, one stared at within 16 stands frozen, and a melee hit by the bot never teleports it (EnderMan.hurtServer, EndermanLookForPlayerGoal)"
    "Fight from a burrow, not in the open: three stairs down and a tunnel two high, the enderman stopped at the last stair two cells off, out of its reach (a mob's melee is its box grown 0.83 sideways, never up or down: Mob.getAttackBoundingBox, probe run 38893918055) and inside the sword's; the open fight is only the fallback where no burrow can be cut. Never from water, which the escapes already forbid"
-   "The rows stay asides until the stages before them are proven; raising the chain to them is its own change"]
+   "The rows stay asides until the stages before them are proven; raising the chain to them is its own change"
+   "Travel to a warped forest before the hunt (pearls/travel): the cell over the nearest known forest nylium, else explore; only in the Nether, only with no enderman tracked, never hurt, swarmed or menaced. Chosen over decoding the chunk's biome container because the memory already watches blocks and a per-chunk fact of the nylium count needs no biome table; the gym row pearls-12-from-fortress starts where the race does (issue #263, real race 40980342194 Clj_r13: two hours round a fortress, no pearl)"]
   :problem/risks
   ["Seven a hit on Normal, one hit a second, against forty health: an iron sword needs seven hits, so a fight in the open costs most of the bot's health even in iron"
    "The bot staring at an enderman's face by accident (a look at its head from within 4 blocks) sends it away mid-fight"
    "An enderman carrying a block drops the block beside its pearl: only a drop that says it holds a pearl (#262's :entity/item), or has not said yet, may be picked up"
-   "No warped forest near where the bot comes out of the portal"
-   "Endermen teleporting out of reach"]
+   "No warped forest near where the bot comes out of the portal" "Endermen teleporting out of reach"
+   "The way to a forest: lava seas, ghasts, crimson forests full of hoglins and piglins, endless travel with no forest known (explore widens along a heading, never to ground already arrived at)"]
   :problem/done
   "RCON: clear <bot> minecraft:ender_pearl 0 finds twelve or more after a warped forest landing at Normal (gym pearls-12), and one or more from summoned endermen (gym pearls-1)."
   :problem/last-failure
