@@ -1,0 +1,9 @@
+;; issue #10, the enderman deaths of the dragon row (w16 run 3, main dragon-main-a run 1): the End's
+;; arrival looks straight down until a pumpkin is worn (the arrival faces yaw 0 pitch 0, at
+;; endermen thirty blocks off), and an angry enderman under the danger line is covered against,
+;; not backed off from; off main (#621), the dragon row 6 runs
+{:plans/label "dragon-ender-a"
+ :plans/jobs 4
+ :plans/issue 10
+ :plans/experiments
+ [{:exp/name "dragon" :exp/kind :gym :exp/goal "dragon" :exp/runs 6 :exp/bots 1 :exp/est-s 1600}]}

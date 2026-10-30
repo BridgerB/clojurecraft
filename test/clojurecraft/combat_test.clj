@@ -262,9 +262,10 @@
                         {7 (assoc (mob :enderman [11.0 64.0 8.5] 40.0) :entity/creepy? true)})
                        :plan/goals
                        #{:dragon})] ; the pearls rows, in play, answer endermen themselves
-      (is (= {:intent/kind :back-off :intent/target 7}
-             (plan/next-intent (assoc angry :player/health 6.0) (row :defend) plan/goals))
-          "under danger-health, an angry enderman is backed off from, never fought on to death")
+      (is
+       (= {:intent/kind :back-off :intent/target 7}
+          (plan/next-intent (assoc angry :player/health 6.0) (row :defend) plan/goals))
+       "under danger-health, an angry enderman with nothing held to cover with is backed off from, never fought on to death, never the wait that ends the plan")
       (is (= {:intent/kind :fight :intent/target 7 :intent/to-the-end? true}
              (plan/next-intent (assoc angry :player/health 20.0) (row :defend) plan/goals))
           "healthy, an angry enderman is fought to the end: it cannot be outrun")
@@ -669,3 +670,22 @@
     (is (not (combat/occupied? w [10 64 8])))
     (is (= [9 65 8] (combat/wall-cell w fish))
         "the feet's height is taken, so the cell over it is the wall")))
+
+(deftest under-the-line-an-angry-enderman-is-covered-against-not-backed-off-from
+  ;; gym main dragon-main-a run 1 (plan run 41092662823): fought enderman 105 at 15.7, 12.2, then
+  ;; at 9.3 `:dragon-rest` and `:back-off 105` and 104, hits of 4.3 from two of them, 5.6, 1.5, 0
+  ;; in 3 s: they teleport, a back-off gets nowhere. The kit held cobblestone, a pickaxe, steak
+  (let [kit {0 (item :iron_pickaxe 1) 1 (item :cobblestone 64) 2 (item :cooked_beef 16)}
+        angry (assoc (standing {105
+                                (assoc (mob :enderman [10.5 64.0 8.5] 40.0) :entity/creepy? true)})
+                     :plan/goals #{:dragon}
+                     :player/dimension dimension/end
+                     :player/health 9.3
+                     :player/food 20
+                     :player/inventory kit)
+        i (plan/next-intent angry (row :defend) plan/goals)]
+    (is (some? (combat/teleport-cover angry (get-in angry [:world/entities 105])))
+        "it teleports and a cover is held")
+    (is (not= :back-off (:intent/kind i)) "no back-off")
+    (is (not= :fight (:intent/kind i)) "no fight under the line")
+    (is (contains? #{:place :pillar :dig :eat} (:intent/kind i)) "a cover")))
