@@ -720,6 +720,18 @@
   [world e]
   (<= (path/octile (path/feet-cell (:player/pos world)) (cell (:entity/pos e))) cut-reach))
 
+(def lava-sea-top 32)                   ; the Nether's lava fills every cell up to this height
+(def lava-margin 4)                    ; cells over it that nothing is cut below
+
+(defn lava-floor
+  "The height in the Nether under which no stair, tunnel or burrow is cut: the lava sea's top and
+   lava-margin over it (a cell of lava or a dug cell beside it floods the cut). 0 elsewhere. Gym
+   plan run 41134469333 (pearls-travel-b) job 6 (issue #263): a descent toward an enderman cut
+   down from y 47 to y 34 and the burrow at [2498 34 2160] let lava in; two flees and \"tried to
+   swim in lava\" at 62 minutes."
+  [world]
+  (if (= dimension/nether (dimension/of world)) (+ lava-sea-top lava-margin) 0))
+
 (defn descend
   "Stairs down toward the first of the candidates nearest endermen in ms that stands
    descend-drop or more below the feet within cut-reach on the plane (within-cut-reach?), a
@@ -748,10 +760,11 @@
            (sort-by (fn [[_ e]] (physics/distance pos (:entity/pos e))))
            (take candidates)
            (some (fn [[_ e]]
-                   (let [drop (- fy (physics/y-of (cell (:entity/pos e))))]
-                     (when (and (>= drop descend-drop) (within-cut-reach? world e))
+                   (let [drop (- fy (physics/y-of (cell (:entity/pos e))))
+                         to-y (max (- fy (min drop descend-step)) (lava-floor world))]
+                     (when (and (>= drop descend-drop) (within-cut-reach? world e) (< to-y fy))
                        {:intent/kind :stairs-down
-                        :intent/to-y (- fy (min drop descend-step))
+                        :intent/to-y to-y
                         :intent/dir (mapv - (away world e))
                         :intent/for :pearls}))))))))
 
@@ -832,7 +845,8 @@
   (let [roof (mouth-cells feet)
         steps (burrow-steps feet dir)
         open (fn [w cells] (reduce #(assoc-in %1 [:world/blocks %2] blocks/air) w cells))
-        dug (when (stairs/clear-way? world roof)
+        dug (when (and (>= (- (second feet) burrow-depth) (lava-floor world))
+                       (stairs/clear-way? world roof))
               (reduce (fn [w cells] (if (stairs/safe? w cells) (open w cells) (reduced nil)))
                       (open world roof)
                       steps))]
@@ -1141,9 +1155,12 @@
                :intent/dir (cheapest-heading world :stairs-up feet toward)
                :intent/to-height? true
                :intent/for :pearls}
-              (<= rise -2)
+              (and (<= rise -2)
+                   (< (max (- (physics/y-of feet) (min (- rise) descend-step)) (lava-floor world))
+                      (physics/y-of feet)))
               {:intent/kind :stairs-down
-               :intent/to-y (- (physics/y-of feet) (min (- rise) descend-step))
+               :intent/to-y (max (- (physics/y-of feet) (min (- rise) descend-step))
+                                 (lava-floor world))
                :intent/dir (cheapest-heading world :stairs-down feet toward)
                :intent/for :pearls}
               :else

@@ -2619,3 +2619,17 @@
         x-of #(first (:intent/target %))]
     (is (> (x-of (pearls/explore west)) 8) "been west: east")
     (is (< (x-of (pearls/explore east)) 8) "been east: west")))
+
+(deftest nothing-is-cut-down-into-the-nethers-lava-sea
+  ;; gym plan run 41134469333 (pearls-travel-b) job 6 (issue #263): stairs-down from y 47 toward an
+  ;; enderman far below, to y 34, a burrow cut at [2498 34 2160], lava let in, two flees, dead in lava
+  (let [low (-> (standing {7 (enderman [8.5 40.0 14.5])} {})
+                (assoc :player/dimension nether
+                       :player/pos [8.5 38.0 8.5]
+                       :player/inventory {0 (item :iron_sword 1) 1 (item :iron_pickaxe 1)}))]
+    (is (= 36 (pearls/lava-floor low)))
+    (is (zero? (pearls/lava-floor (assoc low :player/dimension "minecraft:overworld"))))
+    (is (nil? (pearls/descend low (pearls/endermen low pearls/descend-radius)))
+        "an enderman 40 and below the cut's floor: none")
+    (is (not (pearls/burrowable? (assoc low :player/pos [8.5 38.0 8.5]) [8 38 8] [1 0]))
+        "a burrow whose last stair is at y 35 is under the floor")))
