@@ -1546,3 +1546,22 @@
     (testing "burning, the pocket first"
       (is (not= :collect-drops
                 (:intent/kind (next-intent (assoc (in-pocket w) :player/on-fire? true))))))))
+
+(deftest a-pocket-is-made-ahead-once-in-five-minutes
+  ;; blaze-race-r jobs 1 and 4: :pocket and :tunnel-to alternated every 3 s, each :pocket digging two
+  ;; blocks beside the tunnel and each tunnel step opening the last one's other side: ten pockets,
+  ;; 250 netherrack, the pickaxe worn out in 4 minutes and the run ended :boxed / :no-path
+  (let [w (-> (standing {})
+              (assoc :world/chunks {[0 0] (world/column rock)}
+                     :player/pos [5.5 64.0 8.5]
+                     :time/now 1000000)
+              with-spawner)
+        sp spawner-at]
+    (is (some? (blaze/prepare-intent w sp)) "none begun: one is")
+    (is (nil? (blaze/prepare-intent (assoc w :pocket/prepared-at 900000) sp))
+        "begun 100 s ago: not again")
+    (is (some? (blaze/prepare-intent
+                (assoc w :pocket/prepared-at (- 1000000 blaze/prepare-cooldown-ms 1))
+                sp))
+        "after the cooldown, one more")
+    (is (= 14.0 blaze/pocket-approach))))

@@ -1,0 +1,13 @@
+;; Issue #262: the race row, six runs, two iron pickaxes. From blaze-race-r: a pocket was dug ahead at
+;; every tunnel step (250 netherrack, the pickaxe worn out in 4 minutes, runs ended :boxed and
+;; :no-path): one in five minutes, within 14 blocks of the spawner; a pressed hold with no seal and no
+;; cover leaves the line. Measure rods seen, picked up and despawned within reach first.
+{:plans/label "blaze-race-s"
+ :plans/jobs 6
+ :plans/issue 262
+ :plans/experiments [{:exp/name "blaze-fortress-race"
+                      :exp/kind :gym
+                      :exp/goal "blaze-fortress-race"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 1800}]}

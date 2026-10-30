@@ -452,6 +452,9 @@
    [:pocket/placed
     "inside :pocket/site: the cells a :seal placed blocks in, empty while the pocket is open; the pocket is sealed while every one is solid. An :unseal digs them and empties it"
     "after a :seal began"]
+   [:pocket/prepared-at
+    "ms (:time/now) a pocket was last begun ahead of the tunnel's last blocks (a :pocket with :intent/prepare?): none is begun again for five minutes, the tunnel's own steps break a pocket beside its path"
+    "after a prepare :pocket began"]
    [:pocket/seal-failed-at
     "ms (:time/now) of the last :seal that failed to lay a block, anywhere: no seal is tried for a minute after it (pocket/seal-retry-ms)"
     "after a :seal failed"]

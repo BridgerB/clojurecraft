@@ -293,7 +293,8 @@
   ;; three times in 0.4 s and the plan with it
   [world {:intent/keys [site prepare?] :as i} event]
   (let [at (path/cells world)
-        world (assoc world :pocket/site site)]
+        world (cond-> (assoc world :pocket/site site)
+                prepare? (assoc :pocket/prepared-at (:time/now world)))]
     (if-not (valid? world at site)
       (finished world)
       (let [plan (ops site (boolean prepare?))

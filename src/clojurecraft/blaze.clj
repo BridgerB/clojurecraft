@@ -1124,7 +1124,8 @@
     (when-let [site (pocket/current world (intent/feet world) (pocket-ok? world sp see?))]
       {:intent/kind :pocket :intent/site site})))
 
-(def pocket-approach 24.0) ; blocks from the spawner within which a pocket is made ready before the tunnel goes on
+(def pocket-approach 14.0) ; blocks from the spawner within which a pocket is made ready before the tunnel goes on: close, so the tunnel's own steps do not break it (24 dug a pocket per tunnel step)
+(def prepare-cooldown-ms 300000) ; ms after a pocket was begun ahead before another is: blaze-race-r jobs 1 and 4 dug one a step, ten of them, 250 netherrack, and wore the pickaxe out
 (def approach-nodes 150)   ; cells the search for it visits at most when asked every tick (interrupts?)
 (def press-ms 8000)        ; ms after a hit a blaze in line but out of reach still presses the bot
 
@@ -1140,6 +1141,8 @@
   (when (and sp
              (not (pocket/in? world))
              (nil? (pocket/held-valid world))
+             (let [at (:pocket/prepared-at world)]
+               (or (nil? at) (> (- (:time/now world 0) at) prepare-cooldown-ms)))
              (<= (physics/distance (physics/centre (intent/feet world)) (physics/centre sp))
                  pocket-approach))
     (when-let [site (pocket/current
@@ -1220,6 +1223,7 @@
                  (:intent/kind (combat/cover world (second (watcher world)))))
             (combat/cover world (second (watcher world)))
             (and (near-rod world) (not (:player/on-fire? world)) (not (pressed? world))) nil
+            (and (pressed? world) (hide world)) (hide world)
             need? (or (meal world) {:intent/kind :pocket-hold :intent/heal-to (hold-to world)})))))
 
 (defn refuge-needed?
