@@ -2607,3 +2607,15 @@
     (is (not (pearls/weak? piglin)) "it shoots and its hit is not in mob/kinds")
     (is (= :fight (:intent/kind (plan/next-intent (standing {7 zombie}) row plan/goals))))
     (is (not= :fight (:intent/kind (plan/next-intent (standing {7 piglin}) row plan/goals))))))
+
+(deftest an-explore-goes-on-away-from-where-it-has-been
+  ;; gym plan run 41134469333 (pearls-travel-b) job 2: walks of 12 s alternating between x 2240 and
+  ;; x 2200 for 5.5 minutes, the heading chosen by the count of walks arrived at
+  (let [w (-> (wide (standing {}))
+              (assoc :player/dimension nether
+                     :player/inventory {0 (item :iron_sword 1) 1 (item :iron_pickaxe 1)}))
+        west (walked w [[-20 64 8] [-24 64 8] [-28 64 8]])
+        east (walked w [[40 64 8] [44 64 8] [48 64 8]])
+        x-of #(first (:intent/target %))]
+    (is (> (x-of (pearls/explore west)) 8) "been west: east")
+    (is (< (x-of (pearls/explore east)) 8) "been east: west")))

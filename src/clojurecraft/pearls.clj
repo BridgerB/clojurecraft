@@ -1554,11 +1554,10 @@
                         wander-lookouts)
                     (nil? (routable world (endermen world seek-radius)))))))
 
-(defn far-walk
-  "A walk to ground far from the feet: to the end of the first of the eight headings (headings,
-   from index start) whose route reaches ground wander-reach out (path/plan :found, as roam looks)
-   and is not in spent, else the farthest end of those routes that comes roam-reach or more from
-   the feet and is not in spent. Nil when no heading has a route that leaves the feet."
+(defn far-ends
+  "Where each of the eight headings' routes (path/plan toward ground wander-reach out, from index
+   start in headings) ends, as [status end gain] with gain the end's octile distance from the feet:
+   the ends roam-reach or more away and not in spent, :found first, then the farthest."
   [world start spent]
   (let [feet (intent/feet world)
         ends (for [k (range (count headings))
@@ -1570,10 +1569,18 @@
                          to (last (:path/waypoints r))]
                    :when (and to (not= to feet) (not (contains? spent to)))]
                [(:path/status r) to (path/octile feet to)])
-        far (filter #(>= (nth % 2) roam-reach) ends)
-        best (or (first (filter #(= :found (first %)) far))
-                 (when (seq far) (apply max-key #(nth % 2) far)))]
-    (when best {:intent/kind :walk :intent/target (second best) :intent/for :pearls})))
+        far (filter #(>= (nth % 2) roam-reach) ends)]
+    (concat (filter #(= :found (first %)) far)
+            (sort-by #(- (nth % 2)) (remove #(= :found (first %)) far)))))
+
+(defn far-walk
+  "A walk to ground far from the feet: to the end of the first of the eight headings (headings,
+   from index start) whose route reaches ground wander-reach out (path/plan :found, as roam looks)
+   and is not in spent, else the farthest end of those routes that comes roam-reach or more from
+   the feet and is not in spent. Nil when no heading has a route that leaves the feet."
+  [world start spent]
+  (when-let [best (first (far-ends world start spent))]
+    {:intent/kind :walk :intent/target (second best) :intent/for :pearls}))
 
 (defn wander
   "A far-walk from the heading the clock picks, nothing spent. Not roam: it refuses an end already
@@ -1606,11 +1613,25 @@
          (sort-by #(path/octile feet %))
          first)))
 
+(def explore-memory 6)                 ; walks arrived at lately that an explore sets out away from
+
 (defn explore
-  "A far-walk that sets out along the heading the count of walks arrived at gives, to ground not
-   arrived at (memory/arrived): the widening search for a warped forest none is known of."
+  "A walk to the end (far-ends) farthest from the targets of the last explore-memory walks arrived
+   at (memory/newest-dones), ground not arrived at (memory/arrived) only: the widening search for
+   a warped forest none is known of goes on away from where it has been. By the count of walks it
+   alternated between two ends forty blocks apart, west and east, twelve seconds each, for five and
+   a half minutes (gym plan run 41134469333, pearls-travel-b job 2, 22:18:43 on)."
   [world]
-  (let [spent (memory/arrived world)] (far-walk world (mod (count spent) (count headings)) spent)))
+  (let [spent (memory/arrived world)
+        feet (intent/feet world)
+        been (conj (vec (keep #(when (vector? (:intention/target %)) (:intention/target %))
+                              (memory/newest-dones world :walk explore-memory)))
+                   feet)
+        ends (far-ends world 0 spent)]
+    (when (seq ends)
+      (let [away (fn [[_ to _]] (apply min (map #(path/octile to %) been)))
+            best (apply max-key away ends)]
+        {:intent/kind :walk :intent/target (second best) :intent/for :pearls}))))
 
 (defn travel
   "The walk to a warped forest, or nil: none in the Nether when the bot is in one (in-forest?);
