@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-30T14:19:18.195Z",
+  "at" : "2026-10-30T14:20:26.167Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -43,13 +43,13 @@
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
-    "number" : 611,
-    "title" : "Bot stops at portal-kit: no-support",
+    "number" : 620,
+    "title" : "Bot stops at furnace: no-support",
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
-    "number" : 620,
-    "title" : "Bot stops at furnace: no-support",
+    "number" : 611,
+    "title" : "Bot stops at portal-kit: no-support",
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
