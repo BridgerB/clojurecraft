@@ -167,14 +167,20 @@
   [world sp]
   (let [bl (:plan/blacklist world #{})] (>= (count (filter bl (cells-beside sp))) stands-tried)))
 
+(declare stand)
+
 (defn nearest-spawner
   "The spawner on record in the bot's dimension nearest the eye, within spawner-radius and not
-   blacklisted (no walk nor tunnel reached it) nor given-up?, or nil."
+   given-up?, or nil; one blacklisted (a walk to it failed) is kept while a stand beside it is
+   open, to be tunnelled to. Race lane 4 (run 40980342194) s1 r15, at its fortress, had
+   `:walk [544 57 203]` fail :no-path with the spawner a block off, lost the spawner to the
+   blacklist and searched far spirals for 4 hours ([-330 88 483] ...); s1 r16 `:walk failed :stuck`
+   there; s2 r08 and r09 never arrived."
   [world]
   (let [bl (:plan/blacklist world #{})]
     (memory/nearest-of (game/eye world)
                        spawner-radius
-                       (remove #(or (bl %) (given-up? world %))
+                       (remove #(or (and (bl %) (nil? (stand world %))) (given-up? world %))
                                (memory/positions-now world [spawner])))))
 
 (defn level-with?
@@ -184,9 +190,11 @@
 
 (defn walkable?
   "Can the bot walk to spawner sp: level-with? it (a route judges the plane only,
-   intent/routable?) and a route to it."
+   intent/routable?), a route to it, and no walk to it failed (blacklisted)."
   [world sp]
-  (and (level-with? world sp) (intent/routable? world {:intent/kind :walk :intent/target sp})))
+  (and (level-with? world sp)
+       (not (contains? (:plan/blacklist world #{}) sp))
+       (intent/routable? world {:intent/kind :walk :intent/target sp})))
 
 (defn top-in-sight?
   "Is the line from the eye to the point a block over spawner sp's centre, where its blazes

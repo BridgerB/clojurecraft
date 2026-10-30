@@ -594,6 +594,19 @@
     (is (intent/arrived? w walk d) "the walk would be done at once")
     (is (not= walk (next-intent w)) "so the walk is not chosen: the act goes on to the camp")))
 
+(deftest a-spawner-whose-walk-failed-is-tunnelled-to-not-given-up
+  ;; race lane 4 s1 r15: `:walk [544 57 203]` failed :no-path at the fortress, the blacklist took the
+  ;; spawner, and the bot searched far spirals for 4 hours; the stand beside it was open
+  (let [sp [11 64 10]
+        w (-> (standing {})
+              (memory/observe sp blaze/spawner)
+              (assoc :plan/blacklist #{sp}))]
+    (is (= sp (blaze/nearest-spawner w)) "kept: a stand beside it is open")
+    (is (not (blaze/walkable? w sp)) "a walk to it failed, so it is not walked to again")
+    (is (= :tunnel-to (:intent/kind (blaze/to-spawner w sp))) "tunnelled to its stand instead")
+    (testing "a spawner with every stand blacklisted is given up"
+      (is (nil? (blaze/nearest-spawner (update w :plan/blacklist into (blaze/cells-beside sp))))))))
+
 (deftest the-blaze-row-takes-the-table-it-placed-along
   ;; race lane 4 (run 40980342194) s1 r15: a pickaxe made at a placed table, the tunnel went on and
   ;; the table stayed; with 598 cobblestone and 13 sticks and no table the next pickaxe could not be
