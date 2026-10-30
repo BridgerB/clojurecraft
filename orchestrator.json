@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-30T12:34:24.443Z",
+  "at" : "2026-10-30T12:35:33.539Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -13,13 +13,13 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 178,
-    "title" : "Bot stops at portal: timeout",
+    "number" : 526,
+    "title" : "Bot stops at blaze-rods: blocked",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 526,
-    "title" : "Bot stops at blaze-rods: blocked",
+    "number" : 178,
+    "title" : "Bot stops at portal: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
@@ -36,7 +36,7 @@
     "number" : 151,
     "title" : "Bot stops at flint-and-steel: not-picked-up",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : true
+    "copilot" : false
   }, {
     "number" : 611,
     "title" : "Bot stops at portal-kit: no-support",
@@ -217,11 +217,11 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 178,
+    "issue" : 526,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 526,
+    "issue" : 178,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -234,8 +234,7 @@
     "why" : "hands-off label"
   }, {
     "issue" : 151,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment"
+    "move" : "assign"
   }, {
     "issue" : 531,
     "move" : "leave",
@@ -302,11 +301,6 @@
     "why" : "hands-off label"
   } ],
   "log" : [ {
-    "issue" : 611,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment",
-    "at" : "2026-10-30T05:24:59.015Z"
-  }, {
     "issue" : 611,
     "move" : "assign",
     "at" : "2026-10-30T05:26:05.781Z"
@@ -1651,5 +1645,9 @@
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
     "at" : "2026-10-30T12:34:24.443Z"
+  }, {
+    "issue" : 151,
+    "move" : "assign",
+    "at" : "2026-10-30T12:35:33.539Z"
   } ]
 }
