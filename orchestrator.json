@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-30T19:49:19.101Z",
+  "at" : "2026-10-30T19:53:40.554Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -33,11 +33,6 @@
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
-    "number" : 610,
-    "title" : "Bot stops at cast-one: no-support",
-    "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
-  }, {
     "number" : 580,
     "title" : "Bot stops at blaze-rods: inventory-full",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
@@ -45,6 +40,11 @@
   }, {
     "number" : 613,
     "title" : "Bot stops at flint-and-steel: no-support",
+    "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 610,
+    "title" : "Bot stops at cast-one: no-support",
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
