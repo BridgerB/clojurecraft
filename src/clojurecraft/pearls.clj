@@ -1546,6 +1546,14 @@
 
 (def answers-to-hand #{:fight :back-off :eat :dig}) ; intents a running hunt keeps with an angry enderman at hand: the answers to it, a meal, a fire put out
 
+(defn out-walk?
+  "Is intent i a walk the hunt takes out of its burrow, to anywhere but the mouth (the lure's
+   walk, which an angry enderman near the mouth is what it is for) and not the walk home?"
+  [world i]
+  (and (= :walk (:intent/kind i))
+       (not= (:intent/target i) (:pearls/shelter world))
+       (not= (:intent/target i) (:pearls/mouth world))))
+
 (defmethod plan/interrupts? :pearls
   ;; any running intent but an answer (answers-to-hand) or the walk home ends with an angry
   ;; enderman at hand (beset?), and the hunt plans again: home, the fight held there, or the
@@ -1553,12 +1561,17 @@
   ;; 39887752302 had a walk and a tunnel go on while one struck the bot from 20 health to none in
   ;; six to ten seconds, the bot carried on away from it. Never in the burrow's end, where none
   ;; reaches: sim probe 39892490709 (worlds R1 and R4, seed 3) cut its lookout there every tick
-  ;; for twenty minutes over one given up on by the mouth, and the lure never counted a lookout
+  ;; for twenty minutes over one given up on by the mouth, and the lure never counted a lookout.
+  ;; A walk out to anywhere but the mouth (out-walk?) ends as soon as an angry one is near the
+  ;; mouth (angry-near), not only at hand: churn-a pearls-12 run 1 (plan run 41096292443) walked
+  ;; 12 blocks up its stairs for 8 s after the hunt's own choice was the way home, the angry one
+  ;; arrived with the bot 11 blocks from the end, and four hits killed it on the stairs
   [world _ i]
   (and (not (contains? answers-to-hand (:intent/kind i)))
        (not (and (= :walk (:intent/kind i)) (= (:intent/target i) (:pearls/shelter world))))
        (not= (:pearls/shelter world) (intent/feet world))
-       (beset? world)))
+       (or (beset? world)
+           (and (out-walk? world i) (some? (shelter world)) (some? (angry-near world))))))
 
 (defmethod combat/answers :pearls
   ;; the hunt provokes endermen and fights them from its burrow; an angry one (entity/creepy?)

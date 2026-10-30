@@ -2049,3 +2049,25 @@
     (is (empty? (combat/threats (hit (burrowed [8.5 61.0 8.5]
                                                {9 (assoc angry :entity/pos [5.5 61.0 8.5])}))))
         "in the burrow's end it stays the hunt's: a held fight")))
+
+(deftest a-walk-out-ends-when-an-angry-one-is-near-the-mouth-not-only-at-hand
+  ;; churn-a pearls-12 run 1 (plan run 41096292443): the hunt's choice had been the way home for
+  ;; 8 s while a walk to a site 12 blocks up the stairs went on; the angry one (blacklisted after
+  ;; a held fight timed out) arrived with the bot 11 blocks from the end, and killed it on them
+  (let [angry (assoc (enderman [3.5 64.0 14.5]) :entity/creepy? true)
+        out {:intent/kind :walk :intent/target [3 64 4] :intent/for :shelter :intent/status :active}
+        lure
+        {:intent/kind :walk :intent/target [3 64 8] :intent/for :shelter :intent/status :active}
+        home
+        {:intent/kind :walk :intent/target [8 61 8] :intent/for :shelter :intent/status :active}
+        w (-> (burrowed [4.5 63.0 8.5] {9 angry})
+              (assoc :plan/blacklist #{9}))]
+    (is (pearls/angry-near w) "the blacklisted angry one is still near the mouth")
+    (is (not (pearls/beset? w)) "and not at hand")
+    (is (plan/interrupts? w row out) "a walk out is cut")
+    (is (not (plan/interrupts? w row lure)) "the lure's walk to the mouth is what it is for")
+    (is (not (plan/interrupts? w row home)) "the way home is never cut")
+    (is (not (plan/interrupts? (assoc w :player/pos [8.5 61.0 8.5]) row out))
+        "nor anything at the burrow's end")
+    (is (not (plan/interrupts? (assoc-in w [:world/entities 9 :entity/creepy?] false) row out))
+        "nor with none angry")))

@@ -669,20 +669,16 @@
 
 (defmethod claims-attacker? :default [_ _ _] false)
 
-(defn worked-rows
-  "The targets in play that are worked here, not reached and not done: the rows whose acts are
-   being asked."
-  [world]
-  (->> (plan/in-play world plan/goals)
-       (filter #(plan/here? world %))
-       (remove #(contains? (:plan/reached world #{}) (:goal/id %)))
-       (remove #(plan/done-by world %))))
-
 (defn claimed-attacker?
-  "Does a row in play (worked-rows) answer entity e, the mob that last hit the bot, itself
-   (claims-attacker?)?"
+  "Does a target in play that is worked here, not reached and not done, claim entity e, the mob
+   that last hit the bot (claims-attacker?), as its own to answer? The claim is asked first: the
+   :defend row's done-by asks threats, which asks this."
   [world e]
-  (boolean (some #(claims-attacker? world (:goal/plan %) e) (worked-rows world))))
+  (boolean (some #(and (claims-attacker? world (:goal/plan %) e)
+                       (plan/here? world %)
+                       (not (contains? (:plan/reached world #{}) (:goal/id %)))
+                       (not (plan/done-by world %)))
+                 (plan/in-play world plan/goals))))
 
 (defn answered-kinds
   "The hostile kinds (answering) of the targets in play that are worked here, not reached and
