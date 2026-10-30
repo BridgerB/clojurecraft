@@ -1,0 +1,11 @@
+;; issue #10, batch w18: recover never eats in the head's reach (backs off from the dragon when no
+;; cell is loaded to go to), heal before a crystal climb, the walk-restart cut fix (2fc3e69b1),
+;; the hunt test without a global redef; attack and defend 3 each, dragon 6, chain 3
+{:plans/label "chain-w18"
+ :plans/jobs 4
+ :plans/issue 10
+ :plans/experiments
+ [{:exp/name "attack" :exp/kind :gym :exp/goal "attack" :exp/runs 3 :exp/bots 1 :exp/est-s 300}
+  {:exp/name "defend" :exp/kind :gym :exp/goal "defend" :exp/runs 3 :exp/bots 1 :exp/est-s 300}
+  {:exp/name "dragon" :exp/kind :gym :exp/goal "dragon" :exp/runs 6 :exp/bots 1 :exp/est-s 1600}
+  {:exp/name "chain" :exp/kind :gym :exp/goal "chain" :exp/runs 3 :exp/bots 1 :exp/est-s 3600}]}

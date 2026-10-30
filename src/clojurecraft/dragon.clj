@@ -38,7 +38,9 @@
    before any crystal (toward-island). Not done: the cages round two spikes (the strike
    through their bars is unproven; the gym takes them away), and the exit portal."
   (:require [clojure.math :as math]
+            [clojure.string :as str]
             [clojurecraft.armour :as armour]
+            [clojurecraft.beds :as beds]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.combat :as combat]
             [clojurecraft.dimension :as dimension]
@@ -49,10 +51,12 @@
             [clojurecraft.inventory :as inventory]
             [clojurecraft.mob :as mob]
             [clojurecraft.packet :as packet]
+            [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
             [clojurecraft.place :as place]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
+            [clojurecraft.stairs :as stairs]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.window :as window]))
 
@@ -89,6 +93,10 @@
 (def walk-in-to 3.0)                  ; blocks on the plane from the fountain a perch walks in to for reach, no nearer
 (def perch-hold-ms 60000)             ; a :perch hands back to the planner this often
 (def breath-radius entity/breath-radius) ; a breath cloud's radius when its metadata has not said: the sitting dragon's flame cloud (DragonSittingFlamingPhase)
+(def dragon-hit 6.8)                  ; health one hit of the dragon's head takes on Normal (gym chain-w12/w9: 18.5 to 11.7 to 4.9, 7.57 to 1.07)
+(def perch-line (+ combat/danger-margin (* 2 dragon-hit))) ; health under which the bot stands in the dragon's reach no more: two hits, which land within a second (three in 0.6 s killed one at 18.5), and the margin
+(def hit-hold-ticks 100)               ; ticks (five seconds) after the dragon's blow that the bot stays out of its reach and strikes no more
+(def step-out-radius 8.0)             ; blocks from the fountain a step out of the head's reach goes to: past mob/bite-out and the margin
 (def breath-hold 2.0)                 ; blocks more than breath-reach the bot keeps from a cloud before it sets out for the stand again, so a cloud growing as it walks does not turn it back (gym chain-w12 dragon run 2: 24 swaps in 12 s between the stand and the cell out of the breath)
 (def breath-margin 1.5)               ; blocks beyond a breath cloud's radius (:entity/radius: a fireball's grows from 3 to 7) the bot keeps
 (def behind-by 1.0)                   ; blocks behind the sitting dragon's body (along its facing, mob/ahead) a stand must be: out of its head's and neck's way
@@ -301,6 +309,8 @@
           (= (dec fx) ix) (standing-walk shore)
           :else (standing-walk [(dec fx) fy 0]))))
 
+(declare recover looks-away)
+
 (defn toward-crystals
   "The next intent toward no crystal standing and the feet off every pillar, for the crystal
    nearest the feet and its approach: on the End's entry platform or its bridge across the void,
@@ -313,7 +323,11 @@
    with no crystal and the feet down. Falling (not :player/on-ground?, a hit's knockback off a
    pillar or the way down it) the wait :falling: no route starts in the air, and gym chain-w11
    runs 3 and 4 asked for a walk every tick, each failed :no-path, twelve in a row failed the
-   run in 0.6 s."
+   run in 0.6 s. On the ground and hurt under perch-line, with food to heal by (food at
+   eat/regen-food or a meal held), recover's meal, shelter or wait before any climb: gym chain-w16
+   run 1 (plan run 40863839525) struck its seventh crystal from the top of a pillar at 14.2
+   health, and three blows of the dragon's (2 + 3 + 3) and its breath took the bot from 13.7 to 0
+   in 1.2 s of dig-down."
   [world]
   (let [[fx fy fz :as feet] (intent/feet world)
         [eid c] (entity/nearest (crystals world) (:player/pos world))
@@ -323,6 +337,10 @@
         gap (when a (wall-gap world a))]
     (cond (off-island? world) (toward-island world)
           (not (:player/on-ground? world true)) {:plan/wait :falling}
+          (and (< (:player/health world full-health) perch-line)
+               (not (or (on-pillar? world) (on-spike? world)))
+               (or (>= (:player/food world 20) eat/regen-food) (eat/food-held world)))
+          (recover world)
           (and a (= feet (:stand a)) gap item)
           {:intent/kind :place :intent/item item :intent/cell gap}
           (and a (= feet (:stand a)) gap) {:plan/wait :no-blocks}
@@ -689,13 +707,67 @@
                        (:player/inventory world))))
     {:intent/kind :wear :intent/item :carved_pumpkin}))
 
+(defn struck-by-dragon?
+  "Did the dragon itself hit the bot within hit-hold-ticks: the last attacker (:player/attacker,
+   from a damage event's direct source) is the dragon's id and health fell (:player/hurt-at) that
+   recently? Not its breath (a cloud's id). Gym chain-w17 dragon run 1 (plan run 40904439588) went
+   20 -> 17.1 -> 14.8 -> 11.9 -> 9.5 -> 3.3 -> 0 in 2.4 s of blows on the perch; a line that waits
+   for three of them is too late."
+  [world]
+  (let [[eid _] (dragon world)
+        a (:player/attacker world)
+        at (:player/hurt-at world)]
+    (boolean (and eid a at (= a eid) (<= (- (:time/tick world 0) at) hit-hold-ticks)))))
+
+(def hold-ms 5000)                    ; a :hold hands back to the planner this often
+
+(defmethod intent/run :hold
+  ;; {:intent/kind :hold :intent/target eid}: stand where the feet are, looking at the dragon
+  ;; (look-away: never into an enderman's eyes), until it is gone, sits perched on the ground
+  ;; (the bed kill takes over, bed-step) or hold-ms have passed. No end condition of the :perch's
+  ;; (in-bite? with a stand) is its own, so the planner's choice of it never ends it at once.
+  [world {:intent/keys [target since] :as i} _]
+  (let [now (:time/now world)
+        since (or since now)
+        e (get-in world [:world/entities target])
+        world (assoc world :plan/intent (assoc i :intent/since since))]
+    (if (or (entity/gone? world target)
+            (and e (grounded? e) (perched? e))
+            (> (- now since) hold-ms))
+      (-> world
+          (assoc :player/controls {})
+          intent/done)
+      (assoc world
+             :player/controls
+             {:control/look (look-away world
+                                       (physics/look-at (game/eye world) (:entity/pos e)))}))))
+
+(def rest-ms 5000)                    ; a :dragon-rest hands back to the planner this often
+
+(defmethod intent/run :dragon-rest
+  ;; {:intent/kind :dragon-rest}: stand where the feet are, the look turned from an enderman's eyes
+  ;; (look-away), until the health is back to perch-line or rest-ms have passed. A wait
+  ;; (:plan/wait :low-health) fails the plan after wait-ticks, 20 s: gym chain-w20 chain run 1
+  ;; (plan run 40928784091) failed :low-health at 31m9s with time left; a rest is an intent of its own kind (:rest is the blaze row's, with other ends), run
+  ;; and replaced, never the wait that counts toward failing
+  [world {:intent/keys [since] :as i} _]
+  (let [now (:time/now world)
+        since (or since now)
+        world (assoc world :plan/intent (assoc i :intent/since since))]
+    (if (or (>= (:player/health world full-health) perch-line) (> (- now since) rest-ms))
+      (-> world
+          (assoc :player/controls {})
+          intent/done)
+      (looks-away (assoc world :player/controls {})))))
+
 (declare fountain-stand holds? in-basin? stand-cells)
 
 (defmethod intent/run :perch
   ;; {:intent/kind :perch :intent/target eid}: the best sword in hand, then by the fountain facing
   ;; the dragon (look-away: never into an enderman's eyes); once it has held perched (perched?)
   ;; for perch-ticks, hit it while its box is in reach, walking in toward the fountain while it
-  ;; is not (no nearer than walk-in-to, and never under its head: bite-on-way?). Done when it is
+  ;; is not (no nearer than walk-in-to, never under its head: bite-on-way?, and only with a stand
+  ;; open: none, every one under a breath cloud, it holds where it is). Done when it is
   ;; gone (dead), a breath is near (the planner backs off) unless the bot holds through it in the
   ;; basin (holds?), its head has turned onto the feet (in-bite?) with a stand behind it to go
   ;; to (the planner walks there) unless the dragon is in its scanning turn (scanning?: the head
@@ -712,7 +784,8 @@
         sat? (>= perched perch-ticks)
         stand (fountain-stand world)
         health (:player/health world full-health)]
-    (cond (or (< health combat/retreat-health)
+    (cond (or (< health perch-line)
+              (struck-by-dragon? world)
               (entity/gone? world target)
               (and (breath-near world) (not (holds? world)))
               (and (in-bite? e (:player/pos world)) (not (scanning? e)) (some? stand))
@@ -733,6 +806,7 @@
               (= :arm (:intent/stage i)) (arm world)
               (and sat? (<= (reach world e) strike-reach)) (hit world target e)
               (and sat?
+                   (some? stand)
                    (> (from-fountain world) walk-in-to)
                    (not
                     (breath-on-way? world (:player/pos world) (let [[fx fz] fountain] [fx 0.0 fz])))
@@ -766,6 +840,10 @@
    (turned?), none short of behind-by behind its body (behind?), where the bot waits for the
    dragon to perch, or nil when no such column has ground loaded. The stand the bot held last
    (:dragon/stand, kept by the :perch) stays the stand while it is out of every breath's reach,
+   no stand the feet are at (stand-near) while the head is on the feet themselves (in-bite? of
+   the position, not the cell's middle: a :perch there ends at once, and a stand the walk had
+   arrived at asked for the :perch again, every tick, 180 times a run: gym chain-w18 dragon runs
+   1, 3 and 4, plan run 40914832722),
    not in the head's bite (in-bite?) and not short of stand-slack less than behind-by behind the
    body: the nearest stand is changed to only for a clear gain, not each time the turning dragon
    makes the other one marginally nearer (gym chain-w13 dragon runs 1 and 3: [0 62 -2] and
@@ -784,15 +862,23 @@
                     (some #(<= (physics/horizontal-distance (physics/centre c) (:entity/pos %))
                                (breath-reach %))
                           clouds))
+        pos (:player/pos world)
+        bitten-here? (fn [c]
+                       (and d
+                            (not (scanning? d))
+                            (<= (physics/horizontal-distance pos (physics/centre c)) stand-near)
+                            (in-bite? d pos)))
         held (:dragon/stand world)]
     (if (and held
              (some #{held} cells)
              (not (breathed? held))
+             (not (bitten-here? held))
              (not (and d (in-bite? d (physics/centre held))))
              (behind? d (physics/centre held) (- behind-by stand-slack)))
       held
       (->> cells
            (remove breathed?)
+           (remove bitten-here?)
            (filter #(behind? d (physics/centre %) behind-by))
            (sort-by #(physics/horizontal-distance (:player/pos world) (physics/centre %)))
            first))))
@@ -868,6 +954,28 @@
          (sort-by #(physics/horizontal-distance pos (physics/centre %)))
          first)))
 
+(defn step-out-cell
+  "The feet cell on the ground nearest the feet, r (step-out-radius when not given) out from the
+   fountain in any of escape-ways directions, that no breath reaches and that is not before the
+   sitting dragon's head nor on a way past it; nil when none has ground loaded: the nearest place
+   beyond the head's reach along the rim."
+  ([world] (step-out-cell world step-out-radius))
+  ([world r]
+   (let [[_ d] (dragon world)
+         [fx fz] fountain
+         pos (:player/pos world)
+         feet (intent/feet world)]
+     (->> (for [k (range escape-ways)
+                :let [a (* k (/ (* 2.0 math/PI) escape-ways))]]
+            [(+ fx (* r (math/cos a))) (+ fz (* r (math/sin a)))])
+          (keep #(ground-cell world %))
+          (remove #{feet})
+          (remove #(breathed? world %))
+          (remove #(before-head? d (physics/centre %)))
+          (remove #(bite-on-way? d pos (physics/centre %)))
+          (sort-by #(physics/horizontal-distance pos (physics/centre %)))
+          first))))
+
 (defn sheltered?
   "Is the bot standing in a safe shelter cell outside the fountain basin: at least escape-from
    out from the fountain, no breath reaching the feet (breathed?), and not before the sitting
@@ -881,23 +989,174 @@
          (not (breathed? world feet))
          (not (before-head? d (physics/centre feet))))))
 
+(defn back-off-from-dragon?
+  "Would a combat :back-off from the dragon get the bot anywhere: the dragon shown and the back-off
+   not pointless (combat/back-off-pointless?: it is already back-off-to away, a drop or lava
+   behind)? A back-off that is done in the tick it starts is chosen again the next: 49 times in
+   2.5 s in gym chain-w20 chain run 1 (plan run 40928784091)."
+  [world]
+  (let [[_ d] (dragon world)] (boolean (and d (not (combat/back-off-pointless? world d))))))
+
+(defn back-off-pointless-here?
+  "Is a combat :back-off from the dragon pointless where the feet are (combat/back-off-pointless?
+   of the dragon's entity)? True with the body back-off-to away, however near its head."
+  [world]
+  (let [[_ d] (dragon world)] (boolean (and d (combat/back-off-pointless? world d)))))
+
 (defn recover
   "The intent while hurt under combat/retreat-health at the dragon, where the perch and
    the walk to its stand are never chosen (gym chain-w3's dragon runs 2 and 3 fought on
    at ten, then four and a half health, and the dragon slew them): a meal first when
-   food is held and the bar can take one, in shelter outside the basin (sheltered?) or with no
-   cell to go to, else, while not yet in shelter, the shelter walk to a cell out of every
-   breath's reach (escape), else the wait :low-health where the feet are for the bar's own
-   healing. Gym chain-w12 chain run 4 ate twice at the fountain at low health and died there.
+   food is held and the bar can take one, in shelter outside the basin (sheltered?) only;
+   not yet in shelter, the shelter walk to a cell out of every breath's reach (escape), else
+   combat's :back-off from the dragon (unless it would be done at once), else the meal, else a :dragon-rest where the feet
+   are for the bar's own healing. Gym chain-w12 chain run 4 ate twice at the fountain at low
+   health and died there, and chain-w17 dragon run 2 (plan run 40904439588) ate at 14.2 in the
+   head's reach: 8.4, 5.5, 0 in the next second.
    The :heal row's meal needs a lull (heal-food), which a sitting dragon never is, so
    the row eats here on its own line."
   [world]
   (let [food (when (< (:player/food world 20) 20) (eat/food-held world))
-        flight (escape world)]
-    (cond (and food (or (sheltered? world) (nil? flight))) {:intent/kind :eat :intent/item food}
-          (sheltered? world) {:plan/wait :low-health}
+        flight (escape world)
+        [eid _] (dragon world)]
+    (cond (sheltered? world)
+          (if food {:intent/kind :eat :intent/item food} {:intent/kind :dragon-rest})
           flight (shelter-walk flight)
-          :else {:plan/wait :low-health})))
+          (back-off-from-dragon? world) {:intent/kind :back-off :intent/target eid}
+          food {:intent/kind :eat :intent/item food}
+          :else {:intent/kind :dragon-rest})))
+
+(defn bed-wall
+  "The two cells, at the feet's height and the eye's, beside stand cell [x y z] toward site cell
+   [sx _ sz] along the axis with the farther way to go: where the blocks go that stand between the
+   bot and the bed, as a vector of cells."
+  [[x y z] [sx _ sz]]
+  (let [dx (- sx x)
+        dz (- sz z)
+        [ux uz] (if (>= (abs dx) (abs dz))
+                  [(long (math/signum (double dx))) 0]
+                  [0 (long (math/signum (double dz)))])]
+    [[(+ x ux) y (+ z uz)] [(+ x ux) (inc y) (+ z uz)]]))
+
+(defn bed-stands
+  "The cells to lay a bed at site cell [sx sy sz] from, nearest the feet first: the ground cells
+   beds/standoff out from the site in eight directions, those whose wall cells (bed-wall) lie
+   outside the dragon's box (beds/in-dragon-box?: the server refuses a block placed into it) and
+   outside every breath's reach, and where no entity stands."
+  [world d site]
+  (let [[sx _ sz] site
+        pos (:player/pos world)]
+    (->> (for [k (range 8)
+               :let [a (* k (/ math/PI 4))
+                     p [(+ sx 0.5 (* beds/standoff (math/cos a)))
+                        (+ sz 0.5 (* beds/standoff (math/sin a)))]]]
+           (ground-cell world p))
+         (remove nil?)
+         (remove (fn [c]
+                   (let [wall (bed-wall c site)]
+                     (or (some #(beds/in-dragon-box? d %) wall)
+                         (some #(combat/occupied? world %) wall)
+                         (some #(breathed? world %) (cons c wall))))))
+         (sort-by #(physics/horizontal-distance pos (physics/centre %))))))
+
+(declare bed-plan)
+
+(defn bed-step
+  "The intent of the bed kill, or nil: with a bed held (beds/held) and the dragon perched on the
+   ground, the walk to the nearest of bed-stands for the ground under its head (beds/head-point);
+   there, the two blocks of cobblestone between the bot and the site (bed-wall), each a :place;
+   then a :use-on laying the bed on the block under the site; then a :use-on of the bed laid,
+   which explodes it in the End (beds/blast-power); done when the bed is gone. Never fired when
+   the damage expected behind the walls that stand (beds/expected-damage) is not under the health
+   by two: with no cobblestone held or the wall cells not clear, the bed's 30 at the stand is a
+   death, not a plan. Its health on the boss bar (:world/boss-health) is read before and after in
+   the recording."
+  [world]
+  (when-let [bed (beds/held world)]
+    (let [[eid d] (dragon world)]
+      (when (and eid d (:entity/yaw d) (grounded? d) (perched? d)) (bed-plan world bed eid d)))))
+
+(defn bed-plan
+  "The bed-step intent for bed held, the perched dragon eid d: see bed-step."
+  [world bed _ d]
+  (let [head (beds/head-point d)
+        ground (ground-cell world head)
+        under-ground (some-> ground
+                             (update 1 dec))
+        bed-block? (fn [c]
+                     (some-> (terrain/block-at world c)
+                             blocks/name-of
+                             name
+                             (str/ends-with? "_bed")))
+        site (if (and under-ground (bed-block? under-ground)) under-ground ground)
+        stand (when site (first (bed-stands world d site)))]
+    (when (and site stand)
+      (let [[sx sy sz] site
+            under [sx (dec sy) sz]
+            wall (bed-wall stand site)
+            open (filter #(= :clear (path/classify world %)) wall)
+            stone (stairs/filler world 1)
+            standing (- (count wall) (count open))
+            dist (physics/horizontal-distance (physics/centre stand) (physics/centre site))
+            health (:player/health world full-health)
+            laid? (str/ends-with? (name (or (some-> (terrain/block-at world site)
+                                                    blocks/name-of)
+                                            :air))
+                                  "_bed")]
+        (cond laid?
+              {:intent/kind :use-on
+               :intent/item bed
+               :intent/target site
+               :intent/aim [(+ sx 0.5) (+ sy 0.5625) (+ sz 0.5)]
+               :intent/expect [:or [:block site :air] [:block site :fire] [:block site :cave_air]]}
+              (not (at-stand? world stand)) (standing-walk stand)
+              (not (< (+ 2.0 (beds/expected-damage dist (if stone (count wall) standing))) health))
+              nil
+              (seq open) {:intent/kind :place :intent/item stone :intent/cell (first open)}
+              :else
+              {:intent/kind :use-on
+               :intent/item bed
+               :intent/target under
+               :intent/aim [(+ sx 0.5) (+ sy 0.0) (+ sz 0.5)]
+               :intent/expect [:block site bed]})))))
+
+(defn out-of-the-bite
+  "The intent that takes the feet from the head's bite: the shelter walk to the nearest cell
+   beyond its reach (step-out-cell), else combat's :back-off from the dragon."
+  [world]
+  (let [cell (step-out-cell world)
+        [eid _] (dragon world)]
+    (cond cell (shelter-walk cell)
+          (back-off-from-dragon? world) {:intent/kind :back-off :intent/target eid}
+          :else {:intent/kind :dragon-rest})))
+
+(defn after-blow
+  "The intent in the hit-hold-ticks after the dragon's blow (struck-by-dragon?): always on, away
+   from it, never a rest, a meal or a wait where the blow fell: the shelter walk to the nearest
+   cell at least step-out-radius out from the fountain and four blocks further out than the feet
+   are (step-out-cell), else combat's :back-off from the dragon (unless it would be done at once),
+   else a :dragon-rest. The dragon's blows reach from its head and wings, well past the body that
+   back-off-pointless? measures: gym chain-w21 dragon runs 1, 4 and 5 (plan run 40939522210) were
+   hit at 8.5 blocks from the fountain, the body 8.5 off but the head two, rested there and were
+   slain, 19.5 -> 12.7 -> 5.9 -> 0 in three blows."
+  [world]
+  (let [r (max step-out-radius (+ 4.0 (from-fountain world)))
+        cell (step-out-cell world r)
+        [eid _] (dragon world)]
+    (cond cell (shelter-walk cell)
+          (back-off-from-dragon? world) {:intent/kind :back-off :intent/target eid}
+          :else {:intent/kind :dragon-rest})))
+
+(defn back-off-breath
+  "The intent for a breath cloud or fireball [eid entity] near the feet (breath-near) that nothing
+   else answered: combat's :back-off from it while it is nearer than combat/back-off-to, else a
+   :dragon-rest. A cloud grown to 7 is near out to 8.5 (breath-reach), past the 8 a back-off ends
+   at: gym chain-w22 job 3 run 6 started `:back-off 385` 38 times from 23:58:08.07, each done in
+   the tick it began."
+  [world [eid e]]
+  (if (< (combat/horizontal world e) combat/back-off-to)
+    {:intent/kind :back-off :intent/target eid}
+    {:intent/kind :dragon-rest}))
 
 (defn toward-dragon
   "The next intent toward the dragon dead: on the ground in a breath cloud itself (in-breath?)
@@ -907,7 +1166,10 @@
    a spike, the crystals' (toward-crystals); a breath near, combat's :back-off from it; away from
    the fountain's stand (fountain-stand), the walk there; there, the :perch, and with every stand
    under a breath, or one on the straight way to the stand (breath-on-way?), the :perch where
-   the feet are (gym dragon-b: a fireball's cloud on the basin after the dragon took off, and
+   the feet are, unless the head is on the feet themselves (in-bite?: the perch ends at once there
+   and the planner asked for it again each tick, 178 times a run, gym chain-w18 dragon runs 1, 3
+   and 4, plan run 40914832722), then the step out of the bite (out-of-the-bite) (gym dragon-b:
+   a fireball's cloud on the basin after the dragon took off, and
    the plan waited :no-fountain until it failed; gym dragon-d: the walk back to the stand went
    through a fireball's cloud lying between and died in it). A wait :no-fountain with no
    ground round the fountain loaded, :no-dragon with no dragon shown. From outside the basin
@@ -922,7 +1184,9 @@
    2 backed straight off into the fountain's pillar and died in the cloud against it); and
    through its scanning turn (scanning?) the :perch holds whatever stand the feet are at, the
    stand re-chosen only in the phases the dragon does not turn in. Hurt under
-   combat/retreat-health, none of the perch or the stands: recover's meal, shelter
+   perch-line (two hits of the head and the margin, not combat/retreat-health: gym chain-w9
+   dragon run 2 perched at 14 and died to two hits in a second), none of the perch or the
+   stands: recover's meal, shelter
    walk or wait until the health is back over that line."
   [world]
   (let [[eid d] (dragon world)
@@ -931,7 +1195,8 @@
         stand (fountain-stand world)
         far? (and stand (> (physics/horizontal-distance pos (physics/centre stand)) stand-near))
         blocked? (and far? (breath-on-way? world pos (physics/centre stand) breath-hold))
-        flight (when breath (escape world))]
+        flight (when breath (escape world))
+        bed-intent (bed-step world)]
     (cond (and (seq (crystals world))
                (in-breath? world)
                (:player/on-ground? world true)
@@ -940,7 +1205,9 @@
           (shelter-walk (escape world))
           (or (off-island? world) (seq (crystals world)) (on-pillar? world) (on-spike? world))
           (toward-crystals world)
-          (< (:player/health world full-health) combat/retreat-health) (recover world)
+          (struck-by-dragon? world) (after-blow world)
+          bed-intent bed-intent
+          (< (:player/health world full-health) perch-line) (recover world)
           (and breath eid (holds? world)) {:intent/kind :perch :intent/target eid}
           (and breath eid d (grounded? d) (or (in-basin? world) (not blocked?)) far?)
           (shelter-walk (or (when-not (in-basin? world)
@@ -948,10 +1215,15 @@
                                        (ground-cell world)))
                             stand))
           (and breath flight) (shelter-walk flight)
-          breath {:intent/kind :back-off :intent/target (first breath)}
+          breath (back-off-breath world breath)
+          (and eid d (beds/held world) (not (and (grounded? d) (perched? d))))
+          (if (< (from-fountain world) step-out-radius)
+            (out-of-the-bite world)
+            {:intent/kind :hold :intent/target eid})
           (and (nil? stand) eid (some? (ground world 0 0 sky)))
           {:intent/kind :perch :intent/target eid}
           (nil? stand) {:plan/wait :no-fountain}
+          (and eid blocked? d (in-bite? d pos) (not (scanning? d)) stand) (out-of-the-bite world)
           (and eid (or blocked? (and (scanning? d) (in-basin? world))))
           {:intent/kind :perch :intent/target eid}
           far?
@@ -1033,7 +1305,7 @@
         pos (:player/pos world)
         shelter? (and (= :walk (:intent/kind i)) (= :shelter (:intent/for i)))]
     (or (and (= :perch (:intent/kind i))
-             (< (:player/health world full-health) combat/retreat-health))
+             (or (< (:player/health world full-health) perch-line) (struck-by-dragon? world)))
         (and (not= :back-off (:intent/kind i))
              (not shelter?)
              (not (off-island? world))

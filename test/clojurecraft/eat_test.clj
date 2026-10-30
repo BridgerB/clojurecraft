@@ -140,3 +140,16 @@
     (is (= (:sim/food sim) (:player/food w)) "the bot's food is the server's")
     (is (= 2 (:bread (recipe/counts (:player/inventory w)))))
     (is (= [] (:sim/violations sim)))))
+
+(deftest no-meal-is-begun-in-the-middle-of-the-blows
+  ;; gym chain-w16 run 1 (plan run 40863839525): `:dig-down`, `:eat`, `:dig-down` on a crystal's
+  ;; pillar while the dragon's blows took 13.7 to 11.8 to 8.9 to 6.0, then the cloud the rest
+  (let [w (assoc (standing 6 {2 (item :bread 3)}) :plan/goals #{:wood} :time/tick 1000)
+        hurt (fn [at] (assoc w :player/hurt-at at))]
+    (is (eat/under-attack? (hurt 990)) "ten ticks ago")
+    (is (not (eat/under-attack? (hurt 900))) "five seconds ago")
+    (is (not (eat/under-attack? w)) "never")
+    (is (nil? (plan/next-intent (hurt 990) eat-row plan/goals)) "no meal under the blows")
+    (is (plan/done-by (hurt 990) eat-row) "the row steps aside")
+    (is (= {:intent/kind :eat :intent/item :bread} (plan/next-intent (hurt 900) eat-row plan/goals))
+        "the meal comes back once the blows stop")))

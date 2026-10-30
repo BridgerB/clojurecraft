@@ -29,6 +29,8 @@
 
 (def hungry-below 14)                 ; food under this is hunger to answer: six short of full, four below where natural healing stops (18)
 (def portal-fed 18)                   ; food under this is eaten once the portal kit is held, in the overworld: health comes back in the Nether only from food 18 (hunger/heal-level), which has no game
+(def regen-food 18)                   ; food from which health comes back by itself (hunger/heal-level)
+(def hit-quiet-ticks 40)               ; ticks (two seconds) after a hit in which no meal is begun: the meal stands the bot still for 1.6 s while whatever hit it hits again
 (def answer-ms 3000)                  ; past the eating time, how long the server's food may take to rise
 
 (def unsafe
@@ -88,15 +90,25 @@
   (boolean (some-> (:player/food world)
                    (< (long (hungry-under world))))))
 
+(defn under-attack?
+  "Was the bot hurt (:player/hurt-at, the tick health fell) within hit-quiet-ticks? Gym chain-w16
+   run 1 (plan run 40863839525) ate in the middle of the dragon's blows on a pillar's top, 13.7 to
+   11.8 to 8.9 to 6.0, and a breath cloud then took the rest."
+  [world]
+  (boolean (some-> (:player/hurt-at world)
+                   (->> (- (:time/tick world 0)))
+                   (<= hit-quiet-ticks))))
+
 (defmethod plan/done-by :fed?
-  ;; fed, or nothing to eat: a row with nothing to do must be done, or it would stand in front of
-  ;; every other target
+  ;; fed, or nothing to eat, or hurt a moment ago (under-attack?): a row with nothing to do must be
+  ;; done, or it would stand in front of every other target
   [world _]
-  (not (and (hungry? world) (food-held world))))
+  (not (and (hungry? world) (food-held world) (not (under-attack? world)))))
 
 (defmethod plan/next-intent :eat
   [world _ _]
-  (when-let [n (and (hungry? world) (food-held world))] {:intent/kind :eat :intent/item n}))
+  (when-let [n (and (hungry? world) (not (under-attack? world)) (food-held world))]
+    {:intent/kind :eat :intent/item n}))
 
 (defn deadline
   "The ms past which an :eat of food n started now has failed: its eating time by the server's

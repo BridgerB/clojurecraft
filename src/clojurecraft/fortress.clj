@@ -14,6 +14,7 @@
             [clojurecraft.blocks :as blocks]
             [clojurecraft.build :as build]
             [clojurecraft.dimension :as dimension]
+            [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.make :as make]
             [clojurecraft.memory :as memory]
@@ -136,6 +137,13 @@
                (path/floor? (assoc-in world [:world/blocks cell] (blocks/default-state item)) cell))
       item)))
 
+(defn infested?
+  "Is the block at cell an infested one (infested_stone, infested_stone_bricks ...)? Breaking one
+   lets a silverfish out, which calls the others out of their blocks: gym chain-w13 run 4 (job 4,
+   plan run 40798605016) dug one in a stronghold's wall and was bitten from 9.3 health to 0."
+  [world cell]
+  (contains? blocks/infested-states (terrain/block-at world cell)))
+
 (defn safe-but-lava?
   "Can the step from feet by move be taken but for the lava beside the cells it opens (safe?
    with that one clause left out): every cell it opens and the floor loaded, none of them lava or
@@ -152,6 +160,7 @@
      (every? some? (map at (conj cells floor)))
      (not-any? lava? cells)
      (not-any? #(and (blocks/solid? (at %)) (contains? unbreakable (blocks/name-of (at %)))) cells)
+     (not-any? #(infested? world %) cells)
      (not-any? #(or (intent/fluid-over-falling? world %) (intent/bed-over-fluid? world %)) cells)
      (or (path/floor? world floor)
          (and filler
@@ -241,6 +250,16 @@
      (if (and (not (zero? dy)) (> (abs ddy) (+ (abs ddx) (abs ddz))))
        (for [dy ys [dx dz] dirs] [dx dy dz])
        (for [[dx dz] dirs dy ys] [dx dy dz])))))
+
+(defn infested-ahead
+  "[cell name] of the first infested block among the cells the moves toward target from feet
+   open, or nil: what the tunnel refused (safe-but-lava?), for the line it logs when it ends
+   :blocked."
+  [world feet target climb]
+  (some (fn [m]
+          (some #(when (infested? world %) [% (name (blocks/name-of (terrain/block-at world %)))])
+                (opens feet m)))
+        (moves feet target climb)))
 
 (defn choose-move
   "The first of moves from feet toward target (climbing past climb, climb-past when not given)
@@ -597,6 +616,22 @@
                                     :intent/top (inc (long (second feet)))
                                     :intent/status :active}))))))
 
+(defn stage-clock
+  "The world with the running intent's stage key set to key (:choose, or an op and step), and,
+   when the key differs from the last one, one log line, `tunnel stage <last key> <ms>ms`, the
+   time that stage took by the clock the events carry. Logging only: it changes no decision.
+   Chain-w9..w17 tunnels took 2.5 to 3 s a step of which two digs were 1.15 s; this names where
+   the rest goes (the walk into the cell, the settle, the confirm and the choice of the move)."
+  [world key]
+  (let [i (:plan/intent world)
+        now (:time/now world)
+        prev (:intent/stage-key i)]
+    (if (= prev key)
+      world
+      (cond-> (intent/assoc-intent world :intent/stage-key key :intent/stage-at now)
+        prev
+        (game/say (str "tunnel stage " (pr-str prev) " " (- now (:intent/stage-at i now)) "ms"))))))
+
 (defmethod intent/run :tunnel-to
   ;; one step at a time toward :intent/target: a step's move is chosen when it starts and its ops
   ;; worked until the bot stands in the cell stepped into; done at the target (within
@@ -629,7 +664,8 @@
       (and (nil? move) (false? (:player/on-ground? world)) (< airborne air-grace))
       (intent/assoc-intent (assoc world :player/controls {}) :intent/airborne (inc airborne))
       (nil? move)
-      (let [back (recentre world feet)
+      (let [world (stage-clock world :choose)
+            back (recentre world feet)
             trail (trail-of world target)
             seen (-> tunnel-visited
                      (into (:trail/cells trail))
@@ -647,9 +683,11 @@
             m (or back undo ahead)
             retreated (if (and ahead (not fresh?) (not undo)) (inc (long retreats)) 0)]
         (cond (or (nil? m) (> retreated retreats-allowed))
-              (-> world
-                  (assoc :player/controls {})
-                  (intent/fail :blocked))
+              (let [[cell block] (when (nil? m) (infested-ahead world feet target climb))]
+                (cond-> (-> world
+                            (assoc :player/controls {})
+                            (intent/fail :blocked))
+                  cell (game/say (str "tunnel: refused " cell " " block " (infested)"))))
               :else
               (cond-> (intent/assoc-intent (assoc world :player/controls {})
                                            :intent/move m
@@ -694,7 +732,10 @@
                    (intent/routable? world child))
               (intent/dissoc-intent (assoc world :player/controls {}) :intent/child)
               :else
-              (let [world (build/work-op world i next event)
+              (let [world (build/work-op (stage-clock world [(:build/op next) (:build/step next)])
+                                         i
+                                         next
+                                         event)
                     i (:plan/intent world)]
                 (cond (and (intent/failed? i) (= :no-pickaxe (:intent/reason i)))
                       (-> world
