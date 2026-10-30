@@ -1650,3 +1650,72 @@
     (is (not (plan/same-choice? i nil)))
     (is (not (plan/same-choice? i {:plan/wait :x})))
     (is (not (plan/same-choice? i {:intent/kind :dig :intent/target [1 2 3]})))))
+
+;;; FLIP-FLOP: a defence runs to its end whichever row is chosen meanwhile
+
+(defn chosen-over
+  "The world after one plan-tick with row goal chosen over a running intent i (numbered 1, its
+   :intent/goal as given, controls held forward) when next-intent answers next; the walk itself
+   a no-op (intent/run unchanged)."
+  [i goal next]
+  (let [w (-> (walking #{} (:intent/goal i))
+              (assoc :plan/intent (merge {:intent/status :active :intent/id 1} i))
+              (assoc :player/controls {:control/forward true}))]
+    (with-redefs [plan/choose (constantly goal)
+                  plan/next-intent (constantly next)
+                  intent/run (fn [world _ _] world)]
+      (plan/plan-tick w {:event/kind :tick :event/now 50 :event/rand 0.5} [goal]))))
+
+(def pearls-row {:goal/id :ender-pearls :goal/done? :never :goal/plan :flip-test})
+(def defend-row {:goal/id :defend :goal/done? :never :goal/plan :flip-test})
+
+(deftest a-back-off-is-not-cut-by-the-row-chosen-when-the-threat-flickers-out
+  ;; pearls-travel-b job 1 (run 41134469333) 4.55-9.10 s: :back-off 885 (:defend) and :eat
+  ;; (:ender-pearls) alternated every 50-100 ms as the hoglin crossed the defend radius, the
+  ;; chosen row :defend, :ender-pearls, :defend ..., no meal and no back-off ever finished
+  (let [w (chosen-over {:intent/kind :back-off :intent/target 885 :intent/goal :defend}
+                       pearls-row
+                       {:intent/kind :eat :intent/item :cooked_beef})]
+    (is (= :back-off (get-in w [:plan/intent :intent/kind])) "the back-off goes on")
+    (is (= 1 (:plan/intents w)) "no intent started")
+    (is (= {:control/forward true} (:player/controls w)) "its controls were not reset")))
+
+(deftest a-pocket-or-seal-is-not-taken-by-defend-when-a-new-attacker-is-named
+  ;; blaze-race-n job 6 (run 41105083204) 663.579-663.678: :seal (:blaze-rods) running, the attacker
+  ;; became blaze 511, :defend was chosen and took it with :back-off 511, then :place; dead in 2 s
+  (doseq [k [:pocket :seal :unseal :pocket-hold]]
+    (let [w (chosen-over {:intent/kind k :intent/goal :blaze-rods}
+                         defend-row
+                         {:intent/kind :back-off :intent/target 511})]
+      (is (= k (get-in w [:plan/intent :intent/kind])) (str k " goes on"))
+      (is (= 1 (:plan/intents w))))))
+
+(deftest what-is-not-a-defence-is-still-preempted
+  (let [back {:intent/kind :back-off :intent/target 885 :intent/goal :defend}
+        meal {:intent/kind :eat :intent/item :cooked_beef :intent/goal :ender-pearls}]
+    (is (= :back-off
+           (get-in (chosen-over meal defend-row {:intent/kind :back-off :intent/target 885})
+                   [:plan/intent :intent/kind]))
+        "another row's meal gives way to :defend")
+    (is (= 2
+           (:plan/intents
+            (chosen-over meal defend-row {:intent/kind :back-off :intent/target 885}))))
+    (is (= 2
+           (:plan/intents (chosen-over {:intent/kind :fight :intent/target 5 :intent/goal :defend}
+                                       pearls-row
+                                       {:intent/kind :eat :intent/item :cooked_beef})))
+        "a :defend fight is not held")
+    (is (= 2
+           (:plan/intents
+            (chosen-over back
+                         {:goal/id :swim :goal/done? :never :goal/plan :flip-test :goal/trap :water}
+                         {:intent/kind :walk :intent/target [0 64 0]})))
+        "an escape row preempts a defence")))
+
+(deftest held-says-what-it-keeps
+  (is (plan/held? {:intent/kind :back-off :intent/goal :defend} pearls-row))
+  (is (plan/held? {:intent/kind :seal :intent/goal :blaze-rods} defend-row))
+  (is (not (plan/held? {:intent/kind :seal :intent/goal :blaze-rods} {:goal/id :blaze-rods}))
+      "its own row")
+  (is (not (plan/held? nil pearls-row)))
+  (is (not (plan/held? {:intent/kind :back-off :intent/goal :defend} nil))))

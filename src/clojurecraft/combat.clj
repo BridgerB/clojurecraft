@@ -816,6 +816,13 @@
     (or (when-let [e (get threats attacker)] [attacker e])
         (entity/nearest threats (:player/pos world)))))
 
+(def refuge-kinds
+  "Intents of another row that shelter the bot (a pocket dug and sealed, held, opened): kept against
+   the :defend row, which would lay a block or back off in their place (plan/holds?)."
+  #{:pocket :seal :unseal :pocket-hold})
+
+(doseq [k refuge-kinds] (defmethod plan/holds? k [_] true))
+
 (defmethod plan/next-intent :defend
   ;; the attacker among the threats, else the nearest (defend-target): a creeper, or anything
   ;; while the health is under the danger-line (the hits near, at most retreat-health), is
