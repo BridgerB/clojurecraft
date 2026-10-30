@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-30T13:55:55.564Z",
+  "at" : "2026-10-30T13:57:05.443Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -36,7 +36,7 @@
     "number" : 618,
     "title" : "Bot stops at ingots: no-support",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
+    "copilot" : true
   }, {
     "number" : 610,
     "title" : "Bot stops at cast-one: no-support",
@@ -239,7 +239,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 618,
-    "move" : "assign"
+    "move" : "wait",
+    "why" : "session starting"
   }, {
     "issue" : 531,
     "move" : "leave",
