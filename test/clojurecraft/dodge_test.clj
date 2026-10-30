@@ -81,14 +81,14 @@
               (+ (:eta-ms (first (dodge/incoming w))) dodge/slack-ms))
           "it gets there in time"))))
 
-(deftest in-a-tunnel-one-wide-there-is-no-cell-to-dodge-to
+(deftest in-a-tunnel-one-wide-there-is-no-cell-beside-it-to-dodge-to
   (let [stone (blocks/default-state :stone)
         walls (into {} (for [x (range 3 14) y [64 65 66] z [7 9]] [[x y z] stone]))
         roof (into {} (for [x (range 3 14)] [[x 66 8] stone]))
         w (standing (:pos volley-1) {1 (:fb volley-1)} (merge walls roof))]
     (is (seq (dodge/incoming w)) "the line still passes the body")
-    (is (nil? (dodge/intent-for w))
-        "no cell beside the tunnel; none along it passes farther in time")))
+    (is (every? #(= 8 (nth % 2)) (keep #(:intent/target (dodge/intent-for %)) [w]))
+        "no cell beside the tunnel: a dodge, if any, is along it")))
 
 (deftest a-fireball-in-flight-is-dodged-before-anything-but-fire-at-the-feet
   (let [w (standing (:pos volley-1) {1 (:fb volley-1)})
