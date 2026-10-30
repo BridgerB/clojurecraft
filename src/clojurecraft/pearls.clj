@@ -1643,6 +1643,17 @@
   [world]
   (min provoke-health (+ provoke-margin (* 2.0 (enderman-hit world)))))
 
+(def weak-melee 4.0)                    ; the hit (mob/kinds :melee) at or under which a mob is fought at hand with no burrow: a zombie's 3, a spider's 2
+
+(defn weak?
+  "Is entity e of a kind mob/kinds knows to hit for weak-melee or less on Normal (a zombie, a
+   spider), and no archer? A piglin, a hoglin or a blaze is not: gym plan run 41109441111
+   (pearls-travel-a) job 5 walked down to a piglin and fought it, three hits in four seconds,
+   dead at 39 minutes."
+  [e]
+  (let [k (mob/kinds (entity/kind e))]
+    (boolean (and k (:melee k) (nil? (:shoot k)) (<= (:melee k) weak-melee)))))
+
 (defn shelter-walk
   "A :walk for :shelter to target, or nil when target is nil or in :plan/blacklist (a walk to it
    failed, plan/fail-intent). A walk is tried once before it is known to fail: a fence between
@@ -1829,7 +1840,7 @@
        :intent/yield? true
        :intent/for :pearls}
       (and sid (not hurt?) (not in?)) {:intent/kind :fight :intent/target sid :intent/for :pearls}
-      (and tid (not hurt?) (not in?) (nil? home) (not swarmed?))
+      (and tid (not hurt?) (not in?) (nil? home) (not swarmed?) (weak? te))
       {:intent/kind :fight :intent/target tid :intent/for :pearls}
       (and at-end? bid (blocked-out? world))
       (or (cut-out world) {:intent/kind :lookout :intent/for :pearls})

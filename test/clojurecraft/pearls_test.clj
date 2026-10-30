@@ -2583,3 +2583,13 @@
         "none angry: provoked from the mouth")
     (is (not= :provoke (:intent/kind (plan/next-intent busy row plan/goals)))
         "another angry and coming: not a second")))
+
+(deftest only-a-weak-mob-at-hand-is-fought-with-no-burrow
+  ;; gym plan run 41109441111 (pearls-travel-a) job 5: `walk [2396 72 2184]`, `fight 744`, three
+  ;; hits of a piglin in four seconds, dead at 39 minutes
+  (let [zombie (mob :zombie [11.5 64.0 8.5])
+        piglin (mob :piglin [11.5 64.0 8.5])]
+    (is (pearls/weak? zombie))
+    (is (not (pearls/weak? piglin)) "it shoots and its hit is not in mob/kinds")
+    (is (= :fight (:intent/kind (plan/next-intent (standing {7 zombie}) row plan/goals))))
+    (is (not= :fight (:intent/kind (plan/next-intent (standing {7 piglin}) row plan/goals))))))
