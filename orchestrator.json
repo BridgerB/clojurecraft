@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-30T22:51:27.873Z",
+  "at" : "2026-10-30T22:53:41.316Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -28,11 +28,6 @@
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : true
   }, {
-    "number" : 514,
-    "title" : "Bot stops at blaze-rods: no-footing",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 623,
     "title" : "Bot stops at blaze-rods: no-support",
     "labels" : [ "bot-failure", "sim" ],
@@ -45,6 +40,11 @@
   }, {
     "number" : 526,
     "title" : "Bot stops at blaze-rods: blocked",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 514,
+    "title" : "Bot stops at blaze-rods: no-footing",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
@@ -245,15 +245,15 @@
     "move" : "wait",
     "why" : "session starting"
   }, {
-    "issue" : 514,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
     "issue" : 538,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
     "issue" : 526,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 514,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
