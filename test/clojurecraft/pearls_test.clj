@@ -2670,3 +2670,29 @@
                       (assoc-in [:world/entities 7 :entity/pos] [8.5 61.0 14.5])
                       (later (* 41 60000)))]
         (is (not (pearls/parked? on-us 7 [8.5 61.0 14.5])) "6 blocks")))))
+
+(deftest a-hunt-caged-in-a-pocket-cuts-its-way-out
+  ;; gym plan run 41134469333 (pearls-travel-b) job 6 (issue #263), the fold at 25 min: feet
+  ;; [2500 47 2155] at the burrow's end, every heading's route ended within thirteen blocks (:none,
+  ;; the frontier spent: 17 and 35 waypoints), so wander was nil; and at home the hunt never
+  ;; reached the roam, climb-out and dig-out of its :else chain. 136 walks over 41 minutes
+  (let [w (-> (burrowed [8.5 61.0 8.5] {})
+              (walked (take pearls/loiter-walks (cycle [[8 61 8] [10 61 8]]))))]
+    (is (pearls/loitering? w))
+    (is (nil? (pearls/wander w)) "one chunk loaded: no route reaches sixteen blocks out")
+    (is (= :stairs-up (:intent/kind (plan/next-intent w row plan/goals)))
+        "so it cuts stairs up toward the open ground")
+    (testing "not loitering: it stays and looks out as before"
+      (is (= {:intent/kind :lookout :intent/for :pearls}
+             (plan/next-intent (burrowed [8.5 61.0 8.5] {}) row plan/goals))))))
+
+(deftest a-hunt-sealed-in-the-nether-with-nowhere-to-travel-cuts-its-way-out
+  ;; pearls-travel-c (plan run 41144362671) jobs 2 and 3, pearls-12-from-fortress: landed in the
+  ;; gym's netherrack pad, lookout x1262 for 106 minutes with no walk at all
+  (let [sealed (-> (burrowed [8.5 61.0 8.5] {})
+                   (assoc :player/dimension nether))]
+    (is (pearls/travel-caged? sealed))
+    (is (nil? (pearls/travel sealed)))
+    (is (= :stairs-up (:intent/kind (plan/next-intent sealed row plan/goals))))
+    (testing "the overworld has no such search"
+      (is (not (pearls/travel-caged? (assoc sealed :player/dimension "minecraft:overworld")))))))

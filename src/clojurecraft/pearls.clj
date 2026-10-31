@@ -1715,6 +1715,18 @@
       {:intent/kind :walk :intent/target (update pos 1 inc) :intent/for :pearls}
       (explore world))))
 
+(defn travel-caged?
+  "Is the bot in the Nether, in no warped forest, with no enderman tracked, and no walk to or toward
+   one (travel) to be had: sealed in a pocket whose routes end within sixteen blocks? Pearls-
+   travel-c (plan run 41144362671, issue #263) jobs 2 and 3 landed in the gym's netherrack pad and
+   stood in :lookout for 106 and 111 minutes without a single walk; job 1 shuffled 337 walks in a
+   dozen blocks."
+  [world]
+  (boolean (and (= dimension/nether (dimension/of world))
+                (not (in-forest? world))
+                (empty? (endermen world seek-radius))
+                (nil? (travel world)))))
+
 (defn enderman-hit
   "The damage one enderman hit does the bot through the armour it wears (armour/worn over the four
    slots, mob/armour-points, mob/absorbed) of the 7 it does on Normal (mob/kinds :melee): 5.74
@@ -1913,6 +1925,11 @@
         wander-walk
         (delay (when (and (not hurt?) (not swarmed?) (not (live-menaced? world)) (wandering? world))
                  (wander world)))
+        cage-break (delay (when (and (not hurt?)
+                                     (not swarmed?)
+                                     (not (live-menaced? world))
+                                     (or (wandering? world) (travel-caged? world)))
+                            (or (climb-out world) (dig-out world))))
         csite-walk (delay (shelter-walk world csite))
         site-walk (delay (shelter-walk world site))
         overworld-death? (and (pos? (:stats/deaths world 0))
@@ -1957,6 +1974,7 @@
       {:intent/kind :fight :intent/target eid :intent/for :pearls}
       meal meal
       @travel-walk @travel-walk
+      @cage-break @cage-break
       @wander-walk @wander-walk
       (or hurt? (and in? bid)) {:intent/kind :lookout :intent/for :pearls}
       (and in? aid (lure? world) @mouth-walk) @mouth-walk
@@ -1990,6 +2008,7 @@
       home
       (or (vantage world far)
           (when (wandering? world) (wander world))
+          @cage-break
           {:intent/kind :lookout :intent/for :pearls})
       :else
       (or (if (pickaxe? world)
