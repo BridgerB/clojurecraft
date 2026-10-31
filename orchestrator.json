@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-31T07:53:01.199Z",
+  "at" : "2026-10-31T07:54:09.181Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -11,7 +11,7 @@
     "number" : 639,
     "title" : "Bot stops at fortress: no-food-to-return",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
+    "copilot" : true
   }, {
     "number" : 636,
     "title" : "Bot stops at blaze-rods: no-food-to-return",
@@ -65,6 +65,11 @@
   }, {
     "number" : 135,
     "title" : "Bot stops at cast-one: timeout",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 178,
+    "title" : "Bot stops at portal: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
@@ -173,11 +178,6 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 178,
-    "title" : "Bot stops at portal: timeout",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 171,
     "title" : "Bot stops at flint-and-steel: unsafe",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
@@ -244,7 +244,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 639,
-    "move" : "assign"
+    "move" : "wait",
+    "why" : "session starting"
   }, {
     "issue" : 539,
     "move" : "leave",
@@ -270,6 +271,10 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 178,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
     "issue" : 580,
     "move" : "leave",
     "why" : "hands-off label"
@@ -291,10 +296,6 @@
     "why" : "hands-off label"
   }, {
     "issue" : 342,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
-    "issue" : 178,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
