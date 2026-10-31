@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-31T09:21:07.357Z",
+  "at" : "2026-10-31T09:24:22.571Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -28,6 +28,11 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
+    "number" : 135,
+    "title" : "Bot stops at cast-one: timeout",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
     "number" : 643,
     "title" : "Bot stops at gear: retrying",
     "labels" : [ "bot-failure", "real", "sim" ],
@@ -41,11 +46,6 @@
     "number" : 617,
     "title" : "Bot stops at blaze-rods: no-log",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
-  }, {
-    "number" : 135,
-    "title" : "Bot stops at cast-one: timeout",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 531,
