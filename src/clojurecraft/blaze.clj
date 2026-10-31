@@ -1156,6 +1156,35 @@
 (def pocket-approach 14.0) ; blocks from the spawner within which a pocket is made ready before the tunnel goes on: close, so the tunnel's own steps do not break it (24 dug a pocket per tunnel step)
 (def prepare-cooldown-ms 300000) ; ms after a pocket was begun ahead before another is: blaze-race-r jobs 1 and 4 dug one a step, ten of them, 250 netherrack, and wore the pickaxe out
 (def approach-nodes 150)   ; cells the search for it visits at most when asked every tick (interrupts?)
+
+(def advance-step 4.0) ; blocks nearer the spawner an advanced pocket is at least
+(def advance-wait-ms 120000) ; ms in a pocket before another nearer the spawner is made
+
+(defn advance-intent
+  "A :pocket intent for a pocket at least advance-step nearer the spawner sp than the feet, or nil:
+   the bot in a pocket that no blaze comes to (idle?) for advance-wait-ms, a site found within
+   approach-nodes. Blaze-race-u jobs 3 and 6 camped 45 s at [2338 60 2291], 11 to 13 blocks from six
+   hovering blazes, then crossed the room to the spawner in the open: nearest blaze 8.4, 4.1, 1.7,
+   20 hp to 0.7 in 8 s, burning 3 of the 7 hits. The blazes hover where they have no line to the
+   bot (blaze-race-c: 4.9 hours, 0 attacks), so the pocket moves nearer a few blocks at a time, each
+   one a refuge to heal in and a mouth for them to come to."
+  [world sp]
+  (let [feet (intent/feet world)
+        here (physics/distance (physics/centre feet) (physics/centre sp))
+        entered (:intention/at (memory/last-done world :pocket))]
+    (when (and sp
+               (or (nil? entered) (> (- (:time/now world 0) entered) advance-wait-ms))
+               (> here advance-step))
+      (when-let [site (pocket/site-near world
+                                        feet
+                                        (let [ok? (pocket-ok? world sp false)]
+                                          (fn [c]
+                                            (and (ok? c)
+                                                 (<= (physics/distance (physics/centre c)
+                                                                       (physics/centre sp))
+                                                     (- here advance-step)))))
+                                        approach-nodes)]
+        {:intent/kind :pocket :intent/site site}))))
 (def press-ms 8000)        ; ms after a hit a blaze in line but out of reach still presses the bot
 
 (defn prepare-intent
@@ -1383,9 +1412,9 @@
   [world goal table]
   (let [in-pocket? (pocket/in? world)
         sp (nearest-spawner world)
-        ;; a camp in the pocket that no blaze comes to (idle?: three camps done in ten minutes and
-        ;; no fight) is left for the spawner's room, as the nook was
-        camping-in-pocket? (and in-pocket? (not (idle? world)) (wakes-spawner? world sp))
+        ;; a camp in the pocket that no blaze comes to (idle?) moves to a pocket nearer the spawner
+        ;; (advance-intent), never out across the room to it
+        camping-in-pocket? (and in-pocket? (wakes-spawner? world sp))
         [heid] (fightable-blaze world)
         [beid] (when-not in-pocket? (quarry world))
         [_ lying] (when (collectable? world) (rod-lying world))
@@ -1409,43 +1438,46 @@
                               (make/take-table-along world))))
         pick (delay (when (build/pickaxe-at-hand? world)
                       (make/decide world (assoc goal :goal/provides {:tag/pickaxes 1}) table)))]
-    (cond
-      (not= dimension/nether (dimension/of world)) {:plan/wait :other-dimension}
-      @out @out
-      @dodging @dodging
-      @held @held
-      @refuge @refuge
-      @heal @heal
-      @grab @grab
-      (and (not (hurt? world)) heid (not (crowded? world)))
-      {:intent/kind :fight :intent/target heid :intent/to-the-end? true :intent/yield? true}
-      @wary @wary
-      @away @away
-      (and lying (drops/under-reach? world lying)) (fetch-walk lying)
-      lying
-      {:intent/kind :collect-drops
-       :intent/item :blaze_rod
-       :intent/target (hunt/cell (:entity/pos lying))}
-      (and (not (hurt? world)) beid) {:intent/kind :fight :intent/target beid :intent/yield? true}
-      @waiting @waiting
-      @stock @stock
-      @fire @fire
-      (and (hurt? world) (not (heals? world)) (food-trip world)) (food-trip world)
-      (and (or (nil? sp) (not (at-spawner? world sp))) @pick) @pick
-      @table-along @table-along
-      @prepare @prepare
-      (and sp (not camping-in-pocket?) (not (at-spawner? world sp)) (not (at-nook? world sp)))
-      (to-spawner world sp)
-      (and sp
-           (or camping-in-pocket? (at-spawner? world sp) (at-nook? world sp))
-           (not (hurt? world))
-           (not (:player/on-fire? world)))
-      (or
-       (when-not (idle? world) (pocket-go world sp true))
-       (when-let [n (and (not in-pocket?) (not (at-nook? world sp)) (nook world sp))]
-         {:intent/kind :walk :intent/target n :intent/for :nook :intent/max-nodes corridor-nodes})
-       {:intent/kind :camp :intent/spawner sp})
-      :else (or (search world) {:plan/wait :no-blaze}))))
+    (cond (not= dimension/nether (dimension/of world)) {:plan/wait :other-dimension}
+          @out @out
+          @dodging @dodging
+          @held @held
+          @refuge @refuge
+          @heal @heal
+          @grab @grab
+          (and (not (hurt? world)) heid (not (crowded? world)))
+          {:intent/kind :fight :intent/target heid :intent/to-the-end? true :intent/yield? true}
+          @wary @wary
+          @away @away
+          (and lying (drops/under-reach? world lying)) (fetch-walk lying)
+          lying
+          {:intent/kind :collect-drops
+           :intent/item :blaze_rod
+           :intent/target (hunt/cell (:entity/pos lying))}
+          (and (not (hurt? world)) beid)
+          {:intent/kind :fight :intent/target beid :intent/yield? true}
+          @waiting @waiting
+          @stock @stock
+          @fire @fire
+          (and (hurt? world) (not (heals? world)) (food-trip world)) (food-trip world)
+          (and (or (nil? sp) (not (at-spawner? world sp))) @pick) @pick
+          @table-along @table-along
+          @prepare @prepare
+          (and sp (not camping-in-pocket?) (not (at-spawner? world sp)) (not (at-nook? world sp)))
+          (to-spawner world sp)
+          (and sp
+               (or camping-in-pocket? (at-spawner? world sp) (at-nook? world sp))
+               (not (hurt? world))
+               (not (:player/on-fire? world)))
+          (or (when (and in-pocket? (idle? world)) (advance-intent world sp))
+              (when-not (idle? world) (pocket-go world sp true))
+              (when-let [n (and (not in-pocket?) (not (at-nook? world sp)) (nook world sp))]
+                {:intent/kind :walk
+                 :intent/target n
+                 :intent/for :nook
+                 :intent/max-nodes corridor-nodes})
+              {:intent/kind :camp :intent/spawner sp})
+          :else (or (search world) {:plan/wait :no-blaze}))))
 
 ;; ---------------------------------------------------------------- the :portal-home intent
 
