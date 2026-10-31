@@ -2047,3 +2047,21 @@
         "the next routable one")
     (is (= [0 64 48] (plan/explore-cell (assoc w :plan/trail []) 0.25))
         "with no trail the old cell, 48 out in the direction asked")))
+
+(deftest the-explore-walk-waits-while-a-hostile-is-near
+  ;; pearl-fight-k job 2 (run 41197008609): "stuck 5" at 13:49:49 left the burrow, and enderman 4501
+  ;; was fighting it half a second later; the bot died in lava 6 s on
+  (let [event {:event/kind :tick :event/now 0 :event/rand 0.25}
+        enderman (fn [angry?]
+                   {7 (cond-> {:entity/type (blocks/entity-types :enderman)
+                               :entity/pos [2396.5 69.0 2164.5]
+                               :entity/health 40.0
+                               :entity/seen-at 0}
+                        angry? (assoc :entity/creepy? true))})
+        at (fn [ms angry?]
+             (plan/watch (assoc (frozen ms) :world/entities (enderman angry?)) pearls-table event))]
+    (is (nil? (:plan/unstuck (at (+ plan/stuck-ms 1000) true))) "an angry one near: put off")
+    (is (= 1 (:plan/unstuck (at (+ plan/stuck-ms plan/menace-grace-ms 1000) true)))
+        "a parked one is there for good: after the grace it goes")
+    (is (= 1 (:plan/unstuck (at (+ plan/stuck-ms 1000) false)))
+        "a calm one is the hunt's quarry, not a menace")))

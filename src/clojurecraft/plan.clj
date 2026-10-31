@@ -14,6 +14,7 @@
             [clojure.math :as math]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.dimension :as dimension]
+            [clojurecraft.entity :as entity]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
@@ -118,9 +119,11 @@
 (def stuck-extent 16.0)               ; blocks the box of the feet's places since progress was last seen must span (x or z) to count as a move: a tunnel loop inside 12 blocks is not one
 (def watch-every-ms 1000)             ; ms between two looks at progress
 (def quiet-ticks 6000)                ; ticks without damage after which a held defence is no longer defended for the watchdog: 5 min
-(def explore-distance 48)
+(def menace-radius 24.0)               ; blocks a hostile (an angry enderman, a blaze) this near puts the explore walk off
+(def menace-grace-ms 300000)          ; ms past the stuck line after which a hostile near no longer puts it off: a parked one is there for good
+(def explore-distance 48)             ; blocks the walk away from a stuck spot goes
 (def explore-tries 4)                 ; trail cells tried farthest first, then as many nearest first, for a route
-(def explore-nodes 2000)              ; expansions each of those route searches may spend             ; blocks the walk away from a stuck spot goes
+(def explore-nodes 2000)              ; expansions each of those route searches may spend
 (def anchors
   "{:goal/plan #{attribute}}: the places a row holds on to (the pearl hunt's burrow, a blaze pocket),
    dropped when it has made no progress for stuck-ms, so it does not walk back to them."
@@ -521,6 +524,15 @@
                 (:player/hurt-at world)
                 (<= (- (:time/tick world 0) (:player/hurt-at world)) quiet-ticks))))
 
+(defn menaced?
+  "Does a hostile (entity/hostiles: an enderman only once angry) stand within menace-radius of the
+   feet? The explore walk leaves a burrow, and pearl-fight-k job 2 (run 41197008609) fired it at
+   13:49:49, left the burrow, and was fighting enderman 4501 half a second later."
+  [world]
+  (let [p (:player/pos world)]
+    (boolean (some #(<= (physics/distance p (:entity/pos %)) menace-radius)
+                   (vals (entity/hostiles world))))))
+
 (defn watch-stamp
   "The watch as of now: the progress key k, where the bot stands, when progress was last seen
    (:at) and when it was last looked at (:checked)."
@@ -615,6 +627,9 @@
                       (not= k (:key w)))
                   (assoc world :plan/watch (watch-stamp world k now now))
                   (or (< (- now (:at w)) (get stuck-after (:goal/plan goal) stuck-ms))
+                      (and (menaced? world)
+                           (< (- now (:at w))
+                              (+ menace-grace-ms (get stuck-after (:goal/plan goal) stuck-ms))))
                       (not (can-abandon? world))
                       (defended? world (:plan/intent world)))
                   (assoc world :plan/watch w)
