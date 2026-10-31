@@ -2633,3 +2633,21 @@
         "an enderman 40 and below the cut's floor: none")
     (is (not (pearls/burrowable? (assoc low :player/pos [8.5 38.0 8.5]) [8 38 8] [1 0]))
         "a burrow whose last stair is at y 35 is under the floor")))
+
+(deftest a-wander-goes-out-past-an-angry-one-that-has-been-given-up-on
+  ;; gym plan run 41134469333 (pearls-travel-b) job 6 (issue #263): the fold at 60 min had
+  ;; loitering? and wander true (a walk to [2520 50 2184]) and still a lookout, with angry
+  ;; enderman 51 at [2506 50 2166], twelve blocks off, that never came in 41 minutes: menaced?
+  ;; kept the wander in
+  (let [angry (assoc (enderman [8.5 61.0 20.5]) :entity/creepy? true)
+        w (-> (wide (burrowed [8.5 61.0 8.5] {7 angry}))
+              (walked (take pearls/loiter-walks (cycle [[8 61 8] [10 61 8]]))))
+        given-up (assoc w :plan/given-up {7 0})]
+    (is (pearls/menaced? w) "twelve blocks off and level: within danger-radius")
+    (is (pearls/coming? w))
+    (is (not (pearls/coming? given-up)))
+    (is (not= [:walk :pearls] ((juxt :intent/kind :intent/for) (plan/next-intent w row plan/goals)))
+        "coming: the wander stays in")
+    (is (= [:walk :pearls]
+           ((juxt :intent/kind :intent/for) (plan/next-intent given-up row plan/goals)))
+        "given up on: the wander goes")))
