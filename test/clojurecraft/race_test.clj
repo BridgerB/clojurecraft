@@ -378,3 +378,15 @@
      (=
       "execute in minecraft:the_nether positioned 100 72 -50 if entity @e[type=minecraft:blaze,distance=..32]"
       (race/mob-test pad "minecraft:blaze")))))
+
+(deftest a-pad-stands-on-ground-with-ground-round-it
+  ;; race 9d15bd6, lane 7: two of three bots stepped off a pad built at y 72 into a cavern and fell
+  ;; 37 blocks into the lava sea
+  (is (= 8 (count race/ground-ring)))
+  (is (every? #(= 4 (apply max (map abs %))) race/ground-ring) "four blocks off, on a square")
+  (is (not-any? #{[0 0]} race/ground-ring))
+  (is (= "execute in minecraft:the_nether if block 3 60 -4 #minecraft:base_stone_nether"
+         (race/ground-test [3 60 -4])))
+  (is (= "execute in minecraft:the_nether if block 3 61 -4 minecraft:cave_air"
+         (race/air-test [3 61 -4] "minecraft:cave_air")))
+  (is (< race/ground-bottom 40.01) "over the lava sea (y 31)"))
