@@ -241,9 +241,11 @@
    open: a :seal that ended :done when its stale list was solid, the bot having moved, and this test
    said sealed (flip_trace2, run 41212534031)."
   [world {:pocket/keys [cell placed]}]
-  (boolean (and (seq placed)
-                (every? #(solid-at? world %) placed)
-                (or (nil? cell) (empty? (wanted-seal-cells world cell))))))
+  (boolean (and (every? #(solid-at? world %) placed)
+                (or (nil? cell) (empty? (wanted-seal-cells world cell)))
+                ;; a site that names no cell and has no cell to seal is a cell shut on every side (a pocket
+                ;; the bot dug into rock and stands in): sealed. Without a cell it is nothing (nil cell).
+                (or (seq placed) (some? cell)))))
 
 (defn unlayable?
   "Does the pocket at cell c want a block that cannot be laid (wanted-seal-cells that are not

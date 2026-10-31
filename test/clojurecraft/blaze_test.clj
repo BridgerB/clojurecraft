@@ -2291,3 +2291,15 @@
         "none is chosen in it")
     (is (some? (blaze/pocket-go (assoc (begun w 8 99500) :time/now 110000) nil false))
         "after pocket-churn-ms the pocket is found again")))
+
+(deftest a-shut-cell-with-nothing-placed-is-not-a-pocket-to-find-again
+  ;; blaze-race-z11 job 3 (flip_trace2): the row wanted a refuge while the cell stood in was shut on every side
+  (let [shut (-> (standing {})
+                 (assoc :world/chunks {[0 0] (world/column (sealed-walls))}
+                        :pocket/site pocket-site
+                        :time/now 100000))]
+    (is (pocket/in? shut))
+    (is (pocket/sealed? shut (:pocket/site shut)))
+    (is (nil? (blaze/hold-intent shut)) "nothing to hold for, nothing to open (no placed cell)")
+    (is (not= :pocket (:intent/kind (next-intent shut))))
+    (is (not= :unseal (:intent/kind (next-intent shut))))))

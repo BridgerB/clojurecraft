@@ -246,3 +246,14 @@
     (is (true? (pocket/unlayable? w c)))
     (is (false? (pocket/sealed? w site)) "not sealed")
     (is (not (pocket/can-seal? held site)) "and no :seal to re-issue")))
+
+(deftest a-cell-shut-on-every-side-with-nothing-placed-is-sealed
+  ;; blaze-race-z11 job 3 (flip_trace2): the held here-site [2345 60 2287] = the feet, :placed [], wanted [],
+  ;; `sealed?` false for ever on (seq placed), so the row still wanted a refuge and chose :pocket every
+  ;; 50 ms, 61 times in 3 s
+  (let [shut (world-of (merge walled (solid [7 64 8] [7 65 8])))
+        site {:pocket/cell [8 64 8] :pocket/stand nil :pocket/dig [] :pocket/placed []}]
+    (is (empty? (pocket/wanted-seal-cells shut [8 64 8])) "nothing left to seal")
+    (is (true? (pocket/sealed? shut site)) "so it is sealed, placed or not")
+    (is (false? (pocket/sealed? (world-of walled) site)) "an open side is not")
+    (is (false? (pocket/sealed? shut nil)) "no site is nothing")))

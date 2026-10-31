@@ -1451,7 +1451,10 @@
               (or (meal world) {:intent/kind :pocket-hold :intent/heal-to (hold-to world)})
               ;; sealed, cannot heal, under low-health: opened, the next blaze in reach seals it again
               ;; (the flip of blaze-race-p job 4), so it stays shut and the row goes on without a hold
-              (when (or (heals? world) (>= (:player/health world 20.0) low-health))
+              ;; and nothing to open when no cell was placed (a cell shut on every side): no :unseal that
+              ;; is done at once and chosen again
+              (when (and (seq (:pocket/placed site))
+                         (or (heals? world) (>= (:player/health world 20.0) low-health)))
                 {:intent/kind :unseal}))
             (and (reach-blaze world) (>= (:player/health world 20.0) low-health)) nil
             (and (or (pressed? world) (reach-blaze world)) (pocket/can-seal? world site))
