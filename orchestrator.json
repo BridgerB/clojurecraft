@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-31T09:48:18.666Z",
+  "at" : "2026-10-31T09:52:40.253Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -28,14 +28,14 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 135,
-    "title" : "Bot stops at cast-one: timeout",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 643,
     "title" : "Bot stops at gear: retrying",
     "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 135,
+    "title" : "Bot stops at cast-one: timeout",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 618,
