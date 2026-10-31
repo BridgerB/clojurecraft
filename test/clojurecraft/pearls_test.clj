@@ -3015,3 +3015,24 @@
         kind (fn [now] (:intent/for (plan/next-intent (assoc w :time/now now) row plan/goals)))]
     (is (not= :relocate (kind 100000)) "in the patience: it waits")
     (is (= :relocate (kind 200000)) "past it, with the angry one parked: it walks")))
+
+(deftest ^:eftest/synchronized a-remembered-table-no-route-reaches-is-replaced-not-walked-at
+  ;; pearl-fight-i job 1 (plan run 41178660163): 28 digs left in a rock pocket, six warped stems,
+  ;; four sticks and 43 cobblestone held, a table remembered ten blocks over it with no route; the
+  ;; pickaxe decide answered the walk to that table, make-pickaxe refused it, and the bot stood
+  ;; still for two hours. The table is replaced: planks and a new table come from the stems
+  (let [table-col (world/column {[12 64 8] (blocks/default-state :crafting_table)})
+        w (-> (standing {})
+              (assoc :world/chunks {[0 0] table-col})
+              (memory/remember-column [0 0] table-col)
+              (assoc :player/inventory
+                     {0 (item :iron_sword 1)
+                      1 (assoc (item :iron_pickaxe 1) :durability 11)
+                      2 (item :warped_stem 6)
+                      3 (item :stick 4)
+                      4 (item :cobblestone 43)})
+              (memory/remember-intention {:intent/id 1 :intent/kind :burrow} :done))]
+    (with-redefs [intent/routable? (constantly false)]
+      (is (contains? #{:craft :place :open-container}
+                     (:intent/kind (plan/next-intent w row plan/goals)))
+          "not the walk to a table nothing reaches"))))

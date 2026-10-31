@@ -2530,7 +2530,16 @@
    a hunt for wood (wood/hunt is nil underground, so the Nether remake is unchanged)."
   [world goal table]
   (let [bare? (not (pickaxe? world))
-        i (make/decide (for-pick-decide world) (assoc goal :goal/provides {:tag/pickaxes 1}) table)]
+        decide
+        (fn [w]
+          (make/decide (for-pick-decide w) (assoc goal :goal/provides {:tag/pickaxes 1}) table))
+        first-i (decide world)
+        ;; a remembered table no route reaches is replaced by a new one, not walked at: the walk
+        ;; to it is no craft, and the hunt in a rock pocket stood still (pearl-fight-i job 1, 28
+        ;; digs left, six stems, sticks and cobblestone held, a table remembered ten blocks over it)
+        i (if (and (= :walk (:intent/kind first-i)) (not (intent/routable? world first-i)))
+            (decide (update world :plan/blacklist (fnil conj #{}) (:intent/target first-i)))
+            first-i)]
     (when (and (:intent/kind i)
                (not (and (log-counted? world) (= :log (:intent/for i))))
                (or (= :log (:intent/for i))
