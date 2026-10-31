@@ -1722,3 +1722,22 @@
     (is (false? (blaze/bait-here? bare spawner-at)) "no blaze in sight: not a bait cell")
     (is (false? (blaze/bait-here? w nil)) "no spawner: none")
     (is (nil? (blaze/bait-walk w spawner-at)) "the bot stands in the only one: no walk")))
+
+(deftest a-tunnel-toward-the-spawner-stops-at-the-first-cell-that-sees-a-blaze
+  ;; blaze-race-z job 2: 9 minutes in a pocket with the tunnel to the room still undug (no corridor
+  ;; cell sees a blaze), then :tunnel-to into the room and dead in 7 s: the tunnel is dug on only
+  ;; until a corridor cell sees one or two blazes
+  (let [line (entity :blaze [3.5 65.0 8.5] :entity/health 20.0)
+        w (-> (standing {7 line})
+              in-pocket
+              with-spawner
+              (assoc :time/now 100000))
+        tunnel {:intent/kind :tunnel-to :intent/target spawner-at}]
+    (is (true? (plan/interrupts? w row tunnel)) "a bait cell: stop here")
+    (is (false? (boolean (plan/interrupts? (-> (standing {})
+                                               in-pocket
+                                               with-spawner
+                                               (assoc :time/now 100000))
+                                           row
+                                           tunnel)))
+        "no blaze in sight: dig on")))
