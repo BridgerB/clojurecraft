@@ -390,3 +390,9 @@
   (is (= "execute in minecraft:the_nether if block 3 61 -4 minecraft:cave_air"
          (race/air-test [3 61 -4] "minecraft:cave_air")))
   (is (< race/ground-bottom 40.01) "over the lava sea (y 31)"))
+
+(deftest racers-are-a-team-with-friendly-fire-off
+  ;; race 9d15bd6, lanes 1 to 6: 47 of 344 deaths were a bot killed by a bot, the 44 "slain by Clj_rNN"
+  ;; among them; sweeps and retaliation at a shared spawner
+  (is (= ["team add racers" "team modify racers friendlyFire false"] race/team-commands))
+  (is (= "team join racers Clj_r07" (race/team-join-command "Clj_r07"))))

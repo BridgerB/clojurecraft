@@ -305,10 +305,33 @@
   [set offset i]
   (let [[x z _] (landings/landing-for set (inc (+ offset i)))] [x z]))
 
+(def team
+  "The scoreboard team every racer joins: friendly fire off, so a bot's sweep or a retaliation never hurts another."
+  "racers")
+
+(def team-commands
+  "What a race asks of its server once beside the gamerule: the team of racers, friendly fire off.
+   A sword's sweep hits the players beside its target; at a spawner several bots stand together, the
+   one struck fought back (combat: the striker is answered), and 47 of 344 deaths of lanes 1 to 6
+   of race 9d15bd6 were a bot killed by a bot (\"was slain by Clj_r24\", 44 of the 83 \"other\"
+   deaths). A team with friendly fire off takes no damage from its own."
+  [(str "team add " team) (str "team modify " team " friendlyFire false")])
+
+(defn team-join-command
+  "The RCON command that puts bot name in the team of racers."
+  [name]
+  (str "team join " team " " name))
+
 (defn set-gamerules!
-  "What every race asks of its server once: keep inventories over deaths."
+  "What every race asks of its server once: keep inventories over deaths, the team of racers with
+   friendly fire off (team-commands; an existing team answers an error, which is no matter)."
   [{:keys [host rcon-port rcon-pass]}]
-  (try (rcon/with-rcon host rcon-port rcon-pass #(rcon/command! % "gamerule keep_inventory true"))
+  (try (rcon/with-rcon host
+                       rcon-port
+                       rcon-pass
+                       (fn [rc]
+                         (rcon/command! rc "gamerule keep_inventory true")
+                         (doseq [c team-commands] (rcon/command! rc c))))
        (catch Exception e (cli/log "gamerule failed:" e))))
 
 (def pad-offsets
@@ -665,6 +688,7 @@
                  _ (when online (deliver centre [(long (first online)) (long (nth online 2))]))
                  at (when online
                       (rcon/command! rc (str "gamemode survival " name))
+                      (rcon/command! rc (team-join-command name))
                       (cond (fortress? from)
                             (let [k (slot-index i bots)]
                               (land-fortress!
