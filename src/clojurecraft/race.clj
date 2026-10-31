@@ -331,26 +331,53 @@
   [[x z y]]
   [(+ x 0.5) (double y) (+ z 0.5)])
 
+(def fortress-near 128)               ; Nether blocks within which a located fortress is the one for a landing: fortresses stand 400 or more apart, so one this near is the nearest
+
+(defn nearby-fortress
+  "The first of known ([fx fz] ...) within fortress-near blocks of the Nether point [nx nz], or nil."
+  [known [nx nz]]
+  (some (fn [[fx fz :as f]]
+          (when (<= (math/hypot (double (- fx nx)) (double (- fz nz))) fortress-near) f))
+        known))
+
 (def fortresses
-  "The fortress located for a landing, [fx fz], by the landing's [x z] (an atom): each landing is
-   asked once, however many bots of the race land there."
-  (atom {}))
+  "The fortresses located so far on this server, [[fx fz] ...] (an atom): a landing is given one
+   within fortress-near of it before the server is asked."
+  (atom []))
 
 (defn locate-fortress!
-  "The fortress nearest the landing's Nether coordinates (an eighth of the overworld's) as the
-   server locates it, [fx fz], asked of the server once for each landing."
+  "The fortress for the landing [x z] (overworld coordinates; the Nether's are an eighth): one
+   already located within fortress-near (nearby-fortress), else the nearest as the server locates
+   it, remembered. A locate is a search in one tick of the server's thread, tens of seconds: asked
+   of fifteen bots at once it stopped the server's keepalives and every bot timed out (race
+   41218543330: 120 bots lost connection, `Can't keep up! Running 31317ms behind`)."
   [rc [x z]]
-  (or (get @fortresses [x z])
-      (let [reply (rcon/command! rc
-                                 (str "execute in minecraft:the_nether positioned "
-                                      (quot x 8)
-                                      " 64 "
-                                      (quot z 8)
-                                      " run locate structure minecraft:fortress"))
-            at (or (fixture/parse-located reply)
-                   (throw (ex-info "no fortress located" {:reply reply})))]
-        (swap! fortresses assoc [x z] at)
-        at)))
+  (let [here [(quot x 8) (quot z 8)]]
+    (or (nearby-fortress @fortresses here)
+        (let [reply (rcon/command! rc
+                                   (str "execute in minecraft:the_nether positioned "
+                                        (first here)
+                                        " 64 "
+                                        (second here)
+                                        " run locate structure minecraft:fortress"))
+              at (or (fixture/parse-located reply)
+                     (throw (ex-info "no fortress located" {:reply reply})))]
+          (swap! fortresses conj at)
+          at))))
+
+(defn prelocate!
+  "Before any bot joins: locate the fortresses for the first bots' landings (racers 0 to n - 1),
+   one at a time on one RCON session, so the searches stall a server nobody is connected to. Then
+   every landing of those bots finds its fortress in the cache."
+  [{:keys [host rcon-port rcon-pass landings landing-offset]} n]
+  (when landings
+    (try (rcon/with-rcon host
+                         rcon-port
+                         rcon-pass
+                         (fn [rc]
+                           (doseq [i (range n)]
+                             (locate-fortress! rc (landing-of landings (or landing-offset 0) i)))))
+         (catch Exception e (cli/log "prelocate failed:" e)))))
 
 (defn land-fortress!
   "Land the bot named name (racer i) at the fortress of its landing: the open pad gym/fortress-pad-open
@@ -657,6 +684,7 @@
              :deadline (+ t0 (run-ms config))}]
     (cli/log "race:" bots "slots to" until "seed" seed "for" (quot (run-ms config) 60000) "min")
     (set-gamerules! server)
+    (when (fortress? (:from server)) (prelocate! server bots))
     (board! server live done)
     (sampler! server where live record-dir done)
     (let [slots (mapv #(slot! ctx %) (range bots))

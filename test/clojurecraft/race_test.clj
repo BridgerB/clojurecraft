@@ -248,3 +248,10 @@
          (race/spawn-command "Clj_r01" [152.5 72.0 -159.5] "minecraft:the_nether")))
   (is (= "execute in minecraft:overworld run spawnpoint Clj_r02 10 80 -4"
          (race/spawn-command "Clj_r02" [10.5 80.0 -3.5] "minecraft:overworld"))))
+
+(deftest a-landing-near-a-located-fortress-is-not-searched-for-again
+  ;; race 41218543330: fifteen bots at once asked the server to locate a fortress, a search in one
+  ;; tick each; the tick stalled for 31 s and 120 bots timed out
+  (is (nil? (race/nearby-fortress [] [10 10])))
+  (is (= [200 -160] (race/nearby-fortress [[200 -160] [900 900]] [260 -100])) "within 128 blocks")
+  (is (nil? (race/nearby-fortress [[200 -160]] [600 -160])) "400 off: another fortress"))
