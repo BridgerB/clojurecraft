@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-31T06:47:09.889Z",
+  "at" : "2026-10-31T06:48:18.601Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -11,7 +11,7 @@
     "number" : 618,
     "title" : "Bot stops at ingots: no-support",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
+    "copilot" : true
   }, {
     "number" : 151,
     "title" : "Bot stops at flint-and-steel: not-picked-up",
@@ -244,7 +244,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 618,
-    "move" : "assign"
+    "move" : "wait",
+    "why" : "session starting"
   }, {
     "issue" : 539,
     "move" : "leave",
