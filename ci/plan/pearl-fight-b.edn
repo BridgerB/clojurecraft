@@ -1,0 +1,18 @@
+;; Issue #263, branch fix/263-pearl-fight, batch b: the fight inside the forest.
+;; Batch a (plan run 41143668588): pearls-12 deaths by an enderman at 43 m with four pearls held
+;; (the burrow stale, one angry enderman 6 to 19 blocks off ignored as fought out, a walk through
+;; the open) and by a piglin at 3 m. Since then:
+;; 1. a menace (any angry enderman within 16, blacklisted or fought out or not) and no burrow:
+;;    cut one where the bot stands, no walk to a crowd site (pearls/menace);
+;; 2. main's combat/teleport-cover (#627), merged.
+;; Carried from batch a: the hit enderman is the hunt's, not :defend's, with a burrow near
+;; (combat/claims-attacker?), and a walk out ends when an angry one is near the mouth.
+{:plans/label "pearl-fight-b"
+ :plans/jobs 6
+ :plans/issue 263
+ :plans/experiments [{:exp/name "pearls-12"
+                      :exp/kind :gym
+                      :exp/goal "pearls-12"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 18000}]}
