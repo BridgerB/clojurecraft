@@ -501,3 +501,13 @@
         "from the sheet, over it to the land")
     (is (not= :found (:path/status (path/plan on-land (path/feet-cell [12.5 64.0 8.5]) goal-ice)))
         "from the land, never onto the sheet")))
+
+(deftest fire-is-no-way
+  ;; blaze-race-g and -i: in_fire hit up to 26 times a run; a route went through fire blocks
+  (let [fire (blocks/default-state :fire)]
+    (is (= :awkward (path/classify-id fire)))
+    (is (= :awkward (path/classify-id (blocks/default-state :soul_fire))))
+    (let [w (world-of {[9 64 8] fire [9 65 8] fire} [8.5 64.0 8.5])
+          r (path/plan w [8 64 8] {:goal/kind :block :goal/pos [10 64 8]} {:path/max-nodes 400})]
+      (is (= :found (:path/status r)))
+      (is (not-any? #{[9 64 8]} (:path/waypoints r)) "round the fire, not through it"))))

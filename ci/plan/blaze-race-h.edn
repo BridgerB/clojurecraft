@@ -1,0 +1,18 @@
+;; Issue #262: both race-kit rows, six runs each, on the merge with main (#608): engage-health 18, a
+;; rest in the nook, no rest in a storm, a wither skeleton avoided, one damage-event handler, an
+;; unloaded cell is no wall.
+{:plans/label "blaze-race-h"
+ :plans/jobs 6
+ :plans/issue 262
+ :plans/experiments [{:exp/name "blaze-fortress-race"
+                      :exp/kind :gym
+                      :exp/goal "blaze-fortress-race"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 1800}
+                     {:exp/name "blaze-fortress-geared"
+                      :exp/kind :gym
+                      :exp/goal "blaze-fortress-geared"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 1800}]}

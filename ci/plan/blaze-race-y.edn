@@ -1,0 +1,13 @@
+;; Issue #262: the race row (one iron pickaxe, a table, 8 sticks, 64 cobblestone). From blaze-race-w
+;; (jobs 1, 2, 3, 6 camped 30+ min, 7-10 blazes hovering 9 blocks off, none ever shot): an idle camp moves to a
+;; pocket whose mouth faces one or two blazes (sees-a-blaze?), the others blind. Measure rods held, time from a
+;; blaze seen to its first hit and to its kill, kills per 10 min.
+{:plans/label "blaze-race-y"
+ :plans/jobs 6
+ :plans/issue 262
+ :plans/experiments [{:exp/name "blaze-fortress-race"
+                      :exp/kind :gym
+                      :exp/goal "blaze-fortress-race"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 1800}]}

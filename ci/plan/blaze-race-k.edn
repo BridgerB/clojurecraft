@@ -1,0 +1,19 @@
+;; Issue #262: both race-kit rows, six runs each (no Fire Resistance, the race rows are the truth):
+;; the pocket sealed with cobblestone while it burns or is pressed by a blaze in line out of reach,
+;; held, then opened; a failed :pocket sealed in place, never a failed plan; the pocket dug in the
+;; tunnel's wall within 24 blocks of the spawner before its last blocks open.
+{:plans/label "blaze-race-k"
+ :plans/jobs 6
+ :plans/issue 262
+ :plans/experiments [{:exp/name "blaze-fortress-race"
+                      :exp/kind :gym
+                      :exp/goal "blaze-fortress-race"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 1800}
+                     {:exp/name "blaze-fortress-geared"
+                      :exp/kind :gym
+                      :exp/goal "blaze-fortress-geared"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 1800}]}

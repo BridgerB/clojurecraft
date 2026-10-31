@@ -134,14 +134,14 @@
     (is (every? #(= :provided? (:goal/done? %)) (filter :goal/provides plan/targets)))
     (is (every? #(contains? #{:not-trapped-in :escaped-water? :built? :at-fortress? :nether-access?
                               :fed? :dressed? :armoured? :health-seen? :safe? :cleared?
-                              :provisioned? :armed? :rods-held? :thrown? :frames-seen?
-                              :in-portal-room? :portal-lit? :in-end? :crystals-gone? :dragon-dead?
-                              :healed?}
+                              :provisioned? :armed? :geared? :regeared? :cooked? :rods-held?
+                              :thrown? :frames-seen? :in-portal-room? :portal-lit? :in-end?
+                              :crystals-gone? :dragon-dead? :healed?}
                             (:goal/done? %))
                 (remove :goal/provides plan/targets)))
     (is (= #{:needs :escape :wade :build :return-nether :fortress :eat :wear :armour :watch :defend
-             :attack :hunt :sword :pearls :blaze-rods :eyes :throw :stronghold :portal-room
-             :end-portal :enter-end :crystals :dragon :heal}
+             :attack :hunt :sword :gear :regear :cook :pearls :blaze-rods :eyes :throw :stronghold
+             :portal-room :end-portal :enter-end :crystals :dragon :heal}
            (set (keys (dissoc (methods plan/next-intent) :default)))))))
 
 (def kit (first (filter #(= :kit (:goal/id %)) plan/goals)))

@@ -1,0 +1,11 @@
+;; Issue #262: the gym with the race kit, after the camp moved into the tunnel (blaze/nook) and
+;; the bot learned it is on fire (:player/on-fire?). Six runs; the sim does not fly fireballs.
+{:plans/label "blaze-race-b"
+ :plans/jobs 6
+ :plans/issue 262
+ :plans/experiments [{:exp/name "blaze-fortress-race"
+                      :exp/kind :gym
+                      :exp/goal "blaze-fortress-race"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 1800}]}

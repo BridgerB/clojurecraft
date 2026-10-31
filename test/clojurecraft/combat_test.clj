@@ -275,6 +275,52 @@
     (is (plan/done-by (standing {9 (mob :pig [10.0 64.0 8.5] 10.0)}) (row :defend))
         "a pig is no threat")))
 
+(deftest a-zombified-piglin-is-left-until-it-strikes-then-backed-away-from
+  ;; gym blaze-wall-b (plan 40624888909) blaze-fortress run 1: a swing at blaze 442 also hit
+  ;; zombified piglin 126 (damage-event source-cause 28, the bot). Piglins 144 and 126 then hit
+  ;; the bot (causes 145 and 127) from 15.5 health to none while the intent was :rest.
+  (let [calm (standing {7 (mob :zombified_piglin [11.0 64.0 8.5] 20.0)})
+        struck (assoc calm
+                      :player/health 13.0
+                      :player/entity-id 27
+                      :player/attacker 7
+                      :player/struck-at 1000
+                      :time/now 1500)]
+    (is (empty? (combat/threats calm)) "a calm one is no threat, and not a fight")
+    (is (plan/done-by calm (row :defend)))
+    (is (= [7 (get-in struck [:world/entities 7])] (combat/striker struck)))
+    (is (contains? (combat/threats struck) 7))
+    (is (= {:intent/kind :back-off :intent/target 7}
+           (plan/next-intent struck (row :defend) plan/goals))
+        "struck: backed away from, never swung at, even over retreat-health")
+    (is (= {:intent/kind :back-off :intent/target 7}
+           (plan/next-intent (assoc struck :player/health 20.0 :plan/cornered #{7})
+                             (row :defend)
+                             plan/goals))
+        "cornered or not, the pack is not fought")
+    (testing "a damage-event on the bot records the attacker as source-cause minus one"
+      (let [w (assoc calm :player/entity-id 27 :time/now 1500)
+            hit (packet {:packet/name :damage-event
+                         :entity-id 27
+                         :source-type 28
+                         :source-cause 8
+                         :source-direct 8})
+            other (packet {:packet/name :damage-event
+                           :entity-id 7
+                           :source-type 34
+                           :source-cause 28
+                           :source-direct 28})
+            none (packet {:packet/name :damage-event
+                          :entity-id 27
+                          :source-type 10
+                          :source-cause 0
+                          :source-direct 0})]
+        (is (= 7 (:player/attacker (game/step w hit))))
+        (is (= 1500 (:player/struck-at (game/step w hit))))
+        (is (nil? (:player/attacker (game/step w other)))
+            "a hit on the piglin is not one on the bot")
+        (is (nil? (:player/attacker (game/step w none))) "source-cause 0 is no entity")))))
+
 (deftest only-a-hostile-in-sight-and-in-reach-of-the-floor-is-a-threat
   ;; gym blaze-fortress-c (run 38895759229): the :defend row went after blazes through the
   ;; fortress's walls and hovering over the bot's tunnel, and failed :unreachable
@@ -292,6 +338,32 @@
       (is
        (empty? (combat/threats in-pit))
        "a silverfish in a pit two below with no way down is not approachable and thus no threat"))))
+
+(deftest a-wither-skeleton-is-not-fought-below-full-health-nor-two-of-them
+  ;; blaze-race-f (real, 6e703362a) race row runs 2 and 3: :fight 82 at 14.9, three wither skeletons
+  ;; (82, 83, 84) hit for 5 each within 0.03 min, dead at 2m42 and 2m52
+  (let [ws (fn [& xs]
+             (into {}
+                   (map-indexed (fn [i x] [(+ 80 i) (mob :wither_skeleton [x 64.0 8.5] 20.0)]) xs)))
+        defend (fn [entities health]
+                 (plan/next-intent (assoc (standing entities) :player/health health)
+                                   (row :defend)
+                                   plan/goals))]
+    (is (= :fight (:intent/kind (defend (ws 11.0) 20.0))) "one, at full health: fought")
+    (is (= :back-off (:intent/kind (defend (ws 11.0) 15.0))) "one, hurt: not")
+    (is (= :back-off (:intent/kind (defend (ws 11.0 12.0) 20.0))) "two: not")
+    (is (= :fight (:intent/kind (defend {7 (mob :zombie [11.0 64.0 8.5] 20.0)} 15.0)))
+        "a zombie is as before")))
+
+(deftest a-ghast-is-never-a-fight
+  ;; blaze-race-c job 4 (3a082f7b7, real): burned to a crisp while fighting a ghast
+  (let [ghast {8 (mob :ghast [11.0 65.0 8.5] 10.0)}]
+    (is (empty? (combat/threats (standing ghast))) "in reach, in sight, still not a fight")
+    (is (plan/done-by (standing ghast) (row :defend)))
+    (is (= #{7}
+           (set (keys (combat/threats (standing
+                                       (assoc ghast 7 (mob :zombie [11.0 64.0 8.5] 20.0)))))))
+        "a zombie beside it still is")))
 
 (deftest a-back-off-ends-eight-blocks-away
   (let [w (assoc (standing {8 (mob :creeper [10.5 64.0 8.5] 20.0)})
@@ -734,3 +806,19 @@
             (combat/danger-line (standing {7 (mob :blaze [10.5 64.0 8.5] 20.0)
                                            8 (mob :wither_skeleton [10.0 64.0 9.0] 20.0)})))
         "a blaze with a wither skeleton: one melee hit, no pack")))
+
+(deftest a-cover-does-not-lay-the-wall-cell-that-just-failed
+  ;; blaze-race-u job 4: :place failed :no-support three times in 0.15 s, the plan failed
+  (let [w {:plan/failed {:intent/kind :place :intent/cell [8 64 8]}}]
+    (is (true? (combat/wall-failed? w [8 64 8])))
+    (is (false? (combat/wall-failed? w [9 64 8])) "another cell is tried")
+    (is (false? (combat/wall-failed? {} [8 64 8])))
+    (is (false? (combat/wall-failed? {:plan/failed {:intent/kind :walk :intent/cell [8 64 8]}}
+                                     [8 64 8])))
+    (is (false? (combat/wall-failed? w nil)))))
+
+(deftest a-cover-does-not-raise-a-pillar-that-just-failed
+  ;; blaze-race-w job 4: :pillar failed :boxed three times in 300 ms
+  (is (true? (combat/pillar-failed? {:plan/failed {:intent/kind :pillar :intent/reason :boxed}})))
+  (is (false? (combat/pillar-failed? {:plan/failed {:intent/kind :place}})))
+  (is (false? (combat/pillar-failed? {}))))

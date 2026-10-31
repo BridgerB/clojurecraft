@@ -221,8 +221,9 @@
    the mine planned it again every tick) and the neighbour cell that stands, from feet resting on
    a rim over a gap (:footing, issue #105: a walk that ended near it ended on the rim) and a drop
    lying in a pit under the floor (:rod, issue #500: only the feet in its cell are in the pickup
-   box)."
-  #{:build :shelter :cover :fight :retreat :over-stone :footing :rod})
+   box) and the cell out of a fire (:fire-out, blaze-race-k race 1: a walk to a cell two off, in
+   reach of the eye, ended in its first tick standing in the fire, ×190 in 9.5 s, 30 in_fire hits)."
+  #{:build :shelter :cover :fight :retreat :over-stone :footing :rod :fire-out})
 
 (defn walk-goal
   "Where a walk's route may end: for a block mined from beside (:intent/pickup?), any cell

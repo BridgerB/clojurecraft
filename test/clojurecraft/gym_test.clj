@@ -23,7 +23,16 @@
   (is (= :kit (:gym/goal (gym/gym :kit))) "or by its goal")
   (testing "several rows of one goal are found by their own names (issue #262)"
     (is (= "blaze-7" (:gym/name (gym/gym "blaze-7"))))
-    (is (= :blaze-rods (:gym/goal (gym/gym "blaze-fortress"))))
+    (is (= :blaze-rods (:gym/goal (gym/gym "blaze-fortress-fireproof"))))
+    (is (= :blaze-rods (:gym/goal (gym/gym "blaze-fortress-race"))))
+    (is (= :blaze-rods (:gym/goal (gym/gym "blaze-fortress-geared"))))
+    (is (not-any? #(str/includes? % "fire_resistance")
+                  (:gym/summon (gym/gym "blaze-fortress-geared")))
+        "the geared bot has no Fire Resistance")
+    (is (some #(str/includes? % "iron_leggings") (:gym/prereqs (gym/gym "blaze-fortress-geared"))))
+    (is (not-any? #(str/includes? % "fire_resistance")
+                  (:gym/summon (gym/gym "blaze-fortress-race")))
+        "the race bot has no Fire Resistance")
     (is (str/includes? (gym/plan-matrix ["blaze-7"] 1) "{\"goal\":\"blaze-7\",\"run\":1,"))
     (is (apply distinct? (keep :gym/name gym/gyms))))
   (testing "a chained row sends a chained :go over its stages (issue #10)"
@@ -451,3 +460,14 @@
     (is (= 3 (count (filter #(str/includes? % "summon minecraft:zombie") (:gym/summon row))))
         "three, summoned with the kit given")
     (is (= (:gym/summon row) (:gym/summon (gym/gym :defend))))))
+
+(deftest the-race-row-carries-what-the-race-bot-has-at-the-fortress
+  ;; race lane 4: 265 to 830 cobblestone and 9 to 24 sticks, a table since #628, one iron pickaxe;
+  ;; a spare pickaxe in the row hid the worn-out one (blaze-race-r jobs 1 and 4: 250 netherrack, then
+  ;; boxed / no-path)
+  (let [pre (:gym/prereqs (gym/gym "blaze-fortress-race"))]
+    (is (some #{"minecraft:iron_pickaxe 1"} pre))
+    (is (some #{"minecraft:crafting_table 1"} pre))
+    (is (some #{"minecraft:stick 8"} pre))
+    (is (some #{"minecraft:cobblestone 64"} pre))
+    (is (not-any? #{"minecraft:iron_pickaxe 2"} pre))))

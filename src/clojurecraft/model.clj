@@ -111,7 +111,22 @@
    [:player/food "food level, 0-20, from set_health; the :eat row eats under eat/hungry-below"
     "after the first set_health"]
    [:player/saturation "food saturation from set_health: what drains before the food does"
-    "after the first set_health"] [:control/forward? "walk forward" "inside :player/controls"]
+    "after the first set_health"]
+   [:player/on-fire?
+    "is the bot burning: bit 0x01 of the shared flags byte (metadata index 0) the server last sent for its own entity. A fireball sets it alight for seconds, and there is no water in the Nether to put it out"
+    "after the first set-entity-data of its own entity"]
+   [:player/ignitions
+    "ms (:time/now) of the bot's last three ignitions: :player/on-fire? turning on from off. Two within thirty seconds send it to its pocket to heal"
+    "after the bot first burns"]
+   [:pocket/site
+    "the pocket the bot fights blazes from: {:pocket/cell the cell with one opening and solid blocks round it and overhead, :pocket/stand the cell it is dug into the wall from (nil for one that exists), :pocket/dig the solid cells still to dig}. Set by the first tick of a :pocket; dropped when it stops being one"
+    "after a :pocket began"]
+   [:player/using-item?
+    "does the bot hold its use key: bit 0x01 of the living flags byte (metadata index 8) the server last sent for its own entity. A shield is raised while it is true with the shield in hand; a meal sets it too"
+    "after the first living-flags set-entity-data of its own entity"]
+   [:player/struck-at
+    "ms (:time/now) of the last damage-event on the bot, beside :player/hurt-at in ticks: combat/striker ages the strike against struck-ms. A zombified piglin that hit is angry, and a hit angers its pack"
+    "after a damage-event on the bot"] [:control/forward? "walk forward" "inside :player/controls"]
    [:control/jump? "jump when allowed" "inside :player/controls"]
    [:control/yaw "heading to walk on" "inside :player/controls"]
    [:control/look "[yaw pitch] to face" "inside :player/controls"]
@@ -189,6 +204,8 @@
    [:intention/recipe "the intent's recipe" "a fact, when the intent had one"]
    [:intention/reason "why it failed or was abandoned (:goal-met, :preempted, :interrupted)"
     "a :failed or :abandoned fact"]
+   [:intention/ended-at "the feet cell a :tunnel-to stood in when it ended"
+    "a :done :tunnel-to fact"]
    [:answer/kind
     "which server answer to the bot's own action: :ack, :pickup, or :death (health reached zero)"
     "a fact in :world/facts"] [:answer/at "ms the answer arrived" "a fact in :world/facts"]
@@ -280,14 +297,17 @@
     "the looks in a row that brought the feet no stall-gain nearer than :search/best; stall-tunnels end the leg (issue #338)"
     "inside :fortress/search, from the leg's second look"]
    [:hunt/forage
-    "the search for animals a bot makes with fewer than hunt/provision-wanted foods held, with the stone pickaxe (before the descent) or the portal kit: {:forage/since :forage/leg :forage/retry-at :forage/phase}; the :forage intent keeps it, and hunt/foraging? ends the search hunt/forage-budget after its first leg (issues #501, #504)"
+    "the search for animals a bot makes with fewer than hunt/provision-wanted foods held, with the stone pickaxe (before the descent) or the portal kit: {:forage/since :forage/leg :forage/retry-at :forage/phase :forage/life}; the :forage intent keeps it, and hunt/foraging? ends the search hunt/forage-budget after its first leg (issues #501, #504)"
     "after a :forage intent chose its first leg"]
    [:forage/since "ms the search's first leg was chosen" "inside :hunt/forage"]
    [:forage/leg
     "the leg the next :forage turns to, from 0: its heading is a quarter turn right of the last (hunt/forage-headings)"
     "inside :hunt/forage"]
+   [:forage/life
+    "the bot's :stats/deaths when the search began: a search of an earlier life is not this one's, and starts afresh (sim R1/1, probe 40761589784: after the first respawn the budget of the first search was long spent, and every later life went back to the Nether with no food)"
+    "inside :hunt/forage"]
    [:forage/phase
-    "the hunt/provision-phase the search began in (:early with the stone pickaxe, :kit with the portal's iron): a search of another phase is not this one's, and starts afresh"
+    "the hunt/provision-phase the search began in (:early with the stone pickaxe, :kit with the portal's iron, :return after the Nether was reached and the goods are lost): a search of another phase is not this one's, and starts afresh"
     "inside :hunt/forage"]
    [:forage/retry-at
     "ms before which the search looks for no leg: set when no heading had a route at any reach (hunt/forage-retry-ms on)"
@@ -334,7 +354,7 @@
    [:plan/wait "a planner answer meaning: nothing to do yet, for this reason"
     "returned by next-intent, never stored"]
    [:intent/kind
-    "executor: :walk :dig :collect :craft :place :open-container :stairs-down :stairs-up :tunnel :tunnel-to :smelt :redig :scoop :equip :build :pour :use-on :await :toss :eat :wear :fight :back-off :provoke :burrow :lookout :throw-eye :end-portal :pillar :dig-down :strike :perch :hold :dragon-rest :camp :collect-drops :cross :flee :forage :rest :portal-home :swim-out :wade"
+    "executor: :walk :dig :collect :craft :place :open-container :stairs-down :stairs-up :tunnel :tunnel-to :smelt :redig :scoop :equip :build :pour :use-on :await :toss :eat :wear :fight :back-off :provoke :burrow :lookout :throw-eye :end-portal :portal-home :ambush :pillar :dig-down :strike :perch :hold :dragon-rest :camp :collect-drops :cross :flee :forage :rest :swim-out :wade :dodge :pocket :pocket-hold :seal :unseal"
     "every intent"] [:intent/status ":active, :done or :failed" "every intent"]
    [:intent/top "feet height a :pillar climbs to (issue #267)" "a :pillar intent"]
    [:intent/under
@@ -353,6 +373,9 @@
    [:intent/goal "the target goal id the intent serves; another target chosen preempts it"
     "intents the planner starts"]
    [:intent/reason "why it failed, or why the planner abandoned it" "a failed or abandoned intent"]
+   [:intent/ended-at
+    "the feet cell a :tunnel-to ended in, kept when it is done: a tunnel that ends where the next one for the same target begins made no progress (issue #262)"
+    "a done :tunnel-to"]
    [:intent/target
     "block position it acts on or walks to; for a :fight, a :back-off or a :provoke (issue #263), the entity id it is after; for a :throw-eye, the eye it follows (issue #265); for a :tunnel for :bank or :lava, the water or the lava source it heads for (issue #130) (issue #259: a widening, a position is still one)"
     "most intents"]
@@ -430,9 +453,34 @@
    [:intent/target-pos "where a :fight last saw its target; a hunt picks the drop up there"
     "fight, while its target is seen"]
    [:intent/spawner "the remembered spawner a :camp waits by for its blazes (issue #262)" "camp"]
+   [:intent/site "the pocket (a :pocket/site map) a :pocket digs out and walks into (issue #262)"
+    "pocket"]
+   [:intent/prepare?
+    "true for a :pocket made ready ahead of the tunnel's last blocks: dug, not entered (issue #262)"
+    "pocket"]
+   [:pocket/placed
+    "inside :pocket/site: the cells a :seal placed blocks in, empty while the pocket is open; the pocket is sealed while every one is solid. An :unseal digs them and empties it"
+    "after a :seal began"]
+   [:pocket/prepared-at
+    "ms (:time/now) a pocket was last begun ahead of the tunnel's last blocks (a :pocket with :intent/prepare?): none is begun again for five minutes, the tunnel's own steps break a pocket beside its path"
+    "after a prepare :pocket began"]
+   [:pocket/seal-failed-at
+    "ms (:time/now) of the last :seal that failed to lay a block, anywhere: no seal is tried for a minute after it (pocket/seal-retry-ms)"
+    "after a :seal failed"]
+   [:pocket/unsealable?
+    "inside :pocket/site: true once a :seal of the pocket failed to lay a block (no support, the body in the cell): not tried again for this site"
+    "after a :seal failed"]
+   [:pocket/here?
+    "inside :pocket/site: true for the cell the feet stand in, sealed in place when no way to a pocket was found (a :pocket never fails the plan)"
+    "after a :pocket fell back"]
+   [:intent/heal-to "the health a :hold in the pocket stays until, the fire out (issue #262)"
+    "hold"]
    [:intent/blazes
     "the blazes within fight range when a :camp began, or watching when a :rest began; a new one ends it"
     "camp, rest"]
+   [:intent/raised?
+    "true once a :block has sent the use key to the offhand shield, so it is sent once (issue #262)"
+    "block, after its first tick"]
    [:intent/health
     "the health when a :camp or a :rest began; a fall under it ends it, since nothing else ends a running intent (issue #262)"
     "camp, rest"]

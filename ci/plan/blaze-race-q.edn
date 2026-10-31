@@ -1,0 +1,13 @@
+;; Issue #262: the race row, six runs. A seal needs a pickaxe to open it (blaze-race-p job 2 dug four
+;; placed blocks for 44 s by hand), none is tried for a minute after one failed, a bot pressed with no
+;; seal to be had takes cover, and a fight that cannot reach or a pickup that found nothing no longer
+;; ends the plan (job 6 at 6m24s).
+{:plans/label "blaze-race-q"
+ :plans/jobs 6
+ :plans/issue 262
+ :plans/experiments [{:exp/name "blaze-fortress-race"
+                      :exp/kind :gym
+                      :exp/goal "blaze-fortress-race"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 1800}]}

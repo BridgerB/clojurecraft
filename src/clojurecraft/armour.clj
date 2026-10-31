@@ -34,15 +34,18 @@
   [["_helmet" 0] ["_chestplate" 1] ["_leggings" 2] ["_boots" 3] ["carved_pumpkin" 0]])
 
 (defn part
-  "The armour slot n (0 head .. 3 feet) item name k is worn in, or nil when it is no armour."
+  "The armour slot n (0 head .. 3 feet) item name k is worn in, :offhand for a shield (held, not
+   worn: the same two clicks put it in the offhand), or nil when it is neither."
   [k]
-  (when k (some (fn [[suffix n]] (when (str/ends-with? (name k) suffix) n)) parts)))
+  (cond (nil? k) nil
+        (= "shield" (name k)) :offhand
+        :else (some (fn [[suffix n]] (when (str/ends-with? (name k) suffix) n)) parts)))
 
 (defn worn-slot
   "The player-inventory slot that shows armour slot n (inventory/head-slot down: 39 the head, 36
-   the feet)."
+   the feet), or the offhand's (inventory/offhand-slot) for :offhand."
   [n]
-  (- inventory/head-slot n))
+  (if (= :offhand n) inventory/offhand-slot (- inventory/head-slot n)))
 
 (defn worn
   "The item name worn in armour slot n, or nil."
@@ -76,14 +79,14 @@
                      (when (and (< -1 p store-slots)
                                 n
                                 (not= :carved_pumpkin k)
-                                (not (and in-end? (zero? n) (some? pumpkin)))
+                                (not (and in-end? (= 0 n) (some? pumpkin)))
                                 (nil? (worn world n)))
                        [p k]))))))))
 
 (def made
   "The pieces made from spare ingots, in order, with their cost in iron ingots (the game's
-   recipes: five for a helmet, eight for a chestplate)."
-  [[:iron_helmet 5] [:iron_chestplate 8]])
+   recipes: five for a helmet, eight for a chestplate, seven for leggings)."
+  [[:iron_helmet 5] [:iron_chestplate 8] [:iron_leggings 7]])
 
 (def kit-iron
   "What the portal needs of the iron, held (the iron kit and the portal kit): until all of it is,
@@ -111,10 +114,14 @@
                                            vector))))))
 
 (defn spare-ingots
-  "The iron ingots held (counts) once every item of kit-iron is, else 0: armour never takes the
+  "The iron ingots held (counts) once every item of kit-iron is, or once the Nether was reached
+   (the portal is lit, and a death took the kit with the rest), else 0: armour never takes the
    iron the portal still needs."
   [world]
-  (let [c (counts world)] (if (every? #(pos? (get c % 0)) kit-iron) (get c :iron_ingot 0) 0)))
+  (let [c (counts world)]
+    (if (or (every? #(pos? (get c % 0)) kit-iron) (contains? (:plan/reached world #{}) :nether))
+      (get c :iron_ingot 0)
+      0)))
 
 (def table-planks 4)                  ; planks a crafting table takes
 
@@ -199,7 +206,9 @@
   (cond (cursor-holds? world item)
         (-> world
             (window/click (window/view world :inventory)
-                          (inventory/left-click (inventory/slot [:armour (part item)])))
+                          (inventory/left-click (inventory/slot
+                                                 (let [p (part item)]
+                                                   (if (= :offhand p) [:offhand] [:armour p])))))
             (intent/assoc-intent :intent/stage :check))
         (> (- (:time/now world) (or since 0)) window/answer-timeout)
         (intent/fail world :not-picked-up)

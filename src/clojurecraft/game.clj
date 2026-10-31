@@ -329,7 +329,10 @@
     (let [attacker (if (pos? (long (or source-direct 0)))
                      (dec (long source-direct))
                      (when (pos? (long (or source-cause 0))) (dec (long source-cause))))]
-      (cond-> (assoc w :player/hurt-at (:time/tick w 0))
+      ;; :player/hurt-at is in ticks (the dragon's rules read it); :player/struck-at is the same
+      ;; moment in ms (:time/now), which combat/striker ages against struck-ms (gym blaze-wall-b,
+      ;; plan 40624888909: zombified piglin 126 arrived as 127, 144 as 145)
+      (cond-> (assoc w :player/hurt-at (:time/tick w 0) :player/struck-at (:time/now w 0))
         attacker (assoc :player/attacker attacker)))
     w))
 
@@ -423,10 +426,27 @@
       death? (track entity-id assoc :entity/died-at (:time/now w))
       (and death? (entity/dragon? (get-in w [:world/entities entity-id])))
       (assoc :world/dragon-dead? true))))
+(defn ignite
+  "w with :player/on-fire? set to lit?; a flag that turns on from off adds :time/now to
+   :player/ignitions, the last three (blaze-race-k: the burn is five seconds, a second ignition
+   within thirty means the fight is lost for now)."
+  [w lit?]
+  (cond-> (assoc w :player/on-fire? lit?)
+    (and lit? (not (:player/on-fire? w)))
+    (update :player/ignitions (fn [v] (vec (take-last 3 (conj (or v []) (:time/now w 0))))))))
+
 (defmethod on-packet [:play :set-entity-data]
   ;; the skimmed metadata: shared flags, and a living entity's health (entity/metadata-facts)
   [w {:keys [entity-id metadata]}]
-  (track w entity-id (fn [e] (merge e (entity/metadata-facts (:entity/type e) metadata)))))
+  (cond-> (track w entity-id (fn [e] (merge e (entity/metadata-facts (:entity/type e) metadata))))
+    ;; the bot's own flags byte: bit 0x01 is on fire (gym blaze-fortress-race run 4: {0 1} at the
+    ;; first fireball, {0 0} when it burned out)
+    (and (= entity-id (:player/entity-id w)) (number? (get metadata entity/flags-index)))
+    (ignite (odd? (long (get metadata entity/flags-index))))
+    ;; the living flags byte: bit 0x01 is a held use key (a raised shield, a meal)
+    (and (= entity-id (:player/entity-id w)) (number? (get metadata entity/living-flags-index)))
+    (assoc :player/using-item?
+           (pos? (bit-and (long (get metadata entity/living-flags-index)) entity/using-item-bit)))))
 (defmethod on-packet [:play :move-entity-pos]
   [w {:keys [entity-id dx dy dz]}]
   (move-entity w entity-id dx dy dz))

@@ -1,0 +1,19 @@
+;; Issue #262: both race-kit rows, six runs each, after the bridge reserve counts every filler together,
+;; tunnel is no longer stalled for ending where the feet are, a thin floor is the last way and not a
+;; block, a rod across a ledge is left, and the nook is searched from the feet. Landing 5 is in the
+;; set: it confirms the bridge on real terrain.
+{:plans/label "blaze-race-f"
+ :plans/jobs 6
+ :plans/issue 262
+ :plans/experiments [{:exp/name "blaze-fortress-race"
+                      :exp/kind :gym
+                      :exp/goal "blaze-fortress-race"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 1800}
+                     {:exp/name "blaze-fortress-geared"
+                      :exp/kind :gym
+                      :exp/goal "blaze-fortress-geared"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 1800}]}

@@ -1,0 +1,13 @@
+;; Issue #262: the race row (one iron pickaxe, a table, 8 sticks, 64 cobblestone). From blaze-race-u
+;; (jobs 3 and 6 died crossing the room after 45 s of camp; 4 and 5 failed the plan in 3 to 5 min):
+;; an idle camp advances to a pocket nearer the spawner; a failed wall cover is not laid again; a pocket
+;; far from a spawner is a refuge; a seal is bounded at 20 s.
+{:plans/label "blaze-race-v"
+ :plans/jobs 6
+ :plans/issue 262
+ :plans/experiments [{:exp/name "blaze-fortress-race"
+                      :exp/kind :gym
+                      :exp/goal "blaze-fortress-race"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 1800}]}

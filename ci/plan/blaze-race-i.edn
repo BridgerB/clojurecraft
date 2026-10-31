@@ -1,0 +1,18 @@
+;; Issue #262: both race-kit rows, six runs each, with the shield (raised while blazes watch, in the
+;; offhand of the geared row) and fire at the feet left first. Damage by type per run against
+;; blaze-race-g: on_fire, in_fire and deaths must fall. The race row holds no shield: the control.
+{:plans/label "blaze-race-i"
+ :plans/jobs 6
+ :plans/issue 262
+ :plans/experiments [{:exp/name "blaze-fortress-race"
+                      :exp/kind :gym
+                      :exp/goal "blaze-fortress-race"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 1800}
+                     {:exp/name "blaze-fortress-geared"
+                      :exp/kind :gym
+                      :exp/goal "blaze-fortress-geared"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 1800}]}

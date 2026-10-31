@@ -14,7 +14,10 @@
             [clojurecraft.blocks :as blocks]
             [clojurecraft.build :as build]
             [clojurecraft.dimension :as dimension]
+            [clojurecraft.eat :as eat]
             [clojurecraft.game :as game]
+            [clojurecraft.hunger :as hunger]
+            [clojurecraft.hunt :as hunt]
             [clojurecraft.intent :as intent]
             [clojurecraft.make :as make]
             [clojurecraft.memory :as memory]
@@ -132,11 +135,51 @@
    in its floor dug it out and laid it again for ever (sim snapshot R1-20-1, issue #537: one
    step's dig and place on the same cell for the whole window)."
   [world cell]
-  (let [item (stairs/filler world 1)]
+  (let [item (stairs/building-filler world 1)]
     (when (and item
                (path/floor? (assoc-in world [:world/blocks cell] (blocks/default-state item)) cell))
       item)))
 
+(def deep-drop 3) ; non-solid cells under a floor that make it thin
+
+(defn thin-floor?
+  "Is floor a solid cell with nothing solid under it for deep-drop cells (air, lava or anything the
+   body falls through, every one of them loaded)? Such a floor is one block thick over a drop, and
+   a ghast's fireball takes it out: blaze-race-c geared run 5 (plan 40805504891) stood at
+   [2146.5 72.0 1758.4] on [2146 71 1758], a fireball (entity 239, the ghast 202's, damage type 14)
+   exploded by it, the server's section-blocks-update set [2146 71 1758] and [2146 71 1759] to air
+   in the next tick, and the bot fell 46 blocks into the lava sea. A floor that is not solid is
+   the floor op's business (the cave's bridge, an air floor filled), and an unloaded cell under it
+   is no drop: nothing is known of it."
+  [world floor]
+  (let [at #(terrain/block-at world %)
+        under (map #(at (plus floor [0 (- %) 0])) (range 1 (inc deep-drop)))]
+    (boolean (and (some? (at floor))
+                  (blocks/solid? (at floor))
+                  (every? some? under)
+                  (not-any? blocks/solid? under)))))
+
+(defn underlay-possible?
+  "Can the cell under floor be filled from the stand before the floor is walked: a filler carried
+   (stairs/filler), bridge-min-filler of them together so that the fill never eats a bridge's
+   reserve (landing 5 went from 64 cobblestone to 12 in 70 s, a floor and a fill under it at every
+   step down its own pillar), and a solid neighbour to place against (build/foundation is the cell
+   itself)?"
+  [world floor]
+  (let [under (plus floor [0 -1 0])]
+    (and (some? (stairs/filler world 1))
+         (>= (stairs/carried-filler world) bridge-min-filler)
+         (= under (build/foundation world under)))))
+
+(defn underlay-ops
+  "The op that fills the cell under the floor of the step from feet by move, first, when that floor
+   is thin (thin-floor?) and the fill is possible (underlay-possible?); none otherwise. A route
+   with a thick floor is chosen before this is asked (next-move)."
+  [world feet move]
+  (let [floor (plus (plus feet move) [0 -1 0])]
+    (if (and (thin-floor? world floor) (underlay-possible? world floor))
+      [(build/place-op (plus floor [0 -1 0]) feet nil :under)]
+      [])))
 (defn infested?
   "Is the block at cell an infested one (infested_stone, infested_stone_bricks ...)? Breaking one
    lets a silverfish out, which calls the others out of their blocks: gym chain-w13 run 4 (job 4,
@@ -275,7 +318,11 @@
    floor it steps onto air that the block under the feet holds (build/foundation), no water or
    lava under it within stairs/bridge-depth (stairs/over-fluid?: a causeway over a lake is no
    cave's floor, unless fluid-ok?: bridge-over-void? asks for ground itself), a filler carried,
-   the step dry? and, with that floor laid, safe?. The fortress's tunnel bridges only by
+   the step dry? and, with that floor laid, safe?. The block laid is one that stands as a floor
+   once laid (walk-filler: soul sand, the last resort of stairs/filler, is not), as the safe?
+   asked of it assumes cobblestone and the placing puts the carried filler there: sim R1/37 seed 2
+   (probe 40826098892) bridged the lava sea with soul sand and stood on five of its blocks, lava all
+   round, and was :blocked three times in four seconds. The fortress's tunnel bridges only by
    bridge-over-void?."
   ([world feet move] (bridge? world feet move false))
   ([world feet move fluid-ok?]
@@ -285,7 +332,7 @@
           (contains? #{:air :cave_air :void_air} (blocks/name-of (terrain/block-at world floor)))
           (= floor (build/foundation world floor))
           (or fluid-ok? (not (stairs/over-fluid? world floor)))
-          (some? (stairs/filler world 1))
+          (some? (walk-filler world floor))
           (dry? world feet move)
           (safe? (assoc-in world [:world/blocks floor] (blocks/default-state :cobblestone))
                  feet
@@ -316,7 +363,9 @@
    leaves only for the laid block) and, under that floor, ground-below? (over lava too only at
    bridge-lava-health, the sea under the Nether's caves: never bridged hurt), a filler reserve
    of bridge-min-filler and bridge-min-health: never over water, never hurt, never short of
-   blocks. Sim world R2/12 (issue #338) met a cavern sixty blocks across over the lava sea, the
+   blocks. The reserve is every filler carried together (stairs/carried-filler), not one kind of
+   it: blaze-race-e landing 5 (step-bre5, 23c96b453) held cobblestone 12 and netherrack 4 at 70 s,
+   neither 16 alone, and the level step across the void at [2157 67 1747] was refused for it. Sim world R2/12 (issue #338) met a cavern sixty blocks across over the lava sea, the
    basalt 26 blocks under its floor, that no step round its rim crossed in an hour."
   [world feet move]
   (let [health (double (or (:player/health world) 20.0))
@@ -325,7 +374,8 @@
          (bridge? world feet move true)
          (or (ground-below? world floor)
              (and (>= health bridge-lava-health) (ground-below? world floor true)))
-         (some? (stairs/filler world bridge-min-filler)))))
+         (>= (stairs/carried-filler world) bridge-min-filler)
+         (some? (walk-filler world floor)))))
 
 (defn climb-out?
   "May the up move from feet stand on a block laid beside the feet at their own height: the
@@ -381,9 +431,14 @@
    (let [ways (moves feet target climb)
          fresh (remove #(contains? visited (plus feet %)) ways)
          allowed? #(and (safe? world feet %) (or (not dry-only?) (dry? world feet %)))
-         first-way? (cond dry-only? #(or (allowed? %) (bridge? world feet %))
-                          bridge-ok? #(or (allowed? %) (bridge-over-void? world feet %))
-                          :else allowed?)
+         ;; a fresh step onto a floor one block thick over a drop only with the cell under it
+         ;; filled first; a retreat onto a cell already stood in is not asked
+         fresh-ok? #(let [floor (plus (plus feet %) [0 -1 0])]
+                      (or (not (thin-floor? world floor)) (underlay-possible? world floor)))
+         any-way? (cond dry-only? #(or (allowed? %) (bridge? world feet %))
+                        bridge-ok? #(or (allowed? %) (bridge-over-void? world feet %))
+                        :else allowed?)
+         first-way? #(and (fresh-ok? %) (any-way? %))
          turn? (fn [move]
                  (let [floor (plus (plus feet move) [0 -1 0])
                        own-floor (plus feet [0 -1 0])]
@@ -402,6 +457,9 @@
          climb? #(climb-out? world feet % dry-only?)
          down? #(neg? (long (second %)))]
      (or (first (filter #(and (first-way? %) (or (not up?) (not (down? %)))) fresh))
+         ;; no reroute with a thick floor, or a block to fill under a thin one: the step as before
+         ;; (sim R1/37 seed 2 held soul sand only, and was blocked at y 31 for the refusal)
+         (first (filter #(and (any-way? %) (or (not up?) (not (down? %)))) fresh))
          (first (filter (fn [move]
                           (let [floor (plus (plus feet move) [0 -1 0])
                                 filled (assoc-in world
@@ -655,6 +713,7 @@
       (or (arrived? world target r) (>= taken steps))
       (-> world
           (assoc :player/controls {})
+          (intent/assoc-intent :intent/ended-at feet)
           intent/done)
       (and move (or (off-step? feet from move) (lost-way? i)))
       (reduce intent/dissoc-intent (assoc world :player/controls {}) step-keys)
@@ -696,10 +755,13 @@
                                            :intent/tunnel-visited (conj tunnel-visited feet))
                 (or undo fresh?) (assoc :fortress/trail (leave-cell trail feet (some? undo))))))
       :else
-      (let [next (build/next-op world (into (seal-ops world from move) (step-plan from move)))
+      (let [next (build/next-op world
+                                (into (into (underlay-ops world from move)
+                                            (seal-ops world from move))
+                                      (step-plan from move)))
             next (cond-> next
                    (= :place (:build/op next))
-                   (assoc :build/item (or (stairs/filler world 1) :cobblestone)))]
+                   (assoc :build/item (or (stairs/building-filler world 1) :cobblestone)))]
         (cond (nil? next)
               (reduce
                intent/dissoc-intent
@@ -914,16 +976,45 @@
   (boolean (and (= dimension/nether (dimension/of world))
                 (some #(arrived? world %) (bricks world)))))
 
+(def return-health 18.0) ; health a bot back in the overworld has before it goes through the portal again
+
+(defn ready-for-nether?
+  "May the bot go back through the portal: its health at return-health or over? Sim R1/1 (probe
+   40787504601) entered the Nether at 7.9 health, food 14 and nothing edible, and was dead within
+   the half hour. Health is made: a meal (eat/hungry-under eats up to food 18 for a bot that
+   went to the Nether), the hunt for the food, then a rest. No timer ends the wait: a bot that
+   cannot heal has no use in the Nether either."
+  [world]
+  (>= (:player/health world 20.0) return-health))
+
 (defmethod plan/done-by :nether-access?
   [world _]
   (or (not= dimension/overworld (dimension/of world))
       (not (contains? (:plan/reached world) :nether))
       (empty? (plan/undone world (filter #(= dimension/nether (:goal/dimension %)) plan/goals)))))
 
+(defn fed-for-nether?
+  "Does the bot hold hunt/entry-food-min edible items? Sim R1/1 (probe 40795259629) went back
+   through the portal with none, and the hunt row never ran in the forty minutes of the build that
+   took it there (foraging? is never out of a :build): the hunt comes first, so the build is not
+   started until the food is held."
+  [world]
+  (>= (hunt/edible-held world) hunt/entry-food-min))
+
 (defmethod plan/next-intent :return-nether
+  ;; not ready: a rest while the food heals (food at the healing level), else the wait named for
+  ;; what is missing, :no-food-to-return, after the meal and the hunt, always rows that come
+  ;; first, found nothing to eat; healthy but without food for the Nether: a rest (done at once,
+  ;; asked again) while the hunt has yet to search, the wait only once it has (hunt/search-spent?)
   [world goal table]
-  (when-not (plan/done-by world goal)
-    (plan/next-intent world (assoc goal :goal/plan :build) table)))
+  (cond (plan/done-by world goal) nil
+        (not (ready-for-nether? world))
+        (cond (>= (:player/food world 20) hunger/heal-level) {:intent/kind :rest}
+              (eat/scrap-held world) {:intent/kind :eat :intent/item (eat/scrap-held world)}
+              :else {:plan/wait :no-food-to-return})
+        (fed-for-nether? world) (plan/next-intent world (assoc goal :goal/plan :build) table)
+        (hunt/search-spent? world) {:plan/wait :no-food-to-return}
+        :else {:intent/kind :rest}))
 
 (defn back-target
   "The cell to walk back to when a pickaxe must be remade and no ground is near: the oldest

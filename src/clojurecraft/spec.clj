@@ -17,6 +17,7 @@
             [clojurecraft.eyes]
             [clojurecraft.fortress :as fortress]
             [clojurecraft.game :as game]
+            [clojurecraft.gear]
             [clojurecraft.hunt]
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
@@ -201,8 +202,10 @@
 (s/def :forage/since int?)
 (s/def :forage/leg nat-int?)
 (s/def :forage/retry-at int?)
-(s/def :forage/phase #{:early :kit})
-(s/def :hunt/forage (s/keys :req [:forage/since :forage/leg] :opt [:forage/retry-at :forage/phase]))
+(s/def :forage/phase #{:early :kit :return})
+(s/def :forage/life nat-int?)
+(s/def :hunt/forage
+  (s/keys :req [:forage/since :forage/leg] :opt [:forage/retry-at :forage/phase :forage/life]))
 (s/def :trail/target (s/coll-of number? :kind vector? :count 3))
 (s/def :trail/cells (s/coll-of ::block-pos :kind vector?))
 (s/def :trail/dead (s/coll-of ::block-pos :kind set?))
@@ -431,6 +434,10 @@
 (s/def :world/boss-health (s/map-of uuid? number?))
 (s/def :player/food int?)               ; 0-20 from a server; the wire allows any varint, and step is total over it
 (s/def :player/saturation number?)
+(s/def :player/on-fire? boolean?)
+(s/def :player/using-item? boolean?)
+(s/def :player/ignitions (s/coll-of number? :kind vector? :max-count 3))
+(s/def :player/struck-at number?)
 (s/def :intent/food-before int?)
 (s/def :intent/eat-by number?)
 (s/def :entity/seen-at int?)
@@ -466,6 +473,7 @@
 (s/def :plan/waiting-ticks int?)
 (s/def :plan/wait some?)
 (s/def :intent/reason some?)
+(s/def :intent/ended-at ::block-pos)
 (s/def :intent/for keyword?)
 (s/def :intent/enter? boolean?)
 (s/def :intent/top int?)
@@ -508,6 +516,21 @@
 (s/def :intent/swings pos-int?)
 (s/def :intent/target-pos ::vec3)
 (s/def :intent/spawner ::block-pos)
+(s/def :pocket/cell ::block-pos)
+(s/def :pocket/stand (s/nilable ::block-pos))
+(s/def :pocket/dig (s/coll-of ::block-pos :kind vector?))
+(s/def :pocket/placed (s/coll-of ::block-pos :kind vector?))
+(s/def :pocket/here? boolean?)
+(s/def :pocket/unsealable? boolean?)
+(s/def :pocket/seal-failed-at number?)
+(s/def :pocket/prepared-at number?)
+(s/def :pocket/site
+  (s/keys :req [:pocket/cell :pocket/dig]
+          :opt [:pocket/stand :pocket/placed :pocket/here? :pocket/unsealable?]))
+(s/def :intent/prepare? boolean?)
+(s/def :intent/site :pocket/site)
+(s/def :intent/heal-to number?)
+(s/def :intent/raised? boolean?)
 (s/def :intent/blazes (s/coll-of int? :kind set?))
 (s/def :intent/health number?)
 (s/def :intent/hold? boolean?)
@@ -601,6 +624,7 @@
 (s/def :intention/target ::target)
 (s/def :intention/recipe keyword?)
 (s/def :intention/reason some?)
+(s/def :intention/ended-at ::block-pos)
 (s/def :answer/kind #{:ack :pickup :death})
 (s/def :answer/at int?)
 (s/def :answer/sequence int?)
