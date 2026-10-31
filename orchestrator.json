@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-31T13:44:02.042Z",
+  "at" : "2026-10-31T13:45:08.962Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -18,11 +18,6 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : true
   }, {
-    "number" : 636,
-    "title" : "Bot stops at blaze-rods: no-food-to-return",
-    "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
-  }, {
     "number" : 643,
     "title" : "Bot stops at gear: retrying",
     "labels" : [ "bot-failure", "real", "sim" ],
@@ -31,6 +26,11 @@
     "number" : 507,
     "title" : "Bot stops at blaze-rods: no-blaze",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 636,
+    "title" : "Bot stops at blaze-rods: no-food-to-return",
+    "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
     "number" : 531,
