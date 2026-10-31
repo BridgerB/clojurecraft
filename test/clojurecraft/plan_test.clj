@@ -1782,7 +1782,8 @@
                                :plan/waiting-ticks plan/wait-ticks)
                         reason))]
     (is (= :active (:plan/status (at 200000 :retrying))))
-    (is (= 1 (:plan/recoveries (at 200000 :retrying))))
+    (is (= 2 (:plan/recoveries (at 200000 :retrying)))
+        "one from the three failures, one from the wait")
     (is (= :failed (:plan/status (at (+ plan/stall-ms 1000) :retrying))) "a dead end still ends")
     (is (= :failed (:plan/status (at 200000 :no-log))) "every other wait ends as it did")))
 
