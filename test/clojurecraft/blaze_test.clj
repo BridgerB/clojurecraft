@@ -2303,3 +2303,26 @@
     (is (nil? (blaze/hold-intent shut)) "nothing to hold for, nothing to open (no placed cell)")
     (is (not= :pocket (:intent/kind (next-intent shut))))
     (is (not= :unseal (:intent/kind (next-intent shut))))))
+
+(deftest a-volley-in-sight-on-a-sortie-is-not-a-refuge
+  ;; blaze-race-z12 job 4: 69 min, 0 real kills; the sortie stepped out of the pocket, 3 to 9 blazes watched it,
+  ;; outnumbered? made the refuge win, back to camp 0.7 s later, 31 minutes
+  (let [volley (into {}
+                     (map (fn [i] [(+ 50 i)
+                                   (entity :blaze [14.5 66.0 (+ 6.0 i)] :entity/health 20.0)])
+                          (range 4)))
+        w (assoc (standing volley) :player/health 19.0 :time/now 100000)
+        sortie (assoc w :sortie/since 98000)]
+    (is (true? (blaze/outnumbered? w)) "four watch")
+    (is (true? (blaze/refuge-needed? w)) "off a sortie: the refuge")
+    (is (false? (blaze/refuge-needed? sortie)) "on a sortie at 19 hp: not a refuge")
+    (is (true? (blaze/refuge-needed? (assoc sortie :player/health 13.0)))
+        "under 14 the sortie is over: the refuge")
+    (is (true? (blaze/refuge-needed? (assoc sortie :player/on-fire? true)))
+        "alight: over, the refuge")
+    (testing "a tunnel out of a pocket just entered is a peek before steer notes the sortie"
+      (let [out (-> w
+                    (assoc :plan/intent {:intent/kind :tunnel-to :intent/target [15 64 15]})
+                    (memory/remember-intention {:intent/id 91 :intent/kind :pocket} :done))]
+        (is (true? (blaze/peeking? out)))
+        (is (false? (blaze/peeking? (dissoc out :plan/intent))) "no tunnel running: not a peek")))))
