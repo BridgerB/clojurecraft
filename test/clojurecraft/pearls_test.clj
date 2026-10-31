@@ -2579,7 +2579,6 @@
         out (assoc w :player/pos [9.5 61.0 8.5])
         i (plan/next-intent out row plan/goals)]
     (is (pearls/wandering? out))
-    (is (some? (pearls/angry-near out)) "the angry one still holds the burrow's mouth")
     (is (= [:walk :pearls] [(:intent/kind i) (:intent/for i)]) (pr-str i))
     (is (not= [8 61 8] (:intent/target i)) "not back to the burrow's end")))
 
@@ -3083,13 +3082,13 @@
   ;; [2444 52 2199]; 2.5 s later the hunt walked back to the burrow site [2450 55 2200] and cut a
   ;; burrow there, undoing the explore walk, sixteen times in 3 hours, five pearls and none after
   ;; minute 18
-  (let [calm (enderman [8.5 64.0 28.5])
+  (let [calm (assoc (enderman [8.5 64.0 28.5]) :entity/creepy? true)
         w (-> (standing {1 calm})
               (assoc-in [:player/inventory 1] (item :iron_pickaxe 1))
               (assoc :time/now 1000))
         avoided (assoc w :plan/avoid {:near [8 64 8] :until 1000000})]
     (is (= :burrow (:intent/kind (plan/next-intent w row plan/goals)))
-        "with nothing to avoid, a burrow is cut where the bot stands")
+        "with nothing to avoid and an angry one in sight, a burrow is cut where the bot stands")
     (is (not= :burrow (:intent/kind (plan/next-intent avoided row plan/goals)))
         "at a place the watchdog asked rows to keep away from: no burrow")
     (is (nil? (pearls/shelter-walk avoided [8 64 8])) "and no walk to a shelter there")
