@@ -2151,12 +2151,16 @@
 (deftest a-rod-pick-up-holds-the-refuge-off-for-two-seconds-only
   ;; lead on z9 job 4: the grab that overrides the refuge under 12 hp runs one step and the pick-up, then the
   ;; refuge wins, so it cannot become a stand in the swarm
-  (let [rod (entity :item [10.5 64.0 8.5] :entity/item blaze/rod)
+  (let [rod (entity :item [4.5 64.0 8.5] :entity/item blaze/rod)
         swarm (into {}
                     (map (fn [i] [(+ 50 i)
                                   (entity :blaze [14.5 66.0 (+ 6.0 i)] :entity/health 20.0)])
                          (range 4)))
-        w (assoc (standing (merge {40 rod} swarm)) :player/health 11.0 :time/now 100000)
+        w (assoc (standing (merge {40 rod} swarm))
+                 :world/chunks {[0 0] (world/column pocket-walls)}
+                 :player/pos [5.5 64.0 8.5]
+                 :player/health 11.0
+                 :time/now 100000)
         grab {:intent/kind :collect-drops :intent/item :blaze_rod :intent/target [10 64 8]}
         row (first (filter #(= :blaze-rods (:goal/id %)) plan/goals))]
     (is (true? (blaze/grab-over-refuge? w)) "not begun: the grab first")
