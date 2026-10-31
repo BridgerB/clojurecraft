@@ -551,7 +551,10 @@
         (is (blaze/at-nook? in-nook [11 64 8]))
         (is (= :pocket (:intent/kind (next-intent in-nook))) "the nook is not the pocket")
         (is (pocket/in? in-pocket))
-        (is (= {:intent/kind :camp :intent/spawner [11 64 8]} (next-intent in-pocket)))))))
+        (is (= {:intent/kind :camp :intent/spawner [11 64 8]}
+               (next-intent
+                (memory/remember-intention in-pocket {:intent/id 99 :intent/kind :pocket} :done)))
+            "just in: the camp, a sortie only after sortie-rest-ms")))))
 
 (deftest the-tunnel-is-the-cover-it-knows-and-cover-that-churns-is-dropped
   ;; blaze-race-b (real, a33d2a96e): :walk [2344 57 2281], [2344 57 2280], [2344 57 2279], then
@@ -1635,7 +1638,8 @@
         base (-> (standing {})
                  in-pocket
                  with-spawner
-                 (assoc :time/now 100000))
+                 (assoc :time/now 100000)
+                 (memory/remember-intention {:intent/id 98 :intent/kind :pocket} :done))
         idle (-> base
                  (camp 1)
                  (camp 2)
@@ -1646,6 +1650,11 @@
     (is (= :camp (:intent/kind (next-intent idle)))
         "idle with no pocket nearer the spawner: stays, never across the room to it")
     (is (nil? (blaze/advance-intent idle spawner-at)) "no site nearer in this one-pocket world")
+    (testing
+      "rested in the pocket sortie-rest-ms with no fight: out toward the spawner (hit and run)"
+      (let [rested (assoc idle :time/now (+ 100000 blaze/sortie-rest-ms 1))]
+        (is (blaze/sortie-due? rested))
+        (is (not= :camp (:intent/kind (next-intent rested))))))
     (testing "after a fight the pocket is camped again"
       (let [fought (memory/remember-intention idle {:intent/id 4 :intent/kind :fight} :done)]
         (is (= :camp (:intent/kind (next-intent fought))))))))
