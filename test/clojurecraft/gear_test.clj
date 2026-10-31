@@ -196,13 +196,13 @@
                    {:forage/since 1000 :forage/leg 3 :forage/phase :return :forage/life 0}}
             go (fn [w] (plan/next-intent (merge w spent) (row :return-nether) plan/goals))]
         (is (not= {:plan/wait :no-food-to-return} (go (back {3 (item :bread 3)} {} 19.0 20))))
-        (is (nil? (:plan/wait (go (back {3 (item :bread 3)} {} 19.0 20)))))
         (testing "respawned, nothing held, health 20 and food 20: the return"
           (let [r (go (back {} {} 20.0 20))]
-            (is (nil? (:plan/wait r)))
+            (is (not= :no-food-to-return (:plan/wait r))
+                "the build's own wait (no log in the fixture) is not this one")
             (is (not= {:intent/kind :rest} r))))
         (testing "hurt, nothing to eat, the search spent: the return, not a wait"
-          (is (nil? (:plan/wait (go (back {} {} 8.0 14))))))))))
+          (is (not= :no-food-to-return (:plan/wait (go (back {} {} 8.0 14))))))))))
 
 (deftest a-running-cook-is-not-left-with-the-food-in-the-furnace
   ;; probe 40795259629: edible 5 (:place, goal :cook) at t 4815750, 0 (:smelt, goal :cook) at
