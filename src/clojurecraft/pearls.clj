@@ -228,32 +228,93 @@
              (endermen (if (lured-out? world) world (dissoc world :plan/blacklist)) stare-range))
        (:player/pos world)))))
 
-(def menace-radius 8.0)               ; blocks from the feet within which an angry enderman, given up on or not, is a menace: travel-b job 6 stood 41 minutes on one parked 12 off, pearl-fight-a job 3 was killed by one that closed from 9 to 3 in a few seconds
-
-(defn menace
-  "[eid entity] of the nearest angry enderman (entity/creepy?), blacklisted or fought out or not,
-   within radius (menace-radius by default) of the feet and danger-rise of their height, or nil.
-   One parked farther off holds nothing (stuck-retry's wander walks past it)."
-  ([world] (menace world menace-radius))
-  ([world radius]
-   (let [p (:player/pos world)]
-     (entity/nearest (into {}
-                           (filter (fn [[_ e]]
-                                     (let [q (:entity/pos e)]
-                                       (and (entity/creepy? e)
-                                            (<= (physics/distance p q) radius)
-                                            (<= (abs (- (physics/y-of q) (physics/y-of p)))
-                                                danger-rise)))))
-                           (endermen (dissoc world :plan/blacklist) stare-range))
-                     p))))
-
 (defn menaced?
   "Does an angry enderman (entity/creepy?), blacklisted or not, stand within danger-radius of the
    feet and danger-rise of their height? Then no drop is walked to or waited for: the hunt meets
    it first. Sim probe 39885574495 (world R2, seed 5): two provoked at once, one killed, and the
    walk to its pearl, out of the burrow, was slain in five seconds by the other, beside it."
   [world]
-  (boolean (menace world danger-radius)))
+  (let [p (:player/pos world)]
+    (boolean (some (fn [[_ e]]
+                     (let [q (:entity/pos e)]
+                       (and (entity/creepy? e)
+                            (<= (physics/distance p q) danger-radius)
+                            (<= (abs (- (physics/y-of q) (physics/y-of p))) danger-rise))))
+                   (endermen (dissoc world :plan/blacklist) stare-range)))))
+
+(def park-ms 60000)                    ; ms an angry enderman has not closed in before it is parked
+(def park-near 8.0)                    ; blocks within which one is never parked: it is on the bot
+(def close-gain 1.0)                   ; blocks nearer than its best distance that count as closing in
+
+(defn track-angry
+  "The world with :pearls/angry updated: for each angry enderman (entity/creepy?) within stare-range
+   {:since :best :closed-at}, :best the nearest it has been to the feet and :closed-at the ms it
+   last came close-gain nearer than that; one that moved off by more than four blocks gets a
+   farther best, not a newer :closed-at; one no longer angry or tracked is dropped. Pure; kept by
+   the :pearls steer. Churn-guard's pearl-fight-a job 3 (issue #263) died to a blacklisted angry
+   enderman that stalked at 6 to 19 blocks for 30 s and then hit five times; travel-b job 6 had
+   one parked at 12 blocks for 41 minutes: told apart by motion, not by the hunt's bookkeeping."
+  [world]
+  (let [now (:time/now world 0)
+        p (:player/pos world)
+        old (:pearls/angry world {})
+        angry (into {}
+                    (filter (comp entity/creepy? val))
+                    (endermen (dissoc world :plan/blacklist) stare-range))]
+    (assoc world
+           :pearls/angry
+           (into {}
+                 (for [[eid e] angry
+                       :let [d (physics/distance p (:entity/pos e))
+                             o (get old eid)]]
+                   [eid
+                    (cond (nil? o) {:since now :best d :closed-at now}
+                          (< d (- (:best o) close-gain)) (assoc o :best d :closed-at now)
+                          (> d (+ (:best o) 4.0)) (assoc o :best d)
+                          :else o)])))))
+
+(defn parked?
+  "Is angry enderman eid, standing at pos q, parked: more than park-near from the feet and no
+   closer than close-gain to its best for park-ms (:pearls/angry)? One that has not been tracked
+   long is not."
+  [world eid q]
+  (let [o (get (:pearls/angry world) eid)]
+    (boolean (and o
+                  (>= (- (:time/now world 0) (:closed-at o)) park-ms)
+                  (> (physics/distance (:player/pos world) q) park-near)))))
+
+(defn live-menaced?
+  "Is an angry enderman within danger-radius and danger-rise of the feet that is not parked
+   (parked?)? Only that holds a wander in."
+  [world]
+  (let [p (:player/pos world)]
+    (boolean (some (fn [[eid e]]
+                     (let [q (:entity/pos e)]
+                       (and (entity/creepy? e)
+                            (<= (physics/distance p q) danger-radius)
+                            (<= (abs (- (physics/y-of q) (physics/y-of p))) danger-rise)
+                            (not (parked? world eid q)))))
+                   (endermen (dissoc world :plan/blacklist) stare-range)))))
+
+(defn menace
+  "[eid entity] of the nearest angry enderman (entity/creepy?) within danger-radius and danger-rise
+   of the feet that is not parked (parked?), blacklisted or fought out or not, or nil: the one
+   that closes in, or stands near, and has to be met. The hunt with no burrow cuts one where it
+   stands for it, and takes no crowd-site walk. Pearl-fight-a job 3 (plan run 41143668588) died to
+   one that stalked at 6 to 19 blocks for 30 s; travel-b job 6 stood 41 minutes on one parked at
+   12, which holds nothing."
+  [world]
+  (let [p (:player/pos world)]
+    (entity/nearest (into {}
+                          (filter (fn [[eid e]]
+                                    (let [q (:entity/pos e)]
+                                      (and (entity/creepy? e)
+                                           (<= (physics/distance p q) danger-radius)
+                                           (<= (abs (- (physics/y-of q) (physics/y-of p)))
+                                               danger-rise)
+                                           (not (parked? world eid q))))))
+                          (endermen (dissoc world :plan/blacklist) stare-range))
+                    p)))
 
 (def stale-lookouts 12)              ; lookouts (five seconds each, a minute) stood with the burrow and nothing to do from it before it is given up for one cut beside the next enderman
 (def lure-lookouts 6)                 ; lookouts (half a minute) stood in the burrow over an angry enderman near its mouth that has not come before the bot shows itself at the mouth to bring it
@@ -1871,11 +1932,9 @@
                                       (not (menaced? world))
                                       (empty? (endermen world seek-radius)))
                              (travel world)))
-        wander-walk (delay (when (and (not hurt?)
-                                      (not swarmed?)
-                                      (not (and (menaced? world) (coming? world)))
-                                      (wandering? world))
-                             (wander world)))
+        wander-walk
+        (delay (when (and (not hurt?) (not swarmed?) (not (live-menaced? world)) (wandering? world))
+                 (wander world)))
         csite-walk (delay (shelter-walk world csite))
         site-walk (delay (shelter-walk world site))
         overworld-death? (and (pos? (:stats/deaths world 0))
@@ -2017,7 +2076,7 @@
   [world _]
   (let [look (:control/look (:player/controls world))
         home (:pearls/shelter world)
-        world (uncovered-log world)]
+        world (track-angry (uncovered-log world))]
     (cond (or (nil? look)
               (= :provoke (:intent/kind (:plan/intent world)))
               (and home (= home (intent/feet world))))
