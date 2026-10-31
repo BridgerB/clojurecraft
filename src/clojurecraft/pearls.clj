@@ -2522,7 +2522,7 @@
                 (recipe/counts (:player/inventory world)))))
 
 (defn reserve-gather
-  "The next step of cutting stems (wood/gather-next, the log chain) while the best pickaxe held has
+  "The next step of cutting stems (wood/continue-gather and wood/near-walk: the log chain to a remembered trunk, never a hunt for wood) while the best pickaxe held has
    under reserve-digs digs left and fewer than reserve-stems logs are held, with no angry enderman
    near: a pickaxe reserve before the last digs, so that the successor is made from stems
    (make-pickaxe, under spare-digs) and the hunt never stands in a rock pocket with six digs and no
@@ -2531,7 +2531,7 @@
   [world]
   (let [d (digs-left world)]
     (when (and d (< d reserve-digs) (< (log-count world) reserve-stems) (not (menaced? world)))
-      (let [i (wood/gather-next world)] (when-not (:plan/wait i) i)))))
+      (or (wood/continue-gather world) (wood/near-walk world)))))
 
 (defn make-pickaxe
   "The intent that makes a pickaxe through the needs planner (a goal providing
