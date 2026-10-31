@@ -310,20 +310,62 @@
   (try (rcon/with-rcon host rcon-port rcon-pass #(rcon/command! % "gamerule keep_inventory true"))
        (catch Exception e (cli/log "gamerule failed:" e))))
 
+(def pad-offsets
+  "Where, round a fortress, racer i's pad is: eight compass points 48 blocks off, so the bots of one
+   fortress (a landing set's 48 landings, 40 blocks apart in the Nether, find only two or three
+   fortresses) do not stand on one pad."
+  [[-48 0] [48 0] [0 -48] [0 48] [-48 -48] [48 48] [-48 48] [48 -48]])
+
+(defn pad-of
+  "The pad [x z y] of racer i (from 0) at the fortress located at [fx fz]: pad-offsets (i mod 8)
+   from it, at gym/pad-y."
+  [[fx fz] i]
+  (let [[dx dz] (nth pad-offsets (mod i (count pad-offsets)))] [(+ fx dx) (+ fz dz) gym/pad-y]))
+
+(defn standing-on
+  "[x y z], where a bot stands on the pad [x z y]: the middle of its cell (the order a :go/at
+   has: gym/place! teleports to x.5 y z.5). Returned from the pad, never from a question to the
+   server: a landing that read a position nil handed the planner the pad's own [x z y], which is
+   not a place, and 30 s later the run ended :no-landing (race 41219596455, Clj_r10 and r11)."
+  [[x z y]]
+  [(+ x 0.5) (double y) (+ z 0.5)])
+
+(def fortresses
+  "The fortress located for a landing, [fx fz], by the landing's [x z] (an atom): each landing is
+   asked once, however many bots of the race land there."
+  (atom {}))
+
+(defn locate-fortress!
+  "The fortress nearest the landing's Nether coordinates (an eighth of the overworld's) as the
+   server locates it, [fx fz], asked of the server once for each landing."
+  [rc [x z]]
+  (or (get @fortresses [x z])
+      (let [reply (rcon/command! rc
+                                 (str "execute in minecraft:the_nether positioned "
+                                      (quot x 8)
+                                      " 64 "
+                                      (quot z 8)
+                                      " run locate structure minecraft:fortress"))
+            at (or (fixture/parse-located reply)
+                   (throw (ex-info "no fortress located" {:reply reply})))]
+        (swap! fortresses assoc [x z] at)
+        at)))
+
 (defn land-fortress!
-  "Land the bot named name at the fortress of its landing (gym/land-fortress!: the fortress the
-   server locates from the landing's Nether coordinates, an open pad gym/fortress-pad-open 48
-   blocks west of it), wait for the server to say it stands in the Nether, clear its inventory
-   and give it kit (\"minecraft:iron_sword 1\" ...: what a race bot carries to the fortress,
-   ci/race.edn's :race/kit). Returns where it stands, or nil when the dimension never came; a
-   landing that cannot locate a fortress throws."
-  [rc name landing kit]
-  (let [at (gym/land-fortress! rc name landing gym/fortress-pad-open)]
+  "Land the bot named name (racer i) at the fortress of its landing: the open pad gym/fortress-pad-open
+   at pad-of the fortress the server locates, gym/place! building it and teleporting the bot in;
+   wait for the server to say it stands in the Nether, clear its inventory and give it kit
+   (\"minecraft:iron_sword 1\" ...: what a race bot carries to the fortress, ci/race.edn's
+   :race/kit). Returns where it stands ([x y z], standing-on the pad), or nil when the dimension
+   never came; a landing that cannot locate a fortress throws."
+  [rc name landing i kit]
+  (let [pad (pad-of (locate-fortress! rc landing) i)]
+    (gym/place! rc dimension/nether name pad 2 gym/fortress-pad-open)
     (when (gym/wait-in! rc name dimension/nether)
       (rcon/command! rc (str "clear " name))
       (doseq [item kit] (rcon/command! rc (str "give " name " " item)))
       (Thread/sleep (long fixture/settle-ms))
-      (or (fixture/position rc name) at))))
+      (standing-on pad))))
 
 (defn land-bot!
   "Land one bot, on a thread of its own with an RCON session of its own: wait for it to be
@@ -347,6 +389,7 @@
                              rc
                              name
                              (if landings (landing-of landings (or landing-offset 0) i) @centre)
+                             i
                              kit)
                             landings
                             (fixture/land-at! rc name (landing-of landings (or landing-offset 0) i))

@@ -229,3 +229,14 @@
       (is (= [:wood :timeout]
              (failure/signature {:until "pearls-12" :reason :timeout :plan {:plan/reached #{}}}))
           "no goals recorded: the whole chain"))))
+
+(deftest a-fortress-pad-is-a-place-and-spread-round-the-fortress
+  ;; race 41219596455 (first fortress lanes): ten bots a server on one pad, and Clj_r10 and r11 told
+  ;; :go/at [176 -160 72] (the pad's [x z y]) and ended :no-landing 30 s later
+  (let [fortress [200 -160]
+        pads (map #(race/pad-of fortress %) (range 8))]
+    (is (= 8 (count (set pads))) "eight bots, eight pads")
+    (is (= (first pads) (race/pad-of fortress 8)) "the ninth comes round to the first")
+    (is (every? #(= 72 (nth % 2)) pads) "all at the pad height")
+    (is (= [152 -160 72] (first pads)) "the first, 48 west of the fortress, as the gym's")
+    (is (= [176.5 72.0 -159.5] (race/standing-on [176 -160 72])) "x y z: the middle of the cell")))
