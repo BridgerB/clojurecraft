@@ -273,6 +273,22 @@
     (let [t (textures-of (model-chain assets id))]
       (or (resolve-texture t "#layer0") (resolve-texture t "#particle")))))
 
+(defn held-view
+  "How an item is held in first person, from its model in the jar: {:kind \"flat\" (a sprite, its
+   layer0) or \"block\", :display its display.firstperson_righthand (rotation, translation,
+   scale), the nearest in its model chain}; nil when the jar names no model for it."
+  [assets item-name]
+  (when-let [id (item-model assets item-name)]
+    (let [chain (model-chain assets id)]
+      {:kind (cond (resolve-texture (textures-of chain) "#layer0") "flat"
+                   :else "block")
+       :display (some #(get-in % ["display" "firstperson_righthand"]) chain)})))
+
+(defn helds
+  "{item-name held-view} for every item the jar has a model for."
+  [assets]
+  (into {} (for [[n] blocks/items :let [s (name n) h (held-view assets s)] :when h] [s h])))
+
 (defn icons
   "{item-name texture} for every item whose icon the jar resolves."
   [assets]
@@ -757,6 +773,7 @@
           (json! ex (assoc (or frame {}) :history history :paused (boolean paused)))
           (= "/meta" path) (json! ex (:meta static))
           (= "/icons" path) (json! ex (:icons static))
+          (= "/held" path) (json! ex (:held static))
           (= "/assets.json" path) (respond! ex 200 "application/json" (:assets static) false)
           (= "/column" path)
           (let [{:strs [x z]} (query ex)]
@@ -785,6 +802,7 @@
                  :assets (.getBytes ^String (json/write-str (assets-message assets textures))
                                     "UTF-8")
                  :icons (icons assets)
+                 :held (helds assets)
                  :meta (meta-view)
                  :rcon rcon
                  :notes (or notes "data/viewer-notes.ndjson")}

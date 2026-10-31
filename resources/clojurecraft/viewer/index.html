@@ -68,7 +68,9 @@
   <div id="mind"></div>
   <h2>Focus changes (newest first)</h2><div id="hist"></div>
   <div class="eqline">armour: <span id="eq"></span></div>
-  <h2>Nearby</h2><div id="near" class="flow"></div>
+  <h2>Around it: facing up · rings 16 / 32 / 64 m · ↑ above ↓ below</h2>
+  <canvas id="radar" width="520" height="520" style="width:100%;max-width:440px;aspect-ratio:1;background:#14171a;border-radius:50%;display:block"></canvas>
+  <div id="near" style="font-size:12px;margin:4px 0"></div>
   <h2>Flagged</h2><div id="notes"></div>
 </div>
 <script type="module">
@@ -186,6 +188,51 @@ function aim(t) {
 // ---------------------------------------------------------------- the panel (data/local-runs/panel.ts's layout and words, from the frame)
 const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const nice = (id) => id.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+// ---------------------------------------------------------------- the radar: what the bot cares about round it, heading up
+// Shown: every hostile (the defend and danger rules are about them); animals only while it is hungry
+// (food under 14: the hunt's prey); endermen only on the pearls stage, blazes only on the rods stage;
+// item drops within 16 (what it picks up); and the block its intent heads for, with a line to it.
+const eggs = {};
+const egg = (k) => { if (!eggs[k]) { const im = new Image(); im.src = "/tex/item/" + k + "_spawn_egg.png"; eggs[k] = im; } return eggs[k]; };
+const PREY = new Set(["cow", "pig", "sheep", "chicken", "rabbit", "mooshroom"]);
+function cares(e, f, d) {
+  const goal = f.intent && f.intent["intent/goal"];
+  if (e.kind === "player") return false;
+  if (e.hostile) return true;
+  if (e.kind === "enderman") return goal === "ender-pearls";
+  if (e.kind === "blaze") return goal === "blaze-rods";
+  if (e.kind === "item") return d <= 16;
+  return PREY.has(e.kind) && (f.food ?? 20) < 14;
+}
+function radar(f, p) {
+  const c = $("radar"), g = c.getContext("2d"), W = c.width, R = W / 2 - 14, cx = W / 2, cy = W / 2, S = R / 64;
+  g.clearRect(0, 0, W, W); g.strokeStyle = "#2c3238"; g.lineWidth = 1; g.fillStyle = "#55606a"; g.font = "13px system-ui";
+  for (const r of [16, 32, 64]) { g.beginPath(); g.arc(cx, cy, r * S, 0, 7); g.stroke(); g.fillText(r + " m", cx + 4, cy - r * S + 14); }
+  const y = ((f.look && f.look[0]) || 0) * Math.PI / 180, fx = -Math.sin(y), fz = Math.cos(y), rx = -Math.cos(y), rz = -Math.sin(y);
+  const at = (dx, dz) => [cx - (dx * rx + dz * rz) * S, cy - (dx * fx + dz * fz) * S];
+  // the target of the running intent (or its child's), and a line to it
+  let t = f.intent && (f.intent["intent/target"] || (f.intent["intent/child"] || {})["intent/target"]);
+  if (Array.isArray(t) && t.length === 3) {
+    const [tx, ty] = at(t[0] + 0.5 - p[0], t[2] + 0.5 - p[2]), dy = Math.round(t[1] - Math.floor(p[1])), d = Math.hypot(t[0] + 0.5 - p[0], t[2] + 0.5 - p[2]);
+    g.strokeStyle = "#ffd54a"; g.setLineDash([6, 5]); g.lineWidth = 2; g.beginPath(); g.moveTo(cx, cy); g.lineTo(tx, ty); g.stroke(); g.setLineDash([]);
+    g.fillStyle = "#ffd54a"; g.fillRect(tx - 6, ty - 6, 12, 12);
+    g.font = "bold 13px system-ui"; g.fillText("target " + d.toFixed(0) + "m" + (dy > 0 ? " ↑" + dy : dy < 0 ? " ↓" + (-dy) : ""), tx + 10, ty + 4);
+  }
+  g.fillStyle = "#fff"; g.beginPath(); g.moveTo(cx, cy - 11); g.lineTo(cx - 8, cy + 8); g.lineTo(cx, cy + 3); g.lineTo(cx + 8, cy + 8); g.closePath(); g.fill();
+  const shown = (f.entities || []).map((e) => ({ e, dx: e.pos[0] - p[0], dy: e.pos[1] - p[1], dz: e.pos[2] - p[2] }))
+    .map((o) => ({ ...o, d: Math.hypot(o.dx, o.dy, o.dz) })).filter((o) => o.d <= 64 && cares(o.e, f, o.d)).sort((a, b) => b.d - a.d);
+  for (const { e, dx, dy, dz, d } of shown) {
+    const [sx, sy] = at(dx, dz), col = e.hostile ? "#ff5a5a" : e.kind === "item" ? "#9ab" : "#5fb0ff";
+    g.fillStyle = col; g.beginPath(); g.arc(sx, sy, e.hostile ? 7 : 5, 0, 7); g.fill();
+    const im = egg(e.kind); if (im.complete && im.naturalWidth) g.drawImage(im, sx - 9, sy - 27, 18, 18);
+    const v = Math.round(dy);
+    g.fillStyle = e.hostile ? "#ffb0b0" : "#c8d0d8"; g.font = (e.hostile ? "bold " : "") + "12px system-ui";
+    g.fillText(nice(e.kind === "item" ? e.item || "item" : e.kind) + " " + d.toFixed(0) + "m" + (v > 1 ? " ↑" + v : v < -1 ? " ↓" + (-v) : ""), sx + 10, sy + 4);
+  }
+  const h = shown.filter((o) => o.e.hostile).reverse();
+  $("near").innerHTML = h.length ? "<b style=color:#f88>Hostile:</b> " + h.map((o) => esc(nice(o.e.kind)) + " " + o.d.toFixed(0) + " m").join(" · ")
+    : "<span style=color:#3c7>No hostiles within 64 m</span>";
+}
 const KIND = { walk: "walking to", dig: "digging", collect: "picking up", craft: "crafting", place: "placing a block", "open-container": "opening",
   "stairs-down": "digging a staircase down", "stairs-up": "digging a staircase up", fight: "fighting", smelt: "smelting", mine: "mining",
   "tunnel-to": "tunnelling to", eat: "eating", forage: "foraging for food", pillar: "pillaring up", scoop: "scooping water",
@@ -263,9 +310,7 @@ function panel(f) {
   $("hudinv").innerHTML = [...Array(27)].map((_, k) => cell(at(k + 9))).join("");
   $("eq").textContent = [39, 38, 37, 36, 40].map((k) => at(k) && nice(at(k).item)).filter(Boolean).join(", ") || "none";
   const p = f.pos || [0, 0, 0];
-  $("near").innerHTML = (f.entities || []).filter((e) => e.kind !== "player").map((e) => [Math.hypot(e.pos[0] - p[0], e.pos[1] - p[1], e.pos[2] - p[2]), e])
-    .sort((a, b) => a[0] - b[0]).slice(0, 8).map(([d, e]) => `<span class="node${e.hostile ? " hot" : ""}">${esc(e.kind === "item" ? e.item || "item" : e.kind)} ${d.toFixed(0)}m</span>`).join(" ")
-    || "<span class=node>nothing within 64 blocks</span>";
+  radar(f, p);
   paused = !!f.paused; $("pb").textContent = paused ? "Resume" : "Pause"; $("pb").className = paused ? "on" : "";
   mind(f);
 }
@@ -292,34 +337,62 @@ const texOf = (name) => {
 const matOf = (tex, name) => { const m = new B.StandardMaterial(name, scene); m.diffuseTexture = tex; m.useAlphaFromDiffuseTexture = true;
   m.emissiveColor = new B.Color3(0.35, 0.35, 0.35); m.specularColor = B.Color3.Black(); m.backFaceCulling = false;
   m.transparencyMode = B.Material.MATERIAL_ALPHATEST; m.alphaCutOff = 0.1; return m; };
+// The hand is vanilla's ItemInHandRenderer, op for op: a PoseStack (pose) applied to the item model in
+// Minecraft's view space, which is this camera's local space (x right, y up, looking along -z): the
+// swing's bob, applyItemArmTransform, applyItemArmAttackTransform, then the item model's own
+// display.firstperson_righthand (translate /16, rotate x then y then z, scale), then -0.5 to centre
+// the 16-pixel model. The empty hand is renderPlayerArm with the player model's right arm.
+const DEG = Math.PI / 180, Mx = B.Matrix;
+const poseStack = (ops) => ops.reduce((m, [k, a, b, c]) => (k === "t" ? Mx.Translation(a, b, c) : k === "s" ? Mx.Scaling(a, b, c)
+  : k === "x" ? Mx.RotationX(a * DEG) : k === "y" ? Mx.RotationY(a * DEG) : Mx.RotationZ(a * DEG)).multiply(m), Mx.Identity());
+const place = (node, m) => { const s = new B.Vector3(), q = new B.Quaternion(), p = new B.Vector3(); m.decompose(s, q, p);
+  node.scaling.copyFrom(s); node.rotationQuaternion = q; node.position.copyFrom(p); };
 const hand = new B.TransformNode("hand", scene); hand.parent = cam; hand.setEnabled(mode === "first");
 if (mode !== "first") $("crosshair").style.display = "none";
-const REST = new B.Vector3(0.56, -0.52, -0.72); // right of and below the eye, in front (a right-handed camera looks along -z)
-hand.position.copyFrom(REST);
+cam.minZ = 0.05; // the world's faces next to the eye are not clipped
+cam.fov = Math.min(110, Math.max(30, Number(new URLSearchParams(location.search).get("fov")) || 90)) * DEG; // vertical, as vanilla's slider; 90 unless ?fov= says (Bridger found 70 narrow)
+// the hand is drawn by its own camera, as vanilla draws it with its own projection: this one frames it as a
+// 16:9 window at vanilla's 70 degrees would (the same horizontal field), so a narrower view does not push the
+// item off its right edge; it sees only the hand's layer, and draws over the world
+const HAND = 0x20000000;
+const handCam = new B.FreeCamera("handcam", B.Vector3.Zero(), scene);
+handCam.minZ = 0.01; handCam.rotationQuaternion = new B.Quaternion(); handCam.layerMask = HAND;
+handCam.fovMode = B.Camera.FOVMODE_HORIZONTAL_FIXED; handCam.fov = 2 * Math.atan(Math.tan(35 * DEG) * 16 / 9);
+if (mode === "first") scene.activeCameras = [cam, handCam];
 const skin = new B.Texture("/tex/entity/player/wide/steve.png", scene, true, true, NEAREST);
-const armUV = new B.Vector4(44 / 64, 1 - 32 / 64, 48 / 64, 1 - 20 / 64); // the right arm's front in the skin
-const arm = B.MeshBuilder.CreateBox("arm", { width: 0.22, height: 0.22, depth: 0.7, faceUV: Array(6).fill(armUV) }, scene);
-arm.material = matOf(skin, "arm"); arm.parent = hand; arm.rotation.set(0.15, -0.35, 0);
-let heldName = null, held = null;
+const armUV = new B.Vector4(44 / 64, 1 - 20 / 64, 48 / 64, 1 - 32 / 64); // the right arm's front, the shoulder at the pivot (model y down)
+const arm = B.MeshBuilder.CreateBox("arm", { width: 4 / 16, height: 12 / 16, depth: 4 / 16, faceUV: Array(6).fill(armUV) }, scene);
+arm.position.set(-1 / 16, 4 / 16, 0); // the cube (-3,-2,-2) 4x12x4 round the model's centre
+arm.material = matOf(skin, "arm"); arm.parent = hand;
+// the item models' first-person transforms, from the jar (/held); vanilla's generated/handheld and block ones until then
+const FLAT = { rotation: [0, -90, 25], translation: [1.13, 3.2, 1.13], scale: [0.68, 0.68, 0.68] };
+const BLOCK = { rotation: [0, 45, 0], translation: [0, 0, 0], scale: [0.4, 0.4, 0.4] };
+let heldInfo = {};
+fetch("/held").then((r) => r.ok ? r.json() : {}).then((h) => { heldInfo = h; heldName = undefined; }).catch(() => {});
+let heldName = null, held = null, heldDisplay = null;
+function flatItem(tex) { // the sprite on the model's 0..1 square at z 0.5, u along +x, v down from +y: never mirrored
+  const m = new B.Mesh("held", scene), v = new B.VertexData();
+  v.positions = [0, 0, 0.5, 1, 0, 0.5, 1, 1, 0.5, 0, 1, 0.5];
+  v.uvs = [0, 0, 1, 0, 1, 1, 0, 1]; v.indices = [0, 1, 2, 0, 2, 3, 0, 2, 1, 0, 3, 2]; v.normals = [0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1];
+  v.applyToMesh(m); m.material = matOf(tex, "held"); return m;
+}
 function holdItem(f) {
   const it = f.hotbar && f.hotbar[f.held];
   const name = it ? it.item : null;
   if (name === heldName) return;
   heldName = name;
   if (held) { held.dispose(false, true); held = null; }
-  const icon = name && icons[name];
+  const icon = name && icons[name], info = (name && heldInfo[name]) || {};
   arm.setEnabled(!icon); // vanilla draws the item without the arm
   if (!icon) return;
-  if (icon.startsWith("item/")) {
-    held = B.MeshBuilder.CreatePlane("held", { size: 0.42, sideOrientation: B.Mesh.DOUBLESIDE }, scene);
-    held.rotation.set(0.1, -1.2, -0.35);
-  } else {
-    held = B.MeshBuilder.CreateBox("held", { size: 0.32 }, scene);
-    held.rotation.set(0.35, 0.75, 0);
-  }
-  held.material = matOf(texOf(icon), "held"); held.parent = hand; held.position.set(0, 0.05, 0.05);
+  const flat = info.kind ? info.kind === "flat" : icon.startsWith("item/");
+  heldDisplay = info.display || (flat ? FLAT : BLOCK);
+  if (flat) held = flatItem(texOf(icon));
+  else { held = B.MeshBuilder.CreateBox("held", { size: 1 }, scene); held.position.set(0.5, 0.5, 0.5); held.material = matOf(texOf(icon), "held"); }
+  const node = new B.TransformNode("model", scene); node.parent = hand; held.parent = node; held.metadata = node;
+  held.layerMask = HAND; held.renderingGroupId = 1;
 }
-for (const m of [arm]) m.renderingGroupId = 1; // over the world, as vanilla's hand is
+arm.layerMask = HAND; arm.renderingGroupId = 1; // over the world, as vanilla's hand is
 let swings = null, swingAt = -1e9;
 const SWING_MS = 300; // vanilla's swing: 6 ticks
 function swingTo(f) {
@@ -327,12 +400,26 @@ function swingTo(f) {
   swings = f.swings ?? 0;
 }
 function animateHand(now) {
-  if (held) held.renderingGroupId = 1;
-  const t = Math.min(1, (now - swingAt) / SWING_MS), s = t < 1 ? Math.sin(t * Math.PI) : 0, r = t < 1 ? Math.sin(Math.sqrt(t) * Math.PI) : 0;
-  hand.position.set(REST.x - 0.3 * r, REST.y + 0.2 * Math.sin(Math.sqrt(t) * Math.PI * 2) * (t < 1 ? 1 : 0), REST.z - 0.15 * s);
-  hand.rotation.set(0.8 * s, -0.6 * r, -0.3 * r);
+  cam.computeWorldMatrix(true); // the hand camera stands where the eye does, turned as it is
+  handCam.position.copyFrom(cam.position); if (cam.rotationQuaternion) handCam.rotationQuaternion.copyFrom(cam.rotationQuaternion);
+  const f = Math.min(1, Math.max(0, (now - swingAt) / SWING_MS)), p = f < 1 ? f : 0, sq = Math.sqrt(p), PI = Math.PI;
+  if (held) {
+    const d = heldDisplay, t = d.translation || [0, 0, 0], r = d.rotation || [0, 0, 0], s = d.scale || [1, 1, 1];
+    place(hand, poseStack([
+      ["t", -0.4 * Math.sin(sq * PI), 0.2 * Math.sin(sq * 2 * PI), -0.2 * Math.sin(p * PI)],
+      ["t", 0.56, -0.52, -0.72],                                                     // applyItemArmTransform
+      ["y", 45 + Math.sin(p * p * PI) * -20], ["z", Math.sin(sq * PI) * -20], ["x", Math.sin(sq * PI) * -80], ["y", -45], // applyItemArmAttackTransform
+      ["t", t[0] / 16, t[1] / 16, t[2] / 16], ["x", r[0]], ["y", r[1]], ["z", r[2]], ["s", s[0], s[1], s[2]], // the model's firstperson_righthand
+      ["t", -0.5, -0.5, -0.5]]));
+    return;
+  }
+  place(hand, poseStack([                                                               // renderPlayerArm
+    ["t", -0.3 * Math.sin(sq * PI) + 0.64, 0.4 * Math.sin(sq * 2 * PI) - 0.6, -0.4 * Math.sin(p * PI) - 0.72],
+    ["y", 45], ["y", Math.sin(sq * PI) * 70], ["z", Math.sin(p * p * PI) * -20],
+    ["t", -1, 3.6, 3.5], ["z", 120], ["x", 200], ["y", -135], ["t", 5.6, 0, 0],
+    ["t", -5 / 16, 2 / 16, 0]]));                                                  // the right arm's pivot
 }
-const crack = B.MeshBuilder.CreateBox("crack", { size: 1.004 }, scene); crack.isPickable = false; crack.setEnabled(false);
+const crack = B.MeshBuilder.CreateBox("crack", { size: 1 }, scene); // the block's own six faces, 0..1 each crack.isPickable = false; crack.setEnabled(false);
 const crackMats = [];
 function showCrack(f) {
   const d = f.dig;
@@ -341,7 +428,8 @@ function showCrack(f) {
   if (!crackMats[stage]) { // multiplied over the block, as vanilla blends its destroy textures (dark lines darken, the rest leaves it be)
     const m = matOf(texOf("block/destroy_stage_" + stage), "crack" + stage);
     m.disableLighting = true; m.emissiveColor = new B.Color3(1, 1, 1);
-    m.transparencyMode = B.Material.MATERIAL_ALPHATESTANDBLEND; m.alphaMode = B.Engine.ALPHA_MULTIPLY; crackMats[stage] = m; }
+    m.transparencyMode = B.Material.MATERIAL_ALPHATESTANDBLEND; m.alphaMode = B.Engine.ALPHA_MULTIPLY;
+    m.backFaceCulling = true; m.zOffset = -2; crackMats[stage] = m; } // the outer faces only, pulled a hair toward the eye (vanilla's polygon offset)
   crack.material = crackMats[stage];
   crack.position.set(d.pos[0] + 0.5, d.pos[1] + 0.5, d.pos[2] + 0.5); crack.setEnabled(true);
 }

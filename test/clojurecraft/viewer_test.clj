@@ -169,3 +169,18 @@
   (is
    (= {:n 2 :at "t" :note "stuck" :pos [1 2 3] :health 20 :food 5 :held 0 :inventory {} :intent nil}
       (viewer/note 2 "t" "stuck" {:pos [1 2 3] :health 20 :food 5 :held 0 :inventory {}}))))
+
+(deftest an-item-is-held-as-its-model-says
+  (let [a (assoc assets
+                 "models/item/generated"
+                 {"display" {"firstperson_righthand" {"rotation" [0 -90 25]}}}
+                 "models/item/stick"
+                 {"parent" "minecraft:item/generated" "textures" {"layer0" "minecraft:item/stick"}}
+                 "models/block/cube"
+                 (assoc (get assets "models/block/cube")
+                        "display"
+                        {"firstperson_righthand" {"rotation" [0 45 0]}}))]
+    (is (= {:kind "flat" :display {"rotation" [0 -90 25]}} (viewer/held-view a "stick"))
+        "a sprite, with its parent's first-person transform")
+    (is (= {:kind "block" :display {"rotation" [0 45 0]}} (viewer/held-view a "oak_log"))
+        "a block item: its block model's")))
