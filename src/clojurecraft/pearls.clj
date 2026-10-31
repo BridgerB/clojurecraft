@@ -244,7 +244,7 @@
 
 (def park-ms 60000)                    ; ms an angry enderman has not closed in before it is parked
 (def park-near 8.0)                    ; blocks within which one is never parked: it is on the bot
-(def close-gain 1.0)                   ; blocks nearer than its best distance that count as closing in
+(def close-gain 2.0)                   ; blocks nearer than its best distance that count as closing in: a parked enderman jitters one or two blocks (pearl-fight-g job 3, enderman 75 at 9 to 11 blocks for 90 min)
 
 (defn track-angry
   "The world with :pearls/angry updated: for each angry enderman (entity/creepy?) within stare-range
