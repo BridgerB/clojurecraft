@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-31T07:09:10.823Z",
+  "at" : "2026-10-31T07:10:20.043Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -11,6 +11,11 @@
     "number" : 636,
     "title" : "Bot stops at blaze-rods: no-food-to-return",
     "labels" : [ "bot-failure", "sim" ],
+    "copilot" : true
+  }, {
+    "number" : 639,
+    "title" : "Bot stops at fortress: no-food-to-return",
+    "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
     "number" : 618,
@@ -18,18 +23,13 @@
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
-    "number" : 151,
-    "title" : "Bot stops at flint-and-steel: not-picked-up",
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
-  }, {
     "number" : 539,
     "title" : "Bot stops at fortress: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 639,
-    "title" : "Bot stops at fortress: no-food-to-return",
+    "number" : 151,
+    "title" : "Bot stops at flint-and-steel: not-picked-up",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
@@ -249,7 +249,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 636,
-    "move" : "assign"
+    "move" : "wait",
+    "why" : "session starting"
   }, {
     "issue" : 539,
     "move" : "leave",
