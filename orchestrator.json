@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-31T12:20:06.473Z",
+  "at" : "2026-10-31T12:25:36.804Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -43,14 +43,14 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 642,
-    "title" : "Bot stops at blaze-rods: nothing-to-do",
-    "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
-  }, {
     "number" : 531,
     "title" : "Bot stops at ingots: boxed",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 642,
+    "title" : "Bot stops at blaze-rods: nothing-to-do",
+    "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
     "number" : 178,
