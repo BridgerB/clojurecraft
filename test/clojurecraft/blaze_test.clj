@@ -1663,5 +1663,5 @@
                                                                              [3.5 65.0 (+ 8.5 dz)]
                                                                              :entity/health 20.0)])
                                                          [0.0 0.2 -0.2 0.1]))))]
-        (is (= 4 (blaze/blazes-seen many [8 64 8])))
+        (is (= 4 (blaze/count-blazes-seen many [8 64 8])))
         (is (false? (blaze/sees-a-blaze? many [8 64 8])))))))

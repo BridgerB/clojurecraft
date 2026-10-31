@@ -1159,7 +1159,7 @@
 
 (def seen-by-at-most 2) ; blazes a pocket's mouth may face: one draws a blaze to fight at the wall, a room of them is a volley
 
-(defn blazes-seen
+(defn count-blazes-seen
   "How many blazes alive within cover-range of cell c are in the sight of the eye over it
    (unseen-from?)? A blaze goes for a player it sees, so a pocket none of them sees draws none:
    blaze-race-w jobs 1, 2, 3 and 6 camped 30 minutes at [2338 60 2291], 12.8 from the spawner
@@ -1177,7 +1177,7 @@
   "Does cell c face one blaze, or at most seen-by-at-most: the mouth toward one that closes and is
    fought at the wall, the others blind to the bot?"
   [world c]
-  (<= 1 (blazes-seen world c) seen-by-at-most))
+  (<= 1 (count-blazes-seen world c) seen-by-at-most))
 
 (def advance-step 4.0) ; blocks nearer the spawner an advanced pocket is at least
 (def advance-wait-ms 120000) ; ms in a pocket before another nearer the spawner is made
