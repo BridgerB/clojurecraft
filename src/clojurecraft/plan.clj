@@ -93,6 +93,14 @@
 (def landing-timeout 30000)           ; a :go that names a landing waits this long for the bot to be there
 (def landing-reach 2.0)               ; horizontal distance from :go/at that counts as landed
 
+(def target-scoped-failures
+  "[kind reason] pairs of failures that concern one target and no more: a fight that cannot reach
+   its mob, a pickup that found nothing. fail-intent blacklists the target, which bounds the retry
+   (the choice skips a blacklisted target), and counts no strike against the plan, for any goal.
+   Blaze-race-p job 6 ended at 6m24s with 16 hp, fifteen beef and full iron on two
+   :collect-drops :not-picked-up and a :fight :unreachable."
+  #{[:fight :unreachable] [:collect-drops :not-picked-up]})
+
 (def max-attempts 3)                  ; consecutive failed intents before the plan fails
 (def stall-ms 900000)                 ; ms with no intent done (progress?) after which a run out of attempts is a dead end: 15 min
 (def regroup-distance 8)              ; blocks from the feet a regroup walk goes back along the trail
@@ -388,7 +396,9 @@
   [world i]
   (let [unwalkable? (and (contains? #{:walk :end-portal} (:intent/kind i))
                          (= :no-path (:intent/reason i)))
-        attempts (cond-> (:plan/attempts world 0) (not unwalkable?) inc)
+        uncounted? (and (some? (:intent/target i))
+                        (contains? target-scoped-failures [(:intent/kind i) (:intent/reason i)]))
+        attempts (cond-> (:plan/attempts world 0) (not (or unwalkable? uncounted?)) inc)
         unwalkable (if unwalkable? (inc (:plan/unwalkable world 0)) 0)
         feet (when (:player/pos world) (intent/feet world))]
     (-> world

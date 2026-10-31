@@ -1,0 +1,13 @@
+;; Issue #262: the race row as the race bot arrives (one iron pickaxe, a crafting table, 8 sticks, 64
+;; cobblestone), on main with #630 and #632. From blaze-race-t job 3 (54 min, 0 kills): a camp in the
+;; pocket that no blaze comes to is left for the spawner's room (idle?), as the nook was.
+;; Measure rods seen, picked up and despawned within reach first, then hp lost per kill.
+{:plans/label "blaze-race-u"
+ :plans/jobs 6
+ :plans/issue 262
+ :plans/experiments [{:exp/name "blaze-fortress-race"
+                      :exp/kind :gym
+                      :exp/goal "blaze-fortress-race"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 1800}]}

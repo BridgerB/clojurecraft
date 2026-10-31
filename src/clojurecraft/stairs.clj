@@ -169,6 +169,20 @@
         (planks-of held n)
         (first (filter #(>= (get held % 0) n) last-resorts)))))
 
+(def cobble-reserve 8) ; cobblestone a building filler keeps for seals and cover: fireball-proof, and the one block the Nether does not give
+
+(defn building-filler
+  "The filler a tunnel's floors and steps are laid from, or nil: the Nether's own rock first (a
+   tunnel digs hundreds), then the rest of fillers in order, cobblestone only above n plus
+   cobble-reserve; else filler's own choice. Blaze-race-v job 5 laid its 64 cobblestone into
+   floors on the way down (y 72 to 67) with 160 netherrack held, and had none to seal with."
+  [world n]
+  (let [held (recipe/counts (:player/inventory world))
+        need (fn [item] (if (= :cobblestone item) (+ n cobble-reserve) n))]
+    (or (first (filter #(>= (get held % 0) (need %))
+                       (cons :netherrack (remove #{:netherrack} fillers))))
+        (filler world n))))
+
 (def lay-reserve 8)                    ; filler a staircase down never lays into floors: what the climb back seals and steps with
 
 (defn climb-reserve

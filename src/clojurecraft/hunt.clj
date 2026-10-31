@@ -27,8 +27,10 @@
 
 (def game-kinds
   "The animals hunted, by type name, with the raw meat each drops (the game's loot tables).
-   Chickens are left: raw chicken may make the eater hungry (eat/unsafe), and it is not cooked."
-  {:cow :beef :mooshroom :beef :pig :porkchop :sheep :mutton :rabbit :rabbit})
+   Chickens are left: raw chicken may make the eater hungry (eat/unsafe), and it is not cooked.
+   A hoglin is the Nether's pig (a crimson forest). It hits back, so game refuses one under
+   combat/retreat-health and the fight yields (issue #577)."
+  {:cow :beef :mooshroom :beef :pig :porkchop :sheep :mutton :rabbit :rabbit :hoglin :porkchop})
 
 (def meats "The item ids of what game-kinds drop." (set (map recipe/item-id (vals game-kinds))))
 
@@ -37,7 +39,8 @@
 (def starving-radius 48)              ; blocks a starving bot hunts within (a server shows animals this far, and the model populates three chunks round the player)
 (def strike-range 4.5)                ; blocks on the plane from which a hunt fights instead of walking: past a walk's reach (intent/reach 4), so a walk that arrived is never asked again
 (def candidates 3)                    ; nearest animals asked for a route, as the other acts ask
-(def provision-wanted 6)              ; edible items held before the portal is lit: the Nether has no animals, and health comes back there only from food held (issue #501: three raw meats were eaten to the bar's 18 before the portal, and the Nether leg began with none)
+(def early-provision-wanted 6)         ; edible items held before the descent (the :early phase): as before issue #262, so the surface is not hunted bare for the stone pickaxe's hours
+(def provision-wanted 16)             ; edible items held before the portal is lit: health comes back in the Nether only from food 18, and a hoglin is hunted only when one is already near and health is at least retreat-health (issue #501: three raw meats were eaten to the bar's 18 before the portal, and the Nether leg began with none)
 (def early-forage-ms 120000)          ; ms the search goes on before the descent, from its first leg: the stone pickaxe is made on the surface among animals, and the iron kit's search still has its own forage-ms
 (def forage-ms 360000)                ; ms the search for animals goes on, from its first leg, however many legs: then the bot goes on with what it holds, never holding the portal up
 (def forage-reach 48)                 ; blocks the first two forage legs walk from the feet: a server shows animals this far (starving-radius)
@@ -66,13 +69,28 @@
    descent for coal and iron is next, and the surface, where the animals are, is left behind
    for hours); nil in any other dimension or before the pickaxe. Sim race 39869307990 (issue
    #504): the kit was finished at y -29 and the bot never surfaced again, so the Nether leg began
-   with no food."
+   with no food. :return when the Nether was reached before and neither goods are held, the bot
+   back in the overworld after a death: sim R1/1 (probe 40751212155) went back through its lit
+   portal twelve times with no edible item and no pickaxe, each time dead within the half hour.
+   :return before :early: a bot back from the Nether that still holds a stone pickaxe is in the
+   return's phase, with its reserve of sixteen and its six minutes, not the early one's six foods
+   and two minutes (sim R1/1, probe 40801960382, failed :no-food-to-return 142 s after the respawn:
+   the early budget, early-forage-ms 120 s, spent and the 20 s wait after it)."
   [world]
   (when (= dimension/overworld (dimension/of world))
     (cond (and (pos? (inventory/item-count world (recipe/item-id :flint_and_steel)))
                (pos? (inventory/item-count world (recipe/item-id :water_bucket))))
           :kit
+          (contains? (:plan/reached world) :nether) :return
           (pos? (inventory/item-count world (recipe/item-id :stone_pickaxe))) :early)))
+
+(defn provision-target
+  "The edible items the provision-phase wants held: early-provision-wanted in :early (the
+   surface is left for hours either way, and sixteen made sim snapshot R3-27-1, issue #69, hunt
+   at the stone-pickaxe stage and stay at the water bucket), provision-wanted in :kit and
+   :return (issue #262: the Nether leg's reserve)."
+  [world]
+  (if (= :early (provision-phase world)) early-provision-wanted provision-wanted))
 
 (defn provisioning?
   "Is the bot in a provision-phase (:early with the stone pickaxe, :kit with the portal's iron in
@@ -80,7 +98,7 @@
    world R1/2) reached a fortress hurt at food 16 with nothing to eat: health comes back only
    from food 18, and a rest in the Nether failed :no-heal."
   [world]
-  (and (some? (provision-phase world)) (< (edible-held world) provision-wanted)))
+  (and (some? (provision-phase world)) (< (edible-held world) (provision-target world))))
 
 (defn reach
   "Blocks from the feet within which an animal is hunted: hunt-radius, and starving-radius once the
@@ -128,11 +146,12 @@
    (hunt-radius, starving-radius when starving), the first of the candidates nearest that a route
    reaches (intent/routable?) and a fight can reach from its end (fightable-from-route?); nil
    when there is none, and none while the body is in water: no route is walked from there, the
-   rows that swim out come first. Never an animal standing in a cell of the blacklist, where a
-   walk to it that failed :no-path left it (fail-intent blacklists the walk's cell, not the
-   animal). Sim snapshot R1-41-1 (issue #162): the bot surfaced in open sea, a sheep stood on
-   the far shore, and the walk at its cell failed :no-path every twelve seconds, twelve in a row
-   ending the plan."
+   rows that swim out come first. Never a hoglin under combat/retreat-health: it hits back
+   (issue #577). Never an animal standing in a cell of the blacklist, where a walk to it that
+   failed :no-path left it (fail-intent blacklists the walk's cell, not the animal). Sim
+   snapshot R1-41-1 (issue #162): the bot surfaced in open sea, a sheep stood on the far shore,
+   and the walk at its cell failed :no-path every twelve seconds, twelve in a row ending the
+   plan."
   [world]
   (let [pos (:player/pos world)
         bl (:plan/blacklist world #{})
@@ -141,6 +160,8 @@
          (filter (fn [[eid e]]
                    (and (not (:player/in-water? world))
                         (game-kinds (entity/kind e))
+                        (or (not= :hoglin (entity/kind e))
+                            (>= (:player/health world 20.0) combat/retreat-health))
                         (not (entity/dead? e))
                         (not (combat/given-up? world eid e))
                         (not (contains? bl eid))
@@ -220,12 +241,27 @@
    none yet): each phase has its own search and its own budget, so the surface search before the
    descent leaves the iron kit's whole forage-ms, hours of mining later."
   [world]
-  (let [s (:hunt/forage world)] (when (and s (= (provision-phase world) (:forage/phase s))) s)))
+  (let [s (:hunt/forage world)]
+    (when (and s
+               (= (provision-phase world) (:forage/phase s))
+               (= (:stats/deaths world 0) (:forage/life s 0)))
+      s)))
+
+(def entry-food-min 4) ; edible items the Nether is not entered, nor the way back begun, without
 
 (defn forage-budget
   "The ms a search of provision-phase p goes on from its first leg."
   [p]
   (if (= :early p) early-forage-ms forage-ms))
+
+(defn search-spent?
+  "Has this life's search for animals run its forage-budget from its first leg? Then it has
+   looked, and nothing more is to be had by waiting for it (sim R1/1, probe 40798555286: the named
+   wait failed the plan a minute after a respawn, before the hunt had searched)."
+  [world]
+  (let [{:forage/keys [since]} (forage-state world)]
+    (boolean (and since
+                  (>= (- (:time/now world 0) since) (forage-budget (provision-phase world)))))))
 
 (defn afloat?
   "Is the body in water: :player/in-water?, or the box at :player/pos overlapping water
@@ -297,7 +333,8 @@
            :intent/for :hunt}
           e
           (if (<= (physics/horizontal-distance (:player/pos world) (:entity/pos e)) strike-range)
-            {:intent/kind :fight :intent/target eid :intent/for :hunt}
+            (cond-> {:intent/kind :fight :intent/target eid :intent/for :hunt}
+              (= :hoglin (entity/kind e)) (assoc :intent/yield? true))
             {:intent/kind :walk :intent/target (cell (:entity/pos e)) :intent/for :hunt})
           (foraging? world) {:intent/kind :forage :intent/for :hunt})))
 
@@ -308,9 +345,11 @@
   ;; nothing walked, and the next look comes forage-retry-ms on (:forage/retry-at): the bot may
   ;; stand in a pit or a thicket a few blocks from open ground
   [world i event]
-  (let [state
-        (or (forage-state world)
-            {:forage/since (:time/now world) :forage/leg 0 :forage/phase (provision-phase world)})
+  (let [state (or (forage-state world)
+                  {:forage/since (:time/now world)
+                   :forage/leg 0
+                   :forage/phase (provision-phase world)
+                   :forage/life (:stats/deaths world 0)})
         found (forage-leg world state)]
     (cond (nil? found)
           (-> world

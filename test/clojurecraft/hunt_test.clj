@@ -3,6 +3,7 @@
    killed and its meat picked up, then eaten; over canned worlds and against the server model."
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [clojurecraft.blocks :as blocks]
+            [clojurecraft.combat :as combat]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
             [clojurecraft.hunt :as hunt]
@@ -50,6 +51,21 @@
     (is (= {:intent/kind :fight :intent/target 5 :intent/for :hunt}
            (plan/next-intent near hunt-row plan/goals))
         "beside it (within a walk's reach) it is fought")))
+
+(deftest a-hoglin-is-hunted-only-at-or-above-retreat-health
+  ;; a crimson-forest hoglin hits back. under combat/retreat-health it is not game (issue #577)
+  (let [hog {5 (animal :hoglin [14.5 64.0 8.5])}
+        low (assoc (standing 8 {} hog) :player/health 9.3)
+        ok (assoc (standing 8 {} hog) :player/health 12.0)
+        beside (assoc (standing 8 {} {5 (animal :hoglin [11.5 64.0 8.5])}) :player/health 12.0)]
+    (is (nil? (hunt/game low)))
+    (is (plan/done-by low hunt-row) "not approached under retreat-health")
+    (is (= {:intent/kind :walk :intent/target [14 64 8] :intent/for :hunt}
+           (plan/next-intent ok hunt-row plan/goals)))
+    (is (= {:intent/kind :fight :intent/target 5 :intent/for :hunt :intent/yield? true}
+           (plan/next-intent beside hunt-row plan/goals))
+        "beside it the fight yields")
+    (is (= 10 combat/retreat-health) "issue #577: the line is 10, and 9.3 is under it")))
 
 (deftest fed-holding-food-or-with-no-game-the-hunt-is-done
   (let [cow {5 (animal :cow [11.5 64.0 8.5])}]
@@ -181,6 +197,75 @@
   [now]
   (assoc (standing 20 kit-held {}) :time/now now :time/tick 0))
 
+(deftest a-search-is-spent-when-its-budget-is
+  ;; sim R1/1 (probe 40798555286): the named wait failed the plan a minute after a respawn
+  (let [began {:forage/since 1000 :forage/leg 3 :forage/phase :kit :forage/life 0}
+        w (-> (provisioning 2000)
+              (assoc :hunt/forage began))]
+    (is (not (hunt/search-spent? w)))
+    (is (not (hunt/search-spent? (provisioning 2000))) "none begun")
+    (is (hunt/search-spent? (assoc w :time/now (+ 1000 hunt/forage-ms))))))
+
+(deftest before-the-descent-the-early-reserve-is-six
+  ;; sim snapshot R3-27-1 (issue #69): sixteen at the stone-pickaxe stage kept the bot hunting at
+  ;; the water bucket; the sixteen are the kit's and the return's (issue #262)
+  (let [w (-> (standing 20 {0 (item :stone_pickaxe 1)} {})
+              (assoc :time/now 1000 :time/tick 0))]
+    (is (= :early (hunt/provision-phase w)))
+    (is (= hunt/early-provision-wanted (hunt/provision-target w)))
+    (is (hunt/provisioning? w))
+    (is (not (hunt/provisioning? (assoc w
+                                        :player/inventory
+                                        {0 (item :stone_pickaxe 1)
+                                         1 (item :bread hunt/early-provision-wanted)}))))
+    (is (= hunt/provision-wanted (hunt/provision-target (standing 20 kit-held {}))))))
+
+(deftest back-from-the-nether-with-a-stone-pickaxe-the-phase-is-the-returns
+  ;; probe 40801960382: the pickaxe was kept through the death, :early took the phase, its target
+  ;; of six and its two minutes, and :no-food-to-return came 142 s after the respawn
+  (let [w (-> (standing 20 {0 (item :stone_pickaxe 1)} {})
+              (assoc :plan/reached #{:nether} :time/now 1000 :time/tick 0))]
+    (is (= :return (hunt/provision-phase w)))
+    (is (= hunt/provision-wanted (hunt/provision-target w)))
+    (is (= hunt/forage-ms (hunt/forage-budget (hunt/provision-phase w))))
+    (is (= :early (hunt/provision-phase (assoc w :plan/reached #{})))
+        "the Nether never reached: the early phase as before")
+    (is (= :kit (hunt/provision-phase (assoc w :player/inventory kit-held)))
+        "the kit held: the kit's")))
+
+(deftest back-in-the-overworld-after-the-nether-the-bot-stocks-food-again
+  ;; sim R1/1 (probe 40751212155): after a death the pickaxe and the kit were gone, no phase
+  ;; applied, and the bot went back through its lit portal twelve times with no edible item
+  (let [w (-> (standing 20 {} {})
+              (assoc :plan/reached #{:nether} :time/now 1000 :time/tick 0))]
+    (is (= :return (hunt/provision-phase w)))
+    (is (hunt/provisioning? w))
+    (is (not (hunt/provisioning? (assoc w :player/dimension "minecraft:the_nether")))
+        "in the Nether the bot is not provisioning")
+    (is (not (hunt/provisioning?
+              (assoc w :player/inventory {0 (item :bread hunt/provision-wanted)})))
+        "the reserve held")
+    (is (nil? (hunt/provision-phase (assoc w :plan/reached #{})))
+        "the Nether never reached: no phase")))
+
+(deftest a-search-of-an-earlier-life-does-not-end-this-lifes
+  ;; sim R1/1 (probe 40761589784): the first respawn hunted for 1000 s; the search's start
+  ;; stayed in :hunt/forage, so at every later respawn (94 s on) its budget was long spent, the
+  ;; hunt row was done, and the bot went back through the portal with edible 0
+  (let [spent {:forage/since 1000 :forage/leg 3 :forage/phase :return :forage/life 0}
+        w (-> (standing 20 {} {})
+              (assoc :plan/reached #{:nether}
+                     :time/now 5000000
+                     :time/tick 0
+                     :hunt/forage spent
+                     :stats/deaths 3))]
+    (is (nil? (hunt/forage-state w)) "a search of life 0 is not life 3's")
+    (is (hunt/foraging? w))
+    (is (= :hunt (:goal/id (plan/choose w plan/goals)))
+        "the hunt row comes before the way back to the Nether")
+    (is (not (hunt/foraging? (assoc w :stats/deaths 0)))
+        "the same life: its budget is spent, the bot goes on")))
+
 (deftest with-no-animal-in-reach-the-portal-bot-searches-for-one
   ;; issue #501: herds are about one chunk in ten, and the Nether has no game
   (let [w (provisioning 1000)]
@@ -232,8 +317,10 @@
         "afloat before the flag: a :go plans before any tick")
     (is (not (hunt/foraging? (assoc (standing 20 {} {}) :time/now 1000))) "no kit, no search")
     (is (not (hunt/foraging?
-              (assoc (standing 20 (assoc kit-held 2 (item :bread 6)) {}) :time/now 1000)))
-        "six foods held: enough")
+              (assoc (standing 20 (assoc kit-held 2 (item :bread hunt/provision-wanted)) {})
+                     :time/now
+                     1000)))
+        "provision-wanted foods held: enough")
     (is (not (hunt/foraging? (assoc w :player/dimension "minecraft:the_nether")))
         "the Nether has no game")
     (is (not
@@ -295,7 +382,8 @@
     (is (= :walk (get-in wide [:plan/intent :intent/kind])))
     (is (= :hunt (get-in wide [:plan/intent :intent/for])))
     (is (< 40 (first (get-in wide [:plan/intent :intent/target]))) "east, far past the bot at 8")
-    (is (= {:forage/since 1000 :forage/leg 1 :forage/phase :kit} (:hunt/forage wide)))
+    (is (= {:forage/since 1000 :forage/leg 1 :forage/phase :kit :forage/life 0}
+           (:hunt/forage wide)))
     (is (intent/done? (:plan/intent alone)))
     (is (= (+ 1000 hunt/forage-retry-ms) (get-in alone [:hunt/forage :forage/retry-at])))
     (is (not (hunt/foraging? alone)) "it waits before it looks again")

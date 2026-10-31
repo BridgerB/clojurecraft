@@ -21,6 +21,7 @@
                :flint-and-steel :iron
                :iron-kit :iron
                :portal-kit :portal
+               :gear :portal
                :cast-one :portal
                :portal :portal
                :nether :nether
@@ -46,6 +47,7 @@
              :flint-and-steel "flint and steel"
              :iron-kit "flint and steel and a water bucket"
              :portal-kit "a water bucket and an empty one, for the cast"
+             :gear "an iron sword, helmet, chestplate and leggings made"
              :cast-one "the first obsidian cast from lava"
              :portal "the portal frame cast and lit"
              :nether "stood in the portal until the Nether"

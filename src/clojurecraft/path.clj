@@ -80,12 +80,14 @@
 
 (defn classify-id
   "What a block state means to a route: :water, :lava, :awkward (a shape the physics cannot
-   simulate), :solid (a full cube, or one of stood-on), or :clear (passable, not a liquid; one
+   simulate, or fire: a cell that burns the body is neither floor nor clear, so no route goes
+   through it: blaze-race-g and -i, in_fire up to 26 hits a run), :solid (a full cube, or one of stood-on), or :clear (passable, not a liquid; one
    layer of snow is). nil → :unknown."
   [id]
   (cond (nil? id) :unknown
         (contains? blocks/water-states id) :water
         (contains? blocks/lava-states id) :lava
+        (contains? blocks/fire-states id) :awkward
         (= id one-layer-snow) :clear
         (or (contains? stood-on (blocks/type-of id)) (contains? stood-on (blocks/name-of id)))
         :solid

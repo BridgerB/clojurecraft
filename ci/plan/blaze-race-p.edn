@@ -1,0 +1,12 @@
+;; Issue #262: the race row, six runs. A spawner within reach of the eye counts as where the bot camps,
+;; a seal that cannot be laid is marked unsealable and not tried again, and a hurt bot with a blaze in
+;; reach it cannot seal out takes combat/cover (a block, a pillar, a meal), never a fight (#577).
+{:plans/label "blaze-race-p"
+ :plans/jobs 6
+ :plans/issue 262
+ :plans/experiments [{:exp/name "blaze-fortress-race"
+                      :exp/kind :gym
+                      :exp/goal "blaze-fortress-race"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 1800}]}

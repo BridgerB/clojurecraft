@@ -21,7 +21,10 @@
    view (issue #353); a set with none captured keeps the overworld's columns past the portal."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
+            [clojure.math :as math]
             [clojure.string :as str]
+            [clojurecraft.armour :as armour]
+            [clojurecraft.blaze :as blaze]
             [clojurecraft.capture :as capture]
             [clojurecraft.chunk :as chunk]
             [clojurecraft.cli :as cli]
@@ -29,6 +32,7 @@
             [clojurecraft.entity :as entity]
             [clojurecraft.failure :as failure]
             [clojurecraft.game :as game]
+            [clojurecraft.hunt :as hunt]
             [clojurecraft.main :as main]
             [clojurecraft.memory :as memory]
             [clojurecraft.physics :as physics]
@@ -36,6 +40,7 @@
             [clojurecraft.recipe :as recipe]
             [clojurecraft.scene :as scene]
             [clojurecraft.sim :as sim]
+            [clojurecraft.sword :as sword]
             [datascript.core :as d]))
 
 (set! *warn-on-reflection* true)
@@ -139,6 +144,66 @@
                              :d (when pos (physics/distance pos (:entity/pos e)))
                              :health (:entity/health e)})))}))
 
+(def sample-ms "Sim ms between the :sample TRACE lines in the Nether." 30000)
+
+(def overworld-sample-ms "Sim ms between the :sample TRACE lines in the overworld." 300000)
+
+(defn trace-note
+  "The TRACE line for the tick that took world before to after, or nil: a :portal-home intent
+   starting or ending, a blaze :fight starting or ending, a change of dimension, a goal newly in
+   :plan/reached (:reached, with the time: when the gear and the portal kit were done). It carries
+   when, the health, the food, the edible items held and the blazes within 16 of the feet, the
+   facts a replay of the blaze stage is read by (issue #262). Not part of the run's result, and
+   never read by the bot."
+  [before after world-set seed]
+  (let [ident (fn [w] (let [i (:plan/intent w)] [(:intent/kind i) (:intent/id i)]))
+        [kb :as ib] (ident before)
+        [ka :as ia] (ident after)
+        blaze-target? (fn [w]
+                        (some-> (get (:world/entities w) (get-in w [:plan/intent :intent/target]))
+                                entity/kind
+                                (= :blaze)))
+        every (if (= dimension/nether (:player/dimension after)) sample-ms overworld-sample-ms)
+        sample? (not= (quot (:time/now before 0) every) (quot (:time/now after 0) every))
+        drop? (>= (- (hunt/edible-held before) (hunt/edible-held after)) 2)
+        reached (sort (remove (set (:plan/reached before)) (:plan/reached after)))
+        hit? (and (= dimension/nether (:player/dimension after))
+                  (<= 2.0 (- (:player/health before 20.0) (:player/health after 20.0))))
+        what (cond hit? :hit
+                   (seq reached) :reached
+                   drop? :edible-drop
+                   (= ib ia)
+                   (cond (not= (:player/dimension before) (:player/dimension after)) :dimension
+                         sample? :sample)
+                   (and (= :portal-home ka) (not= :portal-home kb)) :portal-home-start
+                   (and (= :portal-home kb) (not= :portal-home ka)) :portal-home-end
+                   (and (= :fight ka) (blaze-target? after) (not= :fight kb)) :fight-start
+                   (and (= :fight kb) (blaze-target? before) (not= :fight ka)) :fight-end)]
+    (when what
+      (let [pos (:player/pos after)]
+        {:what what
+         :reached (vec reached)
+         :set world-set
+         :seed seed
+         :t (:time/now after)
+         :dim (:player/dimension after)
+         :health (:player/health after)
+         :food (:player/food after)
+         :edible (hunt/edible-held after)
+         :sword (sword/serviceable after)
+         :worn (into [] (keep #(armour/worn after %)) [0 1 2 3 :offhand])
+         :ingots (get (armour/counts after) :iron_ingot 0)
+         :blazes (count (for [[_ e] (entity/hostiles after)
+                              :when (and pos
+                                         (= :blaze (entity/kind e))
+                                         (<= (physics/distance pos (:entity/pos e)) 16.0))]
+                          e))
+         :watchers (count (blaze/watchers after))
+         :pos (some->> pos
+                       (mapv #(long (math/round (double %)))))
+         :intent (select-keys (:plan/intent after)
+                              [:intent/kind :intent/for :intent/goal :intent/target])}))))
+
 (defn run
   "One run: the bot from empty hands on world w's landing, playing every step up to until,
    against the model, at most max-ms of simulated time, rolling from seed. Returns its RESULT
@@ -174,6 +239,8 @@
                     (let [t0 (:time/now before 0)
                           after (step before event)
                           world-set (:capture/set w)]
+                      (when-let [note (trace-note before after world-set seed)]
+                        (println "TRACE" (pr-str note)))
                       (when (= :back-off (get-in after [:plan/intent :intent/kind]))
                         (swap! backoff + (max 0 (- (:time/now after 0) t0))))
                       (cond (and (not (:player/dead? before)) (:player/dead? after))

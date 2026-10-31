@@ -1,0 +1,13 @@
+;; Issue #262: the race row (one iron pickaxe, a table, 8 sticks, 64 cobblestone). From blaze-race-v
+;; (jobs 2, 4, 5 died burning at 27, 29 and 8.7 min; job 5 had no cobblestone left to seal with):
+;; a seal is laid from any filler held (netherrack), its cells outside the body's box, an unseal that
+;; is shot open ends, the seal is bounded at 20 s.
+{:plans/label "blaze-race-w"
+ :plans/jobs 6
+ :plans/issue 262
+ :plans/experiments [{:exp/name "blaze-fortress-race"
+                      :exp/kind :gym
+                      :exp/goal "blaze-fortress-race"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 1800}]}

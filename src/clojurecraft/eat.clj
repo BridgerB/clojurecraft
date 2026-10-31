@@ -67,12 +67,21 @@
        (pos? (inventory/item-count world (recipe/item-id :flint_and_steel)))
        (pos? (inventory/item-count world (recipe/item-id :water_bucket)))))
 
+(defn returning?
+  "Is the bot in the overworld after the Nether was reached, under portal-fed health? It is on
+   its way back (sim R1/1, probe 40787504601: in at 7.9 health, food 14, nothing eaten) and the
+   meal is for the health the Nether needs."
+  [world]
+  (and (= dimension/overworld (dimension/of world))
+       (contains? (:plan/reached world #{}) :nether)
+       (< (:player/health world 20.0) portal-fed)))
+
 (defn hungry-under
   "The food level under which a meal is eaten now: portal-fed once portal-kit?, else hungry-below.
    Sim race 39712220957 (issue #501, R1/2) entered the Nether at food 16 with food held and none
    eaten: health comes back only from food 18, and the Nether has no game."
   [world]
-  (if (portal-kit? world) portal-fed hungry-below))
+  (if (or (portal-kit? world) (returning? world)) portal-fed hungry-below))
 
 (defn scrap-held
   "The name of rotten flesh when it is held in the hotbar or the main inventory, else nil: food
