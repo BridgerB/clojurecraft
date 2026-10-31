@@ -2084,3 +2084,19 @@
     (is (nil? (blaze/commit-fight (w 4))) "four at hand: not a committed fight")
     (is (nil? (blaze/commit-fight (w 5))))
     (is (not (blaze/committed-fight? (w 4) {:intent/kind :fight :intent/target 50})))))
+
+(deftest a-fire-lit-at-the-feet-cuts-the-running-intent
+  ;; blaze-race-z8 job 3: 14 in_fire hits, 19 s on one spot while :collect-drops of a rod in the fire ran
+  (let [fire (blocks/default-state :fire)
+        w (assoc (standing {}) :world/chunks {[0 0] (world/column {[8 64 8] fire})})
+        collect {:intent/kind :collect-drops :intent/item :blaze_rod :intent/target [8 64 8]}]
+    (is (blaze/burning-here? w) "fire in the feet's cell")
+    (is (true? (boolean (plan/interrupts? w row collect))) "so a running pick-up is cut")
+    (is (false? (boolean (plan/interrupts?
+                          w
+                          row
+                          {:intent/kind :walk :intent/for :fire-out :intent/target [9 64 8]})))
+        "the walk out is not")
+    (is (false? (boolean (plan/interrupts? w row {:intent/kind :dig :intent/target [8 64 8]})))
+        "nor the dig of the fire")
+    (is (false? (boolean (plan/interrupts? (standing {}) row collect))) "no fire: left alone")))
