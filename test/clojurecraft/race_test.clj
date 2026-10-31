@@ -272,3 +272,10 @@
     (is (= (race/pad-of fortress (race/slot-index 3 10))
            (race/pad-of fortress (race/slot-index 13 10)))
         "the serial after a slot's bot lands on the same pad")))
+
+(deftest a-pad-is-pregenerated-within-one-forceload
+  ;; a forceload takes at most 256 chunks; pad-view blocks each side of a pad, however the square
+  ;; lies on the chunk grid, and past the server's view distance (6 chunks, 96 blocks)
+  (let [span (+ 2 (quot (* 2 race/pad-view) 16))]
+    (is (<= (* span span) 256) "a square of pad-view each side is at most 256 chunks")
+    (is (>= race/pad-view (* 6 16)) "the bot's whole view is generated")))

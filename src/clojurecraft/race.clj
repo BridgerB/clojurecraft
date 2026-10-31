@@ -376,6 +376,25 @@
   [name [x z y]]
   (gym/in-dimension dimension/nether (str "tp " name " " (+ x 0.5) " " y " " (+ z 0.5))))
 
+(def pad-view 112)                    ; blocks round a pad generated before a bot is sent to it: 15 by 15 chunks, within one forceload's 256 and past the server's view distance (6 chunks, bb/clojurecraft/server.clj)
+
+(defn pregenerate!
+  "Generate the Nether round the pad [x z y] to pad-view blocks with no bot on it: the square
+   forceloaded and waited for (best effort, three waits of 30 s), then released. A bot teleported
+   onto a pad whose surroundings were not generated made the server generate its whole view,
+   fortress structure included, in its thread: race 41229255270 (lane 3, #662) built the ten pads
+   in 13 s, the bots joined at 18:26:00 and were sent from 18:26:03, and the server was 32.5 s
+   behind at 18:26:50: 298 of its bots lost connection `Timed out`, 588 runs in 29 minutes."
+  [rc [x z _]]
+  (let [square [(- x pad-view) (- z pad-view) (+ x pad-view) (+ z pad-view)]
+        where (str/join " " square)]
+    (rcon/command! rc (gym/in-dimension dimension/nether (str "forceload add " where)))
+    (try (loop [n 3]
+           (when (and (pos? n) (not (gym/wait-loaded-in! rc dimension/nether square)))
+             (recur (dec n))))
+         (finally
+          (rcon/command! rc (gym/in-dimension dimension/nether (str "forceload remove " where)))))))
+
 (defn build-pad!
   "Build the pad [x z y] (gym/fortress-pad-open) in the Nether with no bot: the square round it
    forceloaded and waited for, the commands, the forceload released. The first build of a Nether
@@ -392,6 +411,7 @@
            (doseq [c gym/fortress-pad-open]
              (rcon/command! rc (gym/in-dimension dimension/nether (gym/fill-in c "" pad))))
            (swap! pads-built conj pad)
+           (pregenerate! rc pad)
            (finally (rcon/command! rc
                                    (gym/in-dimension dimension/nether
                                                      (str "forceload remove " where))))))))
