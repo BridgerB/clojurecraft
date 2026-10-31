@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-31T13:52:51.878Z",
+  "at" : "2026-10-31T13:53:59.134Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -53,11 +53,6 @@
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
-    "number" : 178,
-    "title" : "Bot stops at portal: timeout",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 161,
     "title" : "Bot stops at portal-kit: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
@@ -70,6 +65,11 @@
   }, {
     "number" : 580,
     "title" : "Bot stops at blaze-rods: inventory-full",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 178,
+    "title" : "Bot stops at portal: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
@@ -282,15 +282,15 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 178,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
     "issue" : 161,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
     "issue" : 580,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 178,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
