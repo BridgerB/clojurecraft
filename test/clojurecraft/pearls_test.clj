@@ -2634,20 +2634,39 @@
     (is (not (pearls/burrowable? (assoc low :player/pos [8.5 38.0 8.5]) [8 38 8] [1 0]))
         "a burrow whose last stair is at y 35 is under the floor")))
 
-(deftest a-wander-goes-out-past-an-angry-one-that-has-been-given-up-on
-  ;; gym plan run 41134469333 (pearls-travel-b) job 6 (issue #263): the fold at 60 min had
-  ;; loitering? and wander true (a walk to [2520 50 2184]) and still a lookout, with angry
-  ;; enderman 51 at [2506 50 2166], twelve blocks off, that never came in 41 minutes: menaced?
-  ;; kept the wander in
-  (let [angry (assoc (enderman [8.5 61.0 20.5]) :entity/creepy? true)
-        w (-> (wide (burrowed [8.5 61.0 8.5] {7 angry}))
-              (walked (take pearls/loiter-walks (cycle [[8 61 8] [10 61 8]]))))
-        given-up (assoc w :plan/given-up {7 0})]
-    (is (pearls/menaced? w) "twelve blocks off and level: within danger-radius")
-    (is (pearls/coming? w))
-    (is (not (pearls/coming? given-up)))
-    (is (not= [:walk :pearls] ((juxt :intent/kind :intent/for) (plan/next-intent w row plan/goals)))
-        "coming: the wander stays in")
-    (is (= [:walk :pearls]
-           ((juxt :intent/kind :intent/for) (plan/next-intent given-up row plan/goals)))
-        "given up on: the wander goes")))
+(deftest an-angry-one-is-told-parked-from-stalking-by-its-motion
+  ;; travel-b job 6 (plan 41134469333, issue #263): enderman 51 parked at 12 blocks for 41 minutes,
+  ;; the wander held in; pearl-fight-a job 3: a blacklisted angry one stalked at 6 to 19 blocks for
+  ;; 30 s and hit five times
+  (let [at (fn [pos] (assoc (enderman pos) :entity/creepy? true))
+        w (-> (wide (burrowed [8.5 61.0 8.5] {7 (at [8.5 61.0 20.5])}))
+              (walked (take pearls/loiter-walks (cycle [[8 61 8] [10 61 8]])))
+              (assoc :time/now 0))
+        tracked (pearls/track-angry w)
+        later (fn [w ms]
+                (-> w
+                    (assoc :time/now ms)
+                    pearls/track-angry))]
+    (is (= {7 {:since 0 :best 12.0 :closed-at 0}} (:pearls/angry tracked)))
+    (testing "parked 41 minutes at twelve blocks: not a menace, the wander goes"
+      (let [parked (later tracked (* 41 60000))]
+        (is (pearls/parked? parked 7 [8.5 61.0 20.5]))
+        (is (not (pearls/live-menaced? parked)))))
+    (testing "seen only half a minute: still a menace, the wander stays in"
+      (let [fresh (later tracked 30000)]
+        (is (not (pearls/parked? fresh 7 [8.5 61.0 20.5])))
+        (is (pearls/live-menaced? fresh))))
+    (testing "one that stalks: closing in resets the clock"
+      (let [t1 (later tracked 50000)
+            near (-> t1
+                     (assoc-in [:world/entities 7 :entity/pos] [8.5 61.0 16.5])
+                     (later 100000))
+            parked-again (later near 130000)]
+        (is (= 100000 (get-in near [:pearls/angry 7 :closed-at])) "four blocks nearer: closing")
+        (is (not (pearls/parked? parked-again 7 [8.5 61.0 16.5])) "only thirty seconds since")
+        (is (pearls/live-menaced? parked-again))))
+    (testing "within park-near it is never parked"
+      (let [on-us (-> tracked
+                      (assoc-in [:world/entities 7 :entity/pos] [8.5 61.0 14.5])
+                      (later (* 41 60000)))]
+        (is (not (pearls/parked? on-us 7 [8.5 61.0 14.5])) "6 blocks")))))
