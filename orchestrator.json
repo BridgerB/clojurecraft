@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-31T15:11:32.873Z",
+  "at" : "2026-10-31T15:12:41.459Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -16,7 +16,7 @@
     "number" : 643,
     "title" : "Bot stops at gear: retrying",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
+    "copilot" : true
   }, {
     "number" : 531,
     "title" : "Bot stops at ingots: boxed",
@@ -263,7 +263,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 643,
-    "move" : "assign"
+    "move" : "wait",
+    "why" : "session starting"
   }, {
     "issue" : 531,
     "move" : "leave",
