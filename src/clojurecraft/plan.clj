@@ -554,8 +554,10 @@
    explore-nodes expansions?"
   [world c]
   (= :found
-     (:path/status
-      (path/plan world (path/feet-cell (:player/pos world)) c {:path/max-nodes explore-nodes}))))
+     (:path/status (path/plan world
+                              (path/feet-cell (:player/pos world))
+                              (intent/goal-of {:intent/kind :walk :intent/target c})
+                              {:path/max-nodes explore-nodes}))))
 
 (defn explore-cell
   "The cell a stuck bot walks to to plan from afresh: of the cells of the trail it came by at least
