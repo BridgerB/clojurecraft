@@ -20,13 +20,14 @@
     (doall (take-while some? (repeatedly #(edn/read {:readers record/readers :eof nil} r))))))
 
 (def base
-  (reduce (fn [w e] (game/load-chunk w (:packet e)))
-          (assoc (game/init {:host "h" :port 1 :name "Clj"})
-                 :bot/phase :play
-                 :player/loaded? true
-                 :player/on-ground? true
-                 :player/inventory {0 {:item (recipe/item-id :bucket) :count 1}})
-          packets))
+  (try (reduce (fn [w e] (game/load-chunk w (:packet e)))
+               (assoc (game/init {:host "h" :port 1 :name "Clj"})
+                      :bot/phase :play
+                      :player/loaded? true
+                      :player/on-ground? true
+                      :player/inventory {0 {:item (recipe/item-id :bucket) :count 1}})
+               packets)
+       (catch Exception t (.printStackTrace t) (System/exit 1))))
 
 (defn name-at
   [w c]
