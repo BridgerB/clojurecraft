@@ -723,6 +723,20 @@
                         "minecraft:netherrack 64"])
     :gym/timeout-ms trial-ms
     :gym/truth [(pearls-held "(1[2-9]|[2-9][0-9]|[1-9][0-9][0-9])")]}
+   ;; issue #263: pearls-12-race with what race bots have carried since #628, a crafting table and
+   ;; sticks, so that the hunt can make a stone pickaxe when its digs run low (pearl-fight-i jobs 1
+   ;; and 2 stood still two hours in a rock pocket with 28 and 6 digs left and nothing to make one
+   ;; from); pearls-12-race is unchanged
+   {:gym/goal :ender-pearls
+    :gym/name "pearls-12-race-tools"
+    :gym/until "pearls-12"
+    :gym/land :warped-forest
+    :gym/difficulty "normal"
+    :gym/prereqs (into pearl-kit
+                       ["minecraft:cooked_beef 32" "minecraft:cobblestone 64"
+                        "minecraft:netherrack 64" "minecraft:crafting_table 1" "minecraft:stick 8"])
+    :gym/timeout-ms trial-ms
+    :gym/truth [(pearls-held "(1[2-9]|[2-9][0-9]|[1-9][0-9][0-9])")]}
    ;; issue #263: the same twelve pearls from where the race leaves the bot, at a fortress in the
    ;; Nether wastes with seven rods in the pack and no warped forest in view: the stage must find
    ;; one itself (pearls/travel). pearls-12 above lands in a forest, which the race never does. No

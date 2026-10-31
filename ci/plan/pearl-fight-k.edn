@@ -1,0 +1,16 @@
+;; Issue #263, branch fix/263-pearl-relocate, batch k: the pickaxe reserve, on main with #645 to
+;; #647. Batch i (plan run 41178660163) froze two bots in rock pockets with 28 and 6 digs left and no
+;; wood; batch j (41195239535) added the table-and-sticks kit and the replaced unreachable table.
+;; Batch k adds the reserve: under 64 digs and fewer than 6 logs held, the hunt cuts remembered
+;; stems (wood chain), and makes the successor under 32 (make-pickaxe); and the stuck watchdog
+;; (#647) is on main. Row pearls-12-race-tools. Measure: pearls at 30, 60, 90 and 120 min, the
+;; longest gap, pickaxes made, deaths by cause.
+{:plans/label "pearl-fight-k"
+ :plans/jobs 3
+ :plans/issue 263
+ :plans/experiments [{:exp/name "pearls-12-race-tools"
+                      :exp/kind :gym
+                      :exp/goal "pearls-12-race-tools"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 18000}]}

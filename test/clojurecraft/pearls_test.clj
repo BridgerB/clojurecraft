@@ -2968,3 +2968,98 @@
         "an enderman that was near the start is not a reason to stop")
     (is (plan/interrupts? (pearls/relocation arrived) row walk) "the walk is cut once it is over")
     (is (not (plan/interrupts? base row walk)) "and not while it goes on")))
+
+(deftest ^:eftest/synchronized
+         a-relocation-with-no-route-and-nothing-tracked-falls-back-to-the-cage-cuts
+  ;; pearl-fight-g jobs 3 and 5 (plan run 41166403154): relocate-walk was nil, six remembered
+  ;; endermen 82 to 110 blocks off with no route in job 3, none tracked in a cave pocket in job 5,
+  ;; and neither bot moved in 80 minutes. From a ledge it goes down to its burrow to cut from there
+  (let [w (-> (standing {} ledge)
+              (assoc :player/pos [8.5 64.0 8.5] :pearls/shelter [8 61 9] :pearls/mouth [8 64 8])
+              (assoc-in [:player/inventory 1] (item :iron_pickaxe 1)))]
+    (with-redefs [intent/routable? (constantly true)]
+      (is (= {:intent/kind :walk :intent/target [8 61 9] :intent/for :relocate}
+             (pearls/relocate-walk w))))))
+
+(deftest a-parked-enderman-jittering-a-block-or-two-stays-parked
+  ;; pearl-fight-g job 3 (churn-guard's probe 41174965115): enderman 75 sat angry at 9 to 11 blocks for
+  ;; 90 minutes and its best distance and :closed-at kept resetting at a block of jitter
+  (let [at (fn [z] (assoc (enderman [8.5 61.0 z]) :entity/creepy? true))
+        w (-> (wide (burrowed [8.5 61.0 8.5] {7 (at 20.5)}))
+              (assoc :time/now 0)
+              pearls/track-angry)
+        step (fn [w z ms]
+               (-> w
+                   (assoc-in [:world/entities 7] (at z))
+                   (assoc :time/now ms)
+                   pearls/track-angry))
+        jittered (reduce (fn [w [z ms]] (step w z ms))
+                         w
+                         [[19.5 10000] [20.5 20000] [19.0 30000] [20.0 40000] [19.5 50000]
+                          [20.5 60000]])]
+    (is (= 0 (get-in jittered [:pearls/angry 7 :closed-at])) "twelve blocks, a block of jitter")
+    (is (pearls/parked? (assoc jittered :time/now 70000) 7 [8.5 61.0 20.5]))))
+
+(deftest a-relocation-waits-for-an-angry-one-near-then-walks-past-a-parked-one
+  ;; pearl-fight-h job 3 (plan run 41173013374): at 9m43s with no pearl, the relocation walked out
+  ;; of the burrow at 8 minutes past enderman 279, angry and fought all minute, and was slain in
+  ;; four hits. For relocate-patience-ms any angry one within sixteen holds the walk; after that
+  ;; only a live one does (a parked one held the g job 3 bot 90 minutes)
+  (let [angry (assoc (enderman [17.0 64.0 8.5]) :entity/creepy? true)
+        group [(enderman [50.5 64.0 8.5]) (enderman [52.5 64.0 12.5]) (enderman [48.5 64.0 4.5])]
+        w (-> (wide (standing {1 angry 3 (nth group 0) 4 (nth group 1) 5 (nth group 2)}))
+              (assoc-in [:player/inventory 1] (item :iron_pickaxe 1))
+              (assoc :pearls/angry {1 {:since 0 :best 8.5 :closed-at 0}}
+                     :pearls/gain {:held 1 :at 0}
+                     :pearls/relocate {:from [8 64 8] :at 0 :near #{1}}))
+        kind (fn [now] (:intent/for (plan/next-intent (assoc w :time/now now) row plan/goals)))]
+    (is (not= :relocate (kind 100000)) "in the patience: it waits")
+    (is (= :relocate (kind 200000)) "past it, with the angry one parked: it walks")))
+
+(deftest ^:eftest/synchronized a-remembered-table-no-route-reaches-is-replaced-not-walked-at
+  ;; pearl-fight-i job 1 (plan run 41178660163): 28 digs left in a rock pocket, six warped stems,
+  ;; four sticks and 43 cobblestone held, a table remembered ten blocks over it with no route; the
+  ;; pickaxe decide answered the walk to that table, make-pickaxe refused it, and the bot stood
+  ;; still for two hours. The table is replaced: planks and a new table come from the stems
+  (let [table-col (world/column {[12 64 8] (blocks/default-state :crafting_table)})
+        w (-> (standing {})
+              (assoc :world/chunks {[0 0] table-col})
+              (memory/remember-column [0 0] table-col)
+              (assoc :player/inventory
+                     {0 (item :iron_sword 1)
+                      1 (assoc (item :iron_pickaxe 1) :durability 11)
+                      2 (item :warped_stem 6)
+                      3 (item :stick 4)
+                      4 (item :cobblestone 43)})
+              (memory/remember-intention {:intent/id 1 :intent/kind :burrow} :done))]
+    (with-redefs [intent/routable? (constantly false)]
+      (is (contains? #{:craft :place :open-container}
+                     (:intent/kind (plan/next-intent w row plan/goals)))
+          "not the walk to a table nothing reaches"))))
+
+(deftest a-pickaxe-reserve-cuts-stems-before-the-last-digs
+  ;; pearl-fight-i job 2 (plan run 41178660163) stood still in a rock pocket from minute 36 with
+  ;; six digs left and no wood: its iron pickaxe wore out on burrows, 549 netherrack held. At an
+  ;; earlier moment, about sixty digs left and no stems held, the hunt cuts the forest's stems
+  (let [stem (first (blocks/states-of :warped_stem))
+        trunk {[12 64 8] stem
+               [12 65 8] stem
+               [12 66 8] stem
+               [12 67 8] (blocks/default-state :warped_wart_block)}
+        col (world/column trunk)
+        base (-> (standing {})
+                 (assoc :world/chunks {[0 0] col})
+                 (memory/remember-column [0 0] col)
+                 (memory/remember-intention {:intent/id 1 :intent/kind :burrow} :done))
+        with (fn [digs stems]
+               (assoc base
+                      :player/inventory
+                      (cond-> {0 (item :iron_sword 1)
+                               1 (assoc (item :iron_pickaxe 1) :durability digs)}
+                        (pos? stems) (assoc 2 (item :warped_stem stems)))))]
+    (is (= :log (:intent/for (plan/next-intent (with 60 0) row plan/goals)))
+        "sixty digs left and no wood: a stem is cut")
+    (is (= :lookout (:intent/kind (plan/next-intent (with 60 6) row plan/goals)))
+        "six stems held: the hunt goes on, the pickaxe made when it falls under spare-digs")
+    (is (= :lookout (:intent/kind (plan/next-intent (with 200 0) row plan/goals)))
+        "digs to spare: no reserve is cut")))
