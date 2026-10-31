@@ -411,6 +411,14 @@
                k)]
     (when e (into {} (d/touch (d/entity db e))))))
 
+(defn done-count
+  "How many intentions of kind k (:fight) ended :done: a Datalog count over the facts."
+  [world k]
+  (or (d/q '[:find (count ?e) . :in $ ?k :where [?e :intention/kind ?k] [?e :intention/event :done]]
+           (:world/facts world)
+           k)
+      0))
+
 (defn newest-dones
   "The newest n :done facts of an intention of kind k, newest first, as maps of :intention/*
    keys (last-done is the first): where the bot's last walks arrived, in the order it arrived

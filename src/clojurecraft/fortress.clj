@@ -1002,19 +1002,22 @@
   (>= (hunt/edible-held world) hunt/entry-food-min))
 
 (defmethod plan/next-intent :return-nether
-  ;; not ready: a rest while the food heals (food at the healing level), else the wait named for
-  ;; what is missing, :no-food-to-return, after the meal and the hunt, always rows that come
-  ;; first, found nothing to eat; healthy but without food for the Nether: a rest (done at once,
-  ;; asked again) while the hunt has yet to search, the wait only once it has (hunt/search-spent?)
+  ;; not ready: a rest while the food heals (food at the healing level), the scrap eaten, a rest
+  ;; while the hunt has yet to search; healthy but without food for the Nether: a rest (done at
+  ;; once, asked again) while the hunt has yet to search. Once it has (hunt/search-spent?) the way
+  ;; back is taken anyway: food is a nice-to-have, never a gate. A wait here ends the plan after
+  ;; wait-ticks (plan/wait-ticks): :no-food-to-return ended 3 of 7 real runs and 5 sim runs of
+  ;; main dab82b629 (fortress x2, blaze-rods x1), a bot that respawned with full health and hunger
   [world goal table]
-  (cond (plan/done-by world goal) nil
-        (not (ready-for-nether? world))
-        (cond (>= (:player/food world 20) hunger/heal-level) {:intent/kind :rest}
-              (eat/scrap-held world) {:intent/kind :eat :intent/item (eat/scrap-held world)}
-              :else {:plan/wait :no-food-to-return})
-        (fed-for-nether? world) (plan/next-intent world (assoc goal :goal/plan :build) table)
-        (hunt/search-spent? world) {:plan/wait :no-food-to-return}
-        :else {:intent/kind :rest}))
+  (let [back (fn [] (plan/next-intent world (assoc goal :goal/plan :build) table))]
+    (cond (plan/done-by world goal) nil
+          (not (ready-for-nether? world))
+          (cond (>= (:player/food world 20) hunger/heal-level) {:intent/kind :rest}
+                (eat/scrap-held world) {:intent/kind :eat :intent/item (eat/scrap-held world)}
+                (hunt/search-spent? world) (back)
+                :else {:intent/kind :rest})
+          (or (fed-for-nether? world) (hunt/search-spent? world)) (back)
+          :else {:intent/kind :rest})))
 
 (defn back-target
   "The cell to walk back to when a pickaxe must be remade and no ground is near: the oldest

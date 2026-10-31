@@ -11,11 +11,15 @@
    under :plan/*."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
+            [clojure.math :as math]
+            [clojurecraft.blocks :as blocks]
             [clojurecraft.dimension :as dimension]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
+            [clojurecraft.inventory :as inventory]
             [clojurecraft.memory :as memory]
             [clojurecraft.physics :as physics]
+            [clojurecraft.recipe :as recipe]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.trap :as trap]
             [clojurecraft.window :as window]))
@@ -103,11 +107,38 @@
 
 (def max-attempts 3)                  ; consecutive failed intents before the plan fails
 (def stall-ms 900000)                 ; ms with no intent done (progress?) after which a run out of attempts is a dead end: 15 min
+(def recover-cooldown-ms 10000)        ; ms between two recoveries: a recovery that fails again at once waits, it does not start over every 100 ms
+(def stuck-ms 600000)                 ; ms without progress (progress-key changed, or a move of stuck-extent) after which the bot is made to go elsewhere: 10 min
+(def fact-rows
+  "The :goal/plan of the rows whose progress is items and facts only (progress-key): a walk or a
+   tunnel does not count for them, however far. Blaze-race-z job 1 (run 41173997255) tunnelled 106 min
+   round a ring 67 blocks across."
+  #{:pearls :blaze-rods})
+(def stuck-extent 16.0)               ; blocks the box of the feet's places since progress was last seen must span (x or z) to count as a move: a tunnel loop inside 12 blocks is not one
+(def watch-every-ms 1000)             ; ms between two looks at progress
+(def quiet-ticks 6000)                ; ticks without damage after which a held defence is no longer defended for the watchdog: 5 min
+(def explore-distance 48)             ; blocks the walk away from a stuck spot goes
+(def anchors
+  "{:goal/plan #{attribute}}: the places a row holds on to (the pearl hunt's burrow, a blaze pocket),
+   dropped when it has made no progress for stuck-ms, so it does not walk back to them."
+  {:pearls #{:pearls/shelter :pearls/mouth :pearls/relocate :plan/boxed-at :plan/given-up}
+   :blaze-rods #{:pocket/site :pocket/prepared-at :pocket/seal-failed-at :sortie/since}})
+(def resets
+  "{:goal/plan {attribute value}}: what a stuck row starts over with (the pearl hunt's blacklist)."
+  {:pearls {:plan/blacklist #{}}})
+(def clocks
+  "{:goal/plan [path]}: the clocks (ms) inside a row's attributes restarted at now when it is stuck."
+  {:pearls [[:pearls/gain :at]]})
+(def stuck-after
+  "{:goal/plan ms}: how long a row may go without progress before it is stuck, where it is not
+   stuck-ms: a blaze camp can wait 14 to 16 min for its first blaze to be hurt."
+  {:blaze-rods 1200000})
 (def regroup-distance 8)              ; blocks from the feet a regroup walk goes back along the trail
 (def non-progress
   "What finishes without moving the run on: intents of these kinds or for these purposes are done
    but are not progress, so a loop of rests and retreats never keeps the stall clock fresh."
-  {:kind #{:rest :back-off :dodge :pocket-hold :lookout :eat} :for #{:regroup :retreat :cover}})
+  {:kind #{:rest :back-off :dodge :pocket-hold :lookout :eat}
+   :for #{:regroup :retreat :cover :explore}})
 (def max-unwalkable 12)               ; consecutive walks that failed :no-path before the plan fails
 (def wait-ticks 400)                  ; a goal that has nothing to do for this many planner ticks has failed: 20 s at 20 ticks a second
 
@@ -334,17 +365,24 @@
   "A run out of attempts that is not stalled (stalled?) tries again instead of ending: the failure
    counts start over, the last failure is forgotten (so the same intent is not refused as an
    identical retry), and the trail's cell regroup-distance back (regroup-cell) becomes the next
-   thing to walk to, planning again from a new spot. :plan/recoveries counts them. Blaze-race-u
+   thing to walk to, planning again from a new spot. :plan/recoveries counts them. Within
+   recover-cooldown-ms of the last one (:plan/recover-at) it changes nothing but the wait: pearl-fight-i
+   job 3 (run 41178660163) recovered 34 times in a second, the :defend row's :place and :pillar
+   failing three times in 300 ms each round, and was killed by the enderman it stood facing. Blaze-race-u
    (run 41156125534) ended at 4 health after three :place :no-support in 300 ms, and at 16 after a
    camp that found no blaze twice, with hours left."
   [world]
-  (let [cell (regroup-cell world)]
-    (-> world
-        (assoc :plan/attempts 0 :plan/unwalkable 0)
-        (update :plan/recoveries (fnil inc 0))
-        (dissoc :plan/failed :plan/waiting :plan/waiting-since :plan/waiting-ticks :plan/regroup)
-        (cond-> cell (assoc :plan/regroup cell))
-        (game/say (str "recover " (:plan/recoveries world 0) " regroup " (pr-str cell))))))
+  (let [now (:time/now world 0)
+        at (:plan/recover-at world)
+        cell (regroup-cell world)]
+    (if (and at (< (- now at) recover-cooldown-ms))
+      (dissoc world :plan/waiting :plan/waiting-since :plan/waiting-ticks)
+      (-> world
+          (assoc :plan/attempts 0 :plan/unwalkable 0 :plan/recover-at now)
+          (update :plan/recoveries (fnil inc 0))
+          (dissoc :plan/failed :plan/waiting :plan/waiting-since :plan/waiting-ticks :plan/regroup)
+          (cond-> cell (assoc :plan/regroup cell))
+          (game/say (str "recover " (:plan/recoveries world 0) " regroup " (pr-str cell)))))))
 
 (defn finish-intent
   "An intent that succeeds ends any failure streak: attempts and unwalkable walks count
@@ -437,7 +475,127 @@
                 (stalled? w) (assoc w :plan/status :failed :plan/reason (:intent/reason i))
                 :else (recover w))))))
 
-(declare plan-tick)
+(declare plan-tick abandon-intent can-abandon?)
+
+(defmulti progress-key
+  "A value that changes when the row the goal serves makes progress: what the stuck watchdog
+   compares from one look to the next. Keyed by :goal/plan; by default the items held by kind and
+   the stages reached (:plan/reached). A row narrows it with a defmethod."
+  {:arglists '([world goal])}
+  (fn [_world goal] (:goal/plan goal :needs)))
+
+(defn held-counts
+  "{item count} of the stacks in the player's inventory, by item id."
+  [world]
+  (reduce (fn [m {:keys [item count]}] (update m item (fnil + 0) (or count 0)))
+          {}
+          (vals (:player/inventory world))))
+
+(defmethod progress-key :pearls
+  ;; the pearls held, the fights ended and the stages reached: a hunt that holds a pearl more, ended a
+  ;; fight or reached a stage has made progress; tunnelling and walking do not
+  [world _]
+  [(inventory/item-count world (recipe/item-id :ender_pearl)) (memory/done-count world :provoke)
+   (memory/done-count world :fight) (count (:plan/reached world #{}))])
+
+(defmethod progress-key :blaze-rods
+  ;; the rods held, the fights ended and the spawners on record: a new spawner found is a stand
+  ;; reached; the netherrack a tunnel digs every leg is not progress (blaze-race-z job 1 tunnelled
+  ;; 106 min inside 12 blocks)
+  [world _]
+  [(inventory/item-count world (recipe/item-id :blaze_rod)) (memory/done-count world :fight)
+   (count (memory/positions-now world [(blocks/default-state :spawner)]))])
+
+(defmethod progress-key :default [world _] [(held-counts world) (count (:plan/reached world #{}))])
+
+(defn defended?
+  "Is the running intent i a defence (holds?) the bot is under fire in: damage taken within
+   quiet-ticks (:player/hurt-at against :time/tick)? A hold that has taken none for five minutes is
+   quiet, and the watchdog may drop it: a pocket held for an hour with no blaze to fight."
+  [world i]
+  (boolean (and i
+                (holds? i)
+                (:player/hurt-at world)
+                (<= (- (:time/tick world 0) (:player/hurt-at world)) quiet-ticks))))
+
+(defn watch-stamp
+  "The watch as of now: the progress key k, where the bot stands, when progress was last seen
+   (:at) and when it was last looked at (:checked)."
+  [world k at now]
+  {:key k :lo (:player/pos world) :hi (:player/pos world) :at at :checked now})
+
+(defn widened
+  "The watch w with the box of the feet's places (:lo, :hi) widened to hold the feet now."
+  [w world]
+  (let [p (:player/pos world)] (assoc w :lo (mapv min (:lo w) p) :hi (mapv max (:hi w) p))))
+
+(defn extent
+  "The span, on the larger of x and z, of the box of the feet's places in watch w."
+  [w]
+  (let [[lx _ lz] (:lo w) [hx _ hz] (:hi w)] (max (- hx lx) (- hz lz))))
+
+(defn explore-cell
+  "The cell explore-distance from the feet at the feet's height: toward the farthest cell of the
+   trail the bot came by (away from where it is stuck, never further into the room), else in the
+   direction r (0 to 1 of a turn)."
+  [world r]
+  (let [[fx fy fz] (intent/feet world)
+        far (apply max-key
+                   #(physics/horizontal-distance % [fx fy fz])
+                   [fx fy fz]
+                   (:plan/trail world []))
+        d (physics/horizontal-distance far [fx fy fz])
+        a (* 2.0 math/PI r)
+        [ux uz] (if (pos? d)
+                  [(/ (- (first far) fx) d) (/ (- (nth far 2) fz) d)]
+                  [(math/cos a) (math/sin a)])]
+    [(+ fx (long (math/round (* explore-distance ux)))) fy
+     (+ fz (long (math/round (* explore-distance uz))))]))
+
+(defn unstick
+  "The world of a bot that has made no progress for stuck-ms: the running intent dropped, the
+   row's anchors (anchors) forgotten, a walk away planned (:plan/explore) and the watch restarted.
+   Pearl-fight-i jobs 1 and 2 (run 41178660163) stood at one block for 2 h 20 min, 1631 lookouts,
+   and blaze-race-z job 3 camped 119 min. Never a fight: only a walk."
+  [world goal i r now]
+  (-> world
+      (cond-> i (abandon-intent i :stuck))
+      (as-> w (apply dissoc w (get anchors (:goal/plan goal) #{})))
+      (into (get resets (:goal/plan goal) {}))
+      (as-> w
+        (reduce (fn [w path] (cond-> w (get-in w path) (assoc-in path now)))
+                w
+                (get clocks (:goal/plan goal) [])))
+      (assoc :plan/explore (explore-cell world r))
+      (assoc :plan/watch (watch-stamp world (progress-key world goal) now now))
+      (update :plan/unstuck (fnil inc 0))
+      (game/say (str "stuck " (:plan/unstuck world 0) " " (:goal/id goal) " explore"))))
+
+(defn watch
+  "The stuck watchdog, one look a watch-every-ms: the world with its progress seen (the goal's
+   progress-key changed, or the feet moved stuck-move) restamped, or, with none for stuck-ms,
+   unstuck (unstick). Nothing while the plan is not active, no goal is chosen, or the running
+   intent cannot be dropped yet (can-abandon?); event supplies :event/rand for the direction."
+  [world table event]
+  (let [now (:time/now world 0)
+        w (:plan/watch world)]
+    (cond (or (not= :active (:plan/status world)) (nil? (:player/pos world))) world
+          (nil? w) (assoc world :plan/watch (watch-stamp world (progress-key world nil) now now))
+          (< (- now (:checked w)) watch-every-ms) world
+          :else
+          (let [goal (choose world table)
+                k (progress-key world goal)
+                w (assoc (widened w world) :checked now)]
+            (cond (nil? goal) world
+                  (or (and (not (contains? fact-rows (:goal/plan goal)))
+                           (>= (extent w) stuck-extent))
+                      (not= k (:key w)))
+                  (assoc world :plan/watch (watch-stamp world k now now))
+                  (or (< (- now (:at w)) (get stuck-after (:goal/plan goal) stuck-ms))
+                      (not (can-abandon? world))
+                      (defended? world (:plan/intent world)))
+                  (assoc world :plan/watch w)
+                  :else (unstick world goal (:plan/intent world) (:event/rand event 0.5) now))))))
 
 (defn run-intent
   "Advance the intent; when it ends, plan again in the same tick so the next intent or the
@@ -585,7 +743,13 @@
           preempt? (plan-tick (abandon-intent world i :preempted) event table)
           cut? (plan-tick cut-world event table)
           i (run-intent world i event table)
-          (and (:plan/regroup world) (not (:goal/always? goal)))
+          (and (:plan/explore world) (not (:goal/trap goal)))
+          (start-intent (dissoc world :plan/explore)
+                        {:intent/kind :walk
+                         :intent/target (:plan/explore world)
+                         :intent/for :explore
+                         :intent/goal (:goal/id goal)})
+          (and (:plan/regroup world) (not (:goal/trap goal)))
           (start-intent (dissoc world :plan/regroup)
                         {:intent/kind :walk
                          :intent/target (:plan/regroup world)
@@ -623,7 +787,7 @@
         (game/say "go"))
     :tick
     (case (:plan/status world)
-      :active (steered (plan-tick world event table) table)
+      :active (steered (plan-tick (watch world table event) event table) table)
       :landing (landing-tick world)
       world)
     world))

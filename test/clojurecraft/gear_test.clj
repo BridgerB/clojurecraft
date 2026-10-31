@@ -174,10 +174,9 @@
       (let [w (back {3 (item :rotten_flesh 2)} {} 8.0 14)]
         (is (= {:intent/kind :eat :intent/item :rotten_flesh}
                (plan/next-intent w (row :return-nether) plan/goals)))))
-    (testing "no food, none to be had: the named wait, not the portal"
+    (testing "no food, the hunt yet to search: a rest, never a wait (a wait ends the plan)"
       (let [w (back {} {} 8.0 14)]
-        (is (= {:plan/wait :no-food-to-return}
-               (plan/next-intent w (row :return-nether) plan/goals)))))
+        (is (= {:intent/kind :rest} (plan/next-intent w (row :return-nether) plan/goals)))))
     (testing "healed and fed for the Nether: the way back is the build's"
       (is (fortress/fed-for-nether? (back {3 (item :bread 4)} {} 19.0 20)))
       (is (not= {:plan/wait :no-food-to-return}
@@ -190,14 +189,20 @@
              (plan/next-intent (back {3 (item :bread 3)} {} 19.0 20)
                                (row :return-nether)
                                plan/goals))))
-    (testing "the search spent: the wait, with its own reason"
-      (let [w (assoc (back {3 (item :bread 3)} {} 19.0 20)
-                     :plan/since 0
-                     :time/now (+ 1000 hunt/forage-ms 100000)
-                     :hunt/forage
-                     {:forage/since 1000 :forage/leg 3 :forage/phase :return :forage/life 0})]
-        (is (= {:plan/wait :no-food-to-return}
-               (plan/next-intent w (row :return-nether) plan/goals)))))))
+    (testing "the search spent: the way back, food or none (never the wait that ended 3 of 7 runs)"
+      (let [spent {:plan/since 0
+                   :time/now (+ 1000 hunt/forage-ms 100000)
+                   :hunt/forage
+                   {:forage/since 1000 :forage/leg 3 :forage/phase :return :forage/life 0}}
+            go (fn [w] (plan/next-intent (merge w spent) (row :return-nether) plan/goals))]
+        (is (not= {:plan/wait :no-food-to-return} (go (back {3 (item :bread 3)} {} 19.0 20))))
+        (testing "respawned, nothing held, health 20 and food 20: the return"
+          (let [r (go (back {} {} 20.0 20))]
+            (is (not= :no-food-to-return (:plan/wait r))
+                "the build's own wait (no log in the fixture) is not this one")
+            (is (not= {:intent/kind :rest} r))))
+        (testing "hurt, nothing to eat, the search spent: the return, not a wait"
+          (is (not= :no-food-to-return (:plan/wait (go (back {} {} 8.0 14))))))))))
 
 (deftest a-running-cook-is-not-left-with-the-food-in-the-furnace
   ;; probe 40795259629: edible 5 (:place, goal :cook) at t 4815750, 0 (:smelt, goal :cook) at

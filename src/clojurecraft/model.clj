@@ -258,6 +258,15 @@
    [:plan/recoveries
     "times a run out of attempts or a :retrying wait started over instead of ending (plan/recover)"
     "after a recovery"]
+   [:plan/watch
+    "the stuck watchdog's last look: {:key progress-key :lo :hi corners of the box of the feet's places since progress :at ms progress was last seen :checked ms of the last look}"
+    "while planning"]
+   [:plan/explore
+    "the cell the next walk goes to after the stuck watchdog fired (plan/unstick), taken once"
+    "after it fired"] [:plan/unstuck "times the stuck watchdog fired" "after it fired"]
+   [:plan/recover-at
+    "ms of the last recovery (plan/recover); another within recover-cooldown-ms does nothing"
+    "after a recovery"]
    [:plan/regroup
     "the cell back along the trail the next walk goes to, planning again from a new spot"
     "after a recovery, until the walk starts"]
@@ -326,7 +335,7 @@
     "the bot's :stats/deaths when the search began: a search of an earlier life is not this one's, and starts afresh (sim R1/1, probe 40761589784: after the first respawn the budget of the first search was long spent, and every later life went back to the Nether with no food)"
     "inside :hunt/forage"]
    [:forage/phase
-    "the hunt/provision-phase the search began in (:early with the stone pickaxe, :kit with the portal's iron, :return after the Nether was reached and the goods are lost): a search of another phase is not this one's, and starts afresh"
+    "the hunt/provision-phase the search began in (:early with the stone pickaxe, :kit with the portal's iron, :entry once the portal is lit before the Nether is entered, :return after the Nether was reached and the goods are lost): a search of another phase is not this one's, and starts afresh"
     "inside :hunt/forage"]
    [:forage/retry-at
     "ms before which the search looks for no leg: set when no heading had a route at any reach (hunt/forage-retry-ms on)"
