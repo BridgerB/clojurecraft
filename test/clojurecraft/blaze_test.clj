@@ -2021,3 +2021,50 @@
     (is (some? (blaze/long-shot-cover w)) "a shooter beyond reach: the wall")
     (is (nil? (blaze/long-shot-cover (assoc-in w [:world/entities 8] mid)))
         "a blaze within 8 as well: it is fought, no wall")))
+
+(deftest a-blaze-at-hand-is-fought-by-one-row-for-the-whole-fight
+  ;; blaze-race-z8 job 6 (landing 6): two blazes at 0.7 to 3.1 blocks, hp 20 -> 18.4 -> 16.2 (burning) -> 13.7;
+  ;; :fight, :place x4, :dodge, :pocket, :pillar, :dig, :seal took turns, one attack sent in 9 s
+  (let [near (entity :blaze [10.5 64.5 8.5] :entity/health 20.0)
+        also (entity :blaze [8.5 64.5 11.0] :entity/health 20.0)
+        base (-> (standing {7 near 8 also})
+                 (assoc :time/now 100000 :player/struck-at 99500)
+                 (assoc-in [:player/inventory 9] (item :cobblestone 40)))
+        tick (fn [hp burning?] (assoc base :player/health hp :player/on-fire? burning?))
+        fight (fn [w] (:intent/kind (next-intent w)))
+        running {:intent/kind :fight
+                 :intent/target 7
+                 :intent/to-the-end? true
+                 :intent/yield? true
+                 :intent/goal :blaze-rods}]
+    (doseq [[hp burning?] [[20.0 false] [18.4 false] [16.2 true] [13.7 true] [12.0 true]]]
+      (is (= :fight (fight (tick hp burning?)))
+          (str "hp " hp " burning " burning? ": one row, the fight")))
+    (doseq [hp [20.0 16.2 12.0]]
+      (is (not (plan/interrupts? (tick hp true) row running)) (str "a running fight holds at " hp)))
+    (is (true? (plan/holds? running)) "and another row does not preempt it")
+    (testing "under low-health the retreat is one: not a fight"
+      (is (not= :fight (fight (tick 11.0 true)))))))
+
+(deftest the-steer-drops-an-unsealable-pocket-and-remembers-it
+  (let [row (first (filter #(= :blaze-rods (:goal/id %)) plan/goals))
+        site {:pocket/cell [8 64 8]
+              :pocket/stand nil
+              :pocket/dig []
+              :pocket/placed []
+              :pocket/here? true}
+        open-sky (-> (standing {})
+                     with-spawner
+                     (assoc :pocket/site site :time/now 5000))
+        out (plan/steer open-sky row)]
+    (is (pocket/in? open-sky) "the held site is the cell the bot stands in")
+    (is (nil? (:pocket/site out)) "dropped")
+    (is (contains? (:pocket/failed out) [8 64 8]) "remembered as failed")
+    (is (not ((blaze/pocket-ok? out spawner-at false) [8 64 8])) "and passed over as a refuge")
+    (testing "a roofed pocket is kept"
+      (let [kept (plan/steer (in-pocket (-> (standing {})
+                                            with-spawner
+                                            (assoc :time/now 5000)))
+                             row)]
+        (is (some? (:pocket/site kept)))
+        (is (empty? (:pocket/failed kept)))))))

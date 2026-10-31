@@ -230,9 +230,10 @@
     (is (false? (pocket/sealed? half site)) "the placed one solid is not a seal")
     (is (true? (pocket/sealed? full (assoc site :pocket/placed [[7 64 8] [7 65 8]]))))))
 
-(deftest a-wanted-cell-that-cannot-be-laid-does-not-keep-a-pocket-open-for-ever
-  ;; review of 4cbdea744: sealed? false while any wanted cell is open could not become true for a roof
-  ;; over open air (no foundation but the head cell); no :seal may be re-issued for it either
+(deftest a-pocket-with-a-wanted-cell-that-cannot-be-laid-is-not-sealed-and-no-refuge
+  ;; review of 4cbdea744 and of the lead: eight sides solid, the roof over open air wanted but not
+  ;; placeable: sealed? stays false (blazes fly and shoot down: z7 landing 1 burned in one), no :seal
+  ;; is re-issued for it, and the site is dropped and remembered (blaze steer)
   (let [c [8 64 8]
         sides [[7 64 8] [9 64 8] [8 64 7] [8 64 9] [7 65 8] [9 65 8] [8 65 7] [8 65 9]]
         w (assoc-in (world-of (apply solid sides))
@@ -241,6 +242,7 @@
         held (assoc-in w [:player/inventory 10] {:item (recipe/item-id :iron_pickaxe) :count 1})
         site {:pocket/cell c :pocket/stand nil :pocket/dig [] :pocket/placed sides}]
     (is (contains? (set (pocket/wanted-seal-cells w c)) [8 66 8]) "the roof is wanted")
-    (is (empty? (pocket/seal-cells w c)) "and cannot be laid: nothing a seal could do")
-    (is (true? (pocket/sealed? w site)) "so the pocket is sealed as far as it can be")
-    (is (not (pocket/can-seal? held site)) "no :seal to re-issue")))
+    (is (empty? (pocket/seal-cells w c)) "and cannot be laid")
+    (is (true? (pocket/unlayable? w c)))
+    (is (false? (pocket/sealed? w site)) "not sealed")
+    (is (not (pocket/can-seal? held site)) "and no :seal to re-issue")))

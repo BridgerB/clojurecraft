@@ -278,6 +278,9 @@ The sim fortress start (R1/1 seed 1, ci/simrace-from-fortress 47cbcf382) landed 
 ## A wall against a blaze to fight (issue #262, blaze-race-z8 job 6)
 Landing 6 (2m54s): two blazes at 0.7 to 3.1 blocks from the tunnel's end, hp 20 to 3.6 in 9 s, one attack sent; `:fight`, `:place` x4, `:dodge`, `:pocket`, `:pillar`, `:dig`, `:seal` took turns every 0.1 to 0.3 s. The long-shot wall (the `:place` of `long-shot-cover`, for a shooter beyond reach) fired against blazes the bot could fight. It is nil now with a blaze alive within 8 blocks.
 
+## One row for a close blaze, and an open roof is no refuge (issue #262, blaze-race-z8, review)
+Job 6 of z8 (landing 6): :fight, :place x4, :dodge, :pocket, :pillar, :dig and :seal took turns against two blazes in melee range, hp 20 to 3.6 in 9 s, one attack. With a blaze at hand (`at-hand-blaze`) and the health at low-health (12) or more the row now answers `commit-fight` first (after the fire at the feet): a `:fight` to the end that yields under retreat-health, `plan/holds?` for a blaze-rods fight (not preempted by another row), and `interrupts?` never cuts a committed fight (`committed-fight?`). Under 12 the retreat is one (refuge kinds hold). A pocket with a wanted seal cell that cannot be laid (the roof over open air) is not sealed (`sealed?` needs `wanted-seal-cells` empty) and no refuge against blazes that fly and shoot down (z7 landing 1): `plan/steer` drops the held site and adds its cell to `:pocket/failed`, which `pocket-ok?` passes over, so another site is chosen. Not done: digging down a block so the roof is rock.
+
 ## Limits
 - Fireballs are not dodged or blocked: the bot is out of their line, in a pocket or sealed in one.
 - A blaze hovering higher than the eye can reach from under it is never hit (`pressing?` stops within 0.8 on the plane); the fight has no engage timeout, only `:ghost` after 25 swings in reach.

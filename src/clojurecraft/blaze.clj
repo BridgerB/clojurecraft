@@ -1180,6 +1180,7 @@
   [world sp see?]
   (fn [c]
     (and (not (plan/avoiding? world c))
+         (not (contains? (:pocket/failed world #{}) c))
          (or (nil? sp)
              (and (not (in-spawn-volume? sp c))
                   (awake-from? sp c)
@@ -1629,7 +1630,12 @@
   ;; the spawner, and forgets it in a pocket or out of the zone: sortie-over? reads it
   [world _]
   (let [sp (nearest-spawner world)]
-    (cond (pocket/in? world) (dissoc world :sortie/since)
+    (cond (and (pocket/in? world) (pocket/unlayable? world (:pocket/cell (:pocket/site world))))
+          ;; an unsealable pocket is no refuge: forgotten, and its cell remembered as failed
+          (-> world
+              (update :pocket/failed (fnil conj #{}) (:pocket/cell (:pocket/site world)))
+              (dissoc :pocket/site :sortie/since))
+          (pocket/in? world) (dissoc world :sortie/since)
           (and (in-sortie-zone? world sp) (nil? (:sortie/since world)))
           (assoc world :sortie/since (:time/now world 0))
           (and sp (not (in-sortie-zone? world sp))) (dissoc world :sortie/since)
@@ -1644,31 +1650,56 @@
   (boolean (and (or (= :collect-drops (:intent/kind i)) (= :rod (:intent/for i)))
                 (some? (near-rod world)))))
 
+(defn commit-fight
+  "A :fight on the blaze at hand (at-hand-blaze) while the health is at low-health (12) or more,
+   the line under which a pocket seals a blaze out and the retreat is one, or nil: committed for its whole duration, to the end (:intent/to-the-end?), yielding under
+   retreat-health (:intent/yield?) so the retreat that follows is one. Blaze-race-z8 job 6 (landing 6):
+   two blazes at 0.7 to 3.1 blocks and hp 20 to 3.6 in 9 s, one attack sent, because :fight, :place
+   x4, :dodge, :pocket, :pillar, :dig and :seal took turns every 0.1 to 0.3 s: with a blaze in melee
+   range no row held."
+  [world]
+  (when (>= (:player/health world 20.0) low-health)
+    (when-let [[eid] (at-hand-blaze world)]
+      {:intent/kind :fight :intent/target eid :intent/to-the-end? true :intent/yield? true})))
+
+(defn committed-fight?
+  "Is running intent i a :fight with a blaze at hand and the health at low-health or more?"
+  [world i]
+  (and (= :fight (:intent/kind i)) (some? (commit-fight world))))
+
+(defmethod plan/holds? :fight
+  ;; a blaze-rods fight is not cut by another row (the default keeps a :defend row's fight
+  ;; cuttable, as a fight ends by its own break-off); the row's own interrupts? commits it
+  [i]
+  (= :blaze-rods (:intent/goal i)))
+
 (defmethod plan/interrupts? :blaze-rods
   ;; any running intent but a fight ends when a blaze is at hand (at-hand-blaze), and the act
   ;; fights it when healthy: gym blaze-fire-b run 3 (run 39136853644) tunnelled on with one hitting it in melee
   ;; from 20 health to 13.8, since nothing else ends a running intent; never interrupt cover or healing when hurt (#577);
   ;; and one hurt and watched (under-fire?) by blazes further off, whatever the intent but the answer to it
   [world _ i]
-  (or (and (not (contains? no-dodge-kinds (:intent/kind i)))
-           (not (rod-grab? world i))
-           (some? (dodge-intent world)))
-      (and (= :tunnel-to (:intent/kind i)) (some? (prepare-intent world (nearest-spawner world))))
-      (and (:intent/until i) (> (:time/now world 0) (:intent/until i)))
-      (and (= :pocket-hold (:intent/kind i)) (= :seal (:intent/kind (hold-intent world))))
-      (and (= :tunnel-to (:intent/kind i)) (some? (long-shot-cover world)))
-      (and (not (contains? refuge-kinds (:intent/kind i)))
-           (not= :fight (:intent/kind i))
-           (not (rod-grab? world i))
-           (sortie-over? world))
-      (and (not (contains? refuge-kinds (:intent/kind i)))
-           (some? (refuge-now world (nearest-spawner world))))
-      (and (not (hurt? world))
-           (not= :fight (:intent/kind i))
-           (not (and (= :cover (:intent/for i)) (crowded? world)))
-           (not (and (= :collect-drops (:intent/kind i)) (some? (near-rod world))))
-           (some? (fightable-blaze world)))
-      (under-fire? world i)))
+  (and (not (committed-fight? world i))
+       (or (and (not (contains? no-dodge-kinds (:intent/kind i)))
+                (not (rod-grab? world i))
+                (some? (dodge-intent world)))
+           (and (= :tunnel-to (:intent/kind i))
+                (some? (prepare-intent world (nearest-spawner world))))
+           (and (:intent/until i) (> (:time/now world 0) (:intent/until i)))
+           (and (= :pocket-hold (:intent/kind i)) (= :seal (:intent/kind (hold-intent world))))
+           (and (= :tunnel-to (:intent/kind i)) (some? (long-shot-cover world)))
+           (and (not (contains? refuge-kinds (:intent/kind i)))
+                (not= :fight (:intent/kind i))
+                (not (rod-grab? world i))
+                (sortie-over? world))
+           (and (not (contains? refuge-kinds (:intent/kind i)))
+                (some? (refuge-now world (nearest-spawner world))))
+           (and (not (hurt? world))
+                (not= :fight (:intent/kind i))
+                (not (and (= :cover (:intent/for i)) (crowded? world)))
+                (not (and (= :collect-drops (:intent/kind i)) (some? (near-rod world))))
+                (some? (fightable-blaze world)))
+           (under-fire? world i))))
 
 (defmethod plan/next-intent :blaze-rods
   ;; a tunnel to the spawner or on the search first makes the pickaxe it lacks from what is held
@@ -1691,6 +1722,7 @@
         wary (delay (when (and (not in-pocket?) (wary? world)) (warily world)))
         away (delay (when (and (not in-pocket?) (outnumbered? world)) (hide world)))
         held (delay (hold-intent world))
+        commit (delay (commit-fight world))
         shot-cover (delay (long-shot-cover world))
         refuge (delay (when (and (not in-pocket?) (refuge-needed? world))
                         (or (pocket-go world sp false)
@@ -1721,6 +1753,7 @@
     (cond
       (not= dimension/nether (dimension/of world)) {:plan/wait :other-dimension}
       @out @out
+      @commit @commit
       @dodging @dodging
       @held @held
       @shot-cover @shot-cover

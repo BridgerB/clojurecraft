@@ -495,6 +495,9 @@
    [:sortie/since
     "ms (:time/now) the bot left its pocket within blaze/sortie-zone of the spawner: noted by plan/steer for the blaze-rods row, forgotten in a pocket or out of the zone; sortie-over? reads it (two fights ended, 90 s, or health under 14) and the bot goes back to the pocket behind it"
     "after the bot left a pocket for the spawner's zone"]
+   [:pocket/failed
+    "a set of pocket cells that cannot be sealed (a wanted cell that cannot be laid: the roof over open air): noted by plan/steer for the blaze-rods row when the bot stands in one, and pocket-ok? passes over them. Such a pocket is no refuge against blazes (blaze-race-z7 landing 1)"
+    "after the bot stood in an unsealable pocket"]
    [:pocket/prepared-at
     "ms (:time/now) a pocket was last begun ahead of the tunnel's last blocks (a :pocket with :intent/prepare?): none is begun again for five minutes, the tunnel's own steps break a pocket beside its path"
     "after a prepare :pocket began"]

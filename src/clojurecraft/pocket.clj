@@ -236,14 +236,22 @@
 
 (defn sealed?
   "Is the site sealed: it names cells it placed blocks in (:pocket/placed), every one is solid, and
-   no cell a seal could still lay (seal-cells: the wanted ones that are placeable?) is open? A wanted cell that cannot be laid (the roof over open air, nothing to click) does not keep the pocket open for ever: can-seal? is false for it, so no :seal is re-issued and the hold is the pocket's. Blaze-race-z7 job 2 sat 19 s in
+   no cell a seal would still fill (wanted-seal-cells) is open? A wanted cell that cannot be laid (the roof over open air, nothing to click) keeps it false, and the site is no refuge: unlayable? says so, and the blaze row's steer drops the site and remembers it (:pocket/failed). Blaze-race-z7 job 2 sat 19 s in
    :pocket-hold under fireballs and burn with four placed cells solid and the four on its z sides
    open: a :seal that ended :done when its stale list was solid, the bot having moved, and this test
    said sealed (flip_trace2, run 41212534031)."
   [world {:pocket/keys [cell placed]}]
   (boolean (and (seq placed)
                 (every? #(solid-at? world %) placed)
-                (or (nil? cell) (empty? (seal-cells world cell))))))
+                (or (nil? cell) (empty? (wanted-seal-cells world cell))))))
+
+(defn unlayable?
+  "Does the pocket at cell c want a block that cannot be laid (wanted-seal-cells that are not
+   placeable?): the roof over open air, a side with nothing to click? Such a pocket cannot be
+   sealed and against blazes, which fly and shoot down, is no refuge (blaze-race-z7 landing 1
+   burned in one)."
+  [world c]
+  (not= (count (seal-cells world c)) (count (wanted-seal-cells world c))))
 
 (defn seal-ops
   "The ops that seal the cell: a place of item (default seal-item) in each of cells, standing in
