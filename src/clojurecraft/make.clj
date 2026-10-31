@@ -27,6 +27,7 @@
             [clojurecraft.scoop :as scoop]
             [clojurecraft.smelt :as smelt]
             [clojurecraft.stairs :as stairs]
+            [clojurecraft.stone :as stone]
             [clojurecraft.window :as window]
             [clojurecraft.wood :as wood]))
 
@@ -437,6 +438,7 @@
   [world goal table]
   (or (wood/continue-gather world)
       (intent/chain-next (:plan/last world) :take-table table-drops {})
+      (stone/vein-next world)
       (let [row (next-row world goal table)]
         (cond (nil? row) nil
               (= :stuck row) {:plan/wait :stuck}
