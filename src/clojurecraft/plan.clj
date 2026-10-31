@@ -487,7 +487,7 @@
 
 (defn recover
   "A run out of attempts that is not stalled (stalled?) tries again instead of ending: the failure
-   counts start over, the last failure is forgotten (so the same intent is not refused as an
+   counts start over, the last failure is forgotten (the :blocked ones stay: three of them in one area are what area-blocked? counts, and a recovery after every three would never let it) (so the same intent is not refused as an
    identical retry), and the trail's cell regroup-distance back (regroup-cell) becomes the next
    thing to walk to, planning again from a new spot. :plan/recoveries counts them. Within
    recover-cooldown-ms of the last one (:plan/recover-at) it changes nothing but the wait: pearl-fight-i
@@ -504,12 +504,8 @@
       (-> world
           (assoc :plan/attempts 0 :plan/unwalkable 0 :plan/recover-at now)
           (update :plan/recoveries (fnil inc 0))
-          (dissoc :plan/failed
-                  :plan/failures
-                  :plan/waiting
-                  :plan/waiting-since
-                  :plan/waiting-ticks
-                  :plan/regroup)
+          (dissoc :plan/failed :plan/waiting :plan/waiting-since :plan/waiting-ticks :plan/regroup)
+          (update :plan/failures (fn [fs] (filterv #(= :blocked (:reason %)) fs)))
           (cond-> cell (assoc :plan/regroup cell))
           (game/say (str "recover " (:plan/recoveries world 0) " regroup " (pr-str cell)))))))
 

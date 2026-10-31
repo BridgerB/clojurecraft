@@ -1747,8 +1747,8 @@
                      :plan/trail [[2288 72 2304] [2337 60 2290] [2344 60 2284] [2346 60 2283]]))]
     (reduce fail w (range 1 4))))
 
-(deftest three-failures-in-a-row-start-over-and-do-not-end-the-run
-  (let [w (place-failed 316000)]
+(deftest ^:eftest/synchronized three-failures-in-a-row-start-over-and-do-not-end-the-run
+  (let [w (with-redefs [plan/routable? (constantly true)] (place-failed 316000))]
     (is (= :active (:plan/status w)) "five minutes in, not stalled: the run goes on")
     (is (zero? (:plan/attempts w)) "the count starts over")
     (is (= 1 (:plan/recoveries w)))
@@ -1788,7 +1788,7 @@
     (is (= :failed (:plan/status (at 200000 :no-log))) "every other wait ends as it did")))
 
 (deftest ^:eftest/synchronized the-regroup-walk-starts-when-nothing-runs
-  (let [w (-> (place-failed 316000)
+  (let [w (-> (with-redefs [plan/routable? (constantly true)] (place-failed 316000))
               (dissoc :plan/intent))
         goal {:goal/id :blaze-rods :goal/done? :never :goal/plan :flip-test}]
     (with-redefs [plan/choose (constantly goal)
@@ -1835,7 +1835,8 @@
 (deftest ^:eftest/synchronized the-regroup-walk-starts-under-an-always-row
   ;; the :defend row is an always row; the regroup walk took no turn under it and the row's cover
   ;; failed again at once
-  (let [w (dissoc (place-failed 316000) :plan/intent)
+  (let [w (dissoc (with-redefs [plan/routable? (constantly true)] (place-failed 316000))
+           :plan/intent)
         goal {:goal/id :defend :goal/always? true :goal/done? :never :goal/plan :flip-test}]
     (with-redefs [plan/choose (constantly goal)
                   plan/next-intent (constantly {:intent/kind :place :intent/item :cobblestone})]
