@@ -327,6 +327,23 @@
              true intent/done)
            w))))))
 
+(def seal-limit-ms 20000) ; ms a seal may take before it is given up
+
+(defn seal-overdue?
+  "Has the running seal i been at it longer than seal-limit-ms? blaze-race-t job 5 stood sealing
+   68 minutes: `build: placing [2154 73 1750] refused with the body in it` every 3 s, a block
+   into the cell over its own feet, and no refusal count ever ended it."
+  [world {:intent/keys [started]}]
+  (boolean (and started (> (- (:time/now world 0) started) seal-limit-ms))))
+
+(defn give-up-seal
+  "The world with the running seal ended and noted failed (:pocket/unsealable?,
+   :pocket/seal-failed-at), as work-ops does for a placement that failed."
+  [world]
+  (cond-> (assoc world :player/controls {} :pocket/seal-failed-at (:time/now world 0))
+    (:pocket/site world) (assoc-in [:pocket/site :pocket/unsealable?] true)
+    true intent/done))
+
 (defmethod intent/run :seal
   ;; {:intent/kind :seal}: place seal-item in every open side of the pocket at the feet, at the feet
   ;; and the head, and over the head when it has no roof, standing in it; the cells are noted in the
@@ -340,11 +357,15 @@
         world (cond-> world
                 (and site (empty? (:pocket/placed site)))
                 (assoc-in [:pocket/site :pocket/placed] cells))]
-    (if (and site (seq cells) (= (:pocket/cell site) (intent/feet world)))
-      (work-ops world i (seal-ops (:pocket/cell site) cells) event true)
-      (-> world
-          (assoc :player/controls {})
-          intent/done))))
+    (cond (not (and site (seq cells) (= (:pocket/cell site) (intent/feet world))))
+          (-> world
+              (assoc :player/controls {})
+              intent/done)
+          (seal-overdue? world i) (give-up-seal world)
+          :else
+          (-> world
+              (intent/assoc-intent :intent/started (or (:intent/started i) (:time/now world 0)))
+              (work-ops i (seal-ops (:pocket/cell site) cells) event true)))))
 
 (defmethod intent/run :unseal
   ;; {:intent/kind :unseal}: dig every cell the seal placed, the highest first, standing in the

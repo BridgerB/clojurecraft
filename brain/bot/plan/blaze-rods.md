@@ -224,6 +224,9 @@ Jobs 1 and 4 of r ended `:boxed` (5m25s) and `:no-path` (4m17s) at 17 to 20 hp h
 ## A camp in the pocket that no blaze comes to (issue #262, after blaze-race-t)
 Job 3 lived 54 min with 0 kills: `:camp` 39m48s and `:ambush` 10m31s at [2338 60 2291], six to eight blazes within 16 blocks the whole time, the nearest 9.4 to 10, no fireball spawned, one attack sent (`compare.ts`, 120 s rows). `idle?` (three camps done in ten minutes, no fight) left the nook for the room, but the camp clause still took `pocket-go` and `in-pocket?`: the pocket was camped in regardless. A bot in its pocket whose camp is idle (`camping-in-pocket?` false) goes to the spawner (`to-spawner`) and camps there; a fight makes `idle?` false and the pocket is camped again, and the refuge when pressed is the held pocket.
 
+## A seal that never finishes (issue #262, blaze-race-t job 5)
+Job 5 ran `:seal` 68 minutes: `build: placing [2154 73 1750] refused with the body in it` every 3 s, a block into the cell over its own feet (player at [2154.6 72 1750.6]), `use-item-on` against [2154 73 1749] face 3 each time, no other intent. The body-refusal count of #615 did not end it here. `:seal` now stamps `:intent/started` and is given up after `seal-limit-ms` (20 s): the site is `:pocket/unsealable?` and `:pocket/seal-failed-at` is set, as for a failed placement, so the planner chooses something else. The cause of the refused cell is not yet known; the bound ends the stall whatever it is.
+
 ## Limits
 - Fireballs are not dodged or blocked: the bot is out of their line, in a pocket or sealed in one.
 - A blaze hovering higher than the eye can reach from under it is never hit (`pressing?` stops within 0.8 on the plane); the fight has no engage timeout, only `:ghost` after 25 swings in reach.

@@ -149,3 +149,18 @@
                                      site)))
           (is (pocket/can-seal? (assoc picked :pocket/seal-failed-at 1000 :time/now 70000)
                                 site)))))))
+
+(deftest a-seal-that-never-finishes-is-given-up
+  ;; blaze-race-t job 5: :seal ran 68 minutes on a placement refused with the body in the cell
+  (let [site {:pocket/cell [8 64 8] :pocket/stand nil :pocket/dig [] :pocket/placed [[7 64 8]]}
+        at (fn [started now]
+             (let [w (assoc (world-of walled)
+                            :pocket/site site
+                            :time/now now
+                            :plan/intent {:intent/kind :seal :intent/started started})]
+               (intent/run w (:plan/intent w) {:event/kind :tick :event/now now})))]
+    (is (not (intent/done? (:plan/intent (at 0 5000)))) "within the limit it keeps sealing")
+    (let [w (at 0 (inc pocket/seal-limit-ms))]
+      (is (intent/done? (:plan/intent w)))
+      (is (true? (get-in w [:pocket/site :pocket/unsealable?])) "not sealed again at this site")
+      (is (= (inc pocket/seal-limit-ms) (:pocket/seal-failed-at w))))))
