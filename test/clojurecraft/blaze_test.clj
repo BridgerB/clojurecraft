@@ -1655,4 +1655,13 @@
         w (fn [e] (in-pocket (standing {7 e})))]
     (is (true? (blaze/sees-a-blaze? (w line) [8 64 8])) "a blaze in the line of the opening")
     (is (false? (blaze/sees-a-blaze? (w behind) [8 64 8])) "a blaze behind the wall")
-    (is (false? (blaze/sees-a-blaze? (in-pocket (standing {})) [8 64 8])) "none")))
+    (is (false? (blaze/sees-a-blaze? (in-pocket (standing {})) [8 64 8])) "none")
+    (testing "a mouth facing a room of them is a volley, not a pocket to move to"
+      (let [many (in-pocket (standing (into {}
+                                            (map-indexed (fn [i dz] [(+ 7 i)
+                                                                     (entity :blaze
+                                                                             [3.5 65.0 (+ 8.5 dz)]
+                                                                             :entity/health 20.0)])
+                                                         [0.0 0.2 -0.2 0.1]))))]
+        (is (= 4 (blaze/blazes-seen many [8 64 8])))
+        (is (false? (blaze/sees-a-blaze? many [8 64 8])))))))

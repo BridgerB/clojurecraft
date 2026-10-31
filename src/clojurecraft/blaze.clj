@@ -1157,18 +1157,27 @@
 (def prepare-cooldown-ms 300000) ; ms after a pocket was begun ahead before another is: blaze-race-r jobs 1 and 4 dug one a step, ten of them, 250 netherrack, and wore the pickaxe out
 (def approach-nodes 150)   ; cells the search for it visits at most when asked every tick (interrupts?)
 
-(defn sees-a-blaze?
-  "Is a blaze alive within cover-range of cell c in the sight of the eye over it (unseen-from?)? A
-   blaze goes for a player it sees, so a pocket none of them sees draws none: blaze-race-w jobs 1,
-   2, 3 and 6 camped 30 minutes at [2338 60 2291], 12.8 from the spawner with 7 to 10 blazes
-   hovering at it, the nearest 9.4 off and 4.6 under the eye for the whole time, 0 shots."
+(def seen-by-at-most 2) ; blazes a pocket's mouth may face: one draws a blaze to fight at the wall, a room of them is a volley
+
+(defn blazes-seen
+  "How many blazes alive within cover-range of cell c are in the sight of the eye over it
+   (unseen-from?)? A blaze goes for a player it sees, so a pocket none of them sees draws none:
+   blaze-race-w jobs 1, 2, 3 and 6 camped 30 minutes at [2338 60 2291], 12.8 from the spawner
+   with 7 to 10 blazes hovering at it, the nearest 9.4 off and 4.6 under the eye for the whole
+   time, 0 shots."
   [world c]
-  (boolean (some (fn [e]
+  (count (filter (fn [e]
                    (and (= :blaze (entity/kind e))
                         (not (entity/dead? e))
                         (<= (physics/distance (physics/centre c) (:entity/pos e)) cover-range)
                         (not (unseen-from? world c (hunt/cell (:entity/pos e))))))
                  (vals (:world/entities world)))))
+
+(defn sees-a-blaze?
+  "Does cell c face one blaze, or at most seen-by-at-most: the mouth toward one that closes and is
+   fought at the wall, the others blind to the bot?"
+  [world c]
+  (<= 1 (blazes-seen world c) seen-by-at-most))
 
 (def advance-step 4.0) ; blocks nearer the spawner an advanced pocket is at least
 (def advance-wait-ms 120000) ; ms in a pocket before another nearer the spawner is made
