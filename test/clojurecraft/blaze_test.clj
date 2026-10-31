@@ -2100,3 +2100,20 @@
     (is (false? (boolean (plan/interrupts? w row {:intent/kind :dig :intent/target [8 64 8]})))
         "nor the dig of the fire")
     (is (false? (boolean (plan/interrupts? (standing {}) row collect))) "no fire: left alone")))
+
+(deftest a-long-shot-place-past-its-deadline-is-not-planned-again-at-once
+  ;; blaze-race-z8 job 5 (flip_trace2): 97 :place intents, each cut :interrupted because the fresh plan
+  ;; carried a new :until; with same-choice? ignoring :until the same place would run on for ever
+  (let [far (entity :blaze [15.5 66.0 1.5] :entity/health 20.0)
+        w (-> (standing {7 far})
+              (assoc :time/now 100000 :player/struck-at 99000)
+              (assoc-in [:player/inventory 9] (item :cobblestone 40)))
+        i (blaze/long-shot-cover w)]
+    (is (some? i))
+    (is (some? (blaze/long-shot-cover (assoc w :plan/intent (assoc i :intent/status :active))))
+        "within its three seconds the same place is the choice (kept running)")
+    (is (nil? (blaze/long-shot-cover (assoc w
+                                            :time/now 104000
+                                            :player/struck-at 103500
+                                            :plan/intent (assoc i :intent/status :active))))
+        "past them it is not: the cut goes through and the row chooses something else")))

@@ -1500,6 +1500,13 @@
    burned."
   [world]
   (when (and (not (pocket/in? world))
+             ;; a long-shot place that has run past its :intent/until is not planned again at once: the row
+             ;; planning the same place would make plan/same-choice? keep it running (walk-restart's
+             ;; fix/577-same-choice ignores :until), and the deadline would never cut it
+             (not (let [i (:plan/intent world)]
+                    (and (= :place (:intent/kind i))
+                         (:intent/until i)
+                         (> (:time/now world 0) (:intent/until i)))))
              (<= (- (:time/now world 0) (:player/struck-at world -1000000)) long-shot-ms)
              (nil? (at-hand-blaze world))
              ;; one within 8 blocks is fought, not walled off: blaze-race-z8 job 6 flipped :fight,
@@ -1663,7 +1670,9 @@
              ;; the bot, not a fight to commit to the end (the spawner-room deaths of z4 and z5)
              (<= (count (nearby-blazes world 8.0)) sortie-crowd)
              (not (outnumbered? world))
-             (not (burning-here? world)))
+             (not (burning-here? world))
+             ;; a rod within a step is picked up before the next swing (near-rod, blaze-race-m race 4)
+             (nil? (near-rod world)))
     (when-let [[eid] (at-hand-blaze world)]
       {:intent/kind :fight :intent/target eid :intent/to-the-end? true :intent/yield? true})))
 
@@ -1764,8 +1773,8 @@
     (cond
       (not= dimension/nether (dimension/of world)) {:plan/wait :other-dimension}
       @out @out
-      @commit @commit
       @dodging @dodging
+      @commit @commit
       @held @held
       @shot-cover @shot-cover
       @refuge @refuge
