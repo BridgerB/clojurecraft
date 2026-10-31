@@ -10,6 +10,7 @@
             [clojurecraft.build :as build]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
+            [clojurecraft.hunt :as hunt]
             [clojurecraft.intent :as intent]
             [clojurecraft.memory :as memory]
             [clojurecraft.path :as path]
@@ -196,6 +197,36 @@
         "a blocked entry still requires a tool to reopen its way")
     (is (nil? (build/next-op (assoc lit :player/dimension "minecraft:the_nether") ops))
         "entry remains done after the dimension changes")))
+
+(deftest the-way-back-with-no-food-and-the-hunt-spent-is-a-build-step-not-a-wait
+  ;; main dab82b629: :return-nether answered {:plan/wait :no-food-to-return} once the hunt found
+  ;; nothing, and a wait ends the plan; a lit portal remembered, nothing held, health and food 20
+  (let [origin [4 63 4]
+        at #(build/cell origin :south %)
+        frame (into {}
+                    (map (fn [[x y]] [(at [x y 0]) (blocks/default-state :obsidian)])
+                         build/frame-cells))
+        lit (-> (standing-at (open-ground (assoc frame
+                                                 (at [1 0 1])
+                                                 (blocks/default-state :cobblestone)
+                                                 (at [1 1 0])
+                                                 (blocks/default-state :nether_portal)))
+                             [5.5 63.0 6.5])
+                (memory/remember-site origin :south)
+                (assoc :player/inventory {}
+                       :player/health 20.0
+                       :player/food 20
+                       :plan/chain? true
+                       :plan/reached #{:portal-kit :gear :nether}
+                       :plan/since 0
+                       :time/now (+ 1000 hunt/forage-ms 100000)
+                       :hunt/forage
+                       {:forage/since 1000 :forage/leg 3 :forage/phase :return :forage/life 0}))
+        return-row (first (filter #(= :return-nether (:goal/id %)) plan/goals))
+        i (plan/next-intent lit return-row plan/goals)]
+    (is (hunt/search-spent? lit) "the hunt has searched and found nothing")
+    (is (nil? (:plan/wait i)) "no wait at all: it ends the plan")
+    (is (= :build (:intent/kind i)) "the way back is the build's step")))
 
 (deftest a-stand-inside-a-hill-is-dug
   ;; full run 4e59246 stood at the pond and the pad's stand was stone; the walk was :none and

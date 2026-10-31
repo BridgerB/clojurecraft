@@ -501,6 +501,15 @@
    [:pocket/placed
     "inside :pocket/site: the cells a :seal placed blocks in, empty while the pocket is open; the pocket is sealed while every one is solid. An :unseal digs them and empties it"
     "after a :seal began"]
+   [:sortie/since
+    "ms (:time/now) the bot left its pocket within blaze/sortie-zone of the spawner: noted by plan/steer for the blaze-rods row, forgotten in a pocket or out of the zone; sortie-over? reads it (two fights ended, 90 s, or health under 14) and the bot goes back to the pocket behind it"
+    "after the bot left a pocket for the spawner's zone"]
+   [:pocket/failed
+    "a set of pocket cells that cannot be sealed (a wanted cell that cannot be laid: the roof over open air): noted by plan/steer for the blaze-rods row when the bot stands in one, and pocket-ok? passes over them. Such a pocket is no refuge against blazes (blaze-race-z7 landing 1)"
+    "after the bot stood in an unsealable pocket"]
+   [:rod-grab/since
+    "ms (:time/now) the running rod pick-up began (noted by plan/steer for the blaze-rods row, forgotten when none runs): the pick-up holds the refuge off for rod-grab-ms (2 s), then the refuge wins"
+    "while a :collect-drops or :walk :for :rod of a rod within a step runs"]
    [:pocket/prepared-at
     "ms (:time/now) a pocket was last begun ahead of the tunnel's last blocks (a :pocket with :intent/prepare?): none is begun again for five minutes, the tunnel's own steps break a pocket beside its path"
     "after a prepare :pocket began"]
@@ -524,6 +533,9 @@
    [:intent/health
     "the health when a :camp or a :rest began; a fall under it ends it, since nothing else ends a running intent (issue #262)"
     "camp, rest"]
+   [:intent/until
+    "ms (:time/now) after which the running intent is cut for the row's next choice: set by the blaze row's long-shot wall (3 s), whose :place waited 17 s under fire in blaze-race-z7 landing 2"
+    "a :place from blaze/long-shot-cover"]
    [:intent/hold?
     "a :fight that never walks: it waits for the target to come, never presses after it and never breaks off (the pearl hunt's burrow, issue #263)"
     "a :fight from the hunt's burrow"]

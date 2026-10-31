@@ -550,6 +550,9 @@
 (s/def :pocket/unsealable? boolean?)
 (s/def :pocket/seal-failed-at number?)
 (s/def :pocket/prepared-at number?)
+(s/def :rod-grab/since number?)
+(s/def :pocket/failed (s/coll-of vector? :kind set?))
+(s/def :sortie/since number?)
 (s/def :pocket/site
   (s/keys :req [:pocket/cell :pocket/dig]
           :opt [:pocket/stand :pocket/placed :pocket/here? :pocket/unsealable?]))
@@ -581,6 +584,7 @@
 (s/def :intent/turns nat-int?)
 (s/def :intent/rejections pos-int?)
 (s/def :intent/body-refusals pos-int?)
+(s/def :intent/until number?)
 (s/def :intent/cells (s/coll-of ::block-pos :kind vector? :min-count 3))
 (s/def :intent/level-cells (s/coll-of ::block-pos :kind vector? :count 2))
 (s/def :intent/bore (s/coll-of ::block-pos :kind vector? :min-count 1))

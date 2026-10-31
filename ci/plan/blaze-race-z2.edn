@@ -1,0 +1,20 @@
+;; Issue #262, round z2 on 757b056fa: z's landings 1, 2 and 5. From z (b161c84a3): landing 5 alive 107 min with 5 hits
+;; (the long-shot wall), but its tunnel looped (#637 is in this head); landing 1 died in 7 s crossing the room after 9 min
+;; of camp; landing 2 camped 119 min, 9 blazes 9.4 off, 0 kills. New: an idle camp digs on and the tunnel is cut at the
+;; first corridor cell that sees one or two blazes. Rods held, then kills per 10 min (s2k.ts), then seal/unseal switches.
+{:plans/label "blaze-race-z2"
+ :plans/jobs 3
+ :plans/issue 262
+ :plans/experiments [{:exp/name "blaze-fortress-race"
+                      :exp/kind :gym
+                      :exp/goal "blaze-fortress-race"
+                      :exp/runs 2
+                      :exp/bots 1
+                      :exp/est-s 1800}
+                     {:exp/name "blaze-fortress-race-5"
+                      :exp/kind :gym
+                      :exp/goal "blaze-fortress-race"
+                      :exp/runs 1
+                      :exp/from 5
+                      :exp/bots 1
+                      :exp/est-s 1800}]}

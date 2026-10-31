@@ -26,6 +26,7 @@
             [clojurecraft.entity :as entity]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
+            [clojurecraft.memory :as memory]
             [clojurecraft.mob :as mob]
             [clojurecraft.packet :as packet]
             [clojurecraft.path :as path]
@@ -868,20 +869,25 @@
                (= :solid (path/classify world [fx (- fy 2) fz])))
       below)))
 
+(def pillar-memory-ms 30000) ; ms a failed pillar (or a wall with no support) is not chosen again: start-intent forgets :plan/failed, so the story is asked
+
 (defn wall-failed?
   "Did the last failed intent place a block in cell w? Blaze-race-u job 4 laid a wall cell with
    nothing to set it against, `intent :place failed: :no-support` three times in 0.15 s between
    back-offs, and the plan failed at 4 hp; the cover tries the next choice instead."
   [world w]
   (let [{:intent/keys [kind cell]} (:plan/failed world)]
-    (boolean (and w (= :place kind) (= w cell)))))
+    (boolean (and w
+                  (or (and (= :place kind) (= w cell))
+                      (memory/failed-within? world :place :no-support pillar-memory-ms))))))
 
 (defn pillar-failed?
   "Did the last failed intent raise a pillar? Blaze-race-w job 4 chose a :pillar for its cover three
    times in 300 ms, each failed :boxed (attempt 3 of 3), at hp 3, beside a rod it had not taken; the
    cover tries the next choice (the meal, the nook) instead."
   [world]
-  (= :pillar (:intent/kind (:plan/failed world))))
+  (or (= :pillar (:intent/kind (:plan/failed world)))
+      (memory/failed-within? world :pillar pillar-memory-ms)))
 
 (defn cover
   "The intent for a bot under retreat-health that no back-off from entity e would help

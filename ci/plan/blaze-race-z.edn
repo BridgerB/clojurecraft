@@ -1,0 +1,20 @@
+;; Issue #262, round z: the race row (one iron pickaxe, a table, 8 sticks, 64 cobblestone) on main with #634 and the
+;; bait: an idle camp walks to a corridor cell that sees one or two blazes. Three landings: 1 and 2 (the fortress
+;; where y jobs 1, 2, 3 and 6 camped 38 to 48 minutes with no shot) and 5 (shot from 39 to 49 blocks at the tunnel
+;; start: the long-shot wall). Rods held is the metric; then kills per 10 min (s2k.ts) and :seal/:unseal switches.
+{:plans/label "blaze-race-z"
+ :plans/jobs 3
+ :plans/issue 262
+ :plans/experiments [{:exp/name "blaze-fortress-race"
+                      :exp/kind :gym
+                      :exp/goal "blaze-fortress-race"
+                      :exp/runs 2
+                      :exp/bots 1
+                      :exp/est-s 1800}
+                     {:exp/name "blaze-fortress-race-5"
+                      :exp/kind :gym
+                      :exp/goal "blaze-fortress-race"
+                      :exp/runs 1
+                      :exp/from 5
+                      :exp/bots 1
+                      :exp/est-s 1800}]}
