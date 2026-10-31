@@ -1,0 +1,14 @@
+;; Issue #263, branch fix/263-lava-flee, batch l: the first six on main with #649 (the pickaxe
+;; reserve and the relocation), #650 and #651. Batch k (plan run 41197008609): job 1 passed at
+;; 123m31s with 12 pearls, job 2 died at 136 min holding 9 (a fall of 13 blocks into the lava sea
+;; after the stuck watchdog's explore walk left the burrow with an angry enderman near), job 3 was
+;; cancelled at about 3.3 hours. Row pearls-12-race-tools. Measure: passes out of 6, time to 12.
+{:plans/label "pearl-fight-l"
+ :plans/jobs 6
+ :plans/issue 263
+ :plans/experiments [{:exp/name "pearls-12-race-tools"
+                      :exp/kind :gym
+                      :exp/goal "pearls-12-race-tools"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 18000}]}
