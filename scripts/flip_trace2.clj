@@ -36,6 +36,20 @@
         (when-let [site (:pocket/site w)]
           {:can-seal? (when can-seal?
                         (try (boolean (can-seal? w site)) (catch Exception e (str e))))
+           :sealed? (try ((requiring-resolve 'clojurecraft.pocket/sealed?) w site)
+                         (catch Exception e (str e)))
+           :openings
+           (try (vec ((requiring-resolve 'clojurecraft.pocket/openings) w (:pocket/cell site)))
+                (catch Exception e (str e)))
+           :around (let [[cx cy cz] (:pocket/cell site)]
+                     (into {}
+                           (for [[dx dy dz] [[1 0 0] [-1 0 0] [0 0 1] [0 0 -1] [1 1 0] [-1 1 0]
+                                             [0 1 1] [0 1 -1] [0 2 0] [0 -1 0]]
+                                 :let [c [(+ cx dx) (+ cy dy) (+ cz dz)]]]
+                             [c
+                              (some-> (clojurecraft.terrain/block-at w c)
+                                      clojurecraft.blocks/name-of)])))
+           :pos (:player/pos w)
            :cell (:pocket/cell site)
            :feet (clojurecraft.intent/feet w)
            :placed (mapv (fn [c] [c
@@ -65,6 +79,7 @@
                 (vswap! lines
                         conj
                         (cond-> {:t (- now cutoff)
+                                 :now now
                                  :hp (:player/health w)
                                  :intent (dissoc i :intent/status)
                                  :chosen chosen
