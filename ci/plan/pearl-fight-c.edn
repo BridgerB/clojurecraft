@@ -5,7 +5,7 @@
 ;; menace known and no burrow: cut one here; the hit enderman is the hunt's; a walk out ends when
 ;; an angry one is near the mouth) merged with feat/263-stuck-retry: wander after five minutes of
 ;; lookouts, explore away from where the bot has been, provoke only within 3 of the burrow's end,
-;; fight at hand only a weak mob. Measure: pearls at 30 and 60 min, the longest gap between pearls.
+;; fight at hand only a weak mob, and a wander that an angry enderman given up on no longer blocks. Measure: pearls at 30 and 60 min, the longest gap between pearls.
 {:plans/label "pearl-fight-c"
  :plans/jobs 6
  :plans/issue 263
