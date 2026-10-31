@@ -1,0 +1,12 @@
+;; Issue #262: the race row, six runs. blaze-race-n regressed (all dead, 0 rods): a spawner within reach
+;; of the eye now counts as where the bot camps (the tunnel to its stand ran 11 minutes), a seal that
+;; cannot be laid is not tried again, and a hurt bot with a blaze in reach it cannot seal out fights.
+{:plans/label "blaze-race-o"
+ :plans/jobs 6
+ :plans/issue 262
+ :plans/experiments [{:exp/name "blaze-fortress-race"
+                      :exp/kind :gym
+                      :exp/goal "blaze-fortress-race"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 1800}]}

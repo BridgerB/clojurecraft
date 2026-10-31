@@ -1,0 +1,12 @@
+;; Issue #262: the race row (one iron pickaxe, a table, 8 sticks, 64 cobblestone), on main with the
+;; retry fix (#633). From blaze-race-w (5 of 6 alive 27 to 35 min, 1 rod, job 4 boxed): a tunnel lays
+;; netherrack and keeps cobblestone for seals; a cover does not raise a pillar that just failed.
+{:plans/label "blaze-race-x"
+ :plans/jobs 6
+ :plans/issue 262
+ :plans/experiments [{:exp/name "blaze-fortress-race"
+                      :exp/kind :gym
+                      :exp/goal "blaze-fortress-race"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 1800}]}

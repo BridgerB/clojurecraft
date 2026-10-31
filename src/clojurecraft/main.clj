@@ -31,6 +31,7 @@
             [clojurecraft.eyes]
             [clojurecraft.fortress]
             [clojurecraft.game :as game]
+            [clojurecraft.gear]
             [clojurecraft.hunt]
             [clojurecraft.make]
             [clojurecraft.memory :as memory]

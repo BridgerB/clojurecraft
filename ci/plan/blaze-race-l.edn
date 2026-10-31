@@ -1,0 +1,19 @@
+;; Issue #262: both race-kit rows, six runs each, judged on time alive and rods, not on a pass: the
+;; bot leaves to heal (under 12 hp or a second ignition within 30 s: its pocket, or the cell it
+;; stands in sealed, held to 20 hp), a walk out of a fire ends in its cell, the pocket made ahead is
+;; never toward the spawner, and the shield is dropped.
+{:plans/label "blaze-race-l"
+ :plans/jobs 6
+ :plans/issue 262
+ :plans/experiments [{:exp/name "blaze-fortress-race"
+                      :exp/kind :gym
+                      :exp/goal "blaze-fortress-race"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 1800}
+                     {:exp/name "blaze-fortress-geared"
+                      :exp/kind :gym
+                      :exp/goal "blaze-fortress-geared"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 1800}]}

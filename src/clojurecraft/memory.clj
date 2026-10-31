@@ -335,7 +335,8 @@
            :intention/at now}
     (:intent/target i) (assoc :intention/target (:intent/target i))
     (:intent/recipe i) (assoc :intention/recipe (:intent/recipe i))
-    (:intent/reason i) (assoc :intention/reason (:intent/reason i))))
+    (:intent/reason i) (assoc :intention/reason (:intent/reason i))
+    (:intent/ended-at i) (assoc :intention/ended-at (:intent/ended-at i))))
 
 (defn remember-intention
   "Append what happened to intent i (event) as a fact; an intent with no id is not recorded."

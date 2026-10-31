@@ -1,0 +1,13 @@
+;; Issue #262: the race row, six runs, judged on rods held (the most it ever held was 4 in blaze-race-m
+;; race 4, which killed 26 blazes at 7 hp a kill) and hp lost per kill: a rod within three blocks is
+;; picked up before the next swing, the refuge comes before a dodge at low health, and a walk to a
+;; spawner already in reach is not chosen every tick.
+{:plans/label "blaze-race-n"
+ :plans/jobs 6
+ :plans/issue 262
+ :plans/experiments [{:exp/name "blaze-fortress-race"
+                      :exp/kind :gym
+                      :exp/goal "blaze-fortress-race"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 1800}]}

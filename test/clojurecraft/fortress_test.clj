@@ -15,6 +15,7 @@
             [clojurecraft.path :as path]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
+            [clojurecraft.stairs :as stairs]
             [clojurecraft.terrain :as terrain]))
 
 (def netherrack (blocks/default-state :netherrack))
@@ -294,6 +295,88 @@
       (is (not (fortress/safe? flooded [0 64 0] [1 0 0])) "the step leaves the bed sealed")
       (is (fortress/safe? (assoc-in flooded [:world/blocks [1 66 0]] netherrack) [0 64 0] [1 0 0])
           "a non-falling roof keeps the fluid sealed"))))
+
+(deftest a-floor-with-air-under-it-is-no-floor
+  ;; blaze-race-c geared run 5 (plan 40805504891): the bot stood at [2146.5 72.0 1758.4] on the floor
+  ;; [2146 71 1758]; a ghast's fireball exploded by it, the next tick's section-blocks-update set
+  ;; [2146 71 1758] to air, and it fell 46 blocks onto the lava sea. The cells here are the same
+  ;; shifted by [-2146 -8 -1758]: feet [0 64 0], floor of the step east [1 63 0], the drop under
+  (let [thin (rock {[1 62 0] air [1 61 0] air [1 60 0] air})
+        cobble {0 {:item (recipe/item-id :cobblestone) :count 16}}
+        held (assoc thin :player/inventory cobble)]
+    (is (fortress/thin-floor? thin [1 63 0]) "air directly under")
+    (is (not (fortress/thin-floor? thin [0 63 0])) "rock under")
+    (is (fortress/thin-floor? (assoc-in thin [:world/blocks [1 62 0]] blocks/lava-base) [1 63 0])
+        "lava under")
+    (is (not (fortress/thin-floor? (assoc-in thin [:world/blocks [1 62 0]] nil) [1 63 0]))
+        "an unloaded cell is no drop")
+    (testing "no block to put under it: a thick-floored step is taken before it"
+      (is (not= [1 0 0] (fortress/next-move thin [0 64 0] [20 64 0] 8 false #{})))
+      (is (empty? (fortress/underlay-ops thin [0 64 0] [1 0 0]))))
+    (testing "a retreat onto a cell already stood in is not asked (the pacing ledge)"
+      (is (fortress/safe? thin [0 64 0] [1 0 0]) "the step itself is as safe as it was")
+      (is (not= [1 0 0] (fortress/next-move thin [0 64 0] [20 64 0] 8 false #{}))
+          "a thick one is preferred to a fresh thin one"))
+    (testing "with no other way the thin step is taken, not a block (R1/37 seed 2: soul sand only)"
+      (let [open (into {} (for [x (range -4 5) y (range 58 71) z (range -4 5)] [[x y z] air]))
+            only-thin (assoc (rock {})
+                             :world/blocks
+                             (merge open
+                                    {[0 63 0] netherrack [0 62 0] netherrack [1 63 0] netherrack}))]
+        (is (fortress/thin-floor? only-thin [1 63 0]))
+        (is (= [1 0 0] (fortress/next-move only-thin [0 64 0] [20 64 0] 8 false #{}))
+            "the only step with a floor, thin: taken")
+        (testing "and a thick floor beside it is preferred"
+          (let [both (-> only-thin
+                         (assoc-in [:world/blocks [0 63 1]] netherrack)
+                         (assoc-in [:world/blocks [0 62 1]] netherrack))]
+            (is (= [0 0 1] (fortress/next-move both [0 64 0] [20 64 0] 8 false #{})))))))
+    (testing "a block in hand: the step is taken with the cell under the floor filled first"
+      (is (= [1 0 0] (fortress/next-move held [0 64 0] [20 64 0] 8 false #{})))
+      (let [ops (fortress/underlay-ops held [0 64 0] [1 0 0])]
+        (is (= 1 (count ops)))
+        (is (= {:build/op :place :build/pos [1 62 0] :build/step :under}
+               (select-keys (first ops) [:build/op :build/pos :build/step])))
+        (is (= [:solid [1 62 0]] (:build/done (first ops))))))
+    (testing "a thick floor needs no underlay"
+      (is (empty? (fortress/underlay-ops held [0 64 0] [0 0 -1]))))))
+
+(deftest a-tunnel-on-a-column-in-open-air-bridges-toward-its-target
+  ;; blaze-race-d job 5 (story-brd5, 9e111c23b): on a pillar in open Nether air at [2157 61 1748], the
+  ;; target [2209 60 1794] 52 out and one down, the tunnel went down the pillar [0 0 -1], [0 -1 -1]
+  ;; from y 69 to y 32, above the lava sea, the only steps with ground; the stand tunnel did not
+  ;; bridge. Cells shifted to feet [0 64 0], the target [52 63 0], ground at y 40
+  (let [air* (into {} (for [x (range -4 61) y (range 41 71) z (range -4 5)] [[x y z] air]))
+        ground (into {} (for [x (range -4 61) z (range -4 5)] [[x 40 z] netherrack]))
+        w {:world/chunks {}
+           :world/blocks (merge air* ground {[0 63 0] netherrack [0 62 0] netherrack})
+           :player/pos [0.5 64.0 0.5]
+           :player/inventory {0 {:item (recipe/item-id :cobblestone) :count 64}}}
+        target [52 63 0]]
+    (is (fortress/bridge-over-void? w [0 64 0] [1 0 0])
+        "level, floored from the block under the feet")
+    (is (= [1 0 0] (fortress/next-move w [0 64 0] target 0 false #{} true))
+        "with bridging: the level step toward the target")
+    (is (not= [1 0 0] (fortress/next-move w [0 64 0] target 0 false #{}))
+        "without it: the column's steps down, as before")
+    (testing
+      "the reserve is every filler together (landing 5, step-bre5: cobblestone 12, netherrack 4)"
+      (let [mixed (assoc w
+                         :player/inventory
+                         {0 {:item (recipe/item-id :cobblestone) :count 12}
+                          1 {:item (recipe/item-id :netherrack) :count 4}})
+            short (assoc w
+                         :player/inventory
+                         {0 {:item (recipe/item-id :cobblestone) :count 12}
+                          1 {:item (recipe/item-id :netherrack) :count 3}})]
+        (is (fortress/bridge-over-void? mixed [0 64 0] [1 0 0]))
+        (is (= [1 0 0] (fortress/next-move mixed [0 64 0] target 0 false #{} true)))
+        (is (not (fortress/bridge-over-void? short [0 64 0] [1 0 0])) "15 together: short")))
+    (testing "soul sand is no bridge (R1/37 seed 2: soul sand 207, lava all round, :blocked)"
+      (let [sand (assoc w :player/inventory {0 {:item (recipe/item-id :soul_sand) :count 207}})]
+        (is (some? (stairs/filler sand 16)) "it is the last resort filler")
+        (is (not (fortress/bridge-over-void? sand [0 64 0] [1 0 0])))
+        (is (not (fortress/bridge? sand [0 64 0] [1 0 0] true)))))))
 
 (deftest a-tunnel-drops-an-unsafe-in-flight-step
   (let [from [0 64 0]
@@ -1375,3 +1458,21 @@
     (is (= (logs w2) (logs w3)) "the same stage again: no line, no change")
     (is (= #{"tunnel stage :choose 300ms" "tunnel stage [:dig :open] 1100ms"} (set (logs w4))))
     (is (= :choose (get-in w4 [:plan/intent :intent/stage-key])))))
+
+(deftest a-tunnel-lays-netherrack-and-keeps-cobblestone-for-the-seal
+  ;; blaze-race-v job 5: 64 cobblestone gone into floors on the way down with 160 netherrack held
+  (let [w (fn [& items]
+            (assoc (rock {})
+                   :player/inventory
+                   (into {}
+                         (map-indexed (fn [i [item n]] [i {:item (recipe/item-id item) :count n}]))
+                         (partition 2 items))))]
+    (is (= :netherrack (stairs/building-filler (w :cobblestone 64 :netherrack 160) 1))
+        "the start of v job 5's tunnel")
+    (is (= :cobblestone (stairs/building-filler (w :cobblestone 64) 1))
+        "no netherrack: cobblestone, above the reserve")
+    (is (= :cobblestone (stairs/building-filler (w :cobblestone 5) 1))
+        "below the reserve and nothing else: still laid, a tunnel is not stopped")
+    (is (= :cobblestone (stairs/filler (w :cobblestone 64 :netherrack 160) 1))
+        "seals and cover still take filler's cobblestone first")
+    (is (= :netherrack (fortress/walk-filler (w :cobblestone 64 :netherrack 160) [1 63 0])))))

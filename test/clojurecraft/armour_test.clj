@@ -140,12 +140,17 @@
     (is (plan/done-by (standing (merge (dissoc kit 2) {5 (item :iron_ingot 13)})) (row :armour))))
   (testing "the kit held: five spare make a helmet"
     (is (= :iron_helmet (armour/wanted (standing (merge kit {5 (item :iron_ingot 5)}))))))
-  (testing "a helmet held: eight more make a chestplate, seven do not"
+  (testing
+    "a helmet held: eight more make a chestplate; seven make the leggings (issue #262,
+            gear.clj: leggings are made now), and six make nothing"
     (is (= :iron_chestplate
            (armour/wanted (standing (merge kit
                                            {5 (item :iron_ingot 8) 39 (item :iron_helmet 1)})))))
+    (is (= :iron_leggings
+           (armour/wanted (standing (merge kit
+                                           {5 (item :iron_ingot 7) 39 (item :iron_helmet 1)})))))
     (is (nil? (armour/wanted (standing
-                              (merge kit {5 (item :iron_ingot 7) 39 (item :iron_helmet 1)}))))))
+                              (merge kit {5 (item :iron_ingot 6) 39 (item :iron_helmet 1)}))))))
   (testing "no table at hand: nothing is made, so the row never sends the bot after a tree"
     (is (nil? (armour/wanted (standing (merge (dissoc kit 4) {5 (item :iron_ingot 13)})))))))
 

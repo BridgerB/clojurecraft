@@ -15,6 +15,8 @@
 
 (def health-index 9)                  ; LivingEntity.DATA_HEALTH_ID, a float (probe run 38876275250)
 (def flags-index 0)                   ; Entity.DATA_SHARED_FLAGS_ID, a byte: 0x01 on fire, 0x02 crouching, 0x20 invisible
+(def living-flags-index 8)            ; LivingEntity.DATA_LIVING_ENTITY_FLAGS, a byte: 0x01 using an item (a shield raised, food eaten), 0x02 the offhand's
+(def using-item-bit 0x01)             ; in the living flags: the entity holds its use key
 (def item-index 8)                    ; ItemEntity.DATA_ITEM, an item stack: what a drop holds
 (def phase-index 16)                  ; EnderDragon.DATA_PHASE, an int: its EnderDragonPhase id (gym dragon-a's recording: 0 circling, 3 landing, 6 sitting)
 (def creepy-index 17)                 ; EnderMan.DATA_CREEPY, a boolean: it has a target (probe run 38876275250)

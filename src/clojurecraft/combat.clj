@@ -727,18 +727,59 @@
               (mapcat #(answering world (:goal/plan %))))
         (plan/in-play world plan/goals)))
 
+(def struck-ms 4000)                  ; ms a strike stays the answer to who is hitting: the gym's piglin hits came about a second apart
+
+(defn pack-neutral?
+  "Is e a zombified piglin? Hitting one angers the pack, so one that has struck is backed away
+   from and never swung at."
+  [e]
+  (= :zombified_piglin (entity/kind e)))
+
+(defn striker
+  "[eid entity] that last struck the bot, while the strike is fresher than struck-ms and the
+   entity is still there; nil otherwise. :player/attacker and :player/struck-at (ms; hurt-at is
+   the tick) come from a damage-event. A zombified piglin is not hostile until it hits (entity/hostile? wants
+   creepy?, which only an enderman sends), so the strike is the sign the pack is angry."
+  [world]
+  (let [id (:player/attacker world)
+        at (:player/struck-at world)
+        e (get-in world [:world/entities id])]
+    (when
+      (and (some? id) (some? at) e (not (entity/dead? e)) (<= (- (:time/now world 0) at) struck-ms))
+      [id e])))
+
+(def never-fought
+  "Kinds the :defend row never makes a fight of: a ghast hovers out of a sword's reach and burns
+   the bot with fireballs, so a fight on it is a walk after it. Blaze-race-c job 4 (3a082f7b7, real)
+   `burned to a crisp while fighting Ghast` after 172 minutes. Cover or moving on, not a fight."
+  #{:ghast})
+
+(def avoided
+  "Kinds the :defend row does not fight alone below full health, nor two of: a wither skeleton
+   hits for 5 and withers, and a fortress holds them in threes. Blaze-race-f (real, 6e703362a) race
+   row runs 2 and 3, the stone-sword kit, were slain at 2m42 and 2m52: :fight 82 at 14.9 health,
+   three hits of 5 from 82, 84 and 83 in 0.03 minutes."
+  #{:wither_skeleton})
+
+(def avoided-health 18.0) ; health a fight with one of avoided is begun at
+
 (defn threats
-  "{eid entity} of the hostiles (entity/hostiles) the :defend row answers: within defend-radius of
-   the feet, a creeper within creeper-radius, either less once shunned (reach); none the plan blacklisted (a ghost), none of a kind
-   a row in play answers itself (answered-kinds), only what can be fought from here
-   (hittable?) and come to (approachable?: a mob in water two blocks below is seen but never
-   strikable and no route reaches it, and a fight on it ends done at once, re-picked for the
-   whole stage, issues #69 and #62), and none given up as unreachable a while ago (given-up?).
-   None at all while the bot stands in the dragon's breath (breathed-on?)."
+  "{eid entity} of the hostiles (entity/hostiles) the :defend row answers, plus whoever last
+   struck (striker) while that strike is fresh: within defend-radius of the feet, a creeper
+   within creeper-radius, either less once shunned (reach); none the plan blacklisted (a ghost),
+   none of a kind a row in play answers itself (answered-kinds), only what can be fought from
+   here (hittable?) and come to (approachable?: a mob in water two blocks below is seen but
+   never strikable and no route reaches it, and a fight on it ends done at once, re-picked for
+   the whole stage, issues #69 and #62), and none given up as unreachable a while ago
+   (given-up?). A struck zombified piglin is not in entity/hostiles, and the strike is what
+   puts it here (gym blaze-wall-b, plan 40624888909). None at all while the bot stands in the
+   dragon's breath (breathed-on?)."
   [world]
   (let [pos (:player/pos world)
         bl (:plan/blacklist world #{})
         left (answered-kinds world)
+        [aid ae] (striker world)
+        pool (cond-> (entity/hostiles world) ae (assoc aid ae))
         pumpkin? (= :carved_pumpkin (armour/worn world 0))
         hurt? (and (:player/hurt-at world)
                    (<= (- (:time/tick world 0) (:player/hurt-at world)) 60))]
@@ -749,6 +790,7 @@
         (and (not (breathed-on? world))
              (not (contains? bl eid))
              (not= :ender_dragon (entity/kind e))
+             (not (contains? never-fought (entity/kind e)))
              (or (and (= eid (:player/attacker world)) (not (claimed-attacker? world e)))
                  (not (contains? left (entity/kind e))))
              (not (given-up? world eid e))
@@ -760,7 +802,7 @@
                  (reach world eid e (if (= :creeper (entity/kind e)) creeper-radius defend-radius)))
              (hittable? world e)
              (approachable? world e))))
-     (entity/hostiles world))))
+     pool)))
 
 (defmethod plan/done-by :safe? [world _] (or (nil? (:player/pos world)) (empty? (threats world))))
 
@@ -826,6 +868,21 @@
                (= :solid (path/classify world [fx (- fy 2) fz])))
       below)))
 
+(defn wall-failed?
+  "Did the last failed intent place a block in cell w? Blaze-race-u job 4 laid a wall cell with
+   nothing to set it against, `intent :place failed: :no-support` three times in 0.15 s between
+   back-offs, and the plan failed at 4 hp; the cover tries the next choice instead."
+  [world w]
+  (let [{:intent/keys [kind cell]} (:plan/failed world)]
+    (boolean (and w (= :place kind) (= w cell)))))
+
+(defn pillar-failed?
+  "Did the last failed intent raise a pillar? Blaze-race-w job 4 chose a :pillar for its cover three
+   times in 300 ms, each failed :boxed (attempt 3 of 3), at hp 3, beside a rod it had not taken; the
+   cover tries the next choice (the meal, the nook) instead."
+  [world]
+  (= :pillar (:intent/kind (:plan/failed world))))
+
 (defn cover
   "The intent for a bot under retreat-health that no back-off from entity e would help
    (back-off-pointless?), never a fight (#577, danger-health): with e back-off-to or more away, the
@@ -840,18 +897,16 @@
   [world e]
   (let [food (when (< (:player/food world 20) 20) (eat/food-held world))
         near? (<= (physics/distance (game/eye world) (aim e)) attack-reach)
-        wall (wall-cell world e)
+        wall (let [w (wall-cell world e)] (when-not (wall-failed? world w) w))
         filler (stairs/filler world wall-fill)
+        pillar (when-not (pillar-failed? world) (stairs/filler world pillar-fill))
         nook (nook-cell world)
         [_ fy _] (intent/feet world)]
     (cond (>= (horizontal world e) back-off-to)
           (if food {:intent/kind :eat :intent/item food} {:plan/wait :resting})
           (and food (not near?)) {:intent/kind :eat :intent/item food}
           (and wall filler) {:intent/kind :place :intent/item filler :intent/cell wall}
-          (stairs/filler world pillar-fill)
-          {:intent/kind :pillar
-           :intent/item (stairs/filler world pillar-fill)
-           :intent/top (+ fy pillar-height)}
+          pillar {:intent/kind :pillar :intent/item pillar :intent/top (+ fy pillar-height)}
           food {:intent/kind :eat :intent/item food}
           nook {:intent/kind :dig :intent/target nook}
           :else {:plan/wait :cornered})))
@@ -889,8 +944,11 @@
   ;; (#577 danger-health) it is backed away from, never fought on to death. What a back-off could not get away
   ;; from (:plan/cornered) is fought to the end too when healthy, else backed away from, unless
   ;; the back-off would end at once (back-off-pointless?) or e teleports and a cover is held
-  ;; (teleport-cover): then the cover (a meal, a block laid between, a pillar), never the fight
-  ;; under that line (#577).
+  ;; (teleport-cover): then the cover (a meal, a block laid
+  ;; between, a pillar), never the fight under that line (#577).
+  ;; A zombified piglin (pack-neutral?) is backed away from even at full health: the first swing
+  ;; angers the pack (gym blaze-wall-b run 1). A wither skeleton (avoided) is fought alone and at
+  ;; avoided-health or more only.
   [world _ _]
   (when-let [[eid e] (defend-target world (threats world))]
     (let [hurt? (< (:player/health world 20.0) (danger-line world))
@@ -898,7 +956,16 @@
       (cond
         (and (not= :creeper (entity/kind e)) hurt? (back-off-pointless? world e)) (cover world e)
         shelter shelter
-        (or (= :creeper (entity/kind e)) hurt?) {:intent/kind :back-off :intent/target eid}
+        (or (pack-neutral? e)
+            (= :creeper (entity/kind e))
+            hurt?
+            (and (contains? avoided (entity/kind e))
+                 (not (contains? (:plan/cornered world #{}) eid))
+                 (or (< (:player/health world 20.0) avoided-health)
+                     (< 1
+                        (count (filter #(contains? avoided (entity/kind %))
+                                       (vals (threats world))))))))
+        {:intent/kind :back-off :intent/target eid}
         (= :silverfish (entity/kind e)) {:intent/kind :fight :intent/target eid :intent/hold? true}
         (or (contains? entity/neutral (entity/kind e)) (contains? (:plan/cornered world #{}) eid))
         {:intent/kind :fight :intent/target eid :intent/to-the-end? true}

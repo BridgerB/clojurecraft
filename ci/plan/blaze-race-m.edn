@@ -1,0 +1,14 @@
+;; Issue #262: the race row, six runs (the geared row is dropped: its shield is gone), judged on
+;; fireball hits per kill and hp lost per kill (the bar: under 10), time alive and rods. The bot
+;; steps out of a fireball's line the tick it spawns (dodge.clj: the line is known from its
+;; position and velocity, 300 to 750 ms before it arrives; every hit of blaze-race-l race 2 passed
+;; within 1.4 blocks of the body), on top of leave-to-heal, fire-out walks and the sealed pocket.
+{:plans/label "blaze-race-m"
+ :plans/jobs 6
+ :plans/issue 262
+ :plans/experiments [{:exp/name "blaze-fortress-race"
+                      :exp/kind :gym
+                      :exp/goal "blaze-fortress-race"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 1800}]}

@@ -1,0 +1,13 @@
+;; Issue #262: the race row as the race bot arrives (one iron pickaxe, a crafting table, 8 sticks, 64
+;; cobblestone), on main with the table taken along (#628) and a spawner kept (#629). A worn-out
+;; pickaxe is remade as a stone one; one pocket ahead in five minutes, within 14 blocks of the spawner.
+;; Measure rods seen, picked up and despawned within reach first.
+{:plans/label "blaze-race-t"
+ :plans/jobs 6
+ :plans/issue 262
+ :plans/experiments [{:exp/name "blaze-fortress-race"
+                      :exp/kind :gym
+                      :exp/goal "blaze-fortress-race"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 1800}]}

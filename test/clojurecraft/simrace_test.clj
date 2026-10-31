@@ -33,6 +33,18 @@
                                                                                 [[4 y 8] oak-log]))
                                                                         {[4 68 8] oak-leaves}))}}))
 
+(deftest a-goal-newly-reached-is-traced
+  ;; the cost of the gear step is a number: the time :gear and :portal-kit were reached, and the
+  ;; Nether entered (:dimension), read off the TRACE lines
+  (let [base {:world/entities {} :player/pos [0.5 64.0 0.5] :player/inventory {}}
+        before (assoc base :time/now 1000 :plan/reached #{:portal-kit})
+        after (assoc base :time/now 1050 :plan/reached #{:portal-kit :gear})
+        note (simrace/trace-note before after "R1" 1)]
+    (is (= :reached (:what note)))
+    (is (= [:gear] (:reached note)))
+    (is (= 1050 (:t note)))
+    (is (nil? (simrace/trace-note after (assoc after :time/now 1100) "R1" 1)))))
+
 (deftest a-run-walks-into-the-next-column-for-its-log
   (let [r (simrace/run two-columns 1 "wood" 120000)]
     (is (:ok r) (pr-str (dissoc r :plan :stats)))

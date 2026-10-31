@@ -1,0 +1,13 @@
+;; Issue #262: the race row, six runs. From blaze-race-p job 4 (14 kills, rods held at most 3): the
+;; pocket is not wanted for the merely wary (it flipped with the pickup every 0.35 s), a hold that
+;; cannot heal lasts to 13 hp so the seal and unseal stop flipping at 12, a near rod is gone for from
+;; the hold, and a fight or pickup that failed on one target is no strike for any goal.
+{:plans/label "blaze-race-r"
+ :plans/jobs 6
+ :plans/issue 262
+ :plans/experiments [{:exp/name "blaze-fortress-race"
+                      :exp/kind :gym
+                      :exp/goal "blaze-fortress-race"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 1800}]}
