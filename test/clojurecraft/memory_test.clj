@@ -121,3 +121,20 @@
     (is (= [[32 64 0]] (mapv :intention/target (memory/newest-dones w :walk 1))))
     (is (= (:intention/target (memory/last-done w :walk)) [32 64 0]) "last-done is the first")
     (is (empty? (memory/newest-dones w :burrow 2)) "none done: none")))
+
+(deftest a-fortress-column-starts-a-bounded-number-of-records
+  ;; race 41237594157: bots landed at a fortress held 115,000 sightings a minute in and ran at 0.3 to
+  ;; 1 tick a second; a fortress chunk holds thousands of its bricks
+  (let [brick (blocks/default-state :nether_bricks)
+        fence (blocks/default-state :nether_brick_fence)
+        log (blocks/default-state :oak_log)
+        bricks (vec (for [i (range 3000)] [(mod i 16) (quot i 256) (mod (quot i 16) 16) brick]))
+        mixed (conj (vec (concat bricks [[1 2 3 fence]])) [4 5 6 log])
+        thin (memory/thin-bricks mixed)]
+    (is (<= (count (filter (fn [[_ _ _ id]] (not= id log)) thin)) memory/bricks-per-column)
+        "a fortress column: at most bricks-per-column of its cells")
+    (is (some #{[4 5 6 log]} thin) "a log among them is kept")
+    (is (> (count (filter (fn [[_ _ _ id]] (= id brick)) thin)) 200)
+        "evenly spread, not one corner")
+    (let [few (vec (take 20 bricks))]
+      (is (= few (vec (memory/thin-bricks few))) "a column with few is unchanged"))))

@@ -323,6 +323,66 @@
   [[fx fz] i]
   (let [[dx dz] (nth pad-offsets (mod i (count pad-offsets)))] [(+ fx dx) (+ fz dz) gym/pad-y]))
 
+(def pad-radii
+  "How far from the fortress a pad may be, nearest first: the eight compass points at each."
+  [48 80 112])
+
+(def pad-compass [[-1 0] [1 0] [0 -1] [0 1] [-1 -1] [1 1] [-1 1] [1 -1]])
+
+(defn pad-candidates
+  "The pads [x z y] racer i may have at the fortress [fx fz], in the order they are tried: the eight
+   compass points at 48 blocks starting at point (i mod 8), then at 80, then at 112. The first is
+   pad-of."
+  [[fx fz] i]
+  (for [r pad-radii
+        k (range (count pad-compass))
+        :let [[dx dz] (nth pad-compass (mod (+ i k) (count pad-compass)))]]
+    [(+ fx (* r dx)) (+ fz (* r dz)) gym/pad-y]))
+
+(def brick-blocks ["minecraft:nether_bricks" "minecraft:nether_brick_fence"])
+
+(def brick-range 16)                  ; blocks round a pad in which no fortress block may stand: outside its body
+
+(defn brick-probes
+  "The cells [x y z] looked at for a fortress block round the pad [x z y]: five by five columns eight
+   apart (brick-range each side) at three heights eight apart, 75 cells."
+  [[x z y]]
+  (for [dx [-16 -8 0 8 16] dz [-16 -8 0 8 16] dy [-8 0 8]] [(+ x dx) (+ y dy) (+ z dz)]))
+
+(defn brick-test
+  "The RCON test that passes when the Nether's cell [x y z] holds block."
+  [[x y z] block]
+  (str "execute in minecraft:the_nether if block " x " " y " " z " " block))
+
+(def danger-mobs
+  "What a bot is not landed within mob-range of: a fortress's blaze, wither skeleton, the bastion's
+   brute, the forest's hoglin, the ghast."
+  ["minecraft:blaze" "minecraft:hoglin" "minecraft:wither_skeleton" "minecraft:piglin_brute"
+   "minecraft:ghast"])
+
+(def mob-range 32)
+
+(defn mob-test
+  "The RCON test that passes when a mob (an entity type) is within mob-range of the pad [x z y]."
+  [[x z y] mob]
+  (str "execute in minecraft:the_nether positioned "
+       x
+       " "
+       y
+       " "
+       z
+       " if entity @e[type="
+       mob
+       ",distance=.."
+       mob-range
+       "]"))
+
+(defn choose-pad
+  "The first of candidates for which (unsafe pad) is nil, else the first candidate: a pad is taken
+   outside the fortress's body and clear of mobs when one is, else the nearest as before."
+  [unsafe candidates]
+  (or (first (filter #(nil? (unsafe %)) candidates)) (first candidates)))
+
 (defn standing-on
   "[x y z], where a bot stands on the pad [x z y]: the middle of its cell (the order a :go/at
    has: gym/place! teleports to x.5 y z.5). Returned from the pad, never from a question to the
@@ -416,6 +476,68 @@
                                    (gym/in-dimension dimension/nether
                                                      (str "forceload remove " where))))))))
 
+(defn with-loaded
+  "Call (f) with the Nether's square [x0 z0 x1 z1] forceloaded and waited for (best effort, 30 s),
+   and released after, even when f throws: a test of a block or an entity only sees a loaded chunk."
+  [rc square f]
+  (let [where (str/join " " square)]
+    (rcon/command! rc (gym/in-dimension dimension/nether (str "forceload add " where)))
+    (try (gym/wait-loaded-in! rc dimension/nether square)
+         (f)
+         (finally
+          (rcon/command! rc (gym/in-dimension dimension/nether (str "forceload remove " where)))))))
+
+(defn mobs-near?
+  "Is a danger-mob within mob-range of the pad [x z y] now? The chunks round it are loaded for the
+   question."
+  [rc [x z _ :as pad]]
+  (with-loaded
+   rc
+   [(- x 40) (- z 40) (+ x 40) (+ z 40)]
+   (fn [] (boolean (some #(fixture/passed? (rcon/command! rc (mob-test pad %))) danger-mobs)))))
+
+(defn bricks-near?
+  "Is a fortress block within brick-range of the pad [x z y]? (brick-probes, brick-blocks), the
+   chunks round it loaded for the question."
+  [rc [x z _ :as pad]]
+  (with-loaded rc
+               [(- x 24) (- z 24) (+ x 24) (+ z 24)]
+               (fn []
+                 (boolean (some (fn [cell]
+                                  (some #(fixture/passed? (rcon/command! rc (brick-test cell %)))
+                                        brick-blocks))
+                                (brick-probes pad))))))
+
+(defn pad-unsafe
+  "Why the pad is no landing, :bricks (inside the fortress's body) or :mobs (a danger-mob near), or
+   nil. Race 41224855928 and 41229255270: the first deaths of the bots at the fortress came 14 to
+   27 s after landing, blazes, hoglins and a wither skeleton."
+  [rc pad]
+  (cond (bricks-near? rc pad) :bricks
+        (mobs-near? rc pad) :mobs))
+
+(def pads-chosen
+  "The pad each slot lands on, {slot [x z y]} (an atom), chosen by prepare! before any bot joins."
+  (atom {}))
+
+(defn choose-pad!
+  "Choose racer k's pad at the fortress [fx fz] (choose-pad over pad-candidates, minus exclude), build
+   it (build-pad!), remember it (pads-chosen) and log it with its distance to the fortress."
+  [rc [fx fz :as fortress] k exclude]
+  (let [pad (choose-pad (fn [p]
+                          (let [why (pad-unsafe rc p)]
+                            (when why (cli/log "pad" k p "unsafe:" why))
+                            why))
+                        (remove (set exclude) (pad-candidates fortress k)))]
+    (build-pad! rc pad)
+    (swap! pads-chosen assoc k pad)
+    (cli/log "pad" k
+             "chosen" pad
+             "fortress" fortress
+             "distance"
+             (long (math/hypot (double (- (first pad) fx)) (double (- (second pad) fz)))))
+    pad))
+
 (defn prepare!
   "Before any bot joins: locate the fortresses and build the pads for the first bots' landings
    (racers 0 to n - 1), one at a time on one RCON session, so the searches and the Nether's
@@ -431,7 +553,7 @@
             (let [t0 (System/currentTimeMillis)]
               (doseq [i (range n)]
                 (let [landing (landing-of landings (or landing-offset 0) i)]
-                  (build-pad! rc (pad-of (locate-fortress! rc landing) i))))
+                  (choose-pad! rc (locate-fortress! rc landing) i nil)))
               (cli/log "prepared" n "pads in" (quot (- (System/currentTimeMillis) t0) 1000) "s"))))
          (catch Exception e (cli/log "prepare failed:" e)))))
 
@@ -443,7 +565,9 @@
    :race/kit). Returns where it stands ([x y z], standing-on the pad), or nil when the dimension
    never came; a landing that cannot locate a fortress throws."
   [rc name landing i kit]
-  (let [pad (pad-of (locate-fortress! rc landing) i)]
+  (let [fortress (locate-fortress! rc landing)
+        pad (or (get @pads-chosen i) (choose-pad! rc fortress i nil))
+        pad (if (mobs-near? rc pad) (choose-pad! rc fortress i [pad]) pad)]
     (build-pad! rc pad)
     (cli/log "tp:" (rcon/command! rc (tp-command name pad)))
     (when (gym/wait-in! rc name dimension/nether)
@@ -593,7 +717,7 @@
 
 (defn death-class
   "The class of a server death line (\"Clj_r23 was slain by Blaze\"), a keyword: :blaze, :enderman,
-   :piglin (a piglin, zombified or brute), :ghast, :lava, :fire, :fall, else :other (also a nil
+   :piglin (a piglin, zombified or brute), :hoglin, :wither (a wither skeleton), :ghast, :lava, :fire, :fall, else :other (also a nil
    line). The mob is asked first: \"burned to a crisp while fighting Blaze\" is a blaze's, not
    fire's. A death at a stage is filed by its class, so a blaze's and a lava's get different
    issues and owners."
@@ -603,6 +727,8 @@
       #"Blaze" :blaze
       #"Enderman" :enderman
       #"Piglin" :piglin
+      #"Hoglin" :hoglin
+      #"Wither Skeleton" :wither
       #"Ghast" :ghast
       #"lava" :lava
       #"burned|fire|flames" :fire
