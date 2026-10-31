@@ -1375,6 +1375,9 @@
   ;; stuck bots dug by hand)
   [world goal table]
   (let [in-pocket? (pocket/in? world)
+        ;; a camp in the pocket that no blaze comes to (idle?: three camps done in ten minutes and
+        ;; no fight) is left for the spawner's room, as the nook was
+        camping-in-pocket? (and in-pocket? (not (idle? world)))
         [heid] (fightable-blaze world)
         [beid] (when-not in-pocket? (quarry world))
         [_ lying] (when (collectable? world) (rod-lying world))
@@ -1424,14 +1427,14 @@
       (and (or (nil? sp) (not (at-spawner? world sp))) @pick) @pick
       @table-along @table-along
       @prepare @prepare
-      (and sp (not in-pocket?) (not (at-spawner? world sp)) (not (at-nook? world sp)))
+      (and sp (not camping-in-pocket?) (not (at-spawner? world sp)) (not (at-nook? world sp)))
       (to-spawner world sp)
       (and sp
-           (or in-pocket? (at-spawner? world sp) (at-nook? world sp))
+           (or camping-in-pocket? (at-spawner? world sp) (at-nook? world sp))
            (not (hurt? world))
            (not (:player/on-fire? world)))
       (or
-       (pocket-go world sp true)
+       (when-not (idle? world) (pocket-go world sp true))
        (when-let [n (and (not in-pocket?) (not (at-nook? world sp)) (nook world sp))]
          {:intent/kind :walk :intent/target n :intent/for :nook :intent/max-nodes corridor-nodes})
        {:intent/kind :camp :intent/spawner sp})

@@ -1612,3 +1612,25 @@
         "the pickaxe made, the placed table within reach is dug before the tunnel goes on")
     (is (not= :take-table (:intent/for (next-intent (assoc-in w [:player/inventory 2] table))))
         "a table held already: on to the spawner")))
+
+(deftest a-camp-in-the-pocket-that-no-blaze-comes-to-is-left-for-the-room
+  ;; blaze-race-t job 3: alive 54 min, :camp 39m48s and :ambush 10m31s at [2338 60 2291] with six to
+  ;; eight blazes hovering 9.4 to 10 blocks off the whole time and one attack sent: idle? was true
+  ;; but the pocket was camped in regardless (the nook was left, the pocket was not)
+  (let [camp (fn [w n] (memory/remember-intention w {:intent/id n :intent/kind :camp} :done))
+        base (-> (standing {})
+                 in-pocket
+                 with-spawner
+                 (assoc :time/now 100000))
+        idle (-> base
+                 (camp 1)
+                 (camp 2)
+                 (camp 3))]
+    (is (not (blaze/idle? base)))
+    (is (= :camp (:intent/kind (next-intent base))) "fresh: camped in the pocket")
+    (is (blaze/idle? idle))
+    (is (not= :camp (:intent/kind (next-intent idle))) "idle: out of the pocket toward the spawner")
+    (is (contains? #{:walk :tunnel-to} (:intent/kind (next-intent idle))))
+    (testing "after a fight the pocket is camped again"
+      (let [fought (memory/remember-intention idle {:intent/id 4 :intent/kind :fight} :done)]
+        (is (= :camp (:intent/kind (next-intent fought))))))))
