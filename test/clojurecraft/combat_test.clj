@@ -855,3 +855,26 @@
               (:intent/status (:plan/intent (ran
                                              (assoc-in hurt [:plan/intent :intent/hold?] true)))))
         "held from a burrow it is not ended")))
+
+(deftest a-fight-with-an-enderman-breaks-off-at-the-teleporter-line-not-the-danger-line
+  ;; pearl-fight-m: the first hit 20 to 14.3, the second 14.3 to 8.5, the third 8.5 to 2.8, 1.8 s
+  ;; apart. Breaking off at 10 left one hit's time for the cover; at 15 it has two
+  (let [angry (assoc (mob :enderman [9.5 64.0 8.5] 40.0) :entity/creepy? true)
+        kit {0 (item :stone_pickaxe 1) 2 (item :cooked_beef 4)}
+        at (fn [hp]
+             (assoc (standing {7 angry})
+                    :plan/goals #{:dragon}
+                    :player/health hp
+                    :player/food 10
+                    :player/inventory kit))
+        defend (row :defend)]
+    (is (= 10.0 (combat/danger-line (at 14.3))) "the shared line is as it was")
+    (is (= 15.0 (combat/break-line (at 14.3) angry)) "one that teleports breaks off at 15")
+    (is (= :dig (:intent/kind (plan/next-intent (at 14.3) defend plan/goals)))
+        "after the first hit: the hole")
+    (is (= :fight (:intent/kind (plan/next-intent (at 16.0) defend plan/goals)))
+        "above the line: the fight goes on")
+    (let [zombie (mob :zombie [9.5 64.0 8.5] 20.0)]
+      (is (let [w (assoc (at 14.3) :world/entities {7 zombie})]
+            (= (combat/danger-line w) (combat/break-line w zombie)))
+          "any other kind keeps the danger line"))))

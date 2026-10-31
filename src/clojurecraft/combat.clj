@@ -469,6 +469,19 @@
    dragon-main-a run 1, plan run 41092662823, backed off from two at 9.3 health and was slain)."
   #{:enderman})
 
+(def teleporter-break-hp
+  "Health under which a fight with one of teleporters breaks off: its hit is 5.74 on iron helmet
+   and chestplate (7 bare) and lands about every 1.8 s (pearl-fight-m jobs 2, 3, 4 and 6: 20 to
+   14.3 to 8.5 to 2.8 to 0), so 15 is the line the first hit crosses and leaves the cover two
+   hits, three seconds, to dig the hole under the feet. The shared danger-line stays 10."
+  15.0)
+
+(defn break-line
+  "The health under which the bot breaks off a fight with entity e: danger-line, and for one of
+   teleporters at least teleporter-break-hp."
+  [world e]
+  (cond-> (danger-line world) (contains? teleporters (entity/kind e)) (max teleporter-break-hp)))
+
 (defmethod intent/run :fight
   ;; {:intent/kind :fight :intent/target eid}: done when the target is gone (a kill); below
   ;; retreat-health it breaks off and walks away (done once away: a fight left is not a failure).
@@ -498,7 +511,7 @@
               (and (contains? teleporters (entity/kind e))
                    (not (:intent/hold? i))
                    (not (:intent/to-the-end? i))
-                   (< (:player/health world 20.0) (danger-line world))))
+                   (< (:player/health world 20.0) (break-line world e))))
           (-> world
               (assoc :player/controls {})
               intent/done)
@@ -964,7 +977,7 @@
   ;; avoided-health or more only.
   [world _ _]
   (when-let [[eid e] (defend-target world (threats world))]
-    (let [hurt? (< (:player/health world 20.0) (danger-line world))
+    (let [hurt? (< (:player/health world 20.0) (break-line world e))
           shelter (when hurt? (teleport-cover world e))]
       (cond
         (and (not= :creeper (entity/kind e)) hurt? (back-off-pointless? world e)) (cover world e)
