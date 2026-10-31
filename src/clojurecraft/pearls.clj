@@ -1500,6 +1500,15 @@
   (boolean (some (fn [[_ e]] (and (= :ghast (entity/kind e)) (combat/seen? world e)))
                  (swarm world))))
 
+(def shot-hold-ms 10000)                ; ms after a ghast was last in sight that no walk goes elsewhere
+
+(defn recently-shot?
+  "Was a ghast in sight (:pearls/shot-at-ms, shot-at?) less than shot-hold-ms ago? Pearls-fight-c job 1
+   (plan run 41155212096, issue #263) died to a ghast in 1m48: a hide walk and a travel walk
+   alternated every second, 23 swings in 5.6 s, each undoing the other, 13 hits and no cover."
+  [world]
+  (let [t (:pearls/shot-at-ms world)] (boolean (and t (< (- (:time/now world 0) t) shot-hold-ms)))))
+
 (defn swarmed?
   "Are two or more monsters within their reach (swarm), a ghast in sight (shot-at?), or one monster
    while health is under danger-health? A lone one over that health is met by the fight rules (a
@@ -1919,15 +1928,20 @@
         mouth-walk (delay (shelter-walk world mouth))
         travel-walk (delay (when (and (not hurt?)
                                       (not swarmed?)
+                                      (not (recently-shot? world))
                                       (not (menaced? world))
                                       (empty? (endermen world seek-radius)))
                              (travel world)))
-        wander-walk
-        (delay (when (and (not hurt?) (not swarmed?) (not (live-menaced? world)) (wandering? world))
-                 (wander world)))
+        wander-walk (delay (when (and (not hurt?)
+                                      (not swarmed?)
+                                      (not (live-menaced? world))
+                                      (not (recently-shot? world))
+                                      (wandering? world))
+                             (wander world)))
         cage-break (delay (when (and (not hurt?)
                                      (not swarmed?)
                                      (not (live-menaced? world))
+                                     (not (recently-shot? world))
                                      (or (wandering? world) (travel-caged? world)))
                             (or (climb-out world) (dig-out world))))
         csite-walk (delay (shelter-walk world csite))
@@ -2073,7 +2087,8 @@
   [world _]
   (let [look (:control/look (:player/controls world))
         home (:pearls/shelter world)
-        world (track-angry (uncovered-log world))]
+        world (cond-> (track-angry (uncovered-log world))
+                (shot-at? world) (assoc :pearls/shot-at-ms (:time/now world 0)))]
     (cond (or (nil? look)
               (= :provoke (:intent/kind (:plan/intent world)))
               (and home (= home (intent/feet world))))

@@ -2696,3 +2696,20 @@
     (is (= :stairs-up (:intent/kind (plan/next-intent sealed row plan/goals))))
     (testing "the overworld has no such search"
       (is (not (pearls/travel-caged? (assoc sealed :player/dimension "minecraft:overworld")))))))
+
+(deftest a-walk-to-cover-and-a-walk-away-do-not-alternate
+  ;; pearls-fight-c job 1 (plan run 41155212096, issue #263): walk [2474 100 2232] (a cell beside the
+  ;; feet) and walk [2466 73 2292] (far) alternated every second, 23 swings in 5.6 s, a ghast shooting,
+  ;; 13 hits, dead at 1m48
+  (let [base (-> (wide (standing {}))
+                 (assoc :player/dimension nether
+                        :player/inventory {0 (item :iron_sword 1) 1 (item :iron_pickaxe 1)}
+                        :time/now 8000))
+        far? #(= [:walk :pearls]
+                 ((juxt :intent/kind :intent/for) (plan/next-intent % row plan/goals)))]
+    (is (far? base) "nothing in sight: travels, as before")
+    (is (not (far? (assoc base :pearls/shot-at-ms 5000)))
+        "shot at three seconds ago: stays where it is")
+    (is (far? (assoc base :pearls/shot-at-ms 5000 :time/now 16000)) "eleven seconds on: travels")
+    (is (pearls/recently-shot? (assoc base :pearls/shot-at-ms 5000)))
+    (is (not (pearls/recently-shot? base)))))

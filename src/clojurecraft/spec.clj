@@ -183,6 +183,7 @@
 (s/def :world/dragon-dead? boolean?)
 (s/def :world/boss-bars (s/coll-of uuid? :kind set?))
 (s/def :pearls/shelter ::block-pos)
+(s/def :pearls/shot-at-ms int?)
 (s/def :angry/since int?)
 (s/def :angry/best number?)
 (s/def :angry/closed-at int?)
