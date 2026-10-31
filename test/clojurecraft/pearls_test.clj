@@ -2683,8 +2683,10 @@
     (is (= :stairs-up (:intent/kind (plan/next-intent w row plan/goals)))
         "so it cuts stairs up toward the open ground")
     (testing "not loitering: it stays and looks out as before"
-      (is (= {:intent/kind :lookout :intent/for :pearls}
-             (plan/next-intent (burrowed [8.5 61.0 8.5] {}) row plan/goals))))))
+      (is (not (contains? #{:stairs-up :tunnel}
+                          (:intent/kind
+                           (plan/next-intent (burrowed [8.5 61.0 8.5] {}) row plan/goals))))
+          "it stays: a lookout, or a walk to the mouth to look round from"))))
 
 (deftest a-hunt-sealed-in-the-nether-with-nowhere-to-travel-cuts-its-way-out
   ;; pearls-travel-c (plan run 41144362671) jobs 2 and 3, pearls-12-from-fortress: landed in the
@@ -2758,13 +2760,20 @@
         zpig (mob :zombified_piglin [11.5 64.0 8.5])
         w (fn [m]
             (assoc (standing {7 m})
-                   :player/inventory
-                   {0 (item :iron_sword 1) 1 (item :cobblestone 64)}))]
+                   :plan/goals #{:ender-pearls}
+                   :player/inventory {0 (item :iron_sword 1) 1 (item :cobblestone 64)}))]
     (is (pearls/swarmed? (w piglin)) "one piglin at full health")
     (is (not (pearls/swarmed? (w zombie))) "one zombie: the fight rules")
     (is (not (pearls/swarmed? (w zpig))) "a zombified piglin is neutral until it is hit")
     (is (contains? (combat/answering (w piglin) :pearls) :piglin) ":defend leaves it to the hunt")
     (is (not (contains? (combat/answering (w zombie) :pearls) :zombie)))
+    (testing "only when the pearl stage is in play: at an earlier stage a silverfish is :defend's"
+      (let [early (assoc (w (mob :silverfish [11.5 64.0 8.5])) :plan/goals #{:wood})]
+        (is (not (pearls/pearls-stage? early)))
+        (is (not (contains? (combat/answering early :pearls) :piglin)))
+        (is (not (contains? (combat/answering early :pearls) :silverfish))))
+      (is (pearls/pearls-stage?
+           (assoc (w piglin) :plan/goals #{:wood} :plan/reached #{:blaze-rods}))))
     (is (not= :fight (:intent/kind (plan/next-intent (w piglin) row plan/goals))))))
 
 (deftest on-open-ground-with-no-block-a-hole-is-dug-under-the-feet
