@@ -5,17 +5,21 @@
    the latest frame; the page polls the frame and fetches a column again when its version moves.
    Nothing in game, plan or intent knows this namespace exists, and it never writes the atom.
 
-   The textures are the game's own, read from the client jar on this machine (--viewer-jar,
-   Prism's 26.1.2 by default) into cache/viewer/, which git ignores: no Mojang asset is in the
-   repository. A block is drawn from its first blockstate variant's model, cut down to a box with
-   a texture a face, a cross (plants) or a liquid; that is enough to tell stone from ore from
-   water, and the page does the rest (resources/clojurecraft/viewer/index.html, three.js)."
+   The page draws with steve's renderer (typecraft's viewer: the vanilla block models and
+   blockstates, a texture atlas, biome tints, ambient occlusion, sky and fog), vendored as
+   resources/clojurecraft/viewer/web/ and fed what it was fed in steve: an assets message and
+   chunk columns in the network format (column-bytes). The assets are the game's own, read from
+   the client jar on this machine (--viewer-jar, Prism's 26.1.2 by default) at start, and the
+   few files the page fetches by name are extracted to cache/viewer/, which git ignores: no
+   Mojang asset is in the repository."
   (:require [clojure.core.async :as async]
             [clojure.data.json :as json]
+            [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.math :as math]
             [clojure.string :as str]
             [clojurecraft.blocks :as blocks]
+            [clojurecraft.bytes :as b]
             [clojurecraft.chunk :as chunk]
             [clojurecraft.cli :as cli]
             [clojurecraft.entity :as entity]
@@ -25,19 +29,23 @@
 
 (set! *warn-on-reflection* true)
 
-(def radius 3)                        ; chunk columns each side of the bot's: 7x7, about 48 blocks round it
+(def radius 6)                        ; chunk columns each side of the bot's: 13x13, about 100 blocks round it
 (def entity-range 64.0)               ; blocks from the bot an entity is shown within
 (def frame-every-ms 100)              ; the frame thread's rest between two frames: ten a second at most
+(def direct-bits 15)                  ; bits a cell in a section with more than 256 states: the server's global palette
+(def plains 0)                        ; the one biome id the page is sent: the bot keeps no biomes
 
-(def tints
-  "The colour a tinted face is drawn in, by what it is: the game's plains grass and foliage, its
-   two fixed leaf colours, and its default water. A biome's own colour is not known to the bot."
-  {:grass "#79c05a" :foliage "#59ae30" :birch "#80a755" :spruce "#619961" :water "#3f76e4"})
+(def block-states
+  "{block-name [[property [value ...]] ...]}: the generated report order, last property fastest."
+  (edn/read-string (slurp (io/resource "clojurecraft/block-states.edn"))))
 
 (def cutout
-  "Name parts of blocks that have holes or show what is behind them: a face next to one is drawn."
-  ["leaves" "glass" "ice" "_door" "trapdoor" "spawner" "grate" "cobweb" "bars" "scaffolding"
-   "mangrove_roots" "slime" "honey_block"])
+  "Blocks whose full cube shows what is behind it (holes, translucency): a neighbour's face shows."
+  #"leaves|glass|^ice$|frosted_ice|spawner|grate|slime_block|honey_block|^mangrove_roots$|barrier")
+
+(def tint-defaults
+  "The renderer's tints for what no biome names: steve's, the game's plains grass and water."
+  {:grassDefault [0.48 0.74 0.31] :foliageDefault [0.48 0.74 0.31] :waterDefault [0.25 0.29 0.98]})
 
 ;; ---------------------------------------------------------------- the game's models, as data
 
@@ -63,27 +71,41 @@
                (some-> (get assets (str "models/" id))
                        (assoc "id" id))))))
 
+(defn plain-textures
+  "A model with every texture variable a plain reference: 26.x writes some as
+   {\"sprite\" ref \"force_translucent\" true} (glass, panes, redstone dust), which steve's
+   renderer, made against older models, reads as a string."
+  [model]
+  (cond-> model
+    (map? (get model "textures"))
+    (update "textures"
+            #(into {}
+                   (map (fn [[k v]] [k
+                                     (cond (map? v) (get v "sprite")
+                                           :else v)]))
+                   %))))
+
 (defn textures-of
-  "The texture variables of a model chain, a child's over its parent's."
+  "The texture variables of a model chain, a child's over its parent's, as plain references."
   [chain]
-  (reduce (fn [m model] (merge (get model "textures") m)) {} chain))
+  (reduce (fn [m model] (merge (get (plain-textures model) "textures") m)) {} chain))
 
 (defn resolve-texture
   "The texture a reference names (\"#side\" through textures, at most 8 hops), as \"block/x\"; nil
    when it names none."
   [textures ref]
-  (->> ref
-       (iterate #(when (and (string? %) (str/starts-with? % "#")) (get textures (subs % 1))))
-       (take 9)
-       (take-while some?)
-       (remove #(str/starts-with? % "#"))
-       first
-       (#(some-> %
-                 short-id))))
+  (some->> ref
+           (iterate #(when (and (string? %) (str/starts-with? % "#")) (get textures (subs % 1))))
+           (take 9)
+           (take-while some?)
+           (remove #(str/starts-with? % "#"))
+           first
+           short-id))
 
 (defn first-model
-  "The model id a block name is drawn from: its blockstate's \"\" or \"axis=y\" variant, else
-   the first by key, else the first multipart's; the first of a weighted list. Nil without one."
+  "The model id a block name is drawn from by default: its blockstate's \"\" or \"axis=y\" variant,
+   else the first by key, else the first multipart's; the first of a weighted list. Nil without
+   one."
   [assets block-name]
   (let [{:strs [variants multipart]} (get assets (str "blockstates/" block-name))
         pick (fn [v]
@@ -96,81 +118,101 @@
             (get "model")
             short-id)))
 
-(defn tint-of
-  "The tint colour a block's tinted faces take (tints)."
-  [block-name]
-  (cond (= "water" block-name) (:water tints)
-        (str/starts-with? block-name "birch") (:birch tints)
-        (str/starts-with? block-name "spruce") (:spruce tints)
-        (or (str/includes? block-name "leaves") (str/includes? block-name "vine")) (:foliage tints)
-        :else (:grass tints)))
-
-(defn box-of
-  "The box [x0 y0 z0 x1 y1 z1], in blocks (0-1), that holds every element of a model."
-  [elements]
-  (let [froms (map #(get % "from") elements)
-        tos (map #(get % "to") elements)
-        lo (fn [i] (/ (double (apply min (map #(nth % i) froms))) 16.0))
-        hi (fn [i] (/ (double (apply max (map #(nth % i) tos))) 16.0))]
-    [(lo 0) (lo 1) (lo 2) (hi 0) (hi 1) (hi 2)]))
-
-(defn model-def
-  "How the page draws a block named block-name with model id: {:kind \"cross\" :tex t} for a
-   plant, {:kind \"cube\" :box b :faces {face texture} :tint {face colour} :opaque bool} for
-   anything with elements (the first element's faces over the box of them all), or
-   {:kind \"none\"} for a model with no elements (air, light, barrier)."
-  [assets block-name id]
-  (let [chain (model-chain assets id)
-        ids (map #(get % "id") chain)
-        textures (textures-of chain)
-        elements (some #(get % "elements") chain)
-        faces (get (first elements) "faces")
-        box (when (seq elements) (box-of elements))]
-    (cond (some #(str/ends-with? % "cross") ids)
-          (cond-> {:kind "cross" :tex (resolve-texture textures "#cross")}
-            (some #(str/includes? % "tinted") ids) (assoc :tint (tint-of block-name)))
-          (empty? elements) {:kind "none"}
-          :else
-          {:kind "cube"
-           :box box
-           :faces (into {} (for [[f v] faces] [f (resolve-texture textures (get v "texture"))]))
-           :tint (into {} (for [[f v] faces :when (get v "tintindex")] [f (tint-of block-name)]))
-           :opaque (and (= [0.0 0.0 0.0 1.0 1.0 1.0] box)
-                        (not-any? #(str/includes? block-name %) cutout))})))
-
-(defn render-def
-  "How the page draws the block named block-name (a string), from assets: air draws nothing,
-   water and lava are liquids of their still texture, anything else its model (model-def)."
+(defn opaque-cube?
+  "Does the block hide what is behind each face: its default model is only full cubes and it is
+   not one of the cutout blocks? The renderer culls a face against such a neighbour; a guess from
+   the models where steve's registry had a flag (11 of 1168 differ, none common)."
   [assets block-name]
-  (let [id (first-model assets block-name)]
-    (cond (contains? blocks/air-names (keyword block-name)) {:kind "none"}
-          (= "water" block-name) {:kind "liquid" :tex "block/water_still" :tint (tint-of "water")}
-          (= "lava" block-name) {:kind "liquid" :tex "block/lava_still"}
-          (nil? id) {:kind "none"}
-          :else (model-def assets block-name id))))
+  (let [elements (some #(get % "elements") (model-chain assets (first-model assets block-name)))]
+    (and (seq elements)
+         (every? #(and (= [0 0 0] (mapv long (get % "from")))
+                       (= [16 16 16] (mapv long (get % "to"))))
+                 elements)
+         (not (re-find cutout block-name)))))
+
+(defn registry-blocks
+  "The renderer's block registry: for every block, in state order, its name, whether it lets a
+   neighbour's face show (transparent), whether it collides (boundingBox), its first state id and
+   its properties (block-states), from which a state id's model variant is chosen."
+  [assets]
+  (vec (for [[n _ lo] blocks/table
+             :let [s (name n)]]
+         {:name s
+          :transparent (not (opaque-cube? assets s))
+          :boundingBox (cond (blocks/solid? lo) "block"
+                             :else "empty")
+          :minStateId lo
+          :states (mapv (fn [[p vs]] {:name p :values vs}) (get block-states n))})))
+
+(defn colour
+  "A \"#rrggbb\" or an int colour as the renderer's [r g b], each 0-1."
+  [c]
+  (let [v (cond (string? c) (Long/parseLong (subs c 1) 16)
+                :else (long c))]
+    (mapv #(/ (double (bit-and (bit-shift-right v %) 0xff)) 255.0) [16 8 0])))
+
+(defn redstone-tint
+  "The colour of redstone wire at power 0-15, as the game draws it."
+  [power]
+  (let [f (/ (double power) 15.0)]
+    (mapv #(max 0.0 (min 1.0 %))
+          [(+ (* f 0.6)
+              (cond (pos? f) 0.4
+                    :else 0.3)) (- (* f f 0.7) 0.5) (- (* f f 0.6) 0.7)])))
+
+(defn tints
+  "The renderer's tints: water and foliage colours by biome from the biome files (assets
+   \"biome/<name>\"), redstone by power, two constants, and the defaults."
+  [assets]
+  (let [by (fn [k]
+             (into (sorted-map)
+                   (for [[path j] assets
+                         :when (str/starts-with? path "biome/")
+                         :let [c (get-in j ["effects" k])]
+                         :when c]
+                     [(subs path 6) (colour c)])))]
+    (merge {:grass {}
+            :foliage (by "foliage_color")
+            :water (by "water_color")
+            :redstone (into (sorted-map) (for [p (range 16)] [(str p) (redstone-tint p)]))
+            :constant {"attached_stem" [0.9 0.9 0.1] "lily_pad" [0.135 0.522 0.18]}}
+           tint-defaults)))
+
+(defn assets-message
+  "The renderer's assets, as steve's server sent them: every blockstate and block model by name,
+   every block texture (textures: {name base64 png}), the tints, the block registry and the one
+   biome the columns name."
+  [assets textures]
+  (let [under (fn [prefix]
+                (into (sorted-map)
+                      (for [[path j] assets
+                            :when (str/starts-with? path prefix)]
+                        [(subs path (count prefix)) j])))]
+    {:type "assets"
+     :blockStates (under "blockstates/")
+     :blockModels (update-vals (under "models/block/") plain-textures)
+     :textureNames (vec (sort (keys textures)))
+     :textureData textures
+     :tints (tints assets)
+     :blocks (registry-blocks assets)
+     :biomes [{:id plains :name "plains"}]
+     :entityModels {}}))
 
 (defn item-model
   "The model id an item definition (assets \"items/<name>\") draws with: its first \"model\" string,
    found depth first through selects and conditions; nil without one."
   [assets item-name]
-  (->> (tree-seq coll? seq (get assets (str "items/" item-name)))
-       (some (fn [x] (when (and (map-entry? x) (= "model" (key x)) (string? (val x))) (val x))))
-       (#(some-> %
-                 short-id))))
+  (some->> (tree-seq coll? seq (get assets (str "items/" item-name)))
+           (some (fn [x] (when (and (map-entry? x) (= "model" (key x)) (string? (val x))) (val x))))
+           short-id))
 
 (defn icon-texture
-  "The texture an item's icon is: its flat model's layer0, or its block's cross or north face;
-   nil when the jar names none."
+  "The texture an item's icon is: its flat model's layer0, else its block model's particle
+   texture (a log's side, a table's front); nil when the jar names none."
   [assets item-name]
   (when-let [id (item-model assets item-name)]
-    (let [layer0 (resolve-texture (textures-of (model-chain assets id)) "#layer0")
-          d (model-def assets item-name id)]
-      (or layer0 (:tex d) (get-in d [:faces "north"]) (first (vals (:faces d)))))))
-
-(defn defs
-  "{block-name render-def} for every block the generated tables know."
-  [assets]
-  (into {} (for [[n] blocks/table :let [s (name n)]] [s (render-def assets s)])))
+    (let [t (textures-of (model-chain assets id))]
+      (or (resolve-texture t "#layer0") (resolve-texture t "#particle")))))
 
 (defn icons
   "{item-name texture} for every item whose icon the jar resolves."
@@ -229,16 +271,16 @@
             [(str x "," z) (str (System/identityHashCode col) "-" (hash (get overlay [x z])))]))))
 
 (defn entities-view
-  "The entities within entity-range of the bot: id, kind, position, yaw, health, hostile?, and a
-   dropped item's name."
+  "The entities within entity-range of the bot: id, kind, position, yaw in degrees, health,
+   hostile?, and a dropped item's name."
   [world]
   (let [[px py pz] (:player/pos world)]
     (vec (for [[id e] (:world/entities world)
                :let [[x y z :as pos] (:entity/pos e)]
                :when (and pos
-                          (<= (+ (Math/abs (double (- x px))) (Math/abs (double (- z pz))))
+                          (<= (+ (abs (- (double x) (double px))) (abs (- (double z) (double pz))))
                               (* 2 entity-range))
-                          (<= (Math/abs (double (- y py))) entity-range))]
+                          (<= (abs (- (double y) (double py))) entity-range))]
            (cond-> {:id id :kind (entity/kind e) :pos pos :hostile (entity/hostile? e)}
              (:entity/yaw e) (assoc :yaw (:entity/yaw e))
              (:entity/health e) (assoc :health (:entity/health e))
@@ -292,7 +334,7 @@
      :always (mapv (comp row :goal/id) (filter :goal/always? plan/targets))
      :radius radius}))
 
-;; ---------------------------------------------------------------- a column's blocks for the page
+;; ---------------------------------------------------------------- a column in the network format
 
 (defn section-ids
   "The 4096 state ids of section si of column key in world, in chunk order (y, then z, then x),
@@ -309,47 +351,78 @@
       (aset ids (chunk/block-index (- x (* 16 cx)) (- y y0) (- z (* 16 cz))) (long id)))
     ids))
 
-(defn encode-section
-  "One section for the page: {:y its lowest block y :palette [name ...] :w 1|2 :data base64}, each
-   cell its palette index in w bytes (little-endian), or nil when it is all air."
-  [y0 ^longs ids]
-  (let [names (mapv #(or (some-> (blocks/name-of %)
-                                 name)
-                         "air")
-                    ids)
-        palette (vec (distinct names))]
-    (when-not (every? #(contains? blocks/air-names (keyword %)) palette)
-      (let [index (zipmap palette (range))
-            w (cond (<= (count palette) 256) 1
-                    :else 2)
-            out (byte-array (* w 4096))]
-        (dotimes [i 4096]
-          (let [v (long (index (nth names i)))]
-            (aset out (* w i) (unchecked-byte v))
-            (when (= 2 w) (aset out (inc (* w i)) (unchecked-byte (bit-shift-right v 8))))))
-        {:y y0 :palette palette :w w :data (.encodeToString (java.util.Base64/getEncoder) out)}))))
+(defn bits-for
+  "Bits a cell of a section with n distinct states takes on the wire: 0 for one, 4 to 8 through a
+   palette, direct-bits past 256."
+  ^long [^long n]
+  (cond (= 1 n) 0
+        (<= n 256) (max 4 (long (math/ceil (/ (math/log n) (math/log 2)))))
+        :else direct-bits))
+
+(defn pack
+  "Cell values (each under 2^bits) packed into longs as the protocol packs them: 64/bits a long,
+   the first in the low bits, none straddling two longs."
+  ^longs [^long bits values]
+  (let [per (quot 64 bits)
+        out (long-array (long (math/ceil (/ 4096.0 per))))]
+    (reduce (fn [^long i ^long v]
+              (let [li (quot i per)]
+                (aset out li (bit-or (aget out li) (bit-shift-left v (* bits (rem i per)))))
+                (inc i)))
+            0
+            values)
+    out))
+
+(defn write-section!
+  "Write one section as level_chunk_with_light holds it in 26.1 (two counts, the block container
+   without an array length, a one-biome container) to o."
+  [o ^longs ids]
+  (let [palette (vec (distinct ids))
+        bits (bits-for (count palette))]
+    (b/write-i16 o (count (remove blocks/air? ids)))
+    (b/write-i16 o 0)
+    (b/write-u8 o bits)
+    (cond (zero? bits) (b/write-varint o (first palette))
+          (= direct-bits bits) (run! #(b/write-i64 o %) (pack bits ids))
+          :else
+          (let [index (zipmap palette (range))]
+            (b/write-varint o (count palette))
+            (run! #(b/write-varint o %) palette)
+            (run! #(b/write-i64 o %) (pack bits (map index ids)))))
+    (b/write-u8 o 0)
+    (b/write-varint o plains)))
+
+(defn column-bytes
+  "Column key of world as chunk data bytes: every section in order, the overlay applied; the
+   format the renderer's loadChunkColumn reads (no array lengths)."
+  [world key]
+  (let [col (get-in world [:world/chunks key])
+        overlay (get (overlay-by-column world) key)]
+    (b/with-out (fn [o]
+                  (dotimes [si (count (:sections col))]
+                    (write-section! o (section-ids world key si overlay)))))))
 
 (defn column-view
-  "Column key [cx cz] of world as the page draws it: {:x :z :sections [...]} with every section
-   that is not all air (encode-section), the overlay applied; nil when the column is not loaded."
+  "Column key [cx cz] of world for the page: {:x :z :minY :height :buf base64 column-bytes}; nil
+   when the column is not loaded."
   [world [cx cz :as key]]
   (when-let [col (get-in world [:world/chunks key])]
-    (let [overlay (get (overlay-by-column world) key)]
-      {:x cx
-       :z cz
-       :sections (into []
-                       (keep (fn [si]
-                               (encode-section (+ (chunk/column-min-y col) (* 16 si))
-                                               (section-ids world key si overlay))))
-                       (range (count (:sections col))))})))
+    {:x cx
+     :z cz
+     :minY (chunk/column-min-y col)
+     :height (* 16 (count (:sections col)))
+     :buf (.encodeToString (java.util.Base64/getEncoder) (column-bytes world key))}))
 
 (defn jar-entry-kind
   "What the viewer takes from a client jar entry name: :json for a blockstate, model or item
-   definition, :texture for a block or item texture, nil for the rest."
+   definition, :biome for a biome file, :block-texture for a block texture, :file for an item
+   texture or the player skin (served by name), nil for the rest."
   [n]
   (condp re-matches n
     #"assets/minecraft/(blockstates|models|items)/.*\.json" :json
-    #"assets/minecraft/textures/(block|item)/[^/]+\.png" :texture
+    #"data/minecraft/worldgen/biome/[^/]+\.json" :biome
+    #"assets/minecraft/textures/block/[^/]+\.png" :block-texture
+    #"assets/minecraft/textures/(item/[^/]+|entity/player/wide/steve)\.png" :file
     nil))
 
 ;;;; I/O: the jar, the frame thread, the HTTP server ;;;;
@@ -359,47 +432,59 @@
    (System/getProperty "user.home")
    "/Library/Application Support/PrismLauncher/libraries/com/mojang/minecraft/26.1.2/minecraft-26.1.2-client.jar"))
 
-(def cache-dir "cache/viewer/26.1.2") ; extracted textures; git ignores cache/
+(def cache-dir "cache/viewer/26.1.2") ; the files the page fetches by name; git ignores cache/
 
 (defn read-assets!
-  "Every blockstate, model and item definition in the jar, {\"models/block/dirt\" json}, and the
-   block and item textures extracted under cache-dir (once: a file already there is kept). Empty
-   when the jar is missing, logged: the page then draws untextured."
+  "From the client jar: [assets textures]: every blockstate, model, item definition and biome
+   file as {\"models/block/dirt\" json, \"biome/plains\" json}, and every block texture as {name
+   base64}; item textures and the player skin are extracted under cache-dir (once: a file
+   already there is kept). Both empty when the jar is missing, logged."
   [jar]
-  (cond (not (.exists (io/file jar)))
-        (do (cli/log "viewer: no client jar at" jar "- untextured") {})
+  (cond (not (.exists (io/file jar))) (do (cli/log "viewer: no client jar at" jar) [{} {}])
         :else
         (with-open [z (java.util.zip.ZipFile. ^String jar)]
-          (reduce (fn [m ^java.util.zip.ZipEntry e]
-                    (let [n (.getName e)
-                          rel (str/replace n #"^assets/minecraft/" "")]
-                      (case (jar-entry-kind n)
-                        :json
-                        (assoc m
-                               (str/replace rel #"\.json$" "")
-                               (with-open [r (io/reader (.getInputStream z e))] (json/read r)))
-                        :texture
-                        (let [f (io/file cache-dir rel)]
-                          (when-not (.exists f)
-                            (io/make-parents f)
-                            (with-open [in (.getInputStream z e)] (io/copy in f)))
-                          m)
-                        m)))
-                  {}
-                  (enumeration-seq (.entries z))))))
+          (reduce
+           (fn [[assets textures :as acc] ^java.util.zip.ZipEntry e]
+             (let [n (.getName e)
+                   read-json #(with-open [r (io/reader (.getInputStream z e))] (json/read r))
+                   stem (str/replace n #"^.*/([^/]+)\.[a-z]+$" "$1")]
+               (case (jar-entry-kind n)
+                 :json
+                 [(assoc assets (str/replace n #"^assets/minecraft/(.*)\.json$" "$1") (read-json))
+                  textures]
+                 :biome [(assoc assets (str "biome/" stem) (read-json)) textures]
+                 :block-texture
+                 [assets
+                  (assoc textures
+                         stem
+                         (with-open [in (.getInputStream z e)]
+                           (.encodeToString (java.util.Base64/getEncoder) (.readAllBytes in))))]
+                 :file
+                 (let [f (io/file cache-dir (str/replace n #"^assets/minecraft/" ""))]
+                   (when-not (.exists f)
+                     (io/make-parents f)
+                     (with-open [in (.getInputStream z e)] (io/copy in f)))
+                   acc)
+                 acc)))
+           [{} {}]
+           (enumeration-seq (.entries z))))))
 
 (defn respond!
-  "Answer ex with status, a content type and body bytes, never cached."
-  [^com.sun.net.httpserver.HttpExchange ex status ^String type ^bytes body]
+  "Answer ex with status, a content type and body bytes; cache says whether the browser may keep
+   it."
+  [^com.sun.net.httpserver.HttpExchange ex status ^String type ^bytes body cache]
   (.add (.getResponseHeaders ex) "Content-Type" type)
-  (.add (.getResponseHeaders ex) "Cache-Control" "no-store")
+  (.add (.getResponseHeaders ex)
+        "Cache-Control"
+        (cond cache "max-age=3600"
+              :else "no-store"))
   (.sendResponseHeaders ex status (alength body))
   (with-open [o (.getResponseBody ex)] (.write o body)))
 
 (defn json!
-  "Answer ex with x as JSON (plain)."
+  "Answer ex with x as JSON (plain), never cached."
   [ex x]
-  (respond! ex 200 "application/json" (.getBytes ^String (json/write-str (plain x)) "UTF-8")))
+  (respond! ex 200 "application/json" (.getBytes ^String (json/write-str (plain x)) "UTF-8") false))
 
 (defn query
   "The query string of ex as {name value}, values undecoded."
@@ -410,33 +495,38 @@
               :when v]
           [k v])))
 
+(defn resource!
+  "Answer ex with the resource at path under clojurecraft/viewer/, or 404."
+  [ex path type]
+  (let [r (io/resource (str "clojurecraft/viewer/" path))]
+    (cond r (respond! ex 200 type (with-open [in (io/input-stream r)] (.readAllBytes in)) false)
+          :else (respond! ex 404 "text/plain" (.getBytes "not found") false))))
+
 (defn route!
-  "Answer one request from the latest state (:world, :frame) and the static data: the page, the
-   frame, the meta, the block defs and icons, a column, a texture; 404 otherwise."
+  "Answer one request from the latest state (:world, :frame) and the static data: the page and
+   its scripts, the frame, the meta, the icons, the assets, a column, a cached texture; 404
+   otherwise."
   [^com.sun.net.httpserver.HttpExchange ex state static]
   (let [path (.getPath (.getRequestURI ex))
         {:keys [world frame]} @state]
-    (cond (= "/" path)
-          (respond! ex
-                    200
-                    "text/html; charset=utf-8"
-                    (.getBytes ^String (slurp (io/resource "clojurecraft/viewer/index.html"))
-                               "UTF-8"))
+    (cond (= "/" path) (resource! ex "index.html" "text/html; charset=utf-8")
+          (#{"/web/viewer.js" "/web/worker.js"} path) (resource! ex (subs path 1) "text/javascript")
           (= "/frame" path) (json! ex (or frame {}))
           (= "/meta" path) (json! ex (:meta static))
-          (= "/defs" path) (json! ex {:blocks (:defs static) :icons (:icons static)})
+          (= "/icons" path) (json! ex (:icons static))
+          (= "/assets.json" path) (respond! ex 200 "application/json" (:assets static) false)
           (= "/column" path)
           (let [{:strs [x z]} (query ex)]
             (json! ex
                    (or (some-> world
                                (column-view [(parse-long x) (parse-long z)]))
                        {})))
-          (re-matches #"/tex/(block|item)/[a-z0-9_]+\.png" path)
+          (re-matches #"/tex/(item/[a-z0-9_]+|entity/player/wide/steve)\.png" path)
           (let [f (io/file cache-dir "textures" (subs path 5))]
             (cond (.exists f)
-                  (respond! ex 200 "image/png" (java.nio.file.Files/readAllBytes (.toPath f)))
-                  :else (respond! ex 404 "text/plain" (.getBytes "no such texture"))))
-          :else (respond! ex 404 "text/plain" (.getBytes "not found")))))
+                  (respond! ex 200 "image/png" (java.nio.file.Files/readAllBytes (.toPath f)) true)
+                  :else (respond! ex 404 "text/plain" (.getBytes "no such texture") false)))
+          :else (respond! ex 404 "text/plain" (.getBytes "not found") false))))
 
 (defn serve!
   "Watch world* and serve the page on 127.0.0.1:port: the watch offers each new world to a
@@ -444,8 +534,11 @@
    at most every frame-every-ms, and HTTP threads answer from that. Returns {:close (fn [])}."
   ([world* port] (serve! world* port default-jar))
   ([world* port jar]
-   (let [assets (read-assets! jar)
-         static {:defs (defs assets) :icons (icons assets) :meta (meta-view)}
+   (let [[assets textures] (read-assets! jar)
+         static {:assets (.getBytes ^String (json/write-str (assets-message assets textures))
+                                    "UTF-8")
+                 :icons (icons assets)
+                 :meta (meta-view)}
          state (atom {})
          ch (async/chan (async/sliding-buffer 1))
          done (async/thread (loop []

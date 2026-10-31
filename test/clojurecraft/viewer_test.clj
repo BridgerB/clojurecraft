@@ -1,6 +1,8 @@
 (ns clojurecraft.viewer-test
   (:require [clojure.test :refer [deftest is testing]]
             [clojurecraft.blocks :as blocks]
+            [clojurecraft.bytes :as b]
+            [clojurecraft.chunk :as chunk]
             [clojurecraft.viewer :as viewer]
             [clojurecraft.world :as world]))
 
@@ -8,62 +10,73 @@
   "A few of the jar's files, as read-assets! keeps them."
   {"blockstates/oak_log" {"variants" {"axis=x" {"model" "minecraft:block/oak_log_horizontal"}
                                       "axis=y" {"model" "minecraft:block/oak_log"}}}
-   "blockstates/short_grass" {"variants" {"" {"model" "minecraft:block/short_grass"}}}
+   "blockstates/oak_leaves" {"variants" {"" {"model" "minecraft:block/oak_leaves"}}}
    "blockstates/oak_slab" {"variants" {"type=bottom" {"model" "minecraft:block/oak_slab"}}}
+   "blockstates/glass" {"variants" {"" {"model" "minecraft:block/glass"}}}
    "models/block/oak_log" {"parent" "minecraft:block/cube_column"
                            "textures" {"end" "minecraft:block/oak_log_top"
                                        "side" "minecraft:block/oak_log"}}
+   "models/block/oak_leaves" {"parent" "minecraft:block/cube_column"}
    "models/block/cube_column" {"parent" "block/cube"
-                               "textures" {"up" "#end" "down" "#end" "north" "#side"}}
+                               "textures" {"particle" "#side" "up" "#end" "north" "#side"}}
    "models/block/cube" {"elements" [{"from" [0 0 0]
                                      "to" [16 16 16]
                                      "faces" {"up" {"texture" "#up"}
-                                              "down" {"texture" "#down"}
                                               "north" {"texture" "#north"}}}]}
-   "models/block/short_grass" {"parent" "minecraft:block/tinted_cross"
-                               "textures" {"cross" "minecraft:block/short_grass"}}
-   "models/block/tinted_cross" {"elements" []}
-   "models/block/oak_slab" {"elements"
-                            [{"from" [0 0 0] "to" [16 8 16] "faces" {"up" {"texture" "#top"}}}]
-                            "textures" {"top" "minecraft:block/oak_planks"}}
+   "models/block/oak_slab" {"elements" [{"from" [0 0 0] "to" [16 8 16] "faces" {}}]}
+   "models/block/glass" {"parent" "block/cube"
+                         "textures" {"all" {"force_translucent" true
+                                            "sprite" "minecraft:block/glass"}}}
+   "items/oak_log" {"model" {"type" "minecraft:model" "model" "minecraft:block/oak_log"}}
    "items/stick" {"model" {"type" "minecraft:model" "model" "minecraft:item/stick"}}
    "models/item/stick" {"parent" "minecraft:item/generated"
-                        "textures" {"layer0" "minecraft:item/stick"}}})
+                        "textures" {"layer0" "minecraft:item/stick"}}
+   "biome/plains" {"effects" {"water_color" "#3f76e4"}}})
 
-(deftest a-block-is-drawn-from-its-first-model
-  (testing "a log: the upright variant, its textures through the parent's references"
-    (is (= {:kind "cube"
-            :box [0.0 0.0 0.0 1.0 1.0 1.0]
-            :faces {"up" "block/oak_log_top" "down" "block/oak_log_top" "north" "block/oak_log"}
-            :tint {}
-            :opaque true}
-           (viewer/render-def assets "oak_log"))))
-  (is (= {:kind "cross" :tex "block/short_grass" :tint (:grass viewer/tints)}
-         (viewer/render-def assets "short_grass"))
-      "a plant is a tinted cross")
-  (is (false? (:opaque (viewer/render-def assets "oak_slab"))) "half a block hides nothing")
-  (is (= {:kind "none"} (viewer/render-def assets "air")))
-  (is (= "liquid" (:kind (viewer/render-def assets "water"))))
-  (is (= "item/stick" (viewer/icon-texture assets "stick")) "a flat item is its layer0"))
+(deftest what-hides-a-neighbour
+  (is (viewer/opaque-cube? assets "oak_log") "a full cube through its parents")
+  (is (not (viewer/opaque-cube? assets "oak_leaves")) "leaves have holes")
+  (is (not (viewer/opaque-cube? assets "oak_slab")) "half a block hides nothing")
+  (is (not (viewer/opaque-cube? assets "air")) "no model, no faces"))
 
-(deftest a-column-is-its-blocks-with-the-overlay-over-them
+(deftest the-renderer-gets-steves-assets
+  (let [m (viewer/assets-message assets {"oak_log" "AAAA"})
+        log (first (filter #(= "oak_log" (:name %)) (:blocks m)))]
+    (is (= (count blocks/table) (count (:blocks m))) "every block, in state order")
+    (is (= {:name "axis" :values ["x" "y" "z"]} (first (:states log))) "a state's properties")
+    (is (false? (:transparent log)))
+    (is (= "block" (:boundingBox log)))
+    (is (= "minecraft:block/glass" (get-in m [:blockModels "glass" "textures" "all"]))
+        "26.x's sprite objects become plain references")
+    (is (= [(/ 0x3f 255.0) (/ 0x76 255.0) (/ 0xe4 255.0)] (get-in m [:tints :water "plains"])))
+    (is (= ["oak_log"] (:textureNames m)))))
+
+(deftest an-icon-is-the-items-own-texture-or-its-blocks
+  (is (= "item/stick" (viewer/icon-texture assets "stick")))
+  (is (= "block/oak_log" (viewer/icon-texture assets "oak_log")) "a block item: its particle"))
+
+(deftest a-column-goes-out-in-the-network-format
   (let [log (blocks/default-state :oak_log)
-        w {:world/chunks {[0 0] (world/column {[1 64 2] log})}
+        w {:world/chunks {[0 0] (world/column {[1 64 2] log [5 70 5] 9})}
            :world/blocks {[3 64 3] log [1 63 1] blocks/air}
            :player/pos [8.5 64.0 8.5]}
-        c (viewer/column-view w [0 0])
-        s (first (filter #(= 48 (:y %)) (:sections c)))
-        cells (.decode (java.util.Base64/getDecoder) ^String (:data s))
-        at (fn [lx ly lz] (get (:palette s) (aget cells (+ (* 256 ly) (* 16 lz) lx))))
-        top (first (filter #(= 64 (:y %)) (:sections c)))
-        top-cells (.decode (java.util.Base64/getDecoder) ^String (:data top))
-        top-at (fn [lx lz] (get (:palette top) (aget top-cells (+ (* 16 lz) lx))))]
-    (is (= "stone" (at 0 15 0)) "the floor")
-    (is (= "air" (at 1 15 1)) "the overlay's break is over the chunk's stone")
-    (is (= "oak_log" (top-at 1 2)) "the chunk's log")
-    (is (= "oak_log" (top-at 3 3)) "the overlay's log")
-    (is (not-any? #(= 80 (:y %)) (:sections c)) "an all-air section is left out")
+        back (chunk/decode (viewer/column-bytes w [0 0]))]
+    (testing "it reads back as the same blocks, the overlay applied"
+      (is (= log (chunk/block-at {[0 0] back} [1 64 2])))
+      (is (= log (chunk/block-at {[0 0] back} [3 64 3])))
+      (is (= blocks/air (chunk/block-at {[0 0] back} [1 63 1])))
+      (is (= 9 (chunk/block-at {[0 0] back} [5 70 5])))
+      (is (= 1 (chunk/block-at {[0 0] back} [0 0 0])) "the stone floor")
+      (is (= blocks/air (chunk/block-at {[0 0] back} [0 200 0]))))
+    (is (= {:x 0 :z 0 :minY -64 :height 384} (dissoc (viewer/column-view w [0 0]) :buf)))
     (is (nil? (viewer/column-view w [5 5])) "a column not loaded is nothing")))
+
+(deftest a-section-of-many-states-goes-out-direct
+  (let [ids (long-array (range 4096))
+        bytes (b/with-out #(viewer/write-section! % ids))
+        back (chunk/read-section (java.nio.ByteBuffer/wrap bytes))]
+    (is (= 15 (:bits back)))
+    (is (= [0 1 4095] (mapv #(chunk/section-get back %) [0 1 4095])))))
 
 (deftest the-frame-shows-what-the-world-holds
   (let [w {:bot/name "V"
