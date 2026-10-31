@@ -2100,3 +2100,22 @@
     (is (= 1 (:plan/unstuck w)) "past the grace it fires")
     (is (nil? (:plan/explore w)) "but plans no walk into it")
     (is (some? (:plan/avoid w)) "and asks rows to avoid the place")))
+
+;;; SAME-CHOICE: an intent is compared by the form it was planned in
+
+(deftest an-intent-that-gained-fields-running-is-the-same-choice
+  ;; blaze-race-z8 job 5 (run 41214675186): :place #5 gained :intent/target [2150 71 1756] once it ran;
+  ;; the row planned the same :place again (no target) and the cut saw two different intents: 97
+  ;; cuts and restarts in 14 s, 150 ms apart, the bot burning
+  (let [planned {:intent/kind :place :intent/item :cobblestone :intent/cell [2150 71 1756]}
+        w (plan/start-intent (world-state [0.5 64.0 0.5]) (assoc planned :intent/goal :blaze-rods))
+        running (assoc (:plan/intent w) :intent/target [2150 71 1756] :intent/stage :spot)]
+    (is (= (assoc planned :intent/goal :blaze-rods) (:intent/plan running))
+        "start-intent keeps the plan")
+    (is (plan/same-choice? running planned) "planned again: the same")
+    (is (not (plan/same-choice? running (assoc planned :intent/cell [2151 71 1756])))
+        "another cell: another intent")
+    (is (not (plan/same-choice? running (assoc planned :intent/item :netherrack))) "another item")
+    (is (plan/same-choice? {:intent/kind :walk :intent/target [1 2 3]}
+                           {:intent/kind :walk :intent/target [1 2 3]})
+        "an intent with no plan on record (old) is compared as before")))
