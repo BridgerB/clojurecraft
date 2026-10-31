@@ -34,6 +34,7 @@
   (:require [clojure.core.async :as async]
             [clojure.edn :as edn]
             [clojure.java.io :as io]
+            [clojure.math :as math]
             [clojure.string :as str]
             [clojurecraft.claims :as claims]
             [clojurecraft.cli :as cli]
@@ -310,20 +311,101 @@
   (try (rcon/with-rcon host rcon-port rcon-pass #(rcon/command! % "gamerule keep_inventory true"))
        (catch Exception e (cli/log "gamerule failed:" e))))
 
+(def pad-offsets
+  "Where, round a fortress, racer i's pad is: eight compass points 48 blocks off, so the bots of one
+   fortress (a landing set's 48 landings, 40 blocks apart in the Nether, find only two or three
+   fortresses) do not stand on one pad."
+  [[-48 0] [48 0] [0 -48] [0 48] [-48 -48] [48 48] [-48 48] [48 -48]])
+
+(defn pad-of
+  "The pad [x z y] of racer i (from 0) at the fortress located at [fx fz]: pad-offsets (i mod 8)
+   from it, at gym/pad-y."
+  [[fx fz] i]
+  (let [[dx dz] (nth pad-offsets (mod i (count pad-offsets)))] [(+ fx dx) (+ fz dz) gym/pad-y]))
+
+(defn standing-on
+  "[x y z], where a bot stands on the pad [x z y]: the middle of its cell (the order a :go/at
+   has: gym/place! teleports to x.5 y z.5). Returned from the pad, never from a question to the
+   server: a landing that read a position nil handed the planner the pad's own [x z y], which is
+   not a place, and 30 s later the run ended :no-landing (race 41219596455, Clj_r10 and r11)."
+  [[x z y]]
+  [(+ x 0.5) (double y) (+ z 0.5)])
+
+(def fortress-near 128)               ; Nether blocks within which a located fortress is the one for a landing: fortresses stand 400 or more apart, so one this near is the nearest
+
+(defn nearby-fortress
+  "The first of known ([fx fz] ...) within fortress-near blocks of the Nether point [nx nz], or nil."
+  [known [nx nz]]
+  (some (fn [[fx fz :as f]]
+          (when (<= (math/hypot (double (- fx nx)) (double (- fz nz))) fortress-near) f))
+        known))
+
+(def fortresses
+  "The fortresses located so far on this server, [[fx fz] ...] (an atom): a landing is given one
+   within fortress-near of it before the server is asked."
+  (atom []))
+
+(defn locate-fortress!
+  "The fortress for the landing [x z] (overworld coordinates; the Nether's are an eighth): one
+   already located within fortress-near (nearby-fortress), else the nearest as the server locates
+   it, remembered. A locate is a search in one tick of the server's thread, tens of seconds: asked
+   of fifteen bots at once it stopped the server's keepalives and every bot timed out (race
+   41218543330: 120 bots lost connection, `Can't keep up! Running 31317ms behind`)."
+  [rc [x z]]
+  (let [here [(quot x 8) (quot z 8)]]
+    (or (nearby-fortress @fortresses here)
+        (let [reply (rcon/command! rc
+                                   (str "execute in minecraft:the_nether positioned "
+                                        (first here)
+                                        " 64 "
+                                        (second here)
+                                        " run locate structure minecraft:fortress"))
+              at (or (fixture/parse-located reply)
+                     (throw (ex-info "no fortress located" {:reply reply})))]
+          (swap! fortresses conj at)
+          at))))
+
+(defn prelocate!
+  "Before any bot joins: locate the fortresses for the first bots' landings (racers 0 to n - 1),
+   one at a time on one RCON session, so the searches stall a server nobody is connected to. Then
+   every landing of those bots finds its fortress in the cache."
+  [{:keys [host rcon-port rcon-pass landings landing-offset]} n]
+  (when landings
+    (try (rcon/with-rcon host
+                         rcon-port
+                         rcon-pass
+                         (fn [rc]
+                           (doseq [i (range n)]
+                             (locate-fortress! rc (landing-of landings (or landing-offset 0) i)))))
+         (catch Exception e (cli/log "prelocate failed:" e)))))
+
 (defn land-fortress!
-  "Land the bot named name at the fortress of its landing (gym/land-fortress!: the fortress the
-   server locates from the landing's Nether coordinates, an open pad gym/fortress-pad-open 48
-   blocks west of it), wait for the server to say it stands in the Nether, clear its inventory
-   and give it kit (\"minecraft:iron_sword 1\" ...: what a race bot carries to the fortress,
-   ci/race.edn's :race/kit). Returns where it stands, or nil when the dimension never came; a
-   landing that cannot locate a fortress throws."
-  [rc name landing kit]
-  (let [at (gym/land-fortress! rc name landing gym/fortress-pad-open)]
+  "Land the bot named name (racer i) at the fortress of its landing: the open pad gym/fortress-pad-open
+   at pad-of the fortress the server locates, gym/place! building it and teleporting the bot in;
+   wait for the server to say it stands in the Nether, clear its inventory and give it kit
+   (\"minecraft:iron_sword 1\" ...: what a race bot carries to the fortress, ci/race.edn's
+   :race/kit). Returns where it stands ([x y z], standing-on the pad), or nil when the dimension
+   never came; a landing that cannot locate a fortress throws."
+  [rc name landing i kit]
+  (let [pad (pad-of (locate-fortress! rc landing) i)]
+    (gym/place! rc dimension/nether name pad 2 gym/fortress-pad-open)
     (when (gym/wait-in! rc name dimension/nether)
       (rcon/command! rc (str "clear " name))
       (doseq [item kit] (rcon/command! rc (str "give " name " " item)))
       (Thread/sleep (long fixture/settle-ms))
-      (or (fixture/position rc name) at))))
+      (standing-on pad))))
+
+(defn spawn-command
+  "The RCON command that pins bot name's spawn at the cell of at ([x y z]) in the dimension dim:
+   `execute in` it, because spawnpoint takes the dimension of the command's source, the server's
+   overworld: pinned without it, a bot that died at the fortress respawned in the overworld at
+   the Nether's coordinates (race 41219596455 onward)."
+  [name [x y z] dim]
+  (str "execute in " dim
+       " run spawnpoint " name
+       " " (long (math/floor (double x)))
+       " " (long (math/floor (double y)))
+       " " (long (math/floor (double z)))))
 
 (defn land-bot!
   "Land one bot, on a thread of its own with an RCON session of its own: wait for it to be
@@ -347,16 +429,15 @@
                              rc
                              name
                              (if landings (landing-of landings (or landing-offset 0) i) @centre)
+                             i
                              kit)
                             landings
                             (fixture/land-at! rc name (landing-of landings (or landing-offset 0) i))
                             :else (land! rc ch name @centre i)))]
              (when at
-               (rcon/command! rc
-                              (str "spawnpoint " name
-                                   " " (long (first at))
-                                   " " (long (second at))
-                                   " " (long (nth at 2)))))
+               (rcon/command!
+                rc
+                (spawn-command name at (if (fortress? from) dimension/nether dimension/overworld))))
              (cli/log name "landed at" at)
              (async/>!! queue
                         (cond-> {:event/kind :go :go/goals (from-goals from until) :go/chain? true}
@@ -603,6 +684,7 @@
              :deadline (+ t0 (run-ms config))}]
     (cli/log "race:" bots "slots to" until "seed" seed "for" (quot (run-ms config) 60000) "min")
     (set-gamerules! server)
+    (when (fortress? (:from server)) (prelocate! server bots))
     (board! server live done)
     (sampler! server where live record-dir done)
     (let [slots (mapv #(slot! ctx %) (range bots))
