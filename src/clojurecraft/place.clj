@@ -525,6 +525,14 @@
                                :intent/stage :niche
                                :intent/niche at
                                :intent/child (intent/child-dig at))
+          ;; the middle of the feet's cell is no place to step to when nothing is under it: the body
+          ;; clips the edge of the cell it is placing into only because that cell's floor is all it
+          ;; stands on (pearl-fight-n job 1, plan run 41229277566: nudged 0.7 blocks off a ledge into
+          ;; a lava lake, dead of the burn)
+          (and given
+               (inside-player? world at)
+               (not (path/floor? world (update (intent/feet world) 1 dec))))
+          (intent/fail world :no-support)
           (and given (inside-player? world at) (< nudges max-nudges)) (nudge-off world nudges)
           given (settle-at world at against face)
           at (intent/fail world :no-support)
