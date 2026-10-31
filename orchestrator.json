@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-31T02:15:25.360Z",
+  "at" : "2026-10-31T02:19:43.324Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -36,6 +36,11 @@
     "number" : 526,
     "title" : "Bot stops at blaze-rods: blocked",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 151,
+    "title" : "Bot stops at flint-and-steel: not-picked-up",
+    "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
     "number" : 622,
@@ -166,11 +171,6 @@
     "number" : 156,
     "title" : "Bot stops at portal-kit: stuck",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
-    "number" : 151,
-    "title" : "Bot stops at flint-and-steel: not-picked-up",
-    "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
     "number" : 135,
