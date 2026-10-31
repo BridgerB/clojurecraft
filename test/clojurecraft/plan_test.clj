@@ -2116,6 +2116,9 @@
     (is (= (assoc planned :intent/goal :blaze-rods) (:intent/plan running))
         "start-intent keeps the plan")
     (is (plan/same-choice? running planned) "planned again: the same")
+    (is (plan/same-choice? (assoc running :intent/plan {:intent/kind :place :intent/until 1000})
+                           {:intent/kind :place :intent/until 1150})
+        "a planned :place with :until 1000 against a fresh plan with :until 1150: the same choice")
     (is
      (plan/same-choice? running (assoc planned :intent/until 1793461559782))
      "a deadline that moves on is no other intent (z8 job 5: :until 1793461559332, then ...482, ...632)")

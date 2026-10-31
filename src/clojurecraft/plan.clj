@@ -748,10 +748,15 @@
           :else
           (assoc world :plan/waiting-since since :plan/waiting-ticks ticks :plan/waiting reason))))
 
-(def plan-noise
-  "The keys of a planned intent that do not make it another intent: the goal it serves and a
-   deadline (:intent/until, now plus a few seconds) that moves on every planning."
-  #{:intent/goal :intent/until})
+(def choice-keys
+  "The keys of a planned intent that make it this intent and not another: what it is (kind,
+   purpose), what it works on (item, recipe, target, cell) and how far (to-y). Everything else a
+   row plans is left out because it moves on every planning without making another choice: a
+   deadline (:intent/until, now plus a few seconds: blaze-race-z8 job 5, run 41214675186, planned
+   one :place with 1793461559332, then ...482, then ...632), the goal it serves, a start time. The
+   target of an intent whose executor sets one (a :place) is the planned one, nil, never the one
+   it has gained running."
+  [:intent/kind :intent/for :intent/item :intent/recipe :intent/target :intent/cell :intent/to-y])
 
 (defn same-choice?
   "Would the planner start intent next again as the running intent i: the same kind, target and
@@ -767,7 +772,7 @@
                 next
                 (not (:plan/wait next))
                 (if-let [planned (:intent/plan i)]
-                  (= (apply dissoc planned plan-noise) (apply dissoc next plan-noise))
+                  (= (select-keys planned choice-keys) (select-keys next choice-keys))
                   (and (= (:intent/kind i) (:intent/kind next))
                        (= (:intent/target i) (:intent/target next))
                        (= (:intent/for i) (:intent/for next)))))))
