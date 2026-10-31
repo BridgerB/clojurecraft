@@ -2772,3 +2772,46 @@
           "at the end it is not a brink")
       (is (nil? (pearls/uncage (dissoc w :pearls/shelter)))
           "with no burrow, nothing to go down to"))))
+
+(deftest a-hunt-caged-in-a-pocket-cuts-its-way-out
+  ;; gym plan run 41134469333 (pearls-travel-b) job 6 (issue #263), the fold at 25 min: feet
+  ;; [2500 47 2155] at the burrow's end, every heading's route ended within thirteen blocks (:none,
+  ;; the frontier spent: 17 and 35 waypoints), so wander was nil; and at home the hunt never
+  ;; reached the roam, climb-out and dig-out of its :else chain. 136 walks over 41 minutes
+  (let [w (-> (burrowed [8.5 61.0 8.5] {})
+              (walked (take pearls/loiter-walks (cycle [[8 61 8] [10 61 8]]))))]
+    (is (pearls/loitering? w))
+    (is (nil? (pearls/wander w)) "one chunk loaded: no route reaches sixteen blocks out")
+    (is (= :stairs-up (:intent/kind (plan/next-intent w row plan/goals)))
+        "so it cuts stairs up toward the open ground")
+    (testing "not loitering: it stays and looks out as before"
+      (is (= {:intent/kind :lookout :intent/for :pearls}
+             (plan/next-intent (burrowed [8.5 61.0 8.5] {}) row plan/goals))))))
+
+(deftest a-hunt-sealed-in-the-nether-with-nowhere-to-travel-cuts-its-way-out
+  ;; pearls-travel-c (plan run 41144362671) jobs 2 and 3, pearls-12-from-fortress: landed in the
+  ;; gym's netherrack pad, lookout x1262 for 106 minutes with no walk at all
+  (let [sealed (-> (burrowed [8.5 61.0 8.5] {})
+                   (assoc :player/dimension nether))]
+    (is (pearls/travel-caged? sealed))
+    (is (nil? (pearls/travel sealed)))
+    (is (= :stairs-up (:intent/kind (plan/next-intent sealed row plan/goals))))
+    (testing "the overworld has no such search"
+      (is (not (pearls/travel-caged? (assoc sealed :player/dimension "minecraft:overworld")))))))
+
+(deftest a-walk-to-cover-and-a-walk-away-do-not-alternate
+  ;; pearls-fight-c job 1 (plan run 41155212096, issue #263): walk [2474 100 2232] (a cell beside the
+  ;; feet) and walk [2466 73 2292] (far) alternated every second, 23 swings in 5.6 s, a ghast shooting,
+  ;; 13 hits, dead at 1m48
+  (let [base (-> (wide (standing {}))
+                 (assoc :player/dimension nether
+                        :player/inventory {0 (item :iron_sword 1) 1 (item :iron_pickaxe 1)}
+                        :time/now 8000))
+        far? #(= [:walk :pearls]
+                 ((juxt :intent/kind :intent/for) (plan/next-intent % row plan/goals)))]
+    (is (far? base) "nothing in sight: travels, as before")
+    (is (not (far? (assoc base :pearls/shot-at-ms 5000)))
+        "shot at three seconds ago: stays where it is")
+    (is (far? (assoc base :pearls/shot-at-ms 5000 :time/now 16000)) "eleven seconds on: travels")
+    (is (pearls/recently-shot? (assoc base :pearls/shot-at-ms 5000)))
+    (is (not (pearls/recently-shot? base)))))

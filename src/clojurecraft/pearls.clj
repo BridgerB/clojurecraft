@@ -1519,6 +1519,15 @@
   (boolean (some (fn [[_ e]] (and (= :ghast (entity/kind e)) (combat/seen? world e)))
                  (swarm world))))
 
+(def shot-hold-ms 10000)                ; ms after a ghast was last in sight that no walk goes elsewhere
+
+(defn recently-shot?
+  "Was a ghast in sight (:pearls/shot-at-ms, shot-at?) less than shot-hold-ms ago? Pearls-fight-c job 1
+   (plan run 41155212096, issue #263) died to a ghast in 1m48: a hide walk and a travel walk
+   alternated every second, 23 swings in 5.6 s, each undoing the other, 13 hits and no cover."
+  [world]
+  (let [t (:pearls/shot-at-ms world)] (boolean (and t (< (- (:time/now world 0) t) shot-hold-ms)))))
+
 (defn swarmed?
   "Are two or more monsters within their reach (swarm), a ghast in sight (shot-at?), or one monster
    while health is under danger-health? A lone one over that health is met by the fight rules (a
@@ -1734,6 +1743,18 @@
       {:intent/kind :walk :intent/target (update pos 1 inc) :intent/for :pearls}
       (explore world))))
 
+(defn travel-caged?
+  "Is the bot in the Nether, in no warped forest, with no enderman tracked, and no walk to or toward
+   one (travel) to be had: sealed in a pocket whose routes end within sixteen blocks? Pearls-
+   travel-c (plan run 41144362671, issue #263) jobs 2 and 3 landed in the gym's netherrack pad and
+   stood in :lookout for 106 and 111 minutes without a single walk; job 1 shuffled 337 walks in a
+   dozen blocks."
+  [world]
+  (boolean (and (= dimension/nether (dimension/of world))
+                (not (in-forest? world))
+                (empty? (endermen world seek-radius))
+                (nil? (travel world)))))
+
 (defn enderman-hit
   "The damage one enderman hit does the bot through the armour it wears (armour/worn over the four
    slots, mob/armour-points, mob/absorbed) of the 7 it does on Normal (mob/kinds :melee): 5.74
@@ -1943,12 +1964,22 @@
         mouth-walk (delay (shelter-walk world mouth))
         travel-walk (delay (when (and (not hurt?)
                                       (not swarmed?)
+                                      (not (recently-shot? world))
                                       (not (menaced? world))
                                       (empty? (endermen world seek-radius)))
                              (travel world)))
-        wander-walk
-        (delay (when (and (not hurt?) (not swarmed?) (not (live-menaced? world)) (wandering? world))
-                 (wander world)))
+        wander-walk (delay (when (and (not hurt?)
+                                      (not swarmed?)
+                                      (not (live-menaced? world))
+                                      (not (recently-shot? world))
+                                      (wandering? world))
+                             (wander world)))
+        cage-break (delay (when (and (not hurt?)
+                                     (not swarmed?)
+                                     (not (live-menaced? world))
+                                     (not (recently-shot? world))
+                                     (or (wandering? world) (travel-caged? world)))
+                            (or (climb-out world) (dig-out world))))
         csite-walk (delay (shelter-walk world csite))
         site-walk (delay (shelter-walk world site))
         overworld-death? (and (pos? (:stats/deaths world 0))
@@ -1993,6 +2024,7 @@
       {:intent/kind :fight :intent/target eid :intent/for :pearls}
       meal meal
       @travel-walk @travel-walk
+      @cage-break @cage-break
       @wander-walk @wander-walk
       (or hurt? (and in? bid)) {:intent/kind :lookout :intent/for :pearls}
       (and in? aid (lure? world) @mouth-walk) @mouth-walk
@@ -2026,6 +2058,7 @@
       home
       (or (vantage world far)
           (when (wandering? world) (wander world))
+          @cage-break
           {:intent/kind :lookout :intent/for :pearls})
       :else
       (or (if (pickaxe? world)
@@ -2091,7 +2124,8 @@
   [world _]
   (let [look (:control/look (:player/controls world))
         home (:pearls/shelter world)
-        world (track-angry (uncovered-log world))]
+        world (cond-> (track-angry (uncovered-log world))
+                (shot-at? world) (assoc :pearls/shot-at-ms (:time/now world 0)))]
     (cond (or (nil? look)
               (= :provoke (:intent/kind (:plan/intent world)))
               (and home (= home (intent/feet world))))
