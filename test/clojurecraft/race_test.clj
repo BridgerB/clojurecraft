@@ -262,3 +262,13 @@
   (is (= "execute in minecraft:the_nether run tp Clj_r03 152.5 72 -159.5"
          (race/tp-command "Clj_r03" [152 -160 72]))
       "x.5 y z.5 of the pad cell: -160 and .5 is -159.5, the middle of the cell"))
+
+(deftest a-replacement-bot-lands-on-its-slots-pad
+  ;; a bot that ends is replaced by the next serial (r11, r12 ...): lane 3 of race 41218543330 started
+  ;; 116 runs in 31 minutes; a landing by serial would generate a new Nether region each time
+  (is (= [0 1 9 0 1 9 5] (map #(race/slot-index % 10) [0 1 9 10 11 19 25])))
+  (is (= 7 (race/slot-index 7 nil)) "no slot count: as before")
+  (let [fortress [200 -160]]
+    (is (= (race/pad-of fortress (race/slot-index 3 10))
+           (race/pad-of fortress (race/slot-index 13 10)))
+        "the serial after a slot's bot lands on the same pad")))

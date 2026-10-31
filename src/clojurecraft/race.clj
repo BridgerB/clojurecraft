@@ -429,6 +429,14 @@
       (Thread/sleep (long fixture/settle-ms))
       (standing-on pad))))
 
+(defn slot-index
+  "The index racer i (from 0) lands with at the fortress: i mod slots, so a bot that replaces one
+   that ended takes the landing and the pad of its slot, which prepare! built, and no new Nether
+   region is generated while bots are connected. (Racer serials grow with every replacement:
+   lane 3 of race 41218543330 started 116 runs in 31 minutes.)"
+  [i slots]
+  (if (pos? (or slots 0)) (mod i slots) i))
+
 (defn spawn-command
   "The RCON command that pins bot name's spawn at the cell of at ([x y z]) in the dimension dim:
    `execute in` it, because spawnpoint takes the dimension of the command's source, the server's
@@ -447,7 +455,8 @@
    cell claimed for it round the race's centre, which the first bot online decides), pin its spawn
    there, and put its :go (every step up to until, milestones on, :go/at where it landed) on its
    queue. A bot whose landing fails starts where it stands."
-  [{:keys [host rcon-port rcon-pass until landings landing-offset from kit]} ch centre name queue i]
+  [{:keys [host rcon-port rcon-pass until landings landing-offset from kit bots]} ch centre name
+   queue i]
   (async/thread
    (try (rcon/with-rcon
          host
@@ -459,12 +468,13 @@
                  at (when online
                       (rcon/command! rc (str "gamemode survival " name))
                       (cond (fortress? from)
-                            (land-fortress!
-                             rc
-                             name
-                             (if landings (landing-of landings (or landing-offset 0) i) @centre)
-                             i
-                             kit)
+                            (let [k (slot-index i bots)]
+                              (land-fortress!
+                               rc
+                               name
+                               (if landings (landing-of landings (or landing-offset 0) k) @centre)
+                               k
+                               kit))
                             landings
                             (fixture/land-at! rc name (landing-of landings (or landing-offset 0) i))
                             :else (land! rc ch name @centre i)))]
@@ -691,6 +701,7 @@
                         :rcon-pass rcon-pass
                         :until until
                         :from (or (get o :from) (:race/from config))
+                        :bots bots
                         :kit (:race/kit config)}
                  landings-file
                  (assoc :landings (landings/read-landings landings-file)
