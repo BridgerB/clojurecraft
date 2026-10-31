@@ -2147,3 +2147,29 @@
     (is (not (plan/interrupts? w row grab)) "and the pick-up is not cut for the refuge")
     (testing "alight: the refuge first"
       (is (not= :collect-drops (:intent/kind (next-intent (assoc w :player/on-fire? true))))))))
+
+(deftest a-rod-pick-up-holds-the-refuge-off-for-two-seconds-only
+  ;; lead on z9 job 4: the grab that overrides the refuge under 12 hp runs one step and the pick-up, then the
+  ;; refuge wins, so it cannot become a stand in the swarm
+  (let [rod (entity :item [10.5 64.0 8.5] :entity/item blaze/rod)
+        swarm (into {}
+                    (map (fn [i] [(+ 50 i)
+                                  (entity :blaze [14.5 66.0 (+ 6.0 i)] :entity/health 20.0)])
+                         (range 4)))
+        w (assoc (standing (merge {40 rod} swarm)) :player/health 11.0 :time/now 100000)
+        grab {:intent/kind :collect-drops :intent/item :blaze_rod :intent/target [10 64 8]}
+        row (first (filter #(= :blaze-rods (:goal/id %)) plan/goals))]
+    (is (true? (blaze/grab-over-refuge? w)) "not begun: the grab first")
+    (is (true? (blaze/grab-over-refuge? (assoc w :rod-grab/since 99000))) "1 s into it: still")
+    (is (false? (blaze/grab-over-refuge? (assoc w :rod-grab/since 97000)))
+        "3 s in: the refuge wins")
+    (is (not (plan/interrupts? (assoc w :rod-grab/since 99000) row grab)))
+    (is (true? (boolean (plan/interrupts? (assoc w :rod-grab/since 97000) row grab)))
+        "past the 2 s: cut for the refuge")
+    (is (not= :collect-drops (:intent/kind (next-intent (assoc w :rod-grab/since 97000))))
+        "and the refuge is the choice")
+    (testing "steer notes the start and forgets it"
+      (let [on (plan/steer (assoc w :plan/intent (assoc grab :intent/status :active)) row)]
+        (is (= 100000 (:rod-grab/since on)))
+        (is (nil? (:rod-grab/since (plan/steer (assoc w :rod-grab/since 99000) row)))
+            "none running: forgotten")))))

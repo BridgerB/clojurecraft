@@ -1645,11 +1645,16 @@
                   (not (recent? :fight))
                   (not (recent? :pocket))))))
 
+(declare rod-grab?)
+
 (defmethod plan/steer :blaze-rods
   ;; notes where a sortie began (:sortie/since) when the bot leaves its pocket within sortie-zone of
   ;; the spawner, and forgets it in a pocket or out of the zone: sortie-over? reads it
   [world _]
-  (let [sp (nearest-spawner world)]
+  (let [sp (nearest-spawner world)
+        world (if (rod-grab? world (:plan/intent world))
+                (update world :rod-grab/since #(or % (:time/now world 0)))
+                (dissoc world :rod-grab/since))]
     (cond (and (pocket/in? world) (pocket/unlayable? world (:pocket/cell (:pocket/site world))))
           ;; an unsealable pocket is no refuge: forgotten, and its cell remembered as failed
           (-> world
@@ -1669,6 +1674,18 @@
   [world i]
   (boolean (and (or (= :collect-drops (:intent/kind i)) (= :rod (:intent/for i)))
                 (some? (near-rod world)))))
+
+(def rod-grab-ms 2000) ; ms a rod pick-up may hold the refuge off: one step and the pick-up
+
+(defn grab-over-refuge?
+  "Does a rod lying within a step (near-rod) hold the refuge off: the bot not alight and its pick-up
+   (:rod-grab/since, noted by steer) under rod-grab-ms old? Then the refuge wins: a grab is a second's
+   walk, never a stand in the swarm (blaze-race-z9 job 4 lost 7 of 9 rods to the refuge/grab flip)."
+  [world]
+  (boolean (and (near-rod world)
+                (not (:player/on-fire? world))
+                (let [since (:rod-grab/since world)]
+                  (or (nil? since) (< (- (:time/now world 0) since) rod-grab-ms))))))
 
 (defn commit-fight
   "A :fight on the blaze at hand (at-hand-blaze) while the health is at low-health (12) or more,
@@ -1726,7 +1743,7 @@
              (not (rod-grab? world i))
              (sortie-over? world))
         (and (not (contains? refuge-kinds (:intent/kind i)))
-             (not (and (rod-grab? world i) (not (:player/on-fire? world))))
+             (not (and (rod-grab? world i) (grab-over-refuge? world)))
              (some? (refuge-now world (nearest-spawner world))))
         (and (not (hurt? world))
              (not= :fight (:intent/kind i))
@@ -1760,11 +1777,9 @@
         shot-cover (delay (long-shot-cover world))
         ;; not while a rod lies within a step and the bot is not alight: the pick-up is a second's walk
         ;; (blaze-race-z9 job 4: 7 of 9 rods lost, :collect-drops and :pocket alternating at hp 10 to 12)
-        refuge (delay (when (and (not in-pocket?)
-                                 (refuge-needed? world)
-                                 (not (and (near-rod world) (not (:player/on-fire? world)))))
-                        (or (pocket-go world sp false)
-                            (when (burning-twice? world) (here-intent world)))))
+        refuge
+        (delay (when (and (not in-pocket?) (refuge-needed? world) (not (grab-over-refuge? world)))
+                 (or (pocket-go world sp false) (when (burning-twice? world) (here-intent world)))))
         prepare (delay (prepare-intent world sp))
         ;; the stuck watchdog fired here with a hostile near (no explore walk planned): leave through the
         ;; search, never back to the pocket or the camp it dropped (blaze-race-z6: 12 of 12 firings undone
