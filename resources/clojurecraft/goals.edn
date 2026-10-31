@@ -334,7 +334,7 @@
   :goal/target? true
   :goal/always? true
   :goal/doc
-  "hungry (food under 14) with nothing edible held, kill the nearest cow, pig, sheep or rabbit a route reaches within 24 blocks and pick its meat up, for the meal row to eat raw (issue #259: the food producer); in the overworld with a stone pickaxe held (before the descent, issue #504) or the portal's iron held, and under six foods, it hunts within 48 blocks and, with none there, searches for animals on foot for two minutes (before the descent) or six (kit) at most, never from the water, and never out of a dig or a swim already begun (issue #501: the Nether has no game); an always row at priority 0 after the meal in this table"
+  "food: hungry (food under 14) with nothing edible held, or the early provisioning of issue #504 (six edible items once a stone pickaxe is held, up to two minutes, under open sky and safe); kill the nearest cow, pig, sheep or rabbit a route reaches within 24 blocks and pick its meat up, for the meal row to eat raw (issue #259: the food producer); in the overworld with a stone pickaxe held (before the descent, issue #504) or the portal's iron held, and under six foods, it hunts within 48 blocks and, with none there, searches for animals on foot for two minutes (before the descent) or six (kit) at most, never from the water, and never out of a dig or a swim already begun (issue #501: the Nether has no game); an always row at priority 0 after the meal in this table"
   :goal/done? :provisioned?
   :goal/plan :hunt}
  {:goal/id :wear-armour
