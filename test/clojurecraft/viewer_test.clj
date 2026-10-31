@@ -3,6 +3,7 @@
             [clojurecraft.blocks :as blocks]
             [clojurecraft.bytes :as b]
             [clojurecraft.chunk :as chunk]
+            [clojurecraft.game :as game]
             [clojurecraft.viewer :as viewer]
             [clojurecraft.world :as world]))
 
@@ -189,12 +190,13 @@
   (let [zombie (:zombie blocks/entity-types)
         cow (:cow blocks/entity-types)
         squid (:squid blocks/entity-types)
-        w {:player/pos [0.5 64.0 0.5]
-           :player/food 20
-           :world/entities {1 {:entity/type zombie :entity/pos [2.5 64.0 0.5]}
-                            2 {:entity/type zombie :entity/pos [20.5 64.0 0.5]}
-                            3 {:entity/type cow :entity/pos [5.5 64.0 0.5]}
-                            4 {:entity/type squid :entity/pos [3.5 60.0 0.5]}}}
+        w (merge (game/init {}) ; the attributes every world has, as the rules' selections require
+                 {:player/pos [0.5 64.0 0.5]
+                  :player/food 20
+                  :world/entities {1 {:entity/type zombie :entity/pos [2.5 64.0 0.5]}
+                                   2 {:entity/type zombie :entity/pos [20.5 64.0 0.5]}
+                                   3 {:entity/type cow :entity/pos [5.5 64.0 0.5]}
+                                   4 {:entity/type squid :entity/pos [3.5 60.0 0.5]}}})
         why (fn [w] (into {} (for [[id e] (:world/entities w)] [id (viewer/care w id e)])))]
     (is
      (= {1 :threat 2 :hostile 3 nil 4 nil} (why w))
