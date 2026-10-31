@@ -2077,7 +2077,14 @@
     (is (not (plan/avoiding? w [2430 69 2164])) "far from it")
     (is (not (plan/avoiding? (assoc w :time/now (+ late plan/avoid-ms 1)) [2395 69 2164]))
         "after the window")
-    (is (not (plan/avoiding? (frozen late) [2395 69 2164])) "never fired")))
+    (is (not (plan/avoiding? (frozen late) [2395 69 2164])) "never fired")
+    (testing "a second firing inside the window does not extend it"
+      (let [again (plan/unstick (assoc w :time/now (+ late 60000) :plan/intent nil)
+                                (first pearls-table)
+                                nil
+                                0.25
+                                (+ late 60000))]
+        (is (= (+ late plan/avoid-ms) (get-in again [:plan/avoid :until])))))))
 
 (deftest no-explore-walk-is-planned-into-a-hostile
   (let [event {:event/kind :tick :event/now 0 :event/rand 0.25}

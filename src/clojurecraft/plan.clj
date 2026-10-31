@@ -122,7 +122,7 @@
 (def menace-radius 24.0)               ; blocks a hostile (an angry enderman, a blaze) this near puts the explore walk off
 (def menace-grace-ms 300000)          ; ms past the stuck line after which a hostile near no longer puts it off: a parked one is there for good
 (def explore-distance 48)             ; blocks the walk away from a stuck spot goes
-(def avoid-ms 120000)                 ; ms after the watchdog fires that the place it fired at is avoided by the row's choices
+(def avoid-ms 300000)                 ; ms after the watchdog fires that the place it fired at is avoided by the row's choices
 (def avoid-radius 16.0)               ; blocks from that place a cell counts as it
 (def explore-tries 4)                 ; trail cells tried farthest first, then as many nearest first, for a route
 (def explore-nodes 2000)              ; expansions each of those route searches may spend
@@ -606,7 +606,7 @@
 
 (defn unstick
   "The world of a bot that has made no progress for stuck-ms: the running intent dropped, the
-   row's anchors (anchors) forgotten, the place avoided for avoid-ms (avoiding?), a walk away
+   row's anchors (anchors) forgotten, the place avoided for avoid-ms, 5 min, not extended by a second firing inside the window (avoiding?), a walk away
    planned (:plan/explore) unless a hostile is near (menaced?: a walk out into it is undone at
    once and is not safe) and the watch restarted.
    Pearl-fight-i jobs 1 and 2 (run 41178660163) stood at one block for 2 h 20 min, 1631 lookouts,
@@ -621,7 +621,10 @@
                 w
                 (get clocks (:goal/plan goal) [])))
       (cond-> (not (menaced? world)) (assoc :plan/explore (explore-cell world r)))
-      (assoc :plan/avoid {:near (intent/feet world) :until (+ now avoid-ms)})
+      (update :plan/avoid
+              #(if (and (:until %) (< now (:until %)))
+                 %
+                 {:near (intent/feet world) :until (+ now avoid-ms)}))
       (assoc :plan/watch (watch-stamp world (progress-key world goal) now now))
       (update :plan/unstuck (fnil inc 0))
       (game/say (str "stuck " (:plan/unstuck world 0) " " (:goal/id goal) " explore"))))
