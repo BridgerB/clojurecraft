@@ -163,12 +163,12 @@ function aim(t) {
   if (!cur || Math.hypot(pose.x - cur.x, pose.y - cur.y, pose.z - cur.z) > 24) cur = { ...pose };
   for (const k of ["x", "y", "z", "pitch"]) cur[k] += (pose[k] - cur[k]) * t;
   cur.yaw = lerpAngle(cur.yaw, pose.yaw, t);
-  const cam = viewer.camera;
   if (mode === "first") { R.setViewerCamera(viewer, R.vec3(cur.x, cur.y, cur.z), cur.yaw, cur.pitch); return; }
-  const c = new B.Vector3(cur.x, cur.y + 1.2, cur.z);
-  cam.rotationQuaternion = null;
-  cam.position.set(c.x + orbit.dist * Math.sin(orbit.phi) * Math.cos(orbit.theta), c.y + orbit.dist * Math.cos(orbit.phi), c.z + orbit.dist * Math.sin(orbit.phi) * Math.sin(orbit.theta));
-  cam.setTarget(c);
+  // the eye on a sphere round the bot's chest, turned to it the way the renderer turns its camera
+  // (typecraft's yaw: 0 looks north, -z; pitch up is positive)
+  const dx = -orbit.dist * Math.sin(orbit.phi) * Math.cos(orbit.theta), dy = -orbit.dist * Math.cos(orbit.phi), dz = -orbit.dist * Math.sin(orbit.phi) * Math.sin(orbit.theta);
+  const eye = [cur.x + 0 - dx, cur.y + 1.2 - dy, cur.z - dz];
+  R.setViewerCamera(viewer, R.vec3(eye[0], eye[1] - 1.6, eye[2]), Math.atan2(-dx, -dz), Math.atan2(dy, Math.hypot(dx, dz)));
 }
 
 // ---------------------------------------------------------------- the panel
