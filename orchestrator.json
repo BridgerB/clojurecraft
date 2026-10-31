@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-31T00:57:02.789Z",
+  "at" : "2026-10-31T00:58:08.987Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -21,7 +21,7 @@
     "number" : 611,
     "title" : "Bot stops at portal-kit: no-support",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : true
+    "copilot" : false
   }, {
     "number" : 623,
     "title" : "Bot stops at blaze-rods: no-support",
@@ -242,8 +242,7 @@
     "why" : "hands-off label"
   }, {
     "issue" : 611,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment"
+    "move" : "assign"
   }, {
     "issue" : 538,
     "move" : "leave",
@@ -330,10 +329,6 @@
     "why" : "hands-off label"
   } ],
   "log" : [ {
-    "issue" : 151,
-    "move" : "assign",
-    "at" : "2026-10-30T08:16:35.038Z"
-  }, {
     "issue" : 151,
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
@@ -1679,5 +1674,9 @@
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
     "at" : "2026-10-31T00:57:02.789Z"
+  }, {
+    "issue" : 611,
+    "move" : "assign",
+    "at" : "2026-10-31T00:58:08.987Z"
   } ]
 }
