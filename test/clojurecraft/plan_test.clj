@@ -2032,6 +2032,22 @@
   (let [w (assoc (frozen-world 0) :plan/trail [[2300 69 2164] [2380 69 2164]])]
     (is (= [2342 69 2164] (plan/explore-cell w 0.25)))))
 
+(deftest the-explore-walk-lands-on-the-farthest-cell-with-a-route
+  ;; pearl-fight-k job 2 (run 41197008609): the walk to the cell 48 out failed :no-path in four of
+  ;; six firings. The trail's far end here is in a chunk that is not loaded: no route; the next
+  ;; cell back, on the floor of the loaded chunk, has one
+  (let [floor (world/column (into {} (for [x (range 16) z (range 16)] [[x 63 z] 1])))
+        w (-> (world-state [0.5 64.0 0.5])
+              (assoc :world/chunks {[0 0] floor})
+              (assoc :plan/trail [[40 64 1] [12 64 1] [9 64 1] [4 64 1]]))]
+    (is (= [12 64 1] (plan/explore-cell w 0.25)) "the unroutable far end is skipped")
+    (is (= [12 64 1] (plan/explore-cell (assoc w :plan/blacklist #{[40 64 1]}) 0.25))
+        "and a blacklisted cell is not tried")
+    (is (= [9 64 1] (plan/explore-cell (assoc w :plan/blacklist #{[12 64 1]}) 0.25))
+        "the next routable one")
+    (is (= [0 64 48] (plan/explore-cell (assoc w :plan/trail []) 0.25))
+        "with no trail the old cell, 48 out in the direction asked")))
+
 (deftest the-explore-walk-waits-while-a-hostile-is-near
   ;; pearl-fight-k job 2 (run 41197008609): "stuck 5" at 13:49:49 left the burrow, and enderman 4501
   ;; was fighting it half a second later; the bot died in lava 6 s on
