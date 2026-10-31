@@ -1352,7 +1352,7 @@
                        :dimension dimension/nether
                        :respawn-in dimension/nether
                        :inventory {[:hotbar 0] pick}})
-        dead (assoc sim :sim/health 0.0 :sim/out [])
+        dead (assoc sim :sim/phase :play :sim/health 0.0 :sim/out [])
         alive (sim/on-packet dead
                              {:packet/name :client-command
                               :action (packet/value :client-command :perform-respawn)})]
