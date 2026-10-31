@@ -257,6 +257,9 @@ z3 (44d358254, dig-on reverted): landings 1 and 2 camped 120 min each at [2338 6
 ## The room on the bot, and a clause that ended in nil (issue #262, blaze-race-z4)
 z4 landing 2 killed 10 blazes in 11.1 minutes (9 per 10) and died with 13 to 14 blazes within 8: the sorties pulled the room onto it (the cap of 6 per spawner is exceeded by the ones that gather while the bot camps). A sortie is over also when the bot burns or more than `sortie-crowd` (3) blazes are within 8. Landing 5 ended `:nothing-to-do` at 15m54s: its last `:tunnel-to` stand was done, `to-spawner` returned nil (every stand stalled), and the clause (the walk on to the spawner) took that nil as its value, so the row had no intent and `plan-tick`'s `(nil? next)` waited 400 ticks and failed. The clause now falls to `search` and then the named wait.
 
+## An open hold under fire is cut for the seal (issue #262, blaze-race-z5)
+z5 (48c17a3f4): landing 1 burned at 16m10s (7 blazes killed, 4 rods dropped, 3 taken, most held 3; 61 hits, 45 of them burn ticks, 39 attacks), landing 2 at 10m49s (1 kill, 2 rods, 1 taken; 68 hits, 48 burn); landing 5 alive 56 min (0 hits worth reading, :tunnel-to 51 min, 0 rods). Landing 1's last minute: `:pocket-hold` ran open at [2341.7 57 2286.5] for 30 s at hp 20 with 63 cobblestone and a pickaxe held, three fireballs and their burns in it (20 to 0 in 60 s, `:eat` between), no `:seal`. The hold is a running intent: `hold-intent` is asked only when none runs, and its `interrupts?` did not see the pressed pocket. A running `:pocket-hold` is now cut when `hold-intent` would answer `:seal`.
+
 ## Limits
 - Fireballs are not dodged or blocked: the bot is out of their line, in a pocket or sealed in one.
 - A blaze hovering higher than the eye can reach from under it is never hit (`pressing?` stops within 0.8 on the plane); the fight has no engage timeout, only `:ghost` after 25 swings in reach.

@@ -1915,3 +1915,26 @@
                                             sp)
                         c))
         "ten minutes on: the site is tried again")))
+
+(deftest an-open-hold-under-fire-is-cut-for-the-seal
+  ;; blaze-race-z5 landing 1: :pocket-hold ran 30 s open at hp 20 with 63 cobblestone and a pickaxe held,
+  ;; three fireballs and their burns in it, 20 to 0 in 60 s, no :seal ever: a running hold is not asked again
+  (let [line (entity :blaze [4.5 65.0 8.5] :entity/health 20.0)
+        loaded (fn [w]
+                 (-> w
+                     (assoc-in [:player/inventory 9] (item :cobblestone 62))
+                     (assoc-in [:player/inventory 10] (item :iron_pickaxe 1))))
+        base (-> (standing {7 line})
+                 in-pocket
+                 loaded)
+        hold {:intent/kind :pocket-hold :intent/heal-to 20.0}]
+    (is (= {:intent/kind :seal} (next-intent (assoc base :player/on-fire? true)))
+        "burning in the line: the seal")
+    (is (true? (boolean (plan/interrupts? (assoc base :player/on-fire? true) row hold)))
+        "so a running hold is cut for it")
+    (is (false? (boolean (plan/interrupts? (-> (standing {})
+                                               in-pocket
+                                               loaded)
+                                           row
+                                           hold)))
+        "nothing shooting: the hold runs")))

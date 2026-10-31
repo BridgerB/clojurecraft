@@ -1633,6 +1633,7 @@
            (not (rod-grab? world i))
            (some? (dodge-intent world)))
       (and (= :tunnel-to (:intent/kind i)) (some? (prepare-intent world (nearest-spawner world))))
+      (and (= :pocket-hold (:intent/kind i)) (= :seal (:intent/kind (hold-intent world))))
       (and (= :tunnel-to (:intent/kind i)) (some? (long-shot-cover world)))
       (and (not (contains? refuge-kinds (:intent/kind i)))
            (not= :fight (:intent/kind i))
