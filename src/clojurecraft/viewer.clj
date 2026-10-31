@@ -24,14 +24,18 @@
             [clojurecraft.cli :as cli]
             [clojurecraft.entity :as entity]
             [clojurecraft.inventory :as inventory]
+            [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
-            [clojurecraft.recipe :as recipe]))
+            [clojurecraft.recipe :as recipe]
+            [clojurecraft.terrain :as terrain]))
 
 (set! *warn-on-reflection* true)
 
 (def radius 6)                        ; chunk columns each side of the bot's: 13x13, about 100 blocks round it
 (def entity-range 64.0)               ; blocks from the bot an entity is shown within
 (def frame-every-ms 100)              ; the frame thread's rest between two frames: ten a second at most
+(def reach 4.5)                       ; blocks the eyes' ray goes for the block under the crosshair (a survival player's reach)
+(def arm-packets #{:swing :attack :use-item :use-item-on}) ; what the bot sends that moves its arm
 (def direct-bits 15)                  ; bits a cell in a section with more than 256 states: the server's global palette
 
 (def block-states
@@ -364,9 +368,45 @@
                                  (bit-shift-left (bit-shift-right (bit-and z 15) 2) 2)
                                  (bit-shift-right (bit-and x 15) 2))))))
 
+(defn intents
+  "The intent and its children, outermost first."
+  [world]
+  (take-while some? (iterate :intent/child (:plan/intent world))))
+
+(defn dig-view
+  "The block the bot is breaking and how far: {:pos target :progress 0-1}, the elapsed time
+   since its START over the dig's own expected time (:intent/dig-ms, dig/dig-time with the held
+   tool and penalties when it began); nil when no :dig is at its :digging stage."
+  [world]
+  (when-let [{:intent/keys [target started dig-ms]}
+             (first (filter #(and (= :dig (:intent/kind %)) (= :digging (:intent/stage %)))
+                            (intents world)))]
+    {:pos target
+     :progress (max 0.0
+                    (min 1.0 (/ (double (- (:time/now world) started)) (double (max 1 dig-ms)))))}))
+
+(defn looked-at
+  "The block cell under the crosshair: the first that is neither air nor a fluid along the eyes'
+   ray within reach, by the bot's look (physics/direction); nil when none."
+  [world]
+  (when-let [pos (:player/pos world)]
+    (some
+     (fn [cell]
+       (let [id (terrain/block-at world cell)]
+         (when (and id (not (blocks/air? id)) (nil? (blocks/fluid id))) cell)))
+     (physics/cells-along (physics/eye pos) (physics/direction (:player/look world)) reach 0.05))))
+
+(defn arm-moves
+  "How many of effects send a packet that moves the arm (arm-packets): a swing, an attack, a use."
+  [effects]
+  (count (filter #(and (= :send (:effect/kind %))
+                       (arm-packets (get-in % [:effect/packet :packet/name])))
+                 effects)))
+
 (defn frame
   "What the page shows of one world: who and where the bot is, how it looks, its health, food
-   and hotbar, the biome under its feet, the entities round it, what it intends (intent-view) and has reached, and the
+   and hotbar, the block it breaks (dig-view) and the one under its crosshair (looked-at), the
+   biome under its feet, the entities round it, what it intends (intent-view) and has reached, and the
    version of every column round it (columns). Absent attributes stay absent."
   [world]
   (let [w world]
@@ -385,6 +425,8 @@
            :air (:player/air w)
            :held (:player/held-slot w)
            :hotbar (hotbar w)
+           :dig (dig-view w)
+           :looking (when (:player/look w) (looked-at w))
            :entities (entities-view w)
            :intent (intent-view (:plan/intent w))
            :failed (intent-view (:plan/failed w))
@@ -624,7 +666,8 @@
 
 (defn serve!
   "Watch world* and serve the page on 127.0.0.1:port: the watch offers each new world to a
-   one-slot sliding channel (it never waits), a thread of its own turns the latest into a frame
+   one-slot sliding channel (it never waits) and counts the arm's packets among the effects the
+   loop is about to send (arm-moves, the frame's :swings), a thread of its own turns the latest into a frame
    at most every frame-every-ms, and HTTP threads answer from that. Returns {:close (fn [])}."
   ([world* port] (serve! world* port default-jar))
   ([world* port jar]
@@ -636,12 +679,14 @@
                  :icons (icons assets)
                  :meta (meta-view)}
          state (atom {})
+         swings (atom 0)
          ch (async/chan (async/sliding-buffer 1))
-         done (async/thread (loop []
-                              (when-let [w (async/<!! ch)]
-                                (swap! state assoc :world w :frame (frame w))
-                                (Thread/sleep (long frame-every-ms))
-                                (recur))))
+         done (async/thread
+               (loop []
+                 (when-let [w (async/<!! ch)]
+                   (swap! state assoc :world w :frame (assoc (frame w) :swings @swings))
+                   (Thread/sleep (long frame-every-ms))
+                   (recur))))
          server (com.sun.net.httpserver.HttpServer/create (java.net.InetSocketAddress. "127.0.0.1"
                                                                                        (int port))
                                                           0)
@@ -657,7 +702,12 @@
                                  (.close ^com.sun.net.httpserver.HttpExchange ex))))))
      (.setExecutor server pool)
      (.start server)
-     (add-watch world* ::viewer (fn [_ _ _ new] (async/offer! ch new)))
+     (add-watch world*
+                ::viewer
+                (fn [_ _ old new]
+                  (when-not (identical? (:bot/effects old) (:bot/effects new))
+                    (swap! swings + (arm-moves (:bot/effects new))))
+                  (async/offer! ch new)))
      (async/offer! ch @world*)
      (cli/log (str "viewer on http://127.0.0.1:" port "/"))
      {:close (fn []

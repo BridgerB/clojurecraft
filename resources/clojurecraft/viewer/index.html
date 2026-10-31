@@ -40,12 +40,17 @@
   button { padding:6px 10px; background:rgba(38,48,58,.85); color:var(--fg); border:1px solid #3d4955; border-radius:5px; cursor:pointer; font:inherit; }
   button.on { background:#3d5a80; border-color:#6b8fbf; }
   #status { position:fixed; left:10px; bottom:10px; color:#fff; text-shadow:0 0 3px #000; }
+  #crosshair { position:fixed; left:50%; top:50%; width:18px; height:18px; margin:-9px 0 0 -9px; pointer-events:none; mix-blend-mode:difference; }
+  #crosshair:before, #crosshair:after { content:""; position:absolute; background:#fff; }
+  #crosshair:before { left:8px; top:0; width:2px; height:18px; } #crosshair:after { top:8px; left:0; height:2px; width:18px; }
+  body.embed #panel, body.embed #status { display:none; }
   @media (max-width: 640px) { #panel { left:10px; right:10px; width:auto; top:auto; bottom:10px; max-height:45%; } }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/babylonjs@9.13.0/babylon.js"></script>
 </head>
 <body>
 <canvas id="view"></canvas>
+<div id="crosshair"></div>
 <div id="status">connecting…</div>
 <div id="panel">
   <div class="head"><b id="who">…</b><span class="mono" id="dim"></span></div>
@@ -144,6 +149,7 @@ function syncEntities(list, f) {
 // round the bot instead, dragged and wheeled, from ?theta=&phi=&dist=
 const q = new URLSearchParams(location.search);
 const mode = q.get("orbit") === "1" ? "third" : "first";
+if (q.get("embed") === "1") document.body.classList.add("embed"); // the 3D view alone, for a page that frames it
 const orbit = { theta: -0.8, phi: 0.9, dist: 9 };
 for (const k of ["theta", "phi", "dist"]) if (q.has(k)) orbit[k] = Number(q.get(k));
 if (mode === "third") {
@@ -210,6 +216,81 @@ function panel(f) {
     .map(([d, e]) => `<div${e.hostile ? ' style="color:#ff8a7a"' : ""}>${esc(e.kind === "item" ? e.item || "item" : e.kind)} ${d.toFixed(1)}m${e.health != null ? " ♥" + e.health : ""}</div>`).join("") || "nothing";
 }
 
+// ---------------------------------------------------------------- first person: the arm or the held item, its swing, the cracks, the outline
+// All of it from the bot's own data: the held item is hotbar[held] (its inventory), a swing is one of
+// the arm packets it sent (frame.swings counts them), the cracks are its dig's elapsed time over the
+// dig's own expected time (frame.dig), the outline the block its eyes' ray meets (frame.looking).
+const scene = viewer.scene, cam = viewer.camera;
+const NEAREST = B.Texture.NEAREST_SAMPLINGMODE;
+const texOf = (name) => {
+  const url = name.startsWith("item/") ? `/tex/${name}.png` : `data:image/png;base64,${assets.textureData[name.replace("block/", "")] || ""}`;
+  const t = new B.Texture(url, scene, true, true, NEAREST); t.hasAlpha = true; return t; };
+const matOf = (tex, name) => { const m = new B.StandardMaterial(name, scene); m.diffuseTexture = tex; m.useAlphaFromDiffuseTexture = true;
+  m.emissiveColor = new B.Color3(0.35, 0.35, 0.35); m.specularColor = B.Color3.Black(); m.backFaceCulling = false;
+  m.transparencyMode = B.Material.MATERIAL_ALPHATEST; m.alphaCutOff = 0.1; return m; };
+const hand = new B.TransformNode("hand", scene); hand.parent = cam; hand.setEnabled(mode === "first");
+if (mode !== "first") $("crosshair").style.display = "none";
+const REST = new B.Vector3(0.56, -0.52, -0.72); // right of and below the eye, in front (a right-handed camera looks along -z)
+hand.position.copyFrom(REST);
+const skin = new B.Texture("/tex/entity/player/wide/steve.png", scene, true, true, NEAREST);
+const armUV = new B.Vector4(44 / 64, 1 - 32 / 64, 48 / 64, 1 - 20 / 64); // the right arm's front in the skin
+const arm = B.MeshBuilder.CreateBox("arm", { width: 0.22, height: 0.22, depth: 0.7, faceUV: Array(6).fill(armUV) }, scene);
+arm.material = matOf(skin, "arm"); arm.parent = hand; arm.rotation.set(0.15, -0.35, 0);
+let heldName = null, held = null;
+function holdItem(f) {
+  const it = f.hotbar && f.hotbar[f.held];
+  const name = it ? it.item : null;
+  if (name === heldName) return;
+  heldName = name;
+  if (held) { held.dispose(false, true); held = null; }
+  const icon = name && icons[name];
+  arm.setEnabled(!icon); // vanilla draws the item without the arm
+  if (!icon) return;
+  if (icon.startsWith("item/")) {
+    held = B.MeshBuilder.CreatePlane("held", { size: 0.42, sideOrientation: B.Mesh.DOUBLESIDE }, scene);
+    held.rotation.set(0.1, -1.2, -0.35);
+  } else {
+    held = B.MeshBuilder.CreateBox("held", { size: 0.32 }, scene);
+    held.rotation.set(0.35, 0.75, 0);
+  }
+  held.material = matOf(texOf(icon), "held"); held.parent = hand; held.position.set(0, 0.05, 0.05);
+}
+for (const m of [arm]) m.renderingGroupId = 1; // over the world, as vanilla's hand is
+let swings = null, swingAt = -1e9;
+const SWING_MS = 300; // vanilla's swing: 6 ticks
+function swingTo(f) {
+  if (swings !== null && (f.swings ?? 0) > swings) swingAt = performance.now();
+  swings = f.swings ?? 0;
+}
+function animateHand(now) {
+  if (held) held.renderingGroupId = 1;
+  const t = Math.min(1, (now - swingAt) / SWING_MS), s = t < 1 ? Math.sin(t * Math.PI) : 0, r = t < 1 ? Math.sin(Math.sqrt(t) * Math.PI) : 0;
+  hand.position.set(REST.x - 0.3 * r, REST.y + 0.2 * Math.sin(Math.sqrt(t) * Math.PI * 2) * (t < 1 ? 1 : 0), REST.z - 0.15 * s);
+  hand.rotation.set(0.8 * s, -0.6 * r, -0.3 * r);
+}
+const crack = B.MeshBuilder.CreateBox("crack", { size: 1.004 }, scene); crack.isPickable = false; crack.setEnabled(false);
+const crackMats = [];
+function showCrack(f) {
+  const d = f.dig;
+  if (!d || !d.pos) { crack.setEnabled(false); return; }
+  const stage = Math.min(9, Math.floor(d.progress * 10));
+  if (!crackMats[stage]) { // multiplied over the block, as vanilla blends its destroy textures (dark lines darken, the rest leaves it be)
+    const m = matOf(texOf("block/destroy_stage_" + stage), "crack" + stage);
+    m.disableLighting = true; m.emissiveColor = new B.Color3(1, 1, 1);
+    m.transparencyMode = B.Material.MATERIAL_ALPHATESTANDBLEND; m.alphaMode = B.Engine.ALPHA_MULTIPLY; crackMats[stage] = m; }
+  crack.material = crackMats[stage];
+  crack.position.set(d.pos[0] + 0.5, d.pos[1] + 0.5, d.pos[2] + 0.5); crack.setEnabled(true);
+}
+const edges = [[0,0,0,1,0,0],[0,0,0,0,1,0],[0,0,0,0,0,1],[1,1,1,0,1,1],[1,1,1,1,0,1],[1,1,1,1,1,0],[1,0,0,1,1,0],[1,0,0,1,0,1],[0,1,0,1,1,0],[0,1,0,0,1,1],[0,0,1,1,0,1],[0,0,1,0,1,1]]
+  .map(([a, b, c, d, e, g]) => [new B.Vector3(a - 0.501, b - 0.501, c - 0.501).scale(1.002), new B.Vector3(d - 0.501, e - 0.501, g - 0.501).scale(1.002)]);
+const lookBox = B.MeshBuilder.CreateLineSystem("look", { lines: edges }, scene);
+lookBox.color = new B.Color3(0, 0, 0); lookBox.alpha = 0.45; lookBox.isPickable = false; lookBox.setEnabled(false);
+function showLook(f) {
+  const c = f.looking;
+  lookBox.setEnabled(!!c);
+  if (c) lookBox.position.set(c[0] + 0.5, c[1] + 0.5, c[2] + 0.5);
+}
+
 // ---------------------------------------------------------------- sky and fog: the biome underfoot's sky colour, fog to the edge of what is loaded
 let skyName = null;
 function sky(f) {
@@ -234,7 +315,7 @@ async function poll() {
       pose = { x: f.pos[0], y: f.pos[1], z: f.pos[2], yaw: yawOf(f.look ? f.look[0] : 0), pitch: pitchOf(f.look ? f.look[1] : 0) };
       if (down || (lastRun && (f.name !== lastRun.name || f.dimension !== lastRun.dimension || (f.tick ?? 0) < (lastRun.tick ?? 0) - 100))) resetWorld();
       down = false; lastRun = f;
-      panel(f); sky(f); syncEntities(f.entities || [], f); syncColumns(f.columns || {}, f.pos, meta.radius);
+      panel(f); sky(f); holdItem(f); swingTo(f); showCrack(f); showLook(f); syncEntities(f.entities || [], f); syncColumns(f.columns || {}, f.pos, meta.radius);
       $("status").textContent = `${versions.size} columns`;
     } else { $("status").textContent = "new world loading… (waiting for the bot to spawn)"; down = true; }
   } catch (e) { $("status").textContent = "new world loading… (the bot is restarting)"; down = true; }
@@ -244,7 +325,7 @@ let last = performance.now();
 function loop() {
   const now = performance.now(), t = Math.min(1, (now - last) / 90); last = now;
   try {
-    aim(t);
+    aim(t); animateHand(now);
     for (const [id, e] of ents) {
       const c = e.cur, g = e.target;
       c.x += (g.x - c.x) * t; c.y += (g.y - c.y) * t; c.z += (g.z - c.z) * t; c.yaw = lerpAngle(c.yaw, g.yaw, t);

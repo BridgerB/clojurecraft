@@ -121,3 +121,27 @@
             cells
             {"temperature" 0.8 "downfall" 0.9 "effects" {"grass_color_modifier" "swamp"}})))
     (is (= ["plains"] (viewer/biome-names cells)) "biome ids are the sorted biome files")))
+
+(deftest the-first-person-view-is-the-bots-own-data
+  (let [log (blocks/default-state :oak_log)
+        w {:time/now 1500
+           :player/pos [0.5 64.0 0.5]
+           :player/look [0.0 0.0]
+           :world/chunks {[0 0] (world/column {[0 65 3] log})}
+           :plan/intent {:intent/kind :stairs-down
+                         :intent/child {:intent/kind :dig
+                                        :intent/stage :digging
+                                        :intent/target [0 65 3]
+                                        :intent/started 1000
+                                        :intent/dig-ms 2000}}}]
+    (is (= {:pos [0 65 3] :progress 0.25} (viewer/dig-view w))
+        "elapsed over the dig's own expected time, found down the intent chain")
+    (is (nil? (viewer/dig-view (assoc-in w [:plan/intent :intent/child :intent/stage] :confirm))))
+    (is (= [0 65 3] (viewer/looked-at w)) "the eyes' ray meets the log three blocks south")
+    (is (nil? (viewer/looked-at (assoc w :player/look [180.0 0.0]))) "nothing within reach north")
+    (is (= 2
+           (viewer/arm-moves [{:effect/kind :send :effect/packet {:packet/name :swing}}
+                              {:effect/kind :send :effect/packet {:packet/name :player-action}}
+                              {:effect/kind :send :effect/packet {:packet/name :attack}}
+                              {:effect/kind :log}]))
+        "a swing and an attack move the arm; a dig action and a log line do not")))

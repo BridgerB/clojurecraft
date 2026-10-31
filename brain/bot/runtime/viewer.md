@@ -14,6 +14,10 @@ sourceRefs:
   - src/clojurecraft/viewer.clj#defn assets-message
   - src/clojurecraft/viewer.clj#defn plain-textures
   - src/clojurecraft/viewer.clj#defn grass-colour
+  - src/clojurecraft/viewer.clj#defn dig-view
+  - src/clojurecraft/viewer.clj#defn looked-at
+  - src/clojurecraft/viewer.clj#defn arm-moves
+  - dev/viewer/loop.sh#one bot plays the whole chain from spawn
   - src/clojurecraft/viewer.clj#defn biome-names
   - src/clojurecraft/chunk.clj#defn read-section-with-biomes
   - src/clojurecraft/viewer.clj#defn read-assets!
@@ -30,7 +34,7 @@ related:
 
 # Viewer
 
-`clojure -M:run ... --viewer 4600` serves `http://127.0.0.1:4600/`: the world within about 100 blocks of the bot (13x13 columns) as Minecraft draws it, through the bot's own eyes or an orbit round it (drag, wheel), the bot as a player model in the orbit, the other entities, wire boxes on the intent's and its children's target cells, and a panel of what it is thinking: the goal (or the interrupt that took the focus), the intent, each child down the chain, a wait, the last failure, the chain a fresh run plays with what is reached, the hotbar with item icons, health and food.
+`clojure -M:run ... --viewer 4600` serves `http://127.0.0.1:4600/`: the world within about 100 blocks of the bot (13x13 columns) as Minecraft draws it, through the bot's own eyes and nothing else (an orbit only behind `?orbit=1`, for debugging; `?embed=1` hides the panel), with the first-person hand or the held item, its swing, the cracks on the block it breaks and a thin outline on the block under the crosshair, the other entities, and a panel of what it is thinking: the goal (or the interrupt that took the focus), the intent, each child down the chain, a wait, the last failure, the chain a fresh run plays with what is reached, the hotbar with item icons, health and food.
 
 It is an observer in the [[telemetry-watch]] sense: nothing in `game`, `plan` or `intent` mentions it and it never writes the atom.
 
@@ -46,6 +50,15 @@ It is fed what steve's server fed it:
 2. `frame` is pure: pose, look, health, food, hotbar, entities, `intent-view` of `:plan/intent` (and `:plan/failed`), `:plan/reached`, the wait, and `columns`: a version per loaded column round the bot, the column's identity plus the hash of the block overlay over it, so it moves exactly when the column is replaced or a block in it changes.
 3. The frame carries the biome id under the feet (`biome-at`); the page sets the sky to that biome's colour and a linear fog in it from 55% of the loaded radius to its edge, so the edge of the known world fades as it does in the game.
 4. The page polls `/frame` every 100 ms, eases the camera and entities toward it as steve's embed does, and fetches a column again when its version moves, nearest first, four at a time, so the ground under the bot draws within seconds and the horizon after (all 169 columns at once drew the deep sections first and showed cut-away stone for most of a minute).
+
+## First person, from the bot's own data
+- The held item is `hotbar[held]`, the bot's own inventory: a flat sprite for an item, a small cube for a block; the skin's arm when the hand is empty.
+- A swing plays (300 ms, vanilla's 6 ticks) for each arm packet the bot sends: the watch counts `:swing`, `:attack`, `:use-item` and `:use-item-on` among the effects the loop is about to perform (`arm-moves`), the frame's `:swings`. A dig swings every `swing-every`, so digging swings continuously as in the game.
+- The cracks are `destroy_stage_0..9` from the jar, multiplied over the block, at the stage `floor(10 x progress)`, where `dig-view`'s progress is the time since the dig's START over its own `:intent/dig-ms` (dig/dig-time with the held tool and the penalties then).
+- The outline is the first cell along the eyes' ray within 4.5 blocks that is neither air nor a fluid (`looked-at`).
+
+## The loop
+`bb viewer-loop` (`dev/viewer/loop.sh`): a fresh local world each run, one bot from spawn through the whole chain at normal difficulty (`--until` the current stage, `--chain true`, 5.5 hours) with `--viewer 4600` and `--record` under `data/viewer-runs/`, again when it ends. Between runs the page says the new world is loading, then drops the old world's columns and entities and follows the new bot; an open page reloads itself when the page file changes.
 
 ## Gotchas
 - 26.x models write some texture variables as `{"sprite" ref "force_translucent" true}` (glass, panes, redstone dust); steve's renderer was made against older models and threw on them (`n.charAt is not a function`), drawing nothing. `plain-textures` flattens them.
