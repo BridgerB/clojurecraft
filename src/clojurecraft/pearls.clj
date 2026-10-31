@@ -1537,14 +1537,31 @@
   [world]
   (let [t (:pearls/shot-at-ms world)] (boolean (and t (< (- (:time/now world 0) t) shot-hold-ms)))))
 
+(def weak-melee 4.0)                    ; the hit (mob/kinds :melee) at or under which a mob is fought at hand with no burrow: a zombie's 3, a spider's 2
+
+(defn weak?
+  "Is entity e of a kind mob/kinds knows to hit for weak-melee or less on Normal (a zombie, a
+   spider), and no archer? A piglin, a hoglin or a blaze is not: gym plan run 41109441111
+   (pearls-travel-a) job 5 walked down to a piglin and fought it, three hits in four seconds,
+   dead at 39 minutes."
+  [e]
+  (let [k (mob/kinds (entity/kind e))]
+    (boolean (and k (:melee k) (nil? (:shoot k)) (<= (:melee k) weak-melee)))))
+
 (defn swarmed?
-  "Are two or more monsters within their reach (swarm), a ghast in sight (shot-at?), or one monster
-   while health is under danger-health? A lone one over that health is met by the fight rules (a
-   magma cube is small and slow)."
+  "Are two or more monsters within their reach (swarm), a ghast in sight (shot-at?), one monster
+   while health is under danger-health, or one hostile that is not weak? (a piglin, a hoglin)? A
+   lone weak one over that health is met by the fight rules (a magma cube is small and slow).
+   Pearls-travel-d job 5 (plan run 41156746096, issue #263) lived 73 minutes and two pearls, then
+   the :defend row fought a lone piglin at full health: two swings, hits of 6.7 at 73.06, .09 and
+   .16 min, dead."
   [world]
-  (let [n (count (swarm world))]
-    (boolean
-     (or (>= n 2) (and (= 1 n) (< (:player/health world 20.0) danger-health)) (shot-at? world)))))
+  (let [sw (swarm world)
+        n (count sw)]
+    (boolean (or (>= n 2)
+                 (and (= 1 n) (< (:player/health world 20.0) danger-health))
+                 (some (fn [[_ e]] (and (entity/hostile? e) (not (weak? e)))) sw)
+                 (shot-at? world)))))
 
 (def neighbours [[1 0 0] [-1 0 0] [0 0 1] [0 0 -1] [0 1 0] [0 -1 0]])
 
@@ -1785,17 +1802,6 @@
    was felled by the second and third hit of a fight in the open."
   [world]
   (min provoke-health (+ provoke-margin (* 2.0 (enderman-hit world)))))
-
-(def weak-melee 4.0)                    ; the hit (mob/kinds :melee) at or under which a mob is fought at hand with no burrow: a zombie's 3, a spider's 2
-
-(defn weak?
-  "Is entity e of a kind mob/kinds knows to hit for weak-melee or less on Normal (a zombie, a
-   spider), and no archer? A piglin, a hoglin or a blaze is not: gym plan run 41109441111
-   (pearls-travel-a) job 5 walked down to a piglin and fought it, three hits in four seconds,
-   dead at 39 minutes."
-  [e]
-  (let [k (mob/kinds (entity/kind e))]
-    (boolean (and k (:melee k) (nil? (:shoot k)) (<= (:melee k) weak-melee)))))
 
 (defn coming?
   "Is the nearest angry enderman (entity/creepy?) within stare-range one the hunt still fights
@@ -2197,9 +2203,12 @@
 (defmethod combat/answering :pearls
   ;; with a burrow near (shelter), every hostile tracked but the shunned kinds is the hunt's too
   ;; (threat): met from the burrow, where the :defend row would fight it in the open. With none,
-  ;; the endermen alone, as answers says
+  ;; the endermen and every hostile that is not weak? (a piglin, a hoglin): the hunt takes cover
+  ;; from those (swarmed?) and the :defend row does not fight them in the open
   [world _]
-  (cond-> (combat/answers :pearls)
+  (cond-> (into (combat/answers :pearls)
+                (comp (remove (comp weak? val)) (map (comp entity/kind val)) (remove shunned))
+                (entity/hostiles world))
     (shelter world)
     (into (comp (map (comp entity/kind val)) (remove shunned)) (entity/hostiles world))))
 

@@ -2749,3 +2749,20 @@
     (is (= 119 (pearls/roof-cap (assoc w :player/dimension "minecraft:overworld") 111))
         "elsewhere eight")
     (is (nil? (pearls/climb-out (assoc w :player/pos [8.5 119.0 8.5]))) "no flight at the roof")))
+
+(deftest a-lone-piglin-is-avoided-not-fought-in-the-open
+  ;; pearls-travel-d job 5 (plan run 41156746096, issue #263): 73 minutes, two pearls, then :defend
+  ;; fought a piglin 2.8 blocks away with no burrow yet: two swings, hits of 6.7, dead
+  (let [piglin (mob :piglin [11.5 64.0 8.5])
+        zombie (mob :zombie [11.5 64.0 8.5])
+        zpig (mob :zombified_piglin [11.5 64.0 8.5])
+        w (fn [m]
+            (assoc (standing {7 m})
+                   :player/inventory
+                   {0 (item :iron_sword 1) 1 (item :cobblestone 64)}))]
+    (is (pearls/swarmed? (w piglin)) "one piglin at full health")
+    (is (not (pearls/swarmed? (w zombie))) "one zombie: the fight rules")
+    (is (not (pearls/swarmed? (w zpig))) "a zombified piglin is neutral until it is hit")
+    (is (contains? (combat/answering (w piglin) :pearls) :piglin) ":defend leaves it to the hunt")
+    (is (not (contains? (combat/answering (w zombie) :pearls) :zombie)))
+    (is (not= :fight (:intent/kind (plan/next-intent (w piglin) row plan/goals))))))
