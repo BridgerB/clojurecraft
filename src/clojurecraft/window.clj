@@ -215,7 +215,7 @@
   [world]
   (count (remove #(get-in world [:player/inventory %]) inventory/main-then-hotbar)))
 
-(defn tossable-to
+(defn reserve-slot
   "The player slot to throw a stack from so that n slots are free: junk-slot when fewer are,
    else nil. (tossable is n = 1.)"
   [world n]
@@ -228,7 +228,7 @@
    container is open."
   ([world] (reserve-toss world free-reserve))
   ([world n]
-   (when (and (nil? (:window/open world)) (tossable-to world n))
+   (when (and (nil? (:window/open world)) (reserve-slot world n))
      {:intent/kind :toss :intent/free n})))
 
 (def toss-pitch -30.0)                 ; degrees up the eyes look before a throw (negative is up)
@@ -266,7 +266,7 @@
           :else (intent/fail world :inventory-full))))
 
 (defmethod intent/run :toss
-  ;; {:intent/kind :toss :intent/free n}: throw junk out of window 0 (tossable-to, toss) until n
+  ;; {:intent/kind :toss :intent/free n}: throw junk out of window 0 (reserve-slot, toss) until n
   ;; slots are free (1 when not given), then done; with nothing to throw it is done too
   [world i _]
   (let [world (assoc world :plan/intent i)
@@ -280,8 +280,8 @@
                 (game/emit {:packet/name :container-close
                             :window-id (get-in world [:window/open :window/id])})
                 (dissoc :window/open))
-            (tossable-to world (:intent/free i 1))
-            (toss world v (tossable-to world (:intent/free i 1)))
+            (reserve-slot world (:intent/free i 1))
+            (toss world v (reserve-slot world (:intent/free i 1)))
             :else
             (-> world
                 (assoc :player/controls {})
