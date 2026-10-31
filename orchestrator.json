@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-31T10:34:59.676Z",
+  "at" : "2026-10-31T10:36:05.290Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -43,13 +43,13 @@
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
-    "number" : 342,
-    "title" : "Bot stops at furnace: boxed",
+    "number" : 531,
+    "title" : "Bot stops at ingots: boxed",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 531,
-    "title" : "Bot stops at ingots: boxed",
+    "number" : 342,
+    "title" : "Bot stops at furnace: boxed",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
@@ -274,11 +274,11 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 342,
+    "issue" : 531,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 531,
+    "issue" : 342,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
