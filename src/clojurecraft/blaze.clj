@@ -1146,6 +1146,13 @@
     (when-let [site (pocket/current world (intent/feet world) (pocket-ok? world sp see?))]
       {:intent/kind :pocket :intent/site site})))
 
+(defn wakes-spawner?
+  "Is the eye within spawner-wake of spawner sp (nil: no)? A pocket farther off than that is a
+   refuge, not a camp: blaze-race-u job 5 sealed itself in 13 s after landing, far from any
+   spawner, and its camp failed :no-blaze three times, which ends the plan."
+  [world sp]
+  (boolean (and sp (<= (physics/distance (game/eye world) (physics/centre sp)) spawner-wake))))
+
 (def pocket-approach 14.0) ; blocks from the spawner within which a pocket is made ready before the tunnel goes on: close, so the tunnel's own steps do not break it (24 dug a pocket per tunnel step)
 (def prepare-cooldown-ms 300000) ; ms after a pocket was begun ahead before another is: blaze-race-r jobs 1 and 4 dug one a step, ten of them, 250 netherrack, and wore the pickaxe out
 (def approach-nodes 150)   ; cells the search for it visits at most when asked every tick (interrupts?)
@@ -1375,13 +1382,13 @@
   ;; stuck bots dug by hand)
   [world goal table]
   (let [in-pocket? (pocket/in? world)
+        sp (nearest-spawner world)
         ;; a camp in the pocket that no blaze comes to (idle?: three camps done in ten minutes and
         ;; no fight) is left for the spawner's room, as the nook was
-        camping-in-pocket? (and in-pocket? (not (idle? world)))
+        camping-in-pocket? (and in-pocket? (not (idle? world)) (wakes-spawner? world sp))
         [heid] (fightable-blaze world)
         [beid] (when-not in-pocket? (quarry world))
         [_ lying] (when (collectable? world) (rod-lying world))
-        sp (nearest-spawner world)
         heal (delay (when (hurt? world) (healing world)))
         wary (delay (when (and (not in-pocket?) (wary? world)) (warily world)))
         away (delay (when (and (not in-pocket?) (outnumbered? world)) (hide world)))

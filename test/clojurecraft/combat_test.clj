@@ -806,3 +806,13 @@
             (combat/danger-line (standing {7 (mob :blaze [10.5 64.0 8.5] 20.0)
                                            8 (mob :wither_skeleton [10.0 64.0 9.0] 20.0)})))
         "a blaze with a wither skeleton: one melee hit, no pack")))
+
+(deftest a-cover-does-not-lay-the-wall-cell-that-just-failed
+  ;; blaze-race-u job 4: :place failed :no-support three times in 0.15 s, the plan failed
+  (let [w {:plan/failed {:intent/kind :place :intent/cell [8 64 8]}}]
+    (is (true? (combat/wall-failed? w [8 64 8])))
+    (is (false? (combat/wall-failed? w [9 64 8])) "another cell is tried")
+    (is (false? (combat/wall-failed? {} [8 64 8])))
+    (is (false? (combat/wall-failed? {:plan/failed {:intent/kind :walk :intent/cell [8 64 8]}}
+                                     [8 64 8])))
+    (is (false? (combat/wall-failed? w nil)))))

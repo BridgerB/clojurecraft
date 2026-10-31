@@ -1634,3 +1634,13 @@
     (testing "after a fight the pocket is camped again"
       (let [fought (memory/remember-intention idle {:intent/id 4 :intent/kind :fight} :done)]
         (is (= :camp (:intent/kind (next-intent fought))))))))
+
+(deftest a-pocket-far-from-any-spawner-is-a-refuge-not-a-camp
+  ;; blaze-race-u job 5: sealed in 13 s after landing, far from a spawner; the camp failed
+  ;; :no-blaze three times and the plan failed
+  (let [w (-> (standing {})
+              in-pocket
+              (assoc :time/now 100000))]
+    (is (true? (blaze/wakes-spawner? w spawner-at)) "a spawner within 16 of the eye: camped")
+    (is (false? (blaze/wakes-spawner? w [200 64 200])) "far: the pocket is a refuge")
+    (is (false? (blaze/wakes-spawner? w nil)))))

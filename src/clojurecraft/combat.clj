@@ -844,6 +844,14 @@
                (= :solid (path/classify world [fx (- fy 2) fz])))
       below)))
 
+(defn wall-failed?
+  "Did the last failed intent place a block in cell w? Blaze-race-u job 4 laid a wall cell with
+   nothing to set it against, `intent :place failed: :no-support` three times in 0.15 s between
+   back-offs, and the plan failed at 4 hp; the cover tries the next choice instead."
+  [world w]
+  (let [{:intent/keys [kind cell]} (:plan/failed world)]
+    (boolean (and w (= :place kind) (= w cell)))))
+
 (defn cover
   "The intent for a bot under retreat-health that no back-off from entity e would help
    (back-off-pointless?), never a fight (#577, danger-health): with e back-off-to or more away, the
@@ -858,7 +866,7 @@
   [world e]
   (let [food (when (< (:player/food world 20) 20) (eat/food-held world))
         near? (<= (physics/distance (game/eye world) (aim e)) attack-reach)
-        wall (wall-cell world e)
+        wall (let [w (wall-cell world e)] (when-not (wall-failed? world w) w))
         filler (stairs/filler world wall-fill)
         nook (nook-cell world)
         [_ fy _] (intent/feet world)]
