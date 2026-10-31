@@ -122,6 +122,8 @@
 (def menace-radius 24.0)               ; blocks a hostile (an angry enderman, a blaze) this near puts the explore walk off
 (def menace-grace-ms 300000)          ; ms past the stuck line after which a hostile near no longer puts it off: a parked one is there for good
 (def explore-distance 48)             ; blocks the walk away from a stuck spot goes
+(def avoid-ms 120000)                 ; ms after the watchdog fires that the place it fired at is avoided by the row's choices
+(def avoid-radius 16.0)               ; blocks from that place a cell counts as it
 (def explore-tries 4)                 ; trail cells tried farthest first, then as many nearest first, for a route
 (def explore-nodes 2000)              ; expansions each of those route searches may spend
 (def anchors
@@ -589,9 +591,24 @@
         [(+ fx (long (math/round (* explore-distance ux)))) fy
          (+ fz (long (math/round (* explore-distance uz))))])))
 
+(defn avoiding?
+  "Does the stuck watchdog ask rows to keep away from cell c: it fired within avoid-ms and c is
+   within avoid-radius on the plane of the place it fired at (:plan/avoid)? A row's choice of a
+   site (a pocket, a camp, a burrow) asks this and passes over the one it was stuck at.
+   Blaze-race-z6 (run 41201377711): all 12 firings of two jobs were followed within 50 ms by the
+   same :pocket, the explore walk undone."
+  [world c]
+  (let [{:keys [near until]} (:plan/avoid world)]
+    (boolean (and near
+                  until
+                  (< (:time/now world 0) until)
+                  (<= (physics/horizontal-distance c near) avoid-radius)))))
+
 (defn unstick
   "The world of a bot that has made no progress for stuck-ms: the running intent dropped, the
-   row's anchors (anchors) forgotten, a walk away planned (:plan/explore) and the watch restarted.
+   row's anchors (anchors) forgotten, the place avoided for avoid-ms (avoiding?), a walk away
+   planned (:plan/explore) unless a hostile is near (menaced?: a walk out into it is undone at
+   once and is not safe) and the watch restarted.
    Pearl-fight-i jobs 1 and 2 (run 41178660163) stood at one block for 2 h 20 min, 1631 lookouts,
    and blaze-race-z job 3 camped 119 min. Never a fight: only a walk."
   [world goal i r now]
@@ -603,7 +620,8 @@
         (reduce (fn [w path] (cond-> w (get-in w path) (assoc-in path now)))
                 w
                 (get clocks (:goal/plan goal) [])))
-      (assoc :plan/explore (explore-cell world r))
+      (cond-> (not (menaced? world)) (assoc :plan/explore (explore-cell world r)))
+      (assoc :plan/avoid {:near (intent/feet world) :until (+ now avoid-ms)})
       (assoc :plan/watch (watch-stamp world (progress-key world goal) now now))
       (update :plan/unstuck (fnil inc 0))
       (game/say (str "stuck " (:plan/unstuck world 0) " " (:goal/id goal) " explore"))))

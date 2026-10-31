@@ -480,6 +480,7 @@
 (s/def :plan/done-at int?)
 (s/def :plan/recoveries nat-int?)
 (s/def :plan/recover-at int?)
+(s/def :plan/avoid map?)
 (s/def :plan/watch map?)
 (s/def :plan/explore ::block-pos)
 (s/def :plan/unstuck nat-int?)
