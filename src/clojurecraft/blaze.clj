@@ -1311,6 +1311,7 @@
   [world sp]
   (when (and sp
              (not (pocket/in? world))
+             (nil? (:sortie/since world))
              (nil? (pocket/held-valid world))
              (let [at (:pocket/prepared-at world)]
                (or (nil? at) (> (- (:time/now world 0) at) prepare-cooldown-ms)))

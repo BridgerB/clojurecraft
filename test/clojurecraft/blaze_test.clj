@@ -1938,3 +1938,16 @@
                                            row
                                            hold)))
         "nothing shooting: the hold runs")))
+
+(deftest a-sortie-is-not-cut-for-a-pocket-ahead
+  ;; blaze-race-z6 landings 1 and 2: 138 minutes of :camp (60 s), :camp failed :no-blaze, :tunnel-to, :pocket
+  ;; one second later, :camp: the sortie's first dig opened the pocket's wall (valid? false), and
+  ;; prepare-intent made a new pocket ahead and cut the tunnel; the leg never got past two cells
+  (let [w (-> (standing {})
+              (assoc :world/chunks {[0 0] (world/column rock)}
+                     :player/pos [5.5 64.0 8.5]
+                     :time/now 1000000)
+              with-spawner)]
+    (is (some? (blaze/prepare-intent w spawner-at)) "no sortie: a pocket ahead is made")
+    (is (nil? (blaze/prepare-intent (assoc w :sortie/since 990000) spawner-at))
+        "on a sortie: no pocket ahead")))
