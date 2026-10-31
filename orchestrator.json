@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-31T09:12:19.954Z",
+  "at" : "2026-10-31T09:15:36.261Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -33,11 +33,6 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 623,
-    "title" : "Bot stops at blaze-rods: no-support",
-    "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
-  }, {
     "number" : 618,
     "title" : "Bot stops at ingots: no-support",
     "labels" : [ "bot-failure", "sim" ],
@@ -48,14 +43,14 @@
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
-    "number" : 531,
-    "title" : "Bot stops at ingots: boxed",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 135,
     "title" : "Bot stops at cast-one: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 531,
+    "title" : "Bot stops at ingots: boxed",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 514,
@@ -76,6 +71,11 @@
     "number" : 178,
     "title" : "Bot stops at portal: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 623,
+    "title" : "Bot stops at blaze-rods: no-support",
+    "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
     "number" : 622,
@@ -265,11 +265,11 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 531,
+    "issue" : 135,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 135,
+    "issue" : 531,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
