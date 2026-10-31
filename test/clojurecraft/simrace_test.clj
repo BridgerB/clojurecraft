@@ -430,3 +430,19 @@
     (is (= (plan/through "pearls-12")
            (:go/goals (simrace/go-of (dissoc w :capture/fortress) "pearls-12")))
         "no fortress: the whole chain, as before")))
+
+(deftest a-fortress-run-ends-at-its-first-death-filed-by-its-class
+  ;; sim race lanes of 9d15bd6: the model respawned the bot at the start for ever (861 and 1722
+  ;; deaths in a run), so nothing was measured; the real race ends such a run at the first death
+  (let [died {:stats/deaths 1 :plan/status :running}
+        r {:ok false :until "blaze-rods" :reason :timeout}]
+    (is (simrace/stopped? died true) "the first death stops a fortress run")
+    (is (not (simrace/stopped? died false)) "a run from spawn plays on after a death")
+    (is (not (simrace/stopped? {:plan/status :running} true)))
+    (is (= :death-blaze (:reason (simrace/death-ended r died true :blaze))))
+    (is (= :death-piglin (:reason (simrace/death-ended r died true :zombified_piglin))))
+    (is (= :death-other (:reason (simrace/death-ended r died true :starve))) "no class for it")
+    (is (= r (simrace/death-ended r {:stats/deaths 0} true :blaze)) "no death, no change")
+    (is (= r (simrace/death-ended r died false :blaze)) "from spawn, no change")
+    (is (= {:ok true :reason :goal} (simrace/death-ended {:ok true :reason :goal} died true :blaze))
+        "a goal reached before the death is a success")))
