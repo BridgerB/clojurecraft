@@ -1814,3 +1814,15 @@
                   with-spawner)]
       (is (= :pocket (:intent/kind (next-intent out)))
           "a spent sortie: back to the pocket behind"))))
+
+(deftest a-spent-sortie-does-not-cut-the-pick-up-of-a-rod-a-step-away
+  ;; blaze-race-z4 landings 1 and 2: :collect-drops [2344 57 2286] and :pocket alternated every 0.35 s
+  ;; for 10 s and more (14 times in 10 s), 4 of 6 rods lost, the bot dead in the room
+  (let [rod (entity :item [10.5 64.0 8.5] :entity/item blaze/rod)
+        w (assoc (standing {40 rod}) :sortie/since 0 :time/now 200000)
+        grab {:intent/kind :collect-drops :intent/item :blaze_rod :intent/target [10 64 8]}]
+    (is (true? (blaze/sortie-over? w)))
+    (is (some? (blaze/near-rod w)))
+    (is (not (plan/interrupts? w row grab)) "the rod is picked up first")
+    (is (plan/interrupts? w row {:intent/kind :camp :intent/spawner [11 64 10]})
+        "a camp is still cut")))

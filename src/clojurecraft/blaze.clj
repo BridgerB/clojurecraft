@@ -1597,6 +1597,7 @@
       (and (= :tunnel-to (:intent/kind i)) (some? (long-shot-cover world)))
       (and (not (contains? refuge-kinds (:intent/kind i)))
            (not= :fight (:intent/kind i))
+           (not (rod-grab? world i))
            (sortie-over? world))
       (and (not (contains? refuge-kinds (:intent/kind i)))
            (some? (refuge-now world (nearest-spawner world))))
