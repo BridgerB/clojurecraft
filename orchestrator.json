@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-31T06:04:30.528Z",
+  "at" : "2026-10-31T06:11:01.765Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -46,6 +46,11 @@
     "number" : 531,
     "title" : "Bot stops at ingots: boxed",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 636,
+    "title" : "Bot stops at blaze-rods: no-food-to-return",
+    "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
     "number" : 622,
