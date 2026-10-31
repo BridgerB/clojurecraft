@@ -466,3 +466,26 @@
          {:intent/kind :scoop :intent/target src :intent/fluid :lava :intent/aim [10.25 63.85 10.5]}
          (build/scoop-at-station w [src]))
         "scooped along the clear ray, nothing dug")))
+
+(deftest a-bank-of-snow-the-ray-crosses-above-does-not-hide-the-water
+  ;; flag #2 (Bridger, local viewer, 2026-10-31): on snow layers, goal water-bucket, the walk
+  ;; flipped between two adjacent sources every ~250 ms, turning 180 degrees each time. Snow in
+  ;; the cell the eyes look down through was taken for a wall, so neither source was ever seen.
+  (let [snow (blocks/default-state :snow)
+        at-feet (standing (assoc pond [8 64 8] snow) [8.5 8.5])
+        in-the-way (standing (assoc pond [9 64 8] snow) [8.5 8.5])]
+    (is (scoop/sees? at-feet [10 63 8]) "the ray crosses the snow cell above its 2/16 outline")
+    (is (= :scoop (:intent/kind (scoop/scoop-next at-feet))) "scooped from the bank")
+    (is (not (scoop/sees? in-the-way [10 63 8]))
+        "a layer the ray's last stretch dips into stops it, as in the game")))
+
+(deftest the-walk-keeps-the-source-it-set-out-for
+  (let [w (standing pond [3.5 8.5])
+        walk {:intent/kind :walk :intent/target [11 63 8] :intent/for :scoop}]
+    (is (= [10 63 8] (:intent/target (scoop/scoop-next w))) "nearest first")
+    (is (= [11 63 8] (:intent/target (scoop/scoop-next (assoc w :plan/last walk))))
+        "the target just walked at stays while it is still a source")
+    (is (= [10 63 8]
+           (:intent/target (scoop/scoop-next
+                            (assoc w :plan/last (assoc walk :intent/for :elsewhere)))))
+        "another purpose's walk is no preference")))
