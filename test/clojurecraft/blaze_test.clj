@@ -1411,8 +1411,8 @@
     (is (= collect (next-intent (standing {40 rod 7 hand}))) "the rod, with a blaze in reach")
     (is (= :fight (:intent/kind (next-intent (standing {40 far-rod 7 hand}))))
         "five off: the swing")
-    (is (not= collect (next-intent (assoc (standing {40 rod 7 hand}) :player/health 11.0)))
-        "under low-health the refuge comes first")
+    (is (not= collect (next-intent (assoc (standing {40 rod 7 hand}) :player/health 9.0)))
+        "under danger-health (rod-grab-health) the refuge comes first")
     (testing "a running pickup is not cut for the blaze in reach, a camp is"
       (let [w (standing {40 rod 7 hand})]
         (is (not (plan/interrupts? w row collect)))
