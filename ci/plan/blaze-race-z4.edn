@@ -1,0 +1,20 @@
+;; Issue #262, round z4: hit and run. z3 (dig-on reverted): landings 1 and 2 camped 120 min, 0 kills; landing 5 burned in
+;; 2m35s before the support fix. z2: landing 2 killed 4 blazes in 3.4 min in the room, then died there. A healed bot in its
+;; pocket goes out to the spawner (sortie-due?), and comes back after 2 fights, 90 s or health 14 (sortie-over?) to heal.
+;; Landings 1, 2 and 5. Rods held, kills per 10 min (s2k.ts), deaths.
+{:plans/label "blaze-race-z4"
+ :plans/jobs 3
+ :plans/issue 262
+ :plans/experiments [{:exp/name "blaze-fortress-race"
+                      :exp/kind :gym
+                      :exp/goal "blaze-fortress-race"
+                      :exp/runs 2
+                      :exp/bots 1
+                      :exp/est-s 1800}
+                     {:exp/name "blaze-fortress-race-5"
+                      :exp/kind :gym
+                      :exp/goal "blaze-fortress-race"
+                      :exp/runs 1
+                      :exp/from 5
+                      :exp/bots 1
+                      :exp/est-s 1800}]}
