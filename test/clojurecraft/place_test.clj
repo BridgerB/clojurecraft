@@ -650,3 +650,19 @@
     (is (= :failed (:intent/status (:plan/intent out))))
     (is (= :no-support (:intent/reason (:plan/intent out))))
     (is (not (:control/forward? (:player/controls out))) "no step off the edge")))
+
+(deftest an-airborne-placement-over-no-floor-still-nudges-as-a-pillar-lays-its-block
+  ;; the fail :no-support for a floorless feet cell holds on the ground only: a pillar's block is laid
+  ;; at the top of a jump with nothing under the feet cell yet
+  (let [floor (into {} (for [x (range 6 10) z (range 3 10)] [[x 63 z] 1]))
+        w (-> (standing [5.74 64.0 5.5])
+              (assoc :world/chunks {[0 0] (world/column floor)} :player/on-ground? false)
+              (assoc :plan/intent
+                     {:intent/kind :place
+                      :intent/item :cobblestone
+                      :intent/status :active
+                      :intent/stage :spot
+                      :intent/cell [6 64 5]}))
+        out (first (fx/fold intent-step w [{:event/kind :tick :event/now 0 :event/rand 0.5}]))]
+    (is (= :active (:intent/status (:plan/intent out))))
+    (is (= 1 (:intent/nudges (:plan/intent out))) "nudged as before")))
