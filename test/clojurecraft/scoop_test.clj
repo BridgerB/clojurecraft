@@ -476,8 +476,8 @@
         in-the-way (standing (assoc pond [9 64 8] snow) [8.5 8.5])]
     (is (scoop/sees? at-feet [10 63 8]) "the ray crosses the snow cell above its 2/16 outline")
     (is (= :scoop (:intent/kind (scoop/scoop-next at-feet))) "scooped from the bank")
-    (is (not (scoop/sees? in-the-way [10 63 8]))
-        "a layer the ray's last stretch dips into stops it, as in the game")))
+    (is (not (scoop/clear? in-the-way [10.5 63.2 8.5]))
+        "a layer the ray dips into on its way down still stops it, as in the game")))
 
 (deftest the-walk-keeps-the-source-it-set-out-for
   (let [w (standing pond [3.5 8.5])
