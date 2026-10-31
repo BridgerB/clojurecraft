@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-31T07:00:23.568Z",
+  "at" : "2026-10-31T07:01:30.705Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -61,6 +61,11 @@
     "number" : 135,
     "title" : "Bot stops at cast-one: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 639,
+    "title" : "Bot stops at fortress: no-food-to-return",
+    "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
     "number" : 622,
