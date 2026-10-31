@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-31T03:34:25.107Z",
+  "at" : "2026-10-31T03:37:38.401Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -18,14 +18,14 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 539,
-    "title" : "Bot stops at fortress: timeout",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 618,
     "title" : "Bot stops at ingots: no-support",
     "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 539,
+    "title" : "Bot stops at fortress: timeout",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 161,
