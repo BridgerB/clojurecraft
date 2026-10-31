@@ -365,10 +365,42 @@
           (swap! fortresses conj at)
           at))))
 
-(defn prelocate!
-  "Before any bot joins: locate the fortresses for the first bots' landings (racers 0 to n - 1),
-   one at a time on one RCON session, so the searches stall a server nobody is connected to. Then
-   every landing of those bots finds its fortress in the cache."
+(def pads-built
+  "The pads built so far on this server, #{[x z y] ...} (an atom): a pad is built once, before a
+   bot is sent to it."
+  (atom #{}))
+
+(defn tp-command
+  "The RCON command that teleports bot name onto the pad [x z y], the middle of its cell, in the
+   Nether."
+  [name [x z y]]
+  (gym/in-dimension dimension/nether (str "tp " name " " (+ x 0.5) " " y " " (+ z 0.5))))
+
+(defn build-pad!
+  "Build the pad [x z y] (gym/fortress-pad-open) in the Nether with no bot: the square round it
+   forceloaded and waited for, the commands, the forceload released. The first build of a Nether
+   region generates its chunks and a fortress's structure, seconds of the server's thread each:
+   done with a bot connected, the server fell 12 to 34 s behind and the bots timed out (race
+   41225389190: Clj_r10 lost connection 17:39:17, six more by 17:39:36, the first pad built at
+   17:39:00, 40 s after the bots joined). Remembered in pads-built."
+  [rc [x z _ :as pad]]
+  (when-not (contains? @pads-built pad)
+    (let [where (str/join " " [(- x 2) (- z 2) (+ x 2) (+ z 2)])]
+      (rcon/command! rc (gym/in-dimension dimension/nether (str "forceload add " where)))
+      (try (when-not (gym/wait-loaded-in! rc dimension/nether [(- x 2) (- z 2) (+ x 2) (+ z 2)])
+             (throw (ex-info "the pad's chunks never loaded" {:pad pad})))
+           (doseq [c gym/fortress-pad-open]
+             (rcon/command! rc (gym/in-dimension dimension/nether (gym/fill-in c "" pad))))
+           (swap! pads-built conj pad)
+           (finally (rcon/command! rc
+                                   (gym/in-dimension dimension/nether
+                                                     (str "forceload remove " where))))))))
+
+(defn prepare!
+  "Before any bot joins: locate the fortresses and build the pads for the first bots' landings
+   (racers 0 to n - 1), one at a time on one RCON session, so the searches and the Nether's
+   chunk generation stall a server nobody is connected to (build-pad!). Then each of those bots
+   is only teleported onto a pad made, and finds its fortress in the cache."
   [{:keys [host rcon-port rcon-pass landings landing-offset]} n]
   (when landings
     (try (rcon/with-rcon host
@@ -376,24 +408,34 @@
                          rcon-pass
                          (fn [rc]
                            (doseq [i (range n)]
-                             (locate-fortress! rc (landing-of landings (or landing-offset 0) i)))))
-         (catch Exception e (cli/log "prelocate failed:" e)))))
+                             (let [landing (landing-of landings (or landing-offset 0) i)]
+                               (build-pad! rc (pad-of (locate-fortress! rc landing) i))))))
+         (catch Exception e (cli/log "prepare failed:" e)))))
 
 (defn land-fortress!
-  "Land the bot named name (racer i) at the fortress of its landing: the open pad gym/fortress-pad-open
-   at pad-of the fortress the server locates, gym/place! building it and teleporting the bot in;
-   wait for the server to say it stands in the Nether, clear its inventory and give it kit
+  "Land the bot named name (racer i) at the fortress of its landing: the pad (pad-of the fortress the
+   server locates, built by prepare! or here when it is new, build-pad!), the bot teleported onto
+   it; wait for the server to say it stands in the Nether, clear its inventory and give it kit
    (\"minecraft:iron_sword 1\" ...: what a race bot carries to the fortress, ci/race.edn's
    :race/kit). Returns where it stands ([x y z], standing-on the pad), or nil when the dimension
    never came; a landing that cannot locate a fortress throws."
   [rc name landing i kit]
   (let [pad (pad-of (locate-fortress! rc landing) i)]
-    (gym/place! rc dimension/nether name pad 2 gym/fortress-pad-open)
+    (build-pad! rc pad)
+    (cli/log "tp:" (rcon/command! rc (tp-command name pad)))
     (when (gym/wait-in! rc name dimension/nether)
       (rcon/command! rc (str "clear " name))
       (doseq [item kit] (rcon/command! rc (str "give " name " " item)))
       (Thread/sleep (long fixture/settle-ms))
       (standing-on pad))))
+
+(defn slot-index
+  "The index racer i (from 0) lands with at the fortress: i mod slots, so a bot that replaces one
+   that ended takes the landing and the pad of its slot, which prepare! built, and no new Nether
+   region is generated while bots are connected. (Racer serials grow with every replacement:
+   lane 3 of race 41218543330 started 116 runs in 31 minutes.)"
+  [i slots]
+  (if (pos? (or slots 0)) (mod i slots) i))
 
 (defn spawn-command
   "The RCON command that pins bot name's spawn at the cell of at ([x y z]) in the dimension dim:
@@ -413,7 +455,8 @@
    cell claimed for it round the race's centre, which the first bot online decides), pin its spawn
    there, and put its :go (every step up to until, milestones on, :go/at where it landed) on its
    queue. A bot whose landing fails starts where it stands."
-  [{:keys [host rcon-port rcon-pass until landings landing-offset from kit]} ch centre name queue i]
+  [{:keys [host rcon-port rcon-pass until landings landing-offset from kit bots]} ch centre name
+   queue i]
   (async/thread
    (try (rcon/with-rcon
          host
@@ -425,12 +468,13 @@
                  at (when online
                       (rcon/command! rc (str "gamemode survival " name))
                       (cond (fortress? from)
-                            (land-fortress!
-                             rc
-                             name
-                             (if landings (landing-of landings (or landing-offset 0) i) @centre)
-                             i
-                             kit)
+                            (let [k (slot-index i bots)]
+                              (land-fortress!
+                               rc
+                               name
+                               (if landings (landing-of landings (or landing-offset 0) k) @centre)
+                               k
+                               kit))
                             landings
                             (fixture/land-at! rc name (landing-of landings (or landing-offset 0) i))
                             :else (land! rc ch name @centre i)))]
@@ -657,6 +701,7 @@
                         :rcon-pass rcon-pass
                         :until until
                         :from (or (get o :from) (:race/from config))
+                        :bots bots
                         :kit (:race/kit config)}
                  landings-file
                  (assoc :landings (landings/read-landings landings-file)
@@ -684,7 +729,7 @@
              :deadline (+ t0 (run-ms config))}]
     (cli/log "race:" bots "slots to" until "seed" seed "for" (quot (run-ms config) 60000) "min")
     (set-gamerules! server)
-    (when (fortress? (:from server)) (prelocate! server bots))
+    (when (fortress? (:from server)) (prepare! server bots))
     (board! server live done)
     (sampler! server where live record-dir done)
     (let [slots (mapv #(slot! ctx %) (range bots))
