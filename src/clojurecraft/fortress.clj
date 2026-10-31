@@ -34,7 +34,7 @@
 (def brick-min-y 32)                  ; bricks under this are below the lava sea's surface (y 31): never tunnel to them
 (def sight-radius 512)                ; how far a remembered brick may be and still be the target
 (def dead-cap 512)                     ; dead cells kept for one target
-(def dead-targets 4)                  ; other targets whose dead cells are kept
+(def dead-targets 8)                  ; other targets whose dead cells are kept
 (def steps-per-tunnel 32)             ; steps a :tunnel-to takes before the planner looks again
 (def explore-spacing 160)             ; blocks between the strips an exploring tunnel sweeps: a server shows 96 either side of the feet
 (def leg-max (* 3 explore-spacing))   ; the longest leg of the spiral: a leg longer than a judge window's walk only ever sweeps one strip

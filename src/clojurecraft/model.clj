@@ -356,7 +356,7 @@
    [:trail/dead "the feet cells found to lead nowhere, which no fresh step enters again"
     "inside :fortress/trail"]
    [:trail/others
-    "[[target dead-cells]] of the last four other targets: the dead cells come back when the tunnel to that target does (fortress/trail-of)"
+    "[[target dead-cells]] of the last eight other targets: the dead cells come back when the tunnel to that target does (fortress/trail-of)"
     "inside :fortress/trail"]
    [:plan/boxed-at
     "feet cells where a staircase or a tunnel died :boxed: no descent or tunnel starts there again, no stair steps onto one"
