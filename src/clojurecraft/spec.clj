@@ -578,6 +578,7 @@
 (s/def :intent/turns nat-int?)
 (s/def :intent/rejections pos-int?)
 (s/def :intent/body-refusals pos-int?)
+(s/def :intent/until number?)
 (s/def :intent/cells (s/coll-of ::block-pos :kind vector? :min-count 3))
 (s/def :intent/level-cells (s/coll-of ::block-pos :kind vector? :count 2))
 (s/def :intent/bore (s/coll-of ::block-pos :kind vector? :min-count 1))

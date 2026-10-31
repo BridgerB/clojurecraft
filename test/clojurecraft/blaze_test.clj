@@ -1716,7 +1716,7 @@
      (= far (blaze/shooter w))
      "a blaze beyond reach with the bot in its sight (the fixture is one chunk; the run: 45 off)")
     (is (= {:intent/kind :place :intent/item :cobblestone :intent/cell [9 64 8]}
-           (blaze/long-shot-cover w))
+           (dissoc (blaze/long-shot-cover w) :intent/until))
         "the cell beside the feet toward it")
     (is (= :place (:intent/kind (next-intent w))) "chosen ahead of the tunnel and the camp")
     (testing "not while the hit is old, a blaze is at hand, or the bot is in a pocket"
@@ -1965,3 +1965,14 @@
     (is (some? (blaze/prepare-intent w spawner-at)) "no sortie: a pocket ahead is made")
     (is (nil? (blaze/prepare-intent (assoc w :sortie/since 990000) spawner-at))
         "on a sortie: no pocket ahead")))
+
+(deftest a-long-shot-wall-place-is-cut-after-three-seconds
+  ;; blaze-race-z7 landing 2: a :place ran 17 s at the tunnel's end under fire (hp 20 to 9.5), 2 use-items
+  (let [far (entity :blaze [15.5 66.0 1.5] :entity/health 20.0)
+        w (-> (standing {7 far})
+              (assoc :time/now 100000 :player/struck-at 99000)
+              (assoc-in [:player/inventory 9] (item :cobblestone 40)))
+        i (blaze/long-shot-cover w)]
+    (is (= (+ 100000 blaze/long-shot-place-ms) (:intent/until i)))
+    (is (not (plan/interrupts? w row i)) "within its three seconds: it runs")
+    (is (true? (boolean (plan/interrupts? (assoc w :time/now 104000) row i))) "past them: cut")))

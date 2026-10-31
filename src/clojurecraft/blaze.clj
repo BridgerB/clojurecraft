@@ -1452,6 +1452,7 @@
 
 (def grab-range 3.0) ; blocks on the plane within which a rod lying is picked up before the next swing
 
+(def long-shot-place-ms 3000) ; ms a long-shot wall's :place may run before it is cut (:intent/until)
 (def long-shot-ms 4000) ; ms after a hit within which a shooter out of reach is answered with a wall, not carried on under
 (def shooter-range 64.0) ; blocks within which a blaze in sight of the bot is a shooter (they fire from 48)
 
@@ -1492,7 +1493,10 @@
                        (when (and f (not (place/inside-player? world f))) f)))
             filler (stairs/filler world combat/wall-fill)]
         (when (and target filler (not (combat/wall-failed? world target)))
-          {:intent/kind :place :intent/item filler :intent/cell target})))))
+          {:intent/kind :place
+           :intent/item filler
+           :intent/cell target
+           :intent/until (+ (:time/now world 0) long-shot-place-ms)})))))
 
 (def rod-grab-health 10.0) ; health at which a rod a step or two away is still picked up: a second's walk, not a fight (#577 danger-health)
 
@@ -1640,6 +1644,7 @@
            (not (rod-grab? world i))
            (some? (dodge-intent world)))
       (and (= :tunnel-to (:intent/kind i)) (some? (prepare-intent world (nearest-spawner world))))
+      (and (:intent/until i) (> (:time/now world 0) (:intent/until i)))
       (and (= :pocket-hold (:intent/kind i)) (= :seal (:intent/kind (hold-intent world))))
       (and (= :tunnel-to (:intent/kind i)) (some? (long-shot-cover world)))
       (and (not (contains? refuge-kinds (:intent/kind i)))

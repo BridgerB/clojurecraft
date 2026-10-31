@@ -515,6 +515,9 @@
    [:intent/health
     "the health when a :camp or a :rest began; a fall under it ends it, since nothing else ends a running intent (issue #262)"
     "camp, rest"]
+   [:intent/until
+    "ms (:time/now) after which the running intent is cut for the row's next choice: set by the blaze row's long-shot wall (3 s), whose :place waited 17 s under fire in blaze-race-z7 landing 2"
+    "a :place from blaze/long-shot-cover"]
    [:intent/hold?
     "a :fight that never walks: it waits for the target to come, never presses after it and never breaks off (the pearl hunt's burrow, issue #263)"
     "a :fight from the hunt's burrow"]
