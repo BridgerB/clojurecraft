@@ -746,6 +746,9 @@
    [:chunk/column "the decoded column, added on the reader thread; never recorded"
     "level-chunk packets"]
    [:chunk/min-y "a column's lowest block y: -64 for 24 sections, 0 for 16 (the Nether, the End)"
+    "every decoded column"]
+   [:chunk/biomes
+    "a column's biome containers, one a section in order, as the wire holds them (64 cells of server biome registry ids); read only by the viewer's tints"
     "every decoded column"]])
 
 (def by-attribute

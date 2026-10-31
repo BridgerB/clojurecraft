@@ -60,20 +60,30 @@
         w {:world/chunks {[0 0] (world/column {[1 64 2] log [5 70 5] 9})}
            :world/blocks {[3 64 3] log [1 63 1] blocks/air}
            :player/pos [8.5 64.0 8.5]}
-        back (chunk/decode (viewer/column-bytes w [0 0]))]
+        back (chunk/decode (viewer/column-bytes w [0 0] {:single 7}))]
     (testing "it reads back as the same blocks, the overlay applied"
       (is (= log (chunk/block-at {[0 0] back} [1 64 2])))
       (is (= log (chunk/block-at {[0 0] back} [3 64 3])))
       (is (= blocks/air (chunk/block-at {[0 0] back} [1 63 1])))
       (is (= 9 (chunk/block-at {[0 0] back} [5 70 5])))
       (is (= 1 (chunk/block-at {[0 0] back} [0 0 0])) "the stone floor")
-      (is (= blocks/air (chunk/block-at {[0 0] back} [0 200 0]))))
-    (is (= {:x 0 :z 0 :minY -64 :height 384} (dissoc (viewer/column-view w [0 0]) :buf)))
-    (is (nil? (viewer/column-view w [5 5])) "a column not loaded is nothing")))
+      (is (= blocks/air (chunk/block-at {[0 0] back} [0 200 0])))
+      (is (= {:single 0} (get-in back [:chunk/biomes 8])) "the column's own biomes go back out"))
+    (is (= {:single 7}
+           (-> (viewer/column-bytes (update-in w [:world/chunks [0 0]] dissoc :chunk/biomes)
+                                    [0 0]
+                                    {:single 7})
+               chunk/decode
+               (get-in [:chunk/biomes 3])))
+        "a column without biomes gets the fallback")
+    (is (= 0 (viewer/biome-at w [1.5 64.0 2.5])) "the biome under the feet")
+    (is (= {:x 0 :z 0 :minY -64 :height 384}
+           (dissoc (viewer/column-view w [0 0] {:single 7}) :buf)))
+    (is (nil? (viewer/column-view w [5 5] {:single 7})) "a column not loaded is nothing")))
 
 (deftest a-section-of-many-states-goes-out-direct
   (let [ids (long-array (range 4096))
-        bytes (b/with-out #(viewer/write-section! % ids))
+        bytes (b/with-out #(viewer/write-section! % ids {:single 3}))
         back (chunk/read-section (java.nio.ByteBuffer/wrap bytes))]
     (is (= 15 (:bits back)))
     (is (= [0 1 4095] (mapv #(chunk/section-get back %) [0 1 4095])))))
@@ -98,3 +108,16 @@
         "a look does not move a column's version")
     (is (not= (:columns f) (:columns (viewer/frame (assoc-in w [:world/blocks [1 64 1]] 1))))
         "a block over it does")))
+
+(deftest a-biome-is-coloured-as-vanilla-colours-it
+  (let [m (int-array (range 65536))
+        cells (assoc assets "colormap/grass" m "colormap/foliage" m)]
+    (testing "the colormap pixel at the climate: x from the temperature, y from the downfall"
+      (is (= (bit-or (bit-shift-left 191 8) 127) (viewer/colormap-colour m 0.5 0.5))))
+    (is (= 0x90814d (viewer/grass-colour cells {"effects" {"grass_color" "#90814d"}}))
+        "its own colour")
+    (is (= 0x6a7039
+           (viewer/grass-colour
+            cells
+            {"temperature" 0.8 "downfall" 0.9 "effects" {"grass_color_modifier" "swamp"}})))
+    (is (= ["plains"] (viewer/biome-names cells)) "biome ids are the sorted biome files")))

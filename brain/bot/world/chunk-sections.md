@@ -27,7 +27,7 @@ related:
 A column is `{:sections [s0 ..] :chunk/min-y y}`: as many sections as the server sent (24 from y -64 in the overworld, 16 from y 0 in the Nether and the End); a section is the paletted container straight off the wire: `{:single id}` or `{:bits n :palette [...] :longs long[]}` (palette nil when direct). Nothing is expanded to 4096 entries; `section-get` indexes the bits on demand.
 
 ## Key files
-- `chunk.clj`, `decode` - every section the bytes hold, and the column's lowest y from `dimension/min-y-of-sections` (`dimensions.edn`, generated from the jar); each reads i16 block count, i16 fluid count (new in 26.1), the block container, the biome container.
+- `chunk.clj`, `decode` - every section the bytes hold, and the column's lowest y from `dimension/min-y-of-sections` (`dimensions.edn`, generated from the jar); each reads i16 block count, i16 fluid count (new in 26.1), the block container, the biome container. The biome containers are kept beside the sections as `:chunk/biomes` (`read-section-with-biomes`), one a section, 64 cells of server biome registry ids; nothing in the bot reads them, the [[viewer]] tints by them.
 - `chunk.clj`, `section-get` - `valuesPerLong = 64 / bits`, entries never straddle longs.
 - `chunk.clj`, `block-at` - nil when the chunk is not loaded or y is outside the column.
 - `chunk.clj`, `section-may-contain?` - palette check that lets scans skip sections.

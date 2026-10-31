@@ -33,7 +33,6 @@
 (def entity-range 64.0)               ; blocks from the bot an entity is shown within
 (def frame-every-ms 100)              ; the frame thread's rest between two frames: ten a second at most
 (def direct-bits 15)                  ; bits a cell in a section with more than 256 states: the server's global palette
-(def plains 0)                        ; the one biome id the page is sent: the bot keeps no biomes
 
 (def block-states
   "{block-name [[property [value ...]] ...]}: the generated report order, last property fastest."
@@ -160,28 +159,81 @@
               (cond (pos? f) 0.4
                     :else 0.3)) (- (* f f 0.7) 0.5) (- (* f f 0.6) 0.7)])))
 
-(defn tints
-  "The renderer's tints: water and foliage colours by biome from the biome files (assets
-   \"biome/<name>\"), redstone by power, two constants, and the defaults."
+(defn biome-names
+  "The biome names in the server's registry order: the jar's biome files by name, the order
+   vanilla's registry (and steve's table of 65) has them in. A biome id in a chunk is an index."
   [assets]
-  (let [by (fn [k]
-             (into (sorted-map)
-                   (for [[path j] assets
-                         :when (str/starts-with? path "biome/")
-                         :let [c (get-in j ["effects" k])]
-                         :when c]
-                     [(subs path 6) (colour c)])))]
-    (merge {:grass {}
-            :foliage (by "foliage_color")
-            :water (by "water_color")
+  (vec (sort (for [[path] assets :when (str/starts-with? path "biome/")] (subs path 6)))))
+
+(defn colormap-colour
+  "The colour vanilla's colormap (256x256 ARGB, row-major) gives a climate: temperature and
+   downfall clamped to 0-1, the downfall scaled by the temperature, the pixel at
+   x = (1 - temperature) * 255, y = (1 - downfall) * 255 (ColorMapColorUtil.get)."
+  [^ints m temperature downfall]
+  (let [t (max 0.0 (min 1.0 (double temperature)))
+        d (* t (max 0.0 (min 1.0 (double downfall))))
+        i (bit-or (bit-shift-left (long (* (- 1.0 d) 255.0)) 8) (long (* (- 1.0 t) 255.0)))]
+    (cond (< i (alength m)) (bit-and (aget m i) 0xffffff)
+          :else 0xff00ff)))
+
+(defn grass-colour
+  "A biome's grass colour as vanilla works it out: its own grass_color, else the grass colormap
+   at its climate, then its modifier (a swamp's fixed dark green, a dark forest's darkening)."
+  [assets biome]
+  (let [{:strs [temperature downfall effects]} biome
+        base (cond (get effects "grass_color")
+                   (Long/parseLong (subs (get effects "grass_color") 1) 16)
+                   :else (colormap-colour (get assets "colormap/grass") temperature downfall))]
+    (case (get effects "grass_color_modifier")
+      "swamp" 0x6a7039
+      "dark_forest" (bit-shift-right (+ (bit-and base 0xfefefe) 0x28340a) 1)
+      base)))
+
+(defn foliage-colour
+  "A biome's leaf colour as vanilla works it out: its own foliage_color, else the foliage
+   colormap at its climate."
+  [assets biome]
+  (let [{:strs [temperature downfall effects]} biome]
+    (cond (get effects "foliage_color") (Long/parseLong (subs (get effects "foliage_color") 1) 16)
+          :else (colormap-colour (get assets "colormap/foliage") temperature downfall))))
+
+(defn by-biome
+  "{biome-name (f assets biome-json)} for every biome file in assets, nils dropped."
+  [assets f]
+  (into (sorted-map)
+        (for [[path j] assets
+              :when (str/starts-with? path "biome/")
+              :let [c (f assets j)]
+              :when c]
+          [(subs path 6) c])))
+
+(defn tints
+  "The renderer's tints: grass and leaf colours by biome (grass-colour, foliage-colour; from the
+   colormaps when the jar has them), water by biome, redstone by power, the fixed leaf and lily
+   pad colours vanilla never tints by biome, and the defaults."
+  [assets]
+  (let [maps? (and (get assets "colormap/grass") (get assets "colormap/foliage"))]
+    (merge {:grass (cond maps? (update-vals (by-biome assets grass-colour) colour)
+                         :else {})
+            :foliage (cond maps? (update-vals (by-biome assets foliage-colour) colour)
+                           :else {})
+            :water (update-vals (by-biome assets #(get-in %2 ["effects" "water_color"])) colour)
             :redstone (into (sorted-map) (for [p (range 16)] [(str p) (redstone-tint p)]))
-            :constant {"attached_stem" [0.9 0.9 0.1] "lily_pad" [0.135 0.522 0.18]}}
+            :constant {"attached_stem" [0.9 0.9 0.1]
+                       "lily_pad" (colour 0x208030)
+                       "birch_leaves" (colour 0x80a755)
+                       "spruce_leaves" (colour 0x619961)}}
            tint-defaults)))
+
+(defn skies
+  "{biome-name [r g b]}: each biome's sky colour (its visual/sky_color attribute)."
+  [assets]
+  (update-vals (by-biome assets #(get-in %2 ["attributes" "minecraft:visual/sky_color"])) colour))
 
 (defn assets-message
   "The renderer's assets, as steve's server sent them: every blockstate and block model by name,
-   every block texture (textures: {name base64 png}), the tints, the block registry and the one
-   biome the columns name."
+   every block texture (textures: {name base64 png}), the tints, the block registry, the biomes by
+   id, and (beyond steve's) each biome's sky colour."
   [assets textures]
   (let [under (fn [prefix]
                 (into (sorted-map)
@@ -195,7 +247,8 @@
      :textureData textures
      :tints (tints assets)
      :blocks (registry-blocks assets)
-     :biomes [{:id plains :name "plains"}]
+     :biomes (vec (map-indexed (fn [i n] {:id i :name n}) (biome-names assets)))
+     :skies (skies assets)
      :entityModels {}}))
 
 (defn item-model
@@ -295,9 +348,25 @@
             {:item (recipe/item-name item) :count count}))
         (range inventory/hotbar-slots)))
 
+(defn biome-at
+  "The biome id at a block or feet position from its column's :chunk/biomes (cells of 4x4x4,
+   y then z then x), or nil: not loaded, or a column without biomes."
+  [world [x y z :as pos]]
+  (let [x (long (math/floor (double x)))
+        y (long (math/floor (double y)))
+        z (long (math/floor (double z)))
+        col (get (:world/chunks world) (chunk-of pos))
+        si (bit-shift-right (- y (chunk/column-min-y col)) 4)
+        biomes (get-in col [:chunk/biomes si])]
+    (when biomes
+      (chunk/section-get biomes
+                         (bit-or (bit-shift-left (bit-shift-right (bit-and y 15) 2) 4)
+                                 (bit-shift-left (bit-shift-right (bit-and z 15) 2) 2)
+                                 (bit-shift-right (bit-and x 15) 2))))))
+
 (defn frame
   "What the page shows of one world: who and where the bot is, how it looks, its health, food
-   and hotbar, the entities round it, what it intends (intent-view) and has reached, and the
+   and hotbar, the biome under its feet, the entities round it, what it intends (intent-view) and has reached, and the
    version of every column round it (columns). Absent attributes stay absent."
   [world]
   (let [w world]
@@ -309,6 +378,8 @@
            :dimension (:player/dimension w)
            :pos (:player/pos w)
            :look (:player/look w)
+           :biome (some->> (:player/pos w)
+                           (biome-at w))
            :health (:player/health w)
            :food (:player/food w)
            :air (:player/air w)
@@ -373,10 +444,20 @@
             values)
     out))
 
+(defn write-container!
+  "Write a paletted container as the wire holds it (chunk/read-container's shape back): the bits,
+   the value or the palette, the longs with no count."
+  [o {:keys [single bits palette ^longs longs]}]
+  (cond single (do (b/write-u8 o 0) (b/write-varint o single))
+        :else
+        (do (b/write-u8 o bits)
+            (when palette (b/write-varint o (count palette)) (run! #(b/write-varint o %) palette))
+            (run! #(b/write-i64 o %) longs))))
+
 (defn write-section!
   "Write one section as level_chunk_with_light holds it in 26.1 (two counts, the block container
-   without an array length, a one-biome container) to o."
-  [o ^longs ids]
+   without an array length, the biome container) to o."
+  [o ^longs ids biomes]
   (let [palette (vec (distinct ids))
         bits (bits-for (count palette))]
     (b/write-i16 o (count (remove blocks/air? ids)))
@@ -389,39 +470,43 @@
             (b/write-varint o (count palette))
             (run! #(b/write-varint o %) palette)
             (run! #(b/write-i64 o %) (pack bits (map index ids)))))
-    (b/write-u8 o 0)
-    (b/write-varint o plains)))
+    (write-container! o biomes)))
 
 (defn column-bytes
-  "Column key of world as chunk data bytes: every section in order, the overlay applied; the
-   format the renderer's loadChunkColumn reads (no array lengths)."
-  [world key]
+  "Column key of world as chunk data bytes: every section in order, the overlay applied, its own
+   biomes (:chunk/biomes) or the container fallback where it has none; the format the
+   renderer's loadChunkColumn reads (no array lengths)."
+  [world key fallback]
   (let [col (get-in world [:world/chunks key])
         overlay (get (overlay-by-column world) key)]
     (b/with-out (fn [o]
                   (dotimes [si (count (:sections col))]
-                    (write-section! o (section-ids world key si overlay)))))))
+                    (write-section! o
+                                    (section-ids world key si overlay)
+                                    (get-in col [:chunk/biomes si] fallback)))))))
 
 (defn column-view
-  "Column key [cx cz] of world for the page: {:x :z :minY :height :buf base64 column-bytes}; nil
-   when the column is not loaded."
-  [world [cx cz :as key]]
+  "Column key [cx cz] of world for the page: {:x :z :minY :height :buf base64 column-bytes}, with
+   fallback where it has no biomes; nil when the column is not loaded."
+  [world [cx cz :as key] fallback]
   (when-let [col (get-in world [:world/chunks key])]
     {:x cx
      :z cz
      :minY (chunk/column-min-y col)
      :height (* 16 (count (:sections col)))
-     :buf (.encodeToString (java.util.Base64/getEncoder) (column-bytes world key))}))
+     :buf (.encodeToString (java.util.Base64/getEncoder) (column-bytes world key fallback))}))
 
 (defn jar-entry-kind
   "What the viewer takes from a client jar entry name: :json for a blockstate, model or item
-   definition, :biome for a biome file, :block-texture for a block texture, :file for an item
+   definition, :biome for a biome file, :block-texture for a block texture, :colormap for the
+   grass or foliage colormap, :file for an item
    texture or the player skin (served by name), nil for the rest."
   [n]
   (condp re-matches n
     #"assets/minecraft/(blockstates|models|items)/.*\.json" :json
     #"data/minecraft/worldgen/biome/[^/]+\.json" :biome
     #"assets/minecraft/textures/block/[^/]+\.png" :block-texture
+    #"assets/minecraft/textures/colormap/(grass|foliage)\.png" :colormap
     #"assets/minecraft/textures/(item/[^/]+|entity/player/wide/steve)\.png" :file
     nil))
 
@@ -436,7 +521,8 @@
 
 (defn read-assets!
   "From the client jar: [assets textures]: every blockstate, model, item definition and biome
-   file as {\"models/block/dirt\" json, \"biome/plains\" json}, and every block texture as {name
+   file as {\"models/block/dirt\" json, \"biome/plains\" json}, the two colormaps as int arrays
+   (\"colormap/grass\"), and every block texture as {name
    base64}; item textures and the player skin are extracted under cache-dir (once: a file
    already there is kept). Both empty when the jar is missing, logged."
   [jar]
@@ -459,6 +545,14 @@
                          stem
                          (with-open [in (.getInputStream z e)]
                            (.encodeToString (java.util.Base64/getEncoder) (.readAllBytes in))))]
+                 :colormap
+                 [(assoc assets
+                         (str "colormap/" stem)
+                         (with-open [in (.getInputStream z e)]
+                           (let [img (javax.imageio.ImageIO/read in)
+                                 w (.getWidth img)
+                                 h (.getHeight img)]
+                             (.getRGB img 0 0 w h nil 0 w)))) textures]
                  :file
                  (let [f (io/file cache-dir (str/replace n #"^assets/minecraft/" ""))]
                    (when-not (.exists f)
@@ -519,7 +613,7 @@
           (let [{:strs [x z]} (query ex)]
             (json! ex
                    (or (some-> world
-                               (column-view [(parse-long x) (parse-long z)]))
+                               (column-view [(parse-long x) (parse-long z)] (:biome static)))
                        {})))
           (re-matches #"/tex/(item/[a-z0-9_]+|entity/player/wide/steve)\.png" path)
           (let [f (io/file cache-dir "textures" (subs path 5))]
@@ -535,7 +629,9 @@
   ([world* port] (serve! world* port default-jar))
   ([world* port jar]
    (let [[assets textures] (read-assets! jar)
-         static {:assets (.getBytes ^String (json/write-str (assets-message assets textures))
+         plains (max 0 (.indexOf ^java.util.List (biome-names assets) "plains"))
+         static {:biome {:single plains}
+                 :assets (.getBytes ^String (json/write-str (assets-message assets textures))
                                     "UTF-8")
                  :icons (icons assets)
                  :meta (meta-view)}

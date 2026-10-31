@@ -13,6 +13,9 @@ sourceRefs:
   - src/clojurecraft/viewer.clj#defn column-bytes
   - src/clojurecraft/viewer.clj#defn assets-message
   - src/clojurecraft/viewer.clj#defn plain-textures
+  - src/clojurecraft/viewer.clj#defn grass-colour
+  - src/clojurecraft/viewer.clj#defn biome-names
+  - src/clojurecraft/chunk.clj#defn read-section-with-biomes
   - src/clojurecraft/viewer.clj#defn read-assets!
   - src/clojurecraft/main.clj#(viewer/serve! world* (Long/parseLong viewer) (or viewer-jar viewer/default-jar))
   - dev/viewer/build.ts#const babylonGlobal
@@ -35,13 +38,14 @@ It is an observer in the [[telemetry-watch]] sense: nothing in `game`, `plan` or
 `resources/clojurecraft/viewer/web/viewer.js` and `worker.js` are typecraft's viewer, the one steve's dashboard draws with (vanilla block models and blockstates, a texture atlas with per-face UVs, biome tints, ambient occlusion, transparency, sky, clouds, entity boxes and the player model), bundled by `dev/viewer/build.ts` from a steve checkout without Babylon, which the page loads from jsDelivr (`babylonjs@9.13.0`, global `BABYLON`). A first, hand-written three.js mesher looked nothing like the game; the bar is parity with steve's view.
 
 It is fed what steve's server fed it:
-- `/assets.json` is `assets-message`: every blockstate and block model from the jar, every block texture as base64, the tints (water and foliage colours from the jar's biome files, redstone by power), and the block registry (`registry-blocks`: name, first state id, the properties from the generated `block-states.edn` in report order, whether it collides, and `transparent` from `opaque-cube?`, a guess from the models that differs from steve's flag on 11 of 1168 blocks).
-- `/column?x=&z=` is `column-bytes`: the column in the network format the renderer's `loadChunkColumn` reads (two counts a section, the block container without array lengths, then a biome container), the block overlay applied. The bot keeps no biomes, so every section names biome 0, sent as plains.
+- `/assets.json` is `assets-message`: every blockstate and block model from the jar, every block texture as base64, the biomes by id (`biome-names`: the jar's biome files sorted, the server registry's order), each biome's sky colour, the tints (grass and leaves by biome as vanilla works them out, `grass-colour` and `foliage-colour`: the biome's own colour, else the jar's colormap at its temperature and downfall, then a swamp's or dark forest's modifier; water by biome; birch and spruce leaves fixed; redstone by power), and the block registry (`registry-blocks`: name, first state id, the properties from the generated `block-states.edn` in report order, whether it collides, and `transparent` from `opaque-cube?`, a guess from the models that differs from steve's flag on 11 of 1168 blocks).
+- `/column?x=&z=` is `column-bytes`: the column in the network format the renderer's `loadChunkColumn` reads (two counts a section, the block container without array lengths, then a biome container), the block overlay applied, each section with its own biome container: `chunk/decode` keeps them as `:chunk/biomes`, which nothing in the bot reads. A column without them (the sim model's) is sent as plains.
 
 ## How it works
 1. `serve!` adds a watch that offers each new world to a one-slot sliding channel (it never waits); a thread of its own turns the latest into a `frame` at most every 100 ms and keeps it with that world. HTTP threads (JDK `HttpServer`, four) answer only from what the thread kept.
 2. `frame` is pure: pose, look, health, food, hotbar, entities, `intent-view` of `:plan/intent` (and `:plan/failed`), `:plan/reached`, the wait, and `columns`: a version per loaded column round the bot, the column's identity plus the hash of the block overlay over it, so it moves exactly when the column is replaced or a block in it changes.
-3. The page polls `/frame` every 100 ms, eases the camera and entities toward it as steve's embed does, and fetches a column again when its version moves.
+3. The frame carries the biome id under the feet (`biome-at`); the page sets the sky to that biome's colour and a linear fog in it from 55% of the loaded radius to its edge, so the edge of the known world fades as it does in the game.
+4. The page polls `/frame` every 100 ms, eases the camera and entities toward it as steve's embed does, and fetches a column again when its version moves, nearest first, four at a time, so the ground under the bot draws within seconds and the horizon after (all 169 columns at once drew the deep sections first and showed cut-away stone for most of a minute).
 
 ## Gotchas
 - 26.x models write some texture variables as `{"sprite" ref "force_translucent" true}` (glass, panes, redstone dust); steve's renderer was made against older models and threw on them (`n.charAt is not a function`), drawing nothing. `plain-textures` flattens them.

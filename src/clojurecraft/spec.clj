@@ -646,6 +646,7 @@
 (s/def :intent/sequence int?)
 (s/def :chunk/column map?)
 (s/def :chunk/min-y #{-64 0})
+(s/def :chunk/biomes (s/coll-of map? :kind vector?))
 (s/def :plan/intents pos-int?)
 (s/def :intent/id pos-int?)
 (s/def :intention/id pos-int?)
