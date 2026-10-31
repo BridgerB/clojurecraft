@@ -205,7 +205,7 @@
   (let [own #{c (plus c [0 1 0])}]
     (filterv #(not (or (own %) (place/inside-player? world %))) cells)))
 
-(defn seal-cells-wanted
+(defn wanted-seal-cells
   "The cells a seal of the pocket at cell c would fill, in order: for each open side (openings) the
    cell beside c at the feet, then the one over it; then the cell over the head when it is no firm
    block; none of them in the body (clear-of-body). Some may not be placeable (placeable?)."
@@ -229,10 +229,10 @@
   (let [f (build/foundation world p)] (boolean (and f (not (place/inside-player? world f))))))
 
 (defn seal-cells
-  "The cells a seal of the pocket at cell c places a block in: seal-cells-wanted that can be laid
+  "The cells a seal of the pocket at cell c places a block in: wanted-seal-cells that can be laid
    (placeable?)."
   [world c]
-  (filterv #(placeable? world %) (seal-cells-wanted world c)))
+  (filterv #(placeable? world %) (wanted-seal-cells world c)))
 
 (defn sealed?
   "Is the site sealed: it names cells it placed blocks in (:pocket/placed) and every one is solid?"
@@ -281,7 +281,7 @@
   (let [n (count (seal-cells world cell))
         failed (:pocket/seal-failed-at world)]
     (and (not unsealable?)
-         (= n (count (seal-cells-wanted world cell)))
+         (= n (count (wanted-seal-cells world cell)))
          (or (nil? failed) (> (- (:time/now world 0) failed) seal-retry-ms))
          (pickaxe-held? world)
          (pos? n)

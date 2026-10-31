@@ -217,6 +217,6 @@
     (is (false? (pocket/placeable? w [8 66 8]))
         "the roof over open air: its foundation is the head cell")
     (is (not (contains? (set (pocket/seal-cells w [8 64 8])) [8 66 8])))
-    (is (contains? (set (pocket/seal-cells-wanted w [8 64 8])) [8 66 8]))
+    (is (contains? (set (pocket/wanted-seal-cells w [8 64 8])) [8 66 8]))
     (is (not (pocket/can-seal? held site))
         "a pocket that cannot be roofed is not sealed over air")))
