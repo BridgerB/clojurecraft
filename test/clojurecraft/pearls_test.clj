@@ -2968,3 +2968,15 @@
         "an enderman that was near the start is not a reason to stop")
     (is (plan/interrupts? (pearls/relocation arrived) row walk) "the walk is cut once it is over")
     (is (not (plan/interrupts? base row walk)) "and not while it goes on")))
+
+(deftest ^:eftest/synchronized
+         a-relocation-with-no-route-and-nothing-tracked-falls-back-to-the-cage-cuts
+  ;; pearl-fight-g jobs 3 and 5 (plan run 41166403154): relocate-walk was nil, six remembered
+  ;; endermen 82 to 110 blocks off with no route in job 3, none tracked in a cave pocket in job 5,
+  ;; and neither bot moved in 80 minutes. From a ledge it goes down to its burrow to cut from there
+  (let [w (-> (standing {} ledge)
+              (assoc :player/pos [8.5 64.0 8.5] :pearls/shelter [8 61 9] :pearls/mouth [8 64 8])
+              (assoc-in [:player/inventory 1] (item :iron_pickaxe 1)))]
+    (with-redefs [intent/routable? (constantly true)]
+      (is (= {:intent/kind :walk :intent/target [8 61 9] :intent/for :relocate}
+             (pearls/relocate-walk w))))))

@@ -1890,7 +1890,7 @@
   "A walk to leave this place for another, or nil: toward the densest of the remembered endermen
    (blacklisted or not, by how many others stand within cluster-radius of each, nearest first)
    that stand relocate-dist or more from the feet: to the first a route reaches (routable), else
-   as far as the route goes (toward), else explore. Pearl-fight-e job 4 (plan run 41157320074)
+   as far as the route goes (toward), else explore, else wander, else the cage-break cuts (dig-out, tunnel-out, climb-out, uncage) from a pocket nothing walks out of. Pearl-fight-g jobs 3 and 5 (plan run 41166403154) had no walk: job 3 six remembered endermen 82 to 110 blocks off and no route, job 5 none tracked in a cave pocket, and neither moved in 80 minutes. Pearl-fight-e job 4 (plan run 41157320074)
    stood 102 minutes beside one angry enderman parked at 8 blocks and calm ones at 7 to 9, too near
    to stare at, cutting its burrow 26 times and gaining one pearl; others stood 52, 53 and 63 off."
   [world]
@@ -1906,13 +1906,17 @@
                                  all)))
         ranked (sort-by (juxt (comp - density) #(physics/distance pos (:entity/pos (second %))))
                         far)
-        ms (into {} (take candidates ranked))]
-    (some-> (or (when (seq ms)
-                  (if-let [[_ e] (routable world ms)]
-                    {:intent/kind :walk :intent/target (cell (:entity/pos e))}
-                    (toward world ms)))
-                (explore world))
-            (assoc :intent/for :relocate))))
+        ms (into {} (take candidates ranked))
+        w (or (when (seq ms)
+                (if-let [[_ e] (routable world ms)]
+                  {:intent/kind :walk :intent/target (cell (:entity/pos e))}
+                  (toward world ms)))
+              (explore world)
+              (wander world)
+              (if (= dimension/nether (dimension/of world))
+                (or (dig-out world) (tunnel-out world) (climb-out world) (uncage world))
+                (or (climb-out world) (dig-out world) (uncage world))))]
+    (cond-> w (= :walk (:intent/kind w)) (assoc :intent/for :relocate))))
 
 (defn hunt
   "The hunt's next step with no kill to pick up, in order: out of the burrow (shelter) with one
