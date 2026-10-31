@@ -1658,7 +1658,12 @@
    x4, :dodge, :pocket, :pillar, :dig and :seal took turns every 0.1 to 0.3 s: with a blaze in melee
    range no row held."
   [world]
-  (when (>= (:player/health world 20.0) low-health)
+  (when (and (>= (:player/health world 20.0) low-health)
+             ;; the sortie's cap: more than sortie-crowd blazes within 8, or a volley watching, is the room on
+             ;; the bot, not a fight to commit to the end (the spawner-room deaths of z4 and z5)
+             (<= (count (nearby-blazes world 8.0)) sortie-crowd)
+             (not (outnumbered? world))
+             (not (burning-here? world)))
     (when-let [[eid] (at-hand-blaze world)]
       {:intent/kind :fight :intent/target eid :intent/to-the-end? true :intent/yield? true})))
 

@@ -2068,3 +2068,19 @@
                              row)]
         (is (some? (:pocket/site kept)))
         (is (empty? (:pocket/failed kept)))))))
+
+(deftest a-crowd-at-hand-is-not-a-committed-fight
+  ;; review of 3d9788a41: four or five blazes at hand and hp 20 is the room on the bot (z4 landing 2, z5)
+  (let [blz (fn [n]
+              (into {}
+                    (map (fn [i] [(+ 50 i)
+                                  (entity :blaze [(+ 9.5 (* 0.4 i)) 64.5 8.5]
+                                          :entity/health 20.0)]))
+                    (range n)))
+        w (fn [n] (assoc (standing (blz n)) :time/now 100000 :player/struck-at 99500))]
+    (is (some? (blaze/commit-fight (w 2))) "two at hand: committed")
+    (is (nil? (blaze/commit-fight (w 3)))
+        "three watching is a volley (outnumbered?): not committed")
+    (is (nil? (blaze/commit-fight (w 4))) "four at hand: not a committed fight")
+    (is (nil? (blaze/commit-fight (w 5))))
+    (is (not (blaze/committed-fight? (w 4) {:intent/kind :fight :intent/target 50})))))
