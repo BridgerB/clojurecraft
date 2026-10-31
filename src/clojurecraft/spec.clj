@@ -543,6 +543,7 @@
 (s/def :pocket/unsealable? boolean?)
 (s/def :pocket/seal-failed-at number?)
 (s/def :pocket/prepared-at number?)
+(s/def :sortie/since number?)
 (s/def :pocket/site
   (s/keys :req [:pocket/cell :pocket/dig]
           :opt [:pocket/stand :pocket/placed :pocket/here? :pocket/unsealable?]))

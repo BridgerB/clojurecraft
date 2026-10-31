@@ -1518,6 +1518,63 @@
        (some? (cond (hurt? world) (healing world false)
                     (wary? world) (warily world false)))))
 
+(def sortie-zone 16.0) ; blocks from the spawner within which a bot out of its pocket is on a sortie
+(def sortie-line 14.0) ; health under which a sortie is over: back to the pocket to heal
+(def sortie-fights 2) ; fights ended on a sortie after which it is over
+(def sortie-ms 90000) ; ms a sortie may last
+(def sortie-start-health 19.0) ; health a sortie is begun at
+(def sortie-rest-ms 45000) ; ms in the pocket with no fight before another sortie
+
+(defn in-sortie-zone?
+  "Is the bot out of a pocket and within sortie-zone of the spawner sp (nil: no)?"
+  [world sp]
+  (boolean (and sp
+                (not (pocket/in? world))
+                (<= (physics/distance (game/eye world) (physics/centre sp)) sortie-zone))))
+
+(defn fights-since
+  "How many :fight intentions ended :done at or after ms t."
+  [world t]
+  (count (filter #(>= (:intention/at %) t) (memory/newest-dones world :fight 20))))
+
+(defn sortie-over?
+  "Is the sortie (:sortie/since, noted by steer when the bot left its pocket for the spawner's zone)
+   over: sortie-fights fights ended since, or sortie-ms spent, or the health under sortie-line? Then
+   the bot goes back to the pocket behind it, heals and goes again. Blaze-race-z2 landing 2 killed 4
+   blazes in 3.4 minutes in the room at [2346 57 2288] and stayed there until dead; landing 1 stood
+   at the tunnel's end among 6 and 7 blazes and flipped dodge, pocket and walk until dead."
+  [world]
+  (let [since (:sortie/since world)]
+    (boolean (and since
+                  (or (>= (fights-since world since) sortie-fights)
+                      (> (- (:time/now world 0) since) sortie-ms)
+                      (< (:player/health world 20.0) sortie-line))))))
+
+(defn sortie-due?
+  "Is it time for a sortie: in the pocket, healed to sortie-start-health, not burning, and no fight
+   nor pocket entered within sortie-rest-ms?"
+  [world]
+  (let [now (:time/now world 0)
+        recent? (fn [k]
+                  (when-let [d (memory/last-done world k)]
+                    (< (- now (:intention/at d)) sortie-rest-ms)))]
+    (boolean (and (pocket/in? world)
+                  (>= (:player/health world 20.0) sortie-start-health)
+                  (not (:player/on-fire? world))
+                  (not (recent? :fight))
+                  (not (recent? :pocket))))))
+
+(defmethod plan/steer :blaze-rods
+  ;; notes where a sortie began (:sortie/since) when the bot leaves its pocket within sortie-zone of
+  ;; the spawner, and forgets it in a pocket or out of the zone: sortie-over? reads it
+  [world _]
+  (let [sp (nearest-spawner world)]
+    (cond (pocket/in? world) (dissoc world :sortie/since)
+          (and (in-sortie-zone? world sp) (nil? (:sortie/since world)))
+          (assoc world :sortie/since (:time/now world 0))
+          (and sp (not (in-sortie-zone? world sp))) (dissoc world :sortie/since)
+          :else world)))
+
 (defn rod-grab?
   "Is running intent i the pick-up of a rod lying within grab-range (near-rod)? A dodge or a meal
    does not cut it: blaze-race-x job 4 left rod 607 lying at [2349 60 2283] for 300 s with the bot
@@ -1538,6 +1595,9 @@
            (some? (dodge-intent world)))
       (and (= :tunnel-to (:intent/kind i)) (some? (prepare-intent world (nearest-spawner world))))
       (and (= :tunnel-to (:intent/kind i)) (some? (long-shot-cover world)))
+      (and (not (contains? refuge-kinds (:intent/kind i)))
+           (not= :fight (:intent/kind i))
+           (sortie-over? world))
       (and (not (contains? refuge-kinds (:intent/kind i)))
            (some? (refuge-now world (nearest-spawner world))))
       (and (not (hurt? world))
@@ -1577,6 +1637,8 @@
         room (delay (rod-room world))
         ;; a rod with no slot to be picked up into is not grabbed: the junk goes first (rod-room)
         grab (delay (when-let [e (near-rod world)] (when-not @room (rod-intent world e))))
+        retreat (delay (when (and (not in-pocket?) (sortie-over? world))
+                         (pocket-go world sp false)))
         waiting (delay (ambush world))
         stock (delay (when-not (hurt? world) (stocking world)))
         out (delay (when (burning-here? world) (leave-fire world)))
@@ -1596,6 +1658,7 @@
       @refuge @refuge
       @heal @heal
       @grab @grab
+      @retreat @retreat
       (and (not (hurt? world)) heid (not (crowded? world)))
       {:intent/kind :fight :intent/target heid :intent/to-the-end? true :intent/yield? true}
       @wary @wary
@@ -1624,7 +1687,8 @@
            (or camping-in-pocket? (at-spawner? world sp) (at-nook? world sp) (bait-here? world sp))
            (not (hurt? world))
            (not (:player/on-fire? world)))
-      (or (when (and in-pocket? (idle? world)) (or (advance-intent world sp) (bait-walk world sp)))
+      (or (when (and in-pocket? (sortie-due? world)) (to-spawner world sp))
+          (when (and in-pocket? (idle? world)) (or (advance-intent world sp) (bait-walk world sp)))
           (when-not (idle? world) (pocket-go world sp true))
           (when-let [n (and (not in-pocket?)
                             (not (at-nook? world sp))

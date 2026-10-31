@@ -1760,3 +1760,56 @@
       (is (= :collect-drops
              (:intent/kind (next-intent (standing (assoc full 9 (item :blaze_rod 3))
                                                   {40 rod}))))))))
+
+(deftest a-sortie-is-over-after-two-fights-ninety-seconds-or-fourteen-health
+  ;; blaze-race-z2 landing 2: 4 blazes in 3.4 minutes in the room, then dead there; landing 1 stood
+  ;; at the tunnel's end among 6 and 7 until dead
+  (let [fought (fn [w t n]
+                 (reduce
+                  (fn [w i]
+                    (memory/remember-intention w {:intent/id (+ 100 i) :intent/kind :fight} :done))
+                  (assoc w :time/now t)
+                  (range n)))
+        base (assoc (standing {}) :time/now 10000 :sortie/since 10000)]
+    (is (false? (blaze/sortie-over? (standing {}))) "no sortie begun")
+    (is (false? (blaze/sortie-over? base)) "just begun")
+    (is (true? (blaze/sortie-over? (assoc base :time/now (+ 10000 blaze/sortie-ms 1))))
+        "90 s spent")
+    (is (true? (blaze/sortie-over? (assoc base :player/health 13.0))) "under 14")
+    (is (false? (blaze/sortie-over? (assoc base :player/health 15.0))))
+    (is (false? (blaze/sortie-over? (fought base 12000 1))) "one fight")
+    (is (true? (blaze/sortie-over? (fought base 12000 2))) "two fights since it began")))
+
+(deftest steer-notes-the-sortie-where-the-bot-leaves-its-pocket-for-the-zone
+  (let [row (first (filter #(= :blaze-rods (:goal/id %)) plan/goals))
+        out (-> (standing {})
+                with-spawner
+                (assoc :time/now 5000))
+        in (in-pocket out)]
+    (is (= 5000 (:sortie/since (plan/steer out row))) "out of a pocket in the zone: begun")
+    (is (= 5000 (:sortie/since (plan/steer (plan/steer out row) row))) "and kept")
+    (is (nil? (:sortie/since (plan/steer (assoc in :sortie/since 1) row))) "forgotten in a pocket")
+    (is (nil? (:sortie/since (plan/steer (assoc out :player/pos [200.5 64.0 200.5]) row)))
+        "and out of the zone")))
+
+(deftest a-healed-bot-in-its-pocket-goes-out-and-a-spent-sortie-comes-back
+  (let [w (-> (standing {})
+              in-pocket
+              with-spawner
+              (assoc :time/now 100000))]
+    (is (true? (blaze/sortie-due? w)) "healed, nothing recent")
+    (is (false? (blaze/sortie-due? (assoc w :player/health 15.0))) "not healed")
+    (is (false? (blaze/sortie-due? (memory/remember-intention (assoc w :time/now 100000)
+                                                              {:intent/id 5 :intent/kind :fight}
+                                                              :done)))
+        "a fight just ended: it rests")
+    (is (not= :camp (:intent/kind (next-intent w)))
+        "out toward the spawner, not a camp in the pocket")
+    (let [out (-> (standing {})
+                  (assoc :world/chunks {[0 0] (world/column pocket-walls)}
+                         :player/pos [5.5 64.0 8.5]
+                         :sortie/since 0
+                         :time/now 100000)
+                  with-spawner)]
+      (is (= :pocket (:intent/kind (next-intent out)))
+          "a spent sortie: back to the pocket behind"))))
