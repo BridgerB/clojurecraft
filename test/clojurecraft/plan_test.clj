@@ -1847,20 +1847,31 @@
 (def pearls-table
   [{:goal/id :ender-pearls :goal/target? true :goal/done? :never :goal/plan :pearls}])
 
-(defn frozen
+(def walker-table [{:goal/id :walker :goal/target? true :goal/done? :never :goal/plan :flip-test}])
+
+(defn frozen-world
   "pearl-fight-i job 1 (run 41178660163) at ms into a run standing at one block: a :lookout
-   running, the burrow remembered, nothing held but a pickaxe, the watch begun at 0."
+   running, the burrow remembered, nothing held but a pickaxe."
   [ms]
   (-> (world-state [2390.5 69.0 2164.5])
-      (assoc :plan/status :active
-             :plan/since 0
-             :plan/blacklist #{}
-             :time/now ms
-             :pearls/shelter [2390 69 2164]
-             :player/inventory {0 {:item 1 :count 1}}
-             :plan/intent
-             {:intent/kind :lookout :intent/status :active :intent/id 7 :intent/goal :ender-pearls})
-      (assoc :plan/watch {:key [{1 1} 0] :pos [2390.5 69.0 2164.5] :at 0 :checked 0})))
+      (assoc
+       :plan/status :active
+       :plan/since 0
+       :plan/blacklist #{}
+       :time/now ms
+       :pearls/shelter [2390 69 2164]
+       :player/inventory {0 {:item 1 :count 1}}
+       :plan/intent
+       {:intent/kind :lookout :intent/status :active :intent/id 7 :intent/goal :ender-pearls})))
+
+(defn frozen
+  "frozen-world with the watch begun at 0 over table's row (the pearl hunt's by default)."
+  ([ms] (frozen ms pearls-table))
+  ([ms table]
+   (let [w (frozen-world ms)]
+     (assoc w
+            :plan/watch
+            (plan/watch-stamp (assoc w :time/now 0) (plan/progress-key w (first table)) 0 0)))))
 
 (deftest a-bot-at-one-block-for-stuck-ms-is-sent-elsewhere
   (let [event {:event/kind :tick :event/now 0 :event/rand 0.25}
@@ -1890,15 +1901,47 @@
                           event)]
         (is (nil? (:plan/unstuck w)))
         (is (= late (get-in w [:plan/watch :at])))))
-    (testing "a move of stuck-move blocks"
-      (let [w
-            (plan/watch (assoc (frozen late) :player/pos [2398.5 69.0 2164.5]) pearls-table event)]
+    (testing "a move across stuck-extent blocks, for a row that counts moves"
+      (let [w (plan/watch (assoc (frozen late walker-table) :player/pos [2410.5 69.0 2164.5])
+                          walker-table
+                          event)]
         (is (nil? (:plan/unstuck w)))
         (is (= late (get-in w [:plan/watch :at])))))
     (testing "a jitter of a block does not"
+      (let [w (plan/watch (assoc (frozen late walker-table) :player/pos [2391.5 69.0 2164.5])
+                          walker-table
+                          event)]
+        (is (= 1 (:plan/unstuck w)))))
+    (testing "the pearl row counts items and fights, not moves"
       (let [w
-            (plan/watch (assoc (frozen late) :player/pos [2391.5 69.0 2164.5]) pearls-table event)]
+            (plan/watch (assoc (frozen late) :player/pos [2450.5 69.0 2164.5]) pearls-table event)]
         (is (= 1 (:plan/unstuck w)))))))
+
+(deftest a-tunnel-loop-that-digs-netherrack-and-finds-nothing-is-stuck
+  ;; blaze-race-z job 1 (run 41173997255) tunnelled 106 min (473 :tunnel-to) round a ring 67 blocks
+  ;; across, digging netherrack every leg: items held changed, rods, fights and spawners never
+  (let [event {:event/kind :tick :event/now 0 :event/rand 0.75}
+        blaze-table
+        [{:goal/id :blaze-rods :goal/target? true :goal/done? :never :goal/plan :blaze-rods}]
+        start
+        (-> (frozen-world 0)
+            (assoc
+             :plan/intent
+             {:intent/kind :tunnel-to :intent/status :active :intent/id 3 :intent/goal :blaze-rods})
+            (dissoc :pearls/shelter)
+            (as-> w
+              (assoc w
+                     :plan/watch
+                     (plan/watch-stamp w (plan/progress-key w (first blaze-table)) 0 0))))
+        ring (fn [w k] ; a look a minute round the ring, a block more netherrack each time
+               (-> w
+                   (assoc :time/now (* k 60000)
+                          :player/pos [(+ 2157.5 (* 6 (mod k 12))) 60.0 1725.5]
+                          :player/inventory {0 {:item 1 :count 1} 1 {:item 5 :count (+ 10 k)}})
+                   (plan/watch blaze-table event)))
+        w (reduce ring start (range 1 12))]
+    (is (= 1 (:plan/unstuck w)) "ten minutes of tunnelling and nothing found: sent elsewhere")
+    (is (some? (:plan/explore w)))))
 
 (deftest ^:eftest/synchronized the-explore-walk-starts-once
   (let [w (-> (frozen 5000)

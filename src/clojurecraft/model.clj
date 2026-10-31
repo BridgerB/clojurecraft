@@ -259,7 +259,7 @@
     "times a run out of attempts or a :retrying wait started over instead of ending (plan/recover)"
     "after a recovery"]
    [:plan/watch
-    "the stuck watchdog's last look: {:key progress-key :pos feet :at ms progress was last seen :checked ms of the last look}"
+    "the stuck watchdog's last look: {:key progress-key :lo :hi corners of the box of the feet's places since progress :at ms progress was last seen :checked ms of the last look}"
     "while planning"]
    [:plan/explore
     "the cell the next walk goes to after the stuck watchdog fired (plan/unstick), taken once"

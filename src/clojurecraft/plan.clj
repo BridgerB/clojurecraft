@@ -12,11 +12,14 @@
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.math :as math]
+            [clojurecraft.blocks :as blocks]
             [clojurecraft.dimension :as dimension]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
+            [clojurecraft.inventory :as inventory]
             [clojurecraft.memory :as memory]
             [clojurecraft.physics :as physics]
+            [clojurecraft.recipe :as recipe]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.trap :as trap]
             [clojurecraft.window :as window]))
@@ -105,8 +108,13 @@
 (def max-attempts 3)                  ; consecutive failed intents before the plan fails
 (def stall-ms 900000)                 ; ms with no intent done (progress?) after which a run out of attempts is a dead end: 15 min
 (def recover-cooldown-ms 10000)        ; ms between two recoveries: a recovery that fails again at once waits, it does not start over every 100 ms
-(def stuck-ms 600000)                 ; ms without progress (progress-key changed, or a move of stuck-move) after which the bot is made to go elsewhere: 10 min
-(def stuck-move 6.0)                  ; blocks from where the watch began that count as a move
+(def stuck-ms 600000)                 ; ms without progress (progress-key changed, or a move of stuck-extent) after which the bot is made to go elsewhere: 10 min
+(def fact-rows
+  "The :goal/plan of the rows whose progress is items and facts only (progress-key): a walk or a
+   tunnel does not count for them, however far. Blaze-race-z job 1 (run 41173997255) tunnelled 106 min
+   round a ring 67 blocks across."
+  #{:pearls :blaze-rods})
+(def stuck-extent 16.0)               ; blocks the box of the feet's places since progress was last seen must span (x or z) to count as a move: a tunnel loop inside 12 blocks is not one
 (def watch-every-ms 1000)             ; ms between two looks at progress
 (def explore-distance 48)             ; blocks the walk away from a stuck spot goes
 (def anchors
@@ -471,13 +479,38 @@
           {}
           (vals (:player/inventory world))))
 
+(defmethod progress-key :pearls
+  ;; the pearls held, the fights ended and the stages reached: a hunt that holds a pearl more, ended a
+  ;; fight or reached a stage has made progress; tunnelling and walking do not
+  [world _]
+  [(inventory/item-count world (recipe/item-id :ender_pearl)) (memory/done-count world :fight)
+   (count (:plan/reached world #{}))])
+
+(defmethod progress-key :blaze-rods
+  ;; the rods held, the fights ended and the spawners on record: a new spawner found is a stand
+  ;; reached; the netherrack a tunnel digs every leg is not progress (blaze-race-z job 1 tunnelled
+  ;; 106 min inside 12 blocks)
+  [world _]
+  [(inventory/item-count world (recipe/item-id :blaze_rod)) (memory/done-count world :fight)
+   (count (memory/positions-now world [(blocks/default-state :spawner)]))])
+
 (defmethod progress-key :default [world _] [(held-counts world) (count (:plan/reached world #{}))])
 
 (defn watch-stamp
   "The watch as of now: the progress key k, where the bot stands, when progress was last seen
    (:at) and when it was last looked at (:checked)."
   [world k at now]
-  {:key k :pos (:player/pos world) :at at :checked now})
+  {:key k :lo (:player/pos world) :hi (:player/pos world) :at at :checked now})
+
+(defn widened
+  "The watch w with the box of the feet's places (:lo, :hi) widened to hold the feet now."
+  [w world]
+  (let [p (:player/pos world)] (assoc w :lo (mapv min (:lo w) p) :hi (mapv max (:hi w) p))))
+
+(defn extent
+  "The span, on the larger of x and z, of the box of the feet's places in watch w."
+  [w]
+  (let [[lx _ lz] (:lo w) [hx _ hz] (:hi w)] (max (- hx lx) (- hz lz))))
 
 (defn explore-cell
   "The cell explore-distance from the feet in the direction r (0 to 1 of a turn): where a stuck
@@ -516,12 +549,14 @@
           :else
           (let [goal (choose world table)
                 k (progress-key world goal)
-                moved? (>= (physics/horizontal-distance (:player/pos world) (:pos w)) stuck-move)]
+                w (assoc (widened w world) :checked now)]
             (cond (nil? goal) world
-                  (or moved? (not= k (:key w)))
+                  (or (and (not (contains? fact-rows (:goal/plan goal)))
+                           (>= (extent w) stuck-extent))
+                      (not= k (:key w)))
                   (assoc world :plan/watch (watch-stamp world k now now))
                   (or (< (- now (:at w)) stuck-ms) (not (can-abandon? world)))
-                  (assoc-in world [:plan/watch :checked] now)
+                  (assoc world :plan/watch w)
                   :else (unstick world goal (:plan/intent world) (:event/rand event 0.5) now))))))
 
 (defn run-intent
