@@ -2795,7 +2795,8 @@
                    (assoc :player/dimension nether))]
     (is (pearls/travel-caged? sealed))
     (is (nil? (pearls/travel sealed)))
-    (is (= :stairs-up (:intent/kind (plan/next-intent sealed row plan/goals))))
+    (is (= :tunnel (:intent/kind (plan/next-intent sealed row plan/goals)))
+        "in the Nether, level: there is no sky to climb to")
     (testing "the overworld has no such search"
       (is (not (pearls/travel-caged? (assoc sealed :player/dimension "minecraft:overworld")))))))
 
@@ -2838,3 +2839,45 @@
       (let [floor (-> (wide (standing {7 ghast} {[7 64 8] stone}))
                       (assoc :player/inventory held))]
         (is (= [7 65 8] (:intent/cell (pearls/cover-from floor))))))))
+
+(deftest a-nether-climb-stops-under-the-bedrock-roof
+  ;; pearls-travel-d job 3 (plan run 41156746096, issue #263): the open pad was cut in rock; stairs
+  ;; up from y 72 in flights of eight to y 126, then :rejected three times at the server's bedrock
+  (let [w (-> (burrowed [8.5 100.0 8.5] {})
+              (assoc :player/dimension nether))]
+    (is (= 120 (pearls/roof-cap w 112)) "eight up from 112 is the roof")
+    (is (= 120 (pearls/roof-cap w 118)))
+    (is (= 80 (pearls/roof-cap w 72)))
+    (is (= 119 (pearls/roof-cap (assoc w :player/dimension "minecraft:overworld") 111))
+        "elsewhere eight")
+    (is (nil? (pearls/climb-out (assoc w :player/pos [8.5 119.0 8.5]))) "no flight at the roof")))
+
+(deftest a-lone-piglin-is-avoided-not-fought-in-the-open
+  ;; pearls-travel-d job 5 (plan run 41156746096, issue #263): 73 minutes, two pearls, then :defend
+  ;; fought a piglin 2.8 blocks away with no burrow yet: two swings, hits of 6.7, dead
+  (let [piglin (mob :piglin [11.5 64.0 8.5])
+        zombie (mob :zombie [11.5 64.0 8.5])
+        zpig (mob :zombified_piglin [11.5 64.0 8.5])
+        w (fn [m]
+            (assoc (standing {7 m})
+                   :player/inventory
+                   {0 (item :iron_sword 1) 1 (item :cobblestone 64)}))]
+    (is (pearls/swarmed? (w piglin)) "one piglin at full health")
+    (is (not (pearls/swarmed? (w zombie))) "one zombie: the fight rules")
+    (is (not (pearls/swarmed? (w zpig))) "a zombified piglin is neutral until it is hit")
+    (is (contains? (combat/answering (w piglin) :pearls) :piglin) ":defend leaves it to the hunt")
+    (is (not (contains? (combat/answering (w zombie) :pearls) :zombie)))
+    (is (not= :fight (:intent/kind (plan/next-intent (w piglin) row plan/goals))))))
+
+(deftest on-open-ground-with-no-block-a-hole-is-dug-under-the-feet
+  ;; pearls-travel-d job 6 (plan run 41156746096, issue #263), the fold at 0.22 to 0.4 min: the bot at
+  ;; [2463 101 2230] on open ground, ghast 53 at [2454.5 101 2265.5] in sight, shot-at? true, the
+  ;; pearl kit holds no block, cover-from nil, and the hunt went on with its stairs; fireballed at 39 s
+  (let [ghast (mob :ghast [8.5 64.0 44.5])
+        w (-> (wide (standing {7 ghast}))
+              (assoc :player/inventory {0 (item :iron_sword 1) 1 (item :iron_pickaxe 1)}))]
+    (is (pearls/shot-at? w))
+    (is (nil? (pearls/hide-cell w (get-in w [:world/entities 7]))))
+    (is (= {:intent/kind :dig :intent/target [8 63 8] :intent/for :pearls} (pearls/cover-from w))
+        "the cell under the feet: a hole to stand in, the rim between it and the ghast")
+    (is (= :dig (:intent/kind (plan/next-intent w row plan/goals))))))

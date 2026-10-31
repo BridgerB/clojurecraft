@@ -1262,6 +1262,16 @@
               (when (and (solid-cut? world :stairs-up feet h) (not (brink? world step))) h)))
           ways)))
 
+(def nether-roof 120)                    ; the Nether's roof is bedrock from y 123: nothing is cut up past this
+
+(defn roof-cap
+  "The height a stair up from y stops at: y + descend-step, in the Nether at most nether-roof. Pearls-
+   travel-d job 3 (plan run 41156746096, issue #263) climbed from y 72 to y 126 by eight-block
+   flights and failed :rejected three times at bedrock."
+  [world y]
+  (let [up (+ y descend-step)]
+    (if (= dimension/nether (dimension/of world)) (min up nether-roof) up)))
+
 (defn climb-out
   "Stairs up from the feet, descend-step higher along the heading whose first cut digs
    into rock without stepping onto an open brink (climb-heading), for a pocket no roam finds an
@@ -1271,12 +1281,30 @@
   [world]
   (let [feet (intent/feet world)]
     (when (and (spare? world) (not (contains? (:plan/boxed-at world) feet)))
-      (when-let [dir (climb-heading world feet)]
+      (when-let [dir (when (< (physics/y-of feet) (dec (roof-cap world (physics/y-of feet))))
+                       (climb-heading world feet))]
         {:intent/kind :stairs-up
-         :intent/to-y (+ (physics/y-of feet) descend-step)
+         :intent/to-y (roof-cap world (physics/y-of feet))
          :intent/dir dir
          :intent/to-height? true
          :intent/for :pearls}))))
+
+(defn tunnel-out
+  "A :tunnel of up to bore-length steps along the heading of stairs/directions the clock picks (a
+   new one every thirty seconds, so a refused heading is followed by another), in the Nether, with
+   digs to spare (spare?), a staircase not boxed from these feet, a floor under the steps
+   (floored-length) and rock to cut (solid-cut?); nil otherwise. The Nether has no open sky to climb
+   to: pearls-travel-d job 3 stood in rock and climbed to the bedrock roof."
+  [world]
+  (let [feet (intent/feet world)
+        dir (nth stairs/directions (mod (quot (:time/now world 0) 30000) (count stairs/directions)))
+        n (floored-length world feet dir bore-length)]
+    (when (and (= dimension/nether (dimension/of world))
+               (spare? world)
+               (not (contains? (:plan/boxed-at world) feet))
+               (pos? n)
+               (solid-cut? world :tunnel feet dir n))
+      {:intent/kind :tunnel :intent/dir dir :intent/length n :intent/for :pearls})))
 
 (defn cut-out
   "Stairs up out of the burrow's end, the other way from its mouth, for when the burrow is
@@ -1528,14 +1556,31 @@
   [world]
   (let [t (:pearls/shot-at-ms world)] (boolean (and t (< (- (:time/now world 0) t) shot-hold-ms)))))
 
+(def weak-melee 4.0)                    ; the hit (mob/kinds :melee) at or under which a mob is fought at hand with no burrow: a zombie's 3, a spider's 2
+
+(defn weak?
+  "Is entity e of a kind mob/kinds knows to hit for weak-melee or less on Normal (a zombie, a
+   spider), and no archer? A piglin, a hoglin or a blaze is not: gym plan run 41109441111
+   (pearls-travel-a) job 5 walked down to a piglin and fought it, three hits in four seconds,
+   dead at 39 minutes."
+  [e]
+  (let [k (mob/kinds (entity/kind e))]
+    (boolean (and k (:melee k) (nil? (:shoot k)) (<= (:melee k) weak-melee)))))
+
 (defn swarmed?
-  "Are two or more monsters within their reach (swarm), a ghast in sight (shot-at?), or one monster
-   while health is under danger-health? A lone one over that health is met by the fight rules (a
-   magma cube is small and slow)."
+  "Are two or more monsters within their reach (swarm), a ghast in sight (shot-at?), one monster
+   while health is under danger-health, or one hostile that is not weak? (a piglin, a hoglin)? A
+   lone weak one over that health is met by the fight rules (a magma cube is small and slow).
+   Pearls-travel-d job 5 (plan run 41156746096, issue #263) lived 73 minutes and two pearls, then
+   the :defend row fought a lone piglin at full health: two swings, hits of 6.7 at 73.06, .09 and
+   .16 min, dead."
   [world]
-  (let [n (count (swarm world))]
-    (boolean
-     (or (>= n 2) (and (= 1 n) (< (:player/health world 20.0) danger-health)) (shot-at? world)))))
+  (let [sw (swarm world)
+        n (count sw)]
+    (boolean (or (>= n 2)
+                 (and (= 1 n) (< (:player/health world 20.0) danger-health))
+                 (some (fn [[_ e]] (and (entity/hostile? e) (not (weak? e)))) sw)
+                 (shot-at? world)))))
 
 (def neighbours [[1 0 0] [-1 0 0] [0 0 1] [0 0 -1] [0 1 0] [0 -1 0]])
 
@@ -1619,7 +1664,11 @@
                :intent/cell line
                :intent/for :pearls
                :intent/wall? true}
-              :else (or (wall-toward world (:entity/pos e) [0 1]) (dig-away world e)))))
+              :else
+              (or (wall-toward world (:entity/pos e) [0 1])
+                  (dig-away world e)
+                  (when-let [c (combat/nook-cell world)]
+                    {:intent/kind :dig :intent/target c :intent/for :pearls})))))
     (when-let [[_ e] (entity/nearest (swarm world) (:player/pos world))]
       (let [c (combat/cover world e)] (when (:intent/kind c) (assoc c :intent/for :pearls))))))
 
@@ -1776,17 +1825,6 @@
    was felled by the second and third hit of a fight in the open."
   [world]
   (min provoke-health (+ provoke-margin (* 2.0 (enderman-hit world)))))
-
-(def weak-melee 4.0)                    ; the hit (mob/kinds :melee) at or under which a mob is fought at hand with no burrow: a zombie's 3, a spider's 2
-
-(defn weak?
-  "Is entity e of a kind mob/kinds knows to hit for weak-melee or less on Normal (a zombie, a
-   spider), and no archer? A piglin, a hoglin or a blaze is not: gym plan run 41109441111
-   (pearls-travel-a) job 5 walked down to a piglin and fought it, three hits in four seconds,
-   dead at 39 minutes."
-  [e]
-  (let [k (mob/kinds (entity/kind e))]
-    (boolean (and k (:melee k) (nil? (:shoot k)) (<= (:melee k) weak-melee)))))
 
 (defn coming?
   "Is the nearest angry enderman (entity/creepy?) within stare-range one the hunt still fights
@@ -1976,12 +2014,15 @@
                                       (not (recently-shot? world))
                                       (wandering? world))
                              (wander world)))
-        cage-break (delay (when (and (not hurt?)
-                                     (not swarmed?)
-                                     (not (live-menaced? world))
-                                     (not (recently-shot? world))
-                                     (or (wandering? world) (travel-caged? world)))
-                            (or (climb-out world) (dig-out world) (uncage world))))
+        cage-break (delay
+                    (when (and (not hurt?)
+                               (not swarmed?)
+                               (not (live-menaced? world))
+                               (not (recently-shot? world))
+                               (or (wandering? world) (travel-caged? world)))
+                      (if (= dimension/nether (dimension/of world))
+                        (or (dig-out world) (tunnel-out world) (climb-out world) (uncage world))
+                        (or (climb-out world) (dig-out world) (uncage world)))))
         csite-walk (delay (shelter-walk world csite))
         site-walk (delay (shelter-walk world site))
         overworld-death? (and (pos? (:stats/deaths world 0))
@@ -2217,9 +2258,12 @@
 (defmethod combat/answering :pearls
   ;; with a burrow near (shelter), every hostile tracked but the shunned kinds is the hunt's too
   ;; (threat): met from the burrow, where the :defend row would fight it in the open. With none,
-  ;; the endermen alone, as answers says
+  ;; the endermen and every hostile that is not weak? (a piglin, a hoglin): the hunt takes cover
+  ;; from those (swarmed?) and the :defend row does not fight them in the open
   [world _]
-  (cond-> (combat/answers :pearls)
+  (cond-> (into (combat/answers :pearls)
+                (comp (remove (comp weak? val)) (map (comp entity/kind val)) (remove shunned))
+                (entity/hostiles world))
     (shelter world)
     (into (comp (map (comp entity/kind val)) (remove shunned)) (entity/hostiles world))))
 

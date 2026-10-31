@@ -672,6 +672,20 @@
     :gym/prereqs (conj pearl-kit "minecraft:cooked_beef 32")
     :gym/timeout-ms trial-ms
     :gym/truth [(pearls-held "(1[2-9]|[2-9][0-9]|[1-9][0-9][0-9])")]}
+   ;; issue #263: pearls-12 with what the race bot carries into the Nether besides the kit, a stack of
+   ;; cobblestone and one of netherrack (chain-dragon's lane-4 audit: 265 to 830 cobblestone), so that
+   ;; the ghast cover, the walls and the hole as a last-resort cover have blocks to lay; pearls-12 is
+   ;; unchanged and holds none
+   {:gym/goal :ender-pearls
+    :gym/name "pearls-12-race"
+    :gym/until "pearls-12"
+    :gym/land :warped-forest
+    :gym/difficulty "normal"
+    :gym/prereqs (into pearl-kit
+                       ["minecraft:cooked_beef 32" "minecraft:cobblestone 64"
+                        "minecraft:netherrack 64"])
+    :gym/timeout-ms trial-ms
+    :gym/truth [(pearls-held "(1[2-9]|[2-9][0-9]|[1-9][0-9][0-9])")]}
    ;; issue #263: the same twelve pearls from where the race leaves the bot, at a fortress in the
    ;; Nether wastes with seven rods in the pack and no warped forest in view: the stage must find
    ;; one itself (pearls/travel). pearls-12 above lands in a forest, which the race never does. No
