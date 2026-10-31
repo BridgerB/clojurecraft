@@ -50,6 +50,7 @@
             [clojurecraft.plan :as plan]
             [clojurecraft.pocket :as pocket]
             [clojurecraft.recipe :as recipe]
+            [clojurecraft.stairs :as stairs]
             [clojurecraft.terrain :as terrain]
             [datascript.core :as d]))
 
@@ -1356,6 +1357,43 @@
 
 (def grab-range 3.0) ; blocks on the plane within which a rod lying is picked up before the next swing
 
+(def long-shot-ms 4000) ; ms after a hit within which a shooter out of reach is answered with a wall, not carried on under
+(def shooter-range 64.0) ; blocks within which a blaze in sight of the bot is a shooter (they fire from 48)
+
+(defn shooter
+  "The nearest blaze alive within shooter-range that has the bot in sight (combat/seen?), or nil:
+   what shoots it from beyond cover-range. Blaze-race-x job 5 and y job 5 (and r, v job 5 before
+   them) land at one place every round, tunnel at y 72 to 67 along a ledge in sight of the fortress
+   across the chasm, and are fireballed by blazes at 24 to 48 blocks (shooters at [2185 57 1731]
+   and [2191 50 1740], 39 to 49 off): 47 to 53 hits in 4 minutes, 0 attacks, no blaze in reach."
+  [world]
+  (let [pos (:player/pos world)]
+    (->> (vals (:world/entities world))
+         (filter (fn [e]
+                   (and (= :blaze (entity/kind e))
+                        (not (entity/dead? e))
+                        (<= (physics/distance pos (:entity/pos e)) shooter-range)
+                        (combat/seen? world e))))
+         (sort-by #(physics/distance pos (:entity/pos %)))
+         first)))
+
+(defn long-shot-cover
+  "A :place of a filler block in the wall cell toward the shooter (combat/wall-cell: the feet's,
+   then the eye's), or nil: the bot outside a pocket, hit within long-shot-ms, no blaze within
+   at-hand, a shooter in sight (shooter), a cell to lay (not one that just failed) and a filler
+   held. A fireball stops at the first block on its line, so two blocks beside the bot toward the
+   shooter hide it, where a rest (combat/cover's wait for a threat past back-off-to) stood and
+   burned."
+  [world]
+  (when (and (not (pocket/in? world))
+             (<= (- (:time/now world 0) (:player/struck-at world -1000000)) long-shot-ms)
+             (nil? (at-hand-blaze world)))
+    (when-let [e (shooter world)]
+      (let [cell (combat/wall-cell world e)
+            filler (stairs/filler world combat/wall-fill)]
+        (when (and cell filler (not (combat/wall-failed? world cell)))
+          {:intent/kind :place :intent/item filler :intent/cell cell})))))
+
 (def rod-grab-health 10.0) ; health at which a rod a step or two away is still picked up: a second's walk, not a fight (#577 danger-health)
 
 (defn near-rod
@@ -1429,6 +1467,7 @@
            (not (rod-grab? world i))
            (some? (dodge-intent world)))
       (and (= :tunnel-to (:intent/kind i)) (some? (prepare-intent world (nearest-spawner world))))
+      (and (= :tunnel-to (:intent/kind i)) (some? (long-shot-cover world)))
       (and (not (contains? refuge-kinds (:intent/kind i)))
            (some? (refuge-now world (nearest-spawner world))))
       (and (not (hurt? world))
@@ -1459,6 +1498,7 @@
         wary (delay (when (and (not in-pocket?) (wary? world)) (warily world)))
         away (delay (when (and (not in-pocket?) (outnumbered? world)) (hide world)))
         held (delay (hold-intent world))
+        shot-cover (delay (long-shot-cover world))
         refuge (delay (when (and (not in-pocket?) (refuge-needed? world))
                         (or (pocket-go world sp false)
                             (when (burning-twice? world) (here-intent world)))))
@@ -1479,6 +1519,7 @@
           @out @out
           @dodging @dodging
           @held @held
+          @shot-cover @shot-cover
           @refuge @refuge
           @heal @heal
           @grab @grab

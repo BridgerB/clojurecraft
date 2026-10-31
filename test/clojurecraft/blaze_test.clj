@@ -1680,3 +1680,26 @@
     (is (true? (blaze/rod-grab? w {:intent/kind :walk :intent/for :rod})))
     (is (false? (blaze/rod-grab? w {:intent/kind :walk :intent/for :cover})))
     (is (false? (blaze/rod-grab? (assoc w :player/health 9.0) grab)))))
+
+(deftest a-bot-shot-from-range-lays-a-wall-toward-the-shooter
+  ;; blaze-race-x job 5 and y job 5: at [2151.4 72 1757.5] fireballed by blazes at [2185 57 1731]
+  ;; (45 off) for 4 minutes, 47-53 hits, 0 attacks, nothing within reach
+  (let [far (entity :blaze [15.5 66.0 1.5] :entity/health 20.0)
+        w (-> (standing {7 far})
+              (assoc :time/now 100000 :player/struck-at 99000)
+              (assoc-in [:player/inventory 9] (item :cobblestone 40)))]
+    (is
+     (= far (blaze/shooter w))
+     "a blaze beyond reach with the bot in its sight (the fixture is one chunk; the run: 45 off)")
+    (is (= {:intent/kind :place :intent/item :cobblestone :intent/cell [9 64 8]}
+           (blaze/long-shot-cover w))
+        "the cell beside the feet toward it")
+    (is (= :place (:intent/kind (next-intent w))) "chosen ahead of the tunnel and the camp")
+    (testing "not while the hit is old, a blaze is at hand, or the bot is in a pocket"
+      (is (nil? (blaze/long-shot-cover (assoc w :player/struck-at 50000))))
+      (is (nil? (blaze/long-shot-cover (in-pocket w))))
+      (is (nil? (blaze/long-shot-cover (assoc-in w
+                                        [:world/entities 8]
+                                        (entity :blaze [9.5 65.0 8.5] :entity/health 20.0))))))
+    (testing "nothing to lay with: nothing"
+      (is (nil? (blaze/long-shot-cover (assoc w :player/inventory {})))))))
