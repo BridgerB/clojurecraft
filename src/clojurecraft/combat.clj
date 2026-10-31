@@ -476,11 +476,31 @@
    hits, three seconds, to dig the hole under the feet. The shared danger-line stays 10."
   15.0)
 
+(def teleporter-resume-hp
+  "Health a bot that broke off from one of teleporters must regain before it fights again.
+   Pearl-fight-n jobs 3 and 4 (plan run 41229277566) broke off, regained a point or two and fought
+   on in the open: 9.4 to 10.7 to 4.9 to dead, 14.3 to 17.1 to 11.5 to 5.8 to dead."
+  19.0)
+
+(def cover-kinds
+  "Intents :defend plans against a threat it will not fight: a meal, a block, a pillar, a hole,
+   a back-off."
+  #{:eat :place :pillar :dig :back-off})
+
+(defn covering?
+  "Is the intent running, or the last one chosen, a cover (cover-kinds) of the :defend row?"
+  [world]
+  (let [i (or (:plan/intent world) (:plan/last world))]
+    (boolean (and (= :defend (:intent/goal i)) (contains? cover-kinds (:intent/kind i))))))
+
 (defn break-line
   "The health under which the bot breaks off a fight with entity e: danger-line, and for one of
-   teleporters at least teleporter-break-hp."
+   teleporters at least teleporter-break-hp, or teleporter-resume-hp while it is covering
+   (covering?), so that a point or two of healing does not send it back to the fight."
   [world e]
-  (cond-> (danger-line world) (contains? teleporters (entity/kind e)) (max teleporter-break-hp)))
+  (cond-> (danger-line world)
+    (contains? teleporters (entity/kind e))
+    (max (if (covering? world) teleporter-resume-hp teleporter-break-hp))))
 
 (defmethod intent/run :fight
   ;; {:intent/kind :fight :intent/target eid}: done when the target is gone (a kill); below

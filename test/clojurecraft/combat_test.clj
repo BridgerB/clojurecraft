@@ -878,3 +878,24 @@
       (is (let [w (assoc (at 14.3) :world/entities {7 zombie})]
             (= (combat/danger-line w) (combat/break-line w zombie)))
           "any other kind keeps the danger line"))))
+
+(deftest a-bot-that-broke-off-from-an-enderman-does-not-go-back-at-the-first-healed-point
+  ;; pearl-fight-n jobs 3 and 4 (plan run 41229277566): 9.4 healed to 10.7 and the fight went on,
+  ;; 10.7 to 4.9 to dead; 14.3 healed to 17.1, fought, 11.5, 5.8, dead
+  (let [angry (assoc (mob :enderman [9.5 64.0 8.5] 40.0) :entity/creepy? true)
+        w (assoc (standing {7 angry})
+                 :plan/goals #{:dragon}
+                 :player/health 17.1
+                 :player/food 10
+                 :player/inventory {0 (item :stone_pickaxe 1)})
+        digging
+        (assoc w :plan/last {:intent/kind :dig :intent/goal :defend :intent/target [8 63 8]})]
+    (is (= 15.0 (combat/break-line w angry)) "fresh: the teleporter line")
+    (is (= 19.0 (combat/break-line digging angry)) "after a cover: the resume line")
+    (is (= :fight (:intent/kind (plan/next-intent w (row :defend) plan/goals))))
+    (is (= :dig (:intent/kind (plan/next-intent digging (row :defend) plan/goals)))
+        "17.1 after a dig: on with the cover, not the fight")
+    (is (= :fight
+           (:intent/kind
+            (plan/next-intent (assoc digging :player/health 19.5) (row :defend) plan/goals)))
+        "healed past 19: the fight")))
