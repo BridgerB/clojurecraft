@@ -25,6 +25,7 @@
             [clojure.string :as str]
             [clojurecraft.armour :as armour]
             [clojurecraft.blaze :as blaze]
+            [clojurecraft.blocks :as blocks]
             [clojurecraft.capture :as capture]
             [clojurecraft.chunk :as chunk]
             [clojurecraft.cli :as cli]
@@ -35,6 +36,7 @@
             [clojurecraft.hunt :as hunt]
             [clojurecraft.main :as main]
             [clojurecraft.memory :as memory]
+            [clojurecraft.mob :as mob]
             [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
@@ -105,16 +107,134 @@
   [w nether file]
   (assoc w :capture/nether nether :capture/nether-file (str file)))
 
+;; ---------------------------------------------------------------- a start at a fortress
+
+(def fortress-kit-default
+  "What a bot brings to a fortress in the real race, as {item count} (ci/race.edn's :race/kit, from the
+   lane audits): a stone pickaxe, an iron sword and three pieces of iron armour in the bag (the
+   :wear-armour row puts them on), a table, sticks, flint and steel, both buckets, coal, cooked food and
+   junk stone and loot, all thirty-six slots. ci/simrace.edn's :simrace/kit
+   replaces it as one line."
+  {:stone_pickaxe 1
+   :iron_sword 1
+   :iron_helmet 1
+   :iron_chestplate 1
+   :iron_leggings 1
+   :cooked_beef 16
+   :crafting_table 1
+   :stick 12
+   :flint_and_steel 1
+   :bucket 1
+   :water_bucket 1
+   :coal 4
+   :stone_sword 1
+   :cobblestone 256
+   :netherrack 64
+   :diorite 128
+   :granite 64
+   :andesite 64
+   :cobbled_deepslate 64
+   :dirt 64
+   :gravel 16
+   :raw_copper 12
+   :lapis_lazuli 11
+   :leather 6
+   :bone 2
+   :string 3
+   :oak_planks 1
+   :flint 1
+   :sand 16
+   :arrow 1
+   :spruce_planks 1
+   :white_wool 2})
+
+(def stack-size 64)
+
+(defn kit->inventory
+  "The sim's :inventory, {place item}, of a kit ({item count}): every item in the bag, the hotbar and
+   then the main inventory, a count over a stack split into stacks of stack-size, items in name order
+   so the same kit is the same inventory. Armour is carried, not worn, as the real bots arrive."
+  [kit]
+  (let [stacks (for [[k n] (sort-by key kit)
+                     c (concat (repeat (quot n stack-size) stack-size)
+                               (when (pos? (rem n stack-size)) [(rem n stack-size)]))]
+                 {:item (recipe/item-id k) :count c})
+        places (concat (for [i (range 9)] [:hotbar i]) (for [i (range 27)] [:main i]))]
+    (into {} (map vector places stacks))))
+
+(def fortress-rings
+  "Distances from a fortress spawner, nearest last, a start is looked for at: the far side first, so
+   the bot walks to the fortress as a race bot does, and a nearer one when no ground is found."
+  [32 28 24 20 16 12 8])
+
+(defn standable-cell?
+  "Can the feet stand at [x y z] of the decoded columns: a solid block under them, the feet and the
+   head cell air, and none of the three a fluid? Unloaded counts as no."
+  [decoded [x y z]]
+  (let [at (fn [dy] (chunk/block-at decoded [x (+ y dy) z]))
+        floor (at -1)
+        feet (at 0)
+        head (at 1)]
+    (boolean (and floor feet head (blocks/solid? floor) (blocks/air? feet) (blocks/air? head)))))
+
+(defn fortress-start
+  "Where a run starts at a fortress in the decoded columns of a captured Nether: the cell where the
+   spawner nearest the landing's Nether coordinates ([x z y] landing, an eighth of the overworld's,
+   as the server's locate reads them) has ground to stand on, at the farthest of fortress-rings
+   from it, 8 vertically either way. {:spawn [x y z] :spawner [x y z]}, or nil when the Nether
+   holds no spawner or no ground round it."
+  [decoded [lx lz _]]
+  (let [spawners (vec (chunk/find-blocks decoded #(= % mob/spawner-block)))
+        nx (quot lx 8)
+        nz (quot lz 8)]
+    (when (seq spawners)
+      (let [[sx sy sz] (apply min-key (fn [[x _ z]] (+ (abs (- x nx)) (abs (- z nz)))) spawners)
+            ring (fn [r]
+                   (for [dx (range (- r) (inc r))
+                         dz (range (- r) (inc r))
+                         :when (= r (max (abs dx) (abs dz)))]
+                     [(+ sx dx) (+ sz dz)]))
+            cell (some (fn [[x z]]
+                         (some (fn [y] (when (standable-cell? decoded [x y z]) [x y z]))
+                               (map #(+ sy %) [0 1 -1 2 -2 3 -3 4 -4 5 -5 6 -6 7 -7 8 -8])))
+                       (mapcat ring fortress-rings))]
+        (when cell
+          {:spawn (let [[x y z] cell] [(+ x 0.5) (double y) (+ z 0.5)]) :spawner [sx sy sz]})))))
+
+(defn with-fortress
+  "World w with a start at its set's fortress (:capture/fortress {:spawn :spawner :kit}) when it
+   has a captured Nether (:capture/nether) with one (fortress-start) and kit, a map of items;
+   otherwise w as it is, which a from-fortress race then leaves out (fortress-worlds)."
+  [w kit]
+  (if-let [start (some-> (:capture/nether w)
+                         :decoded
+                         (fortress-start (:capture/landing w)))]
+    (assoc w :capture/fortress (assoc start :inventory (kit->inventory kit)))
+    w))
+
+(defn fortress-goals
+  "The goal ids a run that starts at a fortress plays to until: the chain's own, the stages from the
+   blaze rods up (their priority at least the blaze row's), nothing before: a bot at a fortress
+   has gone through them, and a failure before the rods is not the run's to file."
+  [until]
+  (let [row (fn [id] (first (filter #(= id (:goal/id %)) plan/goals)))
+        from (:goal/priority (row :blaze-rods))]
+    (filterv #(>= (:goal/priority (row %) 0) from) (plan/through until))))
+
 (defn spawn-of
-  "Where a run starts: on the landing ([x z y], its surface) at the column's centre."
-  [{[x z y] :capture/landing}]
-  [(+ x 0.5) (double y) (+ z 0.5)])
+  "Where a run starts: at its fortress when it has one (with-fortress), else on the landing ([x z y],
+   its surface) at the column's centre."
+  [{[x z y] :capture/landing :as w}]
+  (or (get-in w [:capture/fortress :spawn]) [(+ x 0.5) (double y) (+ z 0.5)]))
 
 (defn go-of
-  "The :go a run of w to until is given once its bot is loaded: the chain to until and the
-   landing (:go/at)."
+  "The :go a run of w to until is given once its bot is loaded: the chain to until (from the blaze
+   rods when the run starts at a fortress, fortress-goals) and the start (:go/at)."
   [w until]
-  {:event/kind :go :go/goals (plan/through until) :go/chain? true :go/at (spawn-of w)})
+  {:event/kind :go
+   :go/goals (if (:capture/fortress w) (fortress-goals until) (plan/through until))
+   :go/chain? true
+   :go/at (spawn-of w)})
 
 (defn death-note
   "Facts from the tick a run dies on: when, where, what it held, the intent it was in, and
@@ -234,6 +354,7 @@
   ([w seed until max-ms] (run w seed until max-ms nil))
   ([w seed until max-ms food]
    (let [opts {:host "sim" :port 0 :name "Clj_sim"}
+         fortress (:capture/fortress w)
          backoff (atom 0)
          counting (fn [before event]
                     (let [t0 (:time/now before 0)
@@ -254,20 +375,29 @@
                                               :pos (:player/pos after)})))
                       after))
          {:keys [world sim last moments crashed]}
-         (sim/run+ counting
-                   (game/init opts)
-                   (sim/init (cond-> {:columns (:capture/columns w)
-                                      :decoded (:capture/decoded w)
-                                      :spawn (spawn-of w)
-                                      :seed seed
-                                      :tick-seed seed
-                                      :difficulty difficulty
-                                      :day-time (day-time-of seed)}
-                               (:capture/nether w) (assoc :nether (:capture/nether w))
-                               food (assoc :food food)))
-                   #(or (plan/done? %) (plan/failed? %))
-                   max-ms
-                   (go-of w until))
+         (sim/run+
+          counting
+          (game/init opts)
+          (sim/init
+           (cond-> {:columns
+                    (if fortress (get-in w [:capture/nether :columns]) (:capture/columns w))
+                    :decoded
+                    (if fortress (get-in w [:capture/nether :decoded]) (:capture/decoded w))
+                    :spawn (spawn-of w)
+                    :seed seed
+                    :tick-seed seed
+                    :difficulty difficulty
+                    :day-time (day-time-of seed)}
+             fortress
+             (assoc :dimension dimension/nether
+                    :view-distance nether-view
+                    :inventory (:inventory fortress)
+                    :respawn-in dimension/nether)
+             (and (:capture/nether w) (not fortress)) (assoc :nether (:capture/nether w))
+             food (assoc :food food)))
+          #(or (plan/done? %) (plan/failed? %))
+          max-ms
+          (go-of w until))
          ok (and (nil? crashed) (main/ok? world until))]
      (assoc (cond-> (main/result world until ok)
               crashed (assoc :reason :crashed :error (str crashed)))
@@ -704,6 +834,9 @@
         budget (get o :budget-minutes)
         food (some-> (get o :food)
                      Long/parseLong)
+        config (let [f (io/file "ci/simrace.edn")] (when (.exists f) (edn/read-string (slurp f))))
+        from (or (get o :from) (:simrace/from config))
+        kit (or (:simrace/kit config) fortress-kit-default)
         given (some-> (get o :runs)
                       slurp
                       edn/read-string)
@@ -726,8 +859,15 @@
                    (let [w (assoc (prepared (capture/read-world f)) :capture/file (str f))
                          path (nether-file f)
                          nether (nether-of path)]
-                     (cond-> w nether (with-nether nether path))))
+                     (cond-> w
+                       nether (with-nether nether path)
+                       (and nether (= "fortress" from)) (with-fortress kit))))
                  files)
+        ws (if (= "fortress" from)
+             (let [with (filterv :capture/fortress ws)]
+               (cli/log "from fortress:" (count with) "of" (count ws) "worlds have one")
+               with)
+             ws)
         deadline (when budget (+ (System/currentTimeMillis) (* 60000 (Long/parseLong budget))))
         todo (atom (if given
                      (given-jobs given files)

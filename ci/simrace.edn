@@ -6,4 +6,15 @@
  :simrace/until "pearls-12"          ; the target each run plays every step up to: the Nether, the fortress (issue #261), seven blaze rods from its spawner (#262), in each set's captured Nether (#353) with the model's fortress spawners (#495), then twelve ender pearls from the model's warped-forest endermen (#263: they spawn, #523, and teleport and walk round walls, #542), as the real race (#516)
  :simrace/max-minutes 330            ; simulated minutes a run may take: the real bots' horizon, a lane's job (#252); a run that finishes early stops early
  :simrace/budget-minutes 330         ; wall minutes a runner plays: 300 took 303 with setup (sim race 38515210080), inside the job's 355 of GitHub's 360
+ :simrace/from "fortress" ; each run starts in its set's captured Nether at the fortress with the real race's kit and plays only stages 17 and 18 (probe simfort-c 41217235280: R1/1 seeds 1-2 signed [:blaze-rods :timeout], a death respawns in the Nether with the kit); remove the line to start from spawn
  :simrace/heap-mb 11264}                ; the runner's 16 GB, less the system's share and the churn's 2 GB judge (issue #299)
+;; A start at a fortress (issue #263/#262 frontier, branch ci/simrace-from-fortress): with
+;; :simrace/from "fortress" each run starts in its set's captured Nether, on ground thirty-two
+;; blocks (nearer when there is none) from the fortress spawner nearest the landing's Nether
+;; coordinates, with the kit below, and plays only the stages from the blaze rods up to :simrace/until
+;; (a failure before them is not the run's to file). Worlds whose Nether holds no spawner are left out.
+;; Absent, every run starts from spawn in the overworld as before. --from fortress does the same on one
+;; command line.
+;;   :simrace/from "fortress"   ; (set above)
+;;   :simrace/kit {:stone_pickaxe 1 :cobblestone 256 ...}   ; replaces simrace/fortress-kit-default,
+;;                                                         ; the real race's :race/kit
