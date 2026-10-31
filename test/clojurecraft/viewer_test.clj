@@ -145,3 +145,27 @@
                               {:effect/kind :send :effect/packet {:packet/name :attack}}
                               {:effect/kind :log}]))
         "a swing and an attack move the arm; a dig action and a log line do not")))
+
+(deftest the-panel-gets-the-bots-own-state
+  (let [w {:player/inventory {0 {:item (:stone_pickaxe blocks/items) :count 1}
+                              39 {:item (:iron_helmet blocks/items) :count 1}
+                              5 {}}}]
+    (is (= {0 {:item :stone_pickaxe :count 1} 39 {:item :iron_helmet :count 1}}
+           (viewer/inventory-view w))
+        "every slot it holds, the armour too; an empty slot is left out"))
+  (let [f1 {:now 10 :intent {:intent/goal :wood :intent/kind :walk :intent/target [1 2 3]}}
+        f2 {:now 20
+            :intent {:intent/goal :wood :intent/kind :walk :intent/target [1 2 3] :intent/stage :x}}
+        f3 {:now 30 :intent {:intent/goal :wood :intent/kind :walk :intent/target [4 5 6]}}
+        h (reduce viewer/note-focus [] [f1 f2 f3 {:now 40}])]
+    (is (= [[10 [1 2 3]] [30 [4 5 6]]] (mapv (juxt :at :target) h))
+        "a change of goal, kind, target or recipe is noted; a stage or no intent is not")
+    (is (= viewer/focus-kept
+           (count (reduce viewer/note-focus
+                          []
+                          (for [k (range 100)]
+                            {:now k :intent {:intent/goal :wood :intent/target [k 0 0]}}))))
+        "only the newest are kept"))
+  (is
+   (= {:n 2 :at "t" :note "stuck" :pos [1 2 3] :health 20 :food 5 :held 0 :inventory {} :intent nil}
+      (viewer/note 2 "t" "stuck" {:pos [1 2 3] :health 20 :food 5 :held 0 :inventory {}}))))

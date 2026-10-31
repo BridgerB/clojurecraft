@@ -26,6 +26,7 @@
             [clojurecraft.inventory :as inventory]
             [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
+            [clojurecraft.rcon :as rcon]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.terrain :as terrain]))
 
@@ -36,6 +37,7 @@
 (def frame-every-ms 100)              ; the frame thread's rest between two frames: ten a second at most
 (def reach 4.5)                       ; blocks the eyes' ray goes for the block under the crosshair (a survival player's reach)
 (def arm-packets #{:swing :attack :use-item :use-item-on}) ; what the bot sends that moves its arm
+(def focus-kept 60)                   ; focus changes the frame keeps, newest last
 (def direct-bits 15)                  ; bits a cell in a section with more than 256 states: the server's global palette
 
 (def block-states
@@ -352,6 +354,55 @@
             {:item (recipe/item-name item) :count count}))
         (range inventory/hotbar-slots)))
 
+(defn inventory-view
+  "Every slot the bot holds, {player-slot {:item name :count n}}: 0-8 the hotbar, 9-35 the main
+   inventory, 36-39 the armour (boots to helmet), 40 the offhand."
+  [world]
+  (into (sorted-map)
+        (for [[k {:keys [item count]}] (:player/inventory world)
+              :when item]
+          [k {:item (recipe/item-name item) :count count}])))
+
+(defn focus
+  "What the bot's focus is, for telling a change of it: the intent's goal, kind, target and
+   recipe; nil without an intent."
+  [frame]
+  (when-let [i (:intent frame)] ((juxt :intent/goal :intent/kind :intent/target :intent/recipe) i)))
+
+(defn note-focus
+  "history (focus changes, oldest first, at most focus-kept) with frame's focus added when it
+   differs from the last one: {:goal :kind :target :recipe :stage :at}."
+  [history frame]
+  (let [f (focus frame)
+        last-f (some-> (peek history)
+                       ((juxt :goal :kind :target :recipe)))]
+    (cond (or (nil? f) (= f last-f)) history
+          :else
+          (let [[goal kind target recipe] f
+                h (conj (or history [])
+                        {:goal goal
+                         :kind kind
+                         :target target
+                         :recipe recipe
+                         :stage (get-in frame [:intent :intent/stage])
+                         :at (:now frame)})]
+            (cond (> (count h) focus-kept) (subvec h (- (count h) focus-kept))
+                  :else h)))))
+
+(defn note
+  "A flagged note as a line of the notes file: its number, when, what was written, and the bot's
+   state then from frame (where, health, food, the held slot, the inventory, the intent)."
+  [n at text frame]
+  {:n n
+   :at at
+   :note text
+   :pos (:pos frame)
+   :health (:health frame)
+   :food (:food frame)
+   :held (:held frame)
+   :inventory (:inventory frame)
+   :intent (:intent frame)})
+
 (defn biome-at
   "The biome id at a block or feet position from its column's :chunk/biomes (cells of 4x4x4,
    y then z then x), or nil: not loaded, or a column without biomes."
@@ -405,7 +456,7 @@
 
 (defn frame
   "What the page shows of one world: who and where the bot is, how it looks, its health, food
-   and hotbar, the block it breaks (dig-view) and the one under its crosshair (looked-at), the
+   and hotbar and every slot it holds, the block it breaks (dig-view) and the one under its crosshair (looked-at), the
    biome under its feet, the entities round it, what it intends (intent-view) and has reached, and the
    version of every column round it (columns). Absent attributes stay absent."
   [world]
@@ -425,6 +476,7 @@
            :air (:player/air w)
            :held (:player/held-slot w)
            :hotbar (hotbar w)
+           :inventory (inventory-view w)
            :dig (dig-view w)
            :looking (when (:player/look w) (looked-at w))
            :entities (entities-view w)
@@ -638,16 +690,71 @@
     (cond r (respond! ex 200 type (with-open [in (io/input-stream r)] (.readAllBytes in)) false)
           :else (respond! ex 404 "text/plain" (.getBytes "not found") false))))
 
+(defn body
+  "The request body of ex as a string, at most 500 characters."
+  [^com.sun.net.httpserver.HttpExchange ex]
+  (let [s (slurp (.getRequestBody ex) :encoding "UTF-8")] (subs s 0 (min 500 (count s)))))
+
+(defn rcon!
+  "Run one command on the server over RCON ({:host :port :pass}); its answer, or the error's
+   message when it could not be run (no RCON given, refused, down)."
+  [{:keys [host port pass]} command]
+  (cond (not (and port pass))
+        "no rcon: start the bot with --viewer-rcon-port and --viewer-rcon-pass-file"
+        :else
+        (try (rcon/with-rcon (or host "127.0.0.1") port pass #(rcon/command! % command))
+             (catch Exception e (str "rcon: " (.getMessage e))))))
+
+(defn notes!
+  "The notes in the notes file, newest first; empty when there is none."
+  [path]
+  (let [f (some-> path
+                  io/file)]
+    (cond (and f (.exists f))
+          (reverse (map json/read-str (remove str/blank? (str/split-lines (slurp f)))))
+          :else [])))
+
+(defn act!
+  "Pause, resume or flag, from the page: pause freezes the server's ticks (/tick freeze) and
+   resume unfreezes them, both over RCON with a line in chat; a flag appends a note (note) to the
+   notes file. Returns the answer for the page."
+  [what text state {:keys [rcon notes]}]
+  (case what
+    "pause"
+    (do (rcon! rcon "tick freeze")
+        (rcon! rcon "say paused from the viewer")
+        (swap! state assoc :paused true)
+        {:paused true})
+    "go"
+    (do (rcon! rcon "tick unfreeze")
+        (rcon! rcon "say resumed from the viewer")
+        (swap! state assoc :paused false)
+        {:paused false})
+    "bad"
+    (let [n (inc (count (notes! notes)))
+          line (note n (str (java.time.LocalTime/now)) text (:frame @state))]
+      (io/make-parents (io/file notes))
+      (spit notes (str (json/write-str (plain line)) "\n") :append true)
+      (rcon! rcon (str "say noted #" n))
+      {:n n})))
+
 (defn route!
-  "Answer one request from the latest state (:world, :frame) and the static data: the page and
-   its scripts, the frame, the meta, the icons, the assets, a column, a cached texture; 404
-   otherwise."
+  "Answer one request from the latest state (:world, :frame, :history, :paused) and the static
+   data: the page and its scripts, the frame (with the focus history and the pause), the meta,
+   the icons, the assets, a column, a cached texture, the notes, and POST pause, go and bad;
+   404 otherwise."
   [^com.sun.net.httpserver.HttpExchange ex state static]
   (let [path (.getPath (.getRequestURI ex))
-        {:keys [world frame]} @state]
-    (cond (= "/" path) (resource! ex "index.html" "text/html; charset=utf-8")
+        {:keys [world frame history paused]} @state]
+    (cond (= "POST" (.getRequestMethod ex))
+          (cond (#{"/pause" "/go" "/bad"} path)
+                (json! ex (act! (subs path 1) (body ex) state static))
+                :else (respond! ex 404 "text/plain" (.getBytes "not found") false))
+          (= "/" path) (resource! ex "index.html" "text/html; charset=utf-8")
+          (= "/notes" path) (json! ex (notes! (:notes static)))
           (#{"/web/viewer.js" "/web/worker.js"} path) (resource! ex (subs path 1) "text/javascript")
-          (= "/frame" path) (json! ex (or frame {}))
+          (= "/frame" path)
+          (json! ex (assoc (or frame {}) :history history :paused (boolean paused)))
           (= "/meta" path) (json! ex (:meta static))
           (= "/icons" path) (json! ex (:icons static))
           (= "/assets.json" path) (respond! ex 200 "application/json" (:assets static) false)
@@ -665,26 +772,31 @@
           :else (respond! ex 404 "text/plain" (.getBytes "not found") false))))
 
 (defn serve!
-  "Watch world* and serve the page on 127.0.0.1:port: the watch offers each new world to a
+  "Watch world* and serve the page on 127.0.0.1:port (opts: :jar the client jar, :rcon
+   {:host :port :pass} for pause and resume, :notes the file flags go to): the watch offers each new world to a
    one-slot sliding channel (it never waits) and counts the arm's packets among the effects the
    loop is about to send (arm-moves, the frame's :swings), a thread of its own turns the latest into a frame
    at most every frame-every-ms, and HTTP threads answer from that. Returns {:close (fn [])}."
-  ([world* port] (serve! world* port default-jar))
-  ([world* port jar]
-   (let [[assets textures] (read-assets! jar)
+  ([world* port] (serve! world* port {}))
+  ([world* port {:keys [jar rcon notes]}]
+   (let [[assets textures] (read-assets! (or jar default-jar))
          plains (max 0 (.indexOf ^java.util.List (biome-names assets) "plains"))
          static {:biome {:single plains}
                  :assets (.getBytes ^String (json/write-str (assets-message assets textures))
                                     "UTF-8")
                  :icons (icons assets)
-                 :meta (meta-view)}
+                 :meta (meta-view)
+                 :rcon rcon
+                 :notes (or notes "data/viewer-notes.ndjson")}
          state (atom {})
          swings (atom 0)
          ch (async/chan (async/sliding-buffer 1))
          done (async/thread
                (loop []
                  (when-let [w (async/<!! ch)]
-                   (swap! state assoc :world w :frame (assoc (frame w) :swings @swings))
+                   (let [f (assoc (frame w) :swings @swings)]
+                     (swap! state
+                       #(assoc % :world w :frame f :history (note-focus (:history %) f))))
                    (Thread/sleep (long frame-every-ms))
                    (recur))))
          server (com.sun.net.httpserver.HttpServer/create (java.net.InetSocketAddress. "127.0.0.1"

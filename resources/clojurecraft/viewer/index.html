@@ -9,42 +9,47 @@
      game's models, blockstates and textures, read from the local client jar), then each column
      from /column when its version in /frame moves. The panel shows what the bot is thinking. -->
 <style>
-  :root { --bg:#14171a; --panel:rgba(22,25,29,.86); --fg:#dde3e8; --dim:#8c99a6; --line:#2e353c;
-          --goal:#ffd54a; --act:#6bb8ff; --sub:#8dd88d; --intr:#ff6a5a; --wait:#f0a050; }
-  html,body { margin:0; height:100%; background:var(--bg); color:var(--fg); font:13px/1.35 system-ui,sans-serif; overflow:hidden; }
-  #view { position:fixed; inset:0; width:100%; height:100%; display:block; outline:none; }
-  #panel { position:fixed; top:10px; right:10px; width:340px; max-height:calc(100% - 20px); overflow:auto; overflow-x:hidden;
-           background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:10px 12px; }
-  #panel h2 { margin:10px 0 4px; font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--dim); }
-  .head { display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
-  .head b { font-size:15px; }
-  .mono { font-family:ui-monospace,Menlo,monospace; font-size:12px; color:var(--dim); }
-  .bars { display:flex; gap:10px; margin:6px 0 2px; }
-  .bar { flex:1; height:8px; background:#2a2f35; border-radius:4px; overflow:hidden; }
-  .bar i { display:block; height:100%; }
-  .lvl { padding:6px 9px; border-radius:5px; background:#232830; border-left:5px solid #567; margin:4px 0; }
-  .lvl small { display:block; color:var(--dim); font-size:11px; }
-  .lvl.goal { border-color:var(--goal); } .lvl.intr { border-color:var(--intr); background:#33201f; }
-  .lvl.act { border-color:var(--act); } .lvl.sub { border-color:var(--sub); margin-left:14px; }
-  .lvl.wait { border-color:var(--wait); }
-  .flow { display:flex; flex-wrap:wrap; gap:3px; }
-  .node { padding:2px 7px; border-radius:10px; background:#232830; border:1px solid #3a424a; font-size:11px; }
-  .node.done { background:#1f4228; border-color:#3c7; } .node.cur { background:#5a4a10; border-color:var(--goal); font-weight:700; }
-  .node.hot { background:#5a1e1e; border-color:var(--intr); font-weight:700; }
-  .hot9 { display:grid; grid-template-columns:repeat(9,1fr); gap:3px; }
-  .slot { min-width:0; overflow:hidden; aspect-ratio:1; background:#2a2f35; border:2px solid #3a424a; border-radius:4px; position:relative; }
-  .slot.sel { border-color:var(--goal); }
-  .slot img { width:100%; height:100%; image-rendering:pixelated; object-fit:cover; object-position:top; }
-  .slot span { position:absolute; right:2px; bottom:0; font-size:11px; font-weight:700; text-shadow:0 0 3px #000; }
-  #controls { position:fixed; left:10px; top:10px; display:flex; gap:6px; }
-  button { padding:6px 10px; background:rgba(38,48,58,.85); color:var(--fg); border:1px solid #3d4955; border-radius:5px; cursor:pointer; font:inherit; }
-  button.on { background:#3d5a80; border-color:#6b8fbf; }
-  #status { position:fixed; left:10px; bottom:10px; color:#fff; text-shadow:0 0 3px #000; }
-  #crosshair { position:fixed; left:50%; top:50%; width:18px; height:18px; margin:-9px 0 0 -9px; pointer-events:none; mix-blend-mode:difference; }
+  /* the 3D view on the left 60%, the panel (as data/local-runs/panel.ts laid it out) on the right 40% */
+  html,body { margin:0; height:100%; background:#1d1f21; color:#ddd; font:14px system-ui,sans-serif; overflow:hidden; }
+  #view { position:fixed; left:0; top:0; width:60vw; height:100vh; display:block; outline:none; background:#000; }
+  #side { position:fixed; right:0; top:0; width:40vw; height:100vh; overflow-y:auto; overflow-x:hidden; padding:12px; box-sizing:border-box; }
+  body.embed #view { width:100vw; } body.embed #side, body.embed .mcgrid { display:none; } body.embed #crosshair { left:50vw; } body.embed #status { left:10px; }
+  #status { position:fixed; left:10px; bottom:72px; color:#fff; text-shadow:0 0 3px #000; font-size:12px; }
+  #crosshair { position:fixed; left:30vw; top:50%; width:18px; height:18px; margin:-9px 0 0 -9px; pointer-events:none; mix-blend-mode:difference; }
   #crosshair:before, #crosshair:after { content:""; position:absolute; background:#fff; }
   #crosshair:before { left:8px; top:0; width:2px; height:18px; } #crosshair:after { top:8px; left:0; height:2px; width:18px; }
-  body.embed #panel, body.embed #status { display:none; }
-  @media (max-width: 640px) { #panel { left:10px; right:10px; width:auto; top:auto; bottom:10px; max-height:45%; } }
+  h2 { margin:12px 0 6px; font-size:14px; color:#9ab; }
+  .bar { display:flex; gap:24px; font-size:16px; flex-wrap:wrap; }
+  .eqline { font-size:12px; color:#9ab; margin:6px 0; }
+  .ctl { display:flex; gap:8px; margin:12px 0; align-items:center; }
+  .ctl input { flex:1; min-width:0; padding:8px; background:#111; color:#eee; border:1px solid #555; border-radius:4px; }
+  button { padding:8px 14px; background:#335; color:#fff; border:1px solid #557; border-radius:4px; cursor:pointer; font:inherit; }
+  button.on { background:#a33; }
+  .mbox { height:78px; box-sizing:border-box; padding:8px 12px; border-radius:6px; background:#262a2f; border-left:6px solid #567; overflow:hidden; }
+  .mbox .ml { font-size:11px; color:#9ab; text-transform:uppercase; letter-spacing:.05em; }
+  .mbox .mm { font-size:15px; margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .mbox .ms { font-size:12px; color:#aab; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .mbox.why .mm { white-space:normal; font-size:14px; line-height:1.35; } .mbox.why { height:84px; border-color:#c9f; }
+  .mbox.ok { border-color:#3c7; } .mbox.red { border-color:#f55; background:#3a2020; } .mbox.goal { border-color:#ffd54a; } .mbox.dim { opacity:.6; }
+  .mbox.act { border-color:#6bf; } .mbox.step { border-color:#8d8; }
+  .marrow { text-align:center; color:#666; height:14px; line-height:14px; font-size:13px; }
+  .dots { display:inline-flex; gap:3px; margin-right:8px; vertical-align:middle; }
+  .dots i { width:10px; height:10px; border-radius:50%; background:#444; display:inline-block; }
+  .dots i.d { background:#3c7; } .dots i.c { background:#ffd54a; box-shadow:0 0 6px #ffd54a; }
+  #hist { height:150px; overflow-y:auto; }
+  .h { font-size:12px; padding:3px 8px; border-left:4px solid #567; margin:2px 0; background:#23272b; } .h.i { border-color:#e55; } .h.r { border-color:#e95; }
+  .flow { display:flex; flex-wrap:wrap; align-items:center; gap:4px; }
+  .node { padding:6px 9px; border-radius:14px; background:#2a2f36; border:1px solid #444; font-size:12px; }
+  .node.hot { background:#5a1e1e; border-color:#f55; box-shadow:0 0 10px #f55; font-weight:700; }
+  .n { background:#262a2e; padding:6px 8px; margin:4px 0; border-radius:4px; font-size:12px; } .n b { color:#ffd54a; }
+  #tip { position:fixed; z-index:20; pointer-events:none; background:#100010e0; border:2px solid #2a0a5a; color:#fff; padding:4px 8px; font:14px monospace; display:none; }
+  .mcgrid { position:fixed; display:grid; grid-template-columns:repeat(9,44px); gap:2px; padding:3px; background:rgba(0,0,0,.45); border:2px solid rgba(255,255,255,.25); z-index:5; }
+  .mcgrid .s { width:44px; height:44px; background:rgba(139,139,139,.35); border:2px solid rgba(0,0,0,.4); box-sizing:border-box; position:relative; overflow:hidden; }
+  .mcgrid .s.sel { border:3px solid #fff; box-shadow:0 0 0 1px #000; }
+  .mcgrid .ic { width:34px; height:34px; margin:3px auto 0; display:block; image-rendering:pixelated; object-fit:cover; object-position:top; }
+  .mcgrid .c { position:absolute; color:#fff; text-shadow:2px 2px 0 #3f3f3f; font:700 14px monospace; right:2px; bottom:0; }
+  .hudbar { left:30vw; bottom:14px; transform:translateX(-50%); }
+  .inv { left:10px; top:10px; grid-template-columns:repeat(9,34px); } .inv .s { width:34px; height:34px; } .inv .ic { width:26px; height:26px; margin:2px auto 0; } .inv .c { font-size:11px; }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/babylonjs@9.13.0/babylon.js"></script>
 </head>
@@ -52,17 +57,19 @@
 <canvas id="view"></canvas>
 <div id="crosshair"></div>
 <div id="status">connecting…</div>
-<div id="panel">
-  <div class="head"><b id="who">…</b><span class="mono" id="dim"></span></div>
-  <div class="mono" id="pos"></div>
-  <div class="bars"><div class="bar" title="health"><i id="hp" style="background:#e55"></i></div>
-                    <div class="bar" title="food"><i id="food" style="background:#c8913a"></i></div></div>
-  <div class="mono" id="hf"></div>
-  <h2>Thinking</h2><div id="stack"></div>
-  <h2>Chain</h2><div id="chain" class="flow"></div>
-  <h2>Interrupts</h2><div id="intr" class="flow"></div>
-  <h2>Hotbar</h2><div id="hotbar" class="hot9"></div>
-  <h2>Near</h2><div id="near" class="mono"></div>
+<div id="hudinv" class="mcgrid inv"></div>
+<div id="hudhot" class="mcgrid hudbar"></div><div id="tip"></div>
+<div id="side">
+  <div class="bar"><b id="who">…</b><span id="hp"></span><span id="food"></span><span id="pos"></span></div>
+  <div class="ctl"><button id="pb">Pause</button>
+    <input id="note" placeholder="What's wrong right now? (Enter to save)">
+    <button id="flagb">Flag</button> <span id="msg"></span></div>
+  <h2>Its mind, top to bottom</h2>
+  <div id="mind"></div>
+  <h2>Focus changes (newest first)</h2><div id="hist"></div>
+  <div class="eqline">armour: <span id="eq"></span></div>
+  <h2>Nearby</h2><div id="near" class="flow"></div>
+  <h2>Flagged</h2><div id="notes"></div>
 </div>
 <script type="module">
 import * as R from "/web/viewer.js";
@@ -176,45 +183,102 @@ function aim(t) {
   R.setViewerCamera(viewer, R.vec3(eye[0], eye[1] - 1.6, eye[2]), Math.atan2(-dx, -dz), Math.atan2(dy, Math.hypot(dx, dz)));
 }
 
-// ---------------------------------------------------------------- the panel
+// ---------------------------------------------------------------- the panel (data/local-runs/panel.ts's layout and words, from the frame)
 const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-const KIND = { walk: "walking to", dig: "digging", collect: "picking up", craft: "crafting", place: "placing", "open-container": "opening",
-  "stairs-down": "staircase down", "stairs-up": "staircase up", fight: "fighting", smelt: "smelting", mine: "mining", "tunnel-to": "tunnelling to",
-  eat: "eating", pillar: "pillaring up", scoop: "scooping", "back-off": "backing off", build: "building", "swim-out": "swimming out", flee: "fleeing" };
-const say = (i) => [KIND[i["intent/kind"]] || i["intent/kind"], i["intent/target"] && JSON.stringify(i["intent/target"]),
-  i["intent/item"], i["intent/recipe"], i["intent/build"], i["intent/for"] && "for " + i["intent/for"]].filter(Boolean).map(esc).join(" ");
+const nice = (id) => id.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+const KIND = { walk: "walking to", dig: "digging", collect: "picking up", craft: "crafting", place: "placing a block", "open-container": "opening",
+  "stairs-down": "digging a staircase down", "stairs-up": "digging a staircase up", fight: "fighting", smelt: "smelting", mine: "mining",
+  "tunnel-to": "tunnelling to", eat: "eating", forage: "foraging for food", pillar: "pillaring up", scoop: "scooping water",
+  "back-off": "backing off from", burrow: "digging a burrow", lookout: "watching for endermen", build: "building" };
+// short words for the goals the panel names; any other goal shows its own doc from the goal table (/meta)
+const DOC = { wood: "hold one log", kit: "sticks, then a crafting table", pickaxe: "a wooden pickaxe", cobblestone: "three cobblestone",
+  "stone-pickaxe": "a stone pickaxe", furnace: "a furnace placed near (8 cobblestone)", ingots: "four iron ingots: mine iron ore, smelt it",
+  bucket: "an empty bucket (3 ingots)", "water-bucket": "fill the bucket at surface water", "flint-and-steel": "flint (from gravel) + an ingot",
+  "iron-kit": "flint and steel + a water bucket", "portal-kit": "a second bucket etc. for the portal cast", gear: "iron sword, helmet, chestplate, leggings",
+  "cast-one": "one obsidian cast for the frame", portal: "a nether portal cast from lava and water", nether: "light it and go through",
+  fortress: "reach a nether fortress", "blaze-rods": "seven blaze rods", "ender-pearls": "twelve ender pearls", "escape-water": "out of water first",
+  "escape-lava": "off lava first", defend: "a hostile within 4 blocks: answer it", eat: "food under 14 and has food: eat",
+  hunt: "hungry with no food: kill an animal", heal: "eat for health", "wear-armour": "put on armour it holds",
+  armour: "make helmet/chestplate from spare ingots", sword: "make the best sword it can", cook: "cook raw meat in the furnace",
+  regear: "remake gear after a death", "return-nether": "go back through a portal" };
+const FOR = { bank: "water it remembers on the surface, to fill the bucket from", log: "a log to chop", trees: "trees it remembers",
+  surface: "the surface (it is underground)", shelter: "a safe spot", hunt: "an animal to kill for food", "log-hunt": "trees while hungry",
+  food: "food", pearls: "endermen for pearls", retreat: "safety, away from danger", build: "the portal it is building", lava: "lava for the portal",
+  stronghold: "the stronghold", explore: "new ground, to find what it needs", opening: "a way out", cover: "cover from what is attacking it",
+  rod: "a blaze rod on the ground", nook: "a nook to hide in", scoop: "water to scoop", rise: "higher ground", relocate: "a new hunting spot",
+  regroup: "a spot it can walk from", corridor: "the fortress corridor", fire: "fire to put out", "fire-out": "out of fire", site: "a building site",
+  "water-hunt": "water", footing: "solid footing", foothold: "a foothold", valley: "a valley", churn: "a new spot (it was stuck)",
+  boxed: "a way out of the box it is in" };
+const say = (i) => i ? ((KIND[i["intent/kind"]] || i["intent/kind"]) + " " + [i["intent/target"], i["intent/item"], i["intent/recipe"],
+  i["intent/for"] && ("for " + i["intent/for"])].filter(Boolean).join(" ")) : "";
+const dur = (ms) => { const s = Math.max(0, Math.round(ms / 1000)); return s >= 60 ? Math.floor(s / 60) + "m " + String(s % 60).padStart(2, "0") + "s" : s + "s"; };
+const since = (h, pred) => { let a = null; for (let k = h.length - 1; k >= 0 && pred(h[k]); k--) a = h[k].at; return a; };
+const box = (cls, label, main, sub) => `<div class="mbox ${cls}"><div class=ml>${label}</div><div class=mm>${main}</div><div class=ms>${sub || "&nbsp;"}</div></div><div class=marrow>↓</div>`;
 let meta = { chain: [], always: [], radius: 3 }, icons = {};
+const doc = (id) => DOC[id] || (meta.docs && meta.docs[id]) || "";
+const iconSrc = (item) => { const t = icons[item]; if (!t) return "";
+  return t.startsWith("item/") ? `/tex/${t}.png` : `data:image/png;base64,${assets.textureData[t.replace("block/", "")] || ""}`; };
+const cell = (it, sel) => `<div class="s${sel ? " sel" : ""}"${it ? ` data-n="${esc(nice(it.item))}${it.count > 1 ? " × " + it.count : ""}"` : ""}>` +
+  (it ? (iconSrc(it.item) ? `<img class=ic src="${iconSrc(it.item)}">` : `<small>${esc(it.item)}</small>`) + `<span class=c>${it.count > 1 ? it.count : ""}</span>` : "") + "</div>";
+document.addEventListener("mousemove", (e) => { const c = e.target.closest && e.target.closest(".mcgrid .s[data-n]"), tip = $("tip");
+  if (!c) { tip.style.display = "none"; return; } tip.textContent = c.dataset.n; tip.style.display = "block"; tip.style.left = (e.clientX + 14) + "px"; tip.style.top = (e.clientY + 10) + "px"; });
+function mind(f) {
+  const i = f.intent, g = i && i["intent/goal"], reached = new Set(f.reached || []), h = f.history || [], now = f.now, p = f.pos || [0, 0, 0];
+  const chain = meta.chain.map((r) => r.id), always = new Set(meta.always.map((r) => r.id));
+  const host = (f.entities || []).filter((e) => e.hostile).map((e) => [Math.hypot(e.pos[0] - p[0], e.pos[1] - p[1], e.pos[2] - p[2]), e]).sort((a, b) => a[0] - b[0]);
+  const hostTxt = host[0] ? host[0][1].kind + " " + host[0][0].toFixed(0) + " m" : "none";
+  const isI = always.has(g);
+  let s = box(isI ? "red" : "ok", "1 · Safety first", isI ? "INTERRUPTED by <b>" + esc(g) + "</b>: " + esc(doc(g)) : "All clear, so it follows the plan",
+    "nearest hostile " + esc(hostTxt) + " · food " + (f.food ?? "?") + " · health " + String(f.health ?? "?").slice(0, 4));
+  const next = chain.find((x) => !reached.has(x)), stage = isI ? next : g, n = chain.indexOf(stage) + 1;
+  const onGoal = since(h, (e) => e.goal === g);
+  s += box(isI ? "dim" : "goal", "2 · The plan: stage " + (n || "?") + " of " + chain.length, "<b>" + esc(stage || "done") + "</b>: " + esc(doc(stage)),
+    "<span class=dots>" + chain.map((x) => `<i class="${reached.has(x) ? "d" : ""}${x === stage ? " c" : ""}" title="${esc(x + ": " + doc(x))}"></i>`).join("") + "</span>" + (onGoal ? " on this for " + dur(now - onGoal) : ""));
+  const tg = i && i["intent/target"], fo = i && i["intent/for"];
+  let why = "";
+  if (Array.isArray(tg) && tg.length === 3) {
+    const dy = tg[1] - Math.floor(p[1]), d = Math.hypot(tg[0] - p[0], tg[2] - p[2]);
+    why = (fo ? "It is heading for " + esc(FOR[fo] || fo) + " at <b>" + tg.join(", ") + "</b>" : "Target <b>" + tg.join(", ") + "</b>") + "<br>" +
+      (dy > 0 ? "that is " + dy + " blocks <b>above</b> it" : dy < 0 ? "that is " + (-dy) + " blocks <b>below</b> it" : "at its level") + ", " + d.toFixed(0) + " blocks across";
+  } else why = fo ? "for " + esc(FOR[fo] || fo) : (i && i["intent/recipe"] ? "it needs a " + esc(i["intent/recipe"].replace(/_/g, " ")) + " for this stage" : "");
+  s += box("why", "3 · Why this action", why || "&nbsp;", "");
+  const onAct = since(h, (e) => e.goal === g && e.kind === (i && i["intent/kind"]) && JSON.stringify(e.target) === JSON.stringify(tg));
+  s += box("act", "4 · Doing", i ? esc(say({ ...i, "intent/for": null })) : (f.wait || f.waiting ? "waiting: " + esc(JSON.stringify(f.wait || f.waiting)) : "choosing"),
+    (i && i["intent/stage"] ? "stage " + esc(i["intent/stage"]) + " · " : "") + (onAct ? "for " + dur(now - onAct) : ""));
+  const steps = [];
+  for (let c = i && i["intent/child"]; c; c = c["intent/child"]) steps.push(esc(say(c)) + (c["intent/stage"] ? " (" + esc(c["intent/stage"]) + ")" : ""));
+  s += box("step", "5 · This step", steps.join(" → ") || "—", "").split("<div class=marrow>")[0];
+  $("mind").innerHTML = s;
+  $("hist").innerHTML = h.slice().reverse().map((e, k, r) => { const prev = r[k + 1];
+    const re = prev && prev.goal === e.goal && prev.kind === e.kind && JSON.stringify(prev.target) !== JSON.stringify(e.target);
+    return `<div class="h${always.has(e.goal) ? " i" : ""}${re ? " r" : ""}">${Math.round((now - e.at) / 1000)}s ago · <b>${esc(e.goal)}</b> · ${esc(say({ "intent/kind": e.kind, "intent/target": e.target }))}${e.stage ? " (" + esc(e.stage) + ")" : ""}${re ? " · <i>changed its mind: new target</i>" : ""}</div>`; }).join("");
+}
 function panel(f) {
   $("who").textContent = f.name || "bot";
-  $("dim").textContent = (f.dimension || "minecraft:overworld").replace("minecraft:", "");
-  $("pos").textContent = f.pos ? f.pos.map((v) => v.toFixed(1)).join("  ") + (f.look ? `   yaw ${f.look[0].toFixed(0)} pitch ${f.look[1].toFixed(0)}` : "") : "";
-  $("hp").style.width = ((f.health ?? 0) / 20 * 100) + "%";
-  $("food").style.width = ((f.food ?? 0) / 20 * 100) + "%";
-  $("hf").textContent = `health ${f.health ?? "?"}  food ${f.food ?? "?"}${f.air != null && f.air < 300 ? "  air " + f.air : ""}  tick ${f.tick ?? ""}`;
-  const always = new Set(meta.always.map((r) => r.id)), docs = Object.fromEntries([...meta.chain, ...meta.always].map((r) => [r.id, r.doc]));
-  const i = f.intent, g = i && i["intent/goal"], isI = always.has(g);
-  let s = "";
-  if (g) s += `<div class="lvl ${isI ? "intr" : "goal"}">${isI ? "INTERRUPT" : "GOAL"}: ${esc(g)}<small>${esc(docs[g] || "")}</small></div>`;
-  if (i) s += `<div class="lvl act">${say(i)}<small>intent #${i["intent/id"] ?? "?"}${i["intent/stage"] ? " · " + esc(i["intent/stage"]) : ""}${i["intent/op"] ? " · op " + esc(JSON.stringify(i["intent/op"])) : ""}</small></div>`;
-  for (let c = i && i["intent/child"]; c; c = c["intent/child"])
-    s += `<div class="lvl sub">${say(c)}<small>${esc(c["intent/stage"] || "sub-step")}</small></div>`;
-  if (f.wait || f.waiting) s += `<div class="lvl wait">waiting: ${esc(JSON.stringify(f.wait || f.waiting))}</div>`;
-  if (f.failed) s += `<div class="lvl intr">last failed: ${say(f.failed)}<small>${esc(f.failed["intent/reason"] || "")}</small></div>`;
-  if (!i && !f.wait && !f.waiting) s += `<div class="lvl">idle · ${esc(f.status || "no plan")}</div>`;
-  $("stack").innerHTML = s;
-  const reached = new Set(f.reached || []), next = meta.chain.find((r) => !reached.has(r.id));
-  $("chain").innerHTML = meta.chain.map((r) => `<span class="node${reached.has(r.id) ? " done" : ""}${r.id === g || (isI && next && r.id === next.id) ? " cur" : ""}" title="${esc(r.doc || "")}">${esc(r.id)}</span>`).join("");
-  $("intr").innerHTML = meta.always.map((r) => `<span class="node${r.id === g ? " hot" : ""}" title="${esc(r.doc || "")}">${esc(r.id)}</span>`).join("");
-  $("hotbar").innerHTML = (f.hotbar || Array(9).fill(null)).map((it, k) => {
-    const t = it && icons[it.item];
-    const src = !t ? "" : t.startsWith("item/") ? `/tex/${t}.png` : `data:image/png;base64,${assets.textureData[t.replace("block/", "")] || ""}`;
-    return `<div class="slot${k === f.held ? " sel" : ""}" title="${it ? esc(it.item) : ""}">${it ? (src ? `<img src="${src}">` : `<small>${esc(it.item)}</small>`) + `<span>${it.count > 1 ? it.count : ""}</span>` : ""}</div>`;
-  }).join("");
+  $("hp").textContent = "health " + String(f.health ?? "?").slice(0, 4);
+  $("food").textContent = "food " + (f.food ?? "?");
+  $("pos").textContent = f.pos ? "pos " + f.pos.map((v) => v.toFixed(1)).join(", ") + ((f.dimension || "").includes("nether") ? " · nether" : (f.dimension || "").includes("end") ? " · end" : "") : "";
+  const inv = f.inventory || Object.fromEntries((f.hotbar || []).map((it, k) => [k, it]).filter((x) => x[1])), at = (k) => inv[k]; // an older bot: the hotbar alone
+  $("hudhot").innerHTML = [...Array(9)].map((_, k) => cell(at(k), k === f.held)).join("");
+  $("hudinv").innerHTML = [...Array(27)].map((_, k) => cell(at(k + 9))).join("");
+  $("eq").textContent = [39, 38, 37, 36, 40].map((k) => at(k) && nice(at(k).item)).filter(Boolean).join(", ") || "none";
   const p = f.pos || [0, 0, 0];
-  $("near").innerHTML = (f.entities || []).map((e) => [Math.hypot(e.pos[0] - p[0], e.pos[1] - p[1], e.pos[2] - p[2]), e])
-    .sort((a, b) => a[0] - b[0]).slice(0, 8)
-    .map(([d, e]) => `<div${e.hostile ? ' style="color:#ff8a7a"' : ""}>${esc(e.kind === "item" ? e.item || "item" : e.kind)} ${d.toFixed(1)}m${e.health != null ? " ♥" + e.health : ""}</div>`).join("") || "nothing";
+  $("near").innerHTML = (f.entities || []).filter((e) => e.kind !== "player").map((e) => [Math.hypot(e.pos[0] - p[0], e.pos[1] - p[1], e.pos[2] - p[2]), e])
+    .sort((a, b) => a[0] - b[0]).slice(0, 8).map(([d, e]) => `<span class="node${e.hostile ? " hot" : ""}">${esc(e.kind === "item" ? e.item || "item" : e.kind)} ${d.toFixed(0)}m</span>`).join(" ")
+    || "<span class=node>nothing within 64 blocks</span>";
+  paused = !!f.paused; $("pb").textContent = paused ? "Resume" : "Pause"; $("pb").className = paused ? "on" : "";
+  mind(f);
 }
+let paused = false;
+const post = async (w, body = "") => (await fetch("/" + w, { method: "POST", body })).json();
+$("pb").onclick = () => post(paused ? "go" : "pause");
+async function flag() { const t = $("note").value.trim(); if (!t) return; const r = await post("bad", t); $("note").value = "";
+  $("msg").textContent = "saved #" + r.n; setTimeout(() => ($("msg").textContent = ""), 3000); notes(); }
+$("flagb").onclick = flag;
+$("note").onkeydown = (e) => { if (e.key === "Enter") flag(); };
+async function notes() { try { const ns = await (await fetch("/notes")).json();
+  $("notes").innerHTML = ns.map((n) => `<div class=n><b>#${n.n}</b> ${esc(n.at)} · ${esc(n.note)} · <i>${esc(n.intent ? say(n.intent) : "")}</i></div>`).join(""); } catch (_) {} }
+notes(); setInterval(notes, 5000);
 
 // ---------------------------------------------------------------- first person: the arm or the held item, its swing, the cracks, the outline
 // All of it from the bot's own data: the held item is hotbar[held] (its inventory), a swing is one of
@@ -340,6 +404,7 @@ $("status").textContent = "loading the game's assets…";
 const assets = await (await fetch("/assets.json", { cache: "no-cache" })).json();
 await applyAssets(assets);
 meta = await (await fetch("/meta")).json();
+meta.docs = Object.fromEntries([...meta.chain, ...meta.always].map((r) => [r.id, r.doc]));
 icons = await (await fetch("/icons")).json();
 poll(); loop();
 

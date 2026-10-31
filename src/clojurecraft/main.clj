@@ -5,7 +5,8 @@
      clojure -M:run --port 25571 [--name N] [--until play|wood|table|pickaxe] [--chain true]
                     [--events stdin]
                     [--timeout-ms 120000] [--hold-ms 0] [--record run.edn [--commit sha]]
-                    [--telemetry t.edn] [--viewer 4600 [--viewer-jar client.jar]]
+                    [--telemetry t.edn] [--viewer 4600 [--viewer-jar client.jar]
+                    [--viewer-rcon-port 25581 --viewer-rcon-pass-file rcon.pass]]
      clojure -M:replay run.edn
 
    With --events stdin the bot reads EDN events (one per line) from stdin: that is how the
@@ -13,7 +14,8 @@
    starts where the bot stands, once it is loaded. --telemetry writes one EDN line per change of
    the world, from a watch on the atom (clojurecraft.watch) that never slows the loop. --viewer
    serves a 3D view of the bot's world and thoughts on that port (clojurecraft.viewer), from
-   another watch."
+   another watch; with RCON its Pause button freezes the server, and its flags go beside the
+   recording."
   (:require [clojure.core.async :as async]
             [clojure.edn :as edn]
             [clojure.java.shell :as sh]
@@ -239,7 +241,7 @@
    hold for an outside judge, and exit 0 when ok else 1."
   [& args]
   (let [{:keys [host port name until timeout-ms hold-ms events record commit telemetry chain viewer
-                viewer-jar]
+                viewer-jar viewer-rcon-port viewer-rcon-pass-file]
          :or {host "127.0.0.1"
               port "25571"
               name "Clj_wood"
@@ -252,7 +254,16 @@
         watcher (some->> telemetry
                          (watch/telemetry! world*))
         view (when viewer
-               (viewer/serve! world* (Long/parseLong viewer) (or viewer-jar viewer/default-jar)))]
+               (viewer/serve! world*
+                              (Long/parseLong viewer)
+                              {:jar viewer-jar
+                               :rcon (when viewer-rcon-port
+                                       {:port (Long/parseLong viewer-rcon-port)
+                                        :pass (some-> viewer-rcon-pass-file
+                                                      slurp
+                                                      str/trim)})
+                               :notes (some-> record
+                                              (str ".notes.ndjson"))}))]
     (when queue (read-events! *in* queue)) ; a fixture speaks through the pipe
     (let [{r :result} (run-bot! {:host host
                                  :port (Long/parseLong port)

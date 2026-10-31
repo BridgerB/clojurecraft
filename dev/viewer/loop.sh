@@ -18,6 +18,7 @@ while true; do
   until=$(clojure -M -e "(require '[clojurecraft.plan :as plan]) (println (plan/current-until))")
   echo "$(date +%T) run $n: Clj from spawn until $until"
   clojure -M:run --port 25571 --name Clj --until "$until" --chain true --timeout-ms 19800000 \
-    --record "data/viewer-runs/run-$stamp.edn" --viewer 4600 > "data/viewer-runs/bot-$stamp.log" 2>&1
+    --record "data/viewer-runs/run-$stamp.edn" --viewer 4600 \
+    --viewer-rcon-port 25581 --viewer-rcon-pass-file data/local-server/rcon.pass > "data/viewer-runs/bot-$stamp.log" 2>&1
   echo "$(date +%T) run $n ended: $(grep -m1 '^RESULT' "data/viewer-runs/bot-$stamp.log" | cut -c1-200)"
 done

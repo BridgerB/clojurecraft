@@ -21,7 +21,9 @@ sourceRefs:
   - src/clojurecraft/viewer.clj#defn biome-names
   - src/clojurecraft/chunk.clj#defn read-section-with-biomes
   - src/clojurecraft/viewer.clj#defn read-assets!
-  - src/clojurecraft/main.clj#(viewer/serve! world* (Long/parseLong viewer) (or viewer-jar viewer/default-jar))
+  - src/clojurecraft/main.clj#(viewer/serve! world*
+  - src/clojurecraft/viewer.clj#defn note-focus
+  - src/clojurecraft/viewer.clj#defn act!
   - dev/viewer/build.ts#const babylonGlobal
   - dev/clojurecraft/datagen.clj#defn block-states
   - test/clojurecraft/viewer_test.clj#a-column-goes-out-in-the-network-format
@@ -50,6 +52,9 @@ It is fed what steve's server fed it:
 2. `frame` is pure: pose, look, health, food, hotbar, entities, `intent-view` of `:plan/intent` (and `:plan/failed`), `:plan/reached`, the wait, and `columns`: a version per loaded column round the bot, the column's identity plus the hash of the block overlay over it, so it moves exactly when the column is replaced or a block in it changes.
 3. The frame carries the biome id under the feet (`biome-at`); the page sets the sky to that biome's colour and a linear fog in it from 55% of the loaded radius to its edge, so the edge of the known world fades as it does in the game.
 4. The page polls `/frame` every 100 ms, eases the camera and entities toward it as steve's embed does, and fetches a column again when its version moves, nearest first, four at a time, so the ground under the bot draws within seconds and the horizon after (all 169 columns at once drew the deep sections first and showed cut-away stone for most of a minute).
+
+## The panel
+The right 40% is the panel `data/local-runs/panel.ts` was, read from the frame instead of RCON and logs: its mind top to bottom (safety first, the plan's stage with the chain as dots, why this action, doing, this step), the focus changes newest first with "changed its mind: new target" (`note-focus`, kept by the frame thread, the last 60), armour, nearby entities, and the flagged notes; over the view, the game's hotbar and inventory grids from `:inventory` (every slot the bot holds). Pause and Resume freeze and unfreeze the server's ticks over RCON (`--viewer-rcon-port`, `--viewer-rcon-pass-file`; `act!`); Flag appends a note with the bot's state to the recording's `.notes.ndjson` (`data/viewer-notes.ndjson` without one).
 
 ## First person, from the bot's own data
 - The held item is `hotbar[held]`, the bot's own inventory: a flat sprite for an item, a small cube for a block; the skin's arm when the hand is empty.
