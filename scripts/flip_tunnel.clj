@@ -22,13 +22,25 @@
                   id (:intent/id i)]
               (when (and tunnel? (>= now cutoff))
                 (cond (not= id prev-id)
-                      (prn {:new-tunnel id
-                            :t (- now cutoff)
-                            :feet (intent/feet w)
-                            :target (:intent/target i)
-                            :search (:intent/search i)
-                            :steps (:intent/steps i)
-                            :hp (:player/health w)})
+                      (prn
+                       {:new-tunnel id
+                        :t (- now cutoff)
+                        :feet (intent/feet w)
+                        :target (:intent/target i)
+                        :search (:intent/search i)
+                        :steps (:intent/steps i)
+                        :hp (:player/health w)
+                        :blaze
+                        (try (let [sp ((requiring-resolve 'clojurecraft.blaze/nearest-spawner) w)]
+                               {:spawner sp
+                                :stand (when sp
+                                         ((requiring-resolve 'clojurecraft.blaze/stand) w sp))
+                                :given-up?
+                                (when sp ((requiring-resolve 'clojurecraft.blaze/given-up?) w sp))
+                                :blacklist (:plan/blacklist w)})
+                             (catch Exception e (str e)))
+                        :brick (try ((requiring-resolve 'clojurecraft.fortress/nearest-brick) w)
+                                    (catch Exception e (str e)))})
                       (and move (not= move prev-move))
                       (prn {:id id
                             :t (- now cutoff)
