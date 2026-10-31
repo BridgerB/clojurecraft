@@ -2075,3 +2075,18 @@
         "nor anything at the burrow's end")
     (is (not (plan/interrupts? (assoc-in w [:world/entities 9 :entity/creepy?] false) row out))
         "nor with none angry")))
+
+(deftest an-angry-one-known-and-no-burrow-cuts-one-here-not-a-walk-to-a-site
+  ;; pearl-fight-a job 3 (plan run 41143668588): the burrow stale, enderman 964 angry 6 to 19
+  ;; blocks off the whole 30 s (fought out and blacklisted, so no ce, no quarry, no angry-near),
+  ;; and the hunt walked and climbed through the open toward a crowd site and a new burrow's
+  ;; stairs; 964 reached it on the stairs, five hits in 12 s, held four pearls
+  (let [angry (assoc (enderman [8.5 64.0 14.5]) :entity/creepy? true)
+        w (-> (standing {9 angry})
+              (assoc-in [:player/inventory 1] (item :iron_pickaxe 1))
+              (assoc :plan/blacklist #{9}))]
+    (is (some? (pearls/menace w)) "angry, six blocks off, blacklisted: still a menace")
+    (is (= :burrow (:intent/kind (plan/next-intent w row plan/goals)))
+        "a burrow is cut where the bot stands")
+    (is (nil? (pearls/menace (assoc-in w [:world/entities 9 :entity/creepy?] false)))
+        "a calm one is none")))

@@ -227,19 +227,28 @@
              (endermen (if (lured-out? world) world (dissoc world :plan/blacklist)) stare-range))
        (:player/pos world)))))
 
+(defn menace
+  "[eid entity] of the nearest angry enderman (entity/creepy?), blacklisted or fought out or not,
+   within danger-radius of the feet and danger-rise of their height, or nil."
+  [world]
+  (let [p (:player/pos world)]
+    (entity/nearest (into {}
+                          (filter (fn [[_ e]]
+                                    (let [q (:entity/pos e)]
+                                      (and (entity/creepy? e)
+                                           (<= (physics/distance p q) danger-radius)
+                                           (<= (abs (- (physics/y-of q) (physics/y-of p)))
+                                               danger-rise)))))
+                          (endermen (dissoc world :plan/blacklist) stare-range))
+                    p)))
+
 (defn menaced?
   "Does an angry enderman (entity/creepy?), blacklisted or not, stand within danger-radius of the
    feet and danger-rise of their height? Then no drop is walked to or waited for: the hunt meets
    it first. Sim probe 39885574495 (world R2, seed 5): two provoked at once, one killed, and the
    walk to its pearl, out of the burrow, was slain in five seconds by the other, beside it."
   [world]
-  (let [p (:player/pos world)]
-    (boolean (some (fn [[_ e]]
-                     (let [q (:entity/pos e)]
-                       (and (entity/creepy? e)
-                            (<= (physics/distance p q) danger-radius)
-                            (<= (abs (- (physics/y-of q) (physics/y-of p))) danger-rise))))
-                   (endermen (dissoc world :plan/blacklist) stare-range)))))
+  (boolean (menace world)))
 
 (def stale-lookouts 12)              ; lookouts (five seconds each, a minute) stood with the burrow and nothing to do from it before it is given up for one cut beside the next enderman
 (def lure-lookouts 6)                 ; lookouts (half a minute) stood in the burrow over an angry enderman near its mouth that has not come before the bot shows itself at the mouth to bring it
@@ -1413,13 +1422,15 @@
         [aid _] (when home (angry-near world))
         [qid q] (quarry world)
         ghost? (and near? (not angry?) (contains? (:plan/blacklist world #{}) eid))
+        m (second (menace world))
         dir (when (and (nil? home)
                        (pickaxe? world)
-                       (or ce q (and near? (not ghost?)) (and e (at-site? world))))
-              (away world (or q ce e)))
+                       (or ce q m (and near? (not ghost?)) (and e (at-site? world))))
+              (away world (or q ce m e)))
         digs? (and dir (burrowable? world (intent/feet world) dir))
         site (when (and dir (not digs?)) (burrow-site world dir))
-        csite (when (and (nil? home) (pickaxe? world) (not (at-site? world)) (stale? world))
+        csite (when
+                (and (nil? home) (pickaxe? world) (not (at-site? world)) (stale? world) (nil? m))
                 (crowd-site world))
         mouth (:pearls/mouth world)
         way-home {:intent/kind :walk :intent/target home :intent/for :shelter}
