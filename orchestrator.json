@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-31T13:53:59.134Z",
+  "at" : "2026-10-31T13:56:13.664Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -13,15 +13,15 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 639,
-    "title" : "Bot stops at fortress: no-food-to-return",
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : true
-  }, {
     "number" : 643,
     "title" : "Bot stops at gear: retrying",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
+  }, {
+    "number" : 639,
+    "title" : "Bot stops at fortress: no-food-to-return",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : true
   }, {
     "number" : 507,
     "title" : "Bot stops at blaze-rods: no-blaze",
