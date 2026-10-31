@@ -34,18 +34,24 @@
   (some-> (terrain/block-at w c)
           blocks/name-of))
 
-(defn at [x y z] (assoc base :player/pos [x (double y) z]))
+(def lake
+  "The three ice cells the bot broke at 16:26:49-16:26:54 (the log's digs), now water sources."
+  {[-783 62 322] blocks/water-base [-784 62 321] blocks/water-base [-785 62 321] blocks/water-base})
 
-(println "chunks" (count packets) "sources" (take 8 (scoop/sources (at -783.95 63 322.5))))
-(println "blocks round the flag (x -786..-782, z 320..323), y 61..64")
+(defn at [x y z] (assoc base :player/pos [x (double y) z] :world/blocks lake))
+
+(println "chunks" (count packets))
+(println "blocks round the flag (x -786..-782, z 320..323), y 61..64, ice broken")
 (doseq [y [64 63 62 61]
         z [320 321 322 323]]
-  (println y z (mapv #(name-at base [% y z]) (range -786 -781))))
-(doseq [[x z] [[-783.95 322.5] [-784.5 322.5] [-785.5 322.5] [-784.5 321.5] [-785.5 321.5]]
+  (println y z (mapv #(name-at (at -784 63 322) [% y z]) (range -786 -781))))
+(doseq [[x z] [[-783.95 322.5] [-784.5 322.5] [-785.5 322.5] [-784.5 321.5] [-785.5 321.5]
+               [-783.5 321.5]]
         :let [w (at x 63 z)]]
-  (println "feet" x z "sources" (take 3 (scoop/sources w)) "->" (scoop/scoop-next w))
-  (doseq [s (take 2 (scoop/sources w))
+  (println "feet" x z "sources" (take 4 (scoop/sources w)) "->" (scoop/scoop-next w))
+  (doseq [s (take 3 (scoop/sources w))
           :let [pt (scoop/aim-point s)]]
     (println "  source" s
              "sees?" (scoop/sees? w s)
-             "ray cells" (mapv (fn [c] [c (name-at w c)]) (scoop/ray-cells w pt)))))
+             "in-reach?" (scoop/in-reach? w s)
+             "ray" (mapv (fn [c] [c (name-at w c)]) (scoop/ray-cells w pt)))))
