@@ -33,6 +33,7 @@
 (s/def :exp/goal string?)
 (s/def :exp/set string?)
 (s/def :exp/runs pos-int?)
+(s/def :exp/from pos-int?)                          ; the first run's number: run k lands on landing k, so a plan picks its landings
 (s/def :exp/bots pos-int?)
 (s/def :exp/est-s pos-int?)
 (s/def :arm/name string?)
@@ -44,8 +45,8 @@
 (s/def ::experiment
   (s/and (s/keys :req [:exp/name :exp/kind :exp/est-s]
                  :opt
-                 [:exp/goal :exp/set :exp/runs :exp/bots :exp/arms :exp/property :exp/shards
-                  :exp/worlds])
+                 [:exp/goal :exp/set :exp/runs :exp/from :exp/bots :exp/arms :exp/property
+                  :exp/shards :exp/worlds])
          #(case (:exp/kind %)
             :gym (and (:exp/goal %) (:exp/runs %))
             :sim (and (:exp/property %) (:exp/shards %) (:exp/worlds %)))))
@@ -67,11 +68,14 @@
   (Math/abs (long (hash [label exp-name shard]))))
 
 (defn gym-units
-  "A gym experiment's units: for each arm, runs trials in run order, k to a server."
-  [{:exp/keys [name goal set runs bots est-s arms]}]
+  "A gym experiment's units: for each arm, runs trials in run order, k to a server. The runs are
+   numbered from :exp/from (default 1): run k lands on landing k of the set, so two experiments of
+   one goal pick the landings that teach most (blaze-race-z: landings 1 and 2, and 5)."
+  [{:exp/keys [name goal set runs from bots est-s arms]}]
   (let [k (or bots default-bots)]
     (vec (for [arm (or arms default-arms)
-               [i trials] (map-indexed vector (partition-all k (range 1 (inc runs))))]
+               [i trials] (map-indexed vector
+                                       (partition-all k (range (or from 1) (+ (or from 1) runs))))]
            {:unit/id (str name "-" (:arm/name arm) "-" (inc i))
             :unit/kind :gym
             :unit/exp name

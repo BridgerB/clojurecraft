@@ -245,6 +245,9 @@ Job 4 (33m36s, the best yet: 8 rod entities, 5 taken, 5 held at most, 14 blazes 
 ## Shot from range at the tunnel start (issue #262, blaze-race-r, v, x, y job 5)
 One landing, [2144 72 1760], loses a sixth of every round in 3 to 9 minutes: 47 to 68 hits, 0 attacks, 74 to 120 use-items. From the recording (`shooters.ts`): the bot at [2148 to 2163, 72 to 70, 1757] on a ledge is fireballed by blazes at [2185 57 1731] and [2191 50 1740], 39 to 49 blocks off and 15 to 22 below, across a chasm; the nearest blaze in the 24-block list is 24 to 38 away. combat/cover's answer to a threat past back-off-to is a rest, so it stood and burned (fire is 36 to 53 of the hits). `blaze/long-shot-cover`: hit within 4 s, no blaze at hand, a shooter within 64 in sight (`shooter`): two filler blocks (combat/wall-cell, feet then eye) beside the bot toward it; a running `:tunnel-to` is cut for it.
 
+## Bait from a corridor cell (issue #262, blaze-race-y)
+Round y (head 678c2432c, the one-or-two-blaze pocket in): jobs 1, 2, 3 and 6 camped 38 to 48 minutes again (:camp 38 to 40 min, :ambush 9 to 11), job 4 died at 43 min, 3 attacks; `advance-intent` found no pocket nearer or seeing a blaze within 150 nodes, since the tunnel from the pocket to the room has none. An idle camp with no advance now walks to the nearest corridor cell (exposure 2 or less, outside the spawner's volume, in its wake) that sees one or two blazes (`bait-walk`, `bait-ok?`) and camps there (`bait-here?` counts as the nook does): one or two aggro, come down the corridor one at a time, and are fought with the wall at the back; when hurt the refuge is the pocket it left.
+
 ## Limits
 - Fireballs are not dodged or blocked: the bot is out of their line, in a pocket or sealed in one.
 - A blaze hovering higher than the eye can reach from under it is never hit (`pressing?` stops within 0.8 on the plane); the fight has no engage timeout, only `:ghost` after 25 swings in reach.

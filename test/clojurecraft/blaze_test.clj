@@ -1703,3 +1703,22 @@
                                         (entity :blaze [9.5 65.0 8.5] :entity/health 20.0))))))
     (testing "nothing to lay with: nothing"
       (is (nil? (blaze/long-shot-cover (assoc w :player/inventory {})))))))
+
+(deftest an-idle-camp-baits-from-a-corridor-cell-that-sees-a-blaze
+  ;; blaze-race-y jobs 1, 2, 3 and 6: 39 to 48 minutes in a pocket seeing the spawner's top and no
+  ;; blaze, 7 to 10 hovering 9 blocks off, none shot, no nearer pocket found
+  (let [line (entity :blaze [3.5 65.0 8.5] :entity/health 20.0)
+        w (-> (standing {7 line})
+              in-pocket
+              with-spawner
+              (assoc :time/now 100000))
+        bare (-> (standing {})
+                 in-pocket
+                 with-spawner
+                 (assoc :time/now 100000))]
+    (is (true? (blaze/bait-ok? w spawner-at [8 64 8]))
+        "the pocket cell sees the blaze in its opening")
+    (is (true? (blaze/bait-here? w spawner-at)))
+    (is (false? (blaze/bait-here? bare spawner-at)) "no blaze in sight: not a bait cell")
+    (is (false? (blaze/bait-here? w nil)) "no spawner: none")
+    (is (nil? (blaze/bait-walk w spawner-at)) "the bot stands in the only one: no walk")))

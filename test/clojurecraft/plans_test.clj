@@ -108,3 +108,17 @@
     (is (= #{"- wood (head) run 2 :fail :stuck at [1 70 2]: b"
              "- sim forests seed 9 smallest [[{:x 1}] 0 1]: d"}
            (set (map plans/failure-line fs))))))
+
+(deftest an-experiment-picks-its-landings-by-where-its-runs-start
+  ;; blaze-race-y: job 5's landing is shot from range, jobs 1, 2, 3 and 6 share a fortress; a 3-job
+  ;; round runs landings 1, 2 and 5
+  (let [p
+        {:plans/label "z"
+         :plans/jobs 3
+         :plans/experiments
+         [{:exp/name "race" :exp/kind :gym :exp/goal "g" :exp/runs 2 :exp/est-s 100}
+          {:exp/name "race-5" :exp/kind :gym :exp/goal "g" :exp/runs 1 :exp/from 5 :exp/est-s 100}]}
+        us (plans/units p)]
+    (is (s/valid? ::plans/plan p))
+    (is (= [[1] [2] [5]] (mapv :unit/runs us)))
+    (is (= 3 (count (plans/schedule p))))))
