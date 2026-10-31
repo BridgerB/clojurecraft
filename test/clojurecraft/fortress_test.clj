@@ -1476,3 +1476,33 @@
     (is (= :cobblestone (stairs/filler (w :cobblestone 64 :netherrack 160) 1))
         "seals and cover still take filler's cobblestone first")
     (is (= :netherrack (fortress/walk-filler (w :cobblestone 64 :netherrack 160) [1 63 0])))))
+
+(deftest a-step-down-onto-a-dead-cell-is-not-a-step-forward
+  ;; blaze-race-z9 job 5 (run 41222838848): at [2162 69 1748] the tunnel to [2209 60 1794] chose
+  ;; [0 -1 -1] onto [2162 68 1747], found no fresh step there, stepped back up [0 1 1], and chose
+  ;; the same step down again: 32 steps a tunnel, :retreats 0, visited unmoving, 32 minutes
+  (let [feet [2162 69 1748]
+        down [0 -1 -1]
+        target [2209 60 1794]
+        cell [2162 68 1747]]
+    (is (fortress/gaining? feet down target) "a step down toward a target below gains height")
+    (is (fortress/fresh-move? feet down target #{cell} #{})
+        "stood in, not dead: the way back down a stair")
+    (is (not (fortress/fresh-move? feet down target #{cell} #{cell})) "dead: not a step forward")
+    (is (fortress/fresh-move? feet [1 0 0] target #{cell} #{cell}) "a cell not stood in is")
+    (is (not (fortress/fresh-move? feet nil target #{} #{})) "no move is none")))
+
+(deftest the-cells-found-dead-outlive-the-target-they-were-found-for
+  ;; the same tunnel's target alternated between two spawners 67 blocks off, and the trail was
+  ;; kept for the other target and learnt again each time
+  (let [dead #{[2162 68 1747] [2161 70 1747]}
+        w {:fortress/trail {:trail/target [2209 60 1794] :trail/cells [[1 2 3]] :trail/dead dead}}
+        other (fortress/trail-of w [2224 60 1726])]
+    (is (= dead (:trail/dead other)) "the dead cells are kept")
+    (is (= [] (:trail/cells other)) "the way back is the other target's own")
+    (is (= #{}
+           (:trail/dead (fortress/trail-of {:fortress/trail {:trail/target [0 0 0]
+                                                             :trail/dead (set (for [x (range 600)]
+                                                                                [x 0 0]))}}
+                                           [1 1 1])))
+        "forgotten past dead-cap")))
