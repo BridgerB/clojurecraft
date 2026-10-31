@@ -14,6 +14,7 @@
             [clojurecraft.main]
             [clojurecraft.memory :as memory]
             [clojurecraft.path :as path]
+            [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.sim :as sim]
@@ -542,6 +543,76 @@
       (is (not (blaze/under-fire? hurt {:intent/kind :rest})))
       (is (not (blaze/under-fire? hurt {:intent/kind :walk :intent/for :cover})))
       (is (not (blaze/under-fire? (assoc (standing {}) :player/health 9.0) tunnel))))))
+
+(deftest a-bot-that-cannot-heal-goes-home-for-food-not-to-a-rest-without-end
+  ;; race lane 4 (run 40980342194) s1 r01, s2 r11 and s2 r16: one :rest for 200, 164 and 200 minutes at
+  ;; health 10.9, 10.2 and 9.0, food 17 (natural regeneration needs 18), 830 / 354 / 394 cobblestone and
+  ;; not a bite to eat; the stage had no way to food
+  (let [cobble (item :cobblestone 64)
+        portal [20 64 8]
+        w (-> (standing {1 cobble} {})
+              (assoc :player/health 9.0 :player/food 17)
+              (memory/observe portal (blocks/default-state :nether_portal)))]
+    (is (not (blaze/heals? w)) "food 17 and nothing to eat")
+    (is (= {:intent/kind :portal-home} (next-intent w)) "the way home for food, not a :rest")
+    (testing "a meal held: eaten, and the rest heals"
+      (is (= :eat
+             (:intent/kind (next-intent
+                            (assoc-in w [:player/inventory 2] (item :cooked_beef 4)))))))
+    (testing "food at 18: the rest heals, so it is the rest"
+      (is (= {:intent/kind :rest} (next-intent (assoc w :player/food 18)))))
+    (testing "no portal on record: the rest holds, as before"
+      (is (= {:intent/kind :rest} (next-intent (assoc w :world/facts (memory/empty-facts))))))))
+
+(deftest the-stand-is-kept-while-the-feet-move-in-the-pocket
+  ;; blaze-race-a run 5 (727b4c2b2) and blaze-race-c (3a082f7b7): :tunnel-to [2209 60 1794] and
+  ;; [2210 60 1793], the stands west and north of the spawner [2210 60 1794], by turns every 14.5 s
+  ;; for 140 minutes, as the feet moved and the nearer of the two changed
+  (let [sp [10 64 10]
+        west [9 64 10]
+        north [10 64 9]
+        at (fn [x z] (assoc (standing {}) :player/pos [(+ x 0.5) 64.0 (+ z 0.5)]))
+        fact (fn [w target]
+               (memory/remember-intention
+                (assoc w :time/now 5000)
+                {:intent/id 1 :intent/kind :tunnel-to :intent/target target}
+                :done))]
+    (is (= west (blaze/stand (at 2 4) sp)) "from here the west stand is nearer")
+    (is (= north (blaze/stand (at 4 2) sp)) "and from here the north one: the choice flipped")
+    (testing "a tunnel last done to a stand keeps it"
+      (is (= west (blaze/stand (fact (at 4 2) west) sp)))
+      (is (= north (blaze/stand (fact (at 2 4) north) sp))))
+    (testing "the tunnel running keeps its stand, as race lane 4 s2 r08 [543/544 57 203] flipped"
+      (is (= west
+             (blaze/stand
+              (assoc (at 4 2) :plan/intent {:intent/kind :tunnel-to :intent/target west})
+              sp)))
+      (is (= north
+             (blaze/stand
+              (assoc (at 2 4) :plan/intent {:intent/kind :tunnel-to :intent/target north})
+              sp))))
+    (testing "a stand no longer open, or blacklisted, is not kept"
+      (is (= north (blaze/stand (assoc (fact (at 2 4) west) :plan/blacklist #{west}) sp))))))
+
+
+(deftest a-walk-to-a-spawner-already-in-reach-is-not-chosen-every-tick
+  ;; snapshot test/issues/514/b10231346-R4-21-1.edn.gz (churn-guard scan): the bot at [540.5 57 201.5],
+  ;; the spawner at [544 57 203] 3.96 from the eye, its top out of sight: :walk [544 57 203] ended in
+  ;; its first tick (within reach) with at-spawner? still false, and was chosen again every tick.
+  ;; The same geometry from the fixture's floor: the spawner at [11 64 10], a pillar between
+  (let [sp [11 64 10]
+        stone (blocks/default-state :stone)
+        pillar (into {} (for [y [64 65 66]] [[10 y 9] stone]))
+        w (-> (standing {})
+              (assoc :world/chunks {[0 0] (world/column pillar)})
+              (memory/observe sp blaze/spawner))
+        walk {:intent/kind :walk :intent/target sp}
+        d (physics/distance (game/eye w) (physics/centre sp))]
+    (is (blaze/walkable? w sp))
+    (is (blaze/at-spawner? w sp)
+        "within reach of the eye with the spawner walkable: where it camps")
+    (is (intent/arrived? w walk d) "the walk would be done at once")
+    (is (not= walk (next-intent w)) "so the walk is not chosen: the act goes on to the camp")))
 
 (deftest a-spawner-whose-walk-failed-is-tunnelled-to-not-given-up
   ;; race lane 4 s1 r15: `:walk [544 57 203]` failed :no-path at the fortress, the blacklist took the

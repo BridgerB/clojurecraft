@@ -235,6 +235,15 @@
     "from the :go event"]
    [:plan/unwalkable "walks in a row that failed :no-path; max-unwalkable of them fail the plan"
     "from the :go event"]
+   [:plan/done-at
+    "ms when the last intent that moved the run on (plan/progress?) finished; the stall clock (plan/stalled?) runs from it, or from :plan/since"
+    "after an intent is done"]
+   [:plan/recoveries
+    "times a run out of attempts or a :retrying wait started over instead of ending (plan/recover)"
+    "after a recovery"]
+   [:plan/regroup
+    "the cell back along the trail the next walk goes to, planning again from a new spot"
+    "after a recovery, until the walk starts"]
    [:plan/unreached
     "targets log walks failed :no-path toward; a log within unreached-radius of one is not chosen: the trees round a place no route reaches are as far from the feet"
     "after a walk fails :no-path"]
@@ -344,7 +353,7 @@
    [:plan/wait "a planner answer meaning: nothing to do yet, for this reason"
     "returned by next-intent, never stored"]
    [:intent/kind
-    "executor: :walk :dig :collect :craft :place :open-container :stairs-down :stairs-up :tunnel :tunnel-to :smelt :redig :scoop :equip :build :pour :use-on :await :toss :eat :wear :fight :back-off :provoke :burrow :lookout :throw-eye :end-portal :pillar :dig-down :strike :perch :hold :dragon-rest :camp :collect-drops :cross :flee :forage :rest :swim-out :wade"
+    "executor: :walk :dig :collect :craft :place :open-container :stairs-down :stairs-up :tunnel :tunnel-to :smelt :redig :scoop :equip :build :pour :use-on :await :toss :eat :wear :fight :back-off :provoke :burrow :lookout :throw-eye :end-portal :pillar :dig-down :strike :perch :hold :dragon-rest :camp :collect-drops :cross :flee :forage :rest :portal-home :swim-out :wade"
     "every intent"] [:intent/status ":active, :done or :failed" "every intent"]
    [:intent/top "feet height a :pillar climbs to (issue #267)" "a :pillar intent"]
    [:intent/under

@@ -56,6 +56,7 @@
 (def candidates 3)                    ; nearest blazes asked for a route, as the hunt asks of its animals
 (def side-steps [[1 0 0] [-1 0 0] [0 0 1] [0 0 -1]]) ; the cells beside a spawner a stand is looked for in
 (def stand-levels [0 -1 1])           ; the heights from the spawner's own a stand is looked for at, in this order: its blazes' floor first
+(def stand-memory 3)                  ; tunnels last done whose target is looked for among the stands, before the nearest
 (def stands-tried 2)                  ; stands beside one spawner whose tunnel ended :blocked before the spawner is given up
 (def spawner-reach 2.0)                ; blocks from the feet cell's centre to the spawner's a tunnel to it ends within: in its room, at the blazes' floor
 (def cover-range 16.0)                ; blazes this near that see the bot are the ones a hurt bot takes cover from (they shoot that far)
@@ -206,13 +207,19 @@
 (defn at-spawner?
   "Is the bot where it camps by spawner sp: the feet within spawner-reach of it and level-with?
    it (where a tunnel to it ends), or the eye within camp-range with the spawner walkable? (on its
-   floor, not in a tunnel beside its room) and its top-in-sight?. Gym blaze-fortress-b (run
+   floor, not in a tunnel beside its room) and its top-in-sight?, or the eye within intent/reach
+   of it with the spawner walkable? (a walk to it is done in its first tick and chosen again every
+   tick: snapshot test/issues/514/b10231346-R4-21-1, the bot 3.96 from the spawner at
+   [544 57 203]; race lane 4 s2 r08 and r09 flipped :tunnel-to between [543 57 203] and
+   [544 57 203] at that spawner). Gym blaze-fortress-b (run
    38893941350) tunnelled to within 6 of its spawner, four blocks over it in the wall, and
    camped there ten minutes: the blazes the spawner made in its room below were out of reach,
    every run; blaze-fortress-c (run 38895759229) run 3 came up under its spawner, three below
    its floor, killed eight blazes from there and every rod lay on the floor over it."
   [world sp]
   (or (and (fortress/arrived? world sp spawner-reach) (level-with? world sp))
+      (and (<= (physics/distance (game/eye world) (physics/centre sp)) intent/reach)
+           (walkable? world sp))
       (and (<= (physics/distance (game/eye world) (physics/centre sp)) camp-range)
            (walkable? world sp)
            (top-in-sight? world sp))))
@@ -229,15 +236,30 @@
   "The cell beside spawner sp with room for the body (open?) and not blacklisted (a tunnel to it
    ended :blocked), at its own height when one is there, else a level under or over it
    (stand-levels), nearest the feet: where a tunnel to it ends, on its blazes' floor; nil when
-   none is."
+   none is. The target of a tunnel last done, when it is still one of those cells, before the
+   nearest: the feet moved a cell or two in the pocket the tunnel dug and the nearest of two
+   stands side by side changed with them, so the tunnel's trail was kept for the other target and
+   the same cells were dug again, 140 minutes (blaze-race-a run 5, 727b4c2b2: :tunnel-to
+   [2209 60 1794] and [2210 60 1793] by turns every 14.5 s, 0 attacks to the five-hour cap; the
+   same on blaze-race-c, 3a082f7b7). So is the target of the :tunnel-to running now: race lane 4
+   (run 40980342194) s2 r08 and r09 sent [543 57 203] and [544 57 203] by turns every 12 s, 539
+   and 681 intents, none ever done, each abandoned for the other."
   [world sp]
   (let [bl (:plan/blacklist world #{})
-        open (remove bl (filter #(open? world %) (cells-beside sp)))]
-    (some (fn [dy]
-            (memory/nearest-of (physics/centre (intent/feet world))
-                               Double/POSITIVE_INFINITY
-                               (filter #(= (+ (physics/y-of sp) dy) (physics/y-of %)) open)))
-          stand-levels)))
+        open (remove bl (filter #(open? world %) (cells-beside sp)))
+        running (let [i (:plan/intent world)]
+                  (when (= :tunnel-to (:intent/kind i)) (:intent/target i)))
+        kept (->> (cons running
+                        (keep :intention/target
+                              (memory/newest-dones world :tunnel-to stand-memory)))
+                  (filter (set open))
+                  first)]
+    (or kept
+        (some (fn [dy]
+                (memory/nearest-of (physics/centre (intent/feet world))
+                                   Double/POSITIVE_INFINITY
+                                   (filter #(= (+ (physics/y-of sp) dy) (physics/y-of %)) open)))
+              stand-levels))))
 
 (defn hurt?
   "Is the health the server last told under combat/retreat-health?"
@@ -332,6 +354,42 @@
   [world]
   (cover world (vals (watchers world))))
 
+(def portal-states "Every state of the Nether portal block." (blocks/states-of :nether_portal))
+
+(defn home-portal
+  "The Nether portal block on record in the bot's dimension nearest the feet, or nil: the way
+   back to the overworld, where the animals are (memory/positions-now; portals are remembered
+   whenever they are seen lit)."
+  [world]
+  (memory/nearest-of (physics/centre (intent/feet world))
+                     Double/POSITIVE_INFINITY
+                     (memory/positions-now world portal-states)))
+
+(defn home-op
+  "The op that stands in the portal block p until the dimension is the overworld."
+  [p]
+  {:build/op :stand-in
+   :build/pos p
+   :build/stand p
+   :build/step :enter
+   :build/done [:dimension dimension/overworld]})
+
+(defn food-trip
+  "The intent to go home through the portal for food, or nil when no portal is on record: what a
+   bot that cannot heal (heals? false: the food under hunger/heal-level and nothing to eat) does
+   instead of a :rest that never ends. Race lane 4 (run 40980342194) s1 r01, s2 r11 and s2 r16 held
+   one :rest for 200, 164 and 200 minutes at health 10.9, 10.2 and 9.0, food 17, with 830, 354 and
+   394 cobblestone and no food; the overworld has animals (hunt/provisioning? stocks
+   hunt/provision-wanted again) and the :return-nether row brings the bot back."
+  [world]
+  (when (home-portal world) {:intent/kind :portal-home}))
+
+(defn unhealing
+  "The food trip when the bot cannot heal (heals? false), else nil: where a rest would hold for
+   ever, the way out."
+  [world]
+  (when-not (heals? world) (food-trip world)))
+
 (def rest-intent {:intent/kind :rest})
 
 (defn healing
@@ -353,6 +411,7 @@
           (meal world) (meal world)
           (and weid (not (combat/void-retreat? world e)))
           {:intent/kind :back-off :intent/target weid}
+          (unhealing world) (unhealing world)
           :else rest-intent)))
 
 (defn wary?
@@ -371,6 +430,7 @@
   (let [away (hide world)]
     (cond away away
           (meal world) (meal world)
+          (and (empty? (watchers world)) (unhealing world)) (unhealing world)
           (empty? (watchers world)) rest-intent
           :else nil)))
 
@@ -503,6 +563,24 @@
           (and sp (not (at-spawner? world sp))) (to-spawner world sp)
           sp {:intent/kind :camp :intent/spawner sp}
           :else (or (search world) {:plan/wait :no-blaze}))))
+
+;; ---------------------------------------------------------------- the :portal-home intent
+
+(defmethod intent/run :portal-home
+  ;; {:intent/kind :portal-home}: work the stand in the nearest remembered Nether portal block
+  ;; through build/work-op (its child a walk to it, the await); done in the overworld, failed
+  ;; :no-portal when none is on record
+  [world i event]
+  (let [p (home-portal world)]
+    (cond (not= dimension/nether (dimension/of world))
+          (-> world
+              (assoc :player/controls {})
+              intent/done)
+          (nil? p)
+          (-> world
+              (assoc :player/controls {})
+              (intent/fail :no-portal))
+          :else (build/work-op world i (home-op p) event))))
 
 ;; ---------------------------------------------------------------- the :camp intent
 

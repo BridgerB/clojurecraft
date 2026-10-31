@@ -94,6 +94,12 @@
 (def landing-reach 2.0)               ; horizontal distance from :go/at that counts as landed
 
 (def max-attempts 3)                  ; consecutive failed intents before the plan fails
+(def stall-ms 900000)                 ; ms with no intent done (progress?) after which a run out of attempts is a dead end: 15 min
+(def regroup-distance 8)              ; blocks from the feet a regroup walk goes back along the trail
+(def non-progress
+  "What finishes without moving the run on: intents of these kinds or for these purposes are done
+   but are not progress, so a loop of rests and retreats never keeps the stall clock fresh."
+  {:kind #{:rest :back-off :dodge :pocket-hold :lookout :eat} :for #{:regroup :retreat :cover}})
 (def max-unwalkable 12)               ; consecutive walks that failed :no-path before the plan fails
 (def wait-ticks 400)                  ; a goal that has nothing to do for this many planner ticks has failed: 20 s at 20 ticks a second
 
@@ -127,6 +133,30 @@
    kind. Keyed by :goal/plan; the controls as they are by default."
   {:arglists '([world goal])}
   (fn [_world goal] (:goal/plan goal :needs)))
+
+(defmulti holds?
+  "Is the running intent i a defence that another row's choice must not cut: one that runs to its
+   own end, whatever row the planner chooses meanwhile? Keyed by :intent/kind; every intent of
+   the :defend row by default, a fight excepted (it ends by its own break-off), and refuge kinds
+   by a defmethod. Only an escape row (:goal/trap) preempts it. Blaze-race-n jobs 4 and 6 (run
+   41105083204) lost a :pocket and a :seal to :defend within 50 ms of a new attacker, and
+   pearls-travel-b job 1 (41134469333) flipped :eat and :back-off every 50 ms as a hoglin crossed
+   the defend radius, no intent ever finishing."
+  {:arglists '([i])}
+  :intent/kind)
+
+(defmethod holds? :default [i] (and (= :defend (:intent/goal i)) (not= :fight (:intent/kind i))))
+
+(defn held?
+  "Is running intent i kept against goal, the row chosen now: i serves another row, i is a
+   defence (holds?), and goal is no escape (:goal/trap)? False for nil i or goal."
+  [i goal]
+  (boolean (and i
+                goal
+                (:intent/goal i)
+                (not= (:goal/id goal) (:intent/goal i))
+                (not (:goal/trap goal))
+                (holds? i))))
 
 (defmethod interrupts? :default [_ _ _] false)
 (defmethod steer :default [world _] world)
@@ -266,6 +296,48 @@
       (and (pos? n) (zero? (mod n churn-log-every)))
       (game/say (str "churn " (:intent/kind i) " " (:intent/target i) " x" n)))))
 
+(defn progress?
+  "Does finishing intent i move the run on: not of a kind or for a purpose in non-progress?"
+  [i]
+  (not (or (contains? (:kind non-progress) (:intent/kind i))
+           (contains? (:for non-progress) (:intent/for i)))))
+
+(defn stalled?
+  "Has no intent that moved the run on (progress?) finished for stall-ms: since :plan/done-at,
+   else since the plan began (:plan/since)? Only then does a plan out of attempts end."
+  [world]
+  (let [now (:time/now world 0)
+        since (:plan/done-at world (:plan/since world now))]
+    (> (- now since) stall-ms)))
+
+(defn regroup-cell
+  "The latest cell of the trail (feet of recently started intents) at least regroup-distance
+   from the feet on the plane, not blacklisted nor boxed-at, or nil: the new spot to plan from."
+  [world]
+  (let [feet (when (:player/pos world) (intent/feet world))
+        ok? (fn [c]
+              (and feet
+                   (>= (physics/horizontal-distance c feet) regroup-distance)
+                   (not (contains? (:plan/blacklist world #{}) c))
+                   (not (contains? (:plan/boxed-at world #{}) c))))]
+    (some #(when (ok? %) %) (rseq (:plan/trail world [])))))
+
+(defn recover
+  "A run out of attempts that is not stalled (stalled?) tries again instead of ending: the failure
+   counts start over, the last failure is forgotten (so the same intent is not refused as an
+   identical retry), and the trail's cell regroup-distance back (regroup-cell) becomes the next
+   thing to walk to, planning again from a new spot. :plan/recoveries counts them. Blaze-race-u
+   (run 41156125534) ended at 4 health after three :place :no-support in 300 ms, and at 16 after a
+   camp that found no blaze twice, with hours left."
+  [world]
+  (let [cell (regroup-cell world)]
+    (-> world
+        (assoc :plan/attempts 0 :plan/unwalkable 0)
+        (update :plan/recoveries (fnil inc 0))
+        (dissoc :plan/failed :plan/waiting :plan/waiting-since :plan/waiting-ticks :plan/regroup)
+        (cond-> cell (assoc :plan/regroup cell))
+        (game/say (str "recover " (:plan/recoveries world 0) " regroup " (pr-str cell))))))
+
 (defn finish-intent
   "An intent that succeeds ends any failure streak: attempts and unwalkable walks count
    consecutive failures, so a long goal is not killed by three unrelated hiccups an hour apart.
@@ -282,6 +354,7 @@
       (memory/remember-intention i :done)
       (mark-ended i)
       (assoc :plan/last i :plan/attempts 0 :plan/unwalkable 0)
+      (cond-> (progress? i) (assoc :plan/done-at (:time/now world 0)))
       (cond-> (and (= :collect (:intent/kind i)) (= :log (:intent/for i))) (dissoc :plan/surfaced))
       (dissoc :plan/intent)))
 
@@ -349,8 +422,10 @@
                        " of "
                        max-attempts
                        ")"))
-        (cond-> (or (>= attempts max-attempts) (>= unwalkable max-unwalkable))
-                (assoc :plan/status :failed :plan/reason (:intent/reason i))))))
+        (as-> w
+          (cond (not (or (>= attempts max-attempts) (>= unwalkable max-unwalkable))) w
+                (stalled? w) (assoc w :plan/status :failed :plan/reason (:intent/reason i))
+                :else (recover w))))))
 
 (declare plan-tick)
 
@@ -436,9 +511,10 @@
   [world reason]
   (let [since (or (:plan/waiting-since world) (:time/now world))
         ticks (inc (:plan/waiting-ticks world 0))]
-    (if (> ticks wait-ticks)
-      (assoc world :plan/status :failed :plan/reason reason)
-      (assoc world :plan/waiting-since since :plan/waiting-ticks ticks :plan/waiting reason))))
+    (cond (and (> ticks wait-ticks) (= :retrying reason) (not (stalled? world))) (recover world)
+          (> ticks wait-ticks) (assoc world :plan/status :failed :plan/reason reason)
+          :else
+          (assoc world :plan/waiting-since since :plan/waiting-ticks ticks :plan/waiting reason))))
 
 (defn same-choice?
   "Would the planner start intent next again as the running intent i: the same kind, target and
@@ -459,7 +535,9 @@
    value, so done is re-derived, regressions re-plan automatically\"): no target left means
    :done, whatever is running; a running intent that serves another target than the one chosen
    now is preempted, as is one the chosen row's interrupts? cuts short, unless the row, planning again
-   without it, would start the same intent (same-choice?): that one keeps running. Either waits
+   without it, would start the same intent (same-choice?): that one keeps running. A defence
+   (holds?) is neither preempted nor cut by another row but an escape: it runs to its own end.
+   Either waits
    while the cursor holds an item. Otherwise the intent runs, or
    the chosen target's next intent starts."
   [world event table]
@@ -469,8 +547,9 @@
         i (:plan/intent world)
         active? (= :active (:plan/status world))
         goal (when active? (choose world table))
-        preempt? (and i goal (:intent/goal i) (not= (:goal/id goal) (:intent/goal i)))
-        cut-world (when (and i goal (not preempt?) (interrupts? world goal i))
+        held (held? i goal)
+        preempt? (and i goal (:intent/goal i) (not= (:goal/id goal) (:intent/goal i)) (not held))
+        cut-world (when (and i goal (not preempt?) (not held) (interrupts? world goal i))
                     (abandon-intent world i :interrupted))
         cut? (and cut-world (not (same-choice? i (next-intent cut-world goal table))))
         next (when (and goal (nil? i)) (next-intent world goal table))
@@ -496,6 +575,12 @@
           preempt? (plan-tick (abandon-intent world i :preempted) event table)
           cut? (plan-tick cut-world event table)
           i (run-intent world i event table)
+          (and (:plan/regroup world) (not (:goal/always? goal)))
+          (start-intent (dissoc world :plan/regroup)
+                        {:intent/kind :walk
+                         :intent/target (:plan/regroup world)
+                         :intent/for :regroup
+                         :intent/goal (:goal/id goal)})
           (nil? next) (wait world :nothing-to-do)
           (:plan/wait next) (wait world (:plan/wait next))
           (and retrying? retreat-cell)

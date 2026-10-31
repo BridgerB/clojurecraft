@@ -1,0 +1,12 @@
+;; RETRY (branch fix/577-retry): three failed intents in a row start over (plan/recover) and only a
+;; run with nothing done for 15 min ends. Measure: runs that end with time left, by reason, against
+;; blaze-race-u (41156125534) and flip-a. Race kit, no buffed gym rows.
+{:plans/label "retry-a"
+ :plans/jobs 6
+ :plans/issue 577
+ :plans/experiments [{:exp/name "blaze-fortress-race"
+                      :exp/kind :gym
+                      :exp/goal "blaze-fortress-race"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 1800}]}
