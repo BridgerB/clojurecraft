@@ -2196,3 +2196,26 @@
                 (assoc (entered w (+ blaze/prepare-after-pocket-ms 1000)) :time/now 1000000)
                 spawner-at))
         "long ago: made again")))
+
+(deftest two-near-equidistant-spawners-do-not-flip-the-tunnel
+  ;; blaze-race-z9 job 5 (walk-restart's probe): spawners [2225 60 1726] and [2210 60 1794], both ~67 blocks
+  ;; from the bot; each new tunnel went to whichever was nearer to the eye, and the bot paced a block or
+  ;; two between tunnels: 61 to 74 tunnels alternating, 32 minutes
+  (let [w (fn [x & spawners]
+            (reduce #(memory/observe %1 %2 blaze/spawner)
+                    (assoc (standing {}) :player/pos [x 64.0 8.5])
+                    spawners))
+        tunnel (fn [w target]
+                 (memory/remember-intention
+                  w
+                  {:intent/id 5 :intent/kind :tunnel-to :intent/target target}
+                  :done))
+        a [12 64 8]
+        b [4 64 8]
+        far [90 64 8]]
+    (is (= a (blaze/nearest-spawner (w 9.0 a b))) "no tunnel yet: the nearer")
+    (is (= b (blaze/nearest-spawner (w 7.5 a b))))
+    (is (= a (blaze/nearest-spawner (tunnel (w 7.5 a b) (first (blaze/cells-beside a)))))
+        "after a tunnel to a stand of a: a, though b is a hair nearer")
+    (is (= b (blaze/nearest-spawner (tunnel (w 4.5 far b) (first (blaze/cells-beside far)))))
+        "the tunnel's own spawner 85 blocks off, b 0.5: b is chosen (more than the margin)")))

@@ -290,6 +290,9 @@ Job 4 (24m17s): 15 blazes died (6.2 per 10 min), 9 rod entities, 2 taken, 7 lost
 ## Why the camp never became an approach (issue #262, blaze-race-z9 jobs 1 and 6)
 z9 jobs 1 and 6 ran 30 min with 0 kills: `:camp` 60 s, `:camp failed :no-blaze`, `:tunnel-to [2346 60 2281]` (the sortie), 0.7 s later `:pocket`, `:camp` 60 s, again: 17:15:42.9, 17:16:44.7, 17:19:34.0 ... The sortie's first dig opens a wall of the held pocket (`valid?` false); one tick later `plan/steer` notes `:sortie/since`, but `interrupts?` is asked first in that tick and `prepare-intent` (a pocket ahead) is non-nil (`:sortie/since` still nil, no valid held pocket), so the leg is cut. `prepare-intent` is also nil within 2 minutes (`prepare-after-pocket-ms`) of a pocket entered, which covers the tick before steer.
 
+## Two spawners, one tunnel (issue #262, blaze-race-z9 job 5, walk-restart's probe 41227306752)
+Two spawners on record, [2225 60 1726] and [2210 60 1794], both about 67 blocks from the bot; `nearest-spawner` gave each new tunnel whichever was nearer to the eye, and the bot moved a block or two inside its 20-block box between tunnels, so tunnels alternated the stands of spawner B and A (with spiral legs when neither) for 32 minutes. `stand` remembered the stand cell of one spawner, the spawner had no memory. `nearest-spawner` keeps the spawner the running or last-done `:tunnel-to` is for (`tunnelled-spawner`: its target is the spawner or a cell beside it) unless another is nearer by more than `spawner-switch-margin` (16).
+
 ## Limits
 - Fireballs are not dodged or blocked: the bot is out of their line, in a pocket or sealed in one.
 - A blaze hovering higher than the eye can reach from under it is never hit (`pressing?` stops within 0.8 on the plane); the fight has no engage timeout, only `:ghost` after 25 swings in reach.

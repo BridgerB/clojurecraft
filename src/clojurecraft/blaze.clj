@@ -201,6 +201,17 @@
 
 (declare stand)
 
+(def spawner-switch-margin 16.0) ; blocks nearer another spawner must be for the tunnel's own to be left
+
+(defn tunnelled-spawner
+  "The spawner among candidates that the running :tunnel-to, else the last one done, is for (its
+   target the spawner or a stand beside it), or nil."
+  [world candidates]
+  (let [i (:plan/intent world)
+        target (or (when (= :tunnel-to (:intent/kind i)) (:intent/target i))
+                   (:intention/target (memory/last-done world :tunnel-to)))]
+    (when target (first (filter #(or (= % target) (some #{target} (cells-beside %))) candidates)))))
+
 (defn nearest-spawner
   "The spawner on record in the bot's dimension nearest the eye, within spawner-radius and not
    given-up?, or nil; one blacklisted (a walk to it failed) is kept while a stand beside it is
@@ -209,11 +220,23 @@
    blacklist and searched far spirals for 4 hours ([-330 88 483] ...); s1 r16 `:walk failed :stuck`
    there; s2 r08 and r09 never arrived."
   [world]
-  (let [bl (:plan/blacklist world #{})]
-    (memory/nearest-of (game/eye world)
-                       spawner-radius
-                       (remove #(or (and (bl %) (nil? (stand world %))) (given-up? world %))
-                               (memory/positions-now world [spawner])))))
+  (let [bl (:plan/blacklist world #{})
+        eye (game/eye world)
+        candidates (remove #(or (and (bl %) (nil? (stand world %))) (given-up? world %))
+                           (memory/positions-now world [spawner]))
+        nearest (memory/nearest-of eye spawner-radius candidates)
+        kept (tunnelled-spawner world candidates)]
+    ;; the spawner the running or last-done :tunnel-to is for is kept unless another is nearer by more than
+    ;; spawner-switch-margin: two spawners ~67 blocks off, a block or two of the bot's pacing between tunnels,
+    ;; sent each new tunnel to the other (blaze-race-z9 job 5: stands [2224 60 1726] and [2209 60 1794]
+    ;; by turns every 25 s for 32 minutes)
+    (if (and kept
+             nearest
+             (not= kept nearest)
+             (<= (physics/distance eye (physics/centre kept))
+                 (+ (physics/distance eye (physics/centre nearest)) spawner-switch-margin)))
+      kept
+      nearest)))
 
 (defn level-with?
   "Are the feet within a block of spawner sp's height: its blazes' floor?"
