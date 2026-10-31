@@ -255,3 +255,10 @@
   (is (nil? (race/nearby-fortress [] [10 10])))
   (is (= [200 -160] (race/nearby-fortress [[200 -160] [900 900]] [260 -100])) "within 128 blocks")
   (is (nil? (race/nearby-fortress [[200 -160]] [600 -160])) "400 off: another fortress"))
+
+(deftest a-bot-is-teleported-onto-a-pad-built-before-it-joined
+  ;; race 41225389190: the first pad was built 40 s after ten bots joined, generating Nether chunks
+  ;; in the server's thread, and seven of them timed out; the pads are built first (prepare!)
+  (is (= "execute in minecraft:the_nether run tp Clj_r03 152.5 72 -159.5"
+         (race/tp-command "Clj_r03" [152 -160 72]))
+      "x.5 y z.5 of the pad cell: -160 and .5 is -159.5, the middle of the cell"))
