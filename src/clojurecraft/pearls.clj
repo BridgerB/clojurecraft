@@ -1878,7 +1878,8 @@
 
 (def relocate-ms 480000)              ; ms without a pearl gained before the hunt leaves the place for another (8 minutes)
 (def relocate-dist 32.0)              ; blocks from where it began that a relocation walks before it is over
-(def relocate-timeout-ms 240000)      ; ms a relocation goes on at most (four minutes) before the clock starts again
+(def relocate-timeout-ms 420000)      ; ms a relocation goes on at most (seven minutes) before the clock starts again
+(def relocate-patience-ms 180000)     ; ms a relocation waits in place for an angry enderman near to come or go (menaced?) before it walks past one that is parked (live-menaced?)
 (def cluster-radius 24.0)             ; blocks round an enderman within which the others count toward how thick the place is
 
 (defn pearls-held
@@ -2068,7 +2069,11 @@
                                        (not hurt?)
                                        (not swarmed?)
                                        (not (recently-shot? world))
-                                       (not (live-menaced? world)))
+                                       (not (if (< (- (:time/now world 0)
+                                                      (:at (:pearls/relocate world)))
+                                                   relocate-patience-ms)
+                                              (menaced? world)
+                                              (live-menaced? world))))
                               (relocate-walk world)))
         wander-walk (delay (when (and (not hurt?)
                                       (not swarmed?)

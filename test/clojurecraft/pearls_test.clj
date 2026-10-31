@@ -2999,3 +2999,19 @@
                           [20.5 60000]])]
     (is (= 0 (get-in jittered [:pearls/angry 7 :closed-at])) "twelve blocks, a block of jitter")
     (is (pearls/parked? (assoc jittered :time/now 70000) 7 [8.5 61.0 20.5]))))
+
+(deftest a-relocation-waits-for-an-angry-one-near-then-walks-past-a-parked-one
+  ;; pearl-fight-h job 3 (plan run 41173013374): at 9m43s with no pearl, the relocation walked out
+  ;; of the burrow at 8 minutes past enderman 279, angry and fought all minute, and was slain in
+  ;; four hits. For relocate-patience-ms any angry one within sixteen holds the walk; after that
+  ;; only a live one does (a parked one held the g job 3 bot 90 minutes)
+  (let [angry (assoc (enderman [17.0 64.0 8.5]) :entity/creepy? true)
+        group [(enderman [50.5 64.0 8.5]) (enderman [52.5 64.0 12.5]) (enderman [48.5 64.0 4.5])]
+        w (-> (wide (standing {1 angry 3 (nth group 0) 4 (nth group 1) 5 (nth group 2)}))
+              (assoc-in [:player/inventory 1] (item :iron_pickaxe 1))
+              (assoc :pearls/angry {1 {:since 0 :best 8.5 :closed-at 0}}
+                     :pearls/gain {:held 1 :at 0}
+                     :pearls/relocate {:from [8 64 8] :at 0 :near #{1}}))
+        kind (fn [now] (:intent/for (plan/next-intent (assoc w :time/now now) row plan/goals)))]
+    (is (not= :relocate (kind 100000)) "in the patience: it waits")
+    (is (= :relocate (kind 200000)) "past it, with the angry one parked: it walks")))
