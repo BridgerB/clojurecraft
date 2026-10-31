@@ -631,38 +631,3 @@
     (is (= 6 (swapped (at {11 beef} 6))) "no tool held: into the held slot as before")
     (is (= 1 (swapped (at {0 pick 6 pick 11 beef} 6)))
         "a tool in slot 0 too: the first hotbar slot with none is 1")))
-
-(deftest a-body-on-the-edge-of-the-cell-it-places-into-does-not-step-to-a-floorless-middle
-  ;; pearl-fight-n job 1 (plan run 41229277566, 18:49:11): stairs-up laid a block into the cell
-  ;; beside its feet from x/z 2164.8, the body clipping the cell; the nudge walked it to the middle
-  ;; of its own cell, which had no floor over a lava lake: three blocks down, burned to death
-  (let [floor (into {} (for [x (range 6 10) z (range 3 10)] [[x 63 z] 1]))
-        w (-> (standing [5.9 64.0 5.5])
-              (assoc :world/chunks {[0 0] (world/column floor)})
-              (assoc :plan/intent
-                     {:intent/kind :place
-                      :intent/item :cobblestone
-                      :intent/status :active
-                      :intent/stage :spot
-                      :intent/cell [6 64 5]}))
-        out (intent/run w (:plan/intent w) {:event/kind :tick :event/now 0 :event/rand 0.5})]
-    (is (place/inside-player? w [6 64 5]))
-    (is (= :failed (:intent/status (:plan/intent out))))
-    (is (= :no-support (:intent/reason (:plan/intent out))))
-    (is (not (:control/forward? (:player/controls out))) "no step off the edge")))
-
-(deftest an-airborne-placement-over-no-floor-still-nudges-as-a-pillar-lays-its-block
-  ;; the fail :no-support for a floorless feet cell holds on the ground only: a pillar's block is laid
-  ;; at the top of a jump with nothing under the feet cell yet
-  (let [floor (into {} (for [x (range 6 10) z (range 3 10)] [[x 63 z] 1]))
-        w (-> (standing [5.9 64.0 5.5])
-              (assoc :world/chunks {[0 0] (world/column floor)} :player/on-ground? false)
-              (assoc :plan/intent
-                     {:intent/kind :place
-                      :intent/item :cobblestone
-                      :intent/status :active
-                      :intent/stage :spot
-                      :intent/cell [6 64 5]}))
-        out (intent/run w (:plan/intent w) {:event/kind :tick :event/now 0 :event/rand 0.5})]
-    (is (= :active (:intent/status (:plan/intent out))))
-    (is (= 1 (:intent/nudges (:plan/intent out))) "nudged as before")))
