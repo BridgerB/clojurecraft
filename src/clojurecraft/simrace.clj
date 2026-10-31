@@ -391,7 +391,8 @@
              fortress
              (assoc :dimension dimension/nether
                     :view-distance nether-view
-                    :inventory (:inventory fortress))
+                    :inventory (:inventory fortress)
+                    :respawn-in dimension/nether)
              (and (:capture/nether w) (not fortress)) (assoc :nether (:capture/nether w))
              food (assoc :food food)))
           #(or (plan/done? %) (plan/failed? %))

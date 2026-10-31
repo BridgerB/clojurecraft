@@ -1343,6 +1343,24 @@
     (is (= dimension/nether (:sim/dimension entered)))
     (is (= 1 (:sim/respawns entered)))))
 
+(deftest a-death-where-the-spawn-is-kept-respawns-there-with-the-inventory
+  ;; a race that starts at a fortress pins the spawn in the Nether (spawnpoint) and keeps
+  ;; inventories: a death costs time and the kit, not the dimension
+  (let [pick {:item (recipe/item-id :stone_pickaxe) :count 1}
+        sim (sim/init {:columns {[0 0] (world/column-bytes {})}
+                       :spawn [0.5 64.0 0.5]
+                       :dimension dimension/nether
+                       :respawn-in dimension/nether
+                       :inventory {[:hotbar 0] pick}})
+        dead (assoc sim :sim/health 0.0 :sim/out [])
+        alive (sim/on-packet dead
+                             {:packet/name :client-command
+                              :action (packet/value :client-command :perform-respawn)})]
+    (is (= dimension/nether (:sim/dimension alive)) "still in the Nether")
+    (is (some #(= dimension/nether (:dimension %)) (:sim/out alive)) "told it is the Nether")
+    (is (= 1 (:sim/respawns alive)))
+    (is (= pick (get-in alive [:sim/inv (inventory/slot [:hotbar 0])])) "the kit kept")))
+
 (deftest streamed-chunks-include-the-blocks-the-server-now-holds
   ;; Sim race 38999010135 (issue #328): resending the original column after the portal erased
   ;; the client's dug room, so its feet were in deepslate and the tunnel failed :no-stand.
