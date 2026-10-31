@@ -6,7 +6,11 @@
 
      clojure -M:race --config ci/race.edn --port 25565 --rcon-port 25575 --rcon-pass S \\
        [--record-dir data/race] [--commit sha] [--seed s] [--runner n] [--server k]
-       [--landings cache/worlds/R1/landings.edn --landing-offset n]
+       [--landings cache/worlds/R1/landings.edn --landing-offset n] [--from spawn|fortress]
+
+   --from (else ci/race.edn's :race/from) is where each bot starts: spawn (a forest, every stage)
+   or fortress (the Nether, at the open pad beside its landing's fortress with :race/kit, playing
+   only the stages from the blaze rods: stages 17 and 18, issue #262).
 
    --server names which of a runner's servers this race is on, when a runner carries more than
    one (:race/servers): each server is its own world, seed and race process, and its facts say
@@ -37,6 +41,7 @@
             [clojurecraft.failure :as failure]
             [clojurecraft.fixture :as fixture]
             [clojurecraft.game :as game]
+            [clojurecraft.gym :as gym]
             [clojurecraft.landings :as landings]
             [clojurecraft.main :as main]
             [clojurecraft.plan :as plan]
@@ -277,6 +282,21 @@
           nil
           (take claim-tries (drop offset (claims/spiral)))))
 
+(defn fortress?
+  "Does :race/from name the fortress start?"
+  [from]
+  (contains? #{"fortress" :fortress} from))
+
+(def fortress-from :blaze-rods)       ; the first target a race that starts at the fortress plays (issue #262): the stages before it are the road to the fortress
+
+(defn from-goals
+  "The targets a race to until plays when it starts at (:race/from) from: the whole chain to until
+   from spawn (nil or :spawn), else the chain from the fortress's stage (fortress-from) on, so the
+   run is only stages 17 and 18 (blaze rods, ender pearls) and its failures are filed at those."
+  [from until]
+  (let [chain (plan/through until)]
+    (if (fortress? from) (vec (drop-while #(not= fortress-from %) chain)) chain)))
+
 (defn landing-of
   "The [x z] racer i (from 0) lands on in a landing set ([[x z y] ...]), offset into it: the
    set's landing offset + i, wrapping, so a runner's servers and the runners sharing a set start
@@ -290,13 +310,28 @@
   (try (rcon/with-rcon host rcon-port rcon-pass #(rcon/command! % "gamerule keep_inventory true"))
        (catch Exception e (cli/log "gamerule failed:" e))))
 
+(defn land-fortress!
+  "Land the bot named name at the fortress of its landing (gym/land-fortress!: the fortress the
+   server locates from the landing's Nether coordinates, an open pad gym/fortress-pad-open 48
+   blocks west of it), wait for the server to say it stands in the Nether, clear its inventory
+   and give it kit (\"minecraft:iron_sword 1\" ...: what a race bot carries to the fortress,
+   ci/race.edn's :race/kit). Returns where it stands, or nil when the dimension never came; a
+   landing that cannot locate a fortress throws."
+  [rc name landing kit]
+  (let [at (gym/land-fortress! rc name landing gym/fortress-pad-open)]
+    (when (gym/wait-in! rc name dimension/nether)
+      (rcon/command! rc (str "clear " name))
+      (doseq [item kit] (rcon/command! rc (str "give " name " " item)))
+      (Thread/sleep (long fixture/settle-ms))
+      (or (fixture/position rc name) at))))
+
 (defn land-bot!
   "Land one bot, on a thread of its own with an RCON session of its own: wait for it to be
    online, make it a survival player, land it (on landing i of the set, with landings; else on a
    cell claimed for it round the race's centre, which the first bot online decides), pin its spawn
    there, and put its :go (every step up to until, milestones on, :go/at where it landed) on its
    queue. A bot whose landing fails starts where it stands."
-  [{:keys [host rcon-port rcon-pass until landings landing-offset]} ch centre name queue i]
+  [{:keys [host rcon-port rcon-pass until landings landing-offset from kit]} ch centre name queue i]
   (async/thread
    (try (rcon/with-rcon
          host
@@ -307,7 +342,13 @@
                  _ (when online (deliver centre [(long (first online)) (long (nth online 2))]))
                  at (when online
                       (rcon/command! rc (str "gamemode survival " name))
-                      (cond landings
+                      (cond (fortress? from)
+                            (land-fortress!
+                             rc
+                             name
+                             (if landings (landing-of landings (or landing-offset 0) i) @centre)
+                             kit)
+                            landings
                             (fixture/land-at! rc name (landing-of landings (or landing-offset 0) i))
                             :else (land! rc ch name @centre i)))]
              (when at
@@ -318,7 +359,7 @@
                                    " " (long (nth at 2)))))
              (cli/log name "landed at" at)
              (async/>!! queue
-                        (cond-> {:event/kind :go :go/goals (plan/through until) :go/chain? true}
+                        (cond-> {:event/kind :go :go/goals (from-goals from until) :go/chain? true}
                           at (assoc :go/at at))))))
         (catch Exception e (cli/log name "landing failed:" e)))))
 
@@ -533,7 +574,9 @@
                         :port (Long/parseLong port)
                         :rcon-port (Long/parseLong rcon-port)
                         :rcon-pass rcon-pass
-                        :until until}
+                        :until until
+                        :from (or (get o :from) (:race/from config))
+                        :kit (:race/kit config)}
                  landings-file
                  (assoc :landings (landings/read-landings landings-file)
                         :landing-offset (parse-long (or landing-offset "0"))))

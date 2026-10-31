@@ -12,16 +12,22 @@
   #{:disconnected :closed})
 
 (defn stage
-  "The target a run was on when it stopped: the first of until's chain it had not reached."
-  [until reached]
-  (first (remove (set reached) (plan/through until))))
+  "The target a run was on when it stopped: the first of until's chain it had not reached; of the
+   targets in play (goals) when the run named them: a race that starts at the fortress plays only
+   the stages from the blaze rods, and a failure of one is never filed at a stage before them."
+  ([until reached] (stage until reached nil))
+  ([until reached goals]
+   (cond->> (plan/through until)
+     (seq goals) (filter (set goals))
+     true (remove (set reached))
+     true first)))
 
 (defn signature
   "What groups failures, from a RESULT: [the target the run was on, why it stopped]. One bug
    met in several intents (a pickaxe gone while mining or tunnelling) is one signature; the
    intents are listed inside its issue."
   [{:keys [until reason plan]}]
-  [(stage until (:plan/reached plan)) reason])
+  [(stage until (:plan/reached plan) (:plan/goals plan)) reason])
 
 (defn infra?
   "Did the run stop for a reason that is not the bot's play (infra-reasons)?"
