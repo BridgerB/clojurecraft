@@ -236,6 +236,9 @@ Job 5 (8m43s, passive: 68 hits, 0 attacks, 120 use-items) ended with no cobblest
 ## An unseal that is shot open (issue #262, blaze-race-v job 2)
 Job 2 (28m35s) sealed and unsealed five times from 02:19 to 02:25. The last `:unseal` began at 02:25:16 at hp 20 with the fire out and the last hit older than press-ms; a fireball came through the first opened cell at 02:25:22, and the unseal (a defence, plan/holds?) dug the rest for 27 s while the bot burned: hp 20 to 0.4, then `:place` at 02:25:43. `pocket/shot-open?`: an unseal with a cell open and the bot burning or struck within reopen-ms (1.5 s) ends, and the open pocket is pressed again (:seal lays the cells that are open).
 
+## The stalemate trace (issue #262, blaze-race-w jobs 1, 2, 3, 6)
+All four sat in one pocket, [2338 60 2291], 12.8 blocks from the spawner (inside the 16 a player wakes it within; `pocket-ok?` asks a line to the spawner's top, which it has). Over 32 to 45 minutes, from the recordings (`trace.ts`): 6 to 10 blazes within 16, one or more within 0.0 to 0.2 of the spawner at every sample, the nearest blaze 8.7 to 10.1 away, 8 to 9.9 horizontally and 3.6 to 4.6 below the eye, unchanged for the whole time; no fireball, no hit. `:camp` ends every 30 to 60 s (22 to 40 starts per 5 minutes), `:ambush` starts every 5 to 8 minutes and ends by its time, no blaze ever closing. The blazes are awake and do not go for the bot: it is in the sight of the spawner's top, not of them. `advance-intent` now also takes a pocket cell that sees a blaze (`sees-a-blaze?`, unseen-from?), not only one 4 blocks nearer.
+
 ## Limits
 - Fireballs are not dodged or blocked: the bot is out of their line, in a pocket or sealed in one.
 - A blaze hovering higher than the eye can reach from under it is never hit (`pressing?` stops within 0.8 on the plane); the fight has no engage timeout, only `:ghost` after 25 swings in reach.

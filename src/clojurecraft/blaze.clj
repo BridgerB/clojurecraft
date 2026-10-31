@@ -1157,6 +1157,19 @@
 (def prepare-cooldown-ms 300000) ; ms after a pocket was begun ahead before another is: blaze-race-r jobs 1 and 4 dug one a step, ten of them, 250 netherrack, and wore the pickaxe out
 (def approach-nodes 150)   ; cells the search for it visits at most when asked every tick (interrupts?)
 
+(defn sees-a-blaze?
+  "Is a blaze alive within cover-range of cell c in the sight of the eye over it (unseen-from?)? A
+   blaze goes for a player it sees, so a pocket none of them sees draws none: blaze-race-w jobs 1,
+   2, 3 and 6 camped 30 minutes at [2338 60 2291], 12.8 from the spawner with 7 to 10 blazes
+   hovering at it, the nearest 9.4 off and 4.6 under the eye for the whole time, 0 shots."
+  [world c]
+  (boolean (some (fn [e]
+                   (and (= :blaze (entity/kind e))
+                        (not (entity/dead? e))
+                        (<= (physics/distance (physics/centre c) (:entity/pos e)) cover-range)
+                        (not (unseen-from? world c (hunt/cell (:entity/pos e))))))
+                 (vals (:world/entities world)))))
+
 (def advance-step 4.0) ; blocks nearer the spawner an advanced pocket is at least
 (def advance-wait-ms 120000) ; ms in a pocket before another nearer the spawner is made
 
@@ -1180,9 +1193,11 @@
                                         (let [ok? (pocket-ok? world sp false)]
                                           (fn [c]
                                             (and (ok? c)
-                                                 (<= (physics/distance (physics/centre c)
-                                                                       (physics/centre sp))
-                                                     (- here advance-step)))))
+                                                 (not= c feet)
+                                                 (or (<= (physics/distance (physics/centre c)
+                                                                           (physics/centre sp))
+                                                         (- here advance-step))
+                                                     (sees-a-blaze? world c)))))
                                         approach-nodes)]
         {:intent/kind :pocket :intent/site site}))))
 (def press-ms 8000)        ; ms after a hit a blaze in line but out of reach still presses the bot

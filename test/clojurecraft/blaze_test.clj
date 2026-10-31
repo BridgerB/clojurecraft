@@ -1646,3 +1646,13 @@
     (is (true? (blaze/wakes-spawner? w spawner-at)) "a spawner within 16 of the eye: camped")
     (is (false? (blaze/wakes-spawner? w [200 64 200])) "far: the pocket is a refuge")
     (is (false? (blaze/wakes-spawner? w nil)))))
+
+(deftest a-pocket-is-judged-by-the-blazes-it-sees
+  ;; blaze-race-w jobs 1, 2, 3, 6: 30 minutes in a pocket, 7 to 10 blazes hovering 9 blocks off, none
+  ;; ever shot: the pocket sees the spawner's top, no blaze
+  (let [line (entity :blaze [3.5 65.0 8.5] :entity/health 20.0)
+        behind (entity :blaze [8.5 65.0 14.5] :entity/health 20.0)
+        w (fn [e] (in-pocket (standing {7 e})))]
+    (is (true? (blaze/sees-a-blaze? (w line) [8 64 8])) "a blaze in the line of the opening")
+    (is (false? (blaze/sees-a-blaze? (w behind) [8 64 8])) "a blaze behind the wall")
+    (is (false? (blaze/sees-a-blaze? (in-pocket (standing {})) [8 64 8])) "none")))
