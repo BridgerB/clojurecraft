@@ -116,12 +116,13 @@
   #{:pearls :blaze-rods})
 (def stuck-extent 16.0)               ; blocks the box of the feet's places since progress was last seen must span (x or z) to count as a move: a tunnel loop inside 12 blocks is not one
 (def watch-every-ms 1000)             ; ms between two looks at progress
+(def quiet-ticks 6000)                ; ticks without damage after which a held defence is no longer defended for the watchdog: 5 min
 (def explore-distance 48)             ; blocks the walk away from a stuck spot goes
 (def anchors
   "{:goal/plan #{attribute}}: the places a row holds on to (the pearl hunt's burrow, a blaze pocket),
    dropped when it has made no progress for stuck-ms, so it does not walk back to them."
   {:pearls #{:pearls/shelter :pearls/mouth :pearls/relocate :plan/boxed-at :plan/given-up}
-   :blaze-rods #{:pocket/site :pocket/prepared-at :pocket/seal-failed-at}})
+   :blaze-rods #{:pocket/site :pocket/prepared-at :pocket/seal-failed-at :sortie/since}})
 (def resets
   "{:goal/plan {attribute value}}: what a stuck row starts over with (the pearl hunt's blacklist)."
   {:pearls {:plan/blacklist #{}}})
@@ -507,6 +508,16 @@
 
 (defmethod progress-key :default [world _] [(held-counts world) (count (:plan/reached world #{}))])
 
+(defn defended?
+  "Is the running intent i a defence (holds?) the bot is under fire in: damage taken within
+   quiet-ticks (:player/hurt-at against :time/tick)? A hold that has taken none for five minutes is
+   quiet, and the watchdog may drop it: a pocket held for an hour with no blaze to fight."
+  [world i]
+  (boolean (and i
+                (holds? i)
+                (:player/hurt-at world)
+                (<= (- (:time/tick world 0) (:player/hurt-at world)) quiet-ticks))))
+
 (defn watch-stamp
   "The watch as of now: the progress key k, where the bot stands, when progress was last seen
    (:at) and when it was last looked at (:checked)."
@@ -582,8 +593,7 @@
                   (assoc world :plan/watch (watch-stamp world k now now))
                   (or (< (- now (:at w)) (get stuck-after (:goal/plan goal) stuck-ms))
                       (not (can-abandon? world))
-                      (some-> (:plan/intent world)
-                              holds?))
+                      (defended? world (:plan/intent world)))
                   (assoc world :plan/watch w)
                   :else (unstick world goal (:plan/intent world) (:event/rand event 0.5) now))))))
 

@@ -1941,8 +1941,8 @@
                           :player/pos [(+ 2157.5 (* 6 (mod k 12))) 60.0 1725.5]
                           :player/inventory {0 {:item 1 :count 1} 1 {:item 5 :count (+ 10 k)}})
                    (plan/watch blaze-table event)))
-        w (reduce ring start (range 1 12))]
-    (is (= 1 (:plan/unstuck w)) "ten minutes of tunnelling and nothing found: sent elsewhere")
+        w (reduce ring start (range 1 22))]
+    (is (= 1 (:plan/unstuck w)) "twenty minutes of tunnelling and nothing found: sent elsewhere")
     (is (some? (:plan/explore w)))))
 
 (deftest ^:eftest/synchronized the-explore-walk-starts-once
@@ -2002,8 +2002,30 @@
     (is (nil? (:plan/unstuck (at (+ plan/stuck-ms 1000) {:intent/kind :camp})))
         "10 min is not enough")
     (is (= 1 (:plan/unstuck (at 1201000 {:intent/kind :camp}))) "20 min is")
-    (is (nil? (:plan/unstuck (at 1201000 {:intent/kind :pocket-hold})))
-        "a pocket held is not dropped")))
+    (testing "a pocket held under fire is not dropped, a quiet one is"
+      (let [under-fire (fn [w] (assoc w :player/hurt-at 100 :time/tick 150))
+            held (fn [i] (under-fire (assoc (frozen-world 1201000) :plan/intent i)))
+            blaze-watch (fn [w]
+                          (plan/watch (assoc w
+                                             :plan/watch
+                                             (plan/watch-stamp
+                                              (assoc w :time/now 0)
+                                              (plan/progress-key w (first blaze-table))
+                                              0
+                                              0))
+                                      blaze-table
+                                      event))
+            hold {:intent/kind :pocket-hold
+                  :intent/status :active
+                  :intent/id 3
+                  :intent/goal :blaze-rods}]
+        (is (nil? (:plan/unstuck (blaze-watch (held hold)))) "hit 50 ticks ago: kept")
+        (is (= 1
+               (:plan/unstuck (blaze-watch
+                               (assoc (held hold) :time/tick (+ 100 plan/quiet-ticks 1)))))
+            "no damage for five minutes: dropped")
+        (is (= 1 (:plan/unstuck (blaze-watch (dissoc (held hold) :player/hurt-at))))
+            "never hurt: dropped")))))
 
 (deftest the-explore-walk-goes-back-the-way-the-bot-came
   ;; never further into the room: toward the farthest cell of the trail
