@@ -46,10 +46,6 @@
 </head>
 <body>
 <canvas id="view"></canvas>
-<div id="controls">
-  <button id="first" class="on">Bot's eyes</button>
-  <button id="third">Orbit</button>
-</div>
 <div id="status">connecting…</div>
 <div id="panel">
   <div class="head"><b id="who">…</b><span class="mono" id="dim"></span></div>
@@ -115,6 +111,15 @@ function syncColumns(cols, pos, radius) {
   }
 }
 
+// ---------------------------------------------------------------- a new run: the bot's server restarted (a new world, a new bot)
+function resetWorld() {
+  for (const key of [...versions.keys()]) { const [cx, cz] = key.split(",").map(Number); R.removeViewerColumn(viewer, cx, cz); }
+  versions.clear();
+  for (const id of [...ents.keys()]) R.removeViewerEntity(viewer, id);
+  ents.clear();
+  cur = null;
+}
+
 // ---------------------------------------------------------------- entities: the bot itself in orbit, the rest always
 const rad = (d) => d * Math.PI / 180;
 const yawOf = (deg) => Math.PI - rad(deg);        // the game's degrees → typecraft's radians (fromNotchianYaw)
@@ -135,35 +140,20 @@ function syncEntities(list, f) {
   for (const id of [...ents.keys()]) if (!want.has(id)) { R.removeViewerEntity(viewer, id); ents.delete(id); }
 }
 
-// ---------------------------------------------------------------- the intent's target cells, outlined
-const outline = (r, g, b) => { const m = B.MeshBuilder.CreateBox("target", { size: 1.02 }, viewer.scene);
-  const mat = new B.StandardMaterial("target", viewer.scene); mat.wireframe = true; mat.emissiveColor = new B.Color3(r, g, b); mat.disableLighting = true;
-  m.material = mat; m.isPickable = false; m.setEnabled(false); return m; };
-const targets = [outline(0.42, 0.72, 1), outline(0.55, 0.85, 0.55), outline(0.55, 0.85, 0.55)];
-function placeTargets(f) {
-  const ts = [];
-  for (let i = f.intent; i; i = i["intent/child"]) for (const k of ["intent/target", "intent/cell"]) {
-    const t = i[k]; if (Array.isArray(t) && t.length === 3 && t.every(Number.isInteger)) ts.push(t);
-  }
-  targets.forEach((m, k) => { m.setEnabled(!!ts[k]); if (ts[k]) m.position.set(ts[k][0] + 0.5, ts[k][1] + 0.5, ts[k][2] + 0.5); });
-}
-
-// ---------------------------------------------------------------- cameras: the bot's eyes, or an orbit round it (drag, wheel)
-let mode = "first";
-const orbit = { theta: -0.8, phi: 0.9, dist: 9 };
-// ?mode=third&theta=&phi=&dist= opens on a given camera, so two screenshots can be taken from the same one
+// ---------------------------------------------------------------- the camera: the bot's eyes, always. ?orbit=1 (debugging only, no button) orbits
+// round the bot instead, dragged and wheeled, from ?theta=&phi=&dist=
 const q = new URLSearchParams(location.search);
+const mode = q.get("orbit") === "1" ? "third" : "first";
+const orbit = { theta: -0.8, phi: 0.9, dist: 9 };
 for (const k of ["theta", "phi", "dist"]) if (q.has(k)) orbit[k] = Number(q.get(k));
-const setMode = (m) => { mode = m; $("first").classList.toggle("on", m === "first"); $("third").classList.toggle("on", m === "third"); };
-$("first").onclick = () => setMode("first");
-$("third").onclick = () => setMode("third");
-if (q.get("mode") === "third") setMode("third");
-let drag = null;
-canvas.addEventListener("pointerdown", (e) => { drag = [e.clientX, e.clientY]; if (mode === "first") setMode("third"); });
-addEventListener("pointerup", () => { drag = null; });
-addEventListener("pointermove", (e) => { if (!drag) return;
-  orbit.theta -= (e.clientX - drag[0]) * 0.008; orbit.phi = Math.min(1.5, Math.max(0.1, orbit.phi - (e.clientY - drag[1]) * 0.008)); drag = [e.clientX, e.clientY]; });
-canvas.addEventListener("wheel", (e) => { e.preventDefault(); orbit.dist = Math.min(60, Math.max(2, orbit.dist * (1 + e.deltaY * 0.001))); }, { passive: false });
+if (mode === "third") {
+  let drag = null;
+  canvas.addEventListener("pointerdown", (e) => { drag = [e.clientX, e.clientY]; });
+  addEventListener("pointerup", () => { drag = null; });
+  addEventListener("pointermove", (e) => { if (!drag) return;
+    orbit.theta -= (e.clientX - drag[0]) * 0.008; orbit.phi = Math.min(1.5, Math.max(0.1, orbit.phi - (e.clientY - drag[1]) * 0.008)); drag = [e.clientX, e.clientY]; });
+  canvas.addEventListener("wheel", (e) => { e.preventDefault(); orbit.dist = Math.min(60, Math.max(2, orbit.dist * (1 + e.deltaY * 0.001))); }, { passive: false });
+}
 
 let pose = null, cur = null;
 const lerpAngle = (a, b, t) => a + ((((b - a) % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI) - Math.PI) * t;
@@ -236,15 +226,18 @@ function sky(f) {
 }
 
 // ---------------------------------------------------------------- polling and the render loop
+let down = false, lastRun = null; // the bot was away (its run ended), the last frame of this run
 async function poll() {
   try {
     const f = await (await fetch("/frame")).json();
     if (f.pos) {
       pose = { x: f.pos[0], y: f.pos[1], z: f.pos[2], yaw: yawOf(f.look ? f.look[0] : 0), pitch: pitchOf(f.look ? f.look[1] : 0) };
-      panel(f); sky(f); placeTargets(f); syncEntities(f.entities || [], f); syncColumns(f.columns || {}, f.pos, meta.radius);
+      if (down || (lastRun && (f.name !== lastRun.name || f.dimension !== lastRun.dimension || (f.tick ?? 0) < (lastRun.tick ?? 0) - 100))) resetWorld();
+      down = false; lastRun = f;
+      panel(f); sky(f); syncEntities(f.entities || [], f); syncColumns(f.columns || {}, f.pos, meta.radius);
       $("status").textContent = `${versions.size} columns`;
-    } else $("status").textContent = "waiting for the bot to spawn…";
-  } catch (e) { $("status").textContent = "bot not answering (" + e.message + ")"; }
+    } else { $("status").textContent = "new world loading… (waiting for the bot to spawn)"; down = true; }
+  } catch (e) { $("status").textContent = "new world loading… (the bot is restarting)"; down = true; }
   setTimeout(poll, 100);
 }
 let last = performance.now();
@@ -268,6 +261,10 @@ await applyAssets(assets);
 meta = await (await fetch("/meta")).json();
 icons = await (await fetch("/icons")).json();
 poll(); loop();
+
+// a changed page reloads itself, so an edit reaches an open tab without a restart of the bot
+const page = await (await fetch("/", { cache: "no-store" })).text();
+setInterval(async () => { try { if ((await (await fetch("/", { cache: "no-store" })).text()) !== page) location.reload(); } catch (_) {} }, 15000);
 </script>
 </body>
 </html>
