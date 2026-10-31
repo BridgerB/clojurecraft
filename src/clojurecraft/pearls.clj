@@ -1645,7 +1645,11 @@
                :intent/cell line
                :intent/for :pearls
                :intent/wall? true}
-              :else (or (wall-toward world (:entity/pos e) [0 1]) (dig-away world e)))))
+              :else
+              (or (wall-toward world (:entity/pos e) [0 1])
+                  (dig-away world e)
+                  (when-let [c (combat/nook-cell world)]
+                    {:intent/kind :dig :intent/target c :intent/for :pearls})))))
     (when-let [[_ e] (entity/nearest (swarm world) (:player/pos world))]
       (let [c (combat/cover world e)] (when (:intent/kind c) (assoc c :intent/for :pearls))))))
 

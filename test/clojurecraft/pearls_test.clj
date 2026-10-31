@@ -2766,3 +2766,16 @@
     (is (contains? (combat/answering (w piglin) :pearls) :piglin) ":defend leaves it to the hunt")
     (is (not (contains? (combat/answering (w zombie) :pearls) :zombie)))
     (is (not= :fight (:intent/kind (plan/next-intent (w piglin) row plan/goals))))))
+
+(deftest on-open-ground-with-no-block-a-hole-is-dug-under-the-feet
+  ;; pearls-travel-d job 6 (plan run 41156746096, issue #263), the fold at 0.22 to 0.4 min: the bot at
+  ;; [2463 101 2230] on open ground, ghast 53 at [2454.5 101 2265.5] in sight, shot-at? true, the
+  ;; pearl kit holds no block, cover-from nil, and the hunt went on with its stairs; fireballed at 39 s
+  (let [ghast (mob :ghast [8.5 64.0 44.5])
+        w (-> (wide (standing {7 ghast}))
+              (assoc :player/inventory {0 (item :iron_sword 1) 1 (item :iron_pickaxe 1)}))]
+    (is (pearls/shot-at? w))
+    (is (nil? (pearls/hide-cell w (get-in w [:world/entities 7]))))
+    (is (= {:intent/kind :dig :intent/target [8 63 8] :intent/for :pearls} (pearls/cover-from w))
+        "the cell under the feet: a hole to stand in, the rim between it and the ghast")
+    (is (= :dig (:intent/kind (plan/next-intent w row plan/goals))))))
