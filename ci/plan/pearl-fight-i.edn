@@ -1,0 +1,16 @@
+;; Issue #263, branch fix/263-pearl-relocate, batch i: the relocation with a fallback and patience, on
+;; main with #638. Batch h (plan run 41173013374): job 3 died at 9m43s with no pearl, the relocation
+;; walking out at eight minutes past an enderman it had fought all minute. Batch i holds the
+;; relocation walk for relocate-patience-ms while any angry enderman is within sixteen, falls back to
+;; wander and the cage cuts when relocate-walk has no route (g jobs 3 and 5 never moved in 80
+;; minutes), and uses close-gain 2.0 for the parked motion rule. Row pearls-12-race. Measure: pearls
+;; at 30, 60 and 90 min, the longest gap between pearls, deaths by cause.
+{:plans/label "pearl-fight-i"
+ :plans/jobs 3
+ :plans/issue 263
+ :plans/experiments [{:exp/name "pearls-12-race"
+                      :exp/kind :gym
+                      :exp/goal "pearls-12-race"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 18000}]}
