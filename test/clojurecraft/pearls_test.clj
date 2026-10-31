@@ -2897,7 +2897,8 @@
                  pearls/relocation))]
     (is (= {:held 0 :at 0} (:pearls/gain w)) "the clock starts with the first tick")
     (is (nil? (:pearls/relocate (at (dec pearls/relocate-ms)))) "seven minutes fifty-nine: not yet")
-    (is (= {:from [8 64 8] :at pearls/relocate-ms} (:pearls/relocate (at pearls/relocate-ms)))
+    (is (= {:from [8 64 8] :at pearls/relocate-ms :near #{}}
+           (:pearls/relocate (at pearls/relocate-ms)))
         "eight minutes without a pearl")
     (testing "a pearl gained moves the clock on"
       (let [got (-> (at 400000)
@@ -2932,4 +2933,27 @@
                      :pearls/relocate {:from [8 64 8] :at 3600000}))
         walk (pearls/relocate-walk w)]
     (is (= :walk (:intent/kind walk)))
+    (is (= :relocate (:intent/for walk)) "marked, so that it is cut when the relocation ends")
     (is (> (first (:intent/target walk)) 40) "toward the group, not the lone one")))
+
+(deftest a-relocation-ends-short-of-the-endermen-it-walks-toward
+  ;; pearl-fight-g job 4 (plan run 41166403154): the walk went the whole way to the cluster and was
+  ;; slain in the open fifteen blocks from a calm one. It ends half the distance on, within
+  ;; cluster-radius of an enderman that was not near the start, and the running walk is cut
+  (let [calm (enderman [40.5 64.0 8.5])
+        base (-> (standing {1 calm})
+                 (assoc :time/now 600000
+                        :pearls/shelter [8 61 8]
+                        :pearls/relocate {:from [8 64 8] :at 500000 :near #{}}))
+        arrived (assoc base :player/pos [24.5 64.0 8.5])
+        walk
+        {:intent/kind :walk :intent/target [40 64 8] :intent/for :relocate :intent/status :active}]
+    (is (some? (:pearls/relocate (pearls/relocation (assoc base :player/pos [14.5 64.0 8.5]))))
+        "6 blocks on: still going")
+    (is (nil? (:pearls/relocate (pearls/relocation arrived))) "16 blocks on and 16 from it: over")
+    (is (nil? (:pearls/shelter (pearls/relocation arrived))) "the old burrow left behind")
+    (is (some? (:pearls/relocate (pearls/relocation
+                                  (assoc-in arrived [:pearls/relocate :near] #{1}))))
+        "an enderman that was near the start is not a reason to stop")
+    (is (plan/interrupts? (pearls/relocation arrived) row walk) "the walk is cut once it is over")
+    (is (not (plan/interrupts? base row walk)) "and not while it goes on")))

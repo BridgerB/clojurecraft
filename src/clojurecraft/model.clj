@@ -266,7 +266,7 @@
     "{:held pearls held :at ms the count last rose}, kept by the :pearls steer (pearls/track-gain): the clock of production"
     "every tick a pearl hunt runs (plan/steer)"]
    [:pearls/relocate
-    "{:from feet :at ms} while the hunt leaves the place for another (pearls/relocation): begun after relocate-ms without a pearl gained, ended at relocate-dist from :from or after relocate-timeout-ms, leaving the burrow and the blacklist behind"
+    "{:from feet :at ms :near ids of the endermen within cluster-radius of :from} while the hunt leaves the place for another (pearls/relocation): begun after relocate-ms without a pearl gained, ended at relocate-dist from :from, half that far and near a new enderman, or after relocate-timeout-ms, leaving the burrow and the blacklist behind"
     "while a relocation goes on"]
    [:pearls/shot-at-ms
     "ms a ghast was last in sight with a clear line to the bot (pearls/shot-at?), kept by the :pearls steer: the walks that go elsewhere (travel, wander, cage-break) wait shot-hold-ms after it, so that a walk to cover and a walk away do not alternate"

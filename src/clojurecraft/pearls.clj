@@ -1893,11 +1893,12 @@
         ranked (sort-by (juxt (comp - density) #(physics/distance pos (:entity/pos (second %))))
                         far)
         ms (into {} (take candidates ranked))]
-    (or (when (seq ms)
-          (if-let [[_ e] (routable world ms)]
-            {:intent/kind :walk :intent/target (cell (:entity/pos e)) :intent/for :pearls}
-            (toward world ms)))
-        (explore world))))
+    (some-> (or (when (seq ms)
+                  (if-let [[_ e] (routable world ms)]
+                    {:intent/kind :walk :intent/target (cell (:entity/pos e))}
+                    (toward world ms)))
+                (explore world))
+            (assoc :intent/for :relocate))))
 
 (defn hunt
   "The hunt's next step with no kill to pick up, in order: out of the burrow (shelter) with one
@@ -2213,26 +2214,42 @@
           (not= n (:held g)) (assoc-in world [:pearls/gain :held] n)
           :else world)))
 
+(defn near-ids
+  "The ids of the remembered endermen (blacklisted or not) within cluster-radius of pos."
+  [world pos]
+  (into #{}
+        (keep (fn [[eid e]] (when (<= (physics/distance pos (:entity/pos e)) cluster-radius) eid)))
+        (endermen (dissoc world :plan/blacklist) 128.0)))
+
 (defn relocation
-  "The world with the relocation (:pearls/relocate {:from feet :at ms}) begun when no pearl has
-   been gained for relocate-ms, and ended, the burrow and the blacklist left behind and the clock
-   started again, when the feet stand relocate-dist from where it began or relocate-timeout-ms
+  "The world with the relocation (:pearls/relocate {:from feet :at ms :near ids}) begun when no
+   pearl has been gained for relocate-ms, and ended, the burrow and the blacklist left behind and
+   the clock started again, when the feet stand relocate-dist from where it began, or half that
+   far and within cluster-radius of an enderman that was not near the start (arrived: the walk
+   goes toward the densest, and the burrow is cut here, not beside them), or relocate-timeout-ms
    have passed: production as data, not the hunt's own signs of being stuck. A hunt that dithers
    beside endermen it cannot provoke counts none of the lookouts or walks wandering? asks for
-   (pearl-fight-e job 4: 943 lookouts, 273 walks, one pearl in 102 minutes)."
+   (pearl-fight-e job 4: 943 lookouts, 273 walks, one pearl in 102 minutes). Pearl-fight-g job 4
+   (plan run 41166403154) walked the whole way to the cluster, 15 blocks from a calm one, and
+   was slain in the open by it."
   [world]
   (let [now (:time/now world 0)
         feet (intent/feet world)
         r (:pearls/relocate world)
-        g (:pearls/gain world)]
+        g (:pearls/gain world)
+        moved (when r (physics/distance feet (:from r)))]
     (cond (and r
-               (or (>= (physics/distance feet (:from r)) relocate-dist)
-                   (>= (- now (:at r)) relocate-timeout-ms)))
+               (or (>= moved relocate-dist)
+                   (>= (- now (:at r)) relocate-timeout-ms)
+                   (and (>= moved (/ relocate-dist 2))
+                        (seq (remove (:near r) (near-ids world (:player/pos world)))))))
           (-> world
               (dissoc :pearls/relocate :pearls/shelter :pearls/mouth :plan/blacklist)
               (assoc-in [:pearls/gain :at] now))
           (and (nil? r) g (>= (- now (:at g)) relocate-ms))
-          (assoc world :pearls/relocate {:from feet :at now})
+          (assoc world
+                 :pearls/relocate
+                 {:from feet :at now :near (near-ids world (:player/pos world))})
           :else world)))
 
 (defmethod plan/steer :pearls
@@ -2315,6 +2332,7 @@
   ;; arrived with the bot 11 blocks from the end, and four hits killed it on the stairs
   [world goal i]
   (or (held-idle? world i)
+      (and (= :relocate (:intent/for i)) (nil? (:pearls/relocate world)))
       (and (not (contains? answers-to-hand (:intent/kind i)))
            (not (:intent/wall? i))
            (not (and (= :walk (:intent/kind i)) (= (:intent/target i) (:pearls/shelter world))))
