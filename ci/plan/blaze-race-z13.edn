@@ -1,0 +1,13 @@
+;; Issue #262, round z13 on fix/262-peek (main + #671's content + the peek): six landings (1-6). z12 (9f31e304c): job 1 10 real kills in 10.7 min,
+;; job 4 69 min 0 real kills (the sortie cut 0.7 s after it stepped into 3-9 blazes' sight: outnumbered? made the refuge win).
+;; z13: peeking? -- on a sortie (hp >= 14, not over) a volley in sight is neither a refuge nor a hide; the sortie's own end is the retreat.
+;; Real kills (6-s rule) per 10 min, camp/ambush/pocket-hold minutes per job, rods held.
+{:plans/label "blaze-race-z13"
+ :plans/jobs 6
+ :plans/issue 262
+ :plans/experiments [{:exp/name "blaze-fortress-race"
+                      :exp/kind :gym
+                      :exp/goal "blaze-fortress-race"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 1800}]}
