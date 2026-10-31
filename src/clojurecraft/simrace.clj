@@ -113,7 +113,7 @@
   "What a bot brings to a fortress in the real race, as {item count} (ci/race.edn's :race/kit, from the
    lane audits): a stone pickaxe, an iron sword and three pieces of iron armour in the bag (the
    :wear-armour row puts them on), a table, sticks, flint and steel, both buckets, coal, cooked food and
-   eight stacks of junk stone, twenty-eight of the thirty-six slots. ci/simrace.edn's :simrace/kit
+   junk stone, twenty-five of the thirty-six slots. ci/simrace.edn's :simrace/kit
    replaces it as one line."
   {:stone_pickaxe 1
    :iron_sword 1
