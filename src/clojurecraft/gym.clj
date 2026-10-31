@@ -1550,7 +1550,7 @@
       (str
        "(?m)^\\[[^\\]]+\\] \\[Server thread/INFO\\]: ("
        (java.util.regex.Pattern/quote name)
-       " (?:was fireballed by|tried to swim in lava|was slain by|burned to death|fell from|suffocated|was blown up|was shot by|was killed by|withered away|starved to death|drowned|died).*)$"))]
+       " (?:was fireballed by|tried to swim in lava|was slain by|burned to death|was burned to a crisp|walked into fire|went up in flames|fell from|hit the ground|suffocated|was blown up|was obliterated|was shot by|was killed by|withered away|starved to death|drowned|died).*)$"))]
     (when-let [m (re-find pattern log-text)] (second m))))
 
 (defn await-result!

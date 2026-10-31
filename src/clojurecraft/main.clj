@@ -64,6 +64,16 @@
   [until]
   (if (plan/goals-for until) plan/done? :player/loaded?))
 
+(defn death-ended
+  "RESULT r with :reason :death when the run was to end at its first death (end-on-death?: a race
+   that starts at the fortress, where a death is no step of the plan: race 41224855928, Clj_r23 took
+   its seven rods out of 23 deaths in 2.5 minutes, respawning at its pad each time) and world died
+   without reaching its goal; r as it is otherwise. A run that reached its goal before dying is
+   still a success, and one that died before it is a failure of the stage it was on."
+  [r world end-on-death?]
+  (cond-> r
+    (and end-on-death? (not (:ok r)) (pos? (:stats/deaths world 0))) (assoc :reason :death)))
+
 (defn ok?
   "Did a run that ended in world succeed, for --until until: its goal holds and the socket is
    neither closed nor disconnected. The live run and its replay judge with this one rule."
@@ -182,14 +192,19 @@
    a watcher may be on it already). With no events channel and a plan, the run starts where it
    stands as soon as it is loaded. Returns {:result r :world final}. Nothing is shared with
    another bot: a race runs many of these, each its own atom and loop."
-  [{:keys [host port name until timeout-ms hold-ms record commit chain events on-result world*]
+  [{:keys [host port name until timeout-ms hold-ms record commit chain events on-result world*
+           end-on-death?]
     :or {host "127.0.0.1" until "wood" timeout-ms 120000 hold-ms 0 on-result (fn [_])}}]
   (let [opts {:host host :port port :name name}
         deadline (+ (now) timeout-ms)
         ;; --chain plays every step up to --until. A gym stage names only its own target.
         planned (if chain (plan/through until) (plan/goals-for until))
         goal? (goal-fn until)
-        stop? (fn [w] (or (goal? w) (and planned (plan/failed? w)) (> (now) deadline)))
+        stop? (fn [w]
+                (or (goal? w)
+                    (and planned (plan/failed? w))
+                    (and end-on-death? (pos? (:stats/deaths w 0)))
+                    (> (now) deadline)))
         tap (when record (record/tap! record (if commit {:record/commit commit} {}))) ; the code that made the run
         c (conn/open! opts)
         queue (or events (async/chan 16))
@@ -206,7 +221,7 @@
                   tap)
     (try (let [final (run-loop! c queue world* stop? tap)
                ok (ok? final until)
-               r (result final until ok)]
+               r (death-ended (result final until ok) final end-on-death?)]
            (when tap ((:result tap) r) ((:close tap))) ; the recording is the run: it ends at RESULT
            (on-result r)
            (when (and (pos? hold-ms) (not (:bot/closed final)) (not (:bot/disconnected final)))

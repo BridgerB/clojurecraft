@@ -588,6 +588,19 @@
                        #(str (rcon/command! % (str "data get entity " name " Dimension"))))
        (catch Exception e (str "truth failed: " (ex-message e)))))
 
+(defn with-death-message
+  "RESULT r with the server's death line for bot name (gym/death-message from the server's log,
+   the file :server-log names) as :death-message, when the run ended :death; r otherwise. The
+   cause the bot cannot tell: it is the server's word (\"Clj_r23 was slain by Blaze\")."
+  [{:keys [server-log]} name r]
+  (if (= :death (:reason r))
+    (let [f (some-> server-log
+                    io/file)
+          msg (when (and f (.exists f))
+                (try (gym/death-message (slurp f) name) (catch Exception _ nil)))]
+      (cond-> r msg (assoc :death-message msg)))
+    r))
+
 (defn play-one!
   "One bot's whole life in a slot: the next serial's name (serials, an atom shared by the slots),
    its own atom and queue, on the board (live) and watched for milestones while it plays, landed on
@@ -603,21 +616,24 @@
     ((:watch watcher) name world*)
     (land-bot! server ch centre name queue (dec n))
     (try (let [truth (promise)
-               {r :result} (main/run-bot! {:host (:host server)
-                                           :port (:port server)
-                                           :name name
-                                           :until (:until server)
-                                           :chain true
-                                           :timeout-ms (max 1000
-                                                            (- deadline (System/currentTimeMillis)))
-                                           :record (str (io/file record-dir (str name ".edn")))
-                                           :commit commit
-                                           :events queue
-                                           :world* world*
-                                           :on-result (fn [r]
-                                                        (deliver truth (truth! server name))
-                                                        (println "RESULT" name (pr-str (marked r))) ; what bb failures groups by
-                                                        (flush))})]
+               {r :result}
+               (main/run-bot!
+                {:host (:host server)
+                 :port (:port server)
+                 :name name
+                 :until (:until server)
+                 :chain true
+                 :end-on-death? (fortress? (:from server))
+                 :timeout-ms (max 1000 (- deadline (System/currentTimeMillis)))
+                 :record (str (io/file record-dir (str name ".edn")))
+                 :commit commit
+                 :events queue
+                 :world* world*
+                 :on-result
+                 (fn [r]
+                   (deliver truth (truth! server name))
+                   (println "RESULT" name (pr-str (marked (with-death-message server name r)))) ; what bb failures groups by
+                   (flush))})]
            {:name name :result r :truth @truth})
          (catch Exception e
            (cli/log name "failed:" e)
@@ -722,6 +738,7 @@
                         :until until
                         :from (or (get o :from) (:race/from config))
                         :bots bots
+                        :server-log (str "work/world-" (or which 1) "/logs/latest.log")
                         :kit (:race/kit config)}
                  landings-file
                  (assoc :landings (landings/read-landings landings-file)

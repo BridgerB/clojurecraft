@@ -9,6 +9,7 @@
             [clojurecraft.failure :as failure]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
+            [clojurecraft.main :as main]
             [clojurecraft.plan :as plan]
             [clojurecraft.race :as race]))
 
@@ -279,3 +280,42 @@
   (let [span (+ 2 (quot (* 2 race/pad-view) 16))]
     (is (<= (* span span) 256) "a square of pad-view each side is at most 256 chunks")
     (is (>= race/pad-view (* 6 16)) "the bot's whole view is generated")))
+
+(deftest a-fortress-run-ends-at-its-first-death-and-is-filed-at-its-stage
+  ;; race 41224855928, Clj_r23: seven rods out of 23 deaths in 2.5 minutes, each respawn at the pad
+  ;; with keep_inventory: a death used as a plan. In a fortress race the first death ends the run
+  (let [failed {:ok false
+                :until "pearls-12"
+                :reason :timeout
+                :plan {:plan/goals #{:blaze-rods :ender-pearls} :plan/reached #{}}}
+        died {:stats/deaths 1}]
+    (is (= :death (:reason (main/death-ended failed died true))) "died, goal not reached: a death")
+    (is (= [:blaze-rods :death] (failure/signature (main/death-ended failed died true)))
+        "filed at the stage it was on, blaze-rods not reached")
+    (is (= [:ender-pearls :death]
+           (failure/signature (-> (main/death-ended failed died true)
+                                  (assoc-in [:plan :plan/reached] #{:blaze-rods}))))
+        "rods reached before the death: the pearls stage")
+    (is (= :timeout (:reason (main/death-ended failed died false))) "a spawn race: as before")
+    (is (= :timeout (:reason (main/death-ended failed {} true))) "no death: as it was")
+    (is (= :goal (:reason (main/death-ended {:ok true :reason :goal} died true)))
+        "the goal reached before the death stays a success")))
+
+(deftest the-death-line-is-the-servers
+  (let [f (java.io.File/createTempFile "server" ".log")]
+    (try
+      (spit
+       f
+       "[17:39:33] [Server thread/INFO]: Clj_r23 was burned to a crisp while fighting Blaze\n[17:39:44] [Server thread/INFO]: Clj_r24 was slain by Zombie\n")
+      (is (= "Clj_r24 was slain by Zombie"
+             (:death-message
+              (race/with-death-message {:server-log (str f)} "Clj_r24" {:reason :death})))
+          "the line for that bot from the server's log")
+      (is (nil? (:death-message
+                 (race/with-death-message {:server-log (str f)} "Clj_r24" {:reason :timeout})))
+          "only a run that ended in a death")
+      (is (=
+           {:reason :death}
+           (race/with-death-message {:server-log "no/such/server.log"} "Clj_r24" {:reason :death}))
+          "no log: the result as it was")
+      (finally (.delete f)))))
