@@ -1731,3 +1731,26 @@
       (is (= :collect-drops
              (:intent/kind (next-intent (standing (assoc full 9 (item :blaze_rod 3))
                                                   {40 rod}))))))))
+
+(deftest stalled-tunnels-to-two-stands-give-up-the-spawners-site
+  ;; blaze-race-z4 job 1 (41194927191): :tunnel-to flipped among the cells beside one spawner (x 2209-2211,
+  ;; y 60-61, z 1793-1795) for 13 minutes; a tunnel that went nowhere to two of them went nowhere to the site
+  (let [sp [12 70 8]
+        w (-> (standing {})
+              (memory/observe sp blaze/spawner))
+        [a b c] (blaze/cells-beside sp)
+        done
+        (fn [w id target ended-at]
+          (memory/remember-intention
+           w
+           {:intent/id id :intent/kind :tunnel-to :intent/target target :intent/ended-at ended-at}
+           :done))
+        stall (fn [w id target cell]
+                (-> w
+                    (done id target cell)
+                    (done (inc id) target cell)))
+        one (stall w 1 a [3 64 3])
+        two (stall one 3 b [3 64 3])]
+    (is (some? (blaze/to-spawner one sp)) "one stand stalled: another is tried")
+    (is (contains? (blaze/site-stalled two sp) c) "two stalled: every cell beside the spawner is")
+    (is (nil? (blaze/to-spawner two sp)) "the site is given up: the act goes on with the search")))
