@@ -255,7 +255,7 @@
   [world]
   (reduce + 0 (map #(or (:count %) 0) (vals (:player/inventory world)))))
 
-(defn reached-ever
+(defn milestones-ever
   "The milestones the run has ever reached: :plan/reached and :plan/best (what the stages that a
    death which lost the inventory took back were: the race's records count them)."
   [world]

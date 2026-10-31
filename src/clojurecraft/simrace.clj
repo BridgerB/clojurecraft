@@ -605,7 +605,7 @@
         halted (volatile! false)
         stop? #(or (plan/done? %)
                    (plan/failed? %)
-                   (contains? (plan/reached-ever %) stage)
+                   (contains? (plan/milestones-ever %) stage)
                    (vreset! halted (boolean (halt?))))
         {world' :world crashed :crashed}
         (sim/play-from step m stop? (window-of snap) (go-of w until) nil)]

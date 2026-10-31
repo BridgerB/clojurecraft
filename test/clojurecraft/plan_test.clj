@@ -2294,7 +2294,7 @@
            (:plan/best w))
         "the furthest ever is kept")
     (is (= #{:wood :kit :pickaxe :cobblestone :stone-pickaxe :furnace :ingots :bucket}
-           (plan/reached-ever w)))
+           (plan/milestones-ever w)))
     (is (= {:wood 100 :kit 200} (:plan/reached-after w)) "when they were reached is left alone")
     (is (= 1 (:plan/lives w)) "judged once for this life")
     (is (= :wood (:goal/id (plan/choose w plan/goals))) "the chain starts at the wood")))
