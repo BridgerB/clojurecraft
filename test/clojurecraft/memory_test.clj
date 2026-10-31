@@ -134,6 +134,7 @@
     (is (<= (count (filter (fn [[_ _ _ id]] (not= id log)) thin)) memory/bricks-per-column)
         "a fortress column: at most bricks-per-column of its cells")
     (is (some #{[4 5 6 log]} thin) "a log among them is kept")
-    (is (> (count (filter (fn [[_ _ _ id]] (= id brick)) thin)) 30) "evenly spread, not one corner")
+    (is (> (count (filter (fn [[_ _ _ id]] (= id brick)) thin)) 200)
+        "evenly spread, not one corner")
     (let [few (vec (take 20 bricks))]
       (is (= few (vec (memory/thin-bricks few))) "a column with few is unchanged"))))

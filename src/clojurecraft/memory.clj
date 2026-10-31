@@ -253,8 +253,10 @@
    recording them all made every chunk load and every planner tick take seconds, as stone did
    (watched?): the bots ran at 0.3 to 1 tick a second, missed the server's keepalives and were
    dropped `Timed out`, 569 of 588 runs in 29 minutes. Evenly spread, so the nearest brick on
-   record is still near."
-  64)
+   record is still near: of the 3,000 cells a dense fortress column holds, one in twelve is kept,
+   a wall of them about 3.5 blocks apart, within the 6 blocks fortress/reach counts as at the
+   fortress. 256 a column bounds a bot's records to tens of thousands, not 115,000."
+  256)
 
 (defn thin-bricks
   "The cells ([x y z id]) with the fortress cells (brick-names) among them thinned to at most
