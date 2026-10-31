@@ -2040,14 +2040,7 @@
         meal (when-not rested? (blaze/meal world))
         home (shelter world)
         in? (and home (= home (intent/feet world)))
-        ;; out of a burrow the line an enderman is broken off from is combat's (15, then 19 while
-        ;; covering), not danger-health: the hunt fought on at 15.1 while :defend covered
-        ;; (pearl-fight-o job 2, plan run 41232709566); in the burrow it cannot be hit
-        hurt? (<
-               (:player/health world 20.0)
-               (if (and (not in?) (or ce e) (contains? combat/teleporters (entity/kind (or ce e))))
-                 (combat/break-line world (or ce e))
-                 danger-health))
+        hurt? (< (:player/health world 20.0) danger-health)
         at-end? (= (:pearls/shelter world) (intent/feet world))
         [tid te] (threat world)
         [sid _] (struck-by world)

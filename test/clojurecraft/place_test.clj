@@ -637,7 +637,7 @@
   ;; beside its feet from x/z 2164.8, the body clipping the cell; the nudge walked it to the middle
   ;; of its own cell, which had no floor over a lava lake: three blocks down, burned to death
   (let [floor (into {} (for [x (range 6 10) z (range 3 10)] [[x 63 z] 1]))
-        w (-> (standing [5.74 64.0 5.5])
+        w (-> (standing [5.9 64.0 5.5])
               (assoc :world/chunks {[0 0] (world/column floor)})
               (assoc :plan/intent
                      {:intent/kind :place
@@ -655,7 +655,7 @@
   ;; the fail :no-support for a floorless feet cell holds on the ground only: a pillar's block is laid
   ;; at the top of a jump with nothing under the feet cell yet
   (let [floor (into {} (for [x (range 6 10) z (range 3 10)] [[x 63 z] 1]))
-        w (-> (standing [5.74 64.0 5.5])
+        w (-> (standing [5.9 64.0 5.5])
               (assoc :world/chunks {[0 0] (world/column floor)} :player/on-ground? false)
               (assoc :plan/intent
                      {:intent/kind :place

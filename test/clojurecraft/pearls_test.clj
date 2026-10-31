@@ -608,10 +608,11 @@
     (is (= {:intent/kind :burrow :intent/dir [-1 0] :intent/for :pearls}
            (plan/next-intent near row plan/goals))
         "a pickaxe held and one at hand not coming: a burrow away from it, not a blow in the open")
-    (is (=
-         {:intent/kind :fight :intent/target 7 :intent/for :pearls}
-         (plan/next-intent (assoc-in near [:world/entities 7 :entity/creepy?] true) row plan/goals))
-        "one at hand already coming is fought: there is no time to dig")
+    (is (= :burrow
+           (:intent/kind (plan/next-intent (assoc-in near [:world/entities 7 :entity/creepy?] true)
+                                           row
+                                           plan/goals)))
+        "one at hand already coming: still a burrow, never the open fight (pearl-fight-o)")
     (is (= {:intent/kind :lookout :intent/for :pearls}
            (plan/next-intent (assoc (burrowed [8.5 61.0 8.5] {7 far}) :player/health 6.0)
                              row
@@ -1785,11 +1786,14 @@
         "a calm one three off, not given up on: the burrow it is met from, as before")
     (is (= {:intent/kind :lookout :intent/for :pearls} (plan/next-intent ghost row plan/goals))
         "the same one given up on (:unprovoked): no burrow for it, the hunt looks for another")
-    (is (= :fight
+    ;; pearl-fight-o jobs 1, 2 and 5 (plan run 41232709566): with a pickaxe held an angry one at hand
+    ;; is met from a burrow, never fought in the open (62 of 64 kills came from a burrow with no hit,
+    ;; all 4 open fights of 3 swings or more were lost)
+    (is (= :burrow
            (:intent/kind (plan/next-intent (assoc-in ghost [:world/entities 7 :entity/creepy?] true)
                                            row
                                            plan/goals)))
-        "an angry one given up on at hand is fought, as before")
+        "an angry one given up on at hand is met from a burrow, not fought in the open")
     ;; batch pearls-warped7-a (plan run 39714009099, probe 39720871893) run 4: three endermen in
     ;; one spot 3.8 off, two blacklisted and one not; the blacklisted one nearest by a hair got
     ;; no burrow, and the walk to the other, within reach, was planned 18,760 times in fifteen
@@ -3122,7 +3126,8 @@
         (is (not (combat/claimed-attacker? (assoc bare :player/attacker 1) angry)))))))
 
 (deftest the-hunt-does-not-fight-an-enderman-at-15-after-breaking-off
-  ;; pearl-fight-o job 2: the hunt's :fight 73 resumed at 15.1 while :defend covered at 15
+  ;; pearl-fight-o job 2: the hunt's :fight 73 resumed at 15.1 while :defend covered at 15; with a
+  ;; pickaxe in hand the hunt's answer to an angry one is the burrow at any health
   (let [angry (assoc (enderman [14.5 64.0 8.5]) :entity/creepy? true)
         w (-> (standing {1 angry})
               (assoc-in [:player/inventory 1] (item :iron_pickaxe 1))
