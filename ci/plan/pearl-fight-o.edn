@@ -1,0 +1,18 @@
+;; Issue #263, branch fix/263-teleporter-break, batch o: everything batch n had (lava-flee footing, the
+;; wander not called home, a burrow beside an angry one, the fight ends and a hole is dug under the
+;; danger line) plus the teleporter break-off. Batch m: 4 of 6 slain by an enderman in an open fight,
+;; 62 of 64 kills came from held burrow fights with no hits and every open fight with 3 swings or more
+;; was lost. Batch n (plan run 41229277566, cancelled): jobs 3 and 4 died at 11 and 7 minutes in open
+;; fights that went on at 14.3 and 17.1 and again at 10.7 after healing. Batch o breaks off from one
+;; that teleports at 15 (combat/teleporter-break-hp) and fights again only from 19 once it has covered
+;; (teleporter-resume-hp). Row pearls-12-race-tools. Measure: passes of 6, time to 12, deaths by cause,
+;; hp at the start of each final fight, and a hole dug in the 3 s after a first hit.
+{:plans/label "pearl-fight-o"
+ :plans/jobs 6
+ :plans/issue 263
+ :plans/experiments [{:exp/name "pearls-12-race-tools"
+                      :exp/kind :gym
+                      :exp/goal "pearls-12-race-tools"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 18000}]}
