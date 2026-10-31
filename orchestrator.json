@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-31T09:42:53.229Z",
+  "at" : "2026-10-31T09:47:12.653Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -61,6 +61,11 @@
     "number" : 161,
     "title" : "Bot stops at portal-kit: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 644,
+    "title" : "Bot stops at ender-pearls: no-path",
+    "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
     "number" : 642,
