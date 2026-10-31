@@ -1786,6 +1786,21 @@
   (when (and target (not (contains? (:plan/blacklist world #{}) target)))
     {:intent/kind :walk :intent/target target :intent/for :shelter}))
 
+(defn uncage
+  "A walk down to the burrow's end (:pearls/shelter) when the bot stands at a brink (brink?) and
+   the end is within shelter-reach and routable: climb-out, dig-out and bore refuse to cut from
+   a brink, so a bot on a ledge over a cavern, the burrow behind it, tried every move and found
+   none. Pearl-fight-a job 4 (plan run 41143668588) stood 23 minutes so at [2533 41 2181] with 141
+   digs left and endermen 17 to 63 blocks off: every cell round the feet open over a drop but the
+   burrow's stair, a path to any enderman :none. From the end, in rock, the cuts are allowed."
+  [world]
+  (let [feet (intent/feet world)
+        s (:pearls/shelter world)
+        walk
+        (when (and s (not= s feet) (<= (physics/distance feet s) shelter-reach) (brink? world feet))
+          (shelter-walk world s))]
+    (when (and walk (intent/routable? world walk)) walk)))
+
 (defn hunt
   "The hunt's next step with no kill to pick up, in order: out of the burrow (shelter) with one
    coming (creepy), one at hand (within strike-range, blacklisted or not: one a held fight gave
@@ -2030,7 +2045,8 @@
           (when (= :lookout (:intent/kind (:plan/last world)))
             (or (roam world)
                 (when (stuck? world) (climb-out world))
-                (when-not overworld-death? (dig-out world))))
+                (when-not overworld-death? (dig-out world))
+                (when (stuck? world) (uncage world))))
           (when (wandering? world) (wander world))
           {:intent/kind :lookout :intent/for :pearls}))))
 

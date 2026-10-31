@@ -2746,3 +2746,29 @@
     (is (nil? (pearls/menace w)) "twelve blocks off")
     (is (some? (pearls/menace (assoc-in w [:world/entities 9 :entity/pos] [8.5 64.0 14.5])))
         "six blocks off")))
+
+(def ledge
+  "A pillar of stone at [8 y 8] up to y 63 in a void: x and z 2 to 14 and y 40 to 63 are air but
+   the pillar and a stair of cells going down from [8 63 9] (the burrow's shaft): every cell
+   round the feet at [8 64 8] is open over a drop but the stair."
+  (into
+   {}
+   (concat
+    (for [x (range 2 15) z (range 2 15) y (range 40 64) :when (not= [8 8] [x z])] [[x y z] air])
+    (for [y [63 62 61]] [[8 y 9] air]))))
+
+(deftest ^:eftest/synchronized a-bot-on-a-ledge-over-a-cavern-goes-down-to-its-burrow-to-cut-from
+  ;; pearl-fight-a job 4 (plan run 41143668588): 23 minutes in lookouts at [2533 41 2181], 141 digs
+  ;; left, endermen 17 to 63 blocks off, every move nil: the feet a brink, so climb-out, dig-out
+  ;; and bore refuse to cut from them; the burrow's end five blocks down was all the bot could walk to
+  (let [w (-> (standing {} ledge)
+              (assoc :player/pos [8.5 64.0 8.5] :pearls/shelter [8 61 9] :pearls/mouth [8 64 8])
+              (assoc-in [:player/inventory 1] (item :iron_pickaxe 1)))]
+    (is (pearls/brink? w [8 64 8]) "a ledge")
+    (with-redefs [intent/routable? (constantly true)]
+      (is (= {:intent/kind :walk :intent/target [8 61 9] :intent/for :shelter} (pearls/uncage w))
+          "down to the burrow's end")
+      (is (nil? (pearls/uncage (assoc w :player/pos [8.5 61.0 9.5])))
+          "at the end it is not a brink")
+      (is (nil? (pearls/uncage (dissoc w :pearls/shelter)))
+          "with no burrow, nothing to go down to"))))
