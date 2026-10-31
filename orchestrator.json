@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-31T05:19:38.579Z",
+  "at" : "2026-10-31T05:20:47.531Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -11,7 +11,7 @@
     "number" : 618,
     "title" : "Bot stops at ingots: no-support",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
+    "copilot" : true
   }, {
     "number" : 151,
     "title" : "Bot stops at flint-and-steel: not-picked-up",
@@ -25,6 +25,11 @@
   }, {
     "number" : 623,
     "title" : "Bot stops at blaze-rods: no-support",
+    "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 617,
+    "title" : "Bot stops at blaze-rods: no-log",
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
@@ -55,11 +60,6 @@
   }, {
     "number" : 619,
     "title" : "Bot stops at water-bucket: no-support",
-    "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
-  }, {
-    "number" : 617,
-    "title" : "Bot stops at blaze-rods: no-log",
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
@@ -234,7 +234,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 618,
-    "move" : "assign"
+    "move" : "wait",
+    "why" : "session starting"
   }, {
     "issue" : 161,
     "move" : "leave",
