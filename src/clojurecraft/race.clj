@@ -376,6 +376,25 @@
   [name [x z y]]
   (gym/in-dimension dimension/nether (str "tp " name " " (+ x 0.5) " " y " " (+ z 0.5))))
 
+(def pad-view 112)                    ; blocks round a pad generated before a bot is sent to it: 15 by 15 chunks, within one forceload's 256 and past the server's view distance (6 chunks, bb/clojurecraft/server.clj)
+
+(defn pregenerate!
+  "Generate the Nether round the pad [x z y] to pad-view blocks with no bot on it: the square
+   forceloaded and waited for (best effort, three waits of 30 s), then released. A bot teleported
+   onto a pad whose surroundings were not generated made the server generate its whole view,
+   fortress structure included, in its thread: race 41229255270 (lane 3, #662) built the ten pads
+   in 13 s, the bots joined at 18:26:00 and were sent from 18:26:03, and the server was 32.5 s
+   behind at 18:26:50: 298 of its bots lost connection `Timed out`, 588 runs in 29 minutes."
+  [rc [x z _]]
+  (let [square [(- x pad-view) (- z pad-view) (+ x pad-view) (+ z pad-view)]
+        where (str/join " " square)]
+    (rcon/command! rc (gym/in-dimension dimension/nether (str "forceload add " where)))
+    (try (loop [n 3]
+           (when (and (pos? n) (not (gym/wait-loaded-in! rc dimension/nether square)))
+             (recur (dec n))))
+         (finally
+          (rcon/command! rc (gym/in-dimension dimension/nether (str "forceload remove " where)))))))
+
 (defn build-pad!
   "Build the pad [x z y] (gym/fortress-pad-open) in the Nether with no bot: the square round it
    forceloaded and waited for, the commands, the forceload released. The first build of a Nether
@@ -392,6 +411,7 @@
            (doseq [c gym/fortress-pad-open]
              (rcon/command! rc (gym/in-dimension dimension/nether (gym/fill-in c "" pad))))
            (swap! pads-built conj pad)
+           (pregenerate! rc pad)
            (finally (rcon/command! rc
                                    (gym/in-dimension dimension/nether
                                                      (str "forceload remove " where))))))))
@@ -403,13 +423,16 @@
    is only teleported onto a pad made, and finds its fortress in the cache."
   [{:keys [host rcon-port rcon-pass landings landing-offset]} n]
   (when landings
-    (try (rcon/with-rcon host
-                         rcon-port
-                         rcon-pass
-                         (fn [rc]
-                           (doseq [i (range n)]
-                             (let [landing (landing-of landings (or landing-offset 0) i)]
-                               (build-pad! rc (pad-of (locate-fortress! rc landing) i))))))
+    (try (rcon/with-rcon
+          host
+          rcon-port
+          rcon-pass
+          (fn [rc]
+            (let [t0 (System/currentTimeMillis)]
+              (doseq [i (range n)]
+                (let [landing (landing-of landings (or landing-offset 0) i)]
+                  (build-pad! rc (pad-of (locate-fortress! rc landing) i))))
+              (cli/log "prepared" n "pads in" (quot (- (System/currentTimeMillis) t0) 1000) "s"))))
          (catch Exception e (cli/log "prepare failed:" e)))))
 
 (defn land-fortress!
@@ -568,6 +591,40 @@
                        #(str (rcon/command! % (str "data get entity " name " Dimension"))))
        (catch Exception e (str "truth failed: " (ex-message e)))))
 
+(defn death-class
+  "The class of a server death line (\"Clj_r23 was slain by Blaze\"), a keyword: :blaze, :enderman,
+   :piglin (a piglin, zombified or brute), :ghast, :lava, :fire, :fall, else :other (also a nil
+   line). The mob is asked first: \"burned to a crisp while fighting Blaze\" is a blaze's, not
+   fire's. A death at a stage is filed by its class, so a blaze's and a lava's get different
+   issues and owners."
+  [msg]
+  (let [m (str msg)]
+    (condp re-find m
+      #"Blaze" :blaze
+      #"Enderman" :enderman
+      #"Piglin" :piglin
+      #"Ghast" :ghast
+      #"lava" :lava
+      #"burned|fire|flames" :fire
+      #"fell from|hit the ground" :fall
+      :other)))
+
+(defn with-death-message
+  "RESULT r with the server's death line for bot name (gym/death-message from the server's log,
+   the file :server-log names) as :death-message, when the run ended :death, and its :reason the
+   class of that line (:death-blaze, :death-lava ..., death-class; :death-other with no line):
+   the signature [stage reason] names the cause. r otherwise. The cause the bot cannot tell: it is
+   the server's word."
+  [{:keys [server-log]} name r]
+  (if (= :death (:reason r))
+    (let [f (some-> server-log
+                    io/file)
+          msg (when (and f (.exists f))
+                (try (gym/death-message (slurp f) name) (catch Exception _ nil)))]
+      (cond-> (assoc r :reason (keyword (str "death-" (clojure.core/name (death-class msg)))))
+        msg (assoc :death-message msg)))
+    r))
+
 (defn play-one!
   "One bot's whole life in a slot: the next serial's name (serials, an atom shared by the slots),
    its own atom and queue, on the board (live) and watched for milestones while it plays, landed on
@@ -583,21 +640,24 @@
     ((:watch watcher) name world*)
     (land-bot! server ch centre name queue (dec n))
     (try (let [truth (promise)
-               {r :result} (main/run-bot! {:host (:host server)
-                                           :port (:port server)
-                                           :name name
-                                           :until (:until server)
-                                           :chain true
-                                           :timeout-ms (max 1000
-                                                            (- deadline (System/currentTimeMillis)))
-                                           :record (str (io/file record-dir (str name ".edn")))
-                                           :commit commit
-                                           :events queue
-                                           :world* world*
-                                           :on-result (fn [r]
-                                                        (deliver truth (truth! server name))
-                                                        (println "RESULT" name (pr-str (marked r))) ; what bb failures groups by
-                                                        (flush))})]
+               {r :result}
+               (main/run-bot!
+                {:host (:host server)
+                 :port (:port server)
+                 :name name
+                 :until (:until server)
+                 :chain true
+                 :end-on-death? (fortress? (:from server))
+                 :timeout-ms (max 1000 (- deadline (System/currentTimeMillis)))
+                 :record (str (io/file record-dir (str name ".edn")))
+                 :commit commit
+                 :events queue
+                 :world* world*
+                 :on-result
+                 (fn [r]
+                   (deliver truth (truth! server name))
+                   (println "RESULT" name (pr-str (marked (with-death-message server name r)))) ; what bb failures groups by
+                   (flush))})]
            {:name name :result r :truth @truth})
          (catch Exception e
            (cli/log name "failed:" e)
@@ -702,6 +762,7 @@
                         :until until
                         :from (or (get o :from) (:race/from config))
                         :bots bots
+                        :server-log (str "work/world-" (or which 1) "/logs/latest.log")
                         :kit (:race/kit config)}
                  landings-file
                  (assoc :landings (landings/read-landings landings-file)

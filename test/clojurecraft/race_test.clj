@@ -1,7 +1,7 @@
 (ns clojurecraft.race-test
   "The race (issue #17): the claims reducer never grants one cell to two bots, the spiral visits
    every cell once, and the race's board and summary are functions of values."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.test :refer [are deftest is testing]]
             [clojure.test.check :as tc]
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]
@@ -9,6 +9,7 @@
             [clojurecraft.failure :as failure]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
+            [clojurecraft.main :as main]
             [clojurecraft.plan :as plan]
             [clojurecraft.race :as race]))
 
@@ -272,3 +273,73 @@
     (is (= (race/pad-of fortress (race/slot-index 3 10))
            (race/pad-of fortress (race/slot-index 13 10)))
         "the serial after a slot's bot lands on the same pad")))
+
+(deftest a-pad-is-pregenerated-within-one-forceload
+  ;; a forceload takes at most 256 chunks; pad-view blocks each side of a pad, however the square
+  ;; lies on the chunk grid, and past the server's view distance (6 chunks, 96 blocks)
+  (let [span (+ 2 (quot (* 2 race/pad-view) 16))]
+    (is (<= (* span span) 256) "a square of pad-view each side is at most 256 chunks")
+    (is (>= race/pad-view (* 6 16)) "the bot's whole view is generated")))
+
+(deftest a-fortress-run-ends-at-its-first-death-and-is-filed-at-its-stage
+  ;; race 41224855928, Clj_r23: seven rods out of 23 deaths in 2.5 minutes, each respawn at the pad
+  ;; with keep_inventory: a death used as a plan. In a fortress race the first death ends the run
+  (let [failed {:ok false
+                :until "pearls-12"
+                :reason :timeout
+                :plan {:plan/goals #{:blaze-rods :ender-pearls} :plan/reached #{}}}
+        died {:stats/deaths 1}]
+    (is (= :death (:reason (main/death-ended failed died true))) "died, goal not reached: a death")
+    (is (= [:blaze-rods :death] (failure/signature (main/death-ended failed died true)))
+        "filed at the stage it was on, blaze-rods not reached")
+    (is (= [:ender-pearls :death]
+           (failure/signature (-> (main/death-ended failed died true)
+                                  (assoc-in [:plan :plan/reached] #{:blaze-rods}))))
+        "rods reached before the death: the pearls stage")
+    (is (= :timeout (:reason (main/death-ended failed died false))) "a spawn race: as before")
+    (is (= :timeout (:reason (main/death-ended failed {} true))) "no death: as it was")
+    (is (= :goal (:reason (main/death-ended {:ok true :reason :goal} died true)))
+        "the goal reached before the death stays a success")))
+
+(deftest the-death-line-is-the-servers
+  (let [f (java.io.File/createTempFile "server" ".log")]
+    (try (spit
+          f
+          (str
+           "[17:39:33] [Server thread/INFO]: Clj_r23 was burned to a crisp while fighting Blaze\n"
+           "[17:39:44] [Server thread/INFO]: Clj_r24 tried to swim in lava\n"))
+         (let [died (fn [log bot] (race/with-death-message {:server-log log} bot {:reason :death}))]
+           (is (= "Clj_r24 tried to swim in lava" (:death-message (died (str f) "Clj_r24")))
+               "the line for that bot from the server's log")
+           (is (= :death-lava (:reason (died (str f) "Clj_r24"))) "its class names the reason")
+           (is (= :death-blaze (:reason (died (str f) "Clj_r23")))
+               "burned to a crisp while fighting Blaze: the blaze's")
+           (is (= :death-other (:reason (died "no/such/server.log" "Clj_r24"))) "no line: other"))
+         (is (= {:reason :timeout}
+                (race/with-death-message {:server-log (str f)} "Clj_r24" {:reason :timeout}))
+             "only a run that ended in a death")
+         (finally (.delete f)))))
+
+(deftest a-death-line-has-a-class-and-the-signature-names-it
+  (are [line class] (= class (race/death-class line))
+   "Clj_r23 was slain by Blaze" :blaze
+   "Clj_r23 was fireballed by Blaze" :blaze
+   "Clj_r23 was burned to a crisp while fighting Blaze" :blaze
+   "Clj_r01 was slain by Enderman" :enderman
+   "Clj_r01 was slain by Zombified Piglin" :piglin
+   "Clj_r01 was slain by Piglin Brute" :piglin
+   "Clj_r01 was shot by Piglin" :piglin
+   "Clj_r01 was fireballed by Ghast" :ghast
+   "Clj_r01 tried to swim in lava" :lava
+   "Clj_r01 burned to death" :fire
+   "Clj_r01 walked into fire" :fire
+   "Clj_r01 went up in flames" :fire
+   "Clj_r01 hit the ground too hard" :fall
+   "Clj_r01 fell from a high place" :fall
+   "Clj_r01 suffocated in a wall" :other
+   nil :other)
+  (is (= [:blaze-rods :death-blaze]
+         (failure/signature {:until "pearls-12"
+                             :reason :death-blaze
+                             :plan {:plan/goals #{:blaze-rods :ender-pearls} :plan/reached #{}}}))
+      "a blaze's death and a lava's are two signatures at one stage"))
