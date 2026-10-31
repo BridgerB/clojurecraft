@@ -142,6 +142,10 @@
                 :requires ([clojurecraft.server :as server])
                 :task (server/command! (or (first *command-line-args*) "start")
                                        (server/local-opts))}
+  viewer-loop
+  {:doc
+   "One bot from spawn through the whole chain on a fresh local world, again and again, served by --viewer on 4600 (dev/viewer/loop.sh)"
+   :task (shell "dev/viewer/loop.sh")}
   datagen {:doc "Regenerate the EDN tables in resources/clojurecraft/ from the server jar"
            :requires ([clojurecraft.gen-tables :as gen-tables])
            :task (gen-tables/-main)}}}

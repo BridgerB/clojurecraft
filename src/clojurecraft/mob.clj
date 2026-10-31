@@ -556,8 +556,8 @@
 
 (def warped-floor-states
   "The states of warped nylium: the warped forest's floor, where the model spawns its endermen.
-   The captured Nether's biome containers are not decoded (chunk/read-section keeps the blocks
-   alone), so the floor is the forest's sign, as it is the bot's."
+   The captured Nether's biome containers are kept (:chunk/biomes) but the model does not read
+   them, so the floor is the forest's sign, as it is the bot's."
   (blocks/states-of :warped_nylium))
 
 (defn warped-floor?

@@ -4,7 +4,9 @@
    (a column without :chunk/min-y is an overworld one). A section is the paletted container straight off the wire:
    {:single id} or {:bits n :palette [ids] :longs long[]} (palette nil when direct). Nothing is
    expanded to 4096 entries; block-at indexes the bits on demand. The long[] is never mutated
-   after decode, so a section is a value."
+   after decode, so a section is a value. :chunk/biomes holds each section's biome container the
+   same way (64 cells, 4x4x4 blocks each, ids in the server's biome registry); nothing in the bot
+   reads it, the viewer tints by it."
   (:require [clojure.math :as math]
             [clojurecraft.bytes :as b]
             [clojurecraft.dimension :as dimension])
@@ -31,25 +33,31 @@
         (dotimes [i n] (aset longs i (.getLong buf)))
         {:bits bits :palette palette :longs longs}))))
 
-(defn read-section
-  "One section: block count, fluid count (26.1+), block container, biome container."
+(defn read-section-with-biomes
+  "One section: block count, fluid count (26.1+), block container, biome container; returns
+   [blocks biomes], the two containers."
   [^ByteBuffer buf]
   (b/read-i16 buf)
   (b/read-i16 buf)
-  (let [blocks (read-container buf 8 4096)]
-    (read-container buf 3 64)
-    blocks))
+  [(read-container buf 8 4096) (read-container buf 3 64)])
+
+(defn read-section
+  "One section's block container (read-section-with-biomes without the biomes)."
+  [^ByteBuffer buf]
+  (first (read-section-with-biomes buf)))
 
 (defn decode
   "The chunkData bytes of level_chunk_with_light → column: every section the bytes hold (the
-   server writes exactly its dimension's count, 16 in the Nether), and the lowest y that many
+   server writes exactly its dimension's count, 16 in the Nether), each section's biomes, and
+   the lowest y that many
    sections start at (dimension/min-y-of-sections). Throws when no dimension is that tall."
   [^bytes data]
   (let [^ByteBuffer buf (b/buffer data)
-        sections (loop [acc []] (if (.hasRemaining buf) (recur (conj acc (read-section buf))) acc))
-        min-y (dimension/min-y-of-sections (count sections))]
-    (when-not min-y (throw (ex-info "no dimension is this tall" {:sections (count sections)})))
-    {:sections sections :chunk/min-y min-y}))
+        pairs (loop [acc []]
+                (if (.hasRemaining buf) (recur (conj acc (read-section-with-biomes buf))) acc))
+        min-y (dimension/min-y-of-sections (count pairs))]
+    (when-not min-y (throw (ex-info "no dimension is this tall" {:sections (count pairs)})))
+    {:sections (mapv first pairs) :chunk/biomes (mapv second pairs) :chunk/min-y min-y}))
 
 (defn section-get
   "The id at index idx (0-4095 for blocks) of a section, through the palette when
