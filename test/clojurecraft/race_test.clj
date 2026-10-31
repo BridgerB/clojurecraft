@@ -229,3 +229,46 @@
       (is (= [:wood :timeout]
              (failure/signature {:until "pearls-12" :reason :timeout :plan {:plan/reached #{}}}))
           "no goals recorded: the whole chain"))))
+
+(deftest a-fortress-pad-is-a-place-and-spread-round-the-fortress
+  ;; race 41219596455 (first fortress lanes): ten bots a server on one pad, and Clj_r10 and r11 told
+  ;; :go/at [176 -160 72] (the pad's [x z y]) and ended :no-landing 30 s later
+  (let [fortress [200 -160]
+        pads (map #(race/pad-of fortress %) (range 8))]
+    (is (= 8 (count (set pads))) "eight bots, eight pads")
+    (is (= (first pads) (race/pad-of fortress 8)) "the ninth comes round to the first")
+    (is (every? #(= 72 (nth % 2)) pads) "all at the pad height")
+    (is (= [152 -160 72] (first pads)) "the first, 48 west of the fortress, as the gym's")
+    (is (= [176.5 72.0 -159.5] (race/standing-on [176 -160 72])) "x y z: the middle of the cell")))
+
+(deftest a-spawn-is-pinned-in-the-dimension-the-bot-landed-in
+  ;; spawnpoint takes the dimension of its source, the server's overworld: a bot that died at the
+  ;; fortress respawned in the overworld
+  (is (= "execute in minecraft:the_nether run spawnpoint Clj_r01 152 72 -160"
+         (race/spawn-command "Clj_r01" [152.5 72.0 -159.5] "minecraft:the_nether")))
+  (is (= "execute in minecraft:overworld run spawnpoint Clj_r02 10 80 -4"
+         (race/spawn-command "Clj_r02" [10.5 80.0 -3.5] "minecraft:overworld"))))
+
+(deftest a-landing-near-a-located-fortress-is-not-searched-for-again
+  ;; race 41218543330: fifteen bots at once asked the server to locate a fortress, a search in one
+  ;; tick each; the tick stalled for 31 s and 120 bots timed out
+  (is (nil? (race/nearby-fortress [] [10 10])))
+  (is (= [200 -160] (race/nearby-fortress [[200 -160] [900 900]] [260 -100])) "within 128 blocks")
+  (is (nil? (race/nearby-fortress [[200 -160]] [600 -160])) "400 off: another fortress"))
+
+(deftest a-bot-is-teleported-onto-a-pad-built-before-it-joined
+  ;; race 41225389190: the first pad was built 40 s after ten bots joined, generating Nether chunks
+  ;; in the server's thread, and seven of them timed out; the pads are built first (prepare!)
+  (is (= "execute in minecraft:the_nether run tp Clj_r03 152.5 72 -159.5"
+         (race/tp-command "Clj_r03" [152 -160 72]))
+      "x.5 y z.5 of the pad cell: -160 and .5 is -159.5, the middle of the cell"))
+
+(deftest a-replacement-bot-lands-on-its-slots-pad
+  ;; a bot that ends is replaced by the next serial (r11, r12 ...): lane 3 of race 41218543330 started
+  ;; 116 runs in 31 minutes; a landing by serial would generate a new Nether region each time
+  (is (= [0 1 9 0 1 9 5] (map #(race/slot-index % 10) [0 1 9 10 11 19 25])))
+  (is (= 7 (race/slot-index 7 nil)) "no slot count: as before")
+  (let [fortress [200 -160]]
+    (is (= (race/pad-of fortress (race/slot-index 3 10))
+           (race/pad-of fortress (race/slot-index 13 10)))
+        "the serial after a slot's bot lands on the same pad")))

@@ -267,6 +267,9 @@
    [:plan/avoid
     "{:near feet-cell :until ms}: where the stuck watchdog fired and until when rows keep away from it (plan/avoiding?)"
     "after the watchdog fired"]
+   [:plan/failures
+    "[{:choice choice-keys-of-the-plan :feet cell :at ms}]: the intents that failed in the last 30 s, up to 8, kept across the intents that start after them; the planner refuses a plan that failed from these feet, or 3 times, and backs away instead (plan/failed-before?)"
+    "after an intent fails"]
    [:plan/recover-at
     "ms of the last recovery (plan/recover); another within recover-cooldown-ms does nothing"
     "after a recovery"]
@@ -399,6 +402,9 @@
    [:intent/enter?
     "does the :end-portal intent step into the portal once every frame is eyed (the :enter-end row's) or stop at the lit portal (the :end-portal row's) (issue #266)"
     "an :end-portal intent"]
+   [:intent/plan
+    "the intent as the row planned it, before the executor added fields (a :place's :intent/target): what plan/same-choice? compares a fresh plan with"
+    "every started intent"]
    [:intent/id "the intent's number in this run, linking its facts in memory"
     "every started intent"]
    [:intent/goal "the target goal id the intent serves; another target chosen preempts it"

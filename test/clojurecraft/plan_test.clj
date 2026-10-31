@@ -781,7 +781,7 @@
             :intent/status :active
             :intent/id 1
             :intent/goal :wood}
-           (:plan/intent w))
+           (dissoc (:plan/intent w) :intent/plan))
         "re-planned in the same tick toward the next log")
     (is (= #{[13 64 0]} (:plan/blacklist w)))
     (is (= 1 (:plan/attempts w)))))
@@ -2100,3 +2100,101 @@
     (is (= 1 (:plan/unstuck w)) "past the grace it fires")
     (is (nil? (:plan/explore w)) "but plans no walk into it")
     (is (some? (:plan/avoid w)) "and asks rows to avoid the place")))
+
+;;; SAME-CHOICE: an intent is compared by the form it was planned in
+
+(deftest an-intent-that-gained-fields-running-is-the-same-choice
+  ;; blaze-race-z8 job 5 (run 41214675186): :place #5 gained :intent/target [2150 71 1756] once it ran;
+  ;; the row planned the same :place again (no target) and the cut saw two different intents: 97
+  ;; cuts and restarts in 14 s, 150 ms apart, the bot burning
+  (let [planned {:intent/kind :place
+                 :intent/item :cobblestone
+                 :intent/cell [2150 71 1756]
+                 :intent/until 1793461559332}
+        w (plan/start-intent (world-state [0.5 64.0 0.5]) (assoc planned :intent/goal :blaze-rods))
+        running (assoc (:plan/intent w) :intent/target [2150 71 1756] :intent/stage :spot)]
+    (is (= (assoc planned :intent/goal :blaze-rods) (:intent/plan running))
+        "start-intent keeps the plan")
+    (is (plan/same-choice? running planned) "planned again: the same")
+    (is (plan/same-choice? (assoc running :intent/plan {:intent/kind :place :intent/until 1000})
+                           {:intent/kind :place :intent/until 1150})
+        "a planned :place with :until 1000 against a fresh plan with :until 1150: the same choice")
+    (is
+     (plan/same-choice? running (assoc planned :intent/until 1793461559782))
+     "a deadline that moves on is no other intent (z8 job 5: :until 1793461559332, then ...482, ...632)")
+    (is (not (plan/same-choice? running (assoc planned :intent/cell [2151 71 1756])))
+        "another cell: another intent")
+    (is (not (plan/same-choice? running (assoc planned :intent/item :netherrack))) "another item")
+    (is (plan/same-choice? {:intent/kind :walk :intent/target [1 2 3]}
+                           {:intent/kind :walk :intent/target [1 2 3]})
+        "an intent with no plan on record (old) is compared as before")))
+
+;;; FAILURE HISTORY: a failed choice is refused whatever started between
+
+(defn pillar-failed
+  "blaze-race-z9 job 3 (run 41222838848) at 17:15:21: feet [2349 57 2289], a :pillar of cobblestone
+   to y 60 failed :boxed, then the row's :dig started and was cut. The world after both, nothing
+   running, the trail one cell back."
+  [& {:keys [fire? trail]}]
+  (let [pillar
+        {:intent/kind :pillar :intent/item :cobblestone :intent/top 60 :intent/goal :blaze-rods}
+        w (-> (world-state [2349.5 57.0 2289.5])
+              (assoc :plan/status :active
+                     :plan/since 0
+                     :plan/blacklist #{}
+                     :plan/attempts 0
+                     :time/now 1000
+                     :plan/trail (or trail [[2346 57 2290]]))
+              (cond-> fire? (assoc :player/on-fire? true)))
+        w (plan/start-intent w pillar)
+        w (plan/fail-intent w (assoc (:plan/intent w) :intent/reason :boxed))
+        w (plan/start-intent
+           w
+           {:intent/kind :dig :intent/target [2349 56 2289] :intent/goal :blaze-rods})]
+    (assoc (plan/abandon-intent w (:plan/intent w) :interrupted) :time/now 1050)))
+
+(deftest ^:eftest/synchronized a-pillar-that-failed-is-not-planned-again-after-a-dig
+  (let [w (pillar-failed)
+        goal {:goal/id :blaze-rods :goal/done? :never :goal/plan :flip-test}
+        tick (fn [w]
+               (with-redefs [plan/choose (constantly goal)
+                             plan/next-intent (constantly {:intent/kind :pillar
+                                                           :intent/item :cobblestone
+                                                           :intent/top 60})]
+                 (plan/plan-tick w {:event/kind :tick :event/now 1050 :event/rand 0.5} [goal])))]
+    (is (nil? (:plan/failed w)) "the :dig's start cleared the old guard")
+    (is (= 1 (count (:plan/failures w))) "the history did not")
+    (testing "from the same feet: a retreat along the trail, not the pillar"
+      (let [w' (tick w)]
+        (is (= :walk (get-in w' [:plan/intent :intent/kind])))
+        (is (= :retreat (get-in w' [:plan/intent :intent/for])))))
+    (testing "no trail and calm: it waits :retrying"
+      (let [w' (tick (assoc (pillar-failed :trail []) :plan/trail []))]
+        (is (nil? (:plan/intent w')))
+        (is (= :retrying (:plan/waiting w')))))
+    (testing "no trail and burning: never a wait in place, the row's plan goes ahead"
+      (let [w' (tick (assoc (pillar-failed :trail [] :fire? true) :plan/trail []))]
+        (is (= :pillar (get-in w' [:plan/intent :intent/kind])))))))
+
+(deftest a-choice-with-no-target-is-refused-by-the-choice-it-is
+  (let [pillar (fn [top] {:intent/kind :pillar :intent/item :cobblestone :intent/top top})
+        fail (fn [w feet top at] (plan/remember-failure (assoc w :time/now at) (pillar top) feet))
+        w (world-state [0.5 64.0 0.5])
+        three (-> w
+                  (fail [1 64 0] 60 100)
+                  (fail [2 64 0] 60 200)
+                  (fail [3 64 0] 60 300))]
+    (is (plan/failed-before? (assoc three :time/now 400) (pillar 60) [9 64 9])
+        "3 failures: refused anywhere")
+    (is (not (plan/failed-before? (assoc three :time/now 400) (pillar 61) [9 64 9]))
+        "a pillar to another height is another choice")
+    (is (not
+         (plan/failed-before? (assoc (fail w [1 64 0] 60 100) :time/now 400) (pillar 60) [9 64 9]))
+        "one failure elsewhere: not yet")
+    (is (plan/failed-before? (assoc (fail w [1 64 0] 60 100) :time/now 400) (pillar 60) [1 64 0])
+        "one failure from these feet: refused")
+    (is (not (plan/failed-before? (assoc three :time/now (+ 300 plan/failure-memory-ms 1))
+                                  (pillar 60)
+                                  [9 64 9]))
+        "forgotten after 30 s")
+    (is (not (plan/failed-before? three {:plan/wait :x} [1 64 0])) "a wait is no choice")))
