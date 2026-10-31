@@ -2069,6 +2069,33 @@
         (is (some? (:pocket/site kept)))
         (is (empty? (:pocket/failed kept)))))))
 
+(deftest a-pocket-the-hits-come-through-is-dropped-by-the-steer
+  ;; blaze-race-z13 jobs 4 and 6: 16.6 s and 10.7 s held in a pocket no seal was chosen for, hp 20 to 0
+  (let [row (first (filter #(= :blaze-rods (:goal/id %)) plan/goals))
+        pocket (in-pocket (-> (standing {})
+                              with-spawner))
+        hurt (fn [w hp struck now]
+               (assoc w
+                      :pocket/hurt {:at 1000 :hp 20.0}
+                      :player/health hp
+                      :player/struck-at struck
+                      :player/on-fire? true
+                      :time/now now))]
+    (with-redefs [pocket/can-seal? (constantly false)]
+      (let [out (plan/steer (hurt pocket 12.0 4500 5000) row)]
+        (is (nil? (:pocket/site out)) "hit again 3.5 s after the first hurt, 8 hp down: dropped")
+        (is (contains? (:pocket/failed out) (:pocket/cell (:pocket/site pocket)))
+            "and remembered as failed"))
+      (testing "the burn after the last hit is not a leak"
+        (is (some? (:pocket/site (plan/steer (hurt pocket 12.0 1500 5000) row)))))
+      (testing "a small loss is not one"
+        (is (some? (:pocket/site (plan/steer (hurt pocket 17.0 4500 5000) row)))))
+      (testing "the first hurt is noted"
+        (let [out (plan/steer
+                   (assoc pocket :player/on-fire? true :player/health 18.0 :time/now 7000)
+                   row)]
+          (is (= {:at 7000 :hp 18.0} (:pocket/hurt out))))))))
+
 (deftest a-crowd-at-hand-is-not-a-committed-fight
   ;; review of 3d9788a41: four or five blazes at hand and hp 20 is the room on the bot (z4 landing 2, z5)
   (let [blz (fn [n]

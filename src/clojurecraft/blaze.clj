@@ -1690,6 +1690,37 @@
                   (not (recent? :fight))
                   (not (recent? :pocket))))))
 
+(def leak-ms 3000)   ; ms after the first hurt in a pocket that a further hit means the pocket lets them in
+(def leak-loss 6.0)  ; health lost since that first hurt that, with a further hit, makes the pocket a leak
+
+(defn hurt-mark
+  "The world with :pocket/hurt noted: {:at ms :hp h} from the first hurt (burning or struck within
+   press-ms) in the held pocket, kept while it lasts, dropped when the bot is out of the pocket or
+   unhurt (not burning, no hit within press-ms)."
+  [world]
+  (let [now (:time/now world 0)
+        hurt? (or (:player/on-fire? world)
+                  (<= (- now (:player/struck-at world -1000000)) press-ms))]
+    (cond (or (not (pocket/in? world)) (not hurt?)) (dissoc world :pocket/hurt)
+          (:pocket/hurt world) world
+          :else (assoc world :pocket/hurt {:at now :hp (:player/health world 20.0)}))))
+
+(defn leaky-pocket?
+  "Does the held pocket let the blazes in: it is called a refuge (sealed, or one that cannot be sealed:
+   no seal is chosen) yet the bot was hit again leak-ms after it was first hurt in it and has lost
+   leak-loss health since (:pocket/hurt)? A burning bot loses health after the last hit, so a hit
+   after the first leak-ms is what tells. Blaze-race-z13 jobs 4 and 6: 16.6 s and 10.7 s in a
+   :pocket-hold at hp 20 to 0, 4 and 7 fireballs, the hold never ending because no :seal was chosen."
+  [world]
+  (let [{:keys [at hp]} (:pocket/hurt world)
+        site (:pocket/site world)]
+    (boolean (and at
+                  site
+                  (pocket/in? world)
+                  (or (pocket/sealed? world site) (not (pocket/can-seal? world site)))
+                  (>= (:player/struck-at world -1000000) (+ at leak-ms))
+                  (<= (:player/health world 20.0) (- hp leak-loss))))))
+
 (declare rod-grab?)
 
 (defmethod plan/steer :blaze-rods
@@ -1699,8 +1730,14 @@
   (let [sp (nearest-spawner world)
         world (if (rod-grab? world (:plan/intent world))
                 (update world :rod-grab/since #(or % (:time/now world 0)))
-                (dissoc world :rod-grab/since))]
-    (cond (and (pocket/in? world) (pocket/unlayable? world (:pocket/cell (:pocket/site world))))
+                (dissoc world :rod-grab/since))
+        world (hurt-mark world)]
+    (cond (leaky-pocket? world)
+          ;; a pocket the hits come through is no refuge: forgotten, its cell remembered as failed
+          (-> world
+              (update :pocket/failed (fnil conj #{}) (:pocket/cell (:pocket/site world)))
+              (dissoc :pocket/site :sortie/since :pocket/hurt))
+          (and (pocket/in? world) (pocket/unlayable? world (:pocket/cell (:pocket/site world))))
           ;; an unsealable pocket is no refuge: forgotten, and its cell remembered as failed
           (-> world
               (update :pocket/failed (fnil conj #{}) (:pocket/cell (:pocket/site world)))
@@ -2034,6 +2071,27 @@
 
 ;; ---------------------------------------------------------------- the :pocket-hold intent
 
+(defn pocket-line
+  "The log line for a hold that starts or ends (a decision, no effect on one): the pocket's state as the
+   hold reads it, so a hold under fireballs shows why no :seal was chosen (blaze-race-z13 jobs 4 and 6)."
+  [world what]
+  (let [site (:pocket/site world)
+        c (:pocket/cell site)]
+    (str "pocket-hold " what
+         " pos " (mapv #(format "%.1f" (double %)) (:player/pos world))
+         " hp " (:player/health world)
+         " fire " (boolean (:player/on-fire? world))
+         " cell " (pr-str c)
+         " sealed " (pocket/sealed? world site)
+         " can-seal " (when c (pocket/can-seal? world site))
+         " open " (when c (count (pocket/open-seal-cells world c)))
+         " wanted " (when c (count (pocket/wanted-seal-cells world c)))
+         " placed " (count (:pocket/placed site))
+         " unsealable " (boolean (:pocket/unsealable? site))
+         " failed " (count (:pocket/failed world))
+         " unlayable " (when c (pocket/unlayable? world c))
+         " seal-failed-at " (:pocket/seal-failed-at world))))
+
 (defmethod intent/run :pocket-hold
   ;; {:intent/kind :pocket-hold :intent/heal-to h}: stand still in the pocket, out of every line but the
   ;; opening's, until the fire is out and the health is at h (and, sealed, the last hit older than
@@ -2042,10 +2100,12 @@
   ;; again)
   [world {:intent/keys [since heal-to]} _]
   (let [now (:time/now world)
+        first? (nil? since)
         since (or since now)
-        world (-> world
-                  (assoc :player/controls {})
-                  (intent/assoc-intent :intent/since since))]
+        world (cond-> (-> world
+                          (assoc :player/controls {})
+                          (intent/assoc-intent :intent/since since))
+                first? (game/say (pocket-line world "start")))]
     (cond (or (and (not (:player/on-fire? world))
                    (>= (:player/health world 20.0) (or heal-to engage-health))
                    (or (not (sealed? world))
@@ -2056,5 +2116,7 @@
               (not (pocket/in? world))
               (burning-here? world)
               (> (- now since) hold-ms))
-          (intent/done world)
+          (-> world
+              (game/say (pocket-line world "end"))
+              intent/done)
           :else world)))

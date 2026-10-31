@@ -515,6 +515,9 @@
    [:pocket/failed
     "a set of pocket cells that cannot be sealed (a wanted cell that cannot be laid: the roof over open air): noted by plan/steer for the blaze-rods row when the bot stands in one, and pocket-ok? passes over them. Such a pocket is no refuge against blazes (blaze-race-z7 landing 1)"
     "after the bot stood in an unsealable pocket"]
+   [:pocket/hurt
+    "{:at ms :hp h}: the first hurt (burning or struck within press-ms) of the bot in its held pocket, noted by plan/steer for the blaze-rods row, kept while the hurt lasts, dropped out of the pocket or unhurt; a further hit leak-ms after it with leak-loss health lost makes the pocket a leak (leaky-pocket?): dropped and its cell added to :pocket/failed"
+    "while the bot is hurt in a held pocket"]
    [:rod-grab/since
     "ms (:time/now) the running rod pick-up began (noted by plan/steer for the blaze-rods row, forgotten when none runs): the pick-up holds the refuge off for rod-grab-ms (2 s), then the refuge wins"
     "while a :collect-drops or :walk :for :rod of a rod within a step runs"]
