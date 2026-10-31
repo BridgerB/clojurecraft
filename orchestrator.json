@@ -1,16 +1,11 @@
 {
-  "at" : "2026-10-31T03:53:48.977Z",
+  "at" : "2026-10-31T03:59:10.437Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
     "number" : 537,
     "title" : "Bot stops at blaze-rods: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : true
-  }, {
-    "number" : 623,
-    "title" : "Bot stops at blaze-rods: no-support",
-    "labels" : [ "bot-failure", "sim" ],
     "copilot" : true
   }, {
     "number" : 618,
@@ -27,6 +22,11 @@
     "title" : "Bot stops at portal-kit: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
+  }, {
+    "number" : 623,
+    "title" : "Bot stops at blaze-rods: no-support",
+    "labels" : [ "bot-failure", "sim" ],
+    "copilot" : true
   }, {
     "number" : 622,
     "title" : "Bot stops at portal: no-support",
@@ -233,13 +233,13 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 623,
-    "move" : "wait",
-    "why" : "session starting"
-  }, {
     "issue" : 161,
     "move" : "leave",
     "why" : "hands-off label"
+  }, {
+    "issue" : 623,
+    "move" : "wait",
+    "why" : "session starting"
   }, {
     "issue" : 580,
     "move" : "leave",
