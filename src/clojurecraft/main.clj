@@ -48,6 +48,7 @@
             [clojurecraft.stronghold :as stronghold]
             [clojurecraft.swim]
             [clojurecraft.sword]
+            [clojurecraft.vein]
             [clojurecraft.watch :as watch]
             [clojurecraft.wood])
   (:gen-class))

@@ -27,7 +27,6 @@
             [clojurecraft.scoop :as scoop]
             [clojurecraft.smelt :as smelt]
             [clojurecraft.stairs :as stairs]
-            [clojurecraft.stone :as stone]
             [clojurecraft.window :as window]
             [clojurecraft.wood :as wood]))
 
@@ -431,6 +430,16 @@
              (window/tossable world (window/view world :inventory)))
     {:intent/kind :toss}))
 
+(defmulti vein
+  "The next intent of taking the rest of an ore vein in sight before the planner moves on, or nil
+   (clojurecraft.vein, which needs the mine and the armour and so cannot be required here)."
+  {:arglists '([world])}
+  (constantly :vein)
+  :default
+  :none)
+
+(defmethod vein :none [_] nil)
+
 (defn decide
   "The next intent toward goal: continue a log chain or a table pick-up in flight, else take the
    table along (take-table), make room (make-room) or act on the row the needs planner reaches
@@ -438,7 +447,7 @@
   [world goal table]
   (or (wood/continue-gather world)
       (intent/chain-next (:plan/last world) :take-table table-drops {})
-      (stone/vein-next world)
+      (vein world)
       (let [row (next-row world goal table)]
         (cond (nil? row) nil
               (= :stuck row) {:plan/wait :stuck}
