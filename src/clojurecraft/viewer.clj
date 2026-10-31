@@ -22,7 +22,10 @@
             [clojurecraft.bytes :as b]
             [clojurecraft.chunk :as chunk]
             [clojurecraft.cli :as cli]
+            [clojurecraft.combat :as combat]
+            [clojurecraft.eat :as eat]
             [clojurecraft.entity :as entity]
+            [clojurecraft.hunt :as hunt]
             [clojurecraft.inventory :as inventory]
             [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
@@ -345,9 +348,66 @@
                 :when col]
             [(str x "," z) (str (System/identityHashCode col) "-" (hash (get overlay [x z])))]))))
 
+(defn intents-in
+  "The intent and its children, outermost first."
+  [world]
+  (take-while some? (iterate :intent/child (:plan/intent world))))
+
+(defn hungry?
+  "Does food matter to the bot now: its focus is the hunt or eating, its food is under
+   eat/hungry-below, or it is provisioning (hunt/provisioning?)?"
+  [world]
+  (let [goal (:intent/goal (:plan/intent world))]
+    (boolean (or (#{:hunt :eat} goal)
+                 (some-> (:player/food world)
+                         (< eat/hungry-below))
+                 (hunt/provisioning? world)))))
+
+(defn care
+  "Why the bot cares about entity e (id eid), by its own rules, or nil when it does not: :target
+   (an intent's target is it), :threat (a hostile within the defence's reach: combat's
+   defend-radius, creeper-radius for a creeper), :hostile (within hunt/forage-wary, where a
+   hostile stops the search), :prey (an animal of hunt/game-kinds within hunt/reach while
+   hungry?), :pearls (an enderman on the pearls stage), :rods (a blaze on the rods stage),
+   :collect (a drop within two blocks of a :collect's cell)."
+  [world eid e]
+  (let [pos (:player/pos world)
+        d (physics/distance pos (:entity/pos e))
+        kind (entity/kind e)
+        chain (intents-in world)
+        goal (:intent/goal (:plan/intent world))]
+    (cond
+      (some #(= eid (:intent/target %)) chain) :target
+      (and (entity/hostile? e)
+           (<= d
+               (cond (= :creeper kind) combat/creeper-radius
+                     :else combat/defend-radius)))
+      :threat
+      (and (entity/hostile? e) (<= d hunt/forage-wary)) :hostile
+      (and (hunt/game-kinds kind) (not (entity/dead? e)) (<= d (hunt/reach world)) (hungry? world))
+      :prey
+      (and (= :enderman kind) (= :ender-pearls goal)) :pearls
+      (and (= :blaze kind) (= :blaze-rods goal)) :rods
+      (and (entity/item? e)
+           (some #(and (= :collect (:intent/kind %))
+                       (vector? (:intent/target %))
+                       (<= (physics/distance (:entity/pos e) (physics/centre (:intent/target %)))
+                           2.0))
+                 chain))
+      :collect)))
+
+(defn route-view
+  "The feet cells the bot's walk has still to go, from its next waypoint (the innermost :walk's
+   :intent/waypoints from :intent/at), ending at the walk's target; nil without a planned walk."
+  [world]
+  (when-let [{:intent/keys [waypoints at target]} (last (filter #(and (= :walk (:intent/kind %))
+                                                                      (seq (:intent/waypoints %)))
+                                                                (intents-in world)))]
+    (cond-> (vec (drop (or at 0) waypoints)) (vector? target) (conj target))))
+
 (defn entities-view
   "The entities within entity-range of the bot: id, kind, position, yaw in degrees, health,
-   hostile?, and a dropped item's name."
+   hostile?, a dropped item's name, and why the bot cares about it (care), when it does."
   [world]
   (let [[px py pz] (:player/pos world)]
     (vec (for [[id e] (:world/entities world)
@@ -359,6 +419,7 @@
            (cond-> {:id id :kind (entity/kind e) :pos pos :hostile (entity/hostile? e)}
              (:entity/yaw e) (assoc :yaw (:entity/yaw e))
              (:entity/health e) (assoc :health (:entity/health e))
+             (care world id e) (assoc :cares (care world id e))
              (get-in e [:entity/item :item])
              (assoc :item (recipe/item-name (get-in e [:entity/item :item]))))))))
 
@@ -435,11 +496,6 @@
                                  (bit-shift-left (bit-shift-right (bit-and z 15) 2) 2)
                                  (bit-shift-right (bit-and x 15) 2))))))
 
-(defn intents
-  "The intent and its children, outermost first."
-  [world]
-  (take-while some? (iterate :intent/child (:plan/intent world))))
-
 (defn dig-view
   "The block the bot is breaking and how far: {:pos target :progress 0-1}, the elapsed time
    since its START over the dig's own expected time (:intent/dig-ms, dig/dig-time with the held
@@ -447,7 +503,7 @@
   [world]
   (when-let [{:intent/keys [target started dig-ms]}
              (first (filter #(and (= :dig (:intent/kind %)) (= :digging (:intent/stage %)))
-                            (intents world)))]
+                            (intents-in world)))]
     {:pos target
      :progress (max 0.0
                     (min 1.0 (/ (double (- (:time/now world) started)) (double (max 1 dig-ms)))))}))
@@ -473,7 +529,7 @@
 (defn frame
   "What the page shows of one world: who and where the bot is, how it looks, its health, food
    and hotbar and every slot it holds, the block it breaks (dig-view) and the one under its crosshair (looked-at), the
-   biome under its feet, the entities round it, what it intends (intent-view) and has reached, and the
+   biome under its feet (:rules marks a frame whose entities carry care), the entities round it, what it intends (intent-view) and has reached, and the
    version of every column round it (columns). Absent attributes stay absent."
   [world]
   (let [w world]
@@ -495,6 +551,8 @@
            :inventory (inventory-view w)
            :dig (dig-view w)
            :looking (when (:player/look w) (looked-at w))
+           :route (route-view w)
+           :rules true
            :entities (entities-view w)
            :intent (intent-view (:plan/intent w))
            :failed (intent-view (:plan/failed w))

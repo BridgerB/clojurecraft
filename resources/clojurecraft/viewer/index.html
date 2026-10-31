@@ -196,6 +196,7 @@ const eggs = {};
 const egg = (k) => { if (!eggs[k]) { const im = new Image(); im.src = "/tex/item/" + k + "_spawn_egg.png"; eggs[k] = im; } return eggs[k]; };
 const PREY = new Set(["cow", "pig", "sheep", "chicken", "rabbit", "mooshroom"]);
 function cares(e, f, d) {
+  if (f.rules) return !!e.cares; // the bot's own rules, from the frame (viewer/care)
   const goal = f.intent && f.intent["intent/goal"];
   if (e.kind === "player") return false;
   if (e.hostile) return true;
@@ -218,6 +219,11 @@ function radar(f, p) {
     g.fillStyle = "#ffd54a"; g.fillRect(tx - 6, ty - 6, 12, 12);
     g.font = "bold 13px system-ui"; g.fillText("target " + d.toFixed(0) + "m" + (dy > 0 ? " ↑" + dy : dy < 0 ? " ↓" + (-dy) : ""), tx + 10, ty + 4);
   }
+  if (Array.isArray(f.route) && f.route.length) { // the route its walk is following, cell by cell
+    g.strokeStyle = "#26e6ff"; g.lineWidth = 2; g.beginPath(); g.moveTo(cx, cy);
+    for (const c of f.route) { const [x2, y2] = at(c[0] + 0.5 - p[0], c[2] + 0.5 - p[2]); g.lineTo(x2, y2); }
+    g.stroke();
+  }
   g.fillStyle = "#fff"; g.beginPath(); g.moveTo(cx, cy - 11); g.lineTo(cx - 8, cy + 8); g.lineTo(cx, cy + 3); g.lineTo(cx + 8, cy + 8); g.closePath(); g.fill();
   const shown = (f.entities || []).map((e) => ({ e, dx: e.pos[0] - p[0], dy: e.pos[1] - p[1], dz: e.pos[2] - p[2] }))
     .map((o) => ({ ...o, d: Math.hypot(o.dx, o.dy, o.dz) })).filter((o) => o.d <= 64 && cares(o.e, f, o.d)).sort((a, b) => b.d - a.d);
@@ -231,7 +237,7 @@ function radar(f, p) {
   }
   const h = shown.filter((o) => o.e.hostile).reverse();
   $("near").innerHTML = h.length ? "<b style=color:#f88>Hostile:</b> " + h.map((o) => esc(nice(o.e.kind)) + " " + o.d.toFixed(0) + " m").join(" · ")
-    : "<span style=color:#3c7>No hostiles within 64 m</span>";
+    : "<span style=color:#3c7>No hostile it has to mind (within " + 32 + " m, its search's wary radius)</span>";
 }
 const KIND = { walk: "walking to", dig: "digging", collect: "picking up", craft: "crafting", place: "placing a block", "open-container": "opening",
   "stairs-down": "digging a staircase down", "stairs-up": "digging a staircase up", fight: "fighting", smelt: "smelting", mine: "mining",
@@ -245,7 +251,7 @@ const DOC = { wood: "hold one log", kit: "sticks, then a crafting table", pickax
   "cast-one": "one obsidian cast for the frame", portal: "a nether portal cast from lava and water", nether: "light it and go through",
   fortress: "reach a nether fortress", "blaze-rods": "seven blaze rods", "ender-pearls": "twelve ender pearls", "escape-water": "out of water first",
   "escape-lava": "off lava first", defend: "a hostile within 4 blocks: answer it", eat: "food under 14 and has food: eat",
-  hunt: "hungry with no food: kill an animal", heal: "eat for health", "wear-armour": "put on armour it holds",
+  hunt: "get food: hungry with none, or stocking 6 food early (once it has a stone pickaxe)", heal: "eat for health", "wear-armour": "put on armour it holds",
   armour: "make helmet/chestplate from spare ingots", sword: "make the best sword it can", cook: "cook raw meat in the furnace",
   regear: "remake gear after a death", "return-nether": "go back through a portal" };
 const FOR = { bank: "water it remembers on the surface, to fill the bucket from", log: "a log to chop", trees: "trees it remembers",
@@ -437,6 +443,18 @@ const edges = [[0,0,0,1,0,0],[0,0,0,0,1,0],[0,0,0,0,0,1],[1,1,1,0,1,1],[1,1,1,1,
   .map(([a, b, c, d, e, g]) => [new B.Vector3(a - 0.501, b - 0.501, c - 0.501).scale(1.002), new B.Vector3(d - 0.501, e - 0.501, g - 0.501).scale(1.002)]);
 const lookBox = B.MeshBuilder.CreateLineSystem("look", { lines: edges }, scene);
 lookBox.color = new B.Color3(0, 0, 0); lookBox.alpha = 0.45; lookBox.isPickable = false; lookBox.setEnabled(false);
+// the route the walk follows, as a line through the cells' feet in the world (steve draws its pathfinder's the same way)
+let routeLine = null, routeKey = "";
+function showRoute(f) {
+  const r = Array.isArray(f.route) ? f.route : [], key = JSON.stringify(r);
+  if (key === routeKey) return;
+  routeKey = key;
+  if (routeLine) { routeLine.dispose(); routeLine = null; }
+  if (r.length < 1 || !f.pos) return;
+  const pts = [new B.Vector3(f.pos[0], f.pos[1] + 0.1, f.pos[2]), ...r.map((c) => new B.Vector3(c[0] + 0.5, c[1] + 0.1, c[2] + 0.5))];
+  routeLine = B.MeshBuilder.CreateLines("route", { points: pts }, scene);
+  routeLine.color = new B.Color3(0.15, 0.9, 1); routeLine.isPickable = false;
+}
 function showLook(f) {
   const c = f.looking;
   lookBox.setEnabled(!!c);
@@ -471,7 +489,7 @@ async function poll() {
       pose = { x: f.pos[0], y: f.pos[1], z: f.pos[2], yaw: yawOf(f.look ? f.look[0] : 0), pitch: pitchOf(f.look ? f.look[1] : 0) };
       if (down || (lastRun && (f.name !== lastRun.name || f.dimension !== lastRun.dimension || (f.tick ?? 0) < (lastRun.tick ?? 0) - 100))) resetWorld();
       down = false; lastRun = f;
-      panel(f); sky(f); holdItem(f); swingTo(f); showCrack(f); showLook(f); syncEntities(f.entities || [], f); syncColumns(f.columns || {}, f.pos, meta.radius);
+      panel(f); sky(f); holdItem(f); swingTo(f); showCrack(f); showLook(f); showRoute(f); syncEntities(f.entities || [], f); syncColumns(f.columns || {}, f.pos, meta.radius);
       $("status").textContent = `${versions.size} columns`;
     } else { $("status").textContent = "new world loading… (waiting for the bot to spawn)"; down = true; }
   } catch (e) { $("status").textContent = "new world loading… (the bot is restarting)"; down = true; }
