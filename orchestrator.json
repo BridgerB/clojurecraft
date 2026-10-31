@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-31T10:26:20.513Z",
+  "at" : "2026-10-31T10:34:59.676Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -53,6 +53,11 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
+    "number" : 642,
+    "title" : "Bot stops at blaze-rods: nothing-to-do",
+    "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
     "number" : 514,
     "title" : "Bot stops at blaze-rods: no-footing",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
@@ -65,11 +70,6 @@
   }, {
     "number" : 644,
     "title" : "Bot stops at ender-pearls: no-path",
-    "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
-  }, {
-    "number" : 642,
-    "title" : "Bot stops at blaze-rods: nothing-to-do",
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
