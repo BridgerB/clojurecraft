@@ -1,0 +1,14 @@
+;; Issue #262, round z12 on fix/262-blaze-next 3f2d536bc (main + 2): six landings (1-6). z11 (main f750a1e61, the control): job 2 PASS 45m31s (18 real
+;; kills); job 3 a 61-start :pocket storm, dead 6m9s; job 6 slain 11m20s; jobs 1 and 4 camped (63 and 49 min, 0 and 5 real kills,
+;; :camp 20/29 min, :pocket 14m46 in job 1); job 5 a tunnel loop. z12: the healthy idle bot goes to the spawner after 2 min
+;; (passive?), the bait walk not within 20 s of a pocket, a pocket storm bounded by the story. Real kills (6-s rule) per 10 min,
+;; camp/ambush/pocket-hold minutes per job, rods held.
+{:plans/label "blaze-race-z12"
+ :plans/jobs 6
+ :plans/issue 262
+ :plans/experiments [{:exp/name "blaze-fortress-race"
+                      :exp/kind :gym
+                      :exp/goal "blaze-fortress-race"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 1800}]}
