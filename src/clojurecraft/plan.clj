@@ -357,9 +357,22 @@
         since (:plan/done-at world (:plan/since world now))]
     (> (- now since) stall-ms)))
 
+(defn routable?
+  "Does path/plan find a route (:found) for the feet from the cell they stand in to cell c within
+   explore-nodes expansions?"
+  [world c]
+  (= :found
+     (:path/status (path/plan world
+                              (path/feet-cell (:player/pos world))
+                              (intent/goal-of {:intent/kind :walk :intent/target c})
+                              {:path/max-nodes explore-nodes}))))
+
 (defn regroup-cell
   "The latest cell of the trail (feet of recently started intents) at least regroup-distance
-   from the feet on the plane, not blacklisted nor boxed-at, or nil: the new spot to plan from."
+   from the feet on the plane, not blacklisted nor boxed-at, that has a route (routable?; at most
+   explore-tries searched), or nil: the new spot to plan from. Blaze-race-z11 job 5 (run
+   41233526639): every regroup walk failed :no-path in under a second (the trail cell lay in its own
+   tunnel) and the tunnel was planned again at once, 65 recoveries in 19 minutes."
   [world]
   (let [feet (when (:player/pos world) (intent/feet world))
         ok? (fn [c]
@@ -367,7 +380,10 @@
                    (>= (physics/horizontal-distance c feet) regroup-distance)
                    (not (contains? (:plan/blacklist world #{}) c))
                    (not (contains? (:plan/boxed-at world #{}) c))))]
-    (some #(when (ok? %) %) (rseq (:plan/trail world [])))))
+    (->> (rseq (:plan/trail world []))
+         (filter ok?)
+         (take explore-tries)
+         (some #(when (routable? world %) %)))))
 
 (def choice-keys
   "The keys of a planned intent that make it this intent and not another: what it is (kind,
@@ -381,7 +397,10 @@
    :intent/top])
 
 (def failure-memory-ms 30000)            ; ms a failed choice is remembered
-(def failure-limit 8)                 ; failed choices remembered
+(def failure-limit 16)                ; failed choices remembered
+(def area-memory-ms 300000)           ; ms a :blocked failure counts toward its area: 5 min
+(def area-radius 6.0)                 ; blocks on the plane that make an area
+(def area-blocked-after 3)            ; :blocked failures of one kind in an area after which the row is made to leave it
 (def blocked-after 3)                 ; failures of one choice within failure-memory-ms after which it is refused wherever the bot stands
 
 (defn choice-of
@@ -396,6 +415,12 @@
   (let [now (:time/now world 0)]
     (filterv #(<= (- now (:at %)) failure-memory-ms) (:plan/failures world []))))
 
+(defn recent-failures
+  "The failures of :plan/failures within area-memory-ms of now (the area's, longer than a choice's)."
+  [world]
+  (let [now (:time/now world 0)]
+    (filterv #(<= (- now (:at %)) area-memory-ms) (:plan/failures world []))))
+
 (defn remember-failure
   "The world with the failure of intent i (from feet) added to :plan/failures: the choice, where the
    bot stood and when, the freshest failure-limit kept. Not cleared by the next intent that starts
@@ -406,8 +431,12 @@
   (assoc world
          :plan/failures
          (vec (take-last failure-limit
-                         (conj (fresh-failures world)
-                               {:choice (choice-of i) :feet feet :at (:time/now world 0)})))))
+                         (conj (recent-failures world)
+                               {:choice (choice-of i)
+                                :kind (:intent/kind i)
+                                :reason (:intent/reason i)
+                                :feet feet
+                                :at (:time/now world 0)})))))
 
 (defn failed-before?
   "Did the choice next fail already: from these feet within failure-memory-ms, or blocked-after
@@ -420,9 +449,45 @@
                   (not (:plan/wait next))
                   (or (some #(= feet (:feet %)) fs) (>= (count fs) blocked-after))))))
 
+(defn area-blocked?
+  "Has an intent of next's kind ended :blocked area-blocked-after times or more within area-radius
+   of feet in the last area-memory-ms? A tunnel boxed in its own cells fails :blocked, and the row
+   plans another to a target a cell or two off (a stand beside the spawner, a spiral leg), which
+   the failure history's choice keys call another choice: blaze-race-z11 job 5 (run
+   41233526639) failed 255 tunnels in 19 minutes, 3 to 4 seconds each."
+  [world next feet]
+  (boolean (and next
+                feet
+                (not (:plan/wait next))
+                (>= (count (filter #(and (= (:intent/kind next) (:kind %))
+                                         (= :blocked (:reason %))
+                                         (<= (physics/horizontal-distance feet (:feet %))
+                                             area-radius))
+                                   (recent-failures world)))
+                    area-blocked-after))))
+
+(defn leave-area
+  "The intent that takes a bot out of an area its tunnels were blocked in (area-blocked?): a walk
+   to a trail cell regroup-distance or more away that has a route (regroup-cell), else a tunnel
+   along its own trail to its farthest cell (the way it came is open), else nil."
+  [world]
+  (let [cell (regroup-cell world)
+        feet (when (:player/pos world) (intent/feet world))
+        far (seq (filter #(>= (physics/horizontal-distance % feet) regroup-distance)
+                         (:plan/trail world [])))
+        back (when far (apply max-key #(physics/horizontal-distance % feet) far))]
+    (cond cell {:intent/kind :walk :intent/target cell :intent/for :regroup}
+          back
+          {:intent/kind :tunnel-to
+           :intent/target back
+           :intent/steps 32
+           :intent/bridge? true
+           :intent/for :regroup}
+          :else nil)))
+
 (defn recover
   "A run out of attempts that is not stalled (stalled?) tries again instead of ending: the failure
-   counts start over, the last failure is forgotten (so the same intent is not refused as an
+   counts start over, the last failure is forgotten (the :blocked ones stay: three of them in one area are what area-blocked? counts, and a recovery after every three would never let it) (so the same intent is not refused as an
    identical retry), and the trail's cell regroup-distance back (regroup-cell) becomes the next
    thing to walk to, planning again from a new spot. :plan/recoveries counts them. Within
    recover-cooldown-ms of the last one (:plan/recover-at) it changes nothing but the wait: pearl-fight-i
@@ -439,12 +504,8 @@
       (-> world
           (assoc :plan/attempts 0 :plan/unwalkable 0 :plan/recover-at now)
           (update :plan/recoveries (fnil inc 0))
-          (dissoc :plan/failed
-                  :plan/failures
-                  :plan/waiting
-                  :plan/waiting-since
-                  :plan/waiting-ticks
-                  :plan/regroup)
+          (dissoc :plan/failed :plan/waiting :plan/waiting-since :plan/waiting-ticks :plan/regroup)
+          (update :plan/failures (fn [fs] (filterv #(= :blocked (:reason %)) fs)))
           (cond-> cell (assoc :plan/regroup cell))
           (game/say (str "recover " (:plan/recoveries world 0) " regroup " (pr-str cell)))))))
 
@@ -607,16 +668,6 @@
   "The span, on the larger of x and z, of the box of the feet's places in watch w."
   [w]
   (let [[lx _ lz] (:lo w) [hx _ hz] (:hi w)] (max (- hx lx) (- hz lz))))
-
-(defn routable?
-  "Does path/plan find a route (:found) for the feet from the cell they stand in to cell c within
-   explore-nodes expansions?"
-  [world c]
-  (= :found
-     (:path/status (path/plan world
-                              (path/feet-cell (:player/pos world))
-                              (intent/goal-of {:intent/kind :walk :intent/target c})
-                              {:path/max-nodes explore-nodes}))))
 
 (defn explore-cell
   "The cell a stuck bot walks to to plan from afresh: of the cells of the trail it came by at least
@@ -850,6 +901,7 @@
         next (when (and goal (nil? i)) (next-intent world goal table))
         feet (when (:player/pos world) (intent/feet world))
         failed (:plan/failed world)
+        leaving (when (and next feet (area-blocked? world next feet)) (leave-area world))
         retrying? (and next
                        (or (identical-retry? next failed feet) (failed-before? world next feet)))
         danger? (or (:player/on-fire? world) (menaced? world))
@@ -886,6 +938,7 @@
                          :intent/goal (:goal/id goal)})
           (nil? next) (wait world :nothing-to-do)
           (:plan/wait next) (wait world (:plan/wait next))
+          leaving (start-intent world (assoc leaving :intent/goal (:goal/id goal)))
           (and retrying? retreat-cell)
           (start-intent (update world :plan/boxed-at (fnil conj #{}) feet)
                         {:intent/kind :walk
