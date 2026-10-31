@@ -951,6 +951,8 @@
 
 (def stalled-looked 40) ; the newest done tunnels asked where they ended: a stalled target stays so for some minutes of legs, not four
 
+(def stall-memory-ms 600000) ; ms a stalled stand is remembered: the stalls were of one approach, then it is tried again
+
 (defn stalled
   "The set of targets of which the two newest done :tunnel-to facts (of the stalled-looked newest)
    ended in the same cell (:intention/ended-at): a tunnel begun where the last one ended, ended
@@ -965,6 +967,7 @@
    41161244206, fd5ae5a: 89 legs within a 12-block box)."
   [world]
   (->> (memory/newest-dones world :tunnel-to stalled-looked)
+       (filter #(< (- (:time/now world 0) (:intention/at %)) stall-memory-ms))
        (group-by :intention/target)
        (keep (fn [[target [latest before]]]
                (when (and before
@@ -1103,6 +1106,14 @@
                                       (unvisited-fortress-bricks world))]
         (brick-tunnel b))
       (corridor-extension world)))
+
+(defn explore-away
+  "A walk of plan/explore-distance (48) toward the farthest cell of the trail the bot came by, away
+   from the stuck spot (plan/explore-cell), for the fallback of the walk on to the spawner when every
+   stand is stalled and the search has no heading: an intent, never a wait (a plan wait ends the
+   plan after wait-ticks). Blaze-race-z4 landing 5 ended :nothing-to-do with time left."
+  [world]
+  {:intent/kind :walk :intent/target (plan/explore-cell world 0.0) :intent/for :explore})
 
 (defn search
   "The search for a spawner: explore known fortress corridors and bricks first (fortress-search),
@@ -1699,7 +1710,7 @@
            (not (at-spawner? world sp))
            (not (at-nook? world sp))
            (not (bait-here? world sp)))
-      (or (to-spawner world sp) (search world) {:plan/wait :no-blaze})
+      (or (to-spawner world sp) (search world) (explore-away world))
       (and sp
            (or camping-in-pocket? (at-spawner? world sp) (at-nook? world sp) (bait-here? world sp))
            (not (hurt? world))

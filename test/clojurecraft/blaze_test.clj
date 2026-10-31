@@ -1849,4 +1849,23 @@
                  :player/pos
                  [60.5 64.0 60.5])]
     (with-redefs [blaze/to-spawner (fn [_ _] nil)]
-      (is (some? (next-intent w)) "the search or the named wait, never nil"))))
+      (let [i (with-redefs [blaze/search (fn [_] nil)] (next-intent w))]
+        (is (some? i) "an intent, never nil")
+        (is (nil? (:plan/wait i)) "and no wait: it ends the plan")
+        (is (= :walk (:intent/kind i)))
+        (is (= :explore (:intent/for i)))))))
+
+(deftest a-stalled-stand-is-forgotten-after-ten-minutes
+  (let [tunnel
+        (fn [w id at]
+          (memory/remember-intention
+           (assoc w :time/now at)
+           {:intent/id id :intent/kind :tunnel-to :intent/target [3 64 3] :intent/ended-at [1 64 1]}
+           :done))
+        w (-> (standing {})
+              (tunnel 1 1000)
+              (tunnel 2 2000))]
+    (is (contains? (blaze/stalled (assoc w :time/now 3000)) [3 64 3])
+        "two tunnels ended in one cell")
+    (is (empty? (blaze/stalled (assoc w :time/now (+ 2000 blaze/stall-memory-ms 1))))
+        "ten minutes on: tried again")))
