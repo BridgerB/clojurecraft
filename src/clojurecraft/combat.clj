@@ -852,6 +852,13 @@
   (let [{:intent/keys [kind cell]} (:plan/failed world)]
     (boolean (and w (= :place kind) (= w cell)))))
 
+(defn pillar-failed?
+  "Did the last failed intent raise a pillar? Blaze-race-w job 4 chose a :pillar for its cover three
+   times in 300 ms, each failed :boxed (attempt 3 of 3), at hp 3, beside a rod it had not taken; the
+   cover tries the next choice (the meal, the nook) instead."
+  [world]
+  (= :pillar (:intent/kind (:plan/failed world))))
+
 (defn cover
   "The intent for a bot under retreat-health that no back-off from entity e would help
    (back-off-pointless?), never a fight (#577, danger-health): with e back-off-to or more away, the
@@ -868,16 +875,14 @@
         near? (<= (physics/distance (game/eye world) (aim e)) attack-reach)
         wall (let [w (wall-cell world e)] (when-not (wall-failed? world w) w))
         filler (stairs/filler world wall-fill)
+        pillar (when-not (pillar-failed? world) (stairs/filler world pillar-fill))
         nook (nook-cell world)
         [_ fy _] (intent/feet world)]
     (cond (>= (horizontal world e) back-off-to)
           (if food {:intent/kind :eat :intent/item food} {:plan/wait :resting})
           (and food (not near?)) {:intent/kind :eat :intent/item food}
           (and wall filler) {:intent/kind :place :intent/item filler :intent/cell wall}
-          (stairs/filler world pillar-fill)
-          {:intent/kind :pillar
-           :intent/item (stairs/filler world pillar-fill)
-           :intent/top (+ fy pillar-height)}
+          pillar {:intent/kind :pillar :intent/item pillar :intent/top (+ fy pillar-height)}
           food {:intent/kind :eat :intent/item food}
           nook {:intent/kind :dig :intent/target nook}
           :else {:plan/wait :cornered})))

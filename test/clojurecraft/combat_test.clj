@@ -816,3 +816,9 @@
     (is (false? (combat/wall-failed? {:plan/failed {:intent/kind :walk :intent/cell [8 64 8]}}
                                      [8 64 8])))
     (is (false? (combat/wall-failed? w nil)))))
+
+(deftest a-cover-does-not-raise-a-pillar-that-just-failed
+  ;; blaze-race-w job 4: :pillar failed :boxed three times in 300 ms
+  (is (true? (combat/pillar-failed? {:plan/failed {:intent/kind :pillar :intent/reason :boxed}})))
+  (is (false? (combat/pillar-failed? {:plan/failed {:intent/kind :place}})))
+  (is (false? (combat/pillar-failed? {}))))
