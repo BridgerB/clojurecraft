@@ -1221,12 +1221,22 @@
                   (awake-from? sp c)
                   (or (not see?) (sees-spawner? world sp c)))))))
 
+(def pocket-churn-starts 6) ; :pocket intents begun within pocket-churn-ms after which none is chosen
+(def pocket-churn-ms 5000)
+
+(defn pocket-churning?
+  "Have pocket-churn-starts :pocket intents begun within pocket-churn-ms (the story, not the
+   intent: each one ends at once and the next is chosen)? Blaze-race-z11 job 3: 61 starts in 3 s from
+   19:42:03, dead at 19:42:18; z10 job 2 the same with :pocket-hold. None is chosen while it lasts."
+  [world]
+  (>= (memory/started-count-within? world :pocket pocket-churn-ms) pocket-churn-starts))
+
 (defn pocket-go
   "A :pocket intent for the nearest site (pocket/current, with the line to the spawner asked when
    see?), or nil when the feet are in the pocket already or none is found: a pocket that exists
    is walked into, a wall is dug into."
   [world sp see?]
-  (when-not (pocket/in? world)
+  (when-not (or (pocket/in? world) (pocket-churning? world))
     (when-let [site (pocket/current world (intent/feet world) (pocket-ok? world sp see?))]
       {:intent/kind :pocket :intent/site site})))
 

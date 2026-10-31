@@ -2269,3 +2269,25 @@
                                      :pocket
                                      20000)))
   (is (false? (memory/started-within? (assoc (standing {}) :time/now 100000) :pocket 20000))))
+
+(deftest a-pocket-storm-stops-being-chosen
+  ;; blaze-race-z11 job 3: :pocket began 61 times in 3 s from 19:42:03 and the bot burned; each ends at once
+  (let [w (-> (standing {})
+              (assoc :world/chunks {[0 0] (world/column pocket-walls)}
+                     :player/pos [5.5 64.0 8.5]
+                     :time/now 100000))
+        begun (fn [w n at]
+                (reduce (fn [w i]
+                          (memory/remember-intention (assoc w :time/now (+ at (* 50 i)))
+                                                     {:intent/id (+ 500 i) :intent/kind :pocket}
+                                                     :started))
+                        w
+                        (range n)))]
+    (is (some? (blaze/pocket-go w nil false)) "no storm: the pocket is found")
+    (is (false? (blaze/pocket-churning? (begun w 3 99000))) "three starts: not a storm")
+    (is (true? (blaze/pocket-churning? (assoc (begun w 8 99500) :time/now 100000)))
+        "eight in half a second")
+    (is (nil? (blaze/pocket-go (assoc (begun w 8 99500) :time/now 100000) nil false))
+        "none is chosen in it")
+    (is (some? (blaze/pocket-go (assoc (begun w 8 99500) :time/now 110000) nil false))
+        "after pocket-churn-ms the pocket is found again")))

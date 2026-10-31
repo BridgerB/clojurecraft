@@ -416,6 +416,16 @@
                         (:world/facts world)
                         k)))))
 
+(defn started-count-within?
+  "How many intentions of kind k started within ms of now?"
+  [world k ms]
+  (let [since (- (:time/now world 0) ms)]
+    (count (filter #(>= % since)
+                   (d/q '[:find [?at ...] :in $ ?k :where [?e :intention/kind ?k]
+                          [?e :intention/event :started] [?e :intention/at ?at]]
+                        (:world/facts world)
+                        k)))))
+
 (defn intentions
   "The story of every intention, oldest fact first."
   [world]
