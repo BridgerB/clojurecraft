@@ -2233,3 +2233,73 @@
     (is (= {:intent/kind :dig :intent/target [7 64 8]} (blaze/punch-fire-here w))
         "so the fire is punched")
     (is (not= :pocket-hold (:intent/kind (next-intent w))) "and the row does not hold through it")))
+
+(deftest a-healthy-bot-with-no-fight-for-two-minutes-goes-to-the-spawner
+  ;; blaze-race-z10 jobs 1, 4 and 5: 50 of 57 minutes camping, ambushing, tunnelling or in a pocket,
+  ;; 0 to 9 real kills; job 1 flipped :pocket and :walk [2341 60 2286] every 0.3 s for 12 minutes
+  (let [w (-> (standing {})
+              with-spawner
+              (assoc :plan/since 0 :time/now 300000))
+        fought (fn [w at]
+                 (memory/remember-intention (assoc w :time/now at)
+                                            {:intent/id 70 :intent/kind :fight}
+                                            :done))]
+    (is (true? (blaze/passive? w)) "healthy, idle, no fight for 5 minutes")
+    (is (false? (blaze/passive? (assoc w :time/now 100000))) "only 100 s into the plan")
+    (is (false? (blaze/passive? (assoc (fought w 250000) :time/now 300000))) "a fight 50 s ago")
+    (is (true? (blaze/passive? (assoc (fought w 100000) :time/now 300000))) "a fight 200 s ago")
+    (is (false? (blaze/passive? (assoc w :player/health 15.0))) "under passive-health")
+    (is (false? (blaze/passive? (assoc w :player/on-fire? true))))
+    (is (false? (blaze/passive? (assoc w :sortie/since 290000))) "already on a sortie")
+    (is (false? (blaze/passive? (assoc-in w
+                                 [:world/entities 7]
+                                 (entity :blaze [10.5 65.0 8.5] :entity/health 20.0))))
+        "a blaze within 8")
+    (testing "in the pocket the row goes out, not on camping"
+      (let [p (in-pocket w)]
+        (is (not= :camp (:intent/kind (next-intent p))))
+        (is (contains? #{:walk :tunnel-to} (:intent/kind (next-intent p))))))))
+
+(deftest a-pocket-just-begun-does-not-send-the-bait-walk
+  ;; blaze-race-z10 job 1 (18:24:23 on): :pocket and :walk [2341 60 2286] alternated every 0.3 s for 12 minutes
+  (is (true? (memory/started-within? (memory/remember-intention
+                                      (assoc (standing {}) :time/now 100000)
+                                      {:intent/id 71 :intent/kind :pocket}
+                                      :started)
+                                     :pocket
+                                     20000)))
+  (is (false? (memory/started-within? (assoc (standing {}) :time/now 100000) :pocket 20000))))
+
+(deftest a-pocket-storm-stops-being-chosen
+  ;; blaze-race-z11 job 3: :pocket began 61 times in 3 s from 19:42:03 and the bot burned; each ends at once
+  (let [w (-> (standing {})
+              (assoc :world/chunks {[0 0] (world/column pocket-walls)}
+                     :player/pos [5.5 64.0 8.5]
+                     :time/now 100000))
+        begun (fn [w n at]
+                (reduce (fn [w i]
+                          (memory/remember-intention (assoc w :time/now (+ at (* 50 i)))
+                                                     {:intent/id (+ 500 i) :intent/kind :pocket}
+                                                     :started))
+                        w
+                        (range n)))]
+    (is (some? (blaze/pocket-go w nil false)) "no storm: the pocket is found")
+    (is (false? (blaze/pocket-churning? (begun w 3 99000))) "three starts: not a storm")
+    (is (true? (blaze/pocket-churning? (assoc (begun w 8 99500) :time/now 100000)))
+        "eight in half a second")
+    (is (nil? (blaze/pocket-go (assoc (begun w 8 99500) :time/now 100000) nil false))
+        "none is chosen in it")
+    (is (some? (blaze/pocket-go (assoc (begun w 8 99500) :time/now 110000) nil false))
+        "after pocket-churn-ms the pocket is found again")))
+
+(deftest a-shut-cell-with-nothing-placed-is-not-a-pocket-to-find-again
+  ;; blaze-race-z11 job 3 (flip_trace2): the row wanted a refuge while the cell stood in was shut on every side
+  (let [shut (-> (standing {})
+                 (assoc :world/chunks {[0 0] (world/column (sealed-walls))}
+                        :pocket/site pocket-site
+                        :time/now 100000))]
+    (is (pocket/in? shut))
+    (is (pocket/sealed? shut (:pocket/site shut)))
+    (is (nil? (blaze/hold-intent shut)) "nothing to hold for, nothing to open (no placed cell)")
+    (is (not= :pocket (:intent/kind (next-intent shut))))
+    (is (not= :unseal (:intent/kind (next-intent shut))))))
