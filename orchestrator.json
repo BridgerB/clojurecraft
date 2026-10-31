@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-31T15:10:24.576Z",
+  "at" : "2026-10-31T15:11:32.873Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -16,7 +16,7 @@
     "number" : 643,
     "title" : "Bot stops at gear: retrying",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : true
+    "copilot" : false
   }, {
     "number" : 531,
     "title" : "Bot stops at ingots: boxed",
@@ -263,8 +263,7 @@
     "why" : "hands-off label"
   }, {
     "issue" : 643,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment"
+    "move" : "assign"
   }, {
     "issue" : 531,
     "move" : "leave",
@@ -355,11 +354,6 @@
     "why" : "hands-off label"
   } ],
   "log" : [ {
-    "issue" : 151,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment",
-    "at" : "2026-10-30T10:31:00.865Z"
-  }, {
     "issue" : 151,
     "move" : "assign",
     "at" : "2026-10-30T10:32:10.913Z"
@@ -1704,5 +1698,9 @@
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
     "at" : "2026-10-31T15:10:24.576Z"
+  }, {
+    "issue" : 643,
+    "move" : "assign",
+    "at" : "2026-10-31T15:11:32.873Z"
   } ]
 }
