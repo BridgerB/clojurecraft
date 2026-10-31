@@ -6,6 +6,7 @@
             [clojure.test.check :as tc]
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]
+            [clojurecraft.blaze]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.bytes :as b]
             [clojurecraft.combat :as combat]
@@ -715,3 +716,21 @@
             (at {7 (mob :zombie [10.5 64.0 8.5] 20.0) 8 (mob :zombie [10.0 64.0 8.5] 20.0)} 20.0)))
         "two zombies, 6 a round and the margin 3, are not a pack to run from")
     (is (every? some? (map combat/hit-damage [:piglin :hoglin :wither_skeleton])))))
+
+(deftest shooters-are-no-pack-and-the-blaze-row-answers-its-blazes
+  ;; two blazes (5 each) add to retreat-health, but they shoot: the pack rule counts melee hits only,
+  ;; so the line stays where it was (10), and with the blaze-rods row in play in the Nether :defend
+  ;; leaves blazes to it (combat/answering), as on main
+  (let [blazes {7 (mob :blaze [10.5 64.0 8.5] 20.0) 8 (mob :blaze [10.0 64.0 9.0] 20.0)}
+        w (assoc (standing blazes)
+                 :player/dimension dimension/nether
+                 :plan/status :active
+                 :plan/goals #{:blaze-rods})]
+    (is (== 10 (combat/danger-line w)) "two blazes: the old line, not outmatched-line")
+    (is (empty? (combat/threats w)) "the blaze row answers blazes")
+    (is (nil? (plan/next-intent w (row :defend) plan/goals))
+        "nothing chosen by :defend, as on main")
+    (is (== 10
+            (combat/danger-line (standing {7 (mob :blaze [10.5 64.0 8.5] 20.0)
+                                           8 (mob :wither_skeleton [10.0 64.0 9.0] 20.0)})))
+        "a blaze with a wither skeleton: one melee hit, no pack")))

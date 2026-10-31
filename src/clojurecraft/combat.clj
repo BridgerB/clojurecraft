@@ -420,8 +420,15 @@
   [kind]
   (or (extra-hits kind) (get-in mob/kinds [kind :melee]) (get-in mob/kinds [kind :shoot])))
 
+(defn melee-damage
+  "The damage of one melee hit of a mob kind on Normal (extra-hits, else mob/kinds' :melee), nil
+   for a kind that shoots or has no hit: a ranged mob's hits do not add up at range like a pack's."
+  [kind]
+  (or (extra-hits kind) (get-in mob/kinds [kind :melee])))
+
 (defn outmatched?
-  "Do pack-size or more of the hits (hit-damage of the hostiles near, all known) add up to
+  "Do pack-size or more of the melee hits (melee-damage of the hostiles near, all known: a blaze
+   or a skeleton, which shoot, is none, and the blaze row answers blazes itself) add up to
    retreat-health or more in one round? Pearl-fight-a job 6 (run 41143668588) started :fight 93 at
    17.6 health against piglins 87 and 93, two attackers landing hits of 6.7, and died at 2m56s.
    Two zombies (6) and a zombie with a silverfish (4) are not outmatched; two piglins (12) are."
@@ -446,7 +453,7 @@
                                        defend-radius)))
                          (entity/hostiles world)))
         hits (map (comp hit-damage entity/kind) near)]
-    (cond (outmatched? hits) outmatched-line
+    (cond (outmatched? (map (comp melee-damage entity/kind) near)) outmatched-line
           (or (empty? hits) (some nil? hits)) retreat-health
           :else (min retreat-health (+ danger-margin (reduce + hits))))))
 
