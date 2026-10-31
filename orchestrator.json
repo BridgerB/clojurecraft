@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-31T14:00:37.444Z",
+  "at" : "2026-10-31T14:02:50.441Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -17,11 +17,6 @@
     "title" : "Bot stops at gear: retrying",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
-  }, {
-    "number" : 639,
-    "title" : "Bot stops at fortress: no-food-to-return",
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : true
   }, {
     "number" : 507,
     "title" : "Bot stops at blaze-rods: no-blaze",
@@ -72,6 +67,11 @@
     "title" : "Bot stops at portal: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
+  }, {
+    "number" : 639,
+    "title" : "Bot stops at fortress: no-food-to-return",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : true
   }, {
     "number" : 623,
     "title" : "Bot stops at blaze-rods: no-support",
@@ -262,10 +262,6 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 639,
-    "move" : "wait",
-    "why" : "session starting"
-  }, {
     "issue" : 507,
     "move" : "leave",
     "why" : "hands-off label"
@@ -293,6 +289,10 @@
     "issue" : 178,
     "move" : "leave",
     "why" : "hands-off label"
+  }, {
+    "issue" : 639,
+    "move" : "wait",
+    "why" : "session starting"
   }, {
     "issue" : 579,
     "move" : "leave",
