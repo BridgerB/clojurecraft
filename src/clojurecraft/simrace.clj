@@ -144,7 +144,7 @@
    :oak_planks 1
    :flint 1
    :sand 16
-   :arrow 1
+   :golden_boots 1
    :spruce_planks 1
    :white_wool 2})
 

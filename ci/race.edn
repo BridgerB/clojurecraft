@@ -25,8 +25,8 @@
             "minecraft:cobbled_deepslate 64" "minecraft:dirt 64" "minecraft:gravel 16"
             "minecraft:raw_copper 12" "minecraft:lapis_lazuli 11" "minecraft:leather 6"
             "minecraft:bone 2" "minecraft:string 3" "minecraft:oak_planks 1" "minecraft:flint 1"
-            "minecraft:sand 16" "minecraft:arrow 1" "minecraft:spruce_planks 1"
-            "minecraft:white_wool 2"] ; what a race bot carries to the fortress (lane audits of 2026-10-31: 36 of 36 slots used: armour in the bag, 256 to 877 cobblestone, the stones a tunnel digs, a stone pickaxe, the portal kit's bucket and flint and steel, and the odds and ends it picks up): 13 single tools and stacks, 12 stacks of stone, 11 of odds and ends, 36 slots, given when :race/from is "fortress"
+            "minecraft:sand 16" "minecraft:golden_boots 1" "minecraft:spruce_planks 1"
+            "minecraft:white_wool 2"] ; what a race bot carries to the fortress (lane audits of 2026-10-31: 36 of 36 slots used: armour in the bag, 256 to 877 cobblestone, the stones a tunnel digs, a stone pickaxe, the portal kit's bucket and flint and steel, and the odds and ends it picks up; golden boots in place of the arrow, so piglins are neutral to it: churn-guard, round o lost two pearl bots to a piglin in three minutes): 13 single tools and stacks, 12 stacks of stone, 11 of odds and ends, 36 slots, given when :race/from is "fortress"
  :race/until "pearls-12"   ; the target; the run plays every step up to it (plan/through): the Nether, the fortress (issue #261), seven blaze rods from its spawner (issue #262), then twelve ender pearls from endermen (issue #263). The sim race stays at blaze-rods until the model spawns the Nether's endermen
  :race/run-minutes 330     ; how long each runner plays, its slots refilled the whole time (issue #127): near GitHub's 6 h job cap, inside the job's 355 minutes with setup, the last report and the uploads
  :race/stagger-ms 3000     ; between bots joining a server
