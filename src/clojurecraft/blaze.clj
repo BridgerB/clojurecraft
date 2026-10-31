@@ -933,7 +933,7 @@
             (intent/routable? world walk) walk
             :else nil))))
 
-(def stalled-looked 4) ; the newest done tunnels asked where they ended
+(def stalled-looked 40) ; the newest done tunnels asked where they ended: a stalled target stays so for some minutes of legs, not four
 
 (defn stalled
   "The set of targets of which the two newest done :tunnel-to facts (of the stalled-looked newest)
@@ -943,7 +943,10 @@
    the decision after a done is made where it ended, so that excluded every target the moment its
    tunnel ended, and the two stands beside a spawner were taken by turns, each tunnel a new one
    with a new trail (blaze-race-d job 5, 9e111c23b, story-brd5: ids 2 to 5 alternated [2209 60
-   1794] and [2210 60 1793], each ended-at lower down the column)."
+   1794] and [2210 60 1793], each ended-at lower down the column). Remembered over the newest
+   stalled-looked: with four, a search leg between them pushed a stalled stand out of the window
+   and it was chosen again, the three stands taken by turns for 35 minutes (blaze-race-w job 5,
+   41161244206, fd5ae5a: 89 legs within a 12-block box)."
   [world]
   (->> (memory/newest-dones world :tunnel-to stalled-looked)
        (group-by :intention/target)
