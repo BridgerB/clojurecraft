@@ -52,6 +52,7 @@
             [clojurecraft.recipe :as recipe]
             [clojurecraft.stairs :as stairs]
             [clojurecraft.terrain :as terrain]
+            [clojurecraft.window :as window]
             [datascript.core :as d]))
 
 (set! *warn-on-reflection* true)
@@ -166,6 +167,20 @@
          (sort-by (fn [[_ e]] (physics/distance pos (:entity/pos e))))
          (take candidates)
          (some (fn [[_ e :as ee]] (when (fetchable? world e) ee))))))
+
+(defn rod-room
+  "A :toss of junk when a rod lies within reach of a pickup and every slot is full with no rod
+   held to merge into, else nil: a drop is picked up on contact, and with no slot free it never
+   is. Lane 1 of race 41181938317 (c996f54), s2 Clj_r02: five blazes killed, seven rods dropped,
+   :collect-drops [333 77 300] failed :not-picked-up four times, rods held none, all 36 slots
+   full (877 cobblestone, 128 diorite, 64 cobbled deepslate, 64 netherrack, gravel, dirt ...).
+   Lane 4's Clj_r06 saw fifteen drops and held three."
+  [world]
+  (when (and (some? (rod-lying world))
+             (zero? (rods world))
+             (nil? (:window/open world))
+             (window/tossable world (window/view world :inventory)))
+    {:intent/kind :toss}))
 
 (defn cells-beside
   "Every cell a stand beside spawner sp may be: its side-steps at each of stand-levels, level
@@ -1507,7 +1522,9 @@
                             (when (burning-twice? world) (here-intent world)))))
         prepare (delay (prepare-intent world sp))
         dodging (delay (dodge-intent world))
-        grab (delay (when-let [e (near-rod world)] (rod-intent world e)))
+        room (delay (rod-room world))
+        ;; a rod with no slot to be picked up into is not grabbed: the junk goes first (rod-room)
+        grab (delay (when-let [e (near-rod world)] (when-not @room (rod-intent world e))))
         waiting (delay (ambush world))
         stock (delay (when-not (hurt? world) (stocking world)))
         out (delay (when (burning-here? world) (leave-fire world)))
@@ -1530,6 +1547,7 @@
           {:intent/kind :fight :intent/target heid :intent/to-the-end? true :intent/yield? true}
           @wary @wary
           @away @away
+          @room @room
           (and lying (drops/under-reach? world lying)) (fetch-walk lying)
           lying
           {:intent/kind :collect-drops
