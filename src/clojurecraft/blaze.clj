@@ -354,6 +354,42 @@
   [world]
   (cover world (vals (watchers world))))
 
+(def portal-states "Every state of the Nether portal block." (blocks/states-of :nether_portal))
+
+(defn home-portal
+  "The Nether portal block on record in the bot's dimension nearest the feet, or nil: the way
+   back to the overworld, where the animals are (memory/positions-now; portals are remembered
+   whenever they are seen lit)."
+  [world]
+  (memory/nearest-of (physics/centre (intent/feet world))
+                     Double/POSITIVE_INFINITY
+                     (memory/positions-now world portal-states)))
+
+(defn home-op
+  "The op that stands in the portal block p until the dimension is the overworld."
+  [p]
+  {:build/op :stand-in
+   :build/pos p
+   :build/stand p
+   :build/step :enter
+   :build/done [:dimension dimension/overworld]})
+
+(defn food-trip
+  "The intent to go home through the portal for food, or nil when no portal is on record: what a
+   bot that cannot heal (heals? false: the food under hunger/heal-level and nothing to eat) does
+   instead of a :rest that never ends. Race lane 4 (run 40980342194) s1 r01, s2 r11 and s2 r16 held
+   one :rest for 200, 164 and 200 minutes at health 10.9, 10.2 and 9.0, food 17, with 830, 354 and
+   394 cobblestone and no food; the overworld has animals (hunt/provisioning? stocks
+   hunt/provision-wanted again) and the :return-nether row brings the bot back."
+  [world]
+  (when (home-portal world) {:intent/kind :portal-home}))
+
+(defn unhealing
+  "The food trip when the bot cannot heal (heals? false), else nil: where a rest would hold for
+   ever, the way out."
+  [world]
+  (when-not (heals? world) (food-trip world)))
+
 (def rest-intent {:intent/kind :rest})
 
 (defn healing
@@ -375,6 +411,7 @@
           (meal world) (meal world)
           (and weid (not (combat/void-retreat? world e)))
           {:intent/kind :back-off :intent/target weid}
+          (unhealing world) (unhealing world)
           :else rest-intent)))
 
 (defn wary?
@@ -393,6 +430,7 @@
   (let [away (hide world)]
     (cond away away
           (meal world) (meal world)
+          (and (empty? (watchers world)) (unhealing world)) (unhealing world)
           (empty? (watchers world)) rest-intent
           :else nil)))
 
@@ -525,6 +563,24 @@
           (and sp (not (at-spawner? world sp))) (to-spawner world sp)
           sp {:intent/kind :camp :intent/spawner sp}
           :else (or (search world) {:plan/wait :no-blaze}))))
+
+;; ---------------------------------------------------------------- the :portal-home intent
+
+(defmethod intent/run :portal-home
+  ;; {:intent/kind :portal-home}: work the stand in the nearest remembered Nether portal block
+  ;; through build/work-op (its child a walk to it, the await); done in the overworld, failed
+  ;; :no-portal when none is on record
+  [world i event]
+  (let [p (home-portal world)]
+    (cond (not= dimension/nether (dimension/of world))
+          (-> world
+              (assoc :player/controls {})
+              intent/done)
+          (nil? p)
+          (-> world
+              (assoc :player/controls {})
+              (intent/fail :no-portal))
+          :else (build/work-op world i (home-op p) event))))
 
 ;; ---------------------------------------------------------------- the :camp intent
 

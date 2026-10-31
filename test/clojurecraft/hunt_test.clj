@@ -359,3 +359,22 @@
          (hunt/foraging?
           (assoc w :world/chunks {[0 0] (world/column {[8 70 8] (blocks/default-state :stone)})})))
         "under a roof, in the mine: none")))
+
+(deftest a-bot-home-from-the-nether-hunts-before-it-goes-back
+  ;; race lane 4 s1 r01 (rested 200 min, food 17, no food, 830 cobblestone): sent home by
+  ;; :portal-home it arrives in the overworld with the portal kit and a Nether stage still undone.
+  ;; The :hunt row (priority 0) stocks provision-wanted foods before :return-nether (16) takes it back
+  (let [cow {5 (animal :cow [11.5 64.0 8.5])}
+        home (fn [inv]
+               (assoc (standing 17 inv cow)
+                      :time/now 1000
+                      :time/tick 0
+                      :plan/goals #{:blaze-rods}
+                      :plan/reached #{:nether}))]
+    (is (= :hunt (:goal/id (plan/choose (home kit-held) plan/goals))) "no food: the animals first")
+    (is (= :return-nether
+           (:goal/id
+            (plan/choose
+             (assoc (home (assoc kit-held 2 (item :bread hunt/provision-wanted))) :player/food 20)
+             plan/goals)))
+        "provisioned: back through the portal")))
