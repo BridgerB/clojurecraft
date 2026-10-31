@@ -251,7 +251,7 @@
     "the feet cell of the pearl hunt's burrow, where no enderman can stand within reach of the bot (pearls/shelter?), set when a :burrow ends (issue #263)"
     "after the hunt dug one"]
    [:pearls/angry
-    "per entity id of each angry enderman tracked within stare range: {:since ms first seen angry :best nearest distance so far :closed-at ms it last closed in by a block or more}, kept by pearls/track-angry so that an angry one parked far off for a minute (parked?) is told from one that stalks"
+    "per entity id of each angry enderman tracked within stare range: {:since ms first seen angry :best nearest distance so far :closed-at ms it last closed in by close-gain (2) blocks or more}, kept by pearls/track-angry so that an angry one parked far off for a minute (parked?) is told from one that stalks"
     "every tick a pearl hunt runs (plan/steer)"]
    [:pearls/shot-at-ms
     "ms a ghast was last in sight with a clear line to the bot (pearls/shot-at?), kept by the :pearls steer: the walks that go elsewhere (travel, wander, cage-break) wait shot-hold-ms after it, so that a walk to cover and a walk away do not alternate"

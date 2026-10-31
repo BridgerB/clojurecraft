@@ -2790,3 +2790,22 @@
     (is (= {:intent/kind :dig :intent/target [8 63 8] :intent/for :pearls} (pearls/cover-from w))
         "the cell under the feet: a hole to stand in, the rim between it and the ghast")
     (is (= :dig (:intent/kind (plan/next-intent w row plan/goals))))))
+
+(deftest a-parked-enderman-jittering-a-block-or-two-stays-parked
+  ;; pearl-fight-g job 3 (churn-guard's probe 41174965115): enderman 75 sat angry at 9 to 11 blocks for
+  ;; 90 minutes and its best distance and :closed-at kept resetting at a block of jitter
+  (let [at (fn [z] (assoc (enderman [8.5 61.0 z]) :entity/creepy? true))
+        w (-> (wide (burrowed [8.5 61.0 8.5] {7 (at 20.5)}))
+              (assoc :time/now 0)
+              pearls/track-angry)
+        step (fn [w z ms]
+               (-> w
+                   (assoc-in [:world/entities 7] (at z))
+                   (assoc :time/now ms)
+                   pearls/track-angry))
+        jittered (reduce (fn [w [z ms]] (step w z ms))
+                         w
+                         [[19.5 10000] [20.5 20000] [19.0 30000] [20.0 40000] [19.5 50000]
+                          [20.5 60000]])]
+    (is (= 0 (get-in jittered [:pearls/angry 7 :closed-at])) "twelve blocks, a block of jitter")
+    (is (pearls/parked? (assoc jittered :time/now 70000) 7 [8.5 61.0 20.5]))))
