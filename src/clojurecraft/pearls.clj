@@ -952,6 +952,7 @@
                dy [0 1 -1]]
            [(+ x dx) (+ y dy) (+ z dz)])
          (remove #{feet})
+         (remove #(plan/avoiding? world %))
          (sort-by #(physics/distance feet %))
          (some (fn [c]
                  (when (and (not (contains? bl c))
@@ -1857,9 +1858,14 @@
    failed, plan/fail-intent). A walk is tried once before it is known to fail: a fence between
    the bot and its mouth is walked at first, as the burrow test holds, and given up after. Gym
    plan run 40583923956 run 3 (issue #263, pearls-12) walked to the mouth of its burrow fifteen
-   times in 0.6 s, each failing :no-path, because these walks never asked the blacklist."
+   times in 0.6 s, each failing :no-path, because these walks never asked the blacklist. Nor a place
+   the stuck watchdog asked rows to keep away from (plan/avoiding?): pearl-fight-k job 3 (plan run
+   41197008609) was walked back to its burrow's mouth [2450 55 2200] 16 times after the watchdog's
+   16 firings and cut a burrow there each time."
   [world target]
-  (when (and target (not (contains? (:plan/blacklist world #{}) target)))
+  (when (and target
+             (not (contains? (:plan/blacklist world #{}) target))
+             (not (plan/avoiding? world target)))
     {:intent/kind :walk :intent/target target :intent/for :shelter}))
 
 (defn uncage
@@ -2052,7 +2058,9 @@
                        (pickaxe? world)
                        (or ce q m (and near? (not ghost?)) (and e (at-site? world))))
               (away world (or q ce m e)))
-        digs? (and dir (burrowable? world (intent/feet world) dir))
+        digs? (and dir
+                   (not (plan/avoiding? world (intent/feet world)))
+                   (burrowable? world (intent/feet world) dir))
         site (when (and dir (not digs?)) (burrow-site world dir))
         csite (when
                 (and (nil? home) (pickaxe? world) (not (at-site? world)) (stale? world) (nil? m))

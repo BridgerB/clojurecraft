@@ -3063,3 +3063,20 @@
         "six stems held: the hunt goes on, the pickaxe made when it falls under spare-digs")
     (is (= :lookout (:intent/kind (plan/next-intent (with 200 0) row plan/goals)))
         "digs to spare: no reserve is cut")))
+
+(deftest a-place-the-stuck-watchdog-asked-to-avoid-gets-no-burrow-and-no-shelter-walk
+  ;; pearl-fight-k job 3 (plan run 41197008609, 13:56:12): the watchdog fired for the twelfth time at
+  ;; [2444 52 2199]; 2.5 s later the hunt walked back to the burrow site [2450 55 2200] and cut a
+  ;; burrow there, undoing the explore walk, sixteen times in 3 hours, five pearls and none after
+  ;; minute 18
+  (let [calm (enderman [8.5 64.0 28.5])
+        w (-> (standing {1 calm})
+              (assoc-in [:player/inventory 1] (item :iron_pickaxe 1))
+              (assoc :time/now 1000))
+        avoided (assoc w :plan/avoid {:near [8 64 8] :until 1000000})]
+    (is (= :burrow (:intent/kind (plan/next-intent w row plan/goals)))
+        "with nothing to avoid, a burrow is cut where the bot stands")
+    (is (not= :burrow (:intent/kind (plan/next-intent avoided row plan/goals)))
+        "at a place the watchdog asked rows to keep away from: no burrow")
+    (is (nil? (pearls/shelter-walk avoided [8 64 8])) "and no walk to a shelter there")
+    (is (some? (pearls/shelter-walk w [8 64 8])) "as before when nothing is avoided")))
