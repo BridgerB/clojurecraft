@@ -397,9 +397,10 @@
 
 (deftest a-kit-becomes-an-inventory
   (let [inv (simrace/kit->inventory {:iron_pickaxe 1 :cobblestone 130 :iron_helmet 1})]
-    (is (= {:item (recipe/item-id :iron_helmet) :count 1} (get inv [:armour 0])) "worn")
     (is (= [64 64 2] (map #(:count (get inv [:hotbar %])) [0 1 2])) "a count over a stack is split")
-    (is (= (recipe/item-id :iron_pickaxe) (:item (get inv [:hotbar 3]))))
+    (is (= (recipe/item-id :iron_helmet) (:item (get inv [:hotbar 3])))
+        "armour is carried, not worn")
+    (is (= 28 (count (simrace/kit->inventory simrace/fortress-kit-default))) "28 of 36 slots")
     (is (= inv (simrace/kit->inventory {:iron_helmet 1 :iron_pickaxe 1 :cobblestone 130}))
         "the same kit, the same inventory")
     (is (every? (comp pos? :count) (vals (simrace/kit->inventory simrace/fortress-kit-default))))))

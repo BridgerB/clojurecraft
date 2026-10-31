@@ -110,41 +110,46 @@
 ;; ---------------------------------------------------------------- a start at a fortress
 
 (def fortress-kit-default
-  "What a bot brings to a fortress in the real race, as {item count}: the iron pickaxe and a crafting
-   table for the digs, sticks, a stack of cobblestone to lay and 64 netherrack, an iron sword, iron
-   armour (worn) and sixteen cooked food. ci/simrace.edn's :simrace/kit replaces it as one line."
-  {:iron_pickaxe 1
-   :crafting_table 1
-   :stick 4
-   :cobblestone 256
-   :netherrack 64
+  "What a bot brings to a fortress in the real race, as {item count} (ci/race.edn's :race/kit, from the
+   lane audits): a stone pickaxe, an iron sword and three pieces of iron armour in the bag (the
+   :wear-armour row puts them on), a table, sticks, flint and steel, both buckets, coal, cooked food and
+   eight stacks of junk stone, twenty-eight of the thirty-six slots. ci/simrace.edn's :simrace/kit
+   replaces it as one line."
+  {:stone_pickaxe 1
    :iron_sword 1
    :iron_helmet 1
    :iron_chestplate 1
    :iron_leggings 1
-   :iron_boots 1
-   :cooked_beef 16})
+   :cooked_beef 16
+   :crafting_table 1
+   :stick 12
+   :flint_and_steel 1
+   :bucket 1
+   :water_bucket 1
+   :coal 4
+   :stone_sword 1
+   :cobblestone 256
+   :netherrack 64
+   :diorite 128
+   :granite 64
+   :andesite 64
+   :cobbled_deepslate 64
+   :dirt 64
+   :gravel 16})
 
 (def stack-size 64)
 
 (defn kit->inventory
-  "The sim's :inventory, {place item}, of a kit ({item count}): armour pieces in their armour places
-   (armour/part), everything else in the hotbar and then the main inventory, a count over a stack
-   split into stacks of stack-size, items in name order so the same kit is the same inventory."
+  "The sim's :inventory, {place item}, of a kit ({item count}): every item in the bag, the hotbar and
+   then the main inventory, a count over a stack split into stacks of stack-size, items in name order
+   so the same kit is the same inventory. Armour is carried, not worn, as the real bots arrive."
   [kit]
-  (let [armour? (comp some? armour/part)
-        worn (into {}
-                   (keep (fn [[k n]]
-                           (when (and (armour? k) (pos? n))
-                             [[:armour (armour/part k)] {:item (recipe/item-id k) :count 1}])))
-                   (sort-by key kit))
-        stacks (for [[k n] (sort-by key kit)
-                     :when (not (armour? k))
+  (let [stacks (for [[k n] (sort-by key kit)
                      c (concat (repeat (quot n stack-size) stack-size)
                                (when (pos? (rem n stack-size)) [(rem n stack-size)]))]
                  {:item (recipe/item-id k) :count c})
         places (concat (for [i (range 9)] [:hotbar i]) (for [i (range 27)] [:main i]))]
-    (into worn (map vector places stacks))))
+    (into {} (map vector places stacks))))
 
 (def fortress-rings
   "Distances from a fortress spawner, nearest last, a start is looked for at: the far side first, so

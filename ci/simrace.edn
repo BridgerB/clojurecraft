@@ -15,6 +15,5 @@
 ;; Absent, every run starts from spawn in the overworld as before. --from fortress does the same on one
 ;; command line.
 ;;   :simrace/from "fortress"
-;;   :simrace/kit {:iron_pickaxe 1 :crafting_table 1 :stick 4 :cobblestone 256 :netherrack 64
-;;                 :iron_sword 1 :iron_helmet 1 :iron_chestplate 1 :iron_leggings 1 :iron_boots 1
-;;                 :cooked_beef 16}   ; this is the default kit (simrace/fortress-kit-default)
+;;   :simrace/kit {:stone_pickaxe 1 :cobblestone 256 ...}   ; replaces simrace/fortress-kit-default,
+;;                                                         ; the real race's :race/kit
