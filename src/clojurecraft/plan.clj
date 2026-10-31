@@ -748,6 +748,11 @@
           :else
           (assoc world :plan/waiting-since since :plan/waiting-ticks ticks :plan/waiting reason))))
 
+(def plan-noise
+  "The keys of a planned intent that do not make it another intent: the goal it serves and a
+   deadline (:intent/until, now plus a few seconds) that moves on every planning."
+  #{:intent/goal :intent/until})
+
 (defn same-choice?
   "Would the planner start intent next again as the running intent i: the same kind, target and
    purpose (:intent/for)? False when next is nil or a wait. A cut that restarts what it cut ends
@@ -762,7 +767,7 @@
                 next
                 (not (:plan/wait next))
                 (if-let [planned (:intent/plan i)]
-                  (= (dissoc planned :intent/goal) (dissoc next :intent/goal))
+                  (= (apply dissoc planned plan-noise) (apply dissoc next plan-noise))
                   (and (= (:intent/kind i) (:intent/kind next))
                        (= (:intent/target i) (:intent/target next))
                        (= (:intent/for i) (:intent/for next)))))))
