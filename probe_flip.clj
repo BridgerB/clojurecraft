@@ -5,14 +5,14 @@
          '[clojurecraft.intent :as intent]
          '[clojurecraft.plan :as plan]
          '[clojurecraft.entity :as entity])
-(let [[path from] *command-line-args*
+(let [[path from len] *command-line-args*
       from (parse-long from)
       last-now (record/reduce-entries
                 (fn [acc e] (if (and (= :tick (:event/kind e)) (:event/now e)) (:event/now e) acc))
                 0
                 path)
       lo (- last-now (* 1000 from))
-      hi (+ lo 3000)
+      hi (+ lo (* 1000 (parse-long (or len "3"))))
       prev (volatile! nil)]
   (record/reduce-entries
    (fn [w e]
@@ -20,7 +20,9 @@
        w
        (let [w (assoc (main/step w e) :bot/effects [])
              now (:time/now w)
-             cur (select-keys (:plan/intent w) [:intent/kind :intent/target :intent/for])]
+             cur (select-keys (:plan/intent w)
+                              [:intent/kind :intent/target :intent/for :intent/hold? :intent/yield?
+                               :intent/goal])]
          (when (and now (<= lo now hi) (= :tick (:event/kind e)) (not= cur @prev))
            (vreset! prev cur)
            (println
