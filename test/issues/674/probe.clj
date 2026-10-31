@@ -20,7 +20,7 @@
     (doall (take-while some? (repeatedly #(edn/read {:readers record/readers :eof nil} r))))))
 
 (def base
-  (try (reduce (fn [w e] (game/load-chunk w (:packet e)))
+  (try (reduce (fn [w e] (game/load-chunk w (:event/packet e)))
                (assoc (game/init {:host "h" :port 1 :name "Clj"})
                       :bot/phase :play
                       :player/loaded? true
