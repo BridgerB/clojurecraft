@@ -2065,3 +2065,38 @@
         "a parked one is there for good: after the grace it goes")
     (is (= 1 (:plan/unstuck (at (+ plan/stuck-ms 1000) false)))
         "a calm one is the hunt's quarry, not a menace")))
+
+(deftest the-watchdog-asks-rows-to-avoid-the-place-it-fired-at
+  ;; blaze-race-z6 (run 41201377711): 12 of 12 firings were followed within 50 ms by :pocket at the
+  ;; same site, the explore walk undone
+  (let [event {:event/kind :tick :event/now 0 :event/rand 0.25}
+        late (+ plan/stuck-ms 1000)
+        w (plan/watch (frozen late) pearls-table event)]
+    (is (= {:near [2390 69 2164] :until (+ late plan/avoid-ms)} (:plan/avoid w)))
+    (is (plan/avoiding? w [2395 69 2164]) "the place itself")
+    (is (not (plan/avoiding? w [2430 69 2164])) "far from it")
+    (is (not (plan/avoiding? (assoc w :time/now (+ late plan/avoid-ms 1)) [2395 69 2164]))
+        "after the window")
+    (is (not (plan/avoiding? (frozen late) [2395 69 2164])) "never fired")
+    (testing "a second firing inside the window does not extend it"
+      (let [again (plan/unstick (assoc w :time/now (+ late 60000) :plan/intent nil)
+                                (first pearls-table)
+                                nil
+                                0.25
+                                (+ late 60000))]
+        (is (= (+ late plan/avoid-ms) (get-in again [:plan/avoid :until])))))))
+
+(deftest no-explore-walk-is-planned-into-a-hostile
+  (let [event {:event/kind :tick :event/now 0 :event/rand 0.25}
+        angry {7 {:entity/type (blocks/entity-types :enderman)
+                  :entity/pos [2396.5 69.0 2164.5]
+                  :entity/health 40.0
+                  :entity/seen-at 0
+                  :entity/creepy? true}}
+        w (plan/watch
+           (assoc (frozen (+ plan/stuck-ms plan/menace-grace-ms 1000)) :world/entities angry)
+           pearls-table
+           event)]
+    (is (= 1 (:plan/unstuck w)) "past the grace it fires")
+    (is (nil? (:plan/explore w)) "but plans no walk into it")
+    (is (some? (:plan/avoid w)) "and asks rows to avoid the place")))

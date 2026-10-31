@@ -264,6 +264,9 @@
    [:plan/explore
     "the cell the next walk goes to after the stuck watchdog fired (plan/unstick), taken once"
     "after it fired"] [:plan/unstuck "times the stuck watchdog fired" "after it fired"]
+   [:plan/avoid
+    "{:near feet-cell :until ms}: where the stuck watchdog fired and until when rows keep away from it (plan/avoiding?)"
+    "after the watchdog fired"]
    [:plan/recover-at
     "ms of the last recovery (plan/recover); another within recover-cooldown-ms does nothing"
     "after a recovery"]
