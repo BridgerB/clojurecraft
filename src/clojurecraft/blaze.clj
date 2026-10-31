@@ -1517,9 +1517,6 @@
            (some? (dodge-intent world)))
       (and (= :tunnel-to (:intent/kind i)) (some? (prepare-intent world (nearest-spawner world))))
       (and (= :tunnel-to (:intent/kind i)) (some? (long-shot-cover world)))
-      (and (= :tunnel-to (:intent/kind i))
-           (not (hurt? world))
-           (bait-here? world (nearest-spawner world)))
       (and (not (contains? refuge-kinds (:intent/kind i)))
            (some? (refuge-now world (nearest-spawner world))))
       (and (not (hurt? world))
@@ -1567,56 +1564,54 @@
                               (make/take-table-along world))))
         pick (delay (when (build/pickaxe-at-hand? world)
                       (make/decide world (assoc goal :goal/provides {:tag/pickaxes 1}) table)))]
-    (cond (not= dimension/nether (dimension/of world)) {:plan/wait :other-dimension}
-          @out @out
-          @dodging @dodging
-          @held @held
-          @shot-cover @shot-cover
-          @refuge @refuge
-          @heal @heal
-          @grab @grab
-          (and (not (hurt? world)) heid (not (crowded? world)))
-          {:intent/kind :fight :intent/target heid :intent/to-the-end? true :intent/yield? true}
-          @wary @wary
-          @away @away
-          (and lying (drops/under-reach? world lying)) (fetch-walk lying)
-          lying
-          {:intent/kind :collect-drops
-           :intent/item :blaze_rod
-           :intent/target (hunt/cell (:entity/pos lying))}
-          (and (not (hurt? world)) beid)
-          {:intent/kind :fight :intent/target beid :intent/yield? true}
-          @waiting @waiting
-          @stock @stock
-          @fire @fire
-          (and (hurt? world) (not (heals? world)) (food-trip world)) (food-trip world)
-          (and (or (nil? sp) (not (at-spawner? world sp))) @pick) @pick
-          @table-along @table-along
-          @prepare @prepare
-          (and sp
-               (not camping-in-pocket?)
-               (not (at-spawner? world sp))
-               (not (at-nook? world sp))
-               (not (bait-here? world sp)))
-          (to-spawner world sp)
-          (and
-           sp
+    (cond
+      (not= dimension/nether (dimension/of world)) {:plan/wait :other-dimension}
+      @out @out
+      @dodging @dodging
+      @held @held
+      @shot-cover @shot-cover
+      @refuge @refuge
+      @heal @heal
+      @grab @grab
+      (and (not (hurt? world)) heid (not (crowded? world)))
+      {:intent/kind :fight :intent/target heid :intent/to-the-end? true :intent/yield? true}
+      @wary @wary
+      @away @away
+      (and lying (drops/under-reach? world lying)) (fetch-walk lying)
+      lying
+      {:intent/kind :collect-drops
+       :intent/item :blaze_rod
+       :intent/target (hunt/cell (:entity/pos lying))}
+      (and (not (hurt? world)) beid) {:intent/kind :fight :intent/target beid :intent/yield? true}
+      @waiting @waiting
+      @stock @stock
+      @fire @fire
+      (and (hurt? world) (not (heals? world)) (food-trip world)) (food-trip world)
+      (and (or (nil? sp) (not (at-spawner? world sp))) @pick) @pick
+      @table-along @table-along
+      @prepare @prepare
+      (and sp
+           (not camping-in-pocket?)
+           (not (at-spawner? world sp))
+           (not (at-nook? world sp))
+           (not (bait-here? world sp)))
+      (to-spawner world sp)
+      (and sp
            (or camping-in-pocket? (at-spawner? world sp) (at-nook? world sp) (bait-here? world sp))
            (not (hurt? world))
            (not (:player/on-fire? world)))
-          (or (when (and in-pocket? (idle? world))
-                (or (advance-intent world sp) (bait-walk world sp) (to-spawner world sp)))
-              (when-not (idle? world) (pocket-go world sp true))
-              (when-let [n (and (not in-pocket?)
-                                (not (at-nook? world sp))
-                                (not (bait-here? world sp))
-                                (nook world sp))]
-                {:intent/kind :walk
-                 :intent/target n
-                 :intent/for :nook
-                 :intent/max-nodes corridor-nodes})
-              {:intent/kind :camp :intent/spawner sp})
-          :else (or (search world) {:plan/wait :no-blaze}))))
+      (or (when (and in-pocket? (idle? world)) (or (advance-intent world sp) (bait-walk world sp)))
+          (when-not (idle? world) (pocket-go world sp true))
+          (when-let [n (and (not in-pocket?)
+                            (not (at-nook? world sp))
+                            (not (bait-here? world sp))
+                            (nook world sp))]
+            {:intent/kind :walk
+             :intent/target n
+             :intent/for :nook
+             :intent/max-nodes corridor-nodes})
+          {:intent/kind :camp :intent/spawner sp})
+      :else (or (search world) {:plan/wait :no-blaze}))))
 
 ;; ---------------------------------------------------------------- the :ambush intent
 
