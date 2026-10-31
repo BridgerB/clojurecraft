@@ -28,7 +28,7 @@ on:
         required: true
         default: '1'
       from:
-        description: where the bots start, spawn or fortress (empty: ci/race.edn's :race/from)
+        description: "where the bots start, spawn or fortress; empty keeps ci/race.edn's :race/from"
         required: false
         default: ''
 
