@@ -1994,3 +1994,18 @@
     (is (not= :pocket (:intent/kind (next-intent (assoc w :plan/avoid avoid))))
         "the row leaves through the search, not back to the pocket")
     (is (not= :camp (:intent/kind (next-intent (assoc w :plan/avoid avoid)))))))
+
+(deftest ^:eftest/synchronized a-watched-void-retreat-covers-before-it-rests
+  ;; sim fortress probe 41215805587 (R1/1 seed 1, ci/simrace-from-fortress): :rest at [310 79 234] from
+  ;; t 83 s to 120 s with 2 and then 5 blazes 6.8 to 7.2 blocks off, hp 14.6 to 0.9, dead resting
+  (let [near (entity :blaze [15.5 65.0 8.5] :entity/health 20.0)
+        w (-> (standing {7 near})
+              (assoc :player/health 14.6 :player/food 20 :time/now 100000)
+              (assoc-in [:player/inventory 9] (item :cobblestone 40)))]
+    (with-redefs [combat/void-retreat? (constantly true)]
+      (let [i (blaze/healing w)]
+        (is (not= {:intent/kind :rest} i) "not a rest in the line of fire")
+        (is (= :place (:intent/kind i)) "a block laid between")))
+    (with-redefs [combat/void-retreat? (constantly true)]
+      (is (= {:intent/kind :rest} (blaze/healing (assoc w :player/inventory {})))
+          "nothing to lay, eat or dig: the rest on the lip, as before"))))

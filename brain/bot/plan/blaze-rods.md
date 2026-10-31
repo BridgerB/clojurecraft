@@ -272,6 +272,9 @@ The stuck watchdog drops the row's anchors and plans an explore walk; blaze-race
 ## sealed? lied (issue #262, blaze-race-z7 job 2, walk-restart's flip_trace2)
 The 19 s open `:pocket-hold` that burned landing 1 had :pocket/placed = four solid cells and four cells on its z sides still open (`wanted-seal-cells`), every tick `can-seal?` true: `sealed?` read only the placed list. A first `:seal` was cut `:interrupted` after 0.3 s, a second after the bot moved (wanted 6 cells, then 8) and ended `:done` when the 4 cells of its list were solid. `pocket/sealed?` now also needs no wanted cell open, and the `:seal` run's cells are the held list plus what is open now (`seal-cells`), so it is not done until the pocket is shut.
 
+## A rest in the line of fire (issue #262, sim fortress probe 41215805587)
+The sim fortress start (R1/1 seed 1, ci/simrace-from-fortress 47cbcf382) landed on natural ground 32 blocks from the spawner, and from t 83 s to 120 s chose `:rest` (goal :blaze-rods) at [310 79 234] with 2 and then 5 blazes 6.8 to 7.2 blocks off, hp 14.6 to 0.9, ate once and died resting. The row that emits it is `healing`'s watched void retreat: the back-off from the nearest watcher would step off a drop, so it rests on the lip (issue #514). `combat/cover` (a block laid between, a pillar, a meal, a nook dug) is tried first now; the rest only when cover has nothing.
+
 ## Limits
 - Fireballs are not dodged or blocked: the bot is out of their line, in a pocket or sealed in one.
 - A blaze hovering higher than the eye can reach from under it is never hit (`pressing?` stops within 0.8 on the plane); the fight has no engage timeout, only `:ghost` after 25 swings in reach.

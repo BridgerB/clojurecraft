@@ -811,7 +811,11 @@
            (meal world) (meal world)
            (and aid (not (combat/void-retreat? world ae)))
            {:intent/kind :back-off :intent/target aid}
-           (and e (combat/void-retreat? world e)) rest-intent
+           ;; a watched void retreat is a rest on the lip, but not a rest in the line of fire: the
+           ;; cover first (a block laid, a pillar, a nook), the rest only when cover has nothing
+           ;; (sim fortress probe 41215805587: :rest at 14.6 hp with 2 to 5 blazes 7 off, dead)
+           (and e (combat/void-retreat? world e))
+           (let [c (combat/cover world e)] (if (:intent/kind c) c rest-intent))
            (and weid (< (combat/horizontal world e) combat/back-off-to))
            {:intent/kind :back-off :intent/target weid}
            @food @food
