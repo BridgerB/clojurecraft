@@ -645,7 +645,7 @@
                       :intent/status :active
                       :intent/stage :spot
                       :intent/cell [6 64 5]}))
-        out (first (fx/fold intent-step w [{:event/kind :tick :event/now 0 :event/rand 0.5}]))]
+        out (intent/run w (:plan/intent w) {:event/kind :tick :event/now 0 :event/rand 0.5})]
     (is (place/inside-player? w [6 64 5]))
     (is (= :failed (:intent/status (:plan/intent out))))
     (is (= :no-support (:intent/reason (:plan/intent out))))
@@ -663,6 +663,6 @@
                       :intent/status :active
                       :intent/stage :spot
                       :intent/cell [6 64 5]}))
-        out (first (fx/fold intent-step w [{:event/kind :tick :event/now 0 :event/rand 0.5}]))]
+        out (intent/run w (:plan/intent w) {:event/kind :tick :event/now 0 :event/rand 0.5})]
     (is (= :active (:intent/status (:plan/intent out))))
     (is (= 1 (:intent/nudges (:plan/intent out))) "nudged as before")))

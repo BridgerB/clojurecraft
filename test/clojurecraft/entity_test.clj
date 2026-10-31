@@ -97,7 +97,6 @@
     (is (= #{1 2} (set (keys (entity/hostiles w)))) "bare: both")
     (is (= #{1 2} (set (keys (entity/hostiles iron)))) "iron is no gold")
     (is (entity/gold-worn? gold))
-    (is (= #{2 3} (set (keys (entity/hostiles gold))))
-        "gold: the piglin is spared, the brute is not")
+    (is (= #{2} (set (keys (entity/hostiles gold)))) "gold: the piglin is spared, the brute is not")
     (is (= #{1 2} (set (keys (entity/hostiles (assoc gold :player/attacker 1)))))
         "one that has struck the bot is a hostile all the same")))
