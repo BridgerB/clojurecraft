@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-31T06:50:31.580Z",
+  "at" : "2026-10-31T06:51:39.205Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -7,11 +7,6 @@
     "title" : "Bot stops at blaze-rods: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : true
-  }, {
-    "number" : 636,
-    "title" : "Bot stops at blaze-rods: no-food-to-return",
-    "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
   }, {
     "number" : 618,
     "title" : "Bot stops at ingots: no-support",
@@ -21,6 +16,11 @@
     "number" : 151,
     "title" : "Bot stops at flint-and-steel: not-picked-up",
     "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 636,
+    "title" : "Bot stops at blaze-rods: no-food-to-return",
+    "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
     "number" : 539,
