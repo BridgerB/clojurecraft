@@ -481,6 +481,7 @@
 (s/def :plan/recoveries nat-int?)
 (s/def :intent/plan map?)
 (s/def :plan/recover-at int?)
+(s/def :plan/failures (s/coll-of map? :kind vector?))
 (s/def :plan/avoid map?)
 (s/def :plan/watch map?)
 (s/def :plan/explore ::block-pos)

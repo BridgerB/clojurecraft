@@ -369,6 +369,57 @@
                    (not (contains? (:plan/boxed-at world #{}) c))))]
     (some #(when (ok? %) %) (rseq (:plan/trail world [])))))
 
+(def choice-keys
+  "The keys of a planned intent that make it this intent and not another: what it is (kind,
+   purpose), what it works on (item, recipe, target, cell) and how far (to-y). Everything else a
+   row plans is left out because it moves on every planning without making another choice: a
+   deadline (:intent/until, now plus a few seconds: blaze-race-z8 job 5, run 41214675186, planned
+   one :place with 1793461559332, then ...482, then ...632), the goal it serves, a start time. The
+   target of an intent whose executor sets one (a :place) is the planned one, nil, never the one
+   it has gained running."
+  [:intent/kind :intent/for :intent/item :intent/recipe :intent/target :intent/cell :intent/to-y
+   :intent/top])
+
+(def failure-memory-ms 30000)            ; ms a failed choice is remembered
+(def failure-limit 8)                 ; failed choices remembered
+(def blocked-after 3)                 ; failures of one choice within failure-memory-ms after which it is refused wherever the bot stands
+
+(defn choice-of
+  "The identity of intent i as a choice: its choice-keys, from the form it was planned in
+   (:intent/plan) when it has one."
+  [i]
+  (select-keys (or (:intent/plan i) i) choice-keys))
+
+(defn fresh-failures
+  "The failures of :plan/failures within failure-memory-ms of now."
+  [world]
+  (let [now (:time/now world 0)]
+    (filterv #(<= (- now (:at %)) failure-memory-ms) (:plan/failures world []))))
+
+(defn remember-failure
+  "The world with the failure of intent i (from feet) added to :plan/failures: the choice, where the
+   bot stood and when, the freshest failure-limit kept. Not cleared by the next intent that starts
+   (:plan/failed is): z9 job 3 (run 41222838848) alternated a :pillar that failed :boxed with a
+   :dig the row planned between, 166 failures in 29 s, the guard against an identical retry
+   seeing nothing after the :dig."
+  [world i feet]
+  (assoc world
+         :plan/failures
+         (vec (take-last failure-limit
+                         (conj (fresh-failures world)
+                               {:choice (choice-of i) :feet feet :at (:time/now world 0)})))))
+
+(defn failed-before?
+  "Did the choice next fail already: from these feet within failure-memory-ms, or blocked-after
+   times within it from anywhere? A target-less intent (a :pillar, which fail-intent could not
+   blacklist by target) is refused the same way."
+  [world next feet]
+  (let [c (select-keys next choice-keys)
+        fs (filter #(= c (:choice %)) (fresh-failures world))]
+    (boolean (and next
+                  (not (:plan/wait next))
+                  (or (some #(= feet (:feet %)) fs) (>= (count fs) blocked-after))))))
+
 (defn recover
   "A run out of attempts that is not stalled (stalled?) tries again instead of ending: the failure
    counts start over, the last failure is forgotten (so the same intent is not refused as an
@@ -388,7 +439,12 @@
       (-> world
           (assoc :plan/attempts 0 :plan/unwalkable 0 :plan/recover-at now)
           (update :plan/recoveries (fnil inc 0))
-          (dissoc :plan/failed :plan/waiting :plan/waiting-since :plan/waiting-ticks :plan/regroup)
+          (dissoc :plan/failed
+                  :plan/failures
+                  :plan/waiting
+                  :plan/waiting-since
+                  :plan/waiting-ticks
+                  :plan/regroup)
           (cond-> cell (assoc :plan/regroup cell))
           (game/say (str "recover " (:plan/recoveries world 0) " regroup " (pr-str cell)))))))
 
@@ -452,6 +508,7 @@
         (mark-ended i)
         (assoc :player/controls {})
         (assoc :plan/failed (cond-> i feet (assoc :intent/from-feet feet)))
+        (remember-failure i feet)
         (cond-> (and (:intent/target i)
                      (not (contains? placing-kinds (:intent/kind i)))
                      (not (contains? crossing-kinds (:intent/kind i))))
@@ -748,16 +805,6 @@
           :else
           (assoc world :plan/waiting-since since :plan/waiting-ticks ticks :plan/waiting reason))))
 
-(def choice-keys
-  "The keys of a planned intent that make it this intent and not another: what it is (kind,
-   purpose), what it works on (item, recipe, target, cell) and how far (to-y). Everything else a
-   row plans is left out because it moves on every planning without making another choice: a
-   deadline (:intent/until, now plus a few seconds: blaze-race-z8 job 5, run 41214675186, planned
-   one :place with 1793461559332, then ...482, then ...632), the goal it serves, a start time. The
-   target of an intent whose executor sets one (a :place) is the planned one, nil, never the one
-   it has gained running."
-  [:intent/kind :intent/for :intent/item :intent/recipe :intent/target :intent/cell :intent/to-y])
-
 (defn same-choice?
   "Would the planner start intent next again as the running intent i: the same kind, target and
    purpose (:intent/for)? False when next is nil or a wait. A cut that restarts what it cut ends
@@ -803,7 +850,9 @@
         next (when (and goal (nil? i)) (next-intent world goal table))
         feet (when (:player/pos world) (intent/feet world))
         failed (:plan/failed world)
-        retrying? (and next (identical-retry? next failed feet))
+        retrying? (and next
+                       (or (identical-retry? next failed feet) (failed-before? world next feet)))
+        danger? (or (:player/on-fire? world) (menaced? world))
         retreat-cell (when retrying?
                        (some #(when-not (or (= % feet) (contains? (:plan/blacklist world #{}) %)) %)
                              (rseq (:plan/trail world []))))]
@@ -843,6 +892,7 @@
                          :intent/target retreat-cell
                          :intent/for :retreat
                          :intent/goal (:goal/id goal)})
+          (and retrying? danger?) (start-intent world (assoc next :intent/goal (:goal/id goal)))
           retrying? (wait world :retrying)
           :else (start-intent world (assoc next :intent/goal (:goal/id goal))))))
 
