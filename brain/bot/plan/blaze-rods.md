@@ -284,6 +284,9 @@ Job 6 of z8 (landing 6): :fight, :place x4, :dodge, :pocket, :pillar, :dig and :
 ## A pillar storm, and fire at the box's edge (issue #262, blaze-race-z9 job 3)
 z9 job 3 burned at 8m2s (in_fire 39, on_fire 40, fireball 8): `intent :pillar failed: :boxed` 166 times in 28 s, one every 150 ms ("attempt 53 of 3", the regroup of #633 undone 37 ms later), with the nook's `:dig [2349 56 2289]` between pillars. The only emitter is `combat/cover` (pillar after the wall, before the nook), and its guard `pillar-failed?` read `:plan/failed`, which `plan/start-intent` forgets with every new intent: the dig cleared it, the pillar was chosen again. The guard now asks the story (`memory/failed-within?`, 30 s: `pillar-memory-ms`), for a pillar and for a wall that failed :no-support. The 39 in_fire hits at [2349.2 58.1 2289.3]: the feet's and head's cells were clear and the box (x 2348.9 to 2349.5) reached into the neighbour's fire; `burning-here?` reads every cell the box touches (`body-cells`).
 
+## Rods lost to the refuge (issue #262, blaze-race-z9 job 4)
+Job 4 (24m17s): 15 blazes died (6.2 per 10 min), 9 rod entities, 2 taken, 7 lost: rods 709, 837 and 842 lay 300 s at 1.9 to 2.9 blocks from the bot while `:collect-drops` and `:pocket` alternated (the refuge wants the pocket under low-health (12) with a swarm; the rod grab is allowed from 10). `refuge` is not chosen, and `refuge-now` does not cut a rod pick-up, while a rod lies within a step and the bot is not alight.
+
 ## Limits
 - Fireballs are not dodged or blocked: the bot is out of their line, in a pocket or sealed in one.
 - A blaze hovering higher than the eye can reach from under it is never hit (`pressing?` stops within 0.8 on the plane); the fight has no engage timeout, only `:ghost` after 25 swings in reach.

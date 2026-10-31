@@ -2130,3 +2130,20 @@
     (is (true? (blaze/burning-here? (w [8.2 64.0 8.5])))
         "8.2 - 0.3 = 7.9: the box is in the fire's cell")
     (is (some #{[7 64 8]} (blaze/body-cells (w [8.2 64.0 8.5]))))))
+
+(deftest a-rod-a-step-away-is-picked-up-between-ten-and-twelve-health-under-a-swarm
+  ;; blaze-race-z9 job 4: 9 rods dropped, 2 taken; rods 709, 837 and 842 lay 300 s at 1.9 to 2.9 blocks
+  ;; with :collect-drops and :pocket alternating: near-rod from 10, refuge-needed? under 12 with a swarm
+  (let [rod (entity :item [10.5 64.0 8.5] :entity/item blaze/rod)
+        swarm (into {}
+                    (map (fn [i] [(+ 50 i)
+                                  (entity :blaze [14.5 66.0 (+ 6.0 i)] :entity/health 20.0)])
+                         (range 4)))
+        w (assoc (standing (merge {40 rod} swarm)) :player/health 11.0 :time/now 100000)
+        grab {:intent/kind :collect-drops :intent/item :blaze_rod :intent/target [10 64 8]}]
+    (is (blaze/refuge-needed? w) "hp 11 with a swarm: the refuge wants the pocket")
+    (is (some? (blaze/near-rod w)))
+    (is (= :collect-drops (:intent/kind (next-intent w))) "but the rod a step away first")
+    (is (not (plan/interrupts? w row grab)) "and the pick-up is not cut for the refuge")
+    (testing "alight: the refuge first"
+      (is (not= :collect-drops (:intent/kind (next-intent (assoc w :player/on-fire? true))))))))
