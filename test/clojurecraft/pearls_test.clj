@@ -2682,11 +2682,13 @@
     (is (nil? (pearls/wander w)) "one chunk loaded: no route reaches sixteen blocks out")
     (is (= :stairs-up (:intent/kind (plan/next-intent w row plan/goals)))
         "so it cuts stairs up toward the open ground")
-    (testing "not loitering: it stays and looks out as before"
-      (is (not (contains? #{:stairs-up :tunnel}
-                          (:intent/kind
-                           (plan/next-intent (burrowed [8.5 61.0 8.5] {}) row plan/goals))))
-          "it stays: a lookout, or a walk to the mouth to look round from"))))
+    (testing "not loitering: nothing coming, so out to the mouth to look round from"
+      (is
+       (= {:intent/kind :walk :intent/target [3 64 8] :intent/for :shelter}
+          (plan/next-intent (burrowed [8.5 61.0 8.5] {}) row plan/goals))
+       "the branch (and in? mouth (nil? ce) ...): the walk to the mouth, as in the travel test
+           nothing-at-the-mouth. My earlier expectation (a lookout) was written without a run and
+           was wrong from the start"))))
 
 (deftest a-hunt-sealed-in-the-nether-with-nowhere-to-travel-cuts-its-way-out
   ;; pearls-travel-c (plan run 41144362671) jobs 2 and 3, pearls-12-from-fortress: landed in the
