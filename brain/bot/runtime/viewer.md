@@ -15,6 +15,9 @@ sourceRefs:
   - src/clojurecraft/viewer.clj#defn plain-textures
   - src/clojurecraft/viewer.clj#defn grass-colour
   - src/clojurecraft/viewer.clj#defn dig-view
+  - src/clojurecraft/viewer.clj#defn care
+  - src/clojurecraft/viewer.clj#defn route-view
+  - src/clojurecraft/viewer.clj#defn held-view
   - src/clojurecraft/viewer.clj#defn looked-at
   - src/clojurecraft/viewer.clj#defn arm-moves
   - dev/viewer/loop.sh#one bot plays the whole chain from spawn
@@ -57,10 +60,13 @@ It is fed what steve's server fed it:
 The right 40% is the panel `data/local-runs/panel.ts` was, read from the frame instead of RCON and logs: its mind top to bottom (safety first, the plan's stage with the chain as dots, why this action, doing, this step), the focus changes newest first with "changed its mind: new target" (`note-focus`, kept by the frame thread, the last 60), armour, nearby entities, and the flagged notes; over the view, the game's hotbar and inventory grids from `:inventory` (every slot the bot holds). Pause and Resume freeze and unfreeze the server's ticks over RCON (`--viewer-rcon-port`, `--viewer-rcon-pass-file`; `act!`); Flag appends a note with the bot's state to the recording's `.notes.ndjson` (`data/viewer-notes.ndjson` without one).
 
 ## First person, from the bot's own data
-- The held item is `hotbar[held]`, the bot's own inventory: a flat sprite for an item, a small cube for a block; the skin's arm when the hand is empty.
+- The held item is `hotbar[held]`, the bot's own inventory, drawn as vanilla's ItemInHandRenderer draws it, op for op in Minecraft's view space (this camera's local space): the swing's bob, applyItemArmTransform, applyItemArmAttackTransform, the item model's `display.firstperson_righthand` from the jar (`held-view`, `/held`), then -0.5; a sprite unmirrored, a block a cube. The empty hand is renderPlayerArm with the model's right arm. The hand has its own camera framed as a 16:9 window at 70 degrees: in the 60%-wide view the item otherwise sat off the right edge and showed only a sliver of handle, which read as "backwards".
 - A swing plays (300 ms, vanilla's 6 ticks) for each arm packet the bot sends: the watch counts `:swing`, `:attack`, `:use-item` and `:use-item-on` among the effects the loop is about to perform (`arm-moves`), the frame's `:swings`. A dig swings every `swing-every`, so digging swings continuously as in the game.
 - The cracks are `destroy_stage_0..9` from the jar, multiplied over the block, at the stage `floor(10 x progress)`, where `dig-view`'s progress is the time since the dig's START over its own `:intent/dig-ms` (dig/dig-time with the held tool and the penalties then).
 - The outline is the first cell along the eyes' ray within 4.5 blocks that is neither air nor a fluid (`looked-at`).
+
+## What it cares about, and its route
+Each entity in the frame carries `:cares`, why the bot cares about it by its own rules (`care`): an intent's target, a threat within combat's defend or creeper radius, a hostile within hunt's forage-wary, prey of hunt's game kinds while hungry, endermen on the pearls stage, blazes on the rods stage, drops at a collect's cell. The radar shows only those. `:route` is the innermost walk's waypoints from `:intent/at` to its target (`route-view`), drawn on the radar and as a line through the cells' feet in the world.
 
 ## The loop
 `bb viewer-loop` (`dev/viewer/loop.sh`): a fresh local world each run, one bot from spawn through the whole chain at normal difficulty (`--until` the current stage, `--chain true`, 5.5 hours) with `--viewer 4600` and `--record` under `data/viewer-runs/`, again when it ends. Between runs the page says the new world is loading, then drops the old world's columns and entities and follows the new bot; an open page reloads itself when the page file changes.
