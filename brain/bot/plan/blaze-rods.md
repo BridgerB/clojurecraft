@@ -266,6 +266,9 @@ z6 (b9090d2c3), cancelled at 2h20m: landing 1 (138 min) and landing 2 (138 min) 
 ## A hold that cannot heal ends (issue #262, blaze-race-z6 landing 2)
 Landing 2 held 96 minutes (`:pocket-hold` every 30 s) at hp 6.2 to 7.2, food 17, no food held: `heals?` false, hold-to 12, and hp cannot rise, so the hold never ended and the portal food trip (`unhealing`) behind it was never reached. The hold is now for the fire only when the bot cannot heal; a sealed pocket of such a bot under low-health stays shut with no intent from the hold (opened, the next blaze in reach seals it again: the flip of blaze-race-p job 4), and the row goes on: `@heal` (`unhealing`: the portal food trip, where there is a portal), the camp, the search. #647's anchors (:pocket/site, :pocket/prepared-at, :pocket/seal-failed-at, :sortie/since) were checked against what re-formed the pocket: it is re-found by `pocket-go` (site-near), not held in an anchor.
 
+## The watchdog's avoid window (issue #262, #647 and #653)
+The stuck watchdog drops the row's anchors and plans an explore walk; blaze-race-z6 (run 41201377711) showed 12 of 12 firings undone within about 46 ms by `:pocket` and then `:camp`. It now sets `:plan/avoid {:near feet :until ms}` (5 min) and `plan/avoiding?` says whether a cell is within 16 of it. `pocket-ok?` (so `pocket-go`, the held pocket, `prepare-intent` and `advance-intent`) and `bait-ok?` pass over a cell in the window, and with the window set at the feet and no explore walk planned (a hostile within 24: the watchdog plans none) the `:leave` clause takes the search (or `explore-away`) ahead of the pocket, the camp and the walk to the spawner.
+
 ## Limits
 - Fireballs are not dodged or blocked: the bot is out of their line, in a pocket or sealed in one.
 - A blaze hovering higher than the eye can reach from under it is never hit (`pressing?` stops within 0.8 on the plane); the fight has no engage timeout, only `:ghost` after 25 swings in reach.

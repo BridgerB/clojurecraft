@@ -1976,3 +1976,21 @@
     (is (= (+ 100000 blaze/long-shot-place-ms) (:intent/until i)))
     (is (not (plan/interrupts? w row i)) "within its three seconds: it runs")
     (is (true? (boolean (plan/interrupts? (assoc w :time/now 104000) row i))) "past them: cut")))
+
+(deftest the-stuck-watchdogs-avoid-window-keeps-the-pocket-from-re-forming
+  ;; blaze-race-z6 (run 41201377711): 12 of 12 watchdog firings in two jobs were followed within 50 ms
+  ;; by :pocket and then :camp, the explore walk undone
+  (let [w (-> (standing {})
+              (assoc :world/chunks {[0 0] (world/column pocket-walls)}
+                     :player/pos [5.5 64.0 8.5]
+                     :time/now 100000)
+              with-spawner)
+        avoid {:near [5.5 64.0 8.5] :until 400000}
+        sp spawner-at]
+    (is (some? (blaze/pocket-go (assoc w :health 20.0) sp false)) "no window: the pocket is found")
+    (is (nil? (blaze/pocket-go (assoc w :plan/avoid avoid) sp false)) "in the window: passed over")
+    (is (some? (blaze/pocket-go (assoc w :plan/avoid (assoc avoid :until 50000)) sp false))
+        "after it: the pocket is found again")
+    (is (not= :pocket (:intent/kind (next-intent (assoc w :plan/avoid avoid))))
+        "the row leaves through the search, not back to the pocket")
+    (is (not= :camp (:intent/kind (next-intent (assoc w :plan/avoid avoid)))))))

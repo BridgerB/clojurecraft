@@ -1175,10 +1175,11 @@
    (see? false): the nearest pocket is the one to get into, sighted or not."
   [world sp see?]
   (fn [c]
-    (or (nil? sp)
-        (and (not (in-spawn-volume? sp c))
-             (awake-from? sp c)
-             (or (not see?) (sees-spawner? world sp c))))))
+    (and (not (plan/avoiding? world c))
+         (or (nil? sp)
+             (and (not (in-spawn-volume? sp c))
+                  (awake-from? sp c)
+                  (or (not see?) (sees-spawner? world sp c)))))))
 
 (defn pocket-go
   "A :pocket intent for the nearest site (pocket/current, with the line to the spawner asked when
@@ -1256,7 +1257,8 @@
   "Is cell c a place to be seen from: in a corridor (exposure 2 or less), outside the spawner's
    volume, within its wake, and facing one or two blazes (sees-a-blaze?)?"
   [world sp c]
-  (and (<= (exposure world c) 2)
+  (and (not (plan/avoiding? world c))
+       (<= (exposure world c) 2)
        (not (in-spawn-volume? sp c))
        (awake-from? sp c)
        (sees-a-blaze? world c)))
@@ -1686,6 +1688,12 @@
                         (or (pocket-go world sp false)
                             (when (burning-twice? world) (here-intent world)))))
         prepare (delay (prepare-intent world sp))
+        ;; the stuck watchdog fired here with a hostile near (no explore walk planned): leave through the
+        ;; search, never back to the pocket or the camp it dropped (blaze-race-z6: 12 of 12 firings undone
+        ;; by pocket-go within 46 ms)
+        leave (delay (when (and (plan/avoiding? world (intent/feet world))
+                                (nil? (:plan/explore world)))
+                       (or (search world) (explore-away world))))
         dodging (delay (dodge-intent world))
         room (delay (rod-room world))
         ;; a rod with no slot to be picked up into is not grabbed: the junk goes first (rod-room)
@@ -1730,6 +1738,7 @@
       (and (hurt? world) (not (heals? world)) (food-trip world)) (food-trip world)
       (and (or (nil? sp) (not (at-spawner? world sp))) @pick) @pick
       @table-along @table-along
+      @leave @leave
       @prepare @prepare
       (and sp
            (not camping-in-pocket?)
