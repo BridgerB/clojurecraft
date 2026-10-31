@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-31T04:40:10.190Z",
+  "at" : "2026-10-31T04:41:15.914Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -31,6 +31,11 @@
     "number" : 622,
     "title" : "Bot stops at portal: no-support",
     "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 531,
+    "title" : "Bot stops at ingots: boxed",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 514,
@@ -130,11 +135,6 @@
   }, {
     "number" : 538,
     "title" : "Bot stops at fortress: blocked",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
-    "number" : 531,
-    "title" : "Bot stops at ingots: boxed",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
@@ -241,6 +241,10 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 531,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
     "issue" : 514,
     "move" : "leave",
     "why" : "hands-off label"
@@ -258,10 +262,6 @@
     "why" : "hands-off label"
   }, {
     "issue" : 538,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
-    "issue" : 531,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
