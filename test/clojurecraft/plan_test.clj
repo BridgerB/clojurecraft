@@ -2198,3 +2198,71 @@
                                   [9 64 9]))
         "forgotten after 30 s")
     (is (not (plan/failed-before? three {:plan/wait :x} [1 64 0])) "a wait is no choice")))
+
+;;; BLOCKED AREA: tunnels that keep ending :blocked in one place make the row leave it
+
+(defn blocked-tunnels
+  "blaze-race-z11 job 5 (run 41233526639) at 19:44:08 to 19:44:15: three tunnels to different cells a
+   block or two apart ([2210 60 1793], [2224 60 1726], [2225 60 1727]) each ended :blocked from
+   the feet [2160 67 1747], then the row planned a fourth. The trail has a cell 20 blocks back."
+  [& {:keys [at trail]}]
+  (let [blocked (fn [w target n]
+                  (plan/fail-intent w
+                                    {:intent/kind :tunnel-to
+                                     :intent/target target
+                                     :intent/reason :blocked
+                                     :intent/goal :blaze-rods
+                                     :intent/id n}))
+        w (-> (world-state [2160.5 67.0 1747.5])
+              (assoc :plan/status :active
+                     :plan/since 0
+                     :plan/blacklist #{}
+                     :plan/attempts 0
+                     :time/now (or at 1000)
+                     :plan/trail (or trail [])))]
+    (reduce (fn [w [t n]] (blocked w t n))
+            w
+            [[[2210 60 1793] 1] [[2224 60 1726] 2] [[2225 60 1727] 3]])))
+
+(deftest three-blocked-tunnels-in-one-area-are-an-area-blocked
+  (let [w (blocked-tunnels)
+        next {:intent/kind :tunnel-to :intent/target [2172 52 1733]}
+        feet [2160 67 1747]]
+    (is (plan/area-blocked? w next feet) "a fourth tunnel to yet another cell")
+    (is (not (plan/area-blocked? w next [2180 67 1747])) "from 20 blocks away: no")
+    (is (not (plan/area-blocked? w {:intent/kind :walk :intent/target [1 2 3]} feet))
+        "another kind")
+    (is (not (plan/area-blocked? (assoc w :time/now (+ 1000 plan/area-memory-ms 1)) next feet))
+        "after five minutes")
+    (is (not (plan/area-blocked? (update w :plan/failures #(vec (take 2 %))) next feet))
+        "two is not enough")))
+
+(deftest ^:eftest/synchronized the-row-leaves-the-area-its-tunnels-were-blocked-in
+  (let [goal {:goal/id :blaze-rods :goal/done? :never :goal/plan :flip-test}
+        tick (fn [w]
+               (with-redefs [plan/choose (constantly goal)
+                             plan/next-intent (constantly {:intent/kind :tunnel-to
+                                                           :intent/target [2172 52 1733]
+                                                           :intent/steps 32})
+                             plan/routable? (constantly true)]
+                 (plan/plan-tick w {:event/kind :tick :event/now 1050 :event/rand 0.5} [goal])))
+        far [2140 67 1747]]
+    (testing "a trail cell 20 back that has a route: the walk there"
+      (let [w (tick (assoc (blocked-tunnels :trail [far]) :time/now 1050))]
+        (is (= :walk (get-in w [:plan/intent :intent/kind])))
+        (is (= far (get-in w [:plan/intent :intent/target])))
+        (is (= :regroup (get-in w [:plan/intent :intent/for])))))
+    (testing "none routable: a tunnel along its own trail to its farthest cell"
+      (let [w (with-redefs [plan/routable? (constantly false)]
+                (with-redefs [plan/choose (constantly goal)
+                              plan/next-intent (constantly {:intent/kind :tunnel-to
+                                                            :intent/target [2172 52 1733]})]
+                  (plan/plan-tick (assoc (blocked-tunnels :trail [far]) :time/now 1050)
+                                  {:event/kind :tick :event/now 1050 :event/rand 0.5}
+                                  [goal])))]
+        (is (= :tunnel-to (get-in w [:plan/intent :intent/kind])))
+        (is (= far (get-in w [:plan/intent :intent/target])))
+        (is (= :regroup (get-in w [:plan/intent :intent/for])))))
+    (testing "no trail at all: the row's own plan goes ahead"
+      (let [w (tick (assoc (blocked-tunnels) :time/now 1050))]
+        (is (nil? (get-in w [:plan/intent :intent/for])))))))
