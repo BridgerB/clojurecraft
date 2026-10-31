@@ -2219,3 +2219,17 @@
         "after a tunnel to a stand of a: a, though b is a hair nearer")
     (is (= b (blaze/nearest-spawner (tunnel (w 4.5 far b) (first (blaze/cells-beside far)))))
         "the tunnel's own spawner 85 blocks off, b 0.5: b is chosen (more than the margin)")))
+
+(deftest the-fire-the-box-touches-in-a-pocket-is-punched-not-held-through
+  ;; blaze-race-z10 job 2 (18:23:19): :pocket-hold re-issued every 50 ms, 61 starts in 3 s, in_fire 37: with
+  ;; burning-here? reading the box, @out found fire in a neighbour cell, leave-fire had no clear cell in the
+  ;; walled pocket, and the hold ended at once (burning-here?) and was chosen again
+  (let [fire (blocks/default-state :fire)
+        w (-> (standing {})
+              in-pocket
+              (assoc :player/pos [8.2 64.0 8.5])
+              (assoc :world/chunks {[0 0] (world/column (assoc pocket-walls [7 64 8] fire))}))]
+    (is (blaze/burning-here? w) "the box reaches into [7 64 8]'s fire")
+    (is (= {:intent/kind :dig :intent/target [7 64 8]} (blaze/punch-fire-here w))
+        "so the fire is punched")
+    (is (not= :pocket-hold (:intent/kind (next-intent w))) "and the row does not hold through it")))

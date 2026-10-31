@@ -922,17 +922,16 @@
                  (body-cells world))))
 
 (defn punch-fire-here
-  "A :dig of the fire block in the feet or the head cell, or nil: a punched fire goes out. What a
+  "A :dig of the fire block in a cell the body touches (body-cells), or nil: a punched fire goes out. What a
    bot sealed in its pocket with a fire at its feet does when no cell is clear to walk to
    (blaze-race-k race 1 stood 15 s in a fire it had sealed in: 30 in_fire hits)."
   [world]
-  (let [[x y z] (intent/feet world)]
-    (some (fn [c]
-            (when (contains? fire-blocks
-                             (some-> (terrain/block-at world c)
-                                     blocks/name-of))
-              {:intent/kind :dig :intent/target c}))
-          [[x y z] [x (inc y) z]])))
+  (some (fn [c]
+          (when (contains? fire-blocks
+                           (some-> (terrain/block-at world c)
+                                   blocks/name-of))
+            {:intent/kind :dig :intent/target c}))
+        (body-cells world)))
 
 (defn leave-fire
   "A walk to the nearest standable cell within fire-out-reach with no fire in it or over it, or
