@@ -67,6 +67,7 @@
 (def side-steps [[1 0 0] [-1 0 0] [0 0 1] [0 0 -1]]) ; the cells beside a spawner a stand is looked for in
 (def stand-levels [0 -1 1])           ; the heights from the spawner's own a stand is looked for at, in this order: its blazes' floor first
 (def stand-memory 3)                  ; tunnels last done whose target is looked for among the stands, before the nearest
+(def stands-stalled 2)                ; stands beside one spawner whose tunnels stalled (stalled) before the spawner's site is given up: the cells beside it are one place, not twelve tries
 (def stands-tried 2)                  ; stands beside one spawner whose tunnel ended :blocked before the spawner is given up
 (def spawner-reach 2.0)                ; blocks from the feet cell's centre to the spawner's a tunnel to it ends within: in its room, at the blazes' floor
 (def cover-range 16.0)                ; blazes this near that see the bot are the ones a hurt bot takes cover from (they shoot that far)
@@ -976,6 +977,17 @@
                  target)))
        set))
 
+(defn site-stalled
+  "stalled, with the spawner and every cell beside it added when stands-stalled of those cells
+   have stalled: tunnels that went nowhere to two stands of one spawner went nowhere to the
+   site, and the twelve cells (four sides at three levels) are not twelve tries. Blaze-race-z4
+   job 1 (41194927191, landing 5) took the cells beside [2210 60 1794] by turns for 13 minutes
+   (x 2209-2211, y 60-61, z 1793-1795), each needing two legs to be given up."
+  [world sp]
+  (let [dead (stalled world)
+        around (cells-beside sp)]
+    (if (>= (count (filter dead around)) stands-stalled) (into dead (cons sp around)) dead)))
+
 (defn to-spawner
   "The way to spawner sp: a walk when it is walkable?, else a tunnel by the fortress's steps
    (which never open a cell beside lava nor the spawner itself), climbing first, to its stand
@@ -983,7 +995,7 @@
    ended on this very cell for (stalled) is not chosen again: another stand, else the spawner
    itself, else nil, and the act goes on with the search."
   [world sp]
-  (let [dead (stalled world)
+  (let [dead (site-stalled world sp)
         walk {:intent/kind :walk :intent/target sp}
         at (stand (update world :plan/blacklist (fnil into #{}) dead) sp)]
     (cond (walkable? world sp) walk

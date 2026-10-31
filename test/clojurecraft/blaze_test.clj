@@ -1869,3 +1869,49 @@
         "two tunnels ended in one cell")
     (is (empty? (blaze/stalled (assoc w :time/now (+ 2000 blaze/stall-memory-ms 1))))
         "ten minutes on: tried again")))
+
+(deftest stalled-tunnels-to-two-stands-give-up-the-spawners-site
+  ;; blaze-race-z4 job 1 (41194927191): :tunnel-to flipped among the cells beside one spawner (x 2209-2211,
+  ;; y 60-61, z 1793-1795) for 13 minutes; a tunnel that went nowhere to two of them went nowhere to the site
+  (let [sp [12 70 8]
+        w (-> (standing {})
+              (memory/observe sp blaze/spawner))
+        [a b c] (blaze/cells-beside sp)
+        done
+        (fn [w id target ended-at]
+          (memory/remember-intention
+           w
+           {:intent/id id :intent/kind :tunnel-to :intent/target target :intent/ended-at ended-at}
+           :done))
+        stall (fn [w id target cell]
+                (-> w
+                    (done id target cell)
+                    (done (inc id) target cell)))
+        one (stall w 1 a [3 64 3])
+        two (stall one 3 b [3 64 3])]
+    (is (some? (blaze/to-spawner one sp)) "one stand stalled: another is tried")
+    (is (contains? (blaze/site-stalled two sp) c) "two stalled: every cell beside the spawner is")
+    (is (nil? (blaze/to-spawner two sp)) "the site is given up: the act goes on with the search")))
+
+(deftest the-sites-stalled-mark-expires-with-the-stalls
+  ;; the mark is derived from stalled, whose facts are forgotten after stall-memory-ms
+  (let [sp [12 70 8]
+        w (-> (standing {})
+              (memory/observe sp blaze/spawner))
+        [a b c] (blaze/cells-beside sp)
+        done
+        (fn [w id target at]
+          (memory/remember-intention
+           (assoc w :time/now at)
+           {:intent/id id :intent/kind :tunnel-to :intent/target target :intent/ended-at [3 64 3]}
+           :done))
+        two (-> w
+                (done 1 a 1000)
+                (done 2 a 1100)
+                (done 3 b 1200)
+                (done 4 b 1300))]
+    (is (contains? (blaze/site-stalled (assoc two :time/now 2000) sp) c))
+    (is (not (contains? (blaze/site-stalled (assoc two :time/now (+ 1300 blaze/stall-memory-ms 1))
+                                            sp)
+                        c))
+        "ten minutes on: the site is tried again")))
