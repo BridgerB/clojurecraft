@@ -2093,6 +2093,27 @@
 
 ;; ---------------------------------------------------------------- the :pocket-hold intent
 
+(defn pocket-line
+  "The log line for a hold that starts or ends (a decision, no effect on one): the pocket's state as the
+   hold reads it, so a hold under fireballs shows why no :seal was chosen (blaze-race-z13 jobs 4 and 6)."
+  [world what]
+  (let [site (:pocket/site world)
+        c (:pocket/cell site)]
+    (str "pocket-hold " what
+         " pos " (mapv #(format "%.1f" (double %)) (:player/pos world))
+         " hp " (:player/health world)
+         " fire " (boolean (:player/on-fire? world))
+         " cell " (pr-str c)
+         " sealed " (pocket/sealed? world site)
+         " can-seal " (when c (pocket/can-seal? world site))
+         " open " (when c (count (pocket/open-seal-cells world c)))
+         " wanted " (when c (count (pocket/wanted-seal-cells world c)))
+         " placed " (count (:pocket/placed site))
+         " unsealable " (boolean (:pocket/unsealable? site))
+         " failed " (count (:pocket/failed world))
+         " unlayable " (when c (pocket/unlayable? world c))
+         " seal-failed-at " (:pocket/seal-failed-at world))))
+
 (defmethod intent/run :pocket-hold
   ;; {:intent/kind :pocket-hold :intent/heal-to h}: stand still in the pocket, out of every line but the
   ;; opening's, until the fire is out and the health is at h (and, sealed, the last hit older than
@@ -2101,10 +2122,12 @@
   ;; again)
   [world {:intent/keys [since heal-to]} _]
   (let [now (:time/now world)
+        first? (nil? since)
         since (or since now)
-        world (-> world
-                  (assoc :player/controls {})
-                  (intent/assoc-intent :intent/since since))]
+        world (cond-> (-> world
+                          (assoc :player/controls {})
+                          (intent/assoc-intent :intent/since since))
+                first? (game/say (pocket-line world "start")))]
     (cond (or (and (not (:player/on-fire? world))
                    (>= (:player/health world 20.0) (or heal-to engage-health))
                    (or (not (sealed? world))
@@ -2115,5 +2138,7 @@
               (not (pocket/in? world))
               (burning-here? world)
               (> (- now since) hold-ms))
-          (intent/done world)
+          (-> world
+              (game/say (pocket-line world "end"))
+              intent/done)
           :else world)))
