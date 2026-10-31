@@ -710,8 +710,8 @@
                           defend
                           plan/goals)))
         "two piglins at full health: backed away from, never fought")
-    (is (= 6.0
+    (is (= 9.0
            (combat/danger-line
             (at {7 (mob :zombie [10.5 64.0 8.5] 20.0) 8 (mob :zombie [10.0 64.0 8.5] 20.0)} 20.0)))
-        "two zombies, 6 a round, are not a pack to run from")
+        "two zombies, 6 a round and the margin 3, are not a pack to run from")
     (is (every? some? (map combat/hit-damage [:piglin :hoglin :wither_skeleton])))))
