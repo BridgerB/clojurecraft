@@ -6,6 +6,7 @@
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]
             [clojurecraft.claims :as claims]
+            [clojurecraft.failure :as failure]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
             [clojurecraft.plan :as plan]
@@ -198,3 +199,33 @@
   (is (= (+ 5000 (* 15 race/start-gap-ms))
          (reduce (fn [last _] (race/next-start last 5000)) 5000 (range 15)))
       "fifteen slots ending at once start one a gap apart"))
+
+(deftest a-race-from-the-fortress-plays-only-the-stages-from-the-blaze-rods
+  ;; issue #262: stages 17 and 18 alone, each bot landed in the Nether at its landing's fortress
+  (let [chain (plan/through "pearls-12")
+        from (race/from-goals "fortress" "pearls-12")]
+    (is (= chain (race/from-goals nil "pearls-12")) "no :race/from: every stage, as before")
+    (is (= chain (race/from-goals "spawn" "pearls-12")))
+    (is (= [:blaze-rods :ender-pearls] from) "the blaze rods, then the pearls")
+    (is (= from (race/from-goals :fortress "pearls-12")))
+    (is (race/fortress? "fortress"))
+    (is (not (race/fortress? "spawn")))))
+
+(deftest a-failure-of-a-fortress-race-is-filed-at-its-own-stages
+  ;; a run that played only blaze-rods and ender-pearls: nothing reached, it failed at the blaze
+  ;; rods, never at the wood the chain begins with
+  (let [r {:until "pearls-12"
+           :reason :timeout
+           :plan {:plan/goals #{:blaze-rods :ender-pearls} :plan/reached #{}}}]
+    (is (= [:blaze-rods :timeout] (failure/signature r)))
+    (is (= [:ender-pearls :timeout]
+           (failure/signature (assoc-in r [:plan :plan/reached] #{:blaze-rods}))))
+    (testing "a run of the whole chain is as before"
+      (is (= [:wood :timeout]
+             (failure/signature {:until "pearls-12"
+                                 :reason :timeout
+                                 :plan {:plan/goals (set (plan/through "pearls-12"))
+                                        :plan/reached #{}}})))
+      (is (= [:wood :timeout]
+             (failure/signature {:until "pearls-12" :reason :timeout :plan {:plan/reached #{}}}))
+          "no goals recorded: the whole chain"))))
