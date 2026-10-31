@@ -1,0 +1,13 @@
+;; Issue #263, branch feat/263-stuck-retry: cover from a ghast before the walk home, a running
+;; intent cut only when the hunt would choose another, a vantage only within 3 blocks of the
+;; burrow end, a wander out of a two-block shuffle, and a provoke only with two hits of health
+;; (plan runs 40860669235 and 40839050567).
+{:plans/label "pearls-stuck-e"
+ :plans/jobs 6
+ :plans/issue 263
+ :plans/experiments [{:exp/name "pearls-12"
+                      :exp/kind :gym
+                      :exp/goal "pearls-12"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 18000}]}

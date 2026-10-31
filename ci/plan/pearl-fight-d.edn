@@ -1,0 +1,16 @@
+;; Issue #263, branch fix/263-pearl-fight, batch d: the fight inside the forest, and the rate.
+;; Batch c (plan run 41155212096) ran stuck-retry 0cae01920 and the burrow cut for a menace within
+;; sixteen blocks. Batch d is stuck-retry 30a146c95 merged: the wander is held in by live-menaced?
+;; alone (an angry enderman is parked when it has not closed in for a minute and stands beyond
+;; eight blocks), and the menace, an angry one within eight blocks given up on or not, only decides
+;; the burrow cut where the bot stands. Measure: pearls at 30 and 60 min, the longest gap between
+;; pearls, deaths by cause.
+{:plans/label "pearl-fight-d"
+ :plans/jobs 6
+ :plans/issue 263
+ :plans/experiments [{:exp/name "pearls-12"
+                      :exp/kind :gym
+                      :exp/goal "pearls-12"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 18000}]}

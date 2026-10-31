@@ -1,0 +1,19 @@
+;; Issue #263, branch feat/263-stuck-retry: pearls-12-from-fortress-open lands the bot in the
+;; fortress pad with a doorway in its east wall (the old row's pad is a sealed box: pearls-travel-c
+;; jobs 2 and 3 measured the harness), with the cage-break, the parked-enderman rule, the shot
+;; hold and the lava floor. pearls-12 is the row that lands in a forest.
+{:plans/label "pearls-travel-d"
+ :plans/jobs 6
+ :plans/issue 263
+ :plans/experiments [{:exp/name "pearls-12-from-fortress-open"
+                      :exp/kind :gym
+                      :exp/goal "pearls-12-from-fortress-open"
+                      :exp/runs 4
+                      :exp/bots 1
+                      :exp/est-s 18000}
+                     {:exp/name "pearls-12"
+                      :exp/kind :gym
+                      :exp/goal "pearls-12"
+                      :exp/runs 2
+                      :exp/bots 1
+                      :exp/est-s 18000}]}

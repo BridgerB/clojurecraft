@@ -1,0 +1,12 @@
+;; Issue #263, branch feat/263-stuck-retry: the planner's retry guard and stuck watchdog
+;; (plan/guard, unstick.clj) on the row that failed three of three in plan run 40583923956
+;; (two stood in :lookout after a :boxed descent, one retried a failing walk fifteen times).
+{:plans/label "pearls-stuck-a"
+ :plans/jobs 6
+ :plans/issue 263
+ :plans/experiments [{:exp/name "pearls-12"
+                      :exp/kind :gym
+                      :exp/goal "pearls-12"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 18000}]}

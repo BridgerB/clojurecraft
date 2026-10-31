@@ -1,0 +1,13 @@
+;; Issue #263, branch feat/263-stuck-retry: the hunt's wander after five minutes of lookouts with
+;; no enderman a route reaches, the lookout that is cut only when the hunt would do otherwise, and
+;; no fight planned again within 30 s of one that failed (plan run 40775811459: 0 of 6, five
+;; timeouts in lookouts and one death).
+{:plans/label "pearls-stuck-b"
+ :plans/jobs 6
+ :plans/issue 263
+ :plans/experiments [{:exp/name "pearls-12"
+                      :exp/kind :gym
+                      :exp/goal "pearls-12"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 18000}]}

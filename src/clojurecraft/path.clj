@@ -405,6 +405,27 @@
       trap-cost
       1.0)))
 
+(def wary-extra
+  "Blocks whose cell, or whose floor, a route would rather go round, to the move cost added for
+   entering a cell of them: a crimson forest's ground and growth, where hoglins and piglins stand
+   (gym plan run 41134469333, pearls-travel-b jobs 1 and 2: both died crossing to a warped forest,
+   a hoglin and a piglin). Modest, so a route still crosses one when there is no other way, and
+   the detour that beats it is a few cells."
+  {:crimson_nylium 1.0 :crimson_fungus 1.0 :crimson_roots 1.0 :nether_wart_block 1.0})
+
+(def wary-states
+  "The state ids of wary-extra's blocks, to the extra cost."
+  (into {} (for [[k extra] wary-extra s (blocks/states-of k)] [s extra])))
+
+(defn wary-cost
+  "The extra move cost of entering [x y z]: the larger of the floor block's and the cell's own
+   wary-states entry, 0.0 when neither is in wary-extra. Nil blocks (unloaded) cost nothing, and a world with no chunks (the End's void in a test) costs nothing."
+  [world [x y z]]
+  (if (:world/chunks world)
+    (max (get wary-states (terrain/block-at world [x (dec y) z]) 0.0)
+         (get wary-states (terrain/block-at world [x y z]) 0.0))
+    0.0))
+
 (def lava-trap-reach 4)                ; cells on the plane round a lava trap's column a mine leaves alone
 
 (defn near-lava-trap?
@@ -457,15 +478,16 @@
                           hn (heuristic goal node)
                           [best best-h] (if (< hn best-h) [node hn] [best best-h])
                           [open g parents]
-                          (reduce (fn [[open g parents] {next :node cost :cost}]
-                                    (let [g' (+ gn (* cost (trap-factor world next)))]
-                                      (if (and (not (closed next))
-                                               (< g' (get g next Double/MAX_VALUE)))
-                                        [(conj open [(+ g' (heuristic goal next)) g' next])
-                                         (assoc g next g') (assoc parents next node)]
-                                        [open g parents])))
-                                  [open g parents]
-                                  (neighbors at node))]
+                          (reduce
+                           (fn [[open g parents] {next :node cost :cost}]
+                             (let [g'
+                                   (+ gn (* cost (trap-factor world next)) (wary-cost world next))]
+                               (if (and (not (closed next)) (< g' (get g next Double/MAX_VALUE)))
+                                 [(conj open [(+ g' (heuristic goal next)) g' next])
+                                  (assoc g next g') (assoc parents next node)]
+                                 [open g parents])))
+                           [open g parents]
+                           (neighbors at node))]
                       (recur open g parents closed best best-h (inc expanded)))))))))
 
 (defn feet-cell

@@ -1,0 +1,16 @@
+;; Issue #263, branch fix/263-pearl-fight, batch e: the fight inside the forest, the cage broken.
+;; Batch a job 4 stood 23 minutes on a ledge over a cavern with 141 digs left: every move nil
+;; (brink? refuses climb-out, dig-out and bore from it; wander and explore had no route either).
+;; Batch e has pearls/uncage (walk down to the burrow's end from a brink, third in the cage-break or
+;; after climb-out and dig-out, and in the stuck chain), stuck-retry's cage-break, ghast hold and
+;; wall-toward (e19ad11da), the menace within eight blocks for the burrow cut and live-menaced?
+;; for the wander. Measure: pearls at 30 and 60 min, the longest gap between pearls, deaths by cause.
+{:plans/label "pearl-fight-e"
+ :plans/jobs 6
+ :plans/issue 263
+ :plans/experiments [{:exp/name "pearls-12"
+                      :exp/kind :gym
+                      :exp/goal "pearls-12"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 18000}]}

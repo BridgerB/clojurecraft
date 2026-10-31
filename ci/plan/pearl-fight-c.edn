@@ -1,0 +1,17 @@
+;; Issue #263, branch fix/263-pearl-fight, batch c: the fight inside the forest, and the rate.
+;; Batch a (plan run 41143668588, cancelled at 50 to 65 min): the four survivors held 3, 0, 3 and 2
+;; pearls and stalled early, job 4 standing 283 lookouts (23 min) in a burrow it kept cutting and
+;; giving up with the nearest calm endermen 17 to 80 blocks off. Batch c is batch b's fixes (a
+;; menace known and no burrow: cut one here; the hit enderman is the hunt's; a walk out ends when
+;; an angry one is near the mouth) merged with feat/263-stuck-retry: wander after five minutes of
+;; lookouts, explore away from where the bot has been, provoke only within 3 of the burrow's end,
+;; fight at hand only a weak mob, and a wander that an angry enderman given up on no longer blocks. Measure: pearls at 30 and 60 min, the longest gap between pearls.
+{:plans/label "pearl-fight-c"
+ :plans/jobs 6
+ :plans/issue 263
+ :plans/experiments [{:exp/name "pearls-12"
+                      :exp/kind :gym
+                      :exp/goal "pearls-12"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 18000}]}

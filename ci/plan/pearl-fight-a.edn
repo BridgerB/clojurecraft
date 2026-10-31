@@ -1,0 +1,18 @@
+;; Issue #263, branch fix/263-pearl-fight, batch a: the fight inside the forest.
+;; Churn-a pearls-12 (plan run 41096292443) 0/3 and enderman-end-b pearls-12 (41103285823) 0/3:
+;; five slain by endermen, each after killing 2 to 15 and holding 2 to 6 pearls. Since then:
+;; 1. the enderman that hit the bot is the hunt's, not :defend's, with a burrow near
+;;    (combat/claims-attacker?): three deaths began when :defend cut the walk home 0.05 s after the
+;;    first hit and fought to the end two to four blocks from the burrow's end;
+;; 2. a walk out to anywhere but the mouth ends as soon as an angry one is near the mouth
+;;    (pearls interrupts?), not only at hand: one death walked 12 blocks up its stairs for 8 s
+;;    with the hunt's own choice the way home.
+{:plans/label "pearl-fight-a"
+ :plans/jobs 6
+ :plans/issue 263
+ :plans/experiments [{:exp/name "pearls-12"
+                      :exp/kind :gym
+                      :exp/goal "pearls-12"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 18000}]}

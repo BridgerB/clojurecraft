@@ -1051,6 +1051,14 @@
     (is (= #{} (blaze/stalled moved)) "the second ended elsewhere: progress")
     (is (= first-stand (:intent/target (blaze/to-spawner once sp))) "the target is kept")
     (is (not= first-stand (:intent/target (blaze/to-spawner twice sp))) "another when stalled")
+    (testing "a stalled stand stays so past other legs (blaze-race-w job 5: a search leg between)"
+      (let [between (-> twice
+                        (done 3 [90 60 90] [5 64 5])
+                        (done 4 [91 60 91] [6 64 6])
+                        (done 5 [92 60 92] [7 64 7])
+                        (done 6 [93 60 93] [8 64 8]))]
+        (is (contains? (blaze/stalled between) first-stand) "four dones later it is still stalled")
+        (is (not= first-stand (:intent/target (blaze/to-spawner between sp))))))
     (testing "the tunnel to the stand bridges a cavern (landing 5: a column in open air)"
       (is (true? (:intent/bridge? (blaze/to-spawner w sp)))))))
 
