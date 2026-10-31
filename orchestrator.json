@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-31T13:45:08.962Z",
+  "at" : "2026-10-31T13:48:27.517Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -38,14 +38,14 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 342,
-    "title" : "Bot stops at furnace: boxed",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 135,
     "title" : "Bot stops at cast-one: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 342,
+    "title" : "Bot stops at furnace: boxed",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 642,
@@ -274,11 +274,11 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 342,
+    "issue" : 135,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 135,
+    "issue" : 342,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
