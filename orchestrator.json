@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-31T02:27:18.904Z",
+  "at" : "2026-10-31T02:30:33.327Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -8,15 +8,15 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : true
   }, {
-    "number" : 618,
-    "title" : "Bot stops at ingots: no-support",
-    "labels" : [ "bot-failure", "sim" ],
-    "copilot" : true
-  }, {
     "number" : 539,
     "title" : "Bot stops at fortress: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
+  }, {
+    "number" : 618,
+    "title" : "Bot stops at ingots: no-support",
+    "labels" : [ "bot-failure", "sim" ],
+    "copilot" : true
   }, {
     "number" : 531,
     "title" : "Bot stops at ingots: boxed",
@@ -233,13 +233,13 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 618,
-    "move" : "wait",
-    "why" : "session starting"
-  }, {
     "issue" : 539,
     "move" : "leave",
     "why" : "hands-off label"
+  }, {
+    "issue" : 618,
+    "move" : "wait",
+    "why" : "session starting"
   }, {
     "issue" : 531,
     "move" : "leave",
