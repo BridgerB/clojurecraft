@@ -1,0 +1,16 @@
+;; Issue #263, branch fix/263-lava-flee, batch n: the fixes batch m's deaths asked for. Batch m
+;; (plan run 41216588429) job 1 landed beside a lava fall and fled to footing the flow then covered
+;; (swim: footing ranks by lava near, a flee chooses again when its target is covered); job 4 walked
+;; out of its burrow and home again 130 times in 68 s with an angry enderman near (the way-home
+;; branch no longer calls back a wander) and, before that, was denied a burrow where the watchdog
+;; fired with the angry one on it (d9a32bbed). Row pearls-12-race-tools. Measure: passes of 6, time
+;; to 12, deaths by cause; in the logs, no walk flip longer than a few starts, flee ends off the lava.
+{:plans/label "pearl-fight-n"
+ :plans/jobs 6
+ :plans/issue 263
+ :plans/experiments [{:exp/name "pearls-12-race-tools"
+                      :exp/kind :gym
+                      :exp/goal "pearls-12-race-tools"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 18000}]}
