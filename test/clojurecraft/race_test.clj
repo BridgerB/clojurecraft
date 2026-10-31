@@ -240,3 +240,11 @@
     (is (every? #(= 72 (nth % 2)) pads) "all at the pad height")
     (is (= [152 -160 72] (first pads)) "the first, 48 west of the fortress, as the gym's")
     (is (= [176.5 72.0 -159.5] (race/standing-on [176 -160 72])) "x y z: the middle of the cell")))
+
+(deftest a-spawn-is-pinned-in-the-dimension-the-bot-landed-in
+  ;; spawnpoint takes the dimension of its source, the server's overworld: a bot that died at the
+  ;; fortress respawned in the overworld
+  (is (= "execute in minecraft:the_nether run spawnpoint Clj_r01 152 72 -160"
+         (race/spawn-command "Clj_r01" [152.5 72.0 -159.5] "minecraft:the_nether")))
+  (is (= "execute in minecraft:overworld run spawnpoint Clj_r02 10 80 -4"
+         (race/spawn-command "Clj_r02" [10.5 80.0 -3.5] "minecraft:overworld"))))

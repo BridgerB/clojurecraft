@@ -34,6 +34,7 @@
   (:require [clojure.core.async :as async]
             [clojure.edn :as edn]
             [clojure.java.io :as io]
+            [clojure.math :as math]
             [clojure.string :as str]
             [clojurecraft.claims :as claims]
             [clojurecraft.cli :as cli]
@@ -367,6 +368,18 @@
       (Thread/sleep (long fixture/settle-ms))
       (standing-on pad))))
 
+(defn spawn-command
+  "The RCON command that pins bot name's spawn at the cell of at ([x y z]) in the dimension dim:
+   `execute in` it, because spawnpoint takes the dimension of the command's source, the server's
+   overworld: pinned without it, a bot that died at the fortress respawned in the overworld at
+   the Nether's coordinates (race 41219596455 onward)."
+  [name [x y z] dim]
+  (str "execute in " dim
+       " run spawnpoint " name
+       " " (long (math/floor (double x)))
+       " " (long (math/floor (double y)))
+       " " (long (math/floor (double z)))))
+
 (defn land-bot!
   "Land one bot, on a thread of its own with an RCON session of its own: wait for it to be
    online, make it a survival player, land it (on landing i of the set, with landings; else on a
@@ -395,11 +408,9 @@
                             (fixture/land-at! rc name (landing-of landings (or landing-offset 0) i))
                             :else (land! rc ch name @centre i)))]
              (when at
-               (rcon/command! rc
-                              (str "spawnpoint " name
-                                   " " (long (first at))
-                                   " " (long (second at))
-                                   " " (long (nth at 2)))))
+               (rcon/command!
+                rc
+                (spawn-command name at (if (fortress? from) dimension/nether dimension/overworld))))
              (cli/log name "landed at" at)
              (async/>!! queue
                         (cond-> {:event/kind :go :go/goals (from-goals from until) :go/chain? true}
