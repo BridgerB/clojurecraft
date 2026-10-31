@@ -90,6 +90,7 @@
   "The dimension each kind of landing (:gym/land) leaves the bot in; any other is the overworld.
    The kit is given only once the server says the bot stands there (landing!)."
   {:nether-fortress dimension/nether
+   :nether-fortress-open dimension/nether
    :nether-arena dimension/nether
    :warped-forest dimension/nether
    :end dimension/end})
@@ -97,6 +98,13 @@
 (def fortress-pad
   "The fortress row's start: a hollow box of netherrack round three cells of air at the pad."
   ["fill {x-2} {y-1} {z-2} {x+2} {y+3} {z+2} minecraft:netherrack hollow"])
+
+(def fortress-pad-open
+  "The open fortress start: fortress-pad with a doorway, two cells high and three wide, cut in its
+   east wall, so the bot walks out onto the Nether as a race bot arrives at a fortress, not sealed
+   in a box (pearls-travel-c jobs 2 and 3, issue #263: 106 and 111 minutes of lookouts with no
+   walk, the harness and not the bot)."
+  (conj fortress-pad "fill {x+2} {y} {z-1} {x+2} {y+1} {z+1} minecraft:air"))
 
 (def nether-arena
   "A sealed room in the Nether (issue #261), ruststeve's arena-run.sh recipe: netherrack two
@@ -672,6 +680,16 @@
     :gym/prereqs (into pearl-kit ["minecraft:cooked_beef 32" "minecraft:blaze_rod 7"])
     :gym/timeout-ms trial-ms
     :gym/truth [(pearls-held "(1[2-9]|[2-9][0-9]|[1-9][0-9][0-9])")]}
+   ;; issue #263: pearls-12-from-fortress with a doorway in the pad, as a race bot arrives (no
+   ;; sealed box); the old row measures the harness, not the travel
+   {:gym/goal :ender-pearls
+    :gym/name "pearls-12-from-fortress-open"
+    :gym/until "pearls-12"
+    :gym/land :nether-fortress-open
+    :gym/difficulty "normal"
+    :gym/prereqs (into pearl-kit ["minecraft:cooked_beef 32" "minecraft:blaze_rod 7"])
+    :gym/timeout-ms trial-ms
+    :gym/truth [(pearls-held "(1[2-9]|[2-9][0-9]|[1-9][0-9][0-9])")]}
    ;; issue #264: twelve eyes of ender crafted from what the two stages before make, given on a
    ;; surface landing: seven rods and twelve pearls. Nothing to fight or fetch, so the row measures
    ;; the 2x2 crafts alone (six of blaze powder, twelve of eyes)
@@ -1141,11 +1159,11 @@
          (finally (rcon/command! rc (str "effect clear " name " minecraft:hunger"))))
     landing))
 
-(defmethod land! :nether-fortress
-  ;; the fortress nearest the landing's Nether coordinates (an eighth of the overworld's, so each
-  ;; landing has its own), a pocket of netherrack fortress-offset blocks west of it at pad-y
-  ;; (fortress-pad), and the bot in it
-  [rc _row name [x z _]]
+(defn land-fortress!
+  "The fortress nearest the landing's Nether coordinates (an eighth of the overworld's, so each
+   landing has its own), pad (fortress-pad or fortress-pad-open) built fortress-offset blocks west
+   of it at pad-y, and the bot in it."
+  [rc name [x z _] pad]
   (let [reply (rcon/command! rc
                              (str "execute in minecraft:the_nether positioned "
                                   (quot x 8)
@@ -1154,7 +1172,17 @@
                                   " run locate structure minecraft:fortress"))
         [fx fz] (or (fixture/parse-located reply)
                     (throw (ex-info "no fortress located" {:reply reply})))]
-    (place! rc dimension/nether name [(- fx fortress-offset) fz pad-y] 2 fortress-pad)))
+    (place! rc dimension/nether name [(- fx fortress-offset) fz pad-y] 2 pad)))
+
+(defmethod land! :nether-fortress
+  ;; a pocket of netherrack (fortress-pad) and the bot in it
+  [rc _row name landing]
+  (land-fortress! rc name landing fortress-pad))
+
+(defmethod land! :nether-fortress-open
+  ;; the same pocket with a doorway cut in its east wall (fortress-pad-open)
+  [rc _row name landing]
+  (land-fortress! rc name landing fortress-pad-open))
 
 (defmethod land! :nether-arena
   ;; a sealed room (nether-arena) over the landing's Nether coordinates (an eighth of the
