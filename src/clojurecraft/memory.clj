@@ -405,6 +405,17 @@
                          (:world/facts world)
                          k))))))
 
+(defn started-within?
+  "Did an intention of kind k start within ms of now? A row that must not choose again what it only
+   just began (a pocket, again and again) asks the story."
+  [world k ms]
+  (let [since (- (:time/now world 0) ms)]
+    (boolean (some (fn [at] (>= at since))
+                   (d/q '[:find [?at ...] :in $ ?k :where [?e :intention/kind ?k]
+                          [?e :intention/event :started] [?e :intention/at ?at]]
+                        (:world/facts world)
+                        k)))))
+
 (defn intentions
   "The story of every intention, oldest fact first."
   [world]

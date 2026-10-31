@@ -2233,3 +2233,39 @@
     (is (= {:intent/kind :dig :intent/target [7 64 8]} (blaze/punch-fire-here w))
         "so the fire is punched")
     (is (not= :pocket-hold (:intent/kind (next-intent w))) "and the row does not hold through it")))
+
+(deftest a-healthy-bot-with-no-fight-for-two-minutes-goes-to-the-spawner
+  ;; blaze-race-z10 jobs 1, 4 and 5: 50 of 57 minutes camping, ambushing, tunnelling or in a pocket,
+  ;; 0 to 9 real kills; job 1 flipped :pocket and :walk [2341 60 2286] every 0.3 s for 12 minutes
+  (let [w (-> (standing {})
+              with-spawner
+              (assoc :plan/since 0 :time/now 300000))
+        fought (fn [w at]
+                 (memory/remember-intention (assoc w :time/now at)
+                                            {:intent/id 70 :intent/kind :fight}
+                                            :done))]
+    (is (true? (blaze/passive? w)) "healthy, idle, no fight for 5 minutes")
+    (is (false? (blaze/passive? (assoc w :time/now 100000))) "only 100 s into the plan")
+    (is (false? (blaze/passive? (assoc (fought w 250000) :time/now 300000))) "a fight 50 s ago")
+    (is (true? (blaze/passive? (assoc (fought w 100000) :time/now 300000))) "a fight 200 s ago")
+    (is (false? (blaze/passive? (assoc w :player/health 15.0))) "under passive-health")
+    (is (false? (blaze/passive? (assoc w :player/on-fire? true))))
+    (is (false? (blaze/passive? (assoc w :sortie/since 290000))) "already on a sortie")
+    (is (false? (blaze/passive? (assoc-in w
+                                 [:world/entities 7]
+                                 (entity :blaze [10.5 65.0 8.5] :entity/health 20.0))))
+        "a blaze within 8")
+    (testing "in the pocket the row goes out, not on camping"
+      (let [p (in-pocket w)]
+        (is (not= :camp (:intent/kind (next-intent p))))
+        (is (contains? #{:walk :tunnel-to} (:intent/kind (next-intent p))))))))
+
+(deftest a-pocket-just-begun-does-not-send-the-bait-walk
+  ;; blaze-race-z10 job 1 (18:24:23 on): :pocket and :walk [2341 60 2286] alternated every 0.3 s for 12 minutes
+  (is (true? (memory/started-within? (memory/remember-intention
+                                      (assoc (standing {}) :time/now 100000)
+                                      {:intent/id 71 :intent/kind :pocket}
+                                      :started)
+                                     :pocket
+                                     20000)))
+  (is (false? (memory/started-within? (assoc (standing {}) :time/now 100000) :pocket 20000))))

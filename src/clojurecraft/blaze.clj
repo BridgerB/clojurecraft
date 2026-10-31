@@ -1264,6 +1264,9 @@
   [world c]
   (<= 1 (count-blazes-seen world c) seen-by-at-most))
 
+(def passive-ms 120000) ; ms without a fight or a tunnel done after which a healthy idle bot goes to the spawner
+(def passive-health 16.0) ; health a passive sortie is begun at
+
 (def advance-step 4.0) ; blocks nearer the spawner an advanced pocket is at least
 (def advance-wait-ms 120000) ; ms in a pocket before another nearer the spawner is made
 
@@ -1781,6 +1784,23 @@
              (some? (fightable-blaze world)))
         (under-fire? world i))))
 
+(defn passive?
+  "Is the bot healthy and idle at the fortress: hp at passive-health or more, not burning, no blaze
+   within 8, not on a sortie, no rod near, and no fight and no tunnel done for passive-ms (the later of
+   their ends, else the plan's start)? Blaze-race-z10 jobs 1, 4 and 5 spent 50 of 57 minutes camping,
+   ambushing, tunnelling or in a pocket with 0 to 9 real kills."
+  [world]
+  (let [now (:time/now world 0)
+        last-at (apply max
+                       (or (:plan/since world) 0)
+                       (keep #(:intention/at (memory/last-done world %)) [:fight :tunnel-to]))]
+    (boolean (and (>= (:player/health world 20.0) passive-health)
+                  (not (:player/on-fire? world))
+                  (nil? (:sortie/since world))
+                  (empty? (nearby-blazes world 8.0))
+                  (nil? (near-rod world))
+                  (> (- now last-at) passive-ms)))))
+
 (defmethod plan/next-intent :blaze-rods
   ;; a tunnel to the spawner or on the search first makes the pickaxe it lacks from what is held
   ;; (the :fortress row's rule): sim race 39742401798 R4-6-2 (issue #504) tunnelled 25 blocks in
@@ -1810,6 +1830,7 @@
         (delay (when (and (not in-pocket?) (refuge-needed? world) (not (grab-over-refuge? world)))
                  (or (pocket-go world sp false) (when (burning-twice? world) (here-intent world)))))
         prepare (delay (prepare-intent world sp))
+        passive (delay (when (and sp (passive? world)) (to-spawner world sp)))
         ;; the stuck watchdog fired here with a hostile near (no explore walk planned): leave through the
         ;; search, never back to the pocket or the camp it dropped (blaze-race-z6: 12 of 12 firings undone
         ;; by pocket-go within 46 ms)
@@ -1855,6 +1876,7 @@
        :intent/item :blaze_rod
        :intent/target (hunt/cell (:entity/pos lying))}
       (and (not (hurt? world)) beid) {:intent/kind :fight :intent/target beid :intent/yield? true}
+      @passive @passive
       @waiting @waiting
       @stock @stock
       @fire @fire
@@ -1873,18 +1895,18 @@
            (or camping-in-pocket? (at-spawner? world sp) (at-nook? world sp) (bait-here? world sp))
            (not (hurt? world))
            (not (:player/on-fire? world)))
-      (or (when (and in-pocket? (sortie-due? world)) (to-spawner world sp))
-          (when (and in-pocket? (idle? world)) (or (advance-intent world sp) (bait-walk world sp)))
-          (when-not (idle? world) (pocket-go world sp true))
-          (when-let [n (and (not in-pocket?)
-                            (not (at-nook? world sp))
-                            (not (bait-here? world sp))
-                            (nook world sp))]
-            {:intent/kind :walk
-             :intent/target n
-             :intent/for :nook
-             :intent/max-nodes corridor-nodes})
-          {:intent/kind :camp :intent/spawner sp})
+      (or
+       (when (and in-pocket? (sortie-due? world)) (to-spawner world sp))
+       (when (and in-pocket? (idle? world))
+         (or (advance-intent world sp)
+             (when-not (memory/started-within? world :pocket 20000) (bait-walk world sp))))
+       (when-not (idle? world) (pocket-go world sp true))
+       (when-let [n (and (not in-pocket?)
+                         (not (at-nook? world sp))
+                         (not (bait-here? world sp))
+                         (nook world sp))]
+         {:intent/kind :walk :intent/target n :intent/for :nook :intent/max-nodes corridor-nodes})
+       {:intent/kind :camp :intent/spawner sp})
       :else (or (search world) {:plan/wait :no-blaze}))))
 
 ;; ---------------------------------------------------------------- the :ambush intent
