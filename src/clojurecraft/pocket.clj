@@ -369,11 +369,16 @@
   ;; they are all solid.
   [world i event]
   (let [site (:pocket/site world)
-        cells (if (seq (:pocket/placed site))
-                (:pocket/placed site)
-                (seal-cells world (:pocket/cell site)))
+        ;; the held cells are filtered each tick, not only when first noted: blaze-race-x job 5
+        ;; (build: placing [2151 73 1757] refused with the body in it) refused two seals in a row
+        ;; with seal-cells already clear of the body
+        cells (clear-of-body world
+                             (:pocket/cell site)
+                             (if (seq (:pocket/placed site))
+                               (:pocket/placed site)
+                               (seal-cells world (:pocket/cell site))))
         world (cond-> world
-                (and site (empty? (:pocket/placed site)))
+                (and site (not= cells (:pocket/placed site)))
                 (assoc-in [:pocket/site :pocket/placed] cells))]
     (cond (not (and site (seq cells) (= (:pocket/cell site) (intent/feet world))))
           (-> world
