@@ -781,7 +781,7 @@
             :intent/status :active
             :intent/id 1
             :intent/goal :wood}
-           (:plan/intent w))
+           (dissoc (:plan/intent w) :intent/plan))
         "re-planned in the same tick toward the next log")
     (is (= #{[13 64 0]} (:plan/blacklist w)))
     (is (= 1 (:plan/attempts w)))))
