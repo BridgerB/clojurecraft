@@ -27,6 +27,10 @@ on:
         description: the lane, 1..8 (the runner of the old matrix)
         required: true
         default: '1'
+      from:
+        description: "where the bots start, spawn or fortress; empty keeps ci/race.edn's :race/from"
+        required: false
+        default: ''
 
 run-name: race lane ${{ inputs.lane }}
 
@@ -147,6 +151,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}   # the churn's reports: issues, the page, releases
           RUNNER_N: ${{ matrix.runner }}
+          FROM: ${{ inputs.from }}        # '' keeps ci/race.edn's :race/from
         run: |
           races=""
           for k in $(seq 1 "$SERVERS"); do mkdir -p "data/race/s$k"; touch "data/race/s$k/race.log"; done
@@ -155,10 +160,12 @@ jobs:
             dir="data/race/s$k"
             server=""
             if [ "$SERVERS" -gt 1 ]; then server="--server $k"; fi
-            # shellcheck disable=SC2086 # $server is two words or none
+            from=""
+            if [ -n "$FROM" ]; then from="--from $FROM"; fi
+            # shellcheck disable=SC2086 # $server and $from are two words or none
             clojure -J-Xmx${{ needs.plan.outputs.bot-heap }}m -M:race --config ci/race.edn --port $((25564 + k)) \
               --rcon-port $((25574 + k)) --rcon-pass "$RCON_PASS" --record-dir "$dir" --commit "$GITHUB_SHA" \
-              --seed "${{ steps.set.outputs.set }}" --runner ${{ matrix.runner }} $server \
+              --seed "${{ steps.set.outputs.set }}" --runner ${{ matrix.runner }} $server $from \
               --landings "cache/worlds/${{ steps.set.outputs.set }}/landings.edn" \
               --landing-offset $(( ${{ steps.set.outputs.first }} + (k - 1) * BOTS )) \
               > "$dir/race.log" 2>&1 &
