@@ -29,7 +29,8 @@
    Fireballs are not dodged: ruststeve never needed it with its break-off at 10 health; the
    damage-event log is where to look if they kill. The bot does not put itself out: no water
    works in the Nether, and the gym rows give Fire Resistance until potions exist."
-  (:require [clojurecraft.blocks :as blocks]
+  (:require [clojure.math :as math]
+            [clojurecraft.blocks :as blocks]
             [clojurecraft.build :as build]
             [clojurecraft.combat :as combat]
             [clojurecraft.dimension :as dimension]
@@ -874,16 +875,28 @@
 (def fire-blocks #{:fire :soul_fire})
 (def fire-out-reach 3) ; cells round the feet a burning bot looks for ground without fire in
 
-(defn burning-here?
-  "Does the cell the feet stand in, or the one over it, hold fire? A bot in a fire block is lit
-   again as it burns out."
+(defn body-cells
+  "Every cell the player's box (physics/aabb at its exact position, shrunk a hair) touches: the
+   feet's and the head's, and a neighbour a fractional x or z reaches into."
   [world]
-  (let [[x y z] (intent/feet world)]
-    (boolean (some (fn [c]
-                     (contains? fire-blocks
-                                (some-> (terrain/block-at world c)
-                                        blocks/name-of)))
-                   [[x y z] [x (inc y) z]]))))
+  (let [[x0 y0 z0 x1 y1 z1] (physics/aabb (:player/pos world))
+        lo #(long (math/floor (+ (double %) 1e-4)))
+        hi #(long (math/floor (- (double %) 1e-4)))]
+    (for [x (range (lo x0) (inc (hi x1)))
+          y (range (lo y0) (inc (hi y1)))
+          z (range (lo z0) (inc (hi z1)))]
+      [x y z])))
+
+(defn burning-here?
+  "Does a cell the body touches (body-cells) hold fire? A bot in a fire block is lit again as it
+   burns out. Blaze-race-z9 job 3 took 39 in_fire hits at [2349.2 58.1 2289.3], the box reaching
+   into the neighbour's fire at x 2348.9, with the feet's and the head's cells clear."
+  [world]
+  (boolean (some (fn [c]
+                   (contains? fire-blocks
+                              (some-> (terrain/block-at world c)
+                                      blocks/name-of)))
+                 (body-cells world))))
 
 (defn punch-fire-here
   "A :dig of the fire block in the feet or the head cell, or nil: a punched fire goes out. What a

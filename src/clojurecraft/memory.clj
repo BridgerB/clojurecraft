@@ -390,6 +390,21 @@
          sort
          (mapv #(into {} (d/touch (d/entity db %)))))))
 
+(defn failed-within?
+  "Did an intention of kind k fail (the :failed fact; with reason, that :intention/reason) within ms of
+   now? plan/start-intent forgets :plan/failed with every new intent, so a row that must not choose
+   what just failed again asks the story: blaze-race-z9 job 3 chose :pillar 166 times in 28 s
+   (:boxed, one every 150 ms) because the nook's :dig between two pillars cleared :plan/failed."
+  ([world k ms] (failed-within? world k nil ms))
+  ([world k reason ms]
+   (let [since (- (:time/now world 0) ms)]
+     (boolean (some (fn [[r at]] (and (>= at since) (or (nil? reason) (= r reason))))
+                    (d/q '[:find ?r ?at :in $ ?k :where [?e :intention/kind ?k]
+                           [?e :intention/event :failed] [?e :intention/at ?at]
+                           [(get-else $ ?e :intention/reason :none) ?r]]
+                         (:world/facts world)
+                         k))))))
+
 (defn intentions
   "The story of every intention, oldest fact first."
   [world]

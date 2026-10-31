@@ -2117,3 +2117,16 @@
                                             :player/struck-at 103500
                                             :plan/intent (assoc i :intent/status :active))))
         "past them it is not: the cut goes through and the row chooses something else")))
+
+(deftest a-fire-the-box-reaches-into-is-a-fire-at-the-feet
+  ;; blaze-race-z9 job 3: in_fire x39 at [2349.2 58.1 2289.3]: the feet's cell clear, the neighbour at
+  ;; x 2348 holding fire, the box (0.3 either side) reaching into it
+  (let [fire (blocks/default-state :fire)
+        w (fn [pos]
+            (assoc (assoc (standing {}) :player/pos pos)
+                   :world/chunks
+                   {[0 0] (world/column {[7 64 8] fire})}))]
+    (is (false? (blaze/burning-here? (w [8.5 64.0 8.5]))) "centred, the box clear of x 7")
+    (is (true? (blaze/burning-here? (w [8.2 64.0 8.5])))
+        "8.2 - 0.3 = 7.9: the box is in the fire's cell")
+    (is (some #{[7 64 8]} (blaze/body-cells (w [8.2 64.0 8.5]))))))
