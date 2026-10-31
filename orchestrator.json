@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-31T09:52:40.253Z",
+  "at" : "2026-10-31T09:53:46.653Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -36,11 +36,6 @@
     "number" : 135,
     "title" : "Bot stops at cast-one: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
-    "number" : 618,
-    "title" : "Bot stops at ingots: no-support",
-    "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
     "number" : 617,
@@ -95,6 +90,11 @@
   }, {
     "number" : 619,
     "title" : "Bot stops at water-bucket: no-support",
+    "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 618,
+    "title" : "Bot stops at ingots: no-support",
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
