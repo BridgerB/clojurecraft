@@ -423,13 +423,16 @@
    is only teleported onto a pad made, and finds its fortress in the cache."
   [{:keys [host rcon-port rcon-pass landings landing-offset]} n]
   (when landings
-    (try (rcon/with-rcon host
-                         rcon-port
-                         rcon-pass
-                         (fn [rc]
-                           (doseq [i (range n)]
-                             (let [landing (landing-of landings (or landing-offset 0) i)]
-                               (build-pad! rc (pad-of (locate-fortress! rc landing) i))))))
+    (try (rcon/with-rcon
+          host
+          rcon-port
+          rcon-pass
+          (fn [rc]
+            (let [t0 (System/currentTimeMillis)]
+              (doseq [i (range n)]
+                (let [landing (landing-of landings (or landing-offset 0) i)]
+                  (build-pad! rc (pad-of (locate-fortress! rc landing) i))))
+              (cli/log "prepared" n "pads in" (quot (- (System/currentTimeMillis) t0) 1000) "s"))))
          (catch Exception e (cli/log "prepare failed:" e)))))
 
 (defn land-fortress!
