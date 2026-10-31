@@ -544,6 +544,26 @@
       (is (not (blaze/under-fire? hurt {:intent/kind :walk :intent/for :cover})))
       (is (not (blaze/under-fire? (assoc (standing {}) :player/health 9.0) tunnel))))))
 
+(deftest a-bot-that-cannot-heal-goes-home-for-food-not-to-a-rest-without-end
+  ;; race lane 4 (run 40980342194) s1 r01, s2 r11 and s2 r16: one :rest for 200, 164 and 200 minutes at
+  ;; health 10.9, 10.2 and 9.0, food 17 (natural regeneration needs 18), 830 / 354 / 394 cobblestone and
+  ;; not a bite to eat; the stage had no way to food
+  (let [cobble (item :cobblestone 64)
+        portal [20 64 8]
+        w (-> (standing {1 cobble} {})
+              (assoc :player/health 9.0 :player/food 17)
+              (memory/observe portal (blocks/default-state :nether_portal)))]
+    (is (not (blaze/heals? w)) "food 17 and nothing to eat")
+    (is (= {:intent/kind :portal-home} (next-intent w)) "the way home for food, not a :rest")
+    (testing "a meal held: eaten, and the rest heals"
+      (is (= :eat
+             (:intent/kind (next-intent
+                            (assoc-in w [:player/inventory 2] (item :cooked_beef 4)))))))
+    (testing "food at 18: the rest heals, so it is the rest"
+      (is (= {:intent/kind :rest} (next-intent (assoc w :player/food 18)))))
+    (testing "no portal on record: the rest holds, as before"
+      (is (= {:intent/kind :rest} (next-intent (assoc w :world/facts (memory/empty-facts))))))))
+
 (deftest the-stand-is-kept-while-the-feet-move-in-the-pocket
   ;; blaze-race-a run 5 (727b4c2b2) and blaze-race-c (3a082f7b7): :tunnel-to [2209 60 1794] and
   ;; [2210 60 1793], the stands west and north of the spawner [2210 60 1794], by turns every 14.5 s
