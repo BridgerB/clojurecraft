@@ -1567,10 +1567,24 @@
   (let [k (mob/kinds (entity/kind e))]
     (boolean (and k (:melee k) (nil? (:shoot k)) (<= (:melee k) weak-melee)))))
 
+(def heavy-kinds
+  "Hostile kinds that hit too hard to fight at hand with no burrow, whether mob/kinds holds them or
+   not: a piglin's blade, a hoglin's tusks, a blaze and a ghast's fire."
+  #{:piglin :piglin_brute :hoglin :zoglin :wither_skeleton :blaze :ghast :vindicator :evoker})
+
+(defn heavy?
+  "Is entity e of a heavy kind (heavy-kinds), or one mob/kinds knows to shoot or to hit for more than
+   weak-melee? A kind neither list names (a magma cube) is not: the fight rules' own."
+  [e]
+  (let [kind (entity/kind e)
+        k (mob/kinds kind)]
+    (boolean (or (contains? heavy-kinds kind)
+                 (and k (or (:shoot k) (> (or (:melee k) 0) weak-melee)))))))
+
 (defn swarmed?
   "Are two or more monsters within their reach (swarm), a ghast in sight (shot-at?), one monster
-   while health is under danger-health, or one hostile that is not weak? (a piglin, a hoglin)? A
-   lone weak one over that health is met by the fight rules (a magma cube is small and slow).
+   while health is under danger-health, or one hostile that is heavy? (a piglin, a hoglin)? A
+   lone one that is not over that health is met by the fight rules (a magma cube is small and slow).
    Pearls-travel-d job 5 (plan run 41156746096, issue #263) lived 73 minutes and two pearls, then
    the :defend row fought a lone piglin at full health: two swings, hits of 6.7 at 73.06, .09 and
    .16 min, dead."
@@ -1579,7 +1593,7 @@
         n (count sw)]
     (boolean (or (>= n 2)
                  (and (= 1 n) (< (:player/health world 20.0) danger-health))
-                 (some (fn [[_ e]] (and (entity/hostile? e) (not (weak? e)))) sw)
+                 (some (fn [[_ e]] (and (entity/hostile? e) (heavy? e))) sw)
                  (shot-at? world)))))
 
 (def neighbours [[1 0 0] [-1 0 0] [0 0 1] [0 0 -1] [0 1 0] [0 -1 0]])
@@ -2112,8 +2126,8 @@
       meal meal
       @travel-walk @travel-walk
       @relocate-now @relocate-now
-      @cage-break @cage-break
       @wander-walk @wander-walk
+      @cage-break @cage-break
       (or hurt? (and in? bid)) {:intent/kind :lookout :intent/for :pearls}
       (and in? aid (lure? world) @mouth-walk) @mouth-walk
       (and in? aid) {:intent/kind :lookout :intent/for :pearls}
@@ -2350,6 +2364,15 @@
   [_]
   #{:enderman})
 
+(defn pearls-stage?
+  "Is the pearl stage the one in play: the plan's goals are the pearls row alone (a gym row), or the
+   chain has reached the blaze rods? The kinds the hunt answers beyond the endermen apply only then:
+   answered-kinds asks every row in play and undone, and an overworld bot at an earlier stage must
+   still have :defend fight a silverfish."
+  [world]
+  (boolean (or (= #{:ender-pearls} (:plan/goals world))
+               (contains? (:plan/reached world #{}) :blaze-rods))))
+
 (defmethod combat/answering :pearls
   ;; with a burrow near (shelter), every hostile tracked but the shunned kinds is the hunt's too
   ;; (threat): met from the burrow, where the :defend row would fight it in the open. With none,
@@ -2357,7 +2380,9 @@
   ;; from those (swarmed?) and the :defend row does not fight them in the open
   [world _]
   (cond-> (into (combat/answers :pearls)
-                (comp (remove (comp weak? val)) (map (comp entity/kind val)) (remove shunned))
+                (if (pearls-stage? world)
+                  (comp (filter (comp heavy? val)) (map (comp entity/kind val)) (remove shunned))
+                  (filter (constantly false)))
                 (entity/hostiles world))
     (shelter world)
     (into (comp (map (comp entity/kind val)) (remove shunned)) (entity/hostiles world))))
