@@ -3080,3 +3080,16 @@
         "at a place the watchdog asked rows to keep away from: no burrow")
     (is (nil? (pearls/shelter-walk avoided [8 64 8])) "and no walk to a shelter there")
     (is (some? (pearls/shelter-walk w [8 64 8])) "as before when nothing is avoided")))
+
+(deftest an-angry-one-near-gets-a-burrow-even-where-the-watchdog-fired
+  ;; pearl-fight-m job 4 (plan run 41216588429): 25 minutes, no pearl, the watchdog fired once; the
+  ;; burrow cut where the bot stood was then refused as an avoided place, and enderman 395, angry for
+  ;; fourteen minutes and six blocks off, was fought in the open: four hits in 4 s. The avoid window
+  ;; holds off a calm hunt's burrow, never the shelter an angry one on the bot makes necessary
+  (let [angry (assoc (enderman [14.5 64.0 8.5]) :entity/creepy? true)
+        w (-> (standing {1 angry})
+              (assoc-in [:player/inventory 1] (item :iron_pickaxe 1))
+              (assoc :time/now 1000 :plan/avoid {:near [8 64 8] :until 1000000}))]
+    (is (some? (pearls/menace w)) "an angry one within eight blocks")
+    (is (= :burrow (:intent/kind (plan/next-intent w row plan/goals)))
+        "a burrow is cut here all the same")))

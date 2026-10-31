@@ -2059,7 +2059,7 @@
                        (or ce q m (and near? (not ghost?)) (and e (at-site? world))))
               (away world (or q ce m e)))
         digs? (and dir
-                   (not (plan/avoiding? world (intent/feet world)))
+                   (not (and (nil? m) (plan/avoiding? world (intent/feet world))))
                    (burrowable? world (intent/feet world) dir))
         site (when (and dir (not digs?)) (burrow-site world dir))
         csite (when
