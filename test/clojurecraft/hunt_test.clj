@@ -466,3 +466,20 @@
              (assoc (home (assoc kit-held 2 (item :bread hunt/provision-wanted))) :player/food 20)
              plan/goals)))
         "provisioned: back through the portal")))
+
+(deftest the-nether-entry-has-a-search-of-its-own
+  ;; race 41173625252 and two more dab82b6 lanes: 18 of 28 bots entered the Nether with no food and
+  ;; 23 with under eight; the kit's search (360 s from its first leg) was long spent by the 40 minutes
+  ;; of gear and cast, and the meals had eaten the reserve
+  (let [w (provisioning 1000)
+        spent (assoc w
+                     :time/now (+ 1000 hunt/forage-ms 1)
+                     :hunt/forage {:forage/since 1000 :forage/leg 2 :forage/phase :kit})
+        lit (assoc spent :plan/reached #{:portal})]
+    (is (= :kit (hunt/provision-phase spent)))
+    (is (not (hunt/foraging? spent)) "the kit's budget is spent")
+    (is (= :entry (hunt/provision-phase lit)) "the portal lit, the Nether not entered")
+    (is (= hunt/entry-provision-wanted (hunt/provision-target lit)))
+    (is (hunt/foraging? lit) "a fresh search of its own")
+    (is (= :kit (hunt/provision-phase (assoc spent :plan/reached #{:portal :nether})))
+        "entered before: the :kit / :return phases as before")))

@@ -1798,3 +1798,46 @@
         (is (= [2337 60 2290] (get-in w [:plan/intent :intent/target])))
         (is (= :regroup (get-in w [:plan/intent :intent/for])))
         (is (nil? (:plan/regroup w)) "taken once")))))
+
+;;; RECOVER-CHURN: a recovery waits its cooldown
+
+(defn more-failures
+  "w with n more :place :no-support failures against the :defend row (pearl-fight-i job 3, run
+   41178660163: :place :no-support, :pillar :boxed, :place :no-support, 100 ms apart)."
+  [w n]
+  (reduce (fn [w k]
+            (plan/fail-intent w
+                              {:intent/kind :place
+                               :intent/item :cobblestone
+                               :intent/goal :defend
+                               :intent/reason :no-support
+                               :intent/id (+ 100 k)}))
+          w
+          (range n)))
+
+(deftest a-second-recovery-inside-the-cooldown-does-nothing
+  (let [w1 (place-failed 316000)
+        w2 (more-failures (assoc w1 :time/now 316300) 3)
+        w3 (more-failures (assoc w1 :time/now (+ 316000 plan/recover-cooldown-ms 1)) 3)]
+    (is (= 1 (:plan/recoveries w1)))
+    (is (= 316000 (:plan/recover-at w1)))
+    (is (= 1 (:plan/recoveries w2)) "three more failures 300 ms on: no second recovery")
+    (is (= :active (:plan/status w2)) "and the run does not end for it")
+    (is (some? (:plan/failed w2))
+        "the last failure is kept, so the identical retry waits or steps back")
+    (is (= 2 (:plan/recoveries w3)) "after the cooldown the next round recovers")))
+
+(deftest a-recovery-is-not-progress
+  (let [w (more-failures (place-failed 316000) 3)]
+    (is (nil? (:plan/done-at w)) "no recovery or failure moves the stall clock")
+    (is (plan/stalled? (assoc w :time/now (+ plan/stall-ms 1000))))))
+
+(deftest ^:eftest/synchronized the-regroup-walk-starts-under-an-always-row
+  ;; the :defend row is an always row; the regroup walk took no turn under it and the row's cover
+  ;; failed again at once
+  (let [w (dissoc (place-failed 316000) :plan/intent)
+        goal {:goal/id :defend :goal/always? true :goal/done? :never :goal/plan :flip-test}]
+    (with-redefs [plan/choose (constantly goal)
+                  plan/next-intent (constantly {:intent/kind :place :intent/item :cobblestone})]
+      (let [w (plan/plan-tick w {:event/kind :tick :event/now 316050 :event/rand 0.5} [goal])]
+        (is (= :regroup (get-in w [:plan/intent :intent/for])))))))

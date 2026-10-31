@@ -19,6 +19,7 @@
             [clojurecraft.pocket :as pocket]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.sim :as sim]
+            [clojurecraft.window :as window]
             [clojurecraft.world :as world]
             [datascript.core :as d]))
 
@@ -1741,3 +1742,21 @@
               (assoc :world/chunks {[0 0] (world/column {[9 63 8] (blocks/default-state :air)})}))]
     (is (= [9 63 8] (:intent/cell (blaze/long-shot-cover w)))
         "the cell under the wall cell first")))
+(deftest a-full-inventory-throws-junk-before-a-rod-is-fetched
+  ;; race 41181938317 (c996f54) s2 Clj_r02: five blazes killed, seven rods dropped, :collect-drops
+  ;; [333 77 300] failed :not-picked-up four times and rodMax stayed 0; all 36 slots were full
+  ;; (877 cobblestone, 128 diorite, 64 cobbled deepslate ...), and a drop is picked up on contact
+  (let [rod (entity :item [10.5 64.0 9.5] :entity/item blaze/rod)
+        full (into {}
+                   (map-indexed (fn [i p] [p (item (if (even? i) :sand :cobblestone) 64)]))
+                   inventory/main-then-hotbar)
+        w (standing full {40 rod})]
+    (is (nil? (window/free-slot w (window/view w :inventory))) "every slot is full")
+    (is (= {:intent/kind :toss} (next-intent w)) "junk goes before the rod is gone to")
+    (testing "a slot free, or a rod held to merge into: the rod is collected"
+      (is (= :collect-drops
+             (:intent/kind (next-intent (standing (dissoc full (first inventory/main-then-hotbar))
+                                                  {40 rod})))))
+      (is (= :collect-drops
+             (:intent/kind (next-intent (standing (assoc full 9 (item :blaze_rod 3))
+                                                  {40 rod}))))))))
