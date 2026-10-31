@@ -1458,3 +1458,21 @@
     (is (= (logs w2) (logs w3)) "the same stage again: no line, no change")
     (is (= #{"tunnel stage :choose 300ms" "tunnel stage [:dig :open] 1100ms"} (set (logs w4))))
     (is (= :choose (get-in w4 [:plan/intent :intent/stage-key])))))
+
+(deftest a-tunnel-lays-netherrack-and-keeps-cobblestone-for-the-seal
+  ;; blaze-race-v job 5: 64 cobblestone gone into floors on the way down with 160 netherrack held
+  (let [w (fn [& items]
+            (assoc (rock {})
+                   :player/inventory
+                   (into {}
+                         (map-indexed (fn [i [item n]] [i {:item (recipe/item-id item) :count n}]))
+                         (partition 2 items))))]
+    (is (= :netherrack (stairs/building-filler (w :cobblestone 64 :netherrack 160) 1))
+        "the start of v job 5's tunnel")
+    (is (= :cobblestone (stairs/building-filler (w :cobblestone 64) 1))
+        "no netherrack: cobblestone, above the reserve")
+    (is (= :cobblestone (stairs/building-filler (w :cobblestone 5) 1))
+        "below the reserve and nothing else: still laid, a tunnel is not stopped")
+    (is (= :cobblestone (stairs/filler (w :cobblestone 64 :netherrack 160) 1))
+        "seals and cover still take filler's cobblestone first")
+    (is (= :netherrack (fortress/walk-filler (w :cobblestone 64 :netherrack 160) [1 63 0])))))

@@ -135,7 +135,7 @@
    in its floor dug it out and laid it again for ever (sim snapshot R1-20-1, issue #537: one
    step's dig and place on the same cell for the whole window)."
   [world cell]
-  (let [item (stairs/filler world 1)]
+  (let [item (stairs/building-filler world 1)]
     (when (and item
                (path/floor? (assoc-in world [:world/blocks cell] (blocks/default-state item)) cell))
       item)))
@@ -761,7 +761,7 @@
                                       (step-plan from move)))
             next (cond-> next
                    (= :place (:build/op next))
-                   (assoc :build/item (or (stairs/filler world 1) :cobblestone)))]
+                   (assoc :build/item (or (stairs/building-filler world 1) :cobblestone)))]
         (cond (nil? next)
               (reduce
                intent/dissoc-intent
