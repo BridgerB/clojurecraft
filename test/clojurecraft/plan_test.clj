@@ -1841,3 +1841,74 @@
                   plan/next-intent (constantly {:intent/kind :place :intent/item :cobblestone})]
       (let [w (plan/plan-tick w {:event/kind :tick :event/now 316050 :event/rand 0.5} [goal])]
         (is (= :regroup (get-in w [:plan/intent :intent/for])))))))
+
+;;; STUCK: no progress for stuck-ms sends the bot elsewhere
+
+(def pearls-table
+  [{:goal/id :ender-pearls :goal/target? true :goal/done? :never :goal/plan :pearls}])
+
+(defn frozen
+  "pearl-fight-i job 1 (run 41178660163) at ms into a run standing at one block: a :lookout
+   running, the burrow remembered, nothing held but a pickaxe, the watch begun at 0."
+  [ms]
+  (-> (world-state [2390.5 69.0 2164.5])
+      (assoc :plan/status :active
+             :plan/since 0
+             :plan/blacklist #{}
+             :time/now ms
+             :pearls/shelter [2390 69 2164]
+             :player/inventory {0 {:item 1 :count 1}}
+             :plan/intent
+             {:intent/kind :lookout :intent/status :active :intent/id 7 :intent/goal :ender-pearls})
+      (assoc :plan/watch {:key [{1 1} 0] :pos [2390.5 69.0 2164.5] :at 0 :checked 0})))
+
+(deftest a-bot-at-one-block-for-stuck-ms-is-sent-elsewhere
+  (let [event {:event/kind :tick :event/now 0 :event/rand 0.25}
+        w (plan/watch (frozen (+ plan/stuck-ms 1000)) pearls-table event)]
+    (is (= 1 (:plan/unstuck w)))
+    (is (nil? (:plan/intent w)) "the lookout is dropped")
+    (is (not (contains? w :pearls/shelter)) "the burrow is forgotten")
+    (is (= [2390 69 2212] (:plan/explore w)) "explore-distance away, a quarter turn")
+    (is (= (+ plan/stuck-ms 1000) (get-in w [:plan/watch :at])) "the watch starts over")
+    (testing "before stuck-ms nothing changes but the look"
+      (let [w (plan/watch (frozen (- plan/stuck-ms 1000)) pearls-table event)]
+        (is (nil? (:plan/unstuck w)))
+        (is (= :lookout (get-in w [:plan/intent :intent/kind])))
+        (is (= (- plan/stuck-ms 1000) (get-in w [:plan/watch :checked])))))
+    (testing "a cursor holding an item waits for the next look"
+      (let [w (plan/watch (assoc (frozen (+ plan/stuck-ms 1000)) :window/cursor {:item 1 :count 1})
+                          pearls-table
+                          event)]
+        (is (nil? (:plan/unstuck w)))))))
+
+(deftest progress-or-a-move-restarts-the-watch
+  (let [event {:event/kind :tick :event/now 0 :event/rand 0.25}
+        late (+ plan/stuck-ms 1000)]
+    (testing "a pearl held"
+      (let [w (plan/watch (assoc-in (frozen late) [:player/inventory 1] {:item 2 :count 1})
+                          pearls-table
+                          event)]
+        (is (nil? (:plan/unstuck w)))
+        (is (= late (get-in w [:plan/watch :at])))))
+    (testing "a move of stuck-move blocks"
+      (let [w
+            (plan/watch (assoc (frozen late) :player/pos [2398.5 69.0 2164.5]) pearls-table event)]
+        (is (nil? (:plan/unstuck w)))
+        (is (= late (get-in w [:plan/watch :at])))))
+    (testing "a jitter of a block does not"
+      (let [w
+            (plan/watch (assoc (frozen late) :player/pos [2391.5 69.0 2164.5]) pearls-table event)]
+        (is (= 1 (:plan/unstuck w)))))))
+
+(deftest ^:eftest/synchronized the-explore-walk-starts-once
+  (let [w (-> (frozen 5000)
+              (dissoc :plan/intent)
+              (assoc :plan/explore [2390 69 2212]))
+        goal (first pearls-table)]
+    (with-redefs [plan/choose (constantly goal)
+                  plan/next-intent (constantly {:intent/kind :lookout})]
+      (let [w (plan/plan-tick w {:event/kind :tick :event/now 5050 :event/rand 0.5} pearls-table)]
+        (is (= :walk (get-in w [:plan/intent :intent/kind])))
+        (is (= [2390 69 2212] (get-in w [:plan/intent :intent/target])))
+        (is (= :explore (get-in w [:plan/intent :intent/for])))
+        (is (nil? (:plan/explore w)))))))
