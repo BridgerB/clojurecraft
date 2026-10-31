@@ -317,3 +317,5 @@ Job 4 (69 min, 0 real kills): at [2342 60 2287] it had 3 to 9 blazes within 8 fo
 ## See also
 - [[survival]] - the fight, the back-off and the defend row this goal leans on.
 - [[sib-blaze-combat]] - what ruststeve learned killing blazes.
+
+Z13 jobs 4 and 6 (landings 4 and 6) died in a `:pocket-hold` that was never sealed: unseal, camp, one fireball, then 16.6 s (hp 20 to 0, 4 fireballs and burning) and 10.7 s (7 fireballs) standing still, no `:seal` chosen (the pocket was called sealed, or `can-seal?` was false) and the hold ending only on `hold-intent` saying `:seal`. `plan/steer` now notes `:pocket/hurt` {:at :hp} at the first hurt in the held pocket (`hurt-mark`) and `leaky-pocket?` reads it: a pocket that is sealed or cannot be sealed, a further hit `leak-ms` (3 s) after the first hurt and `leak-loss` (6) health lost since, is a leak: the site is dropped and its cell added to `:pocket/failed`, so another refuge, a cover or a fight is chosen. The burn after the last hit does not count (needs a hit after the first 3 s).

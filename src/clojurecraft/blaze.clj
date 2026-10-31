@@ -1711,6 +1711,37 @@
                   (not (recent? :fight))
                   (not (recent? :pocket))))))
 
+(def leak-ms 3000)   ; ms after the first hurt in a pocket that a further hit means the pocket lets them in
+(def leak-loss 6.0)  ; health lost since that first hurt that, with a further hit, makes the pocket a leak
+
+(defn hurt-mark
+  "The world with :pocket/hurt noted: {:at ms :hp h} from the first hurt (burning or struck within
+   press-ms) in the held pocket, kept while it lasts, dropped when the bot is out of the pocket or
+   unhurt (not burning, no hit within press-ms)."
+  [world]
+  (let [now (:time/now world 0)
+        hurt? (or (:player/on-fire? world)
+                  (<= (- now (:player/struck-at world -1000000)) press-ms))]
+    (cond (or (not (pocket/in? world)) (not hurt?)) (dissoc world :pocket/hurt)
+          (:pocket/hurt world) world
+          :else (assoc world :pocket/hurt {:at now :hp (:player/health world 20.0)}))))
+
+(defn leaky-pocket?
+  "Does the held pocket let the blazes in: it is called a refuge (sealed, or one that cannot be sealed:
+   no seal is chosen) yet the bot was hit again leak-ms after it was first hurt in it and has lost
+   leak-loss health since (:pocket/hurt)? A burning bot loses health after the last hit, so a hit
+   after the first leak-ms is what tells. Blaze-race-z13 jobs 4 and 6: 16.6 s and 10.7 s in a
+   :pocket-hold at hp 20 to 0, 4 and 7 fireballs, the hold never ending because no :seal was chosen."
+  [world]
+  (let [{:keys [at hp]} (:pocket/hurt world)
+        site (:pocket/site world)]
+    (boolean (and at
+                  site
+                  (pocket/in? world)
+                  (or (pocket/sealed? world site) (not (pocket/can-seal? world site)))
+                  (>= (:player/struck-at world -1000000) (+ at leak-ms))
+                  (<= (:player/health world 20.0) (- hp leak-loss))))))
+
 (declare rod-grab?)
 
 (defmethod plan/steer :blaze-rods
@@ -1720,8 +1751,14 @@
   (let [sp (nearest-spawner world)
         world (if (rod-grab? world (:plan/intent world))
                 (update world :rod-grab/since #(or % (:time/now world 0)))
-                (dissoc world :rod-grab/since))]
-    (cond (and (pocket/in? world) (pocket/unlayable? world (:pocket/cell (:pocket/site world))))
+                (dissoc world :rod-grab/since))
+        world (hurt-mark world)]
+    (cond (leaky-pocket? world)
+          ;; a pocket the hits come through is no refuge: forgotten, its cell remembered as failed
+          (-> world
+              (update :pocket/failed (fnil conj #{}) (:pocket/cell (:pocket/site world)))
+              (dissoc :pocket/site :sortie/since :pocket/hurt))
+          (and (pocket/in? world) (pocket/unlayable? world (:pocket/cell (:pocket/site world))))
           ;; an unsealable pocket is no refuge: forgotten, and its cell remembered as failed
           (-> world
               (update :pocket/failed (fnil conj #{}) (:pocket/cell (:pocket/site world)))
