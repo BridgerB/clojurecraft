@@ -26,6 +26,7 @@
             [clojurecraft.eat :as eat]
             [clojurecraft.entity :as entity]
             [clojurecraft.hunt :as hunt]
+            [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
             [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
@@ -40,6 +41,7 @@
 (def frame-every-ms 100)              ; the frame thread's rest between two frames: ten a second at most
 (def reach 4.5)                       ; blocks the eyes' ray goes for the block under the crosshair (a survival player's reach)
 (def arm-packets #{:swing :attack :use-item :use-item-on}) ; what the bot sends that moves its arm
+(def stairs-shown 24)                 ; stairs ahead a staircase's projected route shows at most
 (def focus-kept 60)                   ; focus changes the frame keeps, newest last
 (def direct-bits 15)                  ; bits a cell in a section with more than 256 states: the server's global palette
 
@@ -396,14 +398,44 @@
                  chain))
       :collect)))
 
+(defn walk-route
+  "A walk's feet cells still to go: its :intent/waypoints from :intent/at, then its target."
+  [{:intent/keys [waypoints at target]}]
+  (cond-> (vec (drop (or at 0) waypoints)) (vector? target) (conj target)))
+
+(defn stairs-route
+  "A staircase's feet cells ahead, as its executor cuts them: from the feet, one block along its
+   :intent/dir and one down (stairs-down) or up (stairs-up) a stair, until :intent/to-y, at most
+   stairs-shown; the stair being cut first (its :intent/cells' lowest, the new feet)."
+  [world {:intent/keys [kind dir to-y]}]
+  (let [[x y z] (intent/feet world)
+        [dx dz] dir
+        dy (cond (= :stairs-up kind) 1
+                 :else -1)
+        n (min stairs-shown
+               (cond to-y (abs (- (long to-y) (long y)))
+                     :else stairs-shown))]
+    (mapv (fn [k] [(+ x (* k dx)) (+ y (* k dy)) (+ z (* k dz))]) (range 1 (inc n)))))
+
+(defn tunnel-route
+  "A tunnel's cells: the step being taken (:intent/from, then from plus :intent/move), then the
+   target. Beyond the step the tunnel chooses as it goes, so nothing between is claimed."
+  [{:intent/keys [from move target]}]
+  (cond-> [from (mapv + from move)] (vector? target) (conj target)))
+
 (defn route-view
-  "The feet cells the bot's walk has still to go, from its next waypoint (the innermost :walk's
-   :intent/waypoints from :intent/at), ending at the walk's target; nil without a planned walk."
+  "The route the bot is following: {:kind :walk|:stairs|:tunnel :cells [...]} from the innermost
+   intent that has one: a planned :walk (walk-route), a staircase with a heading (stairs-route),
+   a :tunnel-to step (tunnel-route); nil when none does."
   [world]
-  (when-let [{:intent/keys [waypoints at target]} (last (filter #(and (= :walk (:intent/kind %))
-                                                                      (seq (:intent/waypoints %)))
-                                                                (intents-in world)))]
-    (cond-> (vec (drop (or at 0) waypoints)) (vector? target) (conj target))))
+  (some (fn [i]
+          (cond (and (= :walk (:intent/kind i)) (seq (:intent/waypoints i)))
+                {:kind :walk :cells (walk-route i)}
+                (and (#{:stairs-down :stairs-up} (:intent/kind i)) (:intent/dir i))
+                {:kind :stairs :cells (stairs-route world i)}
+                (and (= :tunnel-to (:intent/kind i)) (:intent/from i) (:intent/move i))
+                {:kind :tunnel :cells (tunnel-route i)}))
+        (reverse (intents-in world))))
 
 (defn entities-view
   "The entities within entity-range of the bot: id, kind, position, yaw in degrees, health,
@@ -532,7 +564,8 @@
    biome under its feet (:rules marks a frame whose entities carry care), the entities round it, what it intends (intent-view) and has reached, and the
    version of every column round it (columns). Absent attributes stay absent."
   [world]
-  (let [w world]
+  (let [w world
+        r (route-view w)]
     (into {}
           (remove (comp nil? val))
           {:name (:bot/name w)
@@ -551,7 +584,8 @@
            :inventory (inventory-view w)
            :dig (dig-view w)
            :looking (when (:player/look w) (looked-at w))
-           :route (route-view w)
+           :route (:cells r)
+           :route-kind (:kind r)
            :rules true
            :entities (entities-view w)
            :intent (intent-view (:plan/intent w))

@@ -220,7 +220,7 @@ function radar(f, p) {
     g.font = "bold 13px system-ui"; g.fillText("target " + d.toFixed(0) + "m" + (dy > 0 ? " ↑" + dy : dy < 0 ? " ↓" + (-dy) : ""), tx + 10, ty + 4);
   }
   if (Array.isArray(f.route) && f.route.length) { // the route its walk is following, cell by cell
-    g.strokeStyle = "#26e6ff"; g.lineWidth = 2; g.beginPath(); g.moveTo(cx, cy);
+    g.strokeStyle = f["route-kind"] === "walk" || !f["route-kind"] ? "#26e6ff" : "#ff8a1f"; g.lineWidth = 2; g.beginPath(); g.moveTo(cx, cy);
     for (const c of f.route) { const [x2, y2] = at(c[0] + 0.5 - p[0], c[2] + 0.5 - p[2]); g.lineTo(x2, y2); }
     g.stroke();
   }
@@ -446,14 +446,14 @@ lookBox.color = new B.Color3(0, 0, 0); lookBox.alpha = 0.45; lookBox.isPickable 
 // the route the walk follows, as a line through the cells' feet in the world (steve draws its pathfinder's the same way)
 let routeLine = null, routeKey = "";
 function showRoute(f) {
-  const r = Array.isArray(f.route) ? f.route : [], key = JSON.stringify(r);
+  const r = Array.isArray(f.route) ? f.route : [], key = JSON.stringify(r) + f["route-kind"];
   if (key === routeKey) return;
   routeKey = key;
   if (routeLine) { routeLine.dispose(); routeLine = null; }
   if (r.length < 1 || !f.pos) return;
   const pts = [new B.Vector3(f.pos[0], f.pos[1] + 0.1, f.pos[2]), ...r.map((c) => new B.Vector3(c[0] + 0.5, c[1] + 0.1, c[2] + 0.5))];
   routeLine = B.MeshBuilder.CreateLines("route", { points: pts }, scene);
-  routeLine.color = new B.Color3(0.15, 0.9, 1); routeLine.isPickable = false;
+  routeLine.color = f["route-kind"] === "walk" || !f["route-kind"] ? new B.Color3(0.15, 0.9, 1) : new B.Color3(1, 0.5, 0.12); // steve's colours: a clear walk, cells to dig routeLine.isPickable = false;
 }
 function showLook(f) {
   const c = f.looking;

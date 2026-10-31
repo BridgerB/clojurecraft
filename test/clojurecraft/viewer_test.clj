@@ -209,5 +209,17 @@
                                         :intent/target [5 64 0]
                                         :intent/waypoints [[1 64 0] [2 64 0] [3 64 0] [4 64 0]]
                                         :intent/at 2}}}]
-    (is (= [[3 64 0] [4 64 0] [5 64 0]] (viewer/route-view w)))
+    (is (= {:kind :walk :cells [[3 64 0] [4 64 0] [5 64 0]]} (viewer/route-view w))
+        "the walk inside")
+    (is (= {:kind :stairs :cells [[1 63 0] [2 62 0] [3 61 0]]}
+           (viewer/route-view {:player/pos [0.5 64.0 0.5]
+                               :plan/intent
+                               {:intent/kind :stairs-down :intent/dir [1 0] :intent/to-y 61}}))
+        "a staircase: a block on and one down a stair, to its depth")
+    (is (= {:kind :tunnel :cells [[0 30 0] [1 30 0] [9 30 0]]}
+           (viewer/route-view {:plan/intent {:intent/kind :tunnel-to
+                                             :intent/from [0 30 0]
+                                             :intent/move [1 0 0]
+                                             :intent/target [9 30 0]}}))
+        "a tunnel: the step it takes, then its target")
     (is (nil? (viewer/route-view {:plan/intent {:intent/kind :dig}})))))
