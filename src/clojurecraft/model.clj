@@ -270,6 +270,14 @@
    [:plan/failures
     "[{:choice choice-keys-of-the-plan :feet cell :at ms}]: the intents that failed in the last 30 s, up to 8, kept across the intents that start after them; the planner refuses a plan that failed from these feet, or 3 times, and backs away instead (plan/failed-before?)"
     "after an intent fails"]
+   [:plan/best
+    "the milestones a chained run reached that a death which took the inventory sent back (plan/restart-after-death): :plan/reached starts over, the records and the race's counting read :plan/reached and this (plan/milestones-ever)"
+    "after the first such death"]
+   [:plan/lives "the deaths (:stats/deaths) the planner has judged, one check per life"
+    "after the first death"]
+   [:inventory/life
+    "the :stats/deaths when the last window-0 contents arrived: the new life's contents are in once it equals :stats/deaths"
+    "after a container-set-content of window 0"]
    [:plan/recover-at
     "ms of the last recovery (plan/recover); another within recover-cooldown-ms does nothing"
     "after a recovery"]

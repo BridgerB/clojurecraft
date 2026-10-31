@@ -641,7 +641,7 @@
         halted (volatile! false)
         stop? #(or (plan/done? %)
                    (plan/failed? %)
-                   (contains? (:plan/reached %) stage)
+                   (contains? (plan/milestones-ever %) stage)
                    (vreset! halted (boolean (halt?))))
         {world' :world crashed :crashed}
         (sim/play-from step m stop? (window-of snap) (go-of w until) nil)]
@@ -673,7 +673,9 @@
         (timeout-signature? snap)
         (not (or (:ok played)
                  (= :done (get-in played [:plan :plan/status]))
-                 (contains? (set (get-in played [:plan :plan/reached])) (stage-of snap))))
+                 (contains? (into (set (get-in played [:plan :plan/reached]))
+                                  (get-in played [:plan :plan/best]))
+                            (stage-of snap))))
         :else (= (:snapshot/signature snap) (:run/signature played))))
 
 (defn stage-until
