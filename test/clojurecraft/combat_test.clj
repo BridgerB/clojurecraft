@@ -822,3 +822,35 @@
   (is (true? (combat/pillar-failed? {:plan/failed {:intent/kind :pillar :intent/reason :boxed}})))
   (is (false? (combat/pillar-failed? {:plan/failed {:intent/kind :place}})))
   (is (false? (combat/pillar-failed? {}))))
+
+(deftest an-enderman-in-reach-under-the-line-is-dug-away-from-not-eaten-or-walled
+  ;; pearl-fight-m (plan run 41216588429): jobs 2, 3, 4 and 6 fought an angry enderman in the open
+  ;; from 20 health; at the line the fight went to :retreat (a walk away, no swing back) or the
+  ;; cover was a meal, a block set against nothing, a pillar, and the next hit 1.8 s later killed:
+  ;; 8.5 to 2.8 to 0 in 3 s. The hole under the feet comes first for one that teleports
+  (let [angry (assoc (mob :enderman [9.5 64.0 8.5] 40.0) :entity/creepy? true)
+        kit {0 (item :stone_pickaxe 1) 1 (item :cobblestone 8) 2 (item :cooked_beef 4)}
+        w (-> (standing {7 angry})
+              (assoc :player/health 8.5 :player/food 10 :player/inventory kit))
+        i (plan/next-intent w (row :defend) plan/goals)]
+    (is (= {:intent/kind :dig :intent/target [8 63 8]} (combat/cover w angry)))
+    (is (= :dig (:intent/kind i)) (pr-str i))
+    (testing "a zombie in reach is still walled or eaten against, not dug away from"
+      (let [z (assoc-in w [:world/entities 7] (mob :zombie [9.5 64.0 8.5] 20.0))]
+        (is (not= :dig (:intent/kind (combat/cover z (get-in z [:world/entities 7])))))))))
+
+(deftest a-fight-with-an-enderman-ends-under-the-line-for-its-row-to-cover
+  ;; pearl-fight-m jobs 3 and 6: the fight turned to its retreat stage at 8.5 and the intent ran on,
+  ;; the row never asked, no attack sent after the line, 8.5 to 0 in two hits
+  (let [angry (assoc (mob :enderman [9.5 64.0 8.5] 40.0) :entity/creepy? true)
+        w (assoc (standing {7 angry})
+                 :plan/intent
+                 {:intent/kind :fight :intent/target 7 :intent/status :active})
+        hurt (assoc w :player/health 8.5)
+        ran (fn [w] (intent/run w (:plan/intent w) (tick 100)))]
+    (is (= :done (:intent/status (:plan/intent (ran hurt)))) "under the line it is over")
+    (is (not= :done (:intent/status (:plan/intent (ran w)))) "healthy it goes on")
+    (is (not= :done
+              (:intent/status (:plan/intent (ran
+                                             (assoc-in hurt [:plan/intent :intent/hold?] true)))))
+        "held from a burrow it is not ended")))

@@ -464,6 +464,11 @@
   [world]
   (and (= dimension/end (:player/dimension world)) (entity/in-breath? world)))
 
+(def teleporters
+  "Kinds a back-off never gets away from: they teleport to the bot (an enderman: gym main
+   dragon-main-a run 1, plan run 41092662823, backed off from two at 9.3 health and was slain)."
+  #{:enderman})
+
 (defmethod intent/run :fight
   ;; {:intent/kind :fight :intent/target eid}: done when the target is gone (a kill); below
   ;; retreat-health it breaks off and walks away (done once away: a fight left is not a failure).
@@ -486,7 +491,14 @@
         world (assoc world :plan/intent i)]
     (cond (or (entity/gone? world (:intent/target i))
               (breathed-on? world)
-              (and (:intent/yield? i) (< (:player/health world 20.0) retreat-health)))
+              (and (:intent/yield? i) (< (:player/health world 20.0) retreat-health))
+              ;; one that teleports to the bot is not walked away from (the retreat stage is
+              ;; hits taken with no swing back, pearl-fight-m jobs 3 and 6: 8.5 to 0 in 2 s, no
+              ;; attack sent after the line): the fight ends and its row plans the cover
+              (and (contains? teleporters (entity/kind e))
+                   (not (:intent/hold? i))
+                   (not (:intent/to-the-end? i))
+                   (< (:player/health world 20.0) (danger-line world))))
           (-> world
               (assoc :player/controls {})
               intent/done)
@@ -806,11 +818,6 @@
 
 (defmethod plan/done-by :safe? [world _] (or (nil? (:player/pos world)) (empty? (threats world))))
 
-(def teleporters
-  "Kinds a back-off never gets away from: they teleport to the bot (an enderman: gym main
-   dragon-main-a run 1, plan run 41092662823, backed off from two at 9.3 health and was slain)."
-  #{:enderman})
-
 (defn back-off-pointless?
   "Would a :back-off from entity e be done at once, getting the bot nowhere: it is already
    back-off-to away, the way straight away is a drop no landing survives (void-retreat?) or
@@ -904,6 +911,12 @@
         [_ fy _] (intent/feet world)]
     (cond (>= (horizontal world e) back-off-to)
           (if food {:intent/kind :eat :intent/item food} {:plan/wait :resting})
+          ;; one in reach that teleports: the hole first. A mob's melee reaches its box grown
+          ;; sideways and not up or down, so a bot two cells down is out of reach of one at the rim,
+          ;; and the meal, the wall and the pillar each took longer than the 1.8 s between its hits
+          ;; (pearl-fight-m jobs 2, 3, 4 and 6: eat, place, pillar, then dead)
+          (and near? nook (contains? teleporters (entity/kind e)))
+          {:intent/kind :dig :intent/target nook}
           (and food (not near?)) {:intent/kind :eat :intent/item food}
           (and wall filler) {:intent/kind :place :intent/item filler :intent/cell wall}
           pillar {:intent/kind :pillar :intent/item pillar :intent/top (+ fy pillar-height)}
