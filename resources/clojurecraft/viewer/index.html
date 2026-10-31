@@ -113,7 +113,9 @@ function syncColumns(cols, pos, radius) {
     fetch(`/column?x=${x}&z=${z}`).then((r) => r.json()).then((c) => {
       if (!c.buf) return;
       const col = R.createChunkColumn({ minY: c.minY, worldHeight: c.height, maxBitsPerBlock: R.GLOBAL_BITS_PER_BLOCK, maxBitsPerBiome: R.GLOBAL_BITS_PER_BIOME });
-      R.loadChunkColumn(col, R.fromBase64(c.buf), true);
+      const bytes = R.fromBase64(c.buf);
+      R.loadChunkColumn(col, bytes, true);
+      if (q.get("light") !== "0") try { lightColumn(c, bytes); } catch (e) { console.error("light", c.x, c.z, e); }
       R.addViewerColumn(viewer, c.x, c.z, col, c.minY, c.height);
       versions.set(key, v);
     }).finally(() => inflight.delete(key));
@@ -121,12 +123,13 @@ function syncColumns(cols, pos, radius) {
   const [bx, bz] = [Math.floor(pos[0]) >> 4, Math.floor(pos[2]) >> 4];
   for (const key of [...versions.keys()]) {
     const [cx, cz] = key.split(",").map(Number);
-    if (!(key in cols) && Math.max(Math.abs(cx - bx), Math.abs(cz - bz)) > radius + 2) { R.removeViewerColumn(viewer, cx, cz); versions.delete(key); }
+    if (!(key in cols) && Math.max(Math.abs(cx - bx), Math.abs(cz - bz)) > radius + 2) { R.removeViewerColumn(viewer, cx, cz); versions.delete(key); lightCols.delete(key); }
   }
 }
 
 // ---------------------------------------------------------------- a new run: the bot's server restarted (a new world, a new bot)
 function resetWorld() {
+  lightCols.clear(); lightBox = null;
   for (const key of [...versions.keys()]) { const [cx, cz] = key.split(",").map(Number); R.removeViewerColumn(viewer, cx, cz); }
   versions.clear();
   for (const id of [...ents.keys()]) R.removeViewerEntity(viewer, id);
@@ -460,6 +463,162 @@ function showLook(f) {
   lookBox.setEnabled(!!c);
   if (c) lookBox.position.set(c[0] + 0.5, c[1] + 0.5, c[2] + 0.5);
 }
+
+// ---------------------------------------------------------------- light: vanilla's sky light and block light, worked out here from the blocks
+// The bot does not keep the server's light arrays (2 KB a section in every bot's world), so the page works
+// the light out from the same blocks the way the game does: sky light 15 down every column to its first
+// block that stops or dims light, then spread to the neighbours less one a block (water and leaves one
+// more); block light from the blocks that glow, spread the same way. Each face of a section's mesh is then
+// darkened by the brighter of the two in the cell it faces, with vanilla's curve, f / (4 - 3f).
+const EMIT = { torch: 14, wall_torch: 14, lantern: 15, soul_lantern: 10, lava: 15, glowstone: 15, fire: 15, soul_fire: 10,
+  sea_lantern: 15, jack_o_lantern: 15, shroomlight: 15, beacon: 15, campfire: 15, soul_campfire: 10, end_rod: 14,
+  redstone_torch: 7, redstone_wall_torch: 7, magma_block: 3, crying_obsidian: 10, glow_lichen: 7, ochre_froglight: 15,
+  verdant_froglight: 15, pearlescent_froglight: 15, nether_portal: 11, end_portal: 15, end_gateway: 15, amethyst_cluster: 5,
+  large_amethyst_bud: 4, medium_amethyst_bud: 2, small_amethyst_bud: 1, brown_mushroom: 1, dragon_egg: 1, sea_pickle: 6,
+  respawn_anchor: 0, conduit: 15, copper_bulb: 15, light: 15, sculk_catalyst: 6, enchanting_table: 7, ender_chest: 7,
+  brewing_stand: 1, end_portal_frame: 1, glow_berries: 0, cave_vines: 0 };
+const DIM = /water|leaves|ice$|cobweb|slime_block|honey_block/; // vanilla's light opacity 1: a block of it dims light by one more
+let stateOpaque = null, stateEmit = null, stateDim = null;
+function lightTables() {
+  if (stateOpaque) return;
+  const bl = assets.blocks.slice().sort((a, b) => a.minStateId - b.minStateId);
+  const count = (b) => (b.states || []).reduce((n, s) => n * ((s.values && s.values.length) || 2), 1);
+  const max = bl.reduce((m, b) => Math.max(m, b.minStateId + count(b)), 0);
+  stateOpaque = new Uint8Array(max); stateEmit = new Uint8Array(max); stateDim = new Uint8Array(max);
+  for (const b of bl) for (let s = b.minStateId; s < b.minStateId + count(b); s++) {
+    stateOpaque[s] = !b.transparent && b.boundingBox === "block" ? 1 : 0;
+    stateEmit[s] = EMIT[b.name] || 0;
+    stateDim[s] = DIM.test(b.name) ? 1 : 0;
+  }
+}
+// a column's sections decoded from the bytes /column sends (the wire's paletted containers), and the
+// highest cell in each x,z that stops or dims light (where the sky's 15 ends)
+const lightCols = new Map();
+function readVarint(b, o) { let v = 0, s = 0, x; do { x = b[o.i++]; v |= (x & 127) << s; s += 7; } while (x & 128); return v >>> 0; }
+function readContainer(b, o, entries, maxBits) {
+  const bits = b[o.i++];
+  if (bits === 0) { const v = readVarint(b, o); return v; }
+  let pal = null;
+  if (bits <= maxBits) { const n = readVarint(b, o); pal = new Array(n); for (let k = 0; k < n; k++) pal[k] = readVarint(b, o); }
+  const per = Math.floor(64 / bits), nl = Math.ceil(entries / per), mask = (1 << bits) - 1, out = new Uint16Array(entries);
+  let e = 0;
+  for (let l = 0; l < nl; l++) {
+    const hi = ((b[o.i] << 24) | (b[o.i + 1] << 16) | (b[o.i + 2] << 8) | b[o.i + 3]) >>> 0;
+    const lo = ((b[o.i + 4] << 24) | (b[o.i + 5] << 16) | (b[o.i + 6] << 8) | b[o.i + 7]) >>> 0;
+    o.i += 8;
+    for (let k = 0; k < per && e < entries; k++, e++) {
+      const off = k * bits;
+      const v = off + bits <= 32 ? (lo >>> off) & mask : off >= 32 ? (hi >>> (off - 32)) & mask : ((lo >>> off) | (hi << (32 - off))) & mask;
+      out[e] = pal ? pal[v] : v;
+    }
+  }
+  return out;
+}
+function lightColumn(c, bytes) {
+  lightTables();
+  const o = { i: 0 }, n = c.height / 16, secs = new Array(n);
+  for (let s = 0; s < n; s++) { o.i += 4; secs[s] = readContainer(bytes, o, 4096, 8); readContainer(bytes, o, 64, 3); }
+  const top = new Int16Array(256).fill(c.minY - 1);
+  for (let xz = 0; xz < 256; xz++) {
+    for (let s = n - 1, found = false; s >= 0 && !found; s--) {
+      const sec = secs[s];
+      if (typeof sec === "number") { if (stateOpaque[sec] || stateDim[sec]) { top[xz] = c.minY + s * 16 + 15; found = true; } continue; }
+      for (let ly = 15; ly >= 0; ly--) { const id = sec[(ly << 8) | xz]; if (stateOpaque[id] || stateDim[id]) { top[xz] = c.minY + s * 16 + ly; found = true; break; } }
+    }
+  }
+  lightCols.set(`${c.x},${c.z}`, { minY: c.minY, secs, top });
+  lightDirty = true;
+}
+function stateAt(col, x, y, z) {
+  const s = (y - col.minY) >> 4, sec = col.secs[s];
+  if (sec === undefined) return 0;
+  return typeof sec === "number" ? sec : sec[((y & 15) << 8) | ((z & 15) << 4) | (x & 15)];
+}
+// the light round the bot: a box of the loaded columns, 48 blocks above and below its feet
+let lightBox = null, lightDirty = false, lightAt = null;
+const LY = 48;
+function computeLight(pos) {
+  const r = meta.radius, bcx = Math.floor(pos[0]) >> 4, bcz = Math.floor(pos[2]) >> 4, W = (2 * r + 1) * 16, H = 2 * LY;
+  const X0 = (bcx - r) * 16, Z0 = (bcz - r) * 16, Y0 = Math.floor(pos[1]) - LY, N = W * W * H;
+  const st = new Uint16Array(N), sky = new Uint8Array(N), blk = new Uint8Array(N), q = new Int32Array(N);
+  const idx = (x, y, z) => ((y * W) + z) * W + x;
+  const cols = [];
+  for (let cz = -r; cz <= r; cz++) for (let cx = -r; cx <= r; cx++) cols.push(lightCols.get(`${bcx + cx},${bcz + cz}`));
+  let qh = 0, qt = 0;
+  for (let z = 0; z < W; z++) for (let x = 0; x < W; x++) {
+    const col = cols[(z >> 4) * (2 * r + 1) + (x >> 4)];
+    const wx = X0 + x, wz = Z0 + z, top = col ? col.top[((wz & 15) << 4) | (wx & 15)] : 1e9;
+    for (let y = 0; y < H; y++) {
+      const wy = Y0 + y, i = idx(x, y, z), id = col ? stateAt(col, wx, wy, wz) : 0;
+      st[i] = id;
+      if (wy > top) { sky[i] = 15; q[qt++] = i; }
+      if (stateEmit[id]) { blk[i] = stateEmit[id]; }
+    }
+  }
+  const WW = W * W;
+  const spread = (lv) => { // breadth first from every lit cell; each step costs one, a dimming block one more
+    const go = (n, l) => { if (stateOpaque[st[n]]) return; const nl = l - 1 - stateDim[st[n]]; if (nl > lv[n]) { lv[n] = nl; q[qt] = n; qt = qt + 1 === N ? 0 : qt + 1; } };
+    while (qh !== qt) {
+      const i = q[qh]; qh = qh + 1 === N ? 0 : qh + 1;
+      const l = lv[i]; if (l <= 1) continue;
+      const x = i % W, z = ((i / W) | 0) % W, y = (i / WW) | 0;
+      if (x > 0) go(i - 1, l); if (x < W - 1) go(i + 1, l);
+      if (z > 0) go(i - W, l); if (z < W - 1) go(i + W, l);
+      if (y > 0) go(i - WW, l); if (y < H - 1) go(i + WW, l);
+    }
+  };
+  spread(sky);
+  qh = 0; qt = 0;
+  for (let i = 0; i < N; i++) if (blk[i]) q[qt++] = i;
+  spread(blk);
+  lightBox = { X0, Y0, Z0, W, H, sky, blk, cols: lightCols, r, bcx, bcz };
+  lightAt = pos.slice();
+}
+function lightOf(wx, wy, wz) {
+  const b = lightBox;
+  const x = wx - b.X0, y = wy - b.Y0, z = wz - b.Z0;
+  if (x >= 0 && z >= 0 && x < b.W && z < b.W && y >= 0 && y < b.H) { const i = ((y * b.W) + z) * b.W + x; return Math.max(b.sky[i], b.blk[i]); }
+  const col = lightCols.get(`${wx >> 4},${wz >> 4}`);
+  return col && wy <= col.top[((wz & 15) << 4) | (wx & 15)] ? 0 : 15; // outside the box: open sky or the dark under it
+}
+// vanilla's light curve at its default brightness (50%: halfway to 1 - (1 - b)^4), never quite black
+const curve = (l) => { const f = l / 15, b = f / (4 - 3 * f); return Math.max(0.08, (b + (1 - (1 - b) ** 4)) / 2); };
+function lightMesh(m) {
+  if (!lightBox || !m.name.startsWith("section_")) return;
+  const p = m.getVerticesData("position"), n = m.getVerticesData("normal");
+  if (!p || !n) return;
+  if (!m.metadata || !m.metadata.lit) m.metadata = { ...(m.metadata || {}), lit: m.getVerticesData("color").slice() };
+  const base = m.metadata.lit, out = new Float32Array(base.length), mp = m.position;
+  for (let v = 0; v < p.length / 3; v += 4) { // a face is four vertices; it takes the light of the cell it faces
+    const cx = (p[v * 3] + p[v * 3 + 3] + p[v * 3 + 6] + p[v * 3 + 9]) / 4 + mp.x, cy = (p[v * 3 + 1] + p[v * 3 + 4] + p[v * 3 + 7] + p[v * 3 + 10]) / 4 + mp.y,
+      cz = (p[v * 3 + 2] + p[v * 3 + 5] + p[v * 3 + 8] + p[v * 3 + 11]) / 4 + mp.z;
+    // the cell it faces, or for a face inside its own cell (a plant's cross, a slab's top) that cell
+    const k = curve(Math.max(lightOf(Math.floor(cx + n[v * 3] * 0.5), Math.floor(cy + n[v * 3 + 1] * 0.5), Math.floor(cz + n[v * 3 + 2] * 0.5)),
+      lightOf(Math.floor(cx - n[v * 3] * 0.01), Math.floor(cy - n[v * 3 + 1] * 0.01), Math.floor(cz - n[v * 3 + 2] * 0.01))));
+    for (let j = v; j < v + 4 && j < p.length / 3; j++) {
+      out[j * 4] = base[j * 4] * k; out[j * 4 + 1] = base[j * 4 + 1] * k; out[j * 4 + 2] = base[j * 4 + 2] * k; out[j * 4 + 3] = base[j * 4 + 3];
+    }
+  }
+  m.setVerticesData("color", out, true);
+}
+scene.onNewMeshAddedObservable.add((m) => { if (m.name.startsWith("section_")) setTimeout(() => lightMesh(m), 0); });
+setInterval(() => { // again when columns arrived, or the bot moved 8 blocks from where it was last worked out
+  if (!pose || !lightCols.size) return;
+  const p = [pose.x, pose.y, pose.z];
+  if (!lightDirty && lightAt && Math.hypot(p[0] - lightAt[0], p[1] - lightAt[1], p[2] - lightAt[2]) < 8) return;
+  lightDirty = false;
+  const t0 = performance.now();
+  computeLight(p);
+  const t1 = performance.now();
+  for (const m of scene.meshes) lightMesh(m);
+  globalThis.lightMs = [Math.round(t1 - t0), Math.round(performance.now() - t1)]; // for the console: working out, applying
+}, 1500);
+// the hand and what it holds take the light where the eyes are, as vanilla's do
+setInterval(() => {
+  if (!lightBox || !pose) return;
+  const k = curve(lightOf(Math.floor(pose.x), Math.floor(pose.y + 1.62), Math.floor(pose.z)));
+  for (const m of [arm, held]) if (m && m.material) { m.material.diffuseColor = new B.Color3(k, k, k); m.material.emissiveColor = new B.Color3(0.35 * k, 0.35 * k, 0.35 * k); }
+}, 500);
 
 // ---------------------------------------------------------------- sky and fog: the biome underfoot's sky colour, fog to the edge of what is loaded
 let skyName = null;
