@@ -28,6 +28,7 @@
    rain and water: the trap rows already keep the bot from fighting while it stands in water."
   (:require [clojure.math :as math]
             [clojure.string :as str]
+            [clojurecraft.armour :as armour]
             [clojurecraft.blaze :as blaze]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.combat :as combat]
@@ -728,6 +729,18 @@
   [world e]
   (<= (path/octile (path/feet-cell (:player/pos world)) (cell (:entity/pos e))) cut-reach))
 
+(def lava-sea-top 32)                   ; the Nether's lava fills every cell up to this height
+(def lava-margin 4)                    ; cells over it that nothing is cut below
+
+(defn lava-floor
+  "The height in the Nether under which no stair, tunnel or burrow is cut: the lava sea's top and
+   lava-margin over it (a cell of lava or a dug cell beside it floods the cut). 0 elsewhere. Gym
+   plan run 41134469333 (pearls-travel-b) job 6 (issue #263): a descent toward an enderman cut
+   down from y 47 to y 34 and the burrow at [2498 34 2160] let lava in; two flees and \"tried to
+   swim in lava\" at 62 minutes."
+  [world]
+  (if (= dimension/nether (dimension/of world)) (+ lava-sea-top lava-margin) 0))
+
 (defn descend
   "Stairs down toward the first of the candidates nearest endermen in ms that stands
    descend-drop or more below the feet within cut-reach on the plane (within-cut-reach?), a
@@ -756,10 +769,11 @@
            (sort-by (fn [[_ e]] (physics/distance pos (:entity/pos e))))
            (take candidates)
            (some (fn [[_ e]]
-                   (let [drop (- fy (physics/y-of (cell (:entity/pos e))))]
-                     (when (and (>= drop descend-drop) (within-cut-reach? world e))
+                   (let [drop (- fy (physics/y-of (cell (:entity/pos e))))
+                         to-y (max (- fy (min drop descend-step)) (lava-floor world))]
+                     (when (and (>= drop descend-drop) (within-cut-reach? world e) (< to-y fy))
                        {:intent/kind :stairs-down
-                        :intent/to-y (- fy (min drop descend-step))
+                        :intent/to-y to-y
                         :intent/dir (mapv - (away world e))
                         :intent/for :pearls}))))))))
 
@@ -840,7 +854,8 @@
   (let [roof (mouth-cells feet)
         steps (burrow-steps feet dir)
         open (fn [w cells] (reduce #(assoc-in %1 [:world/blocks %2] blocks/air) w cells))
-        dug (when (stairs/clear-way? world roof)
+        dug (when (and (>= (- (second feet) burrow-depth) (lava-floor world))
+                       (stairs/clear-way? world roof))
               (reduce (fn [w cells] (if (stairs/safe? w cells) (open w cells) (reduced nil)))
                       (open world roof)
                       steps))]
@@ -887,6 +902,8 @@
 (def vantage-tries 8)                 ; vantages, nearest the feet first, a route is asked for before none is taken: the route is the costly test
 (def vantage-nodes 1500)              ; expansions a route to or from a vantage may spend: it lies within shelter-reach, and sixteen such routes may be asked in one planner tick
 
+(def provoke-home-reach 3.0)              ; blocks from the burrow's end within which an enderman is provoked from outside the mouth: a provoked one is at the bot in about a second, and four hits fell it in the 3.6 s a walk of six blocks home took (gym plan run 40747177526 run 6)
+
 (defn vantage
   "A walk to look from within the burrow's reach, with none of ms provokable from here: a cell
    on the plane between stare-from and vantage-reach from the nearest of the candidates nearest
@@ -909,7 +926,10 @@
    from the mouth, too near to stare at from there and hidden from the end, giving the burrow
    up every minute and cutting the same one again beside it; run 4 walked from its mouth to an
    enderman's cell, back in and out again 130 times. Provoked from a vantage, the enderman
-   follows the bot home, and the fight is the burrow's."
+   follows the bot home, and the fight is the burrow's. Now only within provoke-home-reach of the
+   burrow's end: gym plan run 40860669235 job 4 walked to a vantage five blocks out over a calm
+   enderman crowding the mouth, with an angry one tracked, was fought in the open there at 11
+   health and was slain."
   [world ms]
   (let [pos (:player/pos world)
         feet (intent/feet world)
@@ -930,7 +950,7 @@
                         :let [c [(+ ex dx) (+ ey dy) (+ ez dz)]
                               on-plane (path/octile ec c)]
                         :when (and (<= stare-from on-plane vantage-reach)
-                                   (<= (physics/distance c home) shelter-reach)
+                                   (<= (physics/distance c home) provoke-home-reach)
                                    (<= (physics/distance c home)
                                        (physics/distance c (:entity/pos e)))
                                    (not (contains? spent c))
@@ -1144,9 +1164,12 @@
                :intent/dir (cheapest-heading world :stairs-up feet toward)
                :intent/to-height? true
                :intent/for :pearls}
-              (<= rise -2)
+              (and (<= rise -2)
+                   (< (max (- (physics/y-of feet) (min (- rise) descend-step)) (lava-floor world))
+                      (physics/y-of feet)))
               {:intent/kind :stairs-down
-               :intent/to-y (- (physics/y-of feet) (min (- rise) descend-step))
+               :intent/to-y (max (- (physics/y-of feet) (min (- rise) descend-step))
+                                 (lava-floor world))
                :intent/dir (cheapest-heading world :stairs-down feet toward)
                :intent/for :pearls}
               :else
@@ -1298,9 +1321,406 @@
   (let [{:intent/keys [kind for status]} (:plan/last world)]
     (and (= :walk kind) (= :shelter for) (= :done status))))
 
+(def provoke-margin 3.0)                ; health a provoke keeps over the two hits it risks before the bot is back in its burrow
 (def provoke-health 18.0)             ; health under which no enderman is provoked, from the mouth or anywhere: the bot rests in its burrow first (sim-endermen3's probe 39847287615: in worlds R1, R2 and R4 the first death came of a provoke 4 to 8 blocks off at 10.8 to 17.8 health just outside the burrow, the enderman landing three to five blows in five seconds); away from the mouth (a vantage) only at full health
 
 (def danger-health combat/retreat-health) ; health under which the hunt never fights, provokes or goes toward an enderman: one enderman hit (7 on Normal, ns doc) plus a margin, the same line combat breaks a fight off at. At or under it the bot backs off, walks home, eats or rests where it stands until its health is back over it (issue #563, probe 40022662598: after the second stone sword was crafted the hunt re-fought an angry enderman it had just backed away from, again and again down to 1.3 health, one hit from death)
+
+
+(def wander-lookouts 60)                 ; lookouts (five seconds each, five minutes) stood with no walk taken since before the hunt goes elsewhere (wander)
+(def loiter-walks 12)                  ; walks ended whose targets all lie within loiter-radius of the feet: a hunt shuffling in one place
+(def loiter-radius 8)                  ; blocks on the plane (path/octile) within which twelve walks' ends are one place
+(def wander-reach 64)                  ; blocks a wander looks for ground to walk to, on each of the headings
+(def hold-patience-ms 12000)             ; ms a held fight waits with its target past strike-range before the hunt plans again (combat/hold-timeout-ms is a minute)
+(def fight-giveups 3)                   ; fights on one enderman cut or failed within fight-giveup-ms, after which it is fought no more until it is in reach
+(def fight-giveup-ms 600000)           ; ms (ten minutes) over which those fights are counted
+(def fight-retry-ms 30000)             ; ms after a fight on an enderman failed that it is not fought again until within the sword's reach
+
+(def struck-health 14.0)                ; health under which an enderman at hand has landed a hit (7 on Normal off 20): fought back, fought out or not
+
+(defn unfightable?
+  "Is enderman e (id eid) no fight's target now: fought out (fought-out?), given up by a fight's
+   engage as not strikable (combat/given-up?: it is not within the sword's reach from here), or
+   failed a fight less than fight-retry-ms ago and not within the sword's reach now? A fight that
+   fails (:unreachable) blacklists its target, and an angry one is fought regardless of the
+   blacklist: runs 2 and 3 of gym plan run 40775811459 failed :fight :unreachable eight times and
+   held a fight thirteen minutes.
+   Run 4 of gym plan run 40747177526 (issue #263, pearls-12) planned :fight on one eight blocks
+   below it eight times in 10 ms, each given up and ended done at once, and the eight counted as
+   fought out: the walk that followed was no longer cut by it, and the bot walked on while it
+   took 20 health in five seconds, with no attack sent."
+  [world eid e]
+  (or (fought-out? world eid)
+      (combat/given-up? world eid e)
+      (boolean (when-let [at (memory/last-failed-at world :fight eid)]
+                 (and (not (combat/in-reach? world e))
+                      (or (< (- (:time/now world 0) at) fight-retry-ms)
+                          (>= (memory/failed-count-since world
+                                                         :fight
+                                                         eid
+                                                         (- (:time/now world 0) fight-giveup-ms))
+                              fight-giveups)))))))
+
+(defn struck-by
+  "[eid e] of the nearest angry enderman (entity/creepy?) within the sword's reach (combat/in-reach?)
+   and strike-range of the feet while health is under struck-health, fought out or not, or nil.
+   One that has hit the bot and stands where the sword reaches it is fought back, never walked
+   away from: runs 4 and 5 of the same plan run took three hits in five seconds with a walk and a
+   back-off going on, and sent no attack (run 4) or too few."
+  [world]
+  (when (< (:player/health world 20.0) struck-health)
+    (let [pos (:player/pos world)]
+      (entity/nearest (into {}
+                            (filter (fn [[_ e]]
+                                      (and (entity/creepy? e)
+                                           (<= (physics/distance pos (:entity/pos e)) strike-range)
+                                           (combat/in-reach? world e))))
+                            (endermen (dissoc world :plan/blacklist) strike-range))
+                      pos))))
+
+(defn cell-toward
+  "The cell beside the feet, dy above them, on the side point to lies on (the heading of the larger
+   offset on the plane), or nil when to is over the feet."
+  [world to dy]
+  (let [[fx fy fz] (intent/feet world)
+        [ex _ ez] to
+        dx (- ex (+ fx 0.5))
+        dz (- ez (+ fz 0.5))
+        [hx hz] (if (>= (Math/abs dx) (Math/abs dz))
+                  [(long (math/signum dx)) 0]
+                  [0 (long (math/signum dz))])]
+    (when (not= [0 0] [hx hz]) [(+ fx hx) (+ fy dy) (+ fz hz)])))
+
+(defn wall-toward
+  "A :place of one block of the filler held (stairs/filler) in the first open cell of levels (dy from
+   the feet) on the side of the feet that point to lies on (cell-toward), or nil when all are solid
+   or none is held. Marked :intent/wall?, so the hunt's interrupt does not cut it."
+  [world to levels]
+  (when-let [item (stairs/filler world 2)]
+    (some (fn [dy]
+            (when-let [c (cell-toward world to dy)]
+              (when-not (solid-at? world c)
+                {:intent/kind :place
+                 :intent/item item
+                 :intent/cell c
+                 :intent/for :pearls
+                 :intent/wall? true})))
+          levels)))
+
+(defn unseal
+  "A :dig of the block toward the mouth, the head's level and then the feet's, when it is solid and
+   no route walks to the mouth: the seal a swarm put there (wall-toward). Nil otherwise."
+  [world mouth]
+  (when-not (intent/routable? world {:intent/kind :walk :intent/target mouth :intent/for :shelter})
+    (some (fn [dy]
+            (let [c (cell-toward world (physics/centre mouth) dy)]
+              (when (and c (solid-at? world c))
+                {:intent/kind :dig :intent/target c :intent/for :pearls})))
+          [1 0])))
+
+(defn wall-off
+  "A wall-toward enderman e, the feet's level and then the head's: an enderman cannot reach through
+   two full blocks. Run 1 of gym plan run 40747177526 (issue #263, pearls-12) stood ninety seconds
+   at 7.6 health with one beside it, backing off into a wall, forty-eight cooked beef and 84 blocks
+   held, and was slain: never fought under danger-health (#577), so what is left is to eat, or to
+   put a block between."
+  [world e]
+  (wall-toward world (:entity/pos e) [0 1]))
+
+(def swarm-radius 8.0)                  ; blocks from the feet within which a monster counts toward a swarm
+
+(defn swarm
+  "{eid entity} of the monsters (blocks/mobs category) alive within swarm-radius of pos (the feet when
+   not given) that are
+   no enderman (the quarry, met its own way from the burrow): a zombified piglin counts, hostile
+   on sight or not, as it comes in packs and one hit angers them all. Gym plan run 40825468783 run
+   5 (issue #263, pearls-12): an enderman and two zombified piglins took 20 health in 1.5 s."
+  ([world] (swarm world (:player/pos world)))
+  ([world pos]
+   (into {}
+         (filter (fn [[_ e]]
+                   (and (not (entity/dead? e))
+                        (not= :enderman (entity/kind e))
+                        (= :monster (:category (blocks/mobs (entity/kind e))))
+                        (<= (physics/distance pos (:entity/pos e))
+                            (or (:range (mob/kinds (entity/kind e))) swarm-radius)))))
+         (:world/entities world))))
+
+(defn shot-at?
+  "Is a ghast within its :range (mob/kinds) with a clear line from the eye (combat/seen?)? Never
+   fought (it hovers out of the sword's reach); only covered from. Gym plan run 40839050567 job 6
+   (issue #263, pearls-12): five fireballs in 67 s of digging a staircase down in the open, then
+   burned to death."
+  [world]
+  (boolean (some (fn [[_ e]] (and (= :ghast (entity/kind e)) (combat/seen? world e)))
+                 (swarm world))))
+
+(defn swarmed?
+  "Are two or more monsters within their reach (swarm), a ghast in sight (shot-at?), or one monster
+   while health is under danger-health? A lone one over that health is met by the fight rules (a
+   magma cube is small and slow)."
+  [world]
+  (let [n (count (swarm world))]
+    (boolean
+     (or (>= n 2) (and (= 1 n) (< (:player/health world 20.0) danger-health)) (shot-at? world)))))
+
+(def neighbours [[1 0 0] [-1 0 0] [0 0 1] [0 0 -1] [0 1 0] [0 -1 0]])
+
+(defn line-cell
+  "The first cell from the eye toward entity e's aim, a block to six along the line, that is open,
+   neither the feet's nor the head's, and has a solid neighbour to lay a block against (the walls
+   of a stair cut included), or nil. A fireball travels that line: gym plan run 40839050567 job 6
+   (issue #263) was shot five times down an open diagonal stair cut."
+  [world e]
+  (let [eye (game/eye world)
+        aim (combat/aim e)
+        d (physics/distance eye aim)
+        [fx fy fz] (intent/feet world)
+        own #{[fx fy fz] [fx (inc fy) fz]}]
+    (when (pos? d)
+      (some (fn [t]
+              (let [c (cell (mapv (fn [a b] (+ a (* t (/ (- b a) d)))) eye aim))]
+                (when (and (not (own c))
+                           (not (solid-at? world c))
+                           (some #(solid-at? world (mapv + c %)) neighbours))
+                  c)))
+            (range 1.0 (min 6.0 d) 0.5)))))
+
+(defn hide-cell
+  "A cell beside the feet that can be stood in (floor under it, open itself and over it) and from
+   whose eye the line to entity e's aim is blocked (combat/clear?), or nil: where a walk takes the
+   bot out of a ghast's sight."
+  [world e]
+  (let [[fx fy fz] (intent/feet world)]
+    (some (fn [[dx dz]]
+            (let [c [(+ fx dx) fy (+ fz dz)]
+                  eye [(+ (first c) 0.5) (+ fy 1.62) (+ (last c) 0.5)]]
+              (when (and (solid-at? world [(first c) (dec fy) (last c)])
+                         (not (solid-at? world c))
+                         (not (solid-at? world [(first c) (inc fy) (last c)]))
+                         (not (combat/clear? world eye (combat/aim e))))
+                c)))
+          [[1 0] [-1 0] [0 1] [0 -1]])))
+
+(defn dig-away
+  "A :dig of the first solid cell, the feet's level and then the head's, on the side of the feet
+   away from entity e, with a pickaxe held, or nil: a hole to stand in out of its sight."
+  [world e]
+  (when (pickaxe? world)
+    (let [[fx fy fz] (intent/feet world)
+          [ex _ ez] (:entity/pos e)
+          dx (- (+ fx 0.5) ex)
+          dz (- (+ fz 0.5) ez)
+          [hx hz] (if (>= (Math/abs dx) (Math/abs dz))
+                    [(long (math/signum dx)) 0]
+                    [0 (long (math/signum dz))])]
+      (some (fn [dy]
+              (let [c [(+ fx hx) (+ fy dy) (+ fz hz)]]
+                (when (solid-at? world c)
+                  {:intent/kind :dig :intent/target c :intent/for :pearls})))
+            [0 1]))))
+
+(defn cover-from
+  "The intent that covers the bot from the swarm: from a ghast in sight (shot-at?, never fought,
+   never out-ranged) a walk to a cell beside the feet out of its sight (hide-cell; :intent/for
+   :cover, so the walk ends only centred in the cell: for :pearls it ended at once one cell
+   short and was planned again every 50 ms, gym plan run 40905321229 job 6), else a block of
+   the filler held on the line from the eye to it (line-cell), else a dig into the solid side away
+   from it (dig-away) to stand in; from the others what combat/cover gives for the nearest (meal, a
+   block between, a pillar, a nook dug under the feet). Nil when it only waits (cover's :plan/wait
+   ends the plan) or nothing can be done."
+  [world]
+  (if (shot-at? world)
+    (when-let [[_ e] (entity/nearest
+                      (into {} (filter (fn [[_ e]] (= :ghast (entity/kind e)))) (swarm world))
+                      (:player/pos world))]
+      (let [item (stairs/filler world 1)
+            hide (hide-cell world e)
+            line (when item (line-cell world e))]
+        (cond hide {:intent/kind :walk :intent/target hide :intent/for :cover :intent/wall? true}
+              line
+              {:intent/kind :place
+               :intent/item item
+               :intent/cell line
+               :intent/for :pearls
+               :intent/wall? true}
+              :else (dig-away world e))))
+    (when-let [[_ e] (entity/nearest (swarm world) (:player/pos world))]
+      (let [c (combat/cover world e)] (when (:intent/kind c) (assoc c :intent/for :pearls))))))
+
+(defn loitering?
+  "Did the newest loiter-walks :walk intentions to end :done all end within loiter-radius of the
+   feet (memory/newest-dones, their targets)? Then the hunt has shuffled in one place however
+   many lookouts it stood between the walks: the two-block roams that gym plan run 40839050567
+   jobs 1 to 4 made 446, 784, 346 and 460 times over two to five hours (issue #263), each walk
+   resetting the count of lookouts since the last."
+  [world]
+  (let [feet (intent/feet world)
+        ds (memory/newest-dones world :walk loiter-walks)]
+    (and (= loiter-walks (count ds))
+         (every? (fn [d]
+                   (let [t (:intention/target d)]
+                     (and (vector? t) (<= (path/octile feet t) loiter-radius))))
+                 ds))))
+
+(defn wandering?
+  "Has the hunt stood wander-lookouts or more :lookout intents with no walk ended since (stuck?
+   counts the same, from stale-lookouts), and does no enderman tracked have a route to it
+   (routable), however near it is by the air? Run 1 of gym plan run 40775811459 (issue #263,
+   pearls-12) held five pearls at twelve minutes and then stood 2,210 lookouts to the five-hour
+   cap, twelve endermen tracked 16 to 100 blocks off on other levels, none with a route. Or is it
+   loitering (loitering?), whatever is tracked: gym plan run 40905321229 job 6 shuffled 136 times
+   over 51 minutes on two cells with an angry enderman routable that never came, so the first
+   never held."
+  [world]
+  (boolean (or (loitering? world)
+               (and (>= (or (memory/done-since world :lookout :walk)
+                            (memory/done-since world :lookout :burrow)
+                            0)
+                        wander-lookouts)
+                    (nil? (routable world (endermen world seek-radius)))))))
+
+(defn far-ends
+  "Where each of the eight headings' routes (path/plan toward ground wander-reach out, from index
+   start in headings) ends, as [status end gain] with gain the end's octile distance from the feet:
+   the ends roam-reach or more away and not in spent, :found first, then the farthest."
+  [world start spent]
+  (let [feet (intent/feet world)
+        ends (for [k (range (count headings))
+                   :let [heading (nth headings (mod (+ start k) (count headings)))
+                         r (path/plan world
+                                      (path/feet-cell (:player/pos world))
+                                      (roam-goal feet heading wander-reach)
+                                      {})
+                         to (last (:path/waypoints r))]
+                   :when (and to (not= to feet) (not (contains? spent to)))]
+               [(:path/status r) to (path/octile feet to)])
+        far (filter #(>= (nth % 2) roam-reach) ends)]
+    (concat (filter #(= :found (first %)) far)
+            (sort-by #(- (nth % 2)) (remove #(= :found (first %)) far)))))
+
+(defn far-walk
+  "A walk to ground far from the feet: to the end of the first of the eight headings (headings,
+   from index start) whose route reaches ground wander-reach out (path/plan :found, as roam looks)
+   and is not in spent, else the farthest end of those routes that comes roam-reach or more from
+   the feet and is not in spent. Nil when no heading has a route that leaves the feet."
+  [world start spent]
+  (when-let [best (first (far-ends world start spent))]
+    {:intent/kind :walk :intent/target (second best) :intent/for :pearls}))
+
+(defn wander
+  "A far-walk from the heading the clock picks, nothing spent. Not roam: it refuses an end already
+   walked to while an enderman is tracked within descend-radius, and that stays true for hours."
+  [world]
+  (far-walk world (mod (quot (:time/now world 0) roam-turn-ms) (count headings)) #{}))
+
+(def forest-reach 2)                   ; chunks round the feet's own within which the bot is in a warped forest
+
+(defn in-forest?
+  "Is a warped forest chunk known (memory/warped-chunks) within forest-reach chunks of the feet's
+   chunk, in the Nether? The hunt's ground: its endermen spawn there and nowhere near a fortress."
+  [world]
+  (let [[fx _ fz] (intent/feet world)
+        cx (math/floor-div (long fx) 16)
+        cz (math/floor-div (long fz) 16)]
+    (boolean (some (fn [{[x z] :forest/chunk}]
+                     (<= (max (abs (- x cx)) (abs (- z cz))) forest-reach))
+                   (memory/warped-chunks world)))))
+
+(defn nearest-forest
+  "The pos [x y z] of the nylium block of the nearest known warped forest chunk to the feet whose
+   cell above it is not in :plan/blacklist (a walk to it failed), or nil."
+  [world]
+  (let [feet (intent/feet world)
+        bl (:plan/blacklist world #{})]
+    (->> (memory/warped-chunks world)
+         (map :forest/pos)
+         (remove #(contains? bl (update % 1 inc)))
+         (sort-by #(path/octile feet %))
+         first)))
+
+(def explore-memory 6)                 ; walks arrived at lately that an explore sets out away from
+
+(defn explore
+  "A walk to the end (far-ends) farthest from the targets of the last explore-memory walks arrived
+   at (memory/newest-dones), ground not arrived at (memory/arrived) only: the widening search for
+   a warped forest none is known of goes on away from where it has been. By the count of walks it
+   alternated between two ends forty blocks apart, west and east, twelve seconds each, for five and
+   a half minutes (gym plan run 41134469333, pearls-travel-b job 2, 22:18:43 on)."
+  [world]
+  (let [spent (memory/arrived world)
+        feet (intent/feet world)
+        been (conj (vec (keep #(when (vector? (:intention/target %)) (:intention/target %))
+                              (memory/newest-dones world :walk explore-memory)))
+                   feet)
+        ends (far-ends world 0 spent)]
+    (when (seq ends)
+      (let [away (fn [[_ to _]] (apply min (map #(path/octile to %) been)))
+            best (apply max-key away ends)]
+        {:intent/kind :walk :intent/target (second best) :intent/for :pearls}))))
+
+(defn travel
+  "The walk to a warped forest, or nil: none in the Nether when the bot is in one (in-forest?);
+   to the cell over the nylium nearest of the nearest known forest chunk (nearest-forest), else
+   explore for one. Real race 40980342194, Clj_r13 (issue #263): two hours of lookouts and
+   wandering round a fortress at x 4250-4440, no pearl, no code that went to a forest."
+  [world]
+  (when (and (= dimension/nether (dimension/of world)) (not (in-forest? world)))
+    (if-let [pos (nearest-forest world)]
+      {:intent/kind :walk :intent/target (update pos 1 inc) :intent/for :pearls}
+      (explore world))))
+
+(defn enderman-hit
+  "The damage one enderman hit does the bot through the armour it wears (armour/worn over the four
+   slots, mob/armour-points, mob/absorbed) of the 7 it does on Normal (mob/kinds :melee): 5.74
+   through an iron helmet and chestplate, as gym plan run 40860669235 job 4 measured."
+  [world]
+  (let [[points toughness] (reduce (fn [[pt tg] n]
+                                     (let [[dp dt]
+                                           (get mob/armour-points (armour/worn world n) [0 0.0])]
+                                       [(+ pt dp) (+ tg dt)]))
+                                   [0 0.0]
+                                   (range 4))]
+    (mob/absorbed (:melee (mob/kinds :enderman)) points toughness)))
+
+(defn provoke-line
+  "The health under which no enderman is provoked: provoke-margin over two of its hits
+   (enderman-hit), at most provoke-health. Job 4 of that plan run provoked at 11.19 health and
+   was felled by the second and third hit of a fight in the open."
+  [world]
+  (min provoke-health (+ provoke-margin (* 2.0 (enderman-hit world)))))
+
+(def weak-melee 4.0)                    ; the hit (mob/kinds :melee) at or under which a mob is fought at hand with no burrow: a zombie's 3, a spider's 2
+
+(defn weak?
+  "Is entity e of a kind mob/kinds knows to hit for weak-melee or less on Normal (a zombie, a
+   spider), and no archer? A piglin, a hoglin or a blaze is not: gym plan run 41109441111
+   (pearls-travel-a) job 5 walked down to a piglin and fought it, three hits in four seconds,
+   dead at 39 minutes."
+  [e]
+  (let [k (mob/kinds (entity/kind e))]
+    (boolean (and k (:melee k) (nil? (:shoot k)) (<= (:melee k) weak-melee)))))
+
+(defn coming?
+  "Is the nearest angry enderman (entity/creepy?) within stare-range one the hunt still fights
+   (not unfightable?: given up, fought out, cut or failed lately)? No other is provoked while it
+   is: churn-a (plan 41096292443) run 3 provoked 1310, 1561 and 1691 in 14 s and had three within
+   2.5 blocks of the bot."
+  [world]
+  (let [[ceid ce] (entity/nearest
+                   (into {} (filter (comp entity/creepy? val)) (endermen world stare-range))
+                   (:player/pos world))]
+    (boolean (and ce (not (unfightable? world ceid ce))))))
+
+(defn shelter-walk
+  "A :walk for :shelter to target, or nil when target is nil or in :plan/blacklist (a walk to it
+   failed, plan/fail-intent). A walk is tried once before it is known to fail: a fence between
+   the bot and its mouth is walked at first, as the burrow test holds, and given up after. Gym
+   plan run 40583923956 run 3 (issue #263, pearls-12) walked to the mouth of its burrow fifteen
+   times in 0.6 s, each failing :no-path, because these walks never asked the blacklist."
+  [world target]
+  (when (and target (not (contains? (:plan/blacklist world #{}) target)))
+    {:intent/kind :walk :intent/target target :intent/for :shelter}))
 
 (defn hunt
   "The hunt's next step with no kill to pick up, in order: out of the burrow (shelter) with one
@@ -1412,15 +1832,22 @@
         in-reach? (and near?
                        (<= (physics/distance (game/eye world) (combat/aim e)) combat/attack-reach))
         hurt? (< (:player/health world 20.0) danger-health)
-        rested? (>= (:player/health world 20.0) provoke-health)
+        rested? (>= (:player/health world 20.0) (provoke-line world))
         meal (when-not rested? (blaze/meal world))
         home (shelter world)
         in? (and home (= home (intent/feet world)))
         at-end? (= (:pearls/shelter world) (intent/feet world))
-        [tid _] (threat world)
+        [tid te] (threat world)
+        [sid _] (struck-by world)
+        swarmed? (swarmed? world)
+        cornered? (and near? eid (contains? (:plan/cornered world #{}) eid))
         [bid _] (when at-end? (blocking world))
         [aid _] (when home (angry-near world))
-        [qid q] (quarry world)
+        [quarry-id q] (quarry world)
+        ;; one enderman at a time: none is provoked while an angry one is coming (churn-a run 3,
+        ;; issue #263: 1310, 1561 and 1691 provoked in 14 s, three at the bot at once)
+        coming? (coming? world)
+        qid (when-not coming? quarry-id)
         ghost? (and near? (not angry?) (contains? (:plan/blacklist world #{}) eid))
         m (second (menace world))
         dir (when (and (nil? home)
@@ -1434,16 +1861,36 @@
                 (crowd-site world))
         mouth (:pearls/mouth world)
         way-home {:intent/kind :walk :intent/target home :intent/for :shelter}
+        mouth-walk (delay (shelter-walk world mouth))
+        travel-walk (delay (when (and (not hurt?)
+                                      (not swarmed?)
+                                      (not (menaced? world))
+                                      (empty? (endermen world seek-radius)))
+                             (travel world)))
+        wander-walk
+        (delay (when (and (not hurt?) (not swarmed?) (not (menaced? world)) (wandering? world))
+                 (wander world)))
+        csite-walk (delay (shelter-walk world csite))
+        site-walk (delay (shelter-walk world site))
         overworld-death? (and (pos? (:stats/deaths world 0))
                               (= dimension/overworld (dimension/of world)))
         far (endermen world seek-radius)
-        fight-id (cond (and ce (not (fought-out? world ceid))) ceid
-                       (and (or angry? in-reach?) (not (fought-out? world eid))) eid
+        fight-id (cond (and ce (not (unfightable? world ceid ce))) ceid
+                       (and (or angry? in-reach?) (not (unfightable? world eid e))) eid
                        :else tid)]
     (cond
-      (and home (not in?) (or ce near? hurt? tid aid) (intent/routable? world way-home)) way-home
+      (and (shot-at? world) (not in?) (cover-from world)) (cover-from world)
+      (and home (not in?) (or ce near? hurt? tid aid swarmed?) (intent/routable? world way-home))
+      way-home
+      (and swarmed? (not in?) (nil? home) (cover-from world)) (cover-from world)
+      (and swarmed? in?)
+      (or (when mouth (wall-toward world (physics/centre mouth) [0 1]))
+          {:intent/kind :lookout :intent/for :pearls})
       (and hurt? in?) (or meal {:intent/kind :lookout :intent/for :pearls})
+      (and cornered? hurt? (not in?) (or meal (wall-off world e))) (or meal (wall-off world e))
       (and near? hurt? (not in?)) {:intent/kind :back-off :intent/target eid :intent/for :pearls}
+      (and hurt? (not in?) tid (combat/back-off-pointless? world te) (cover-from world))
+      (cover-from world)
       (and hurt? (not in?) tid) {:intent/kind :back-off :intent/target tid :intent/for :pearls}
       (and hurt? (not in?)) (or meal {:intent/kind :lookout :intent/for :pearls})
       (and in? fight-id)
@@ -1452,45 +1899,55 @@
        :intent/hold? true
        :intent/yield? true
        :intent/for :pearls}
+      (and sid (not hurt?) (not in?)) {:intent/kind :fight :intent/target sid :intent/for :pearls}
+      (and tid (not hurt?) (not in?) (nil? home) (not swarmed?) (weak? te))
+      {:intent/kind :fight :intent/target tid :intent/for :pearls}
       (and at-end? bid (blocked-out? world))
       (or (cut-out world) {:intent/kind :lookout :intent/for :pearls})
       (and near?
            (not in?)
-           (not (fought-out? world eid))
+           (not (unfightable? world eid e))
            (or (entity/creepy? e)
                (and (not (pickaxe? world))
                     (not (worn-out? world))
                     (not (contains? (:plan/blacklist world #{}) eid)))))
       {:intent/kind :fight :intent/target eid :intent/for :pearls}
       meal meal
+      @travel-walk @travel-walk
+      @wander-walk @wander-walk
       (or hurt? (and in? bid)) {:intent/kind :lookout :intent/for :pearls}
-      (and in? aid (lure? world)) {:intent/kind :walk :intent/target mouth :intent/for :shelter}
+      (and in? aid (lure? world) @mouth-walk) @mouth-walk
       (and in? aid) {:intent/kind :lookout :intent/for :pearls}
-      csite {:intent/kind :walk :intent/target csite :intent/for :shelter}
+      (and csite @csite-walk) @csite-walk
       digs? {:intent/kind :burrow :intent/dir dir :intent/for :pearls}
-      site {:intent/kind :walk :intent/target site :intent/for :shelter}
+      (and site @site-walk) @site-walk
       (and in? qid rested?) {:intent/kind :provoke :intent/target qid :intent/for :pearls}
       (and in? qid) {:intent/kind :lookout :intent/for :pearls}
       (and in? (crowded? world))
       (or (vantage world far) {:intent/kind :lookout :intent/for :pearls})
-      (and in? mouth) {:intent/kind :walk :intent/target mouth :intent/for :shelter}
+      (and in? mouth (not swarmed?) (unseal world mouth)) (unseal world mouth)
+      (and in? mouth (nil? ce) (empty? (swarm world (physics/centre mouth))) @mouth-walk)
+      @mouth-walk
       (and qid
            rested?
            (or (and (not (pickaxe? world)) (not (worn-out? world)))
                (= mouth (intent/feet world))
-               (and home (>= (:player/health world 20.0) 20.0) (intent/routable? world way-home))))
+               (and home (<= (physics/distance pos (physics/centre home)) provoke-home-reach))))
       {:intent/kind :provoke :intent/target qid :intent/for :pearls}
-      (and qid home rested?) {:intent/kind :walk :intent/target mouth :intent/for :shelter}
+      (and qid home rested? @mouth-walk) @mouth-walk
       (and qid home (intent/routable? world way-home)) way-home
-      (and (not hurt?) ce (not (fought-out? world ceid)) (pickaxe? world))
+      (and (not hurt?) ce (not (unfightable? world ceid ce)) (pickaxe? world))
       {:intent/kind :fight
        :intent/target ceid
        :intent/hold? true
        :intent/yield? true
        :intent/for :pearls}
-      (and (not hurt?) ce (not (fought-out? world ceid)))
+      (and (not hurt?) ce (not (unfightable? world ceid ce)))
       {:intent/kind :fight :intent/target ceid :intent/for :pearls}
-      home (or (vantage world far) {:intent/kind :lookout :intent/for :pearls})
+      home
+      (or (vantage world far)
+          (when (wandering? world) (wander world))
+          {:intent/kind :lookout :intent/for :pearls})
       :else
       (or (if (pickaxe? world)
             (some (fn [[_ e]]
@@ -1510,6 +1967,7 @@
             (or (roam world)
                 (when (stuck? world) (climb-out world))
                 (when-not overworld-death? (dig-out world))))
+          (when (wandering? world) (wander world))
           {:intent/kind :lookout :intent/for :pearls}))))
 
 (defn look-off
@@ -1524,6 +1982,26 @@
       [(first look) 90.0]
       look)))
 
+(defn uncovered-log
+  "The world with one log line naming the nearest ghast in sight, its position and the bot's, when a
+   ghast is shooting (shot-at?) and cover-from finds no cover, every hundred ticks at most (five
+   seconds): the open-ground case of issue #263 shows in the audit and can be counted before a
+   walk to cover is built. The world as it was otherwise."
+  [world]
+  (if (and (zero? (mod (:time/tick world 0) 100)) (shot-at? world) (nil? (cover-from world)))
+    (let [[eid e] (entity/nearest
+                   (into {} (filter (fn [[_ e]] (= :ghast (entity/kind e)))) (swarm world))
+                   (:player/pos world))]
+      (game/say world
+                (str "ghast "
+                     eid
+                     " at "
+                     (cell (:entity/pos e))
+                     " shoots the bot at "
+                     (intent/feet world)
+                     ": no cover")))
+    world))
+
 (defmethod plan/steer :pearls
   ;; out of the burrow's end, every look but a provoke's turned from a calm enderman's eyes
   ;; (look-off): a walk steers by :control/yaw and a dig or a place is judged by distance, so the
@@ -1532,7 +2010,8 @@
   ;; open. In the end a stare by chance is what the hunt wants: the enderman comes to the sword
   [world _]
   (let [look (:control/look (:player/controls world))
-        home (:pearls/shelter world)]
+        home (:pearls/shelter world)
+        world (uncovered-log world)]
     (cond (or (nil? look)
               (= :provoke (:intent/kind (:plan/intent world)))
               (and home (= home (intent/feet world))))
@@ -1565,6 +2044,29 @@
        (not= (:intent/target i) (:pearls/shelter world))
        (not= (:intent/target i) (:pearls/mouth world))))
 
+(defn same-choice?
+  "Are running intent i and the intent again the hunt would choose now of one kind and target? Then
+   cutting i only starts it again: gym plan run 40860669235 job 5 (issue #263) planned the same
+   :walk every 50 ms for three seconds under a ghast's fire, each plan cutting the last, and never
+   moved."
+  [i again]
+  (= (select-keys i [:intent/kind :intent/target])
+     (select-keys again [:intent/kind :intent/target])))
+
+(defn held-idle?
+  "Is intent i a held :fight (hold?) that has run hold-patience-ms or more with its target gone
+   or past strike-range of the feet? Runs 4 and 5 of gym plan run 40825468783 (issue #263,
+   pearls-12) held a fight a full minute (combat/hold-timeout-ms) on an enderman that did not
+   come, and failed :unreachable."
+  [world i]
+  (boolean (and (= :fight (:intent/kind i))
+                (:intent/hold? i)
+                (:intent/since i)
+                (> (- (:time/now world 0) (:intent/since i)) hold-patience-ms)
+                (let [e (get-in world [:world/entities (:intent/target i)])]
+                  (or (nil? e)
+                      (> (physics/distance (:player/pos world) (:entity/pos e)) strike-range))))))
+
 (defmethod plan/interrupts? :pearls
   ;; any running intent but an answer (answers-to-hand) or the walk home ends with an angry
   ;; enderman at hand (beset?), and the hunt plans again: home, the fight held there, or the
@@ -1577,12 +2079,18 @@
   ;; mouth (angry-near), not only at hand: churn-a pearls-12 run 1 (plan run 41096292443) walked
   ;; 12 blocks up its stairs for 8 s after the hunt's own choice was the way home, the angry one
   ;; arrived with the bot 11 blocks from the end, and four hits killed it on the stairs
-  [world _ i]
-  (and (not (contains? answers-to-hand (:intent/kind i)))
-       (not (and (= :walk (:intent/kind i)) (= (:intent/target i) (:pearls/shelter world))))
-       (not= (:pearls/shelter world) (intent/feet world))
-       (or (beset? world)
-           (and (out-walk? world i) (some? (shelter world)) (some? (angry-near world))))))
+  [world goal i]
+  (or (held-idle? world i)
+      (and (not (contains? answers-to-hand (:intent/kind i)))
+           (not (:intent/wall? i))
+           (not (and (= :walk (:intent/kind i)) (= (:intent/target i) (:pearls/shelter world))))
+           (not= (:pearls/shelter world) (intent/feet world))
+           (or (beset? world)
+               (and (out-walk? world i) (some? (shelter world)) (some? (angry-near world)))
+               (some? (first (struck-by world)))
+               (shot-at? world)
+               (and (= :lookout (:intent/kind i)) (some? (first (threat world)))))
+           (not (same-choice? i (plan/next-intent world goal plan/goals))))))
 
 (defmethod combat/answers :pearls
   ;; the hunt provokes endermen and fights them from its burrow; an angry one (entity/creepy?)

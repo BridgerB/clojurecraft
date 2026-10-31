@@ -1,0 +1,12 @@
+;; Issue #263, branch feat/263-stuck-retry: a held fight cut after twelve seconds with nothing
+;; coming, and a swarm of two monsters sending the hunt home to seal the mouth (plan run
+;; 40825468783: five deaths in 6 to 49 minutes, none stuck).
+{:plans/label "pearls-stuck-c"
+ :plans/jobs 6
+ :plans/issue 263
+ :plans/experiments [{:exp/name "pearls-12"
+                      :exp/kind :gym
+                      :exp/goal "pearls-12"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 18000}]}

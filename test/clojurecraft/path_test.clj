@@ -501,3 +501,31 @@
         "from the sheet, over it to the land")
     (is (not= :found (:path/status (path/plan on-land (path/feet-cell [12.5 64.0 8.5]) goal-ice)))
         "from the land, never onto the sheet")))
+
+;; ---------------------------------------------------------------- wary ground
+
+(def crimson-nylium (blocks/default-state :crimson_nylium))
+
+(defn on-patch?
+  "Does the route stand on the floor cell [x 63 z] of patch (a set of [x z])?"
+  [patch route]
+  (some (fn [[x _ z]] (contains? patch [x z])) (:path/waypoints route)))
+
+(deftest a-short-detour-round-crimson-ground-beats-a-way-through-it
+  ;; gym plan run 41134469333 (pearls-travel-b) jobs 1 and 2 died crossing crimson forest
+  (let [patch (set (for [x (range 3 8) z (range 4 7)] [x z]))
+        floor (into {} (for [[x z] patch] [[x 63 z] crimson-nylium]))
+        w (world-of floor [0.5 64.0 5.5])
+        goal {:goal/kind :block :goal/pos [11 64 5]}
+        r (path/plan w (path/feet-cell [0.5 64.0 5.5]) goal {})]
+    (is (= :found (:path/status r)))
+    (is (not (on-patch? patch r)) "round it")
+    (is (< (:path/cost r) (+ 11 (count patch))) "for less than through it")))
+
+(deftest crimson-ground-with-no-way-round-is-still-crossed
+  (let [patch (set (for [x (range 3 8) z (range 0 16)] [x z]))
+        floor (into {} (for [[x z] patch] [[x 63 z] crimson-nylium]))
+        w (world-of floor [0.5 64.0 5.5])
+        r (path/plan w (path/feet-cell [0.5 64.0 5.5]) {:goal/kind :block :goal/pos [11 64 5]} {})]
+    (is (= :found (:path/status r)) "a modest cost, not a wall")
+    (is (on-patch? patch r))))

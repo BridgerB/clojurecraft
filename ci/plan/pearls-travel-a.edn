@@ -1,0 +1,19 @@
+;; Issue #263, branch feat/263-stuck-retry: the pearl hunt travels to a warped forest (a chunk fact
+;; of warped nylium, pearls/travel) before it hunts, and the wander comes before the lure and
+;; quarry lookouts. pearls-12-from-fortress starts where the race leaves the bot; pearls-12 lands
+;; in a forest as before (real race 40980342194, Clj_r13: two hours round a fortress, no pearl).
+{:plans/label "pearls-travel-a"
+ :plans/jobs 6
+ :plans/issue 263
+ :plans/experiments [{:exp/name "pearls-12-from-fortress"
+                      :exp/kind :gym
+                      :exp/goal "pearls-12-from-fortress"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 18000}
+                     {:exp/name "pearls-12"
+                      :exp/kind :gym
+                      :exp/goal "pearls-12"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 18000}]}

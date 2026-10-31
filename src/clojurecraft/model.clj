@@ -177,6 +177,13 @@
    [:sight/pos "an observation's block position" "a fact in :world/facts"]
    [:sight/state "the state id observed there" "a fact in :world/facts"]
    [:sight/at "ms of the observation" "a fact in :world/facts"]
+   [:forest/chunk "the chunk [cx cz] a warped forest fact summarises (memory/forest-fact)"
+    "a fact in :world/facts"] [:forest/kind "the forest's kind, :warped" "a fact in :world/facts"]
+   [:forest/count "warped nylium blocks the chunk held when seen: forest-min or more"
+    "a fact in :world/facts"]
+   [:forest/pos "the nylium block nearest the chunk's centre" "a fact in :world/facts"]
+   [:forest/at "ms the chunk was seen" "a fact in :world/facts"]
+   [:forest/dimension "the dimension it was seen in" "a fact in :world/facts"]
    [:pool/chunk "the chunk [cx cz] a pool fact summarises" "a fact in :world/facts"]
    [:pool/kind "the pool's fluid, :water or :lava" "a fact in :world/facts"]
    [:pool/pos "the chunk's highest surface source of that fluid, nearest its centre"
@@ -462,6 +469,9 @@
    [:intent/floor-to
     "the height a mine's staircases are cut toward a few stairs at a time (its row's :goal/depth): how far down a floor laid through a cave must go on"
     "stairs-down from the mine act (stone/stairs), when the row has a depth"]
+   [:intent/wall?
+    "a :place of a block between the bot and an enderman it is cornered by (pearls/wall-off): the hunt's interrupt does not cut it"
+    "pearls/wall-off"]
    [:intent/to-height?
     "a :stairs-up that ends only at :intent/to-y: the open sky over a pit's floor is not out"
     "a climb out of a pit under the sky"]

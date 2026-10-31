@@ -3,6 +3,7 @@
    provoke tick by tick against vanilla's stare test, the kill's drop, and a hunt against the
    server model's enderman."
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
+            [clojurecraft.armour :as armour]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.combat :as combat]
             [clojurecraft.fixtures :as fx]
@@ -19,7 +20,8 @@
             [clojurecraft.sim :as sim]
             [clojurecraft.stairs :as stairs]
             [clojurecraft.sword :as sword]
-            [clojurecraft.world :as world]))
+            [clojurecraft.world :as world]
+            [datascript.core :as d]))
 
 (use-fixtures :once fx/instrumented)
 
@@ -730,10 +732,10 @@
                              plan/goals))
         "at the end with it two off the mouth: a crowd, blacklisted or not")
     (is
-     (= [:walk :shelter]
-        ((juxt :intent/kind :intent/for)
-         (plan/next-intent (burrowed [8.5 61.0 8.5] {7 (enderman [0.5 64.0 8.5])}) row plan/goals)))
-     "a calm one three blocks from the mouth: out past it to a vantage to stare from")
+     (= {:intent/kind :lookout :intent/for :pearls}
+        (plan/next-intent (burrowed [8.5 61.0 8.5] {7 (enderman [0.5 64.0 8.5])}) row plan/goals))
+     "a calm one three blocks from the mouth: no vantage out past it (a vantage is only within
+         provoke-home-reach of the burrow's end, gym plan run 40860669235 job 4): the bot stays in")
     (is (=
          {:intent/kind :walk :intent/target [3 64 8] :intent/for :shelter}
          (plan/next-intent (burrowed [8.5 61.0 8.5] {7 (enderman [3.5 44.0 8.5])}) row plan/goals))
@@ -921,9 +923,10 @@
     (is (= {:intent/kind :walk :intent/target [8 61 8] :intent/for :shelter}
            (plan/next-intent (assoc at-mouth :player/health 15.0) row plan/goals))
         "hurt at the mouth: home first")
-    (is (=
-         {:intent/kind :provoke :intent/target 7 :intent/for :pearls}
-         (plan/next-intent (assoc at-mouth :player/health pearls/provoke-health) row plan/goals)))))
+    (is (= {:intent/kind :provoke :intent/target 7 :intent/for :pearls}
+           (plan/next-intent (assoc at-mouth :player/health (pearls/provoke-line at-mouth))
+                             row
+                             plan/goals)))))
 
 (deftest at-a-burrow-site-the-burrow-is-cut-with-the-quarry-hidden
   ;; sim probe 39861051222 (world R4): fifty-seven minutes between a site, from which the quarry
@@ -1586,9 +1589,9 @@
         "so the hunt walks to the nearest cell a burrow would shelter from, and stands in it")
     (is (= [7 64 8] (pearls/burrow-site cave [0 -1])))
     (is (=
-         {:intent/kind :provoke :intent/target 7 :intent/for :pearls}
+         {:intent/kind :walk :intent/target [3 64 8] :intent/for :shelter}
          (plan/next-intent (burrowed [3.5 64.0 2.5] {7 (enderman [3.5 64.0 14.5])}) row plan/goals))
-        "a burrow six blocks off with a route to it and one to provoke: the stare from here")
+        "a burrow six blocks off and one to provoke: to the mouth first, never the stare from here")
     (is
      (= {:intent/kind :walk :intent/target [3 64 8] :intent/for :shelter}
         (plan/next-intent (burrowed [3.5 64.0 2.5]
@@ -1698,14 +1701,9 @@
         {:intent/keys [kind target for]} (plan/next-intent stale row plan/goals)]
     (is (= 11 (memory/done-since (looked dug 11) :lookout :burrow)))
     (is (nil? (memory/done-since dug :lookout :burrow)) "no burrow ever cut")
-    (let [v (plan/next-intent (looked dug 11) row plan/goals)
-          c (:intent/target v)]
-      (is
-       (= [:walk :shelter] [(:intent/kind v) (:intent/for v)])
-       "eleven lookouts, open ground round the mouth: out to a vantage to stare from, ended
-           in that very cell")
-      (is (= 7 (first (pearls/quarry (assoc (looked dug 11) :player/pos (pearls/feet-at c)))))
-          "from which it can be stared at: no nearer than stare-from, with a clear line"))
+    (is (= {:intent/kind :lookout :intent/for :pearls}
+           (plan/next-intent (looked dug 11) row plan/goals))
+        "eleven lookouts: no vantage out past the crowder, the bot stays in until the minute is up")
     (is (pearls/stale? stale) "a minute of them: the burrow is given up")
     (is (nil? (pearls/shelter stale)))
     (is (and (= :walk kind) (= :shelter for) (not= [8 61 8] target) (not= [3 64 8] target))
@@ -1841,48 +1839,27 @@
    the burrow's mouth at z 20 from the eye at the mouth, and a walk goes round it to the east."
   (into {} (for [x (range 1 7) y (range 64 68)] [[x y 12] stone])))
 
-(deftest one-hidden-from-the-mouth-is-provoked-from-a-vantage-within-the-burrows-reach
-  ;; batch pearls-warped4-b (plan run 39596287510, probe 39616249061): the arena's run 2 stood at
-  ;; its mouth at 33 s with all three endermen 16 to 28 blocks off and hidden, walked out to the
-  ;; nearest and met the zombies, a skeleton and a creeper of the dark round the arena with its
-  ;; burrow out of reach; run 3 walked 55 blocks to one. The stare goes from within the burrow's
-  ;; reach, and the provoked enderman follows the bot home
+(deftest one-hidden-from-the-mouth-is-no-reason-to-walk-out-of-the-burrows-close-reach
+  ;; batch pearls-warped4-b (plan run 39596287510): the arena's run 2 stood at its mouth with all
+  ;; three endermen hidden, walked out to the nearest and met the dark's mobs. Gym plan run
+  ;; 40860669235 job 4 (issue #263): a vantage five blocks from home, with an angry one tracked,
+  ;; was fought in the open at 11 health. A vantage is only a cell within provoke-home-reach of
+  ;; the burrow's end, which a provoke from it can be walked home from before the enderman is there
   (let [far (enderman [3.5 64.0 20.5])
         w (-> (burrowed [3.5 64.0 8.5] {7 far} north-wall)
-              (assoc-in [:world/chunks [0 1]] (world/column {})))
-        {:intent/keys [kind target] :as i} (plan/next-intent w row plan/goals)
-        there (assoc w :player/pos (pearls/feet-at target))]
+              (assoc-in [:world/chunks [0 1]] (world/column {})))]
     (is (nil? (pearls/quarry w)) "hidden from the mouth")
-    (is (= i (pearls/vantage w (pearls/endermen w pearls/seek-radius))))
-    (is (= [:walk :shelter] [kind (:intent/for i)]))
-    (is (not= [3 64 20] target) "never to the enderman itself")
-    (is (<= (physics/distance target [8 61 8]) pearls/shelter-reach) "within the burrow's reach")
-    (is (<= (physics/distance target [8 61 8]) (physics/distance target [3.5 64.0 20.5]))
-        "no farther from home than from the enderman: provoked, it comes at the bot's pace")
-    (is (= 7 (first (pearls/quarry there))) "from there it can be stared at")
-    (is (= {:intent/kind :provoke :intent/target 7 :intent/for :pearls}
-           (plan/next-intent there row plan/goals))
-        "and is, from there: the way home is known")
-    (is
-     (= {:intent/kind :walk :intent/target [8 61 8] :intent/for :shelter}
-        (plan/next-intent (assoc-in there [:world/entities 7 :entity/creepy?] true) row plan/goals))
-     "coming: home, where it is met")
+    (is (nil? (pearls/vantage w (pearls/endermen w pearls/seek-radius))))
+    (is (= {:intent/kind :lookout :intent/for :pearls} (plan/next-intent w row plan/goals))
+        "a lookout at the mouth, not a walk out")
+    (is (= {:intent/kind :walk :intent/target [8 61 8] :intent/for :shelter}
+           (plan/next-intent (assoc-in w [:world/entities 7 :entity/creepy?] true) row plan/goals))
+        "coming: home, where it is met")
     (is (= {:intent/kind :walk
             :intent/target (pearls/stare-site (dissoc w :pearls/shelter) far)
             :intent/for :shelter}
            (plan/next-intent (dissoc w :pearls/shelter) row plan/goals))
-        "with no burrow, walked to a new burrow's site it is stared at from (stare-site)")
-    (is (= {:intent/kind :lookout :intent/for :pearls}
-           (plan/next-intent
-            (assoc w
-                   :world/chunks
-                   (:world/chunks
-                    (burrowed [3.5 64.0 8.5]
-                              {7 far}
-                              (into {} (for [x (range 16) y (range 64 68)] [[x y 12] stone])))))
-            row
-            plan/goals))
-        "a wall no route rounds, no vantage: a lookout at the mouth, not a walk out")))
+        "with no burrow, walked to a new burrow's site it is stared at from (stare-site)")))
 
 (deftest a-vantage-farther-from-home-than-from-the-enderman-is-no-vantage
   ;; batch pearls-warped5-b (plan run 39671293287, probe 39683564524): run 1 provoked one 7.6
@@ -2090,3 +2067,633 @@
         "a burrow is cut where the bot stands")
     (is (nil? (pearls/menace (assoc-in w [:world/entities 9 :entity/creepy?] false)))
         "a calm one is none")))
+
+(deftest one-given-up-as-out-of-reach-is-not-fought-again
+  ;; gym plan run 40747177526 run 4 (issue #263, pearls-12): an angry enderman eight blocks below
+  ;; the bot in its stair shaft was chosen as :fight eight times in 10 ms, each given up as not
+  ;; strikable and ended done at once
+  (let [below (assoc (enderman [11.5 56.0 8.5]) :entity/creepy? true)
+        w (standing {7 below})
+        given (combat/given-up w 7)]
+    (is (= :fight (:intent/kind (plan/next-intent w row plan/goals)))
+        "not given up: the hunt fights it")
+    (is (pearls/unfightable? given 7 below) "given up and out of reach: no fight's target")
+    (is (not= :fight (:intent/kind (plan/next-intent given row plan/goals)))
+        "so the fight is not chosen again, the hunt does something else")
+    (testing "once it is within reach it is fought at once"
+      (let [near (assoc below :entity/pos [9.5 64.0 8.5])
+            given-near (combat/given-up (standing {7 near}) 7)]
+        (is (not (pearls/unfightable? given-near 7 near)))))))
+
+(deftest one-that-has-struck-and-stands-in-reach-is-fought-back
+  ;; run 4 again: three hits in five seconds, 20 to 0, with a walk going on and no attack sent,
+  ;; the enderman counted as fought out
+  (let [angry (assoc (enderman [9.5 64.0 8.5]) :entity/creepy? true)
+        base (assoc (standing {7 angry}) :player/health 12.0)
+        out (fought base pearls/fight-tries)
+        walking
+        (assoc
+         out
+         :plan/intent
+         {:intent/kind :walk :intent/target [20 64 20] :intent/status :active :intent/for :pearls})]
+    (is (pearls/fought-out? out 7))
+    (is (= 7 (first (pearls/struck-by out))) "hit once (under struck-health), in reach")
+    (is (= {:intent/kind :fight :intent/target 7 :intent/for :pearls}
+           (plan/next-intent out row plan/goals))
+        "fought out or not, it is fought back")
+    (is (plan/interrupts? walking row (:plan/intent walking)) "a walk is cut by it")
+    (testing "at full health it is fought out as before"
+      (let [full (assoc out :player/health 20.0)]
+        (is (nil? (pearls/struck-by full)))
+        (is (not (plan/interrupts? full row (:plan/intent walking))))))
+    (testing "out of the sword's reach it is not struck-by"
+      (is (nil? (pearls/struck-by
+                 (assoc-in out [:world/entities 7 :entity/pos] [9.5 70.0 8.5])))))))
+
+(deftest a-cornered-bot-under-danger-health-eats-or-walls-off
+  ;; gym plan run 40747177526 run 1 (issue #263, pearls-12): 7.6 health, an angry enderman a block
+  ;; or two off, back-off ten seconds at a time for ninety seconds with the bot backing into a
+  ;; wall, forty-eight cooked beef and many blocks held; slain by the next two hits
+  (let [angry (assoc (enderman [10.5 64.0 8.5]) :entity/creepy? true)
+        held {0 (item :iron_sword 1) 1 (item :cobblestone 64)}
+        w (-> (standing {7 angry})
+              (assoc :player/health 7.6 :player/inventory held :plan/cornered #{7}))]
+    (is (= {:intent/kind :place
+            :intent/item :cobblestone
+            :intent/cell [9 64 8]
+            :intent/for :pearls
+            :intent/wall? true}
+           (plan/next-intent w row plan/goals))
+        "a block at the feet's level on the side it stands on")
+    (is (= [9 65 8]
+           (:intent/cell
+            (plan/next-intent
+             (assoc w :world/chunks (:world/chunks (standing {7 angry} {[9 64 8] stone})))
+             row
+             plan/goals)))
+        "then one over it")
+    (is (= :eat
+           (:intent/kind
+            (plan/next-intent
+             (assoc w :player/food 12 :player/inventory (assoc held 2 (item :cooked_beef 8)))
+             row
+             plan/goals)))
+        "hungry with food held: the meal first")
+    (is (= :back-off (:intent/kind (plan/next-intent (assoc w :plan/cornered #{}) row plan/goals)))
+        "not cornered: backed off from as before")
+    (is (plan/interrupts? w row {:intent/kind :walk :intent/target [1 64 1] :intent/for :pearls})
+        "an angry one at hand cuts a walk")
+    (is (not (plan/interrupts? w row (plan/next-intent w row plan/goals))) "but not the wall")))
+
+(deftest a-shelter-walk-asks-the-blacklist
+  ;; gym plan run 40583923956 run 3 (issue #263): the walk to the burrow's mouth, planned fifteen
+  ;; times in 0.6 s, each failing :no-path
+  (let [w (assoc (standing {}) :plan/blacklist #{[2497 53 2134]})]
+    (is (nil? (pearls/shelter-walk w [2497 53 2134])))
+    (is (nil? (pearls/shelter-walk w nil)))
+    (is (= {:intent/kind :walk :intent/target [1 64 1] :intent/for :shelter}
+           (pearls/shelter-walk w [1 64 1])))))
+
+(defn wide
+  "w with flat stone floor chunks from -2 to 4 round its own, so routes and roams have ground."
+  [w]
+  (update w
+          :world/chunks
+          #(into (or % {})
+                 (for [cx (range -2 5)
+                       cz (range -2 5)
+                       :when (not= [0 0] [cx cz])]
+                   [[cx cz] (world/column {})]))))
+
+(def stranded
+  "Run 1 of gym plan run 40775811459 (issue #263, pearls-12): at its burrow's end with five
+   pearls, endermen tracked 22 blocks out and 14 down, and 16 out and 45 up: none with a route.
+   A staircase from the feet is boxed, as the cuts toward them were refused (descend, ascend,
+   dig-out and climb-out all ask :plan/boxed-at)."
+  (-> (wide (burrowed [8.5 61.0 8.5] {7 (enderman [30.5 50.0 8.5]) 9 (enderman [8.5 106.0 24.5])}))
+      (assoc :plan/boxed-at #{[8 61 8]})))
+
+(deftest a-hunt-with-no-enderman-it-can-walk-to-goes-elsewhere-after-five-minutes
+  (testing "the lookouts stood: not yet, then enough"
+    (is (not (pearls/wandering? (looked stranded (dec pearls/wander-lookouts)))))
+    (is (pearls/wandering? (looked stranded pearls/wander-lookouts))))
+  (testing "an enderman with a route keeps the hunt where it is"
+    (let [w (looked (wide (burrowed [8.5 61.0 8.5] {7 (enderman [30.5 64.0 8.5])}))
+                    pearls/wander-lookouts)]
+      (is (not (pearls/wandering? w)))))
+  (testing "the walk is to ground at least roam-reach off"
+    (let [{:intent/keys [kind target for]} (pearls/wander (looked stranded pearls/wander-lookouts))]
+      (is (= [:walk :pearls] [kind for]))
+      (is (>= (path/octile (intent/feet stranded) target) pearls/roam-reach))))
+  (testing "and the hunt walks, where it would otherwise stand in lookouts"
+    (is (= :walk
+           (:intent/kind
+            (plan/next-intent (looked stranded pearls/wander-lookouts) row plan/goals))))))
+
+(deftest a-lookout-is-cut-only-when-the-hunt-would-do-something-else
+  ;; run 2 of the same plan run ended in 50,301 lookouts 75 ms apart: an angry enderman at hand
+  ;; cut each at once and the hunt chose another lookout
+  (let [angry (assoc (enderman [10.5 64.0 8.5]) :entity/creepy? true)
+        w (standing {7 angry})
+        lookout {:intent/kind :lookout :intent/for :pearls :intent/goal :ender-pearls}]
+    (is (pearls/beset? w))
+    (is (plan/interrupts? w row lookout) "the hunt fights it: cut")
+    (is (pearls/same-choice? lookout {:intent/kind :lookout :intent/for :pearls})
+        "the hunt would lookout again: left to stand")
+    (is (not (pearls/same-choice? lookout {:intent/kind :fight :intent/target 7})))))
+
+(deftest a-fight-that-failed-is-not-planned-again-until-the-enderman-is-in-reach
+  ;; runs 2 and 3: :fight :unreachable eight times on one target, thirteen minutes of a held fight
+  (let [far (assoc (enderman [8.5 64.0 20.5]) :entity/creepy? true)
+        near (assoc far :entity/pos [10.5 64.0 8.5])
+        failed (fn [w]
+                 (memory/remember-intention (assoc w :time/now 1000)
+                                            {:intent/id 5 :intent/kind :fight :intent/target 7}
+                                            :failed))
+        w (failed (standing {7 far}))]
+    (is (pearls/unfightable? w 7 far) "out of reach, just failed")
+    (is (not (pearls/unfightable? w 7 near)) "within reach it is fought")
+    (is (not (pearls/unfightable? (assoc w :time/now (+ 1000 pearls/fight-retry-ms)) 7 far))
+        "after fight-retry-ms it is tried again")
+    (is (not (pearls/unfightable? (standing {7 far}) 7 far)) "never failed: fought")))
+
+(deftest a-held-fight-with-nothing-coming-is-cut-after-twelve-seconds
+  ;; gym plan run 40825468783 runs 4 and 5 (issue #263): :fight 148 held from 06:51:41 to
+  ;; 06:52:41, failing :unreachable after combat/hold-timeout-ms, the enderman never in reach
+  (let [far (assoc (enderman [8.5 64.0 30.5]) :entity/creepy? true)
+        fight {:intent/kind :fight
+               :intent/target 7
+               :intent/hold? true
+               :intent/since 1000
+               :intent/status :active
+               :intent/goal :ender-pearls
+               :intent/for :pearls}
+        at (fn [w ms] (assoc w :time/now ms))
+        w (standing {7 far})]
+    (is (not (pearls/held-idle? (at w (+ 1000 pearls/hold-patience-ms)) fight)) "not yet")
+    (is (pearls/held-idle? (at w (+ 1001 pearls/hold-patience-ms)) fight) "then cut")
+    (is (plan/interrupts? (at w (+ 1001 pearls/hold-patience-ms)) row fight))
+    (is (not (pearls/held-idle? (at w 99999) (dissoc fight :intent/hold?))) "a fight that walks up")
+    (is (not (pearls/held-idle? (at (standing {7 (assoc far :entity/pos [10.5 64.0 8.5])}) 99999)
+                                fight))
+        "its target within strike-range: the fight goes on")
+    (testing "and it is not planned again for a while"
+      (let [cut (memory/remember-intention (at w 20000) (assoc fight :intent/id 5) :abandoned)]
+        (is (pearls/unfightable? cut 7 far))))))
+
+(defn mob
+  "A tracked mob of kind k (a keyword) at pos."
+  [k pos]
+  {:entity/type (blocks/entity-types k) :entity/pos pos :entity/seen-at 0 :entity/health 20.0})
+
+(def burst
+  "Run 5 of gym plan run 40825468783 (issue #263, pearls-12): an angry enderman and two zombified
+   piglins within reach took 20 health in 1.5 s."
+  {7 (assoc (enderman [12.5 64.0 8.5]) :entity/creepy? true)
+   8 (mob :zombified_piglin [11.5 64.0 9.5])
+   9 (mob :zombified_piglin [5.5 64.0 6.5])})
+
+(deftest a-swarm-is-two-monsters-near-or-one-while-hurt
+  (let [w (standing burst)]
+    (is (= #{8 9} (set (keys (pearls/swarm w)))) "the enderman is the quarry, not the swarm")
+    (is (pearls/swarmed? w))
+    (is (not (pearls/swarmed? (standing {8 (mob :zombified_piglin [11.5 64.0 9.5])})))
+        "one, at full health")
+    (is (pearls/swarmed?
+         (assoc (standing {8 (mob :zombified_piglin [11.5 64.0 9.5])}) :player/health 8.0))
+        "one, under danger-health")
+    (is (not (pearls/swarmed? (standing {8 (mob :magma_cube [10.5 64.0 8.5])})))
+        "run 4: a lone magma cube at full health is the fight rules'")
+    (is (not (pearls/swarmed? (standing {8 (mob :zombified_piglin [11.5 64.0 9.5])
+                                         9 (mob :zombified_piglin [40.5 64.0 9.5])})))
+        "the second is past swarm-radius")
+    (testing "gym plan run 40839050567 job 5: two piglins shooting from past eight blocks"
+      (is (pearls/swarmed? (standing {8 (mob :piglin [20.5 64.0 9.5])
+                                      9 (mob :piglin [8.5 64.0 22.5])})))
+      (is (not (pearls/swarmed? (standing {8 (mob :zombified_piglin [20.5 64.0 9.5])
+                                           9 (mob :zombified_piglin [8.5 64.0 22.5])})))
+          "a zombified piglin has no bow"))))
+
+(deftest a-swarmed-hunt-goes-home-seals-the-mouth-and-opens-it-when-they-are-gone
+  (let [held {0 (item :iron_sword 1) 1 (item :iron_pickaxe 1) 2 (item :cobblestone 64)}
+        outside (-> (burrowed [3.5 64.0 2.5] burst)
+                    (assoc :player/inventory held))
+        inside (-> (burrowed [8.5 61.0 8.5] burst)
+                   (assoc :player/inventory held))]
+    (is (= {:intent/kind :walk :intent/target [8 61 8] :intent/for :shelter}
+           (plan/next-intent outside row plan/goals))
+        "out in the open: home")
+    (is (= {:intent/kind :place
+            :intent/item :cobblestone
+            :intent/cell [7 61 8]
+            :intent/for :pearls
+            :intent/wall? true}
+           (plan/next-intent inside row plan/goals))
+        "in the burrow's end: one block between the bot and the mouth")
+    (testing "the feet sealed, the head's level is next: a crossbow shoots over a block"
+      (let [feet-sealed (-> (burrowed [8.5 61.0 8.5] burst {[7 61 8] stone})
+                            (assoc :player/inventory held))]
+        (is (= [7 62 8] (:intent/cell (plan/next-intent feet-sealed row plan/goals))))))
+    (testing "sealed at both, it waits and does not fight"
+      (let [sealed (-> (burrowed [8.5 61.0 8.5] burst {[7 61 8] stone [7 62 8] stone})
+                       (assoc :player/inventory held))]
+        (is (= {:intent/kind :lookout :intent/for :pearls}
+               (plan/next-intent sealed row plan/goals)))))
+    (testing "they gone, the seal is dug"
+      (let [gone (-> (burrowed [8.5 61.0 8.5] {} {[7 61 8] stone})
+                     (assoc :player/inventory held))]
+        (is (= {:intent/kind :dig :intent/target [7 61 8] :intent/for :pearls}
+               (plan/next-intent gone row plan/goals)))))))
+
+(deftest the-hunt-does-not-walk-out-to-a-mouth-a-monster-stands-at
+  ;; gym plan run 40825468783 run 4 (issue #263, pearls-12): the walk between the burrow's end and
+  ;; its mouth every ~2 s, forty-eight times in 3m40, a magma cube at the mouth landing seven hits
+  ;; of three each, 20 health to 3.7: home when it was near, out to the mouth when it was not
+  (let [held {0 (item :iron_sword 1) 1 (item :iron_pickaxe 1)}
+        end [8.5 61.0 8.5]
+        clear (assoc (burrowed end {}) :player/inventory held)
+        cube (assoc (burrowed end {7 (mob :magma_cube [3.5 64.0 8.5])}) :player/inventory held)]
+    (is (= {:intent/kind :walk :intent/target [3 64 8] :intent/for :shelter}
+           (plan/next-intent clear row plan/goals))
+        "nothing at the mouth: out to look round from it")
+    (is (not= [:walk [3 64 8]]
+              ((juxt :intent/kind :intent/target) (plan/next-intent cube row plan/goals)))
+        "a magma cube at the mouth: the walk is not planned")))
+
+(def tunnel
+  "A tunnel two high cut east through the stone from x 8 to 13 at y 60 and 61, opening into a hall
+   (y 60 to 64) at x 14 and 15: the open line a stair cut gave a ghast in gym plan run 40839050567
+   job 6 (issue #263, pearls-12), the bot at [2229 96 2686] and the ghast at [2253 83 2703]."
+  (into {}
+        (concat (for [x (range 8 14) y [60 61]] [[x y 8] air])
+                (for [x [14 15] y (range 60 65)] [[x y 8] air]))))
+
+(deftest a-ghast-in-sight-is-covered-from-never-dug-under
+  (let [ghast (mob :ghast [15.5 60.0 8.5])
+        held {0 (item :iron_sword 1) 1 (item :iron_pickaxe 1) 2 (item :cobblestone 64)}
+        at (fn [entities blocks]
+             (-> (standing entities blocks)
+                 (assoc :player/pos [8.5 60.0 8.5] :player/inventory held)))
+        down-the-cut (at {7 ghast} tunnel)
+        stairs {:intent/kind :stairs-down
+                :intent/status :active
+                :intent/goal :ender-pearls
+                :intent/for :pearls}]
+    (is (pearls/shot-at? down-the-cut) "in sight down the tunnel")
+    (is (pearls/swarmed? down-the-cut))
+    (is (not (pearls/shot-at? (at {7 (mob :ghast [15.5 60.0 8.5])} {}))) "in solid stone: no line")
+    (is (plan/interrupts? down-the-cut row stairs) "a staircase is cut")
+    (is (nil? (pearls/hide-cell down-the-cut (get-in down-the-cut [:world/entities 7])))
+        "a tunnel two high with straight walls has no cell out of the line beside the feet")
+    (is (= {:intent/kind :place
+            :intent/item :cobblestone
+            :intent/cell [9 61 8]
+            :intent/for :pearls
+            :intent/wall? true}
+           (plan/next-intent down-the-cut row plan/goals))
+        "a block on the line, the first open cell with a wall beside it")
+    (testing "with no filler held, a hole is dug on the side away from it"
+      (let [no-filler (assoc down-the-cut :player/inventory {0 (item :iron_pickaxe 1)})]
+        (is (= {:intent/kind :dig :intent/target [7 60 8] :intent/for :pearls}
+               (pearls/cover-from no-filler)))))))
+
+(deftest a-zombie-at-hand-is-fought-at-full-health-and-never-looked-out-from
+  ;; the same plan run, after the death (overworld, zombie 4548): :fight, then :lookout and
+  ;; :back-off alternating every 0.4 to 2 s for 16 s, 86 back-off ticks, then death
+  (let [zombie (mob :zombie [11.5 64.0 8.5])
+        w (standing {7 zombie})
+        lookout {:intent/kind :lookout :intent/for :pearls :intent/goal :ender-pearls}]
+    (is (= {:intent/kind :fight :intent/target 7 :intent/for :pearls}
+           (plan/next-intent w row plan/goals))
+        "at full health with no burrow: fought")
+    (is (= :back-off (:intent/kind (plan/next-intent (assoc w :player/health 8.0) row plan/goals)))
+        "hurt: backed away from")
+    (is (plan/interrupts? w row lookout) "a lookout does not run with it at hand")))
+
+(deftest an-uncovered-ghast-is-logged-once-in-five-seconds
+  ;; the open-ground case: nothing to lay a block against, nothing to dig, no cell out of the line
+  (let [held {0 (item :iron_sword 1)}
+        w (-> (wide (standing {7 (mob :ghast [8.5 75.0 50.5])}))
+              (assoc :player/inventory held :time/tick 0))
+        logged (fn [w] (filter #(= :log (:effect/kind %)) (:bot/effects (pearls/uncovered-log w))))]
+    (is (pearls/shot-at? w))
+    (is (nil? (pearls/cover-from w)))
+    (is (= 1 (count (logged w))))
+    (is (re-find #"ghast 7 at \[8 75 50\] shoots the bot at \[8 64 8\]: no cover"
+                 (:effect/message (first (logged w)))))
+    (is (empty? (logged (assoc w :time/tick 1))) "not every tick")))
+
+(deftest a-provoke-keeps-two-hits-of-health-and-no-walk-out-over-an-angry-one
+  ;; gym plan run 40860669235 job 4 (issue #263, pearls-12): provoked at about 11 health, then
+  ;; the walk between the burrow's end and its mouth ten times in 17 s, then a fight in the open
+  ;; and three hits of 5.7
+  (let [mail (fn [w]
+               (-> w
+                   (assoc-in [:player/inventory (armour/worn-slot 0)] (item :iron_helmet 1))
+                   (assoc-in [:player/inventory (armour/worn-slot 1)] (item :iron_chestplate 1))))
+        sighted (enderman [3.5 64.0 0.5])
+        at-mouth (-> (burrowed [3.5 64.0 8.5] {7 sighted})
+                     (assoc :player/food 20)
+                     mail)
+        calm-end (-> (burrowed [8.5 61.0 8.5] {})
+                     mail)
+        angry-end (-> (burrowed [8.5 61.0 8.5]
+                                {7 (assoc (enderman [3.5 64.0 14.5]) :entity/creepy? true)})
+                      mail)]
+    (is (< 5.7 (pearls/enderman-hit at-mouth) 5.8) "7 through iron helmet and chestplate")
+    (is (< 14.4 (pearls/provoke-line at-mouth) 14.6) "3 over two hits")
+    (is (= 7.0 (pearls/enderman-hit (burrowed [3.5 64.0 8.5] {}))) "no armour: all of it")
+    (is (= :provoke
+           (:intent/kind (plan/next-intent (assoc at-mouth :player/health 15.0) row plan/goals))))
+    (is (not= :provoke
+              (:intent/kind (plan/next-intent (assoc at-mouth :player/health 14.0) row plan/goals)))
+        "under the line: home, not a provoke")
+    (is (= [:walk [3 64 8]]
+           ((juxt :intent/kind :intent/target) (plan/next-intent calm-end row plan/goals)))
+        "nothing coming: out to look round from the mouth")
+    (is (not= [:walk [3 64 8]]
+              ((juxt :intent/kind :intent/target) (plan/next-intent angry-end row plan/goals)))
+        "an angry one tracked: the bot stays in, where the walk out sent it home again")))
+
+(deftest a-ghast-in-sight-is-covered-from-before-the-walk-home-and-a-walk-is-not-cut-for-itself
+  ;; gym plan run 40860669235 job 5 (issue #263, pearls-12): five fireballs took 20 health to 0
+  ;; while the same :walk was planned every 50 ms, each plan cut by the one before it, and no
+  ;; cover was ever chosen (a burrow was cut, so the walk home came first)
+  (let [held {0 (item :iron_sword 1) 1 (item :iron_pickaxe 1) 2 (item :cobblestone 64)}
+        w (-> (burrowed [3.5 64.0 8.5] {7 (mob :ghast [30.5 75.0 8.5])} {[4 64 8] stone})
+              wide
+              (assoc :player/inventory held))
+        walk {:intent/kind :walk
+              :intent/target [3 64 8]
+              :intent/status :active
+              :intent/goal :ender-pearls
+              :intent/for :shelter}]
+    (is (pearls/shot-at? w))
+    (is (= {:intent/kind :place
+            :intent/item :cobblestone
+            :intent/cell [4 65 8]
+            :intent/for :pearls
+            :intent/wall? true}
+           (plan/next-intent w row plan/goals))
+        "cover first, not the walk home")
+    (testing "a walk the hunt would plan again is not cut"
+      (is (pearls/same-choice? walk (assoc walk :intent/status :new :intent/id 9)))
+      (is (not (pearls/same-choice? walk {:intent/kind :lookout})))
+      (is (not (pearls/same-choice? walk (assoc walk :intent/target [4 64 8])))))))
+
+(defn walked
+  "w with a :walk intention done to each target of cells, in order, as memory keeps them."
+  [w cells]
+  (reduce-kv #(memory/remember-intention
+               %1
+               {:intent/id (+ 100 %2) :intent/kind :walk :intent/target %3}
+               :done)
+             w
+             (vec cells)))
+
+(deftest a-hunt-shuffling-two-blocks-for-hours-wanders
+  ;; gym plan run 40839050567 jobs 1 to 4 (issue #263, pearls-12): five-hour timeouts, each a walk
+  ;; between two cells a few blocks apart, 446, 784, 346 and 460 times, a lookout between every
+  ;; two, so that no run of lookouts since the last walk ever reached wander-lookouts. The offsets
+  ;; between the two cells of the jobs: [0 0 2] (job 1, [2449 47 2198] and [2449 47 2200]), [0 0 2]
+  ;; (job 2, [2459 55 2202] and [2459 55 2204]), [0 0 2] (job 3, [2473 55 2210] and [2473 55 2212])
+  ;; and [5 3 0] (job 4, [2457 55 2195] and [2452 52 2195])
+  (doseq [[job [dx dy dz]] {1 [0 0 2]
+                            2 [0 0 2]
+                            3 [0 0 2]
+                            4 [5 3 0]
+                            ;; gym plan run 40905321229 (stuck-e), five timeouts of 378 to 718
+                            ;; swings: [2460 55 2208] and [2458 55 2208]; [2449 47 2198] and
+                            ;; [2449 47 2200]; [2452 55 2201] and [2452 55 2203]; [2489 46 2214]
+                            ;; and [2489 46 2216]; [2778 39 2530] and [2783 36 2530]
+                            :e1 [-2 0 0]
+                            :e2 [0 0 2]
+                            :e3 [0 0 2]
+                            :e4 [0 0 2]
+                            :e5 [5 -3 0]}] ; job 3: [2473 55 2210] and [2473 55 2212]
+    (let [w (-> stranded
+                (assoc :player/pos [8.5 61.0 8.5])
+                (walked (take pearls/loiter-walks
+                              (cycle [[8 61 8] [(+ 8 dx) (+ 61 dy) (+ 8 dz)]]))))]
+      (is (pearls/loitering? w) (str "job " job " shuffles"))
+      (is (pearls/wandering? w) (str "job " job " wanders"))))
+  (testing "twelve walks that went somewhere are no loitering"
+    (let [w (walked stranded (for [k (range pearls/loiter-walks)] [(+ 8 (* 20 k)) 61 8]))]
+      (is (not (pearls/loitering? w)))))
+  (testing "eleven walks are too few"
+    (let [w (walked stranded (repeat (dec pearls/loiter-walks) [8 61 8]))]
+      (is (not (pearls/loitering? w))))))
+
+(deftest a-calm-one-crowding-the-mouth-is-no-reason-to-walk-out-past-an-angry-one
+  ;; gym plan run 40860669235 job 4 (issue #263, pearls-12), 6.30 min: at home with a calm
+  ;; enderman three blocks from the mouth and an angry one thirteen away below, the hunt chose a
+  ;; vantage five blocks out, was fought in the open at 11 health there and slain
+  (let [calm (enderman [5.5 64.0 8.5])
+        angry (assoc (enderman [8.5 50.0 18.5]) :entity/creepy? true)
+        w (assoc (burrowed [8.5 61.0 8.5] {7 calm 8 angry}) :player/food 20)
+        i (plan/next-intent w row plan/goals)]
+    (is (pearls/crowded? w) "the calm one crowds the mouth")
+    (is (nil? (pearls/vantage w (pearls/endermen w pearls/seek-radius))))
+    (is (not= :walk (:intent/kind i)) (pr-str i))))
+
+(deftest a-fight-cut-three-times-in-ten-minutes-is-not-planned-again
+  ;; gym plan run 40860669235 job 3 (issue #263, pearls-12): :fight 65 held twelve seconds, cut,
+  ;; and planned again after thirty, every 47 seconds for 286 minutes, 80 of them in a fight with
+  ;; thirty-three attacks sent: an angry enderman six blocks off and three below that never came
+  (let [far (assoc (enderman [8.5 61.0 14.5]) :entity/creepy? true)
+        near (assoc far :entity/pos [10.5 64.0 8.5])
+        cut (fn [w at id]
+              (memory/remember-intention (assoc w :time/now at)
+                                         {:intent/id id :intent/kind :fight :intent/target 7}
+                                         :abandoned))
+        base (standing {7 far})
+        w (-> base
+              (cut 0 1)
+              (cut 50000 2)
+              (cut 100000 3)
+              (assoc :time/now 140000))]
+    (is (pearls/unfightable? w 7 far)
+        "three cuts in ten minutes, the last long past fight-retry-ms")
+    (is (not (pearls/unfightable? w 7 near)) "in reach, it is fought")
+    (is (not (pearls/unfightable? (-> base
+                                      (cut 0 1)
+                                      (cut 50000 2)
+                                      (assoc :time/now 140000))
+                                  7
+                                  far))
+        "two cuts: tried again")
+    (is (not (pearls/unfightable? (assoc w :time/now (+ 100000 pearls/fight-giveup-ms 1)) 7 far))
+        "ten minutes on, tried again")))
+
+(deftest a-shuffle-wanders-even-with-an-enderman-a-route-reaches
+  ;; gym plan run 40905321229 job 6 (issue #263, pearls-12): [2242 76 2701] and [2244 76 2701]
+  ;; walked 136 times over 51 minutes, an angry enderman routable and never coming
+  (let [angry (assoc (enderman [30.5 64.0 8.5]) :entity/creepy? true)
+        w (-> (wide (burrowed [8.5 61.0 8.5] {7 angry}))
+              (walked (take pearls/loiter-walks (cycle [[8 61 8] [10 61 8]]))))]
+    (is (some? (pearls/routable w (pearls/endermen w pearls/seek-radius))) "a route reaches it")
+    (is (pearls/loitering? w))
+    (is (pearls/wandering? w))
+    (is (not (pearls/wandering? (looked (wide (burrowed [8.5 61.0 8.5] {7 angry}))
+                                        pearls/wander-lookouts)))
+        "lookouts alone, with one routable: as before, it stays")))
+
+(deftest a-walk-out-of-a-ghasts-sight-ends-centred-in-the-cell
+  ;; gym plan run 40905321229 job 6 (issue #263, pearls-12): :walk [2241 83 2705], one cell from the
+  ;; feet, planned 45 times in 2.5 s: a walk for :pearls is over within reach of its target, so it
+  ;; ended where it began and was planned again
+  (let [wall (into {} (for [y (range 64 70)] [[11 y 9] stone]))
+        w (-> (standing {7 (mob :ghast [14.5 66.0 8.5])} wall)
+              (assoc :player/inventory {0 (item :iron_sword 1)}))
+        i (pearls/cover-from w)]
+    (is (pearls/shot-at? w))
+    (is (= [8 64 9] (pearls/hide-cell w (get-in w [:world/entities 7])))
+        "out of its line, beside the feet")
+    (is (= {:intent/kind :walk :intent/target [8 64 9] :intent/for :cover :intent/wall? true} i))
+    (is (not (intent/arrived? w i 1.0)) "from the cell beside it, a walk for :cover is not over")
+    (is (intent/arrived? (assoc w :player/pos [8.5 64.0 9.5]) i 0.0) "centred in the cell it is")))
+
+(deftest a-wander-comes-before-the-lookouts-of-a-burrow-with-an-angry-one-near
+  ;; gym plan run 40973173654 (pearls-stuck-f) jobs 2, 4, 5 and 6: the fold at 120, 200, 60 and 105
+  ;; minutes had wandering? and wander both true and next-intent :lookout or the walk to the mouth,
+  ;; because the lure, crowd and quarry branches come first
+  (let [angry (assoc (enderman [30.5 64.0 8.5]) :entity/creepy? true)
+        w (-> (wide (burrowed [8.5 61.0 8.5] {7 angry}))
+              (assoc :plan/given-up {7 0})
+              (walked (take pearls/loiter-walks (cycle [[8 61 8] [10 61 8]]))))
+        i (plan/next-intent w row plan/goals)]
+    (is (pearls/wandering? w))
+    (is (some? (pearls/wander w)))
+    (is (not (pearls/menaced? w)) "the angry one is not at the feet")
+    (is (= [:walk :pearls] [(:intent/kind i) (:intent/for i)]) (pr-str i))
+    (is (not= [10 61 8] (:intent/target i)))
+    (is (>= (path/octile (intent/feet w) (:intent/target i)) pearls/roam-reach))))
+
+(def nether "minecraft:the_nether")
+
+(deftest a-chunk-of-warped-nylium-is-a-forest-fact
+  (let [nylium (blocks/default-state :warped_nylium)
+        col (fn [n] (world/column (into {} (for [x (range n)] [[x 64 3] nylium]))))
+        fact (fn [n dim] (memory/forest-fact [2 -1] (col n) 77 dim))]
+    (is (= {:forest/chunk [2 -1]
+            :forest/kind :warped
+            :forest/count 12
+            :forest/pos [40 64 -13]
+            :forest/at 77
+            :forest/dimension nether}
+           (select-keys (fact memory/forest-min nether)
+                        [:forest/chunk :forest/kind :forest/count :forest/pos :forest/at
+                         :forest/dimension]))
+        "the block nearest the chunk's centre (40, -8), twelve of them")
+    (is (nil? (fact (dec memory/forest-min) nether)) "eleven: no forest")
+    (is (nil? (fact memory/forest-min "minecraft:overworld")) "only the Nether has them")
+    (testing "remembered on load, known after, and the newest per chunk"
+      (let [w (-> (game/init fx/opts)
+                  (assoc :player/dimension nether :time/now 5)
+                  (memory/remember-column [2 -1] (col 12))
+                  (memory/remember-column [2 -1] (col 12))
+                  (memory/remember-column [2 -1] (col 14)))]
+        (is (= [[[2 -1] 14]] (map (juxt :forest/chunk :forest/count) (memory/warped-chunks w))))
+        (is (= 2 (count (d/q '[:find [?e ...] :where [?e :forest/chunk]] (:world/facts w))))
+            "an unchanged reload adds no fact")))))
+
+(deftest a-hunt-with-no-warped-forest-near-travels-or-explores
+  ;; real race 40980342194, Clj_r13 (issue #263): two hours of lookouts and walks round a fortress
+  ;; at x 4250-4440, z 1700-1750, no pearl, 0 pearls in all of the race's 6 to 7 bots with rods:
+  ;; no code went to a warped forest
+  (let [base (-> (wide (standing {}))
+                 (assoc :player/dimension nether)
+                 (assoc :player/inventory {0 (item :iron_sword 1) 1 (item :iron_pickaxe 1)}))
+        forest (fn [chunk pos]
+                 {:forest/chunk chunk
+                  :forest/kind :warped
+                  :forest/count 40
+                  :forest/pos pos
+                  :forest/at 0
+                  :forest/dimension nether})
+        known (memory/remember-forest base (forest [30 0] [480 70 8]))
+        here (memory/remember-forest base (forest [0 0] [8 63 8]))]
+    (testing "none known: explores, as far as the loaded ground goes"
+      (let [i (plan/next-intent base row plan/goals)]
+        (is (= [:walk :pearls] [(:intent/kind i) (:intent/for i)]) (pr-str i))
+        (is (>= (path/octile (intent/feet base) (:intent/target i)) pearls/roam-reach))))
+    (testing "one known: the cell over its nylium"
+      (is (= {:intent/kind :walk :intent/target [480 71 8] :intent/for :pearls}
+             (plan/next-intent known row plan/goals))))
+    (testing "one failed (blacklisted): not again"
+      (is (not= [480 71 8]
+                (:intent/target
+                 (plan/next-intent (assoc known :plan/blacklist #{[480 71 8]}) row plan/goals)))))
+    (testing "in one: the hunt, no travel"
+      (is (nil? (pearls/travel here)))
+      (is (pearls/in-forest? here))
+      (is
+       (= {:intent/kind :lookout :intent/for :pearls} (plan/next-intent here row plan/goals))
+       "in a forest with no enderman yet: the hunt stands where it is, no walk out (a walk
+           out of a forest it reached was job 5's 13 minutes of walking in pearls-travel-a)"))
+    (testing "the overworld has no such search"
+      (is (nil? (pearls/travel (assoc base :player/dimension "minecraft:overworld")))))
+    (testing "an enderman tracked: hunted, not travelled from"
+      (let [w (assoc-in base [:world/entities 7] (enderman [10.5 64.0 8.5]))]
+        (is (not= [:walk :pearls]
+                  ((juxt :intent/kind :intent/for) (plan/next-intent w row plan/goals))))))))
+
+(deftest one-enderman-at-a-time-is-provoked
+  ;; churn-a (plan 41096292443) pearls-12 run 3 at 59.47 to 59.69 min (issue #263): :provoke 1310,
+  ;; :provoke 1561 half a second on, :provoke 1691 0.2 min later; at 59.73 the three stood within
+  ;; 2.5 blocks of the bot, and the last of them struck it five times in five seconds
+  (let [sighted (enderman [3.5 64.0 0.5])
+        coming (assoc (enderman [3.5 64.0 20.5]) :entity/creepy? true)
+        w (assoc (burrowed [3.5 64.0 8.5] {7 sighted}) :player/food 20)
+        busy (assoc-in w [:world/entities 8] coming)]
+    (is (= {:intent/kind :provoke :intent/target 7 :intent/for :pearls}
+           (plan/next-intent w row plan/goals))
+        "none angry: provoked from the mouth")
+    (is (not= :provoke (:intent/kind (plan/next-intent busy row plan/goals)))
+        "another angry and coming: not a second")
+    (let [given-up (-> busy
+                       (assoc :plan/given-up {8 0})
+                       (assoc-in [:world/entities 8 :entity/pos] [3.5 64.0 30.5]))]
+      (is (pearls/coming? busy))
+      (is (not (pearls/coming? given-up)) "given up on and out of reach: it is not coming")
+      (is
+       (= {:intent/kind :walk :intent/target [8 61 8] :intent/for :shelter}
+          (plan/next-intent given-up row plan/goals))
+       "so it blocks nothing; at the mouth the bot goes home first (an angry one tracked sends
+           it there), where the next plan provokes"))))
+
+(deftest only-a-weak-mob-at-hand-is-fought-with-no-burrow
+  ;; gym plan run 41109441111 (pearls-travel-a) job 5: `walk [2396 72 2184]`, `fight 744`, three
+  ;; hits of a piglin in four seconds, dead at 39 minutes
+  (let [zombie (mob :zombie [11.5 64.0 8.5])
+        piglin (mob :piglin [11.5 64.0 8.5])]
+    (is (pearls/weak? zombie))
+    (is (not (pearls/weak? piglin)) "it shoots and its hit is not in mob/kinds")
+    (is (= :fight (:intent/kind (plan/next-intent (standing {7 zombie}) row plan/goals))))
+    (is (not= :fight (:intent/kind (plan/next-intent (standing {7 piglin}) row plan/goals))))))
+
+(deftest an-explore-goes-on-away-from-where-it-has-been
+  ;; gym plan run 41134469333 (pearls-travel-b) job 2: walks of 12 s alternating between x 2240 and
+  ;; x 2200 for 5.5 minutes, the heading chosen by the count of walks arrived at
+  (let [w (-> (wide (standing {}))
+              (assoc :player/dimension nether
+                     :player/inventory {0 (item :iron_sword 1) 1 (item :iron_pickaxe 1)}))
+        west (walked w [[-20 64 8] [-24 64 8] [-28 64 8]])
+        east (walked w [[40 64 8] [44 64 8] [48 64 8]])
+        x-of #(first (:intent/target %))]
+    (is (> (x-of (pearls/explore west)) 8) "been west: east")
+    (is (< (x-of (pearls/explore east)) 8) "been east: west")))
+
+(deftest nothing-is-cut-down-into-the-nethers-lava-sea
+  ;; gym plan run 41134469333 (pearls-travel-b) job 6 (issue #263): stairs-down from y 47 toward an
+  ;; enderman far below, to y 34, a burrow cut at [2498 34 2160], lava let in, two flees, dead in lava
+  (let [low (-> (standing {7 (enderman [8.5 40.0 14.5])} {})
+                (assoc :player/dimension nether
+                       :player/pos [8.5 38.0 8.5]
+                       :player/inventory {0 (item :iron_sword 1) 1 (item :iron_pickaxe 1)}))]
+    (is (= 36 (pearls/lava-floor low)))
+    (is (zero? (pearls/lava-floor (assoc low :player/dimension "minecraft:overworld"))))
+    (is (nil? (pearls/descend low (pearls/endermen low pearls/descend-radius)))
+        "an enderman 40 and below the cut's floor: none")
+    (is (not (pearls/burrowable? (assoc low :player/pos [8.5 38.0 8.5]) [8 38 8] [1 0]))
+        "a burrow whose last stair is at y 35 is under the floor")))

@@ -108,6 +108,24 @@
            :range 16.0
            :keep 16.0
            :loot [[:blaze_rod 0 1]]}
+   :ghast {:health 10.0
+           :box [4.0 4.0]
+           :speed 0.0
+           :follow 100.0
+           :shoot 6.0
+           :every 60
+           :range 64.0
+           :keep 64.0
+           :loot [[:ghast_tear 0 1] [:gunpowder 0 2]]}
+   :piglin {:health 16.0
+            :box [0.6 1.95]
+            :speed 0.115
+            :follow 16.0
+            :shoot 5.0
+            :every 40
+            :range 16.0
+            :keep 8.0
+            :loot []}
    :cow {:health 10.0 :box [0.9 1.4] :passive true :loot [[:beef 1 3] [:leather 0 2]]}
    :pig {:health 10.0 :box [0.9 0.9] :passive true :loot [[:porkchop 1 3]]}
    :sheep {:health 8.0 :box [0.9 1.3] :passive true :loot [[:mutton 1 2] [:white_wool 1 1]]}
