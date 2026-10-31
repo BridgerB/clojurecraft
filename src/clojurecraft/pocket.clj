@@ -15,10 +15,10 @@
             [clojurecraft.blocks :as blocks]
             [clojurecraft.build :as build]
             [clojurecraft.intent :as intent]
-            [clojurecraft.inventory :as inventory]
             [clojurecraft.path :as path]
             [clojurecraft.place :as place]
             [clojurecraft.recipe :as recipe]
+            [clojurecraft.stairs :as stairs]
             [clojurecraft.terrain :as terrain]))
 
 (set! *warn-on-reflection* true)
@@ -225,19 +225,23 @@
   (boolean (and (seq placed) (every? #(solid-at? world %) placed))))
 
 (defn seal-ops
-  "The ops that seal the cell: a place of seal-item in each of cells, standing in the cell."
-  [c cells]
-  (mapv #(build/place-op % c nil :seal) cells))
+  "The ops that seal the cell: a place of item (default seal-item) in each of cells, standing in
+   the cell."
+  ([c cells] (seal-ops c cells seal-item))
+  ([c cells item] (mapv #(assoc (build/place-op % c nil :seal) :build/item item) cells)))
 
 (defn unseal-ops
   "The ops that open the pocket again: a dig of each placed cell, the highest first, from the cell."
   [c placed]
   (mapv #(build/dig-op % c nil :unseal) (reverse placed)))
 
-(defn filler-held
-  "How many of seal-item the bot holds."
-  [world]
-  (inventory/item-count world (recipe/item-id seal-item)))
+(defn seal-filler
+  "The block to seal n cells with, or nil: the first of stairs/filler's list (cobblestone, then
+   the Nether's own rock, which a tunnel carries by the hundred) the bot holds n of. Blaze-race-v
+   job 5 laid its 64 cobblestone into a tunnel's floors in 8 minutes, held 160 netherrack, could
+   not seal, and held open under fire until dead (hp 14 to 1 in 26 s)."
+  [world n]
+  (stairs/filler world n))
 
 (def seal-retry-ms 60000) ; ms after a seal failed anywhere before another is tried
 
@@ -265,7 +269,7 @@
          (or (nil? failed) (> (- (:time/now world 0) failed) seal-retry-ms))
          (pickaxe-held? world)
          (pos? n)
-         (<= n (filler-held world)))))
+         (some? (seal-filler world n)))))
 
 (defn ops
   "The site as build ops: a dig of each cell still to dig, from the stand, then (unless prepare?:
@@ -379,7 +383,23 @@
           :else
           (-> world
               (intent/assoc-intent :intent/started (or (:intent/started i) (:time/now world 0)))
-              (work-ops i (seal-ops (:pocket/cell site) cells) event true)))))
+              (work-ops
+               i
+               (seal-ops (:pocket/cell site) cells (or (seal-filler world (count cells)) seal-item))
+               event
+               true)))))
+
+(def reopen-ms 1500) ; ms after a hit within which an opening pocket is shut again, not opened further
+
+(defn shot-open?
+  "Is the pocket opened (a placed cell no longer solid) and the bot burning or struck within
+   reopen-ms? The unseal then ends, so a :seal lays the open cells again. Blaze-race-v job 2
+   unsealed at full health, was hit through the first opened cell, and the unseal (a defence,
+   plan/holds?) dug on for 27 s while it burned: hp 20 to 0.4."
+  [world placed]
+  (boolean (and (some #(not (solid-at? world %)) placed)
+                (or (:player/on-fire? world)
+                    (<= (- (:time/now world 0) (:player/struck-at world -1000000)) reopen-ms)))))
 
 (defmethod intent/run :unseal
   ;; {:intent/kind :unseal}: dig every cell the seal placed, the highest first, standing in the
@@ -397,5 +417,9 @@
           (-> world
               (assoc :player/controls {})
               (assoc-in [:pocket/site :pocket/placed] [])
+              intent/done)
+          (shot-open? world placed)
+          (-> world
+              (assoc :player/controls {})
               intent/done)
           :else (work-ops world i (unseal-ops cell placed) event))))

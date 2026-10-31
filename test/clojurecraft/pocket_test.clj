@@ -177,3 +177,30 @@
       (let [edge (assoc w :player/pos [2154.8 72.0 1750.5])]
         (is (= [[2153 72 1750]] (pocket/clear-of-body edge c [[2155 72 1750] [2153 72 1750]]))
             "x 2154.8 spans 2154.5 to 2155.1: [2155 72 1750] is in the box")))))
+
+(deftest a-seal-is-laid-from-netherrack-when-the-cobblestone-is-spent
+  ;; blaze-race-v job 5: 64 cobblestone gone in 8 minutes of tunnel floors, 160 netherrack held,
+  ;; no seal, held open under fire until dead
+  (let [site {:pocket/cell [8 64 8] :pocket/stand nil :pocket/dig [] :pocket/placed []}
+        w (-> (world-of walled)
+              (assoc-in [:player/inventory 9] {:item (recipe/item-id :netherrack) :count 40})
+              (assoc-in [:player/inventory 10] {:item (recipe/item-id :iron_pickaxe) :count 1}))]
+    (is (= :netherrack (pocket/seal-filler w 2)))
+    (is (pocket/can-seal? w site) "no cobblestone: the Nether's own rock seals")
+    (is (every? #(= :netherrack (:build/item %))
+                (pocket/seal-ops [8 64 8] [[7 64 8] [7 65 8]] :netherrack)))
+    (is (every? #(= :cobblestone (:build/item %)) (pocket/seal-ops [8 64 8] [[7 64 8]]))
+        "the default is still cobblestone")))
+
+(deftest an-unseal-that-is-shot-open-ends-so-the-seal-is-laid-again
+  ;; blaze-race-v job 2: dug on for 27 s while burning, hp 20 to 0.4
+  (let [placed [[7 64 8] [7 65 8]]
+        w (assoc (world-of walled) :time/now 100000)]
+    (is (not (pocket/shot-open? w placed)) "calm: opened as asked")
+    (is (pocket/shot-open? (assoc w :player/on-fire? true) placed) "burning, an opening")
+    (is (pocket/shot-open? (assoc w :player/struck-at 99000) placed) "struck 1 s ago")
+    (is (not (pocket/shot-open? (assoc w :player/struck-at 90000) placed)) "struck long ago")
+    (is (not (pocket/shot-open?
+              (assoc (world-of (merge walled (solid [7 64 8] [7 65 8]))) :player/on-fire? true)
+              placed))
+        "still sealed: nothing is open to shut")))
