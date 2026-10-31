@@ -18,6 +18,7 @@
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
             [clojurecraft.memory :as memory]
+            [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.terrain :as terrain]
@@ -117,7 +118,9 @@
 (def stuck-extent 16.0)               ; blocks the box of the feet's places since progress was last seen must span (x or z) to count as a move: a tunnel loop inside 12 blocks is not one
 (def watch-every-ms 1000)             ; ms between two looks at progress
 (def quiet-ticks 6000)                ; ticks without damage after which a held defence is no longer defended for the watchdog: 5 min
-(def explore-distance 48)             ; blocks the walk away from a stuck spot goes
+(def explore-distance 48)
+(def explore-tries 4)                 ; trail cells tried farthest first, then as many nearest first, for a route
+(def explore-nodes 2000)              ; expansions each of those route searches may spend             ; blocks the walk away from a stuck spot goes
 (def anchors
   "{:goal/plan #{attribute}}: the places a row holds on to (the pearl hunt's burrow, a blaze pocket),
    dropped when it has made no progress for stuck-ms, so it does not walk back to them."
@@ -534,23 +537,43 @@
   [w]
   (let [[lx _ lz] (:lo w) [hx _ hz] (:hi w)] (max (- hx lx) (- hz lz))))
 
+(defn routable?
+  "Does path/plan find a route (:found) for the feet from the cell they stand in to cell c within
+   explore-nodes expansions?"
+  [world c]
+  (= :found
+     (:path/status
+      (path/plan world (path/feet-cell (:player/pos world)) c {:path/max-nodes explore-nodes}))))
+
 (defn explore-cell
-  "The cell explore-distance from the feet at the feet's height: toward the farthest cell of the
-   trail the bot came by (away from where it is stuck, never further into the room), else in the
-   direction r (0 to 1 of a turn)."
+  "The cell a stuck bot walks to to plan from afresh: of the cells of the trail it came by at least
+   regroup-distance away (not blacklisted nor boxed-at), the farthest that has a route
+   (routable?), trying explore-tries of them farthest first and then as many nearest first, so the
+   walk lands where the bot has stood (never further into a room). With none routable, the cell
+   explore-distance from the feet toward the farthest trail cell, else in the direction r (0 to 1
+   of a turn). Pearl-fight-k job 2 (run 41197008609): the walk to the cell 48 out failed :no-path in
+   four of six firings, within 3 to 14 s."
   [world r]
-  (let [[fx fy fz] (intent/feet world)
-        far (apply max-key
-                   #(physics/horizontal-distance % [fx fy fz])
-                   [fx fy fz]
-                   (:plan/trail world []))
-        d (physics/horizontal-distance far [fx fy fz])
+  (let [[fx fy fz :as feet] (intent/feet world)
+        bl (:plan/blacklist world #{})
+        boxed (:plan/boxed-at world #{})
+        cands (->> (:plan/trail world [])
+                   (filter #(and (>= (physics/horizontal-distance % feet) regroup-distance)
+                                 (not (contains? bl %))
+                                 (not (contains? boxed %))))
+                   distinct
+                   (sort-by #(- (physics/horizontal-distance % feet))))
+        order (concat (take explore-tries cands) (take explore-tries (reverse cands)))
+        found (some #(when (routable? world %) %) order)
+        far (apply max-key #(physics/horizontal-distance % feet) feet (:plan/trail world []))
+        d (physics/horizontal-distance far feet)
         a (* 2.0 math/PI r)
         [ux uz] (if (pos? d)
                   [(/ (- (first far) fx) d) (/ (- (nth far 2) fz) d)]
                   [(math/cos a) (math/sin a)])]
-    [(+ fx (long (math/round (* explore-distance ux)))) fy
-     (+ fz (long (math/round (* explore-distance uz))))]))
+    (or found
+        [(+ fx (long (math/round (* explore-distance ux)))) fy
+         (+ fz (long (math/round (* explore-distance uz))))])))
 
 (defn unstick
   "The world of a bot that has made no progress for stuck-ms: the running intent dropped, the
