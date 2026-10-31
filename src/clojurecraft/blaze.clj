@@ -1545,6 +1545,7 @@
           {:intent/kind :fight :intent/target heid :intent/to-the-end? true :intent/yield? true}
           @wary @wary
           @away @away
+          (window/reserve-toss world) (window/reserve-toss world)
           (rod-room world) (rod-room world)
           (and lying (drops/under-reach? world lying)) (fetch-walk lying)
           lying
