@@ -634,9 +634,9 @@
     :gym/summon (conj iron-armour fire-resistance)
     :gym/timeout-ms trial-ms
     :gym/truth [(rods-held 7)]}
-   ;; blaze-fortress-race: the same landing with what the race bot brings (gear.clj), not what the
-   ;; gym is generous with: an iron sword, iron helmet, chestplate and leggings, sixteen cooked
-   ;; beef, no Fire Resistance (copied from feat/262-blaze-wall for the FLIP-FLOP rounds)
+   ;; blaze-fortress-race: the same landing with what the race bot brings (gear.clj), not what
+   ;; the gym is generous with: an iron sword, iron helmet, chestplate and leggings, sixteen
+   ;; cooked beef, no Fire Resistance. blaze-fortress-fireproof stays as the mechanics check
    {:gym/goal :blaze-rods
     :gym/name "blaze-fortress-race"
     :gym/until "blaze-rods"
@@ -679,17 +679,6 @@
     :gym/land :warped-forest
     :gym/difficulty "normal"
     :gym/prereqs (conj pearl-kit "minecraft:cooked_beef 32")
-    :gym/timeout-ms trial-ms
-    :gym/truth [(pearls-held "(1[2-9]|[2-9][0-9]|[1-9][0-9][0-9])")]}
-   ;; issue #263: the same twelve pearls from where the race leaves the bot, at a fortress in the
-   ;; Nether wastes with seven rods in the pack and no warped forest in view: the stage must find
-   ;; one itself (pearls/travel). No fire resistance (copied from feat/263-stuck-retry)
-   {:gym/goal :ender-pearls
-    :gym/name "pearls-12-from-fortress"
-    :gym/until "pearls-12"
-    :gym/land :nether-fortress
-    :gym/difficulty "normal"
-    :gym/prereqs (into pearl-kit ["minecraft:cooked_beef 32" "minecraft:blaze_rod 7"])
     :gym/timeout-ms trial-ms
     :gym/truth [(pearls-held "(1[2-9]|[2-9][0-9]|[1-9][0-9][0-9])")]}
    ;; issue #264: twelve eyes of ender crafted from what the two stages before make, given on a

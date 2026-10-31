@@ -56,6 +56,7 @@
 (def candidates 3)                    ; nearest blazes asked for a route, as the hunt asks of its animals
 (def side-steps [[1 0 0] [-1 0 0] [0 0 1] [0 0 -1]]) ; the cells beside a spawner a stand is looked for in
 (def stand-levels [0 -1 1])           ; the heights from the spawner's own a stand is looked for at, in this order: its blazes' floor first
+(def stand-memory 3)                  ; tunnels last done whose target is looked for among the stands, before the nearest
 (def stands-tried 2)                  ; stands beside one spawner whose tunnel ended :blocked before the spawner is given up
 (def spawner-reach 2.0)                ; blocks from the feet cell's centre to the spawner's a tunnel to it ends within: in its room, at the blazes' floor
 (def cover-range 16.0)                ; blazes this near that see the bot are the ones a hurt bot takes cover from (they shoot that far)
@@ -166,14 +167,20 @@
   [world sp]
   (let [bl (:plan/blacklist world #{})] (>= (count (filter bl (cells-beside sp))) stands-tried)))
 
+(declare stand)
+
 (defn nearest-spawner
   "The spawner on record in the bot's dimension nearest the eye, within spawner-radius and not
-   blacklisted (no walk nor tunnel reached it) nor given-up?, or nil."
+   given-up?, or nil; one blacklisted (a walk to it failed) is kept while a stand beside it is
+   open, to be tunnelled to. Race lane 4 (run 40980342194) s1 r15, at its fortress, had
+   `:walk [544 57 203]` fail :no-path with the spawner a block off, lost the spawner to the
+   blacklist and searched far spirals for 4 hours ([-330 88 483] ...); s1 r16 `:walk failed :stuck`
+   there; s2 r08 and r09 never arrived."
   [world]
   (let [bl (:plan/blacklist world #{})]
     (memory/nearest-of (game/eye world)
                        spawner-radius
-                       (remove #(or (bl %) (given-up? world %))
+                       (remove #(or (and (bl %) (nil? (stand world %))) (given-up? world %))
                                (memory/positions-now world [spawner])))))
 
 (defn level-with?
@@ -183,9 +190,11 @@
 
 (defn walkable?
   "Can the bot walk to spawner sp: level-with? it (a route judges the plane only,
-   intent/routable?) and a route to it."
+   intent/routable?), a route to it, and no walk to it failed (blacklisted)."
   [world sp]
-  (and (level-with? world sp) (intent/routable? world {:intent/kind :walk :intent/target sp})))
+  (and (level-with? world sp)
+       (not (contains? (:plan/blacklist world #{}) sp))
+       (intent/routable? world {:intent/kind :walk :intent/target sp})))
 
 (defn top-in-sight?
   "Is the line from the eye to the point a block over spawner sp's centre, where its blazes
@@ -198,13 +207,19 @@
 (defn at-spawner?
   "Is the bot where it camps by spawner sp: the feet within spawner-reach of it and level-with?
    it (where a tunnel to it ends), or the eye within camp-range with the spawner walkable? (on its
-   floor, not in a tunnel beside its room) and its top-in-sight?. Gym blaze-fortress-b (run
+   floor, not in a tunnel beside its room) and its top-in-sight?, or the eye within intent/reach
+   of it with the spawner walkable? (a walk to it is done in its first tick and chosen again every
+   tick: snapshot test/issues/514/b10231346-R4-21-1, the bot 3.96 from the spawner at
+   [544 57 203]; race lane 4 s2 r08 and r09 flipped :tunnel-to between [543 57 203] and
+   [544 57 203] at that spawner). Gym blaze-fortress-b (run
    38893941350) tunnelled to within 6 of its spawner, four blocks over it in the wall, and
    camped there ten minutes: the blazes the spawner made in its room below were out of reach,
    every run; blaze-fortress-c (run 38895759229) run 3 came up under its spawner, three below
    its floor, killed eight blazes from there and every rod lay on the floor over it."
   [world sp]
   (or (and (fortress/arrived? world sp spawner-reach) (level-with? world sp))
+      (and (<= (physics/distance (game/eye world) (physics/centre sp)) intent/reach)
+           (walkable? world sp))
       (and (<= (physics/distance (game/eye world) (physics/centre sp)) camp-range)
            (walkable? world sp)
            (top-in-sight? world sp))))
@@ -221,15 +236,30 @@
   "The cell beside spawner sp with room for the body (open?) and not blacklisted (a tunnel to it
    ended :blocked), at its own height when one is there, else a level under or over it
    (stand-levels), nearest the feet: where a tunnel to it ends, on its blazes' floor; nil when
-   none is."
+   none is. The target of a tunnel last done, when it is still one of those cells, before the
+   nearest: the feet moved a cell or two in the pocket the tunnel dug and the nearest of two
+   stands side by side changed with them, so the tunnel's trail was kept for the other target and
+   the same cells were dug again, 140 minutes (blaze-race-a run 5, 727b4c2b2: :tunnel-to
+   [2209 60 1794] and [2210 60 1793] by turns every 14.5 s, 0 attacks to the five-hour cap; the
+   same on blaze-race-c, 3a082f7b7). So is the target of the :tunnel-to running now: race lane 4
+   (run 40980342194) s2 r08 and r09 sent [543 57 203] and [544 57 203] by turns every 12 s, 539
+   and 681 intents, none ever done, each abandoned for the other."
   [world sp]
   (let [bl (:plan/blacklist world #{})
-        open (remove bl (filter #(open? world %) (cells-beside sp)))]
-    (some (fn [dy]
-            (memory/nearest-of (physics/centre (intent/feet world))
-                               Double/POSITIVE_INFINITY
-                               (filter #(= (+ (physics/y-of sp) dy) (physics/y-of %)) open)))
-          stand-levels)))
+        open (remove bl (filter #(open? world %) (cells-beside sp)))
+        running (let [i (:plan/intent world)]
+                  (when (= :tunnel-to (:intent/kind i)) (:intent/target i)))
+        kept (->> (cons running
+                        (keep :intention/target
+                              (memory/newest-dones world :tunnel-to stand-memory)))
+                  (filter (set open))
+                  first)]
+    (or kept
+        (some (fn [dy]
+                (memory/nearest-of (physics/centre (intent/feet world))
+                                   Double/POSITIVE_INFINITY
+                                   (filter #(= (+ (physics/y-of sp) dy) (physics/y-of %)) open)))
+              stand-levels))))
 
 (defn hurt?
   "Is the health the server last told under combat/retreat-health?"
