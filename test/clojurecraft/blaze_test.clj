@@ -1340,9 +1340,10 @@
         "the cell the feet stand in is held to be sealed")
     (is (true? (:pocket/here? (:pocket/site out))))
     (testing
-      "and there the openings are the cells to seal, every open side at the feet and the head"
-      (is (= #{[7 64 8] [9 64 8] [8 64 7] [8 64 9] [7 65 8] [9 65 8] [8 65 7] [8 65 9] [8 66 8]}
-             (set (pocket/seal-cells out [8 64 8])))))))
+      "and there the openings are the cells to seal, every open side at the feet and the head; the roof over open air has no foundation but the head cell, and is none"
+      (is (= #{[7 64 8] [9 64 8] [8 64 7] [8 64 9] [7 65 8] [9 65 8] [8 65 7] [8 65 9]}
+             (set (pocket/seal-cells out [8 64 8]))))
+      (is (contains? (set (pocket/wanted-seal-cells out [8 64 8])) [8 66 8])))))
 
 (def rock
   "Solid rock two thick all round a tunnel along z 8 from x 4 to 8 at the feet and the head, roofed,

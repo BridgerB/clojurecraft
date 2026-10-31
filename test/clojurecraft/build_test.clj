@@ -216,6 +216,8 @@
                 (assoc :player/inventory {}
                        :player/health 20.0
                        :player/food 20
+                       :plan/chain? true
+                       :plan/reached #{:portal-kit :gear :nether}
                        :plan/since 0
                        :time/now (+ 1000 hunt/forage-ms 100000)
                        :hunt/forage
