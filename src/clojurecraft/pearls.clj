@@ -297,22 +297,21 @@
                    (endermen (dissoc world :plan/blacklist) stare-range)))))
 
 (defn menace
-  "[eid entity] of the nearest angry enderman (entity/creepy?) within danger-radius and danger-rise
-   of the feet that is not parked (parked?), blacklisted or fought out or not, or nil: the one
-   that closes in, or stands near, and has to be met. The hunt with no burrow cuts one where it
-   stands for it, and takes no crowd-site walk. Pearl-fight-a job 3 (plan run 41143668588) died to
-   one that stalked at 6 to 19 blocks for 30 s; travel-b job 6 stood 41 minutes on one parked at
-   12, which holds nothing."
+  "[eid entity] of the nearest angry enderman (entity/creepy?) within park-near (8) blocks and
+   danger-rise of the feet, blacklisted or fought out or not, or nil: one on the bot, never
+   parked (parked?). The hunt with no burrow cuts one where it stands for it, and takes no
+   crowd-site walk. Pearl-fight-a job 3 (plan run 41143668588) died to one that stalked at 6 to
+   19 blocks for 30 s. The wander is held in by live-menaced? alone: travel-b job 6 stood 41
+   minutes on one parked at 12."
   [world]
   (let [p (:player/pos world)]
     (entity/nearest (into {}
-                          (filter (fn [[eid e]]
+                          (filter (fn [[_ e]]
                                     (let [q (:entity/pos e)]
                                       (and (entity/creepy? e)
-                                           (<= (physics/distance p q) danger-radius)
+                                           (<= (physics/distance p q) park-near)
                                            (<= (abs (- (physics/y-of q) (physics/y-of p)))
-                                               danger-rise)
-                                           (not (parked? world eid q))))))
+                                               danger-rise)))))
                           (endermen (dissoc world :plan/blacklist) stare-range))
                     p)))
 

@@ -2735,18 +2735,14 @@
                       (later (* 41 60000)))]
         (is (not (pearls/parked? on-us 7 [8.5 61.0 14.5])) "6 blocks")))))
 
-(deftest the-menace-is-the-angry-one-that-is-not-parked
-  ;; the same two logged states as an-angry-one-is-told-parked-from-stalking-by-its-motion, for the
-  ;; burrow cut where the bot stands: travel-b job 6's 12-block enderman parked 41 minutes is none,
-  ;; pearl-fight-a job 3's stalker at 6 blocks is one
+(deftest the-menace-is-the-angry-one-within-eight-blocks
+  ;; the two logged states of an-angry-one-is-told-parked-from-stalking-by-its-motion, for the
+  ;; burrow cut where the bot stands: travel-b job 6's enderman parked at twelve blocks for 41
+  ;; minutes is no menace (live-menaced? alone holds the wander), pearl-fight-a job 3's stalker
+  ;; at six blocks is one, blacklisted or not
   (let [angry (assoc (enderman [8.5 64.0 20.5]) :entity/creepy? true)
         w (-> (standing {9 angry})
-              (assoc :plan/blacklist #{9})
-              (assoc :time/now (* 41 60000)))]
-    (is (some? (pearls/menace w)) "twelve blocks off and not tracked long: a menace")
-    (is (nil? (pearls/menace (assoc w :pearls/angry {9 {:since 0 :best 12.0 :closed-at 0}})))
-        "parked for 41 minutes")
-    (is (some? (pearls/menace (-> w
-                                  (assoc-in [:world/entities 9 :entity/pos] [8.5 64.0 14.5])
-                                  (assoc :pearls/angry {9 {:since 0 :best 12.0 :closed-at 0}}))))
-        "six blocks off it is never parked")))
+              (assoc :plan/blacklist #{9}))]
+    (is (nil? (pearls/menace w)) "twelve blocks off")
+    (is (some? (pearls/menace (assoc-in w [:world/entities 9 :entity/pos] [8.5 64.0 14.5])))
+        "six blocks off")))
