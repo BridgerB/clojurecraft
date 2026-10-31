@@ -1526,10 +1526,13 @@
                           :player/struck-at 0))
         at (fn [hp] (assoc sealed :player/health hp))]
     (is (not (blaze/heals? sealed)) "no food and the bar is low: a rest cannot heal")
-    (is (= 13.0 (blaze/hold-to sealed)))
+    (is (= 12.0 (blaze/hold-to sealed)))
     (is (= :pocket-hold (:intent/kind (next-intent (at 10.5)))) "10.5: held, not unsealed")
-    (is (= :pocket-hold (:intent/kind (next-intent (at 12.5)))))
-    (is (= {:intent/kind :unseal} (next-intent (at 13.5))) "over low-health: the seal opens")))
+    (is (= :pocket-hold (:intent/kind (next-intent (at 11.9)))))
+    (is
+     (= {:intent/kind :unseal} (next-intent (at 12.2)))
+     "at low-health, 12.2 (x job 4's stuck health): the seal opens, no wait for a meal that is gone")
+    (is (= {:intent/kind :unseal} (next-intent (at 13.5))))))
 
 (deftest the-pocket-is-not-wanted-for-the-wary-and-a-near-rod-is-picked-up-from-the-hold
   ;; blaze-race-p job 4 at 22:41:40: :collect-drops [2346 58 2285] and :pocket alternated every
@@ -1665,3 +1668,15 @@
                                                          [0.0 0.2 -0.2 0.1]))))]
         (is (= 4 (blaze/count-blazes-seen many [8 64 8])))
         (is (false? (blaze/sees-a-blaze? many [8 64 8])))))))
+
+(deftest a-rod-a-step-away-is-grabbed-down-to-danger-health-and-not-cut
+  ;; blaze-race-x job 4: rod 607 lay 300 s with the bot 2.2 off, the pick-up cut twenty times
+  (let [rod (entity :item [10.5 64.0 8.5] :entity/item blaze/rod)
+        w (assoc (standing {40 rod}) :player/health 10.5)
+        grab {:intent/kind :collect-drops :intent/item :blaze_rod :intent/target [10 64 8]}]
+    (is (some? (blaze/near-rod w)) "10.5 hp, 2 blocks: gone for")
+    (is (nil? (blaze/near-rod (assoc w :player/health 9.0))) "under danger-health: not")
+    (is (true? (blaze/rod-grab? w grab)))
+    (is (true? (blaze/rod-grab? w {:intent/kind :walk :intent/for :rod})))
+    (is (false? (blaze/rod-grab? w {:intent/kind :walk :intent/for :cover})))
+    (is (false? (blaze/rod-grab? (assoc w :player/health 9.0) grab)))))

@@ -1255,11 +1255,11 @@
 (def low-health 12.0)  ; under it the bot goes to its pocket to heal, whoever is in sight
 (def reignite-ms 30000) ; a second ignition within this of the first sends it too
 
-(def unseal-health 13.0) ; the health a hold stays until when a rest cannot heal: over low-health, or the seal opens and the next blaze in reach seals it again
+(def unseal-health 12.0) ; the health a hold stays until when a rest cannot heal: low-health, the line under which a blaze in reach is sealed out. 13 held blaze-race-x job 4 at 12.2 for four minutes with its food gone, in the spawner room, until a fireball and the burn finished it
 
 (defn hold-to
   "The health a hold in the pocket stays until: full-health when a rest can heal (heals?), else
-   unseal-health, one over low-health (the line under which a blaze in reach is sealed out). It was
+   unseal-health, low-health (the line under which a blaze in reach is sealed out). It was
    combat/retreat-health, 10, under low-health, 12: blaze-race-p job 4 at 22:42:01 unsealed at
    10.5 and sealed again at once, :unseal and :seal flipping every 0.6 s, four times, and died.
    A human banks health between fights; blaze-race-k's ten fought until they died."
@@ -1356,6 +1356,8 @@
 
 (def grab-range 3.0) ; blocks on the plane within which a rod lying is picked up before the next swing
 
+(def rod-grab-health 10.0) ; health at which a rod a step or two away is still picked up: a second's walk, not a fight (#577 danger-health)
+
 (defn near-rod
   "The rod entity lying within grab-range of the feet (a step or two), the health at low-health or
    more, or nil, blazes watching or not. Blaze-race-m race 4 (22 min, 26 kills) held at most 4 of
@@ -1363,7 +1365,7 @@
    despawned at 300 s, 39 :collect-drops begun and each cut within a second by the next :fight
    (six to eight blazes hovering in reach), which also comes before a rod in the act's order."
   [world]
-  (when (>= (:player/health world 20.0) low-health)
+  (when (>= (:player/health world 20.0) rod-grab-health)
     (let [[_ e] (rod-lying world)
           p (:player/pos world)]
       (when (and e
@@ -1408,13 +1410,24 @@
        (some? (cond (hurt? world) (healing world false)
                     (wary? world) (warily world false)))))
 
+(defn rod-grab?
+  "Is running intent i the pick-up of a rod lying within grab-range (near-rod)? A dodge or a meal
+   does not cut it: blaze-race-x job 4 left rod 607 lying at [2349 60 2283] for 300 s with the bot
+   2.2 blocks off at the nearest, :collect-drops cut by :dodge, :eat and :walk twenty times in
+   0.5 s steps (04:03:53 to 04:05:14), three of its eight rods lost."
+  [world i]
+  (boolean (and (or (= :collect-drops (:intent/kind i)) (= :rod (:intent/for i)))
+                (some? (near-rod world)))))
+
 (defmethod plan/interrupts? :blaze-rods
   ;; any running intent but a fight ends when a blaze is at hand (at-hand-blaze), and the act
   ;; fights it when healthy: gym blaze-fire-b run 3 (run 39136853644) tunnelled on with one hitting it in melee
   ;; from 20 health to 13.8, since nothing else ends a running intent; never interrupt cover or healing when hurt (#577);
   ;; and one hurt and watched (under-fire?) by blazes further off, whatever the intent but the answer to it
   [world _ i]
-  (or (and (not (contains? no-dodge-kinds (:intent/kind i))) (some? (dodge-intent world)))
+  (or (and (not (contains? no-dodge-kinds (:intent/kind i)))
+           (not (rod-grab? world i))
+           (some? (dodge-intent world)))
       (and (= :tunnel-to (:intent/kind i)) (some? (prepare-intent world (nearest-spawner world))))
       (and (not (contains? refuge-kinds (:intent/kind i)))
            (some? (refuge-now world (nearest-spawner world))))
