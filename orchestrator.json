@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-31T13:56:13.664Z",
+  "at" : "2026-10-31T14:00:37.444Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -33,11 +33,6 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 636,
-    "title" : "Bot stops at blaze-rods: no-food-to-return",
-    "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
-  }, {
     "number" : 135,
     "title" : "Bot stops at cast-one: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
@@ -50,6 +45,11 @@
   }, {
     "number" : 642,
     "title" : "Bot stops at blaze-rods: nothing-to-do",
+    "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 636,
+    "title" : "Bot stops at blaze-rods: no-food-to-return",
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
