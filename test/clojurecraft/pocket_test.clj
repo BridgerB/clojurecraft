@@ -229,3 +229,18 @@
     (is (= [[7 65 8]] (pocket/wanted-seal-cells half [8 64 8])) "the head cell is still open")
     (is (false? (pocket/sealed? half site)) "the placed one solid is not a seal")
     (is (true? (pocket/sealed? full (assoc site :pocket/placed [[7 64 8] [7 65 8]]))))))
+
+(deftest a-wanted-cell-that-cannot-be-laid-does-not-keep-a-pocket-open-for-ever
+  ;; review of 4cbdea744: sealed? false while any wanted cell is open could not become true for a roof
+  ;; over open air (no foundation but the head cell); no :seal may be re-issued for it either
+  (let [c [8 64 8]
+        sides [[7 64 8] [9 64 8] [8 64 7] [8 64 9] [7 65 8] [9 65 8] [8 65 7] [8 65 9]]
+        w (assoc-in (world-of (apply solid sides))
+           [:player/inventory 9]
+           {:item (recipe/item-id :cobblestone) :count 62})
+        held (assoc-in w [:player/inventory 10] {:item (recipe/item-id :iron_pickaxe) :count 1})
+        site {:pocket/cell c :pocket/stand nil :pocket/dig [] :pocket/placed sides}]
+    (is (contains? (set (pocket/wanted-seal-cells w c)) [8 66 8]) "the roof is wanted")
+    (is (empty? (pocket/seal-cells w c)) "and cannot be laid: nothing a seal could do")
+    (is (true? (pocket/sealed? w site)) "so the pocket is sealed as far as it can be")
+    (is (not (pocket/can-seal? held site)) "no :seal to re-issue")))
