@@ -326,7 +326,7 @@
     "the bot's :stats/deaths when the search began: a search of an earlier life is not this one's, and starts afresh (sim R1/1, probe 40761589784: after the first respawn the budget of the first search was long spent, and every later life went back to the Nether with no food)"
     "inside :hunt/forage"]
    [:forage/phase
-    "the hunt/provision-phase the search began in (:early with the stone pickaxe, :kit with the portal's iron, :return after the Nether was reached and the goods are lost): a search of another phase is not this one's, and starts afresh"
+    "the hunt/provision-phase the search began in (:early with the stone pickaxe, :kit with the portal's iron, :entry once the portal is lit before the Nether is entered, :return after the Nether was reached and the goods are lost): a search of another phase is not this one's, and starts afresh"
     "inside :hunt/forage"]
    [:forage/retry-at
     "ms before which the search looks for no leg: set when no heading had a route at any reach (hunt/forage-retry-ms on)"
