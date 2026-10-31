@@ -1730,3 +1730,14 @@
     (is (false? (blaze/bait-here? bare spawner-at)) "no blaze in sight: not a bait cell")
     (is (false? (blaze/bait-here? w nil)) "no spawner: none")
     (is (nil? (blaze/bait-walk w spawner-at)) "the bot stands in the only one: no walk")))
+
+(deftest the-long-shot-wall-over-open-air-lays-its-support-first
+  ;; blaze-race-z2 landing 5, [2159.5 69 1746.5]: the wall's :place failed :no-support, open air beside
+  ;; the feet; the block under it, which a neighbour holds up, goes first (build/foundation)
+  (let [far (entity :blaze [15.5 66.0 1.5] :entity/health 20.0)
+        w (-> (standing {7 far})
+              (assoc :time/now 100000 :player/struck-at 99000)
+              (assoc-in [:player/inventory 9] (item :cobblestone 40))
+              (assoc :world/chunks {[0 0] (world/column {[9 63 8] (blocks/default-state :air)})}))]
+    (is (= [9 63 8] (:intent/cell (blaze/long-shot-cover w)))
+        "the cell under the wall cell first")))

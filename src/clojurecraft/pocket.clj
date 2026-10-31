@@ -205,10 +205,10 @@
   (let [own #{c (plus c [0 1 0])}]
     (filterv #(not (or (own %) (place/inside-player? world %))) cells)))
 
-(defn seal-cells
-  "The cells a seal of the pocket at cell c places a block in, in order: for each open side
-   (openings) the cell beside c at the feet, then the one over it; then the cell over the head when
-   it is no firm block; none of them in the body (clear-of-body)."
+(defn seal-cells-wanted
+  "The cells a seal of the pocket at cell c would fill, in order: for each open side (openings) the
+   cell beside c at the feet, then the one over it; then the cell over the head when it is no firm
+   block; none of them in the body (clear-of-body). Some may not be placeable (placeable?)."
   [world c]
   (clear-of-body world
                  c
@@ -218,6 +218,21 @@
                                :when (not (solid-at? world p))]
                            p)
                          (when-not (roofed? world c) [(plus c [0 2 0])]))))
+
+(defn placeable?
+  "Can a block be laid in cell p: a solid neighbour to click (place/support), or a cell under it
+   that has one to build up from (build/foundation), and that cell not in the player? Blaze-race-z2
+   landing 5 bridged at [2159.5 69 1746.5] over open air: the roof cell [2159 71 1746] had no
+   neighbour and its foundation was the cell over the bot's own feet, refused with the body in
+   it (the same cell t, u, x and y job 5 refused)."
+  [world p]
+  (let [f (build/foundation world p)] (boolean (and f (not (place/inside-player? world f))))))
+
+(defn seal-cells
+  "The cells a seal of the pocket at cell c places a block in: seal-cells-wanted that can be laid
+   (placeable?)."
+  [world c]
+  (filterv #(placeable? world %) (seal-cells-wanted world c)))
 
 (defn sealed?
   "Is the site sealed: it names cells it placed blocks in (:pocket/placed) and every one is solid?"
@@ -266,6 +281,7 @@
   (let [n (count (seal-cells world cell))
         failed (:pocket/seal-failed-at world)]
     (and (not unsealable?)
+         (= n (count (seal-cells-wanted world cell)))
          (or (nil? failed) (> (- (:time/now world 0) failed) seal-retry-ms))
          (pickaxe-held? world)
          (pos? n)

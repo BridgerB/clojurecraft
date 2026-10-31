@@ -47,6 +47,7 @@
             [clojurecraft.memory :as memory]
             [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
+            [clojurecraft.place :as place]
             [clojurecraft.plan :as plan]
             [clojurecraft.pocket :as pocket]
             [clojurecraft.recipe :as recipe]
@@ -1439,9 +1440,14 @@
              (nil? (at-hand-blaze world)))
     (when-let [e (shooter world)]
       (let [cell (combat/wall-cell world e)
+            ;; over open air the cell has nothing to click: the block under it, which has, goes first
+            ;; (build/foundation), unless that is in the body
+            target (when cell
+                     (let [f (build/foundation world cell)]
+                       (when (and f (not (place/inside-player? world f))) f)))
             filler (stairs/filler world combat/wall-fill)]
-        (when (and cell filler (not (combat/wall-failed? world cell)))
-          {:intent/kind :place :intent/item filler :intent/cell cell})))))
+        (when (and target filler (not (combat/wall-failed? world target)))
+          {:intent/kind :place :intent/item filler :intent/cell target})))))
 
 (def rod-grab-health 10.0) ; health at which a rod a step or two away is still picked up: a second's walk, not a fight (#577 danger-health)
 

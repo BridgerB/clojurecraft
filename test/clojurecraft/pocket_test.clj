@@ -204,3 +204,19 @@
               (assoc (world-of (merge walled (solid [7 64 8] [7 65 8]))) :player/on-fire? true)
               placed))
         "still sealed: nothing is open to shut")))
+
+(deftest a-roof-over-open-air-has-no-foundation-but-the-bots-own-cell
+  ;; blaze-race-z2 landing 5, bridging at [2159.5 69 1746.5]: the seal's roof cell had no neighbour and its
+  ;; foundation was the cell over the bot's feet, refused with the body in it (t, u, x, y job 5 too)
+  (let [w (world-of {})
+        site {:pocket/cell [8 64 8] :pocket/stand nil :pocket/dig [] :pocket/placed []}
+        held (-> w
+                 (assoc-in [:player/inventory 9] {:item (recipe/item-id :cobblestone) :count 62})
+                 (assoc-in [:player/inventory 10] {:item (recipe/item-id :iron_pickaxe) :count 1}))]
+    (is (true? (pocket/placeable? w [9 64 8])) "beside the feet on the ground: the floor holds it")
+    (is (false? (pocket/placeable? w [8 66 8]))
+        "the roof over open air: its foundation is the head cell")
+    (is (not (contains? (set (pocket/seal-cells w [8 64 8])) [8 66 8])))
+    (is (contains? (set (pocket/seal-cells-wanted w [8 64 8])) [8 66 8]))
+    (is (not (pocket/can-seal? held site))
+        "a pocket that cannot be roofed is not sealed over air")))
