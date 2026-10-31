@@ -1,0 +1,16 @@
+;; Issue #263, branch fix/263-lava-flee, batch m: the hunt keeps away from where the watchdog fired.
+;; Batch k job 3 (plan run 41197008609) fired the stuck watchdog 16 times in 3 hours and the hunt
+;; walked back to its burrow site [2450 55 2200] and cut a burrow there after each, five pearls and
+;; none after minute 18. Batch m wires plan/avoiding? into the hunt (shelter-walk, burrow-site and the
+;; burrow cut where the bot stands) on main with #653 and #651 (the routable explore cell). Row
+;; pearls-12-race-tools. Measure: passes of 6, time to 12, deaths by cause; in the logs, that the
+;; walk after each stuck line covers its distance and the hunt does not return to the avoided site.
+{:plans/label "pearl-fight-m"
+ :plans/jobs 6
+ :plans/issue 263
+ :plans/experiments [{:exp/name "pearls-12-race-tools"
+                      :exp/kind :gym
+                      :exp/goal "pearls-12-race-tools"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 18000}]}
