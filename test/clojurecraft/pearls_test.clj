@@ -2569,6 +2569,20 @@
     (is (not= [10 61 8] (:intent/target i)))
     (is (>= (path/octile (intent/feet w) (:intent/target i)) pearls/roam-reach))))
 
+(deftest a-wander-one-cell-out-of-the-burrow-is-not-called-home-by-the-angry-one
+  ;; pearl-fight-m job 4 (plan run 41216588429): at the burrow's end the hunt chose the wander walk,
+  ;; one cell out it chose the walk home for the angry one near, and so on 130 times in 68 s
+  (let [angry (assoc (enderman [30.5 64.0 8.5]) :entity/creepy? true)
+        w (-> (wide (burrowed [8.5 61.0 8.5] {7 angry}))
+              (assoc :plan/given-up {7 0})
+              (walked (take pearls/loiter-walks (cycle [[8 61 8] [10 61 8]]))))
+        out (assoc w :player/pos [9.5 61.0 8.5])
+        i (plan/next-intent out row plan/goals)]
+    (is (pearls/wandering? out))
+    (is (some? (pearls/angry-near out)) "the angry one still holds the burrow's mouth")
+    (is (= [:walk :pearls] [(:intent/kind i) (:intent/for i)]) (pr-str i))
+    (is (not= [8 61 8] (:intent/target i)) "not back to the burrow's end")))
+
 (def nether "minecraft:the_nether")
 
 (deftest a-chunk-of-warped-nylium-is-a-forest-fact

@@ -2109,7 +2109,13 @@
                        :else tid)]
     (cond
       (and (shot-at? world) (not in?) (cover-from world)) (cover-from world)
-      (and home (not in?) (or ce near? hurt? tid aid swarmed?) (intent/routable? world way-home))
+      ;; an angry one near the burrow does not call back a wander that left it: the wander comes
+      ;; before the lookouts, so at the end it walked out and from the next cell this walked home,
+      ;; 130 times in 68 s (pearl-fight-m job 4, plan run 41216588429, 16:23:10 to 16:24:18)
+      (and home
+           (not in?)
+           (or ce near? hurt? tid (and aid (not (wandering? world))) swarmed?)
+           (intent/routable? world way-home))
       way-home
       (and swarmed? (not in?) (nil? home) (cover-from world)) (cover-from world)
       (and swarmed? in?)
