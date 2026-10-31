@@ -287,6 +287,9 @@ z9 job 3 burned at 8m2s (in_fire 39, on_fire 40, fireball 8): `intent :pillar fa
 ## Rods lost to the refuge (issue #262, blaze-race-z9 job 4)
 Job 4 (24m17s): 15 blazes died (6.2 per 10 min), 9 rod entities, 2 taken, 7 lost: rods 709, 837 and 842 lay 300 s at 1.9 to 2.9 blocks from the bot while `:collect-drops` and `:pocket` alternated (the refuge wants the pocket under low-health (12) with a swarm; the rod grab is allowed from 10). `refuge` is not chosen, and `refuge-now` does not cut a rod pick-up, while a rod lies within a step and the bot is not alight.
 
+## Why the camp never became an approach (issue #262, blaze-race-z9 jobs 1 and 6)
+z9 jobs 1 and 6 ran 30 min with 0 kills: `:camp` 60 s, `:camp failed :no-blaze`, `:tunnel-to [2346 60 2281]` (the sortie), 0.7 s later `:pocket`, `:camp` 60 s, again: 17:15:42.9, 17:16:44.7, 17:19:34.0 ... The sortie's first dig opens a wall of the held pocket (`valid?` false); one tick later `plan/steer` notes `:sortie/since`, but `interrupts?` is asked first in that tick and `prepare-intent` (a pocket ahead) is non-nil (`:sortie/since` still nil, no valid held pocket), so the leg is cut. `prepare-intent` is also nil within 2 minutes (`prepare-after-pocket-ms`) of a pocket entered, which covers the tick before steer.
+
 ## Limits
 - Fireballs are not dodged or blocked: the bot is out of their line, in a pocket or sealed in one.
 - A blaze hovering higher than the eye can reach from under it is never hit (`pressing?` stops within 0.8 on the plane); the fight has no engage timeout, only `:ghost` after 25 swings in reach.

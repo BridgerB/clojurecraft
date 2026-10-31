@@ -2173,3 +2173,22 @@
         (is (= 100000 (:rod-grab/since on)))
         (is (nil? (:rod-grab/since (plan/steer (assoc w :rod-grab/since 99000) row)))
             "none running: forgotten")))))
+
+(deftest no-pocket-ahead-within-two-minutes-of-a-pocket-entered
+  ;; blaze-race-z9 jobs 1 and 6: :tunnel-to, 0.7 s later :pocket, :camp for 60 s, over and over for 20 minutes
+  (let [w (-> (standing {})
+              (assoc :world/chunks {[0 0] (world/column rock)}
+                     :player/pos [5.5 64.0 8.5]
+                     :time/now 1000000)
+              with-spawner)
+        entered (fn [w ago]
+                  (memory/remember-intention (assoc w :time/now (- 1000000 ago))
+                                             {:intent/id 77 :intent/kind :pocket}
+                                             :done))]
+    (is (some? (blaze/prepare-intent w spawner-at)) "no pocket entered: one is made ahead")
+    (is (nil? (blaze/prepare-intent (assoc (entered w 10000) :time/now 1000000) spawner-at))
+        "one entered 10 s ago: none")
+    (is (some? (blaze/prepare-intent
+                (assoc (entered w (+ blaze/prepare-after-pocket-ms 1000)) :time/now 1000000)
+                spawner-at))
+        "long ago: made again")))

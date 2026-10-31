@@ -1216,6 +1216,7 @@
   (boolean (and sp (<= (physics/distance (game/eye world) (physics/centre sp)) spawner-wake))))
 
 (def pocket-approach 14.0) ; blocks from the spawner within which a pocket is made ready before the tunnel goes on: close, so the tunnel's own steps do not break it (24 dug a pocket per tunnel step)
+(def prepare-after-pocket-ms 120000) ; ms after a pocket was entered before another is made ahead
 (def prepare-cooldown-ms 300000) ; ms after a pocket was begun ahead before another is: blaze-race-r jobs 1 and 4 dug one a step, ten of them, 250 netherrack, and wore the pickaxe out
 (def approach-nodes 150)   ; cells the search for it visits at most when asked every tick (interrupts?)
 
@@ -1332,6 +1333,12 @@
   (when (and sp
              (not (pocket/in? world))
              (nil? (:sortie/since world))
+             ;; not within 2 minutes of a pocket entered: the sortie's first dig opens a wall of the held
+             ;; pocket (valid? false) one tick before steer notes :sortie/since, and a pocket ahead made
+             ;; then cut the leg after 0.7 s, every minute (blaze-race-z9 jobs 1 and 6: 17:15:42,
+             ;; 17:16:44, 17:19:33 ..., :tunnel-to -> :pocket -> :camp)
+             (let [d (memory/last-done world :pocket)]
+               (or (nil? d) (> (- (:time/now world 0) (:intention/at d)) prepare-after-pocket-ms)))
              (nil? (pocket/held-valid world))
              (let [at (:pocket/prepared-at world)]
                (or (nil? at) (> (- (:time/now world 0) at) prepare-cooldown-ms)))
