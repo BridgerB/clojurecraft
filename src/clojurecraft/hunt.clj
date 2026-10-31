@@ -43,7 +43,7 @@
 (def early-provision-wanted 6)         ; edible items held before the descent (the :early phase): as before issue #262, so the surface is not hunted bare for the stone pickaxe's hours
 (def provision-wanted 16)             ; edible items held before the portal is lit: health comes back in the Nether only from food 18, and a hoglin is hunted only when one is already near and health is at least retreat-health (issue #501: three raw meats were eaten to the bar's 18 before the portal, and the Nether leg began with none)
 (def early-forage-ms 120000)          ; ms the search goes on before the descent, from its first leg: the stone pickaxe is made on the surface among animals, and the iron kit's search still has its own forage-ms
-(def forage-ms 360000)                ; ms the search for animals goes on, from its first leg, however many legs: then the bot goes on with what it holds, never holding the portal up
+(def forage-ms 900000)                ; ms the search for animals goes on, from its first leg, however many legs: then the bot goes on with what it holds, never holding the portal up. Fifteen minutes, from six: three real lanes (race 41173625252, 41181938317, 41187893770) came to the Nether with 0, 0, 0, 0, 1, 3, 3, 3 ... foods after the six minutes, and the kit's is the last search on the surface
 (def forage-reach 48)                 ; blocks the first two forage legs walk from the feet: a server shows animals this far (starving-radius)
 (def forage-far 96)                   ; blocks the farthest leg walks: a server loads six chunks round the bot
 (def forage-near-reaches [48 32 16])  ; blocks a leg falls back to when none has a route farther, farthest first
