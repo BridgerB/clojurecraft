@@ -120,7 +120,18 @@
 (def anchors
   "{:goal/plan #{attribute}}: the places a row holds on to (the pearl hunt's burrow, a blaze pocket),
    dropped when it has made no progress for stuck-ms, so it does not walk back to them."
-  {:pearls #{:pearls/shelter} :blaze-rods #{:pocket/site}})
+  {:pearls #{:pearls/shelter :pearls/mouth :pearls/relocate :plan/boxed-at :plan/given-up}
+   :blaze-rods #{:pocket/site :pocket/prepared-at :pocket/seal-failed-at}})
+(def resets
+  "{:goal/plan {attribute value}}: what a stuck row starts over with (the pearl hunt's blacklist)."
+  {:pearls {:plan/blacklist #{}}})
+(def clocks
+  "{:goal/plan [path]}: the clocks (ms) inside a row's attributes restarted at now when it is stuck."
+  {:pearls [[:pearls/gain :at]]})
+(def stuck-after
+  "{:goal/plan ms}: how long a row may go without progress before it is stuck, where it is not
+   stuck-ms: a blaze camp can wait 14 to 16 min for its first blaze to be hurt."
+  {:blaze-rods 1200000})
 (def regroup-distance 8)              ; blocks from the feet a regroup walk goes back along the trail
 (def non-progress
   "What finishes without moving the run on: intents of these kinds or for these purposes are done
@@ -483,8 +494,8 @@
   ;; the pearls held, the fights ended and the stages reached: a hunt that holds a pearl more, ended a
   ;; fight or reached a stage has made progress; tunnelling and walking do not
   [world _]
-  [(inventory/item-count world (recipe/item-id :ender_pearl)) (memory/done-count world :fight)
-   (count (:plan/reached world #{}))])
+  [(inventory/item-count world (recipe/item-id :ender_pearl)) (memory/done-count world :provoke)
+   (memory/done-count world :fight) (count (:plan/reached world #{}))])
 
 (defmethod progress-key :blaze-rods
   ;; the rods held, the fights ended and the spawners on record: a new spawner found is a stand
@@ -513,13 +524,22 @@
   (let [[lx _ lz] (:lo w) [hx _ hz] (:hi w)] (max (- hx lx) (- hz lz))))
 
 (defn explore-cell
-  "The cell explore-distance from the feet in the direction r (0 to 1 of a turn): where a stuck
-   bot goes to plan from afresh, at the feet's height."
+  "The cell explore-distance from the feet at the feet's height: toward the farthest cell of the
+   trail the bot came by (away from where it is stuck, never further into the room), else in the
+   direction r (0 to 1 of a turn)."
   [world r]
   (let [[fx fy fz] (intent/feet world)
-        a (* 2.0 math/PI r)]
-    [(+ fx (long (math/round (* explore-distance (math/cos a))))) fy
-     (+ fz (long (math/round (* explore-distance (math/sin a)))))]))
+        far (apply max-key
+                   #(physics/horizontal-distance % [fx fy fz])
+                   [fx fy fz]
+                   (:plan/trail world []))
+        d (physics/horizontal-distance far [fx fy fz])
+        a (* 2.0 math/PI r)
+        [ux uz] (if (pos? d)
+                  [(/ (- (first far) fx) d) (/ (- (nth far 2) fz) d)]
+                  [(math/cos a) (math/sin a)])]
+    [(+ fx (long (math/round (* explore-distance ux)))) fy
+     (+ fz (long (math/round (* explore-distance uz))))]))
 
 (defn unstick
   "The world of a bot that has made no progress for stuck-ms: the running intent dropped, the
@@ -530,6 +550,11 @@
   (-> world
       (cond-> i (abandon-intent i :stuck))
       (as-> w (apply dissoc w (get anchors (:goal/plan goal) #{})))
+      (into (get resets (:goal/plan goal) {}))
+      (as-> w
+        (reduce (fn [w path] (cond-> w (get-in w path) (assoc-in path now)))
+                w
+                (get clocks (:goal/plan goal) [])))
       (assoc :plan/explore (explore-cell world r))
       (assoc :plan/watch (watch-stamp world (progress-key world goal) now now))
       (update :plan/unstuck (fnil inc 0))
@@ -555,7 +580,10 @@
                            (>= (extent w) stuck-extent))
                       (not= k (:key w)))
                   (assoc world :plan/watch (watch-stamp world k now now))
-                  (or (< (- now (:at w)) stuck-ms) (not (can-abandon? world)))
+                  (or (< (- now (:at w)) (get stuck-after (:goal/plan goal) stuck-ms))
+                      (not (can-abandon? world))
+                      (some-> (:plan/intent world)
+                              holds?))
                   (assoc world :plan/watch w)
                   :else (unstick world goal (:plan/intent world) (:event/rand event 0.5) now))))))
 

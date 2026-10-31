@@ -1896,7 +1896,9 @@
   (let [event {:event/kind :tick :event/now 0 :event/rand 0.25}
         late (+ plan/stuck-ms 1000)]
     (testing "a pearl held"
-      (let [w (plan/watch (assoc-in (frozen late) [:player/inventory 1] {:item 2 :count 1})
+      (let [w (plan/watch (assoc-in (frozen late)
+                           [:player/inventory 1]
+                           {:item (recipe/item-id :ender_pearl) :count 1})
                           pearls-table
                           event)]
         (is (nil? (:plan/unstuck w)))
@@ -1955,3 +1957,55 @@
         (is (= [2390 69 2212] (get-in w [:plan/intent :intent/target])))
         (is (= :explore (get-in w [:plan/intent :intent/for])))
         (is (nil? (:plan/explore w)))))))
+
+(deftest a-stuck-pearl-hunt-forgets-its-anchors-and-restarts-its-clocks
+  ;; churn-guard's list: the burrow (:pearls/shelter, :pearls/mouth), the relocation, the boxed and
+  ;; given-up sets and the blacklist; the :pearls/gain clock restarts, :pearls/angry stays
+  (let [late (+ plan/stuck-ms 1000)
+        w (plan/watch (assoc (frozen late)
+                             :pearls/mouth [1 2 3]
+                             :pearls/relocate {:to [9 9 9]}
+                             :pearls/gain {:at 5 :n 2}
+                             :pearls/angry {7 100}
+                             :plan/boxed-at #{[1 1 1]}
+                             :plan/given-up #{[2 2 2]}
+                             :plan/blacklist #{[3 3 3]})
+                      pearls-table
+                      {:event/kind :tick :event/now 0 :event/rand 0.25})]
+    (is (= 1 (:plan/unstuck w)))
+    (is (every? #(not (contains? w %))
+                [:pearls/shelter :pearls/mouth :pearls/relocate :plan/boxed-at :plan/given-up]))
+    (is (= #{} (:plan/blacklist w)))
+    (is (= late (get-in w [:pearls/gain :at])) "the gain clock restarts")
+    (is (= {7 100} (:pearls/angry w)) "the motion record stays")))
+
+(deftest the-blaze-row-gets-twenty-minutes-and-keeps-a-defence
+  ;; blaze-rods: a camp can wait 14 to 16 min for its first blaze to be hurt; a :pocket, :seal or
+  ;; :pocket-hold running is not dropped, however long
+  (let [event {:event/kind :tick :event/now 0 :event/rand 0.25}
+        blaze-table
+        [{:goal/id :blaze-rods :goal/target? true :goal/done? :never :goal/plan :blaze-rods}]
+        at (fn [ms i]
+             (let [w (-> (frozen-world ms)
+                         (assoc :plan/intent
+                                (merge
+                                 {:intent/status :active :intent/id 3 :intent/goal :blaze-rods}
+                                 i)))]
+               (plan/watch (assoc w
+                                  :plan/watch
+                                  (plan/watch-stamp (assoc w :time/now 0)
+                                                    (plan/progress-key w (first blaze-table))
+                                                    0
+                                                    0))
+                           blaze-table
+                           event)))]
+    (is (nil? (:plan/unstuck (at (+ plan/stuck-ms 1000) {:intent/kind :camp})))
+        "10 min is not enough")
+    (is (= 1 (:plan/unstuck (at 1201000 {:intent/kind :camp}))) "20 min is")
+    (is (nil? (:plan/unstuck (at 1201000 {:intent/kind :pocket-hold})))
+        "a pocket held is not dropped")))
+
+(deftest the-explore-walk-goes-back-the-way-the-bot-came
+  ;; never further into the room: toward the farthest cell of the trail
+  (let [w (assoc (frozen-world 0) :plan/trail [[2300 69 2164] [2380 69 2164]])]
+    (is (= [2342 69 2164] (plan/explore-cell w 0.25)))))
