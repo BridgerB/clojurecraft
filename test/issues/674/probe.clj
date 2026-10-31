@@ -9,6 +9,7 @@
          '[clojurecraft.blocks :as blocks]
          '[clojurecraft.game :as game]
          '[clojurecraft.recipe :as recipe]
+         '[clojurecraft.record :as record]
          '[clojurecraft.scoop :as scoop]
          '[clojurecraft.terrain :as terrain])
 
@@ -16,7 +17,7 @@
   (with-open [r (java.io.PushbackReader. (io/reader (java.util.zip.GZIPInputStream.
                                                      (io/input-stream
                                                       "test/issues/674/chunks.edn.gz"))))]
-    (binding [*data-readers* {}] (doall (take-while some? (repeatedly #(edn/read {:eof nil} r)))))))
+    (doall (take-while some? (repeatedly #(edn/read {:readers record/readers :eof nil} r))))))
 
 (def base
   (reduce (fn [w e] (game/load-chunk w (:packet e)))
