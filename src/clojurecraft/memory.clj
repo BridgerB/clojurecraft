@@ -244,6 +244,28 @@
   [world f]
   (update world :world/facts d/db-with [f]))
 
+(def brick-names #{:nether_bricks :nether_brick_fence :nether_brick_stairs})
+
+(def bricks-per-column
+  "How many fortress cells one chunk column starts a record for, at most. A fortress chunk holds
+   thousands (the bot's recording of race 41237594157, landed at a fortress: 115,000 sightings in
+   the first minute, mean over 218 runs, against 16,000 for a bot after hours of the road), and
+   recording them all made every chunk load and every planner tick take seconds, as stone did
+   (watched?): the bots ran at 0.3 to 1 tick a second, missed the server's keepalives and were
+   dropped `Timed out`, 569 of 588 runs in 29 minutes. Evenly spread, so the nearest brick on
+   record is still near."
+  64)
+
+(defn thin-bricks
+  "The cells ([x y z id]) with the fortress cells (brick-names) among them thinned to at most
+   bricks-per-column, every nth in the order given; the rest as they are. A column with no more
+   fortress cells than that is unchanged."
+  [cells]
+  (let [brick? (fn [[_ _ _ id]] (contains? brick-names (blocks/name-of id)))
+        {bricks true others false} (group-by (comp boolean brick?) cells)
+        stride (max 1 (quot (+ (count bricks) (dec bricks-per-column)) bricks-per-column))]
+    (concat others (take-nth stride bricks))))
+
 (defn remember-column
   "Record every watched block in a freshly loaded chunk column, and any change at a position
    already on record within it."
@@ -253,7 +275,7 @@
         dim (dimension/of world)
         forest (forest-fact key column now dim)
         tx (concat (keep (fn [[x y z id]] (observation db dim [x y z] id now))
-                         (chunk/find-blocks {key column} #(watched? dim %)))
+                         (thin-bricks (chunk/find-blocks {key column} #(watched? dim %))))
                    (when (and forest
                               (not= (:forest/count forest)
                                     (:forest/count (latest-forest db dim key))))
