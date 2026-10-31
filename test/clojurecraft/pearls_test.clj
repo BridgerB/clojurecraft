@@ -2693,7 +2693,8 @@
                    (assoc :player/dimension nether))]
     (is (pearls/travel-caged? sealed))
     (is (nil? (pearls/travel sealed)))
-    (is (= :stairs-up (:intent/kind (plan/next-intent sealed row plan/goals))))
+    (is (= :tunnel (:intent/kind (plan/next-intent sealed row plan/goals)))
+        "in the Nether, level: there is no sky to climb to")
     (testing "the overworld has no such search"
       (is (not (pearls/travel-caged? (assoc sealed :player/dimension "minecraft:overworld")))))))
 
@@ -2736,3 +2737,15 @@
       (let [floor (-> (wide (standing {7 ghast} {[7 64 8] stone}))
                       (assoc :player/inventory held))]
         (is (= [7 65 8] (:intent/cell (pearls/cover-from floor))))))))
+
+(deftest a-nether-climb-stops-under-the-bedrock-roof
+  ;; pearls-travel-d job 3 (plan run 41156746096, issue #263): the open pad was cut in rock; stairs
+  ;; up from y 72 in flights of eight to y 126, then :rejected three times at the server's bedrock
+  (let [w (-> (burrowed [8.5 100.0 8.5] {})
+              (assoc :player/dimension nether))]
+    (is (= 120 (pearls/roof-cap w 112)) "eight up from 112 is the roof")
+    (is (= 120 (pearls/roof-cap w 118)))
+    (is (= 80 (pearls/roof-cap w 72)))
+    (is (= 119 (pearls/roof-cap (assoc w :player/dimension "minecraft:overworld") 111))
+        "elsewhere eight")
+    (is (nil? (pearls/climb-out (assoc w :player/pos [8.5 119.0 8.5]))) "no flight at the roof")))
