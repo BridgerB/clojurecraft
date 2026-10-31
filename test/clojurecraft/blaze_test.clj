@@ -1182,9 +1182,10 @@
   (let [far (entity :blaze [3.5 65.0 8.5] :entity/health 20.0)
         hand (entity :blaze [6.5 65.0 8.5] :entity/health 20.0)
         w (in-pocket (standing {7 far}))]
-    (is (= {:intent/kind :pocket-hold :intent/heal-to 20.0}
-           (next-intent (assoc w :player/on-fire? true)))
-        "burning: stay out of every line but the opening's")
+    (is (= {:intent/kind :walk :intent/target [9 64 7] :intent/for :cover}
+           (select-keys (next-intent (assoc w :player/on-fire? true))
+                        [:intent/kind :intent/target :intent/for]))
+        "burning with a blaze in line: out of its sight first (hide), the hold where there is none")
     (is (= {:intent/kind :pocket-hold :intent/heal-to 20.0}
            (next-intent (assoc w :player/health 14.0)))
         "under engage-health")
@@ -1284,8 +1285,8 @@
     (testing "struck within press-ms by a blaze in line out of reach, not burning: the same"
       (is (= {:intent/kind :seal}
              (next-intent (assoc base :player/struck-at (- (:time/now base 0) 1000))))))
-    (testing "no filler held: the old hold in the open"
-      (is (= :pocket-hold
+    (testing "no filler held: out of the line (hide), else the old hold in the open"
+      (is (= :walk
              (:intent/kind (next-intent (assoc (standing {7 line})
                                                :player/on-fire? true
                                                :pocket/site pocket-site
@@ -1582,8 +1583,8 @@
                             (assoc-in w [:player/inventory 2] (item :cooked_beef 4)))))))
     (testing "food at 18: the rest heals, so it is the rest"
       (is (= {:intent/kind :rest} (next-intent (assoc w :player/food 18)))))
-    (testing "no portal on record: the rest holds, as before"
-      (is (= {:intent/kind :rest} (next-intent (assoc w :world/facts (memory/empty-facts))))))))
+    (testing "no portal on record: a rest that cannot heal is never chosen (probe 40634461444)"
+      (is (not= :rest (:intent/kind (next-intent (assoc w :world/facts (memory/empty-facts)))))))))
 
 (deftest a-spawner-whose-walk-failed-is-tunnelled-to-not-given-up
   ;; race lane 4 s1 r15: `:walk [544 57 203]` failed :no-path at the fortress, the blacklist took the

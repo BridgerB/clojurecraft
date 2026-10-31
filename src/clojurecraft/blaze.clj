@@ -1479,24 +1479,6 @@
               {:intent/kind :camp :intent/spawner sp})
           :else (or (search world) {:plan/wait :no-blaze}))))
 
-;; ---------------------------------------------------------------- the :portal-home intent
-
-(defmethod intent/run :portal-home
-  ;; {:intent/kind :portal-home}: work the stand in the nearest remembered Nether portal block
-  ;; through build/work-op (its child a walk to it, the await); done in the overworld, failed
-  ;; :no-portal when none is on record
-  [world i event]
-  (let [p (home-portal world)]
-    (cond (not= dimension/nether (dimension/of world))
-          (-> world
-              (assoc :player/controls {})
-              intent/done)
-          (nil? p)
-          (-> world
-              (assoc :player/controls {})
-              (intent/fail :no-portal))
-          :else (build/work-op world i (home-op p) event))))
-
 ;; ---------------------------------------------------------------- the :ambush intent
 
 (defmethod intent/run :ambush
