@@ -690,6 +690,29 @@
 
 (defmethod answering :default [_ plan] (answers plan))
 
+(defmulti claims-attacker?
+  "Does the goal row's act, by the row's :goal/plan, answer hostile e itself when e is the mob that
+   last hit the bot (:player/attacker), so the :defend row leaves it? False by default: the mob that
+   hits the bot is :defend's whatever a row answers (gym chain-w13: 'defend when attacked'). The
+   pearl hunt answers an enderman that hit it when a burrow is near: its way home is a walk the
+   :defend row's fight to the end cut, standing in the open two blocks from the burrow's end for four
+   hits (issue #263)."
+  {:arglists '([world plan e])}
+  (fn [_world plan _e] plan))
+
+(defmethod claims-attacker? :default [_ _ _] false)
+
+(defn claimed-attacker?
+  "Does a target in play that is worked here, not reached and not done, claim entity e, the mob
+   that last hit the bot (claims-attacker?), as its own to answer? The claim is asked first: the
+   :defend row's done-by asks threats, which asks this."
+  [world e]
+  (boolean (some #(and (claims-attacker? world (:goal/plan %) e)
+                       (plan/here? world %)
+                       (not (contains? (:plan/reached world #{}) (:goal/id %)))
+                       (not (plan/done-by world %)))
+                 (plan/in-play world plan/goals))))
+
 (defn answered-kinds
   "The hostile kinds (answering) of the targets in play that are worked here, not reached and
    not done. Gym blaze-fire-a run 1 (run 39131023637): the :defend row fought a spawner's burst
@@ -768,7 +791,8 @@
              (not (contains? bl eid))
              (not= :ender_dragon (entity/kind e))
              (not (contains? never-fought (entity/kind e)))
-             (or (= eid (:player/attacker world)) (not (contains? left (entity/kind e))))
+             (or (and (= eid (:player/attacker world)) (not (claimed-attacker? world e)))
+                 (not (contains? left (entity/kind e))))
              (not (given-up? world eid e))
              (or (not pumpkin?)
                  (not= :enderman (entity/kind e))

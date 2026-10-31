@@ -48,7 +48,8 @@
    :intention/id {:db/index true}
    :answer/kind {:db/index true}
    :pool/chunk {:db/index true}
-   :pool/kind {:db/index true}})
+   :pool/kind {:db/index true}
+   :forest/chunk {:db/index true}})
 
 (defn empty-facts "A store with nothing seen yet." [] (d/empty-db schema))
 
@@ -191,6 +192,58 @@
     (when (and (not= id (:sight/state last)) (or last (watched? dim id)))
       {:sight/pos pos :sight/state id :sight/at now :sight/dimension dim})))
 
+(def forest-min 12) ; blocks of warped nylium that make a chunk part of a warped forest
+
+(defn forest-fact
+  "The fact for the chunk column key [cx cz], freshly loaded in dimension dim at now, when it is a
+   warped forest's: the Nether and forest-min or more blocks of warped nylium (the forest floor).
+   {:forest/chunk key :forest/kind :warped :forest/count n :forest/pos [x y z] :forest/at now
+   :forest/dimension dim}, the pos the nylium block nearest the chunk's centre. A fact a chunk, as a
+   pool is: a forest's floor holds hundreds of nylium blocks a chunk, and a fact each would be the
+   stone freeze again (watched?). Nil otherwise. Gym plan runs on the race's own frontier
+   (real race 40980342194, Clj_r13: 2 hours and no pearl round a fortress) never travelled to one:
+   no fact said where they were."
+  [[cx cz :as key] column now dim]
+  (when (= dimension/nether dim)
+    (let [cells (chunk/find-blocks {key column} #(= :warped_nylium (blocks/name-of %)))]
+      (when (>= (count cells) forest-min)
+        (let [mx (+ (* 16 cx) 8)
+              mz (+ (* 16 cz) 8)
+              [x y z] (apply min-key (fn [[x _ z]] (+ (abs (- x mx)) (abs (- z mz)))) cells)]
+          {:forest/chunk key
+           :forest/kind :warped
+           :forest/count (count cells)
+           :forest/pos [x y z]
+           :forest/at now
+           :forest/dimension dim})))))
+
+(defn latest-forest
+  "The newest forest fact for chunk key in dimension dim, as a map, or nil."
+  [db dim key]
+  (when-let [e (d/q '[:find (max ?e) . :in $ ?c ?dim :where [?e :forest/chunk ?c]
+                      [?e :forest/dimension ?dim]]
+                    db
+                    key
+                    dim)]
+    (into {} (d/touch (d/entity db e)))))
+
+(defn warped-chunks
+  "The newest forest fact of each chunk known in the dimension the bot is in now, as maps: the warped
+   forests it has seen, which stay known after their chunks unload."
+  [world]
+  (let [db (:world/facts world)
+        dim (dimension/of world)]
+    (for [c (d/q '[:find [?c ...] :in $ ?dim :where [?e :forest/chunk ?c]
+                   [?e :forest/dimension ?dim]]
+                 db
+                 dim)]
+      (latest-forest db dim c))))
+
+(defn remember-forest
+  "The world with forest fact f appended."
+  [world f]
+  (update world :world/facts d/db-with [f]))
+
 (defn remember-column
   "Record every watched block in a freshly loaded chunk column, and any change at a position
    already on record within it."
@@ -198,8 +251,13 @@
   (let [db (:world/facts world)
         now (:time/now world)
         dim (dimension/of world)
-        tx (keep (fn [[x y z id]] (observation db dim [x y z] id now))
-                 (chunk/find-blocks {key column} #(watched? dim %)))]
+        forest (forest-fact key column now dim)
+        tx (concat (keep (fn [[x y z id]] (observation db dim [x y z] id now))
+                         (chunk/find-blocks {key column} #(watched? dim %)))
+                   (when (and forest
+                              (not= (:forest/count forest)
+                                    (:forest/count (latest-forest db dim key))))
+                     [forest]))]
     (cond-> world (seq tx) (assoc :world/facts (d/db-with db tx)))))
 
 (def source-states "The states of a water or a lava source." #{blocks/water-base blocks/lava-base})
@@ -365,6 +423,30 @@
          (sort >)
          (take n)
          (mapv #(into {} (d/touch (d/entity db %)))))))
+
+(defn last-failed-at
+  "The ms the newest :failed or :abandoned fact of an intention of kind k on target t was stamped,
+   or nil when none: when a fight on an enderman last failed or was cut (pearls/unfightable?)."
+  [world k t]
+  (d/q '[:find (max ?at) . :in $ ?k ?t :where [?e :intention/kind ?k] [?e :intention/event ?ev]
+         [(contains? #{:abandoned :failed} ?ev)] [?e :intention/target ?t] [?e :intention/at ?at]]
+       (:world/facts world)
+       k
+       t))
+
+(defn failed-count-since
+  "How many :failed or :abandoned facts of an intention of kind k on target t are stamped at ms
+   since or later: the fights on one enderman the hunt has cut or failed lately (pearls/
+   unfightable?)."
+  [world k t since]
+  (or (d/q '[:find (count ?e) . :in $ ?k ?t ?since :where [?e :intention/kind ?k]
+             [?e :intention/event ?ev] [(contains? #{:abandoned :failed} ?ev)]
+             [?e :intention/target ?t] [?e :intention/at ?at] [(>= ?at ?since)]]
+           (:world/facts world)
+           k
+           t
+           since)
+      0))
 
 (defn arrived
   "The set of targets of every walk that arrived (the :done facts of :walk intentions): the

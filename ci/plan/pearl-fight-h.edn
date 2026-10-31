@@ -1,0 +1,16 @@
+;; Issue #263, branch fix/263-pearl-fight, batch h: the relocation stops short, on main with #633.
+;; Batch g (plan run 41166403154): job 4 relocated 8 minutes after its third pearl, walked the
+;; whole 46 blocks to the endermen it was heading for and was slain in the open by one it came
+;; within 15 blocks of; jobs 2 and 6 ended on the retry class (#633, now merged). Batch h ends a
+;; relocation half the distance on, within 24 blocks of an enderman that was not near the start,
+;; cuts the walk, and cuts a fresh burrow there. Row pearls-12-race. Measure: pearls at 30, 60 and
+;; 90 min, the longest gap between pearls, deaths by cause.
+{:plans/label "pearl-fight-h"
+ :plans/jobs 3
+ :plans/issue 263
+ :plans/experiments [{:exp/name "pearls-12-race"
+                      :exp/kind :gym
+                      :exp/goal "pearls-12-race"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 18000}]}

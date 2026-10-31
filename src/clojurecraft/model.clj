@@ -192,6 +192,13 @@
    [:sight/pos "an observation's block position" "a fact in :world/facts"]
    [:sight/state "the state id observed there" "a fact in :world/facts"]
    [:sight/at "ms of the observation" "a fact in :world/facts"]
+   [:forest/chunk "the chunk [cx cz] a warped forest fact summarises (memory/forest-fact)"
+    "a fact in :world/facts"] [:forest/kind "the forest's kind, :warped" "a fact in :world/facts"]
+   [:forest/count "warped nylium blocks the chunk held when seen: forest-min or more"
+    "a fact in :world/facts"]
+   [:forest/pos "the nylium block nearest the chunk's centre" "a fact in :world/facts"]
+   [:forest/at "ms the chunk was seen" "a fact in :world/facts"]
+   [:forest/dimension "the dimension it was seen in" "a fact in :world/facts"]
    [:pool/chunk "the chunk [cx cz] a pool fact summarises" "a fact in :world/facts"]
    [:pool/kind "the pool's fluid, :water or :lava" "a fact in :world/facts"]
    [:pool/pos "the chunk's highest surface source of that fluid, nearest its centre"
@@ -269,6 +276,18 @@
    [:pearls/shelter
     "the feet cell of the pearl hunt's burrow, where no enderman can stand within reach of the bot (pearls/shelter?), set when a :burrow ends (issue #263)"
     "after the hunt dug one"]
+   [:pearls/angry
+    "per entity id of each angry enderman tracked within stare range: {:since ms first seen angry :best nearest distance so far :closed-at ms it last closed in by a block or more}, kept by pearls/track-angry so that an angry one parked far off for a minute (parked?) is told from one that stalks"
+    "every tick a pearl hunt runs (plan/steer)"]
+   [:pearls/gain
+    "{:held pearls held :at ms the count last rose}, kept by the :pearls steer (pearls/track-gain): the clock of production"
+    "every tick a pearl hunt runs (plan/steer)"]
+   [:pearls/relocate
+    "{:from feet :at ms :near ids of the endermen within cluster-radius of :from} while the hunt leaves the place for another (pearls/relocation): begun after relocate-ms without a pearl gained, ended at relocate-dist from :from, half that far and near a new enderman, or after relocate-timeout-ms, leaving the burrow and the blacklist behind"
+    "while a relocation goes on"]
+   [:pearls/shot-at-ms
+    "ms a ghast was last in sight with a clear line to the bot (pearls/shot-at?), kept by the :pearls steer: the walks that go elsewhere (travel, wander, cage-break) wait shot-hold-ms after it, so that a walk to cover and a walk away do not alternate"
+    "every tick a pearl hunt runs (plan/steer), while a ghast is in sight"]
    [:pearls/mouth "where the pearl hunt's burrow began, on the surface its stairs go down from"
     "after the hunt dug one"]
    [:stronghold/throws
@@ -519,6 +538,9 @@
    [:intent/floor-to
     "the height a mine's staircases are cut toward a few stairs at a time (its row's :goal/depth): how far down a floor laid through a cave must go on"
     "stairs-down from the mine act (stone/stairs), when the row has a depth"]
+   [:intent/wall?
+    "a :place of a block between the bot and an enderman it is cornered by (pearls/wall-off): the hunt's interrupt does not cut it"
+    "pearls/wall-off"]
    [:intent/to-height?
     "a :stairs-up that ends only at :intent/to-y: the open sky over a pit's floor is not out"
     "a climb out of a pit under the sky"]

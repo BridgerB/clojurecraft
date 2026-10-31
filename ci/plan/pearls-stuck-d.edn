@@ -1,0 +1,12 @@
+;; Issue #263, branch feat/263-stuck-retry: cover from a ghast on the line from the eye to it, a
+;; hostile at hand fought at full health, no lookout under threat, ranged reach from mob/kinds
+;; (plan run 40839050567, pearls-stuck-c: a ghast's five fireballs and two piglins' arrows).
+{:plans/label "pearls-stuck-d"
+ :plans/jobs 6
+ :plans/issue 263
+ :plans/experiments [{:exp/name "pearls-12"
+                      :exp/kind :gym
+                      :exp/goal "pearls-12"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 18000}]}

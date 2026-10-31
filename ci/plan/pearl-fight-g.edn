@@ -1,0 +1,17 @@
+;; Issue #263, branch fix/263-pearl-fight, batch g: production as data. Batch e (plan run
+;; 41157320074): four bots lived 100 minutes and held 6, 3, 1 and 4 pearls, all gained in the
+;; first 15 to 60 minutes: job 4 stood beside an angry enderman parked at 8 blocks and calm ones
+;; at 7 to 9 (943 lookouts, 273 walks, 26 burrows, one pearl). Batch g adds the relocation: no
+;; pearl gained in eight minutes (:pearls/gain), the hunt walks 32 blocks toward the densest
+;; remembered endermen and leaves its burrow and blacklist behind (:pearls/relocate). Row
+;; pearls-12-race (the pearls-12 kit plus 64 cobblestone and 64 netherrack). Measure: pearls at
+;; 30, 60 and 90 min, the longest gap between pearls, deaths by cause.
+{:plans/label "pearl-fight-g"
+ :plans/jobs 6
+ :plans/issue 263
+ :plans/experiments [{:exp/name "pearls-12-race"
+                      :exp/kind :gym
+                      :exp/goal "pearls-12-race"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 18000}]}

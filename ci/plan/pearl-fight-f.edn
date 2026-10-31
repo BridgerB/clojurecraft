@@ -1,0 +1,16 @@
+;; Issue #263, branch fix/263-pearl-fight, batch f: the race-faithful kit. pearls-12 holds no blocks,
+;; so the ghast cover, the walls and the hole as a last-resort cover cannot work there; race bots
+;; reach the Nether with 265 to 830 cobblestone and some netherrack. pearls-12-race is pearls-12
+;; with 64 cobblestone and 64 netherrack added. Code: batch e (uncage, cage-break, ghast hold and
+;; wall, the motion rule) plus stuck-retry 4beca7241 (a lone piglin or hoglin avoided, not fought;
+;; a hole as the last-resort ghast cover). Measure: pearls at 30 and 60 min, the longest gap
+;; between pearls, deaths by cause.
+{:plans/label "pearl-fight-f"
+ :plans/jobs 6
+ :plans/issue 263
+ :plans/experiments [{:exp/name "pearls-12-race"
+                      :exp/kind :gym
+                      :exp/goal "pearls-12-race"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 18000}]}
