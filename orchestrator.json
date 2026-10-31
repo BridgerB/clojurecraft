@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-31T10:37:11.540Z",
+  "at" : "2026-10-31T10:39:22.783Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -58,11 +58,6 @@
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
-    "number" : 514,
-    "title" : "Bot stops at blaze-rods: no-footing",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 161,
     "title" : "Bot stops at portal-kit: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
@@ -71,6 +66,11 @@
     "number" : 644,
     "title" : "Bot stops at ender-pearls: no-path",
     "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 514,
+    "title" : "Bot stops at blaze-rods: no-footing",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 178,
@@ -282,11 +282,11 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 514,
+    "issue" : 161,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 161,
+    "issue" : 514,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
