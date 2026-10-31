@@ -25,7 +25,8 @@
             [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
             [clojurecraft.stairs :as stairs]
-            [clojurecraft.terrain :as terrain]))
+            [clojurecraft.terrain :as terrain]
+            [clojurecraft.window :as window]))
 
 (set! *warn-on-reflection* true)
 
@@ -1051,7 +1052,8 @@
                (back-target world (or brick (when search (leg-target search)))))]
     (cond (not nether?) {:plan/wait :other-dimension}
           :else
-          (or (when back
+          (or (window/reserve-toss world)
+              (when back
                 {:intent/kind :tunnel-to
                  :intent/target back
                  :intent/steps steps-per-tunnel

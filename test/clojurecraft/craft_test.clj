@@ -256,3 +256,32 @@
                                                     10 {:item (recipe/item-id :wooden_pickaxe)
                                                         :count 1}}}))
         "a better tool of another item is no reason")))
+
+(deftest four-free-slots-are-kept-in-the-nether-from-junk-only
+  ;; race 41181938317 (c996f54): all four bots that reached a fortress held 36 of 36 slots (877
+  ;; cobblestone, 128 diorite, 64 cobbled deepslate, 64 netherrack ...), so a rod or a pearl dropped
+  ;; had no slot to be picked up into (issue #580)
+  (let [stack (fn [k n] {:item (recipe/item-id k) :count n})
+        used (fn [n filler]
+               ;; n slots: the first is a food stack, the second a pickaxe, then filler stacks
+               (into {}
+                     (map-indexed (fn [i p] [p
+                                             (case (int i)
+                                               0 (stack :cooked_beef 8)
+                                               1 (stack :stone_pickaxe 1)
+                                               (filler i))]))
+                     (take n inventory/main-then-hotbar)))
+        sand (fn [_] (stack :sand 64))
+        w (fn [n filler] (assoc (in-play) :player/inventory (used n filler)))]
+    (is (= {:intent/kind :toss :intent/free 4} (window/reserve-toss (w 33 sand)))
+        "three free and junk to throw: throw until four are free")
+    (is (nil? (window/reserve-toss (w 32 sand))) "four free: nothing to do")
+    (is (= (nth inventory/main-then-hotbar 2) (window/reserve-slot (w 36 sand) 4))
+        "the first junk stack goes, never the food or the tool")
+    (is (nil? (window/reserve-toss (w 36 (fn [_] (stack :iron_ingot 64)))))
+        "nothing is junk: ingots, food and tools stay, the toss has nothing to throw")
+    (is (nil? (window/reserve-toss (assoc (w 36 sand) :window/open {:window/id 3})))
+        "a container is open: not now")
+    (is (= (window/tossable (w 36 sand) (window/view (w 36 sand) :inventory))
+           (window/reserve-slot (w 36 sand) 1))
+        "one free slot is what tossable asks")))

@@ -1753,7 +1753,7 @@
                    inventory/main-then-hotbar)
         w (standing full {40 rod})]
     (is (nil? (window/free-slot w (window/view w :inventory))) "every slot is full")
-    (is (= {:intent/kind :toss} (next-intent w)) "junk goes before the rod is gone to")
+    (is (= :toss (:intent/kind (next-intent w))) "junk goes before the rod is gone to")
     (testing "a slot free, or a rod held to merge into: the rod is collected"
       (is (= :collect-drops
              (:intent/kind (next-intent (standing (dissoc full (first inventory/main-then-hotbar))

@@ -208,6 +208,29 @@
   [world v]
   (when-not (free-slot world v) (junk-slot world)))
 
+(def free-reserve 4)                  ; free slots kept in the Nether: rods and pearls come in bursts, and a drop is picked up on contact only with a slot free
+
+(defn free-count
+  "How many of the player inventory's main and hotbar slots hold nothing."
+  [world]
+  (count (remove #(get-in world [:player/inventory %]) inventory/main-then-hotbar)))
+
+(defn reserve-slot
+  "The player slot to throw a stack from so that n slots are free: junk-slot when fewer are,
+   else nil. (tossable is n = 1.)"
+  [world n]
+  (when (< (free-count world) n) (junk-slot world)))
+
+(defn reserve-toss
+  "A :toss of junk until n slots are free (free-reserve by default), or nil: fewer are free, a
+   stack is junk (junk-slot: the junk kinds, a worn spare, building blocks beyond filler-keep;
+   never food, a tool in use, armour, rods, pearls, the table, sticks or the portal kit) and no
+   container is open."
+  ([world] (reserve-toss world free-reserve))
+  ([world n]
+   (when (and (nil? (:window/open world)) (reserve-slot world n))
+     {:intent/kind :toss :intent/free n})))
+
 (def toss-pitch -30.0)                 ; degrees up the eyes look before a throw (negative is up)
 
 (defn toss
@@ -243,8 +266,8 @@
           :else (intent/fail world :inventory-full))))
 
 (defmethod intent/run :toss
-  ;; {:intent/kind :toss}: throw junk out of window 0 (tossable, toss) until a slot is free, then
-  ;; done; with nothing to throw it is done too
+  ;; {:intent/kind :toss :intent/free n}: throw junk out of window 0 (reserve-slot, toss) until n
+  ;; slots are free (1 when not given), then done; with nothing to throw it is done too
   [world i _]
   (let [world (assoc world :plan/intent i)
         v (view world :inventory)]
@@ -257,7 +280,8 @@
                 (game/emit {:packet/name :container-close
                             :window-id (get-in world [:window/open :window/id])})
                 (dissoc :window/open))
-            (tossable world v) (toss world v (tossable world v))
+            (reserve-slot world (:intent/free i 1))
+            (toss world v (reserve-slot world (:intent/free i 1)))
             :else
             (-> world
                 (assoc :player/controls {})
