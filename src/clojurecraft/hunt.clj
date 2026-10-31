@@ -39,6 +39,7 @@
 (def starving-radius 48)              ; blocks a starving bot hunts within (a server shows animals this far, and the model populates three chunks round the player)
 (def strike-range 4.5)                ; blocks on the plane from which a hunt fights instead of walking: past a walk's reach (intent/reach 4), so a walk that arrived is never asked again
 (def candidates 3)                    ; nearest animals asked for a route, as the other acts ask
+(def entry-provision-wanted 16)       ; edible items held when the portal is lit and the Nether is about to be entered for the first time: its own search (the :entry phase), since the kit's is long spent by the hours of gear and cast between (race 41173625252 and two more dab82b6 lanes: 18 of 28 bots entered with no food, 23 with fewer than 8)
 (def early-provision-wanted 6)         ; edible items held before the descent (the :early phase): as before issue #262, so the surface is not hunted bare for the stone pickaxe's hours
 (def provision-wanted 16)             ; edible items held before the portal is lit: health comes back in the Nether only from food 18, and a hoglin is hunted only when one is already near and health is at least retreat-health (issue #501: three raw meats were eaten to the bar's 18 before the portal, and the Nether leg began with none)
 (def early-forage-ms 120000)          ; ms the search goes on before the descent, from its first leg: the stone pickaxe is made on the surface among animals, and the iron kit's search still has its own forage-ms
@@ -75,10 +76,18 @@
    :return before :early: a bot back from the Nether that still holds a stone pickaxe is in the
    return's phase, with its reserve of sixteen and its six minutes, not the early one's six foods
    and two minutes (sim R1/1, probe 40801960382, failed :no-food-to-return 142 s after the respawn:
-   the early budget, early-forage-ms 120 s, spent and the 20 s wait after it)."
+   the early budget, early-forage-ms 120 s, spent and the 20 s wait after it).
+   :entry before :kit once the portal is lit and the Nether not yet entered: the kit's search is
+   spent long before (the gear and the cast take 40 minutes, the meals eat the reserve), and a
+   search of another phase starts afresh."
   [world]
   (when (= dimension/overworld (dimension/of world))
     (cond (and (pos? (inventory/item-count world (recipe/item-id :flint_and_steel)))
+               (pos? (inventory/item-count world (recipe/item-id :water_bucket)))
+               (contains? (:plan/reached world) :portal)
+               (not (contains? (:plan/reached world) :nether)))
+          :entry
+          (and (pos? (inventory/item-count world (recipe/item-id :flint_and_steel)))
                (pos? (inventory/item-count world (recipe/item-id :water_bucket))))
           :kit
           (contains? (:plan/reached world) :nether) :return
@@ -87,10 +96,13 @@
 (defn provision-target
   "The edible items the provision-phase wants held: early-provision-wanted in :early (the
    surface is left for hours either way, and sixteen made sim snapshot R3-27-1, issue #69, hunt
-   at the stone-pickaxe stage and stay at the water bucket), provision-wanted in :kit and
-   :return (issue #262: the Nether leg's reserve)."
+   at the stone-pickaxe stage and stay at the water bucket), entry-provision-wanted in :entry,
+   provision-wanted in :kit and :return (issue #262: the Nether leg's reserve)."
   [world]
-  (if (= :early (provision-phase world)) early-provision-wanted provision-wanted))
+  (case (provision-phase world)
+    :early early-provision-wanted
+    :entry entry-provision-wanted
+    provision-wanted))
 
 (defn provisioning?
   "Is the bot in a provision-phase (:early with the stone pickaxe, :kit with the portal's iron in
