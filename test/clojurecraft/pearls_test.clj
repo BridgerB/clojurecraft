@@ -2881,3 +2881,55 @@
     (is (= {:intent/kind :dig :intent/target [8 63 8] :intent/for :pearls} (pearls/cover-from w))
         "the cell under the feet: a hole to stand in, the rim between it and the ghast")
     (is (= :dig (:intent/kind (plan/next-intent w row plan/goals))))))
+
+(deftest no-pearl-for-eight-minutes-relocates-the-hunt-and-leaves-the-burrow-behind
+  ;; pearl-fight-e job 4 (plan run 41157320074): one pearl in 102 minutes, 943 lookouts and 26
+  ;; burrows beside an angry enderman parked at 8 blocks and calm ones at 7 to 9, others at 52, 53
+  ;; and 63. Production as data: no pearl gained in relocate-ms starts a relocation, however the
+  ;; lookouts and walks count (wandering? was false throughout)
+  (let [w (-> (standing {})
+              (assoc :time/now 0)
+              pearls/track-gain)
+        at (fn [ms]
+             (-> w
+                 (assoc :time/now ms)
+                 pearls/track-gain
+                 pearls/relocation))]
+    (is (= {:held 0 :at 0} (:pearls/gain w)) "the clock starts with the first tick")
+    (is (nil? (:pearls/relocate (at (dec pearls/relocate-ms)))) "seven minutes fifty-nine: not yet")
+    (is (= {:from [8 64 8] :at pearls/relocate-ms} (:pearls/relocate (at pearls/relocate-ms)))
+        "eight minutes without a pearl")
+    (testing "a pearl gained moves the clock on"
+      (let [got (-> (at 400000)
+                    (assoc-in [:player/inventory 5] (item :ender_pearl 1))
+                    (assoc :time/now 500000)
+                    pearls/track-gain
+                    pearls/relocation)]
+        (is (= {:held 1 :at 500000} (:pearls/gain got)))
+        (is (nil? (:pearls/relocate got)))))
+    (testing "thirty-two blocks on, it is over: the burrow and the blacklist are left behind"
+      (let [begun (-> (at pearls/relocate-ms)
+                      (assoc :pearls/shelter [8 61 8] :pearls/mouth [3 64 8] :plan/blacklist #{9}))
+            there (-> begun
+                      (assoc :player/pos [48.5 64.0 8.5] :time/now 600000)
+                      pearls/relocation)]
+        (is (nil? (:pearls/relocate there)))
+        (is (nil? (:pearls/shelter there)))
+        (is (nil? (:plan/blacklist there)))
+        (is (= 600000 (get-in there [:pearls/gain :at])) "and the clock starts again")))))
+
+(deftest a-relocation-walks-toward-the-densest-endermen-past-thirty-two-blocks
+  ;; pearl-fight-e job 4's state: an angry enderman parked 8.5 blocks off for an hour, a lone one
+  ;; 37 off, and three together 42 to 50 off: the walk goes to the three
+  (let [angry (assoc (enderman [17.0 64.0 8.5]) :entity/creepy? true)
+        group [(enderman [50.5 64.0 8.5]) (enderman [52.5 64.0 12.5]) (enderman [48.5 64.0 4.5])]
+        lone (enderman [8.5 64.0 -28.5])
+        w (-> (wide (standing {1 angry 2 lone 3 (nth group 0) 4 (nth group 1) 5 (nth group 2)}))
+              (assoc-in [:player/inventory 1] (item :iron_pickaxe 1))
+              (assoc :time/now 3600000
+                     :pearls/angry {1 {:since 0 :best 8.5 :closed-at 0}}
+                     :pearls/gain {:held 1 :at 0}
+                     :pearls/relocate {:from [8 64 8] :at 3600000}))
+        walk (pearls/relocate-walk w)]
+    (is (= :walk (:intent/kind walk)))
+    (is (> (first (:intent/target walk)) 40) "toward the group, not the lone one")))

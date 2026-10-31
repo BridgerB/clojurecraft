@@ -1862,6 +1862,43 @@
           (shelter-walk world s))]
     (when (and walk (intent/routable? world walk)) walk)))
 
+(def relocate-ms 480000)              ; ms without a pearl gained before the hunt leaves the place for another (8 minutes)
+(def relocate-dist 32.0)              ; blocks from where it began that a relocation walks before it is over
+(def relocate-timeout-ms 240000)      ; ms a relocation goes on at most (four minutes) before the clock starts again
+(def cluster-radius 24.0)             ; blocks round an enderman within which the others count toward how thick the place is
+
+(defn pearls-held
+  "The ender pearls held."
+  [world]
+  (get (recipe/counts (:player/inventory world)) :ender_pearl 0))
+
+(defn relocate-walk
+  "A walk to leave this place for another, or nil: toward the densest of the remembered endermen
+   (blacklisted or not, by how many others stand within cluster-radius of each, nearest first)
+   that stand relocate-dist or more from the feet: to the first a route reaches (routable), else
+   as far as the route goes (toward), else explore. Pearl-fight-e job 4 (plan run 41157320074)
+   stood 102 minutes beside one angry enderman parked at 8 blocks and calm ones at 7 to 9, too near
+   to stare at, cutting its burrow 26 times and gaining one pearl; others stood 52, 53 and 63 off."
+  [world]
+  (let [pos (:player/pos world)
+        all (endermen (dissoc world :plan/blacklist) 128.0)
+        far (into {}
+                  (filter (fn [[_ e]] (>= (physics/distance pos (:entity/pos e)) relocate-dist)))
+                  all)
+        density (fn [[_ e]]
+                  (count (filter (fn [[_ o]]
+                                   (<= (physics/distance (:entity/pos e) (:entity/pos o))
+                                       cluster-radius))
+                                 all)))
+        ranked (sort-by (juxt (comp - density) #(physics/distance pos (:entity/pos (second %))))
+                        far)
+        ms (into {} (take candidates ranked))]
+    (or (when (seq ms)
+          (if-let [[_ e] (routable world ms)]
+            {:intent/kind :walk :intent/target (cell (:entity/pos e)) :intent/for :pearls}
+            (toward world ms)))
+        (explore world))))
+
 (defn hunt
   "The hunt's next step with no kill to pick up, in order: out of the burrow (shelter) with one
    coming (creepy), one at hand (within strike-range, blacklisted or not: one a held fight gave
@@ -2008,6 +2045,12 @@
                                       (not (menaced? world))
                                       (empty? (endermen world seek-radius)))
                              (travel world)))
+        relocate-now (delay (when (and (:pearls/relocate world)
+                                       (not hurt?)
+                                       (not swarmed?)
+                                       (not (recently-shot? world))
+                                       (not (live-menaced? world)))
+                              (relocate-walk world)))
         wander-walk (delay (when (and (not hurt?)
                                       (not swarmed?)
                                       (not (live-menaced? world))
@@ -2067,6 +2110,7 @@
       {:intent/kind :fight :intent/target eid :intent/for :pearls}
       meal meal
       @travel-walk @travel-walk
+      @relocate-now @relocate-now
       @cage-break @cage-break
       @wander-walk @wander-walk
       (or hurt? (and in? bid)) {:intent/kind :lookout :intent/for :pearls}
@@ -2158,6 +2202,39 @@
                      ": no cover")))
     world))
 
+(defn track-gain
+  "The world with :pearls/gain {:held pearls held :at ms the count last rose}: new on the first
+   tick a hunt runs, moved on when the count rises, kept when it holds or falls (pearls spent)."
+  [world]
+  (let [now (:time/now world 0)
+        n (pearls-held world)
+        g (:pearls/gain world)]
+    (cond (or (nil? g) (> n (:held g))) (assoc world :pearls/gain {:held n :at now})
+          (not= n (:held g)) (assoc-in world [:pearls/gain :held] n)
+          :else world)))
+
+(defn relocation
+  "The world with the relocation (:pearls/relocate {:from feet :at ms}) begun when no pearl has
+   been gained for relocate-ms, and ended, the burrow and the blacklist left behind and the clock
+   started again, when the feet stand relocate-dist from where it began or relocate-timeout-ms
+   have passed: production as data, not the hunt's own signs of being stuck. A hunt that dithers
+   beside endermen it cannot provoke counts none of the lookouts or walks wandering? asks for
+   (pearl-fight-e job 4: 943 lookouts, 273 walks, one pearl in 102 minutes)."
+  [world]
+  (let [now (:time/now world 0)
+        feet (intent/feet world)
+        r (:pearls/relocate world)
+        g (:pearls/gain world)]
+    (cond (and r
+               (or (>= (physics/distance feet (:from r)) relocate-dist)
+                   (>= (- now (:at r)) relocate-timeout-ms)))
+          (-> world
+              (dissoc :pearls/relocate :pearls/shelter :pearls/mouth :plan/blacklist)
+              (assoc-in [:pearls/gain :at] now))
+          (and (nil? r) g (>= (- now (:at g)) relocate-ms))
+          (assoc world :pearls/relocate {:from feet :at now})
+          :else world)))
+
 (defmethod plan/steer :pearls
   ;; out of the burrow's end, every look but a provoke's turned from a calm enderman's eyes
   ;; (look-off): a walk steers by :control/yaw and a dig or a place is judged by distance, so the
@@ -2167,7 +2244,7 @@
   [world _]
   (let [look (:control/look (:player/controls world))
         home (:pearls/shelter world)
-        world (cond-> (track-angry (uncovered-log world))
+        world (cond-> (relocation (track-gain (track-angry (uncovered-log world))))
                 (shot-at? world) (assoc :pearls/shot-at-ms (:time/now world 0)))]
     (cond (or (nil? look)
               (= :provoke (:intent/kind (:plan/intent world)))
