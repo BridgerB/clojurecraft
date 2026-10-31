@@ -1378,13 +1378,19 @@
   [world]
   (when (pocket/in? world)
     (let [site (:pocket/site world)
-          need? (or (:player/on-fire? world) (< (:player/health world 20.0) (hold-to world)))
+          ;; a bot that cannot heal (heals? false) gains nothing by waiting: hp cannot rise, so the hold
+          ;; is for the fire only (blaze-race-z6 landing 2 held 96 minutes at hp 6.2, food 17, none held)
+          need? (or (:player/on-fire? world)
+                    (and (heals? world) (< (:player/health world 20.0) (hold-to world))))
           struck? (<= (- (:time/now world 0) (:player/struck-at world -1000000)) press-ms)]
       (cond (pocket/sealed? world site)
             (if (and (or need? struck?)
                      (not (and (near-rod world) (not (:player/on-fire? world)) (not struck?))))
               (or (meal world) {:intent/kind :pocket-hold :intent/heal-to (hold-to world)})
-              {:intent/kind :unseal})
+              ;; sealed, cannot heal, under low-health: opened, the next blaze in reach seals it again
+              ;; (the flip of blaze-race-p job 4), so it stays shut and the row goes on without a hold
+              (when (or (heals? world) (>= (:player/health world 20.0) low-health))
+                {:intent/kind :unseal}))
             (and (reach-blaze world) (>= (:player/health world 20.0) low-health)) nil
             (and (or (pressed? world) (reach-blaze world)) (pocket/can-seal? world site))
             {:intent/kind :seal}

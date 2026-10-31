@@ -1540,8 +1540,13 @@
         at (fn [hp] (assoc sealed :player/health hp))]
     (is (not (blaze/heals? sealed)) "no food and the bar is low: a rest cannot heal")
     (is (= 12.0 (blaze/hold-to sealed)))
-    (is (= :pocket-hold (:intent/kind (next-intent (at 10.5)))) "10.5: held, not unsealed")
-    (is (= :pocket-hold (:intent/kind (next-intent (at 11.9)))))
+    (is (not= :pocket-hold (:intent/kind (next-intent (at 10.5))))
+        "10.5: no hold that gains nothing")
+    (is (not= :unseal (:intent/kind (next-intent (at 10.5))))
+        "and not opened: a blaze in reach seals it again")
+    (is (not= :pocket-hold (:intent/kind (next-intent (at 6.2))))
+        "z6 landing 2: hp 6.2, food 17, none held")
+    (is (not= :pocket-hold (:intent/kind (next-intent (at 11.9)))))
     (is
      (= {:intent/kind :unseal} (next-intent (at 12.2)))
      "at low-health, 12.2 (x job 4's stuck health): the seal opens, no wait for a meal that is gone")
