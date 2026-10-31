@@ -66,9 +66,7 @@
                         conj
                         (cond-> {:t (- now cutoff)
                                  :hp (:player/health w)
-                                 :intent (select-keys i
-                                                      [:intent/id :intent/kind :intent/target
-                                                       :intent/goal :intent/for])
+                                 :intent (dissoc i :intent/status)
                                  :chosen chosen
                                  :interrupts? cut
                                  :prev-ended (when (not= (first k) (first prev))
