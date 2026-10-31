@@ -359,9 +359,13 @@ function showLook(f) {
 let skyName = null;
 function sky(f) {
   const name = f.biome != null && assets.biomes[f.biome] ? assets.biomes[f.biome].name : "plains";
-  if (name === skyName) return;
-  skyName = name;
-  const c = (assets.skies || {})[name] || [0.47, 0.65, 1];
+  // near the bottom of the overworld vanilla darkens the sky and fog by ((eye y - min y) / 32)^2, the void's
+  // darkness (FogRenderer.setupColor: the clear colour scale 1/32 over the height above the build floor, -64)
+  const eye = (f.pos ? f.pos[1] : 64) + 1.62, dark = (f.dimension || "").includes("overworld") || !f.dimension ? Math.min(1, Math.max(0, (eye + 64) / 32)) ** 2 : 1;
+  const key = name + ":" + dark.toFixed(2);
+  if (key === skyName) return;
+  skyName = key;
+  const c = ((assets.skies || {})[name] || [0.47, 0.65, 1]).map((v) => v * dark);
   const scene = viewer.scene;
   scene.clearColor = new B.Color4(c[0], c[1], c[2], 1);
   scene.fogMode = B.Scene.FOGMODE_LINEAR;
