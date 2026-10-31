@@ -1,0 +1,17 @@
+;; Issue #263, branch fix/263-pearl-relocate, batch j: the pickaxe. Batch i (plan run 41178660163,
+;; cancelled at 172 min): jobs 1 and 2 stood still in rock pockets from minutes 36 and 48 with 28 and
+;; 6 digs left (digs under spare-digs 32, so climb-out, dig-out, tunnel-out and the relocation's
+;; fallbacks all refuse to spend them) and nothing to remake a pickaxe from; job 1 held six stems,
+;; four sticks and 43 cobblestone but the pickaxe decide answered a walk to a remembered table no
+;; route reached. Batch j replaces such a table with a new one (make-pickaxe) and runs the new row
+;; pearls-12-race-tools (pearls-12-race plus a crafting table and eight sticks). Measure: pearls at
+;; 30, 60, 90 and 120 min, the longest gap, pickaxes made, deaths by cause.
+{:plans/label "pearl-fight-j"
+ :plans/jobs 3
+ :plans/issue 263
+ :plans/experiments [{:exp/name "pearls-12-race-tools"
+                      :exp/kind :gym
+                      :exp/goal "pearls-12-race-tools"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 18000}]}

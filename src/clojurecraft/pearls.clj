@@ -48,7 +48,8 @@
             [clojurecraft.stone :as stone]
             [clojurecraft.sword :as sword]
             [clojurecraft.terrain :as terrain]
-            [clojurecraft.window :as window]))
+            [clojurecraft.window :as window]
+            [clojurecraft.wood :as wood]))
 
 (set! *warn-on-reflection* true)
 
@@ -244,7 +245,7 @@
 
 (def park-ms 60000)                    ; ms an angry enderman has not closed in before it is parked
 (def park-near 8.0)                    ; blocks within which one is never parked: it is on the bot
-(def close-gain 1.0)                   ; blocks nearer than its best distance that count as closing in
+(def close-gain 2.0)                   ; blocks nearer than its best distance that count as closing in: a parked enderman jitters one or two blocks (pearl-fight-g job 3, enderman 75 at 9 to 11 blocks for 90 min)
 
 (defn track-angry
   "The world with :pearls/angry updated: for each angry enderman (entity/creepy?) within stare-range
@@ -1878,7 +1879,8 @@
 
 (def relocate-ms 480000)              ; ms without a pearl gained before the hunt leaves the place for another (8 minutes)
 (def relocate-dist 32.0)              ; blocks from where it began that a relocation walks before it is over
-(def relocate-timeout-ms 240000)      ; ms a relocation goes on at most (four minutes) before the clock starts again
+(def relocate-timeout-ms 420000)      ; ms a relocation goes on at most (seven minutes) before the clock starts again
+(def relocate-patience-ms 180000)     ; ms a relocation waits in place for an angry enderman near to come or go (menaced?) before it walks past one that is parked (live-menaced?)
 (def cluster-radius 24.0)             ; blocks round an enderman within which the others count toward how thick the place is
 
 (defn pearls-held
@@ -1890,7 +1892,7 @@
   "A walk to leave this place for another, or nil: toward the densest of the remembered endermen
    (blacklisted or not, by how many others stand within cluster-radius of each, nearest first)
    that stand relocate-dist or more from the feet: to the first a route reaches (routable), else
-   as far as the route goes (toward), else explore. Pearl-fight-e job 4 (plan run 41157320074)
+   as far as the route goes (toward), else explore, else wander, else the cage-break cuts (dig-out, tunnel-out, climb-out, uncage) from a pocket nothing walks out of. Pearl-fight-g jobs 3 and 5 (plan run 41166403154) had no walk: job 3 six remembered endermen 82 to 110 blocks off and no route, job 5 none tracked in a cave pocket, and neither moved in 80 minutes. Pearl-fight-e job 4 (plan run 41157320074)
    stood 102 minutes beside one angry enderman parked at 8 blocks and calm ones at 7 to 9, too near
    to stare at, cutting its burrow 26 times and gaining one pearl; others stood 52, 53 and 63 off."
   [world]
@@ -1906,13 +1908,17 @@
                                  all)))
         ranked (sort-by (juxt (comp - density) #(physics/distance pos (:entity/pos (second %))))
                         far)
-        ms (into {} (take candidates ranked))]
-    (some-> (or (when (seq ms)
-                  (if-let [[_ e] (routable world ms)]
-                    {:intent/kind :walk :intent/target (cell (:entity/pos e))}
-                    (toward world ms)))
-                (explore world))
-            (assoc :intent/for :relocate))))
+        ms (into {} (take candidates ranked))
+        w (or (when (seq ms)
+                (if-let [[_ e] (routable world ms)]
+                  {:intent/kind :walk :intent/target (cell (:entity/pos e))}
+                  (toward world ms)))
+              (explore world)
+              (wander world)
+              (if (= dimension/nether (dimension/of world))
+                (or (dig-out world) (tunnel-out world) (climb-out world) (uncage world))
+                (or (climb-out world) (dig-out world) (uncage world))))]
+    (cond-> w (= :walk (:intent/kind w)) (assoc :intent/for :relocate))))
 
 (defn hunt
   "The hunt's next step with no kill to pick up, in order: out of the burrow (shelter) with one
@@ -2064,7 +2070,11 @@
                                        (not hurt?)
                                        (not swarmed?)
                                        (not (recently-shot? world))
-                                       (not (live-menaced? world)))
+                                       (not (if (< (- (:time/now world 0)
+                                                      (:at (:pearls/relocate world)))
+                                                   relocate-patience-ms)
+                                              (menaced? world)
+                                              (live-menaced? world))))
                               (relocate-walk world)))
         wander-walk (delay (when (and (not hurt?)
                                       (not swarmed?)
@@ -2501,6 +2511,28 @@
   (cond-> (sword/with-laid (drop-worn-picks world))
     (and (log-counted? world) (= :log (:intent/for (:plan/last world)))) (dissoc :plan/last)))
 
+(def reserve-digs 64)               ; digs a held pickaxe may fall to before the hunt cuts the stems for its successor: twice spare-digs
+(def reserve-stems 6)                 ; warped stems held that make a table, sticks and a pickaxe's planks
+
+(defn log-count
+  "The logs and stems held (blocks/log-name?)."
+  [world]
+  (reduce +
+          (keep (fn [[k n]] (when (blocks/log-name? k) n))
+                (recipe/counts (:player/inventory world)))))
+
+(defn reserve-gather
+  "The next step of cutting stems (wood/continue-gather and wood/near-walk: the log chain to a remembered trunk, never a hunt for wood) while the best pickaxe held has
+   under reserve-digs digs left and fewer than reserve-stems logs are held, with no angry enderman
+   near: a pickaxe reserve before the last digs, so that the successor is made from stems
+   (make-pickaxe, under spare-digs) and the hunt never stands in a rock pocket with six digs and no
+   wood (pearl-fight-i job 2, plan run 41178660163: 549 netherrack held and nothing to make a
+   pickaxe from). Nil when none is held or the chain waits."
+  [world]
+  (let [d (digs-left world)]
+    (when (and d (< d reserve-digs) (< (log-count world) reserve-stems) (not (menaced? world)))
+      (or (wood/continue-gather world) (wood/near-walk world)))))
+
 (defn make-pickaxe
   "The intent that makes a pickaxe through the needs planner (a goal providing
    {:tag/pickaxes 1}, as blaze.clj's row asks), when that craft can start from here: one of
@@ -2521,7 +2553,16 @@
    a hunt for wood (wood/hunt is nil underground, so the Nether remake is unchanged)."
   [world goal table]
   (let [bare? (not (pickaxe? world))
-        i (make/decide (for-pick-decide world) (assoc goal :goal/provides {:tag/pickaxes 1}) table)]
+        decide
+        (fn [w]
+          (make/decide (for-pick-decide w) (assoc goal :goal/provides {:tag/pickaxes 1}) table))
+        first-i (decide world)
+        ;; a remembered table no route reaches is replaced by a new one, not walked at: the walk
+        ;; to it is no craft, and the hunt in a rock pocket stood still (pearl-fight-i job 1, 28
+        ;; digs left, six stems, sticks and cobblestone held, a table remembered ten blocks over it)
+        i (if (and (= :walk (:intent/kind first-i)) (not (intent/routable? world first-i)))
+            (decide (update world :plan/blacklist (fnil conj #{}) (:intent/target first-i)))
+            first-i)]
     (when (and (:intent/kind i)
                (not (and (log-counted? world) (= :log (:intent/for i))))
                (or (= :log (:intent/for i))
@@ -2573,6 +2614,7 @@
           (and seek-wood (nil? (combat/sword world))) seek-wood
           (nil? (combat/sword world)) {:plan/wait :no-sword}
           remaking remaking
+          (reserve-gather world) (reserve-gather world)
           (and seek-wood (worn-out? world) (nil? (shelter world)) (not (menaced? world))) seek-wood
           (and (worn-out? world) (nil? (shelter world)) (not (menaced? world)))
           {:plan/wait :no-pickaxe}
