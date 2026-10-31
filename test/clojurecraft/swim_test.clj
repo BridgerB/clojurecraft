@@ -804,3 +804,24 @@
     (is (nil? (:plan/trap (at :wade false almost))) "so does a wade")
     (is (zero? (:plan/afloat-ticks (at :cross false almost))))
     (is (zero? (:plan/afloat-ticks (at :walk true almost))) "on the ground the count restarts")))
+
+(deftest a-flee-chooses-again-when-the-flow-covers-its-target
+  ;; pearl-fight-m job 1 (plan run 41216588429): landed beside a lava fall; the flee's footing, one
+  ;; cell away, was covered by the flow in the second it took, the target kept, eight lava hits in
+  ;; 4 s and dead with a footing four cells off
+  (let [flee {:intent/kind :flee :intent/target [5 64 4] :intent/status :active :intent/started 100}
+        flow (inc blocks/lava-base)
+        lava (into {} (for [dx (range -1 2) dz (range -1 2)] [[(+ 5 dx) 64 (+ 4 dz)] flow]))
+        w (assoc (game/init fx/opts)
+                 :bot/phase :play
+                 :player/pos [5.5 64.0 5.5]
+                 :player/loaded? true
+                 :player/in-lava? true
+                 :time/tick 105
+                 :world/chunks {[0 0] (world/column lava)}
+                 :plan/intent flee)
+        out (intent/run w flee {:event/kind :tick :event/now 1000 :event/rand 0.5})]
+    (is (nil? (:intent/target (:plan/intent out))) "the covered target is dropped for a new choice")
+    (let [cell (swim/footing w [5 64 5])]
+      (is (some? cell))
+      (is (swim/lava-free? w cell)))))

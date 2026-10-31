@@ -716,6 +716,16 @@
   (boolean (some #(= :lava (terrain/fluid-kind world %))
                  [[(inc x) y z] [(dec x) y z] [x y (inc z)] [x y (dec z)]])))
 
+(defn lava-near
+  "How many cells of lava lie within two cells of cell on the plane and one up or down: how deep in
+   a flow a place is, so a flee goes where the flow is thinnest and farthest from reaching it."
+  [world [x y z]]
+  (count (for [dx (range -2 3)
+               dz (range -2 3)
+               dy [-1 0 1]
+               :when (= :lava (terrain/fluid-kind world [(+ x dx) (+ y dy) (+ z dz)]))]
+           1)))
+
 (defn footing
   "The nearest cell within flee-radius of feet, at most one up or down, the feet could stand in,
    those out of the lava first (lava-free?: none in it, over it or under it), then those with no
@@ -733,6 +743,7 @@
          cell)
        (sort-by (juxt #(if (lava-free? world %) 0 1)
                       #(if (lava-beside? world %) 1 0)
+                      #(lava-near world %)
                       #(physics/horizontal-distance (physics/centre feet) (physics/centre %))))
        first))
 
@@ -759,6 +770,8 @@
           (-> world
               (assoc :player/controls {})
               (intent/fail :no-footing))
+          ;; the flow reached the target since it was chosen: choose again
+          (and target (not (lava-free? world target))) (intent/dissoc-intent world :intent/target)
           (nil? target)
           (if-let [cell (footing world feet)]
             (-> world
