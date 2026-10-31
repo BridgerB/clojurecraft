@@ -3036,3 +3036,30 @@
       (is (contains? #{:craft :place :open-container}
                      (:intent/kind (plan/next-intent w row plan/goals)))
           "not the walk to a table nothing reaches"))))
+
+(deftest a-pickaxe-reserve-cuts-stems-before-the-last-digs
+  ;; pearl-fight-i job 2 (plan run 41178660163) stood still in a rock pocket from minute 36 with
+  ;; six digs left and no wood: its iron pickaxe wore out on burrows, 549 netherrack held. At an
+  ;; earlier moment, about sixty digs left and no stems held, the hunt cuts the forest's stems
+  (let [stem (first (blocks/states-of :warped_stem))
+        trunk {[12 64 8] stem
+               [12 65 8] stem
+               [12 66 8] stem
+               [12 67 8] (blocks/default-state :warped_wart_block)}
+        col (world/column trunk)
+        base (-> (standing {})
+                 (assoc :world/chunks {[0 0] col})
+                 (memory/remember-column [0 0] col)
+                 (memory/remember-intention {:intent/id 1 :intent/kind :burrow} :done))
+        with (fn [digs stems]
+               (assoc base
+                      :player/inventory
+                      (cond-> {0 (item :iron_sword 1)
+                               1 (assoc (item :iron_pickaxe 1) :durability digs)}
+                        (pos? stems) (assoc 2 (item :warped_stem stems)))))]
+    (is (= :log (:intent/for (plan/next-intent (with 60 0) row plan/goals)))
+        "sixty digs left and no wood: a stem is cut")
+    (is (= :lookout (:intent/kind (plan/next-intent (with 60 6) row plan/goals)))
+        "six stems held: the hunt goes on, the pickaxe made when it falls under spare-digs")
+    (is (= :lookout (:intent/kind (plan/next-intent (with 200 0) row plan/goals)))
+        "digs to spare: no reserve is cut")))

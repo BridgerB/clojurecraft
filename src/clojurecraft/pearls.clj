@@ -48,7 +48,8 @@
             [clojurecraft.stone :as stone]
             [clojurecraft.sword :as sword]
             [clojurecraft.terrain :as terrain]
-            [clojurecraft.window :as window]))
+            [clojurecraft.window :as window]
+            [clojurecraft.wood :as wood]))
 
 (set! *warn-on-reflection* true)
 
@@ -2510,6 +2511,28 @@
   (cond-> (sword/with-laid (drop-worn-picks world))
     (and (log-counted? world) (= :log (:intent/for (:plan/last world)))) (dissoc :plan/last)))
 
+(def reserve-digs 64)               ; digs a held pickaxe may fall to before the hunt cuts the stems for its successor: twice spare-digs
+(def reserve-stems 6)                 ; warped stems held that make a table, sticks and a pickaxe's planks
+
+(defn log-count
+  "The logs and stems held (blocks/log-name?)."
+  [world]
+  (reduce +
+          (keep (fn [[k n]] (when (blocks/log-name? k) n))
+                (recipe/counts (:player/inventory world)))))
+
+(defn reserve-gather
+  "The next step of cutting stems (wood/gather-next, the log chain) while the best pickaxe held has
+   under reserve-digs digs left and fewer than reserve-stems logs are held, with no angry enderman
+   near: a pickaxe reserve before the last digs, so that the successor is made from stems
+   (make-pickaxe, under spare-digs) and the hunt never stands in a rock pocket with six digs and no
+   wood (pearl-fight-i job 2, plan run 41178660163: 549 netherrack held and nothing to make a
+   pickaxe from). Nil when none is held or the chain waits."
+  [world]
+  (let [d (digs-left world)]
+    (when (and d (< d reserve-digs) (< (log-count world) reserve-stems) (not (menaced? world)))
+      (let [i (wood/gather-next world)] (when-not (:plan/wait i) i)))))
+
 (defn make-pickaxe
   "The intent that makes a pickaxe through the needs planner (a goal providing
    {:tag/pickaxes 1}, as blaze.clj's row asks), when that craft can start from here: one of
@@ -2591,6 +2614,7 @@
           (and seek-wood (nil? (combat/sword world))) seek-wood
           (nil? (combat/sword world)) {:plan/wait :no-sword}
           remaking remaking
+          (reserve-gather world) (reserve-gather world)
           (and seek-wood (worn-out? world) (nil? (shelter world)) (not (menaced? world))) seek-wood
           (and (worn-out? world) (nil? (shelter world)) (not (menaced? world)))
           {:plan/wait :no-pickaxe}
