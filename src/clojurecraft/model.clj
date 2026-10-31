@@ -399,6 +399,9 @@
    [:intent/enter?
     "does the :end-portal intent step into the portal once every frame is eyed (the :enter-end row's) or stop at the lit portal (the :end-portal row's) (issue #266)"
     "an :end-portal intent"]
+   [:intent/plan
+    "the intent as the row planned it, before the executor added fields (a :place's :intent/target): what plan/same-choice? compares a fresh plan with"
+    "every started intent"]
    [:intent/id "the intent's number in this run, linking its facts in memory"
     "every started intent"]
    [:intent/goal "the target goal id the intent serves; another target chosen preempts it"

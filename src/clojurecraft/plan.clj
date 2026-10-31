@@ -675,7 +675,10 @@
   (let [n (inc (:plan/intents world 0))
         feet (when (:player/pos world) (intent/feet world))
         trail (:plan/trail world [])
-        i (assoc i :intent/status :active :intent/id n)]
+        i (assoc i
+                 :intent/plan (dissoc i :intent/status :intent/id :intent/plan)
+                 :intent/status :active
+                 :intent/id n)]
     (-> world
         (assoc :plan/intents n :plan/intent i)
         (cond-> (and feet (not= feet (peek trail)))
@@ -745,18 +748,34 @@
           :else
           (assoc world :plan/waiting-since since :plan/waiting-ticks ticks :plan/waiting reason))))
 
+(def choice-keys
+  "The keys of a planned intent that make it this intent and not another: what it is (kind,
+   purpose), what it works on (item, recipe, target, cell) and how far (to-y). Everything else a
+   row plans is left out because it moves on every planning without making another choice: a
+   deadline (:intent/until, now plus a few seconds: blaze-race-z8 job 5, run 41214675186, planned
+   one :place with 1793461559332, then ...482, then ...632), the goal it serves, a start time. The
+   target of an intent whose executor sets one (a :place) is the planned one, nil, never the one
+   it has gained running."
+  [:intent/kind :intent/for :intent/item :intent/recipe :intent/target :intent/cell :intent/to-y])
+
 (defn same-choice?
   "Would the planner start intent next again as the running intent i: the same kind, target and
    purpose (:intent/for)? False when next is nil or a wait. A cut that restarts what it cut ends
    the intent's controls and its route each tick and moves nothing (WALK-RESTART: a walk to
-   [2345 58 2283] re-issued every 50 ms while a blaze stood at hand, the bot burning where it stood)."
+   [2345 58 2283] re-issued every 50 ms while a blaze stood at hand, the bot burning where it stood).
+   An intent keeps the form it was planned in (:intent/plan, made by start-intent) and is compared
+   by that: a :place gains its :intent/target once it runs, and compared by its running form it was
+   never the same as what the row planned again. Blaze-race-z8 job 5 (run 41214675186) cut and
+   restarted one :place 97 times in 14 s every 150 ms while burning, and died with 18 hp spent."
   [i next]
   (boolean (and i
                 next
                 (not (:plan/wait next))
-                (= (:intent/kind i) (:intent/kind next))
-                (= (:intent/target i) (:intent/target next))
-                (= (:intent/for i) (:intent/for next)))))
+                (if-let [planned (:intent/plan i)]
+                  (= (select-keys planned choice-keys) (select-keys next choice-keys))
+                  (and (= (:intent/kind i) (:intent/kind next))
+                       (= (:intent/target i) (:intent/target next))
+                       (= (:intent/for i) (:intent/for next)))))))
 
 (defn plan-tick
   "One planning tick while :active. The goals are re-derived from the world every tick, even
