@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-31T02:40:13.598Z",
+  "at" : "2026-10-31T02:43:28.343Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -12,6 +12,11 @@
     "title" : "Bot stops at ingots: no-support",
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : true
+  }, {
+    "number" : 151,
+    "title" : "Bot stops at flint-and-steel: not-picked-up",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
   }, {
     "number" : 539,
     "title" : "Bot stops at fortress: timeout",
@@ -36,11 +41,6 @@
     "number" : 526,
     "title" : "Bot stops at blaze-rods: blocked",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
-    "number" : 151,
-    "title" : "Bot stops at flint-and-steel: not-picked-up",
-    "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
     "number" : 622,
