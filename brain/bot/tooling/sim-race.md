@@ -8,6 +8,8 @@ status: verified
 lastUpdated: 2026-10-17
 verifiedAgainst: HEAD
 sourceRefs:
+  - src/clojurecraft/simrace.clj#defn fortress-start
+  - test/clojurecraft/simrace_test.clj#a-run-may-start-at-the-fortress-spawner-nearest-its-landing
   - src/clojurecraft/capture.clj#defn stops
   - src/clojurecraft/capture.clj#defn take-landing!
   - src/clojurecraft/capture.clj#defn chunk-tap
@@ -73,6 +75,10 @@ related:
 # Sim race
 
 A real server carries about 25 bots on its one tick thread (capacity runs 38333898855 and 38348283421); the server model carries as many as there are cores, at about 150 times real time each. So the run is played in the model, in worlds a real server made.
+
+## A start at a fortress
+
+With `:simrace/from "fortress"` in `ci/simrace.edn` (or `--from fortress`) a run starts in its set's captured Nether instead of at the overworld landing: `fortress-start` finds the model's spawner nearest the landing's Nether coordinates (an eighth of the overworld's) and ground on its far side (`fortress-rings`, thirty-two blocks first), the sim joins the player there in the Nether with the kit (`:simrace/kit`, default `fortress-kit-default`: the real race's `:race/kit`: a stone pickaxe, an iron sword and iron armour carried, 16 cooked beef, a table, sticks, flint and steel, both buckets, coal and junk stone and loot, all 36 slots full, as `kit->inventory` places it), and the run plays only the stages from the blaze rods up (`fortress-goals`), so a failure before them is not its to file. A death there respawns at the start in the Nether with the kit kept (`:respawn-in`, as the real race pins the spawn and keeps inventories), and a failure is signed at the stages played (`:plan/goals`), never at the wood. Worlds whose Nether holds no spawner are left out. Absent, a run starts from spawn as before.
 
 ## Capture: a real world, once
 `clojure -M:capture --port --rcon-port --rcon-pass --landings <set>/landings.edn --set R1 --out cache/sim-worlds/R1 [--radius 10]`. For each landing, a client of its own (main's loop and reducer, with `chunk-tap` keeping every `level-chunk-with-light` packet's bytes) joins, is made a spectator and is teleported over `stops`, a view apart, until every column within radius chunks of the landing has arrived (`complete?`); then it leaves. One world file a landing, gzipped EDN: `{:capture/set :capture/landing [x z y] :capture/radius :capture/columns {[cx cz] bytes}}`, bytes as the recordings print them. Nothing is translated: the bot decodes the server's bytes as it decodes any server's. A local run took 49 columns of radius 3 in 20 s, 270 KB.

@@ -204,3 +204,45 @@
               (assoc (world-of (merge walled (solid [7 64 8] [7 65 8]))) :player/on-fire? true)
               placed))
         "still sealed: nothing is open to shut")))
+
+(deftest a-roof-over-open-air-has-no-foundation-but-the-bots-own-cell
+  ;; blaze-race-z2 landing 5, bridging at [2159.5 69 1746.5]: the seal's roof cell had no neighbour and its
+  ;; foundation was the cell over the bot's feet, refused with the body in it (t, u, x, y job 5 too)
+  (let [w (world-of {})
+        site {:pocket/cell [8 64 8] :pocket/stand nil :pocket/dig [] :pocket/placed []}
+        held (-> w
+                 (assoc-in [:player/inventory 9] {:item (recipe/item-id :cobblestone) :count 62})
+                 (assoc-in [:player/inventory 10] {:item (recipe/item-id :iron_pickaxe) :count 1}))]
+    (is (true? (pocket/placeable? w [9 64 8])) "beside the feet on the ground: the floor holds it")
+    (is (false? (pocket/placeable? w [8 66 8]))
+        "the roof over open air: its foundation is the head cell")
+    (is (not (contains? (set (pocket/seal-cells w [8 64 8])) [8 66 8])))
+    (is (contains? (set (pocket/wanted-seal-cells w [8 64 8])) [8 66 8]))
+    (is (not (pocket/can-seal? held site))
+        "a pocket that cannot be roofed is not sealed over air")))
+
+(deftest a-pocket-with-its-placed-cells-solid-and-others-open-is-not-sealed
+  ;; blaze-race-z7 job 2 (flip_trace2): :pocket/placed 4 cells all solid, the 4 on the z sides open
+  (let [site {:pocket/cell [8 64 8] :pocket/stand nil :pocket/dig [] :pocket/placed [[7 64 8]]}
+        half (world-of (merge walled (solid [7 64 8])))
+        full (world-of (merge walled (solid [7 64 8] [7 65 8])))]
+    (is (= [[7 65 8]] (pocket/wanted-seal-cells half [8 64 8])) "the head cell is still open")
+    (is (false? (pocket/sealed? half site)) "the placed one solid is not a seal")
+    (is (true? (pocket/sealed? full (assoc site :pocket/placed [[7 64 8] [7 65 8]]))))))
+
+(deftest a-pocket-with-a-wanted-cell-that-cannot-be-laid-is-not-sealed-and-no-refuge
+  ;; review of 4cbdea744 and of the lead: eight sides solid, the roof over open air wanted but not
+  ;; placeable: sealed? stays false (blazes fly and shoot down: z7 landing 1 burned in one), no :seal
+  ;; is re-issued for it, and the site is dropped and remembered (blaze steer)
+  (let [c [8 64 8]
+        sides [[7 64 8] [9 64 8] [8 64 7] [8 64 9] [7 65 8] [9 65 8] [8 65 7] [8 65 9]]
+        w (assoc-in (world-of (apply solid sides))
+           [:player/inventory 9]
+           {:item (recipe/item-id :cobblestone) :count 62})
+        held (assoc-in w [:player/inventory 10] {:item (recipe/item-id :iron_pickaxe) :count 1})
+        site {:pocket/cell c :pocket/stand nil :pocket/dig [] :pocket/placed sides}]
+    (is (contains? (set (pocket/wanted-seal-cells w c)) [8 66 8]) "the roof is wanted")
+    (is (empty? (pocket/seal-cells w c)) "and cannot be laid")
+    (is (true? (pocket/unlayable? w c)))
+    (is (false? (pocket/sealed? w site)) "not sealed")
+    (is (not (pocket/can-seal? held site)) "and no :seal to re-issue")))

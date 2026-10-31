@@ -551,7 +551,10 @@
         (is (blaze/at-nook? in-nook [11 64 8]))
         (is (= :pocket (:intent/kind (next-intent in-nook))) "the nook is not the pocket")
         (is (pocket/in? in-pocket))
-        (is (= {:intent/kind :camp :intent/spawner [11 64 8]} (next-intent in-pocket)))))))
+        (is (= {:intent/kind :camp :intent/spawner [11 64 8]}
+               (next-intent
+                (memory/remember-intention in-pocket {:intent/id 99 :intent/kind :pocket} :done)))
+            "just in: the camp, a sortie only after sortie-rest-ms")))))
 
 (deftest the-tunnel-is-the-cover-it-knows-and-cover-that-churns-is-dropped
   ;; blaze-race-b (real, a33d2a96e): :walk [2344 57 2281], [2344 57 2280], [2344 57 2279], then
@@ -1340,9 +1343,10 @@
         "the cell the feet stand in is held to be sealed")
     (is (true? (:pocket/here? (:pocket/site out))))
     (testing
-      "and there the openings are the cells to seal, every open side at the feet and the head"
-      (is (= #{[7 64 8] [9 64 8] [8 64 7] [8 64 9] [7 65 8] [9 65 8] [8 65 7] [8 65 9] [8 66 8]}
-             (set (pocket/seal-cells out [8 64 8])))))))
+      "and there the openings are the cells to seal, every open side at the feet and the head; the roof over open air has no foundation but the head cell, and is none"
+      (is (= #{[7 64 8] [9 64 8] [8 64 7] [8 64 9] [7 65 8] [9 65 8] [8 65 7] [8 65 9]}
+             (set (pocket/seal-cells out [8 64 8]))))
+      (is (contains? (set (pocket/wanted-seal-cells out [8 64 8])) [8 66 8])))))
 
 (def rock
   "Solid rock two thick all round a tunnel along z 8 from x 4 to 8 at the feet and the head, roofed,
@@ -1536,8 +1540,13 @@
         at (fn [hp] (assoc sealed :player/health hp))]
     (is (not (blaze/heals? sealed)) "no food and the bar is low: a rest cannot heal")
     (is (= 12.0 (blaze/hold-to sealed)))
-    (is (= :pocket-hold (:intent/kind (next-intent (at 10.5)))) "10.5: held, not unsealed")
-    (is (= :pocket-hold (:intent/kind (next-intent (at 11.9)))))
+    (is (not= :pocket-hold (:intent/kind (next-intent (at 10.5))))
+        "10.5: no hold that gains nothing")
+    (is (not= :unseal (:intent/kind (next-intent (at 10.5))))
+        "and not opened: a blaze in reach seals it again")
+    (is (not= :pocket-hold (:intent/kind (next-intent (at 6.2))))
+        "z6 landing 2: hp 6.2, food 17, none held")
+    (is (not= :pocket-hold (:intent/kind (next-intent (at 11.9)))))
     (is
      (= {:intent/kind :unseal} (next-intent (at 12.2)))
      "at low-health, 12.2 (x job 4's stuck health): the seal opens, no wait for a meal that is gone")
@@ -1634,7 +1643,8 @@
         base (-> (standing {})
                  in-pocket
                  with-spawner
-                 (assoc :time/now 100000))
+                 (assoc :time/now 100000)
+                 (memory/remember-intention {:intent/id 98 :intent/kind :pocket} :done))
         idle (-> base
                  (camp 1)
                  (camp 2)
@@ -1645,6 +1655,11 @@
     (is (= :camp (:intent/kind (next-intent idle)))
         "idle with no pocket nearer the spawner: stays, never across the room to it")
     (is (nil? (blaze/advance-intent idle spawner-at)) "no site nearer in this one-pocket world")
+    (testing
+      "rested in the pocket sortie-rest-ms with no fight: out toward the spawner (hit and run)"
+      (let [rested (assoc idle :time/now (+ 100000 blaze/sortie-rest-ms 1))]
+        (is (blaze/sortie-due? rested))
+        (is (not= :camp (:intent/kind (next-intent rested))))))
     (testing "after a fight the pocket is camped again"
       (let [fought (memory/remember-intention idle {:intent/id 4 :intent/kind :fight} :done)]
         (is (= :camp (:intent/kind (next-intent fought))))))))
@@ -1701,7 +1716,7 @@
      (= far (blaze/shooter w))
      "a blaze beyond reach with the bot in its sight (the fixture is one chunk; the run: 45 off)")
     (is (= {:intent/kind :place :intent/item :cobblestone :intent/cell [9 64 8]}
-           (blaze/long-shot-cover w))
+           (dissoc (blaze/long-shot-cover w) :intent/until))
         "the cell beside the feet toward it")
     (is (= :place (:intent/kind (next-intent w))) "chosen ahead of the tunnel and the camp")
     (testing "not while the hit is old, a blaze is at hand, or the bot is in a pocket"
@@ -1713,6 +1728,35 @@
     (testing "nothing to lay with: nothing"
       (is (nil? (blaze/long-shot-cover (assoc w :player/inventory {})))))))
 
+(deftest an-idle-camp-baits-from-a-corridor-cell-that-sees-a-blaze
+  ;; blaze-race-y jobs 1, 2, 3 and 6: 39 to 48 minutes in a pocket seeing the spawner's top and no
+  ;; blaze, 7 to 10 hovering 9 blocks off, none shot, no nearer pocket found
+  (let [line (entity :blaze [3.5 65.0 8.5] :entity/health 20.0)
+        w (-> (standing {7 line})
+              in-pocket
+              with-spawner
+              (assoc :time/now 100000))
+        bare (-> (standing {})
+                 in-pocket
+                 with-spawner
+                 (assoc :time/now 100000))]
+    (is (true? (blaze/bait-ok? w spawner-at [8 64 8]))
+        "the pocket cell sees the blaze in its opening")
+    (is (true? (blaze/bait-here? w spawner-at)))
+    (is (false? (blaze/bait-here? bare spawner-at)) "no blaze in sight: not a bait cell")
+    (is (false? (blaze/bait-here? w nil)) "no spawner: none")
+    (is (nil? (blaze/bait-walk w spawner-at)) "the bot stands in the only one: no walk")))
+
+(deftest the-long-shot-wall-over-open-air-lays-its-support-first
+  ;; blaze-race-z2 landing 5, [2159.5 69 1746.5]: the wall's :place failed :no-support, open air beside
+  ;; the feet; the block under it, which a neighbour holds up, goes first (build/foundation)
+  (let [far (entity :blaze [15.5 66.0 1.5] :entity/health 20.0)
+        w (-> (standing {7 far})
+              (assoc :time/now 100000 :player/struck-at 99000)
+              (assoc-in [:player/inventory 9] (item :cobblestone 40))
+              (assoc :world/chunks {[0 0] (world/column {[9 63 8] (blocks/default-state :air)})}))]
+    (is (= [9 63 8] (:intent/cell (blaze/long-shot-cover w)))
+        "the cell under the wall cell first")))
 (deftest a-full-inventory-throws-junk-before-a-rod-is-fetched
   ;; race 41181938317 (c996f54) s2 Clj_r02: five blazes killed, seven rods dropped, :collect-drops
   ;; [333 77 300] failed :not-picked-up four times and rodMax stayed 0; all 36 slots were full
@@ -1731,3 +1775,461 @@
       (is (= :collect-drops
              (:intent/kind (next-intent (standing (assoc full 9 (item :blaze_rod 3))
                                                   {40 rod}))))))))
+
+(deftest a-sortie-is-over-after-two-fights-ninety-seconds-or-fourteen-health
+  ;; blaze-race-z2 landing 2: 4 blazes in 3.4 minutes in the room, then dead there; landing 1 stood
+  ;; at the tunnel's end among 6 and 7 until dead
+  (let [fought (fn [w t n]
+                 (reduce
+                  (fn [w i]
+                    (memory/remember-intention w {:intent/id (+ 100 i) :intent/kind :fight} :done))
+                  (assoc w :time/now t)
+                  (range n)))
+        base (assoc (standing {}) :time/now 10000 :sortie/since 10000)]
+    (is (false? (blaze/sortie-over? (standing {}))) "no sortie begun")
+    (is (false? (blaze/sortie-over? base)) "just begun")
+    (is (true? (blaze/sortie-over? (assoc base :time/now (+ 10000 blaze/sortie-ms 1))))
+        "90 s spent")
+    (is (true? (blaze/sortie-over? (assoc base :player/health 13.0))) "under 14")
+    (is (false? (blaze/sortie-over? (assoc base :player/health 15.0))))
+    (is (false? (blaze/sortie-over? (fought base 12000 1))) "one fight")
+    (is (true? (blaze/sortie-over? (fought base 12000 2))) "two fights since it began")))
+
+(deftest steer-notes-the-sortie-where-the-bot-leaves-its-pocket-for-the-zone
+  (let [row (first (filter #(= :blaze-rods (:goal/id %)) plan/goals))
+        out (-> (standing {})
+                with-spawner
+                (assoc :time/now 5000))
+        in (in-pocket out)]
+    (is (= 5000 (:sortie/since (plan/steer out row))) "out of a pocket in the zone: begun")
+    (is (= 5000 (:sortie/since (plan/steer (plan/steer out row) row))) "and kept")
+    (is (nil? (:sortie/since (plan/steer (assoc in :sortie/since 1) row))) "forgotten in a pocket")
+    (is (nil? (:sortie/since (plan/steer (assoc out :player/pos [200.5 64.0 200.5]) row)))
+        "and out of the zone")))
+
+(deftest a-healed-bot-in-its-pocket-goes-out-and-a-spent-sortie-comes-back
+  (let [w (-> (standing {})
+              in-pocket
+              with-spawner
+              (assoc :time/now 100000))]
+    (is (true? (blaze/sortie-due? w)) "healed, nothing recent")
+    (is (false? (blaze/sortie-due? (assoc w :player/health 15.0))) "not healed")
+    (is (false? (blaze/sortie-due? (memory/remember-intention (assoc w :time/now 100000)
+                                                              {:intent/id 5 :intent/kind :fight}
+                                                              :done)))
+        "a fight just ended: it rests")
+    (is (not= :camp (:intent/kind (next-intent w)))
+        "out toward the spawner, not a camp in the pocket")
+    (let [out (-> (standing {})
+                  (assoc :world/chunks {[0 0] (world/column pocket-walls)}
+                         :player/pos [5.5 64.0 8.5]
+                         :sortie/since 0
+                         :time/now 100000)
+                  with-spawner)]
+      (is (= :pocket (:intent/kind (next-intent out)))
+          "a spent sortie: back to the pocket behind"))))
+
+(deftest a-spent-sortie-does-not-cut-the-pick-up-of-a-rod-a-step-away
+  ;; blaze-race-z4 landings 1 and 2: :collect-drops [2344 57 2286] and :pocket alternated every 0.35 s
+  ;; for 10 s and more (14 times in 10 s), 4 of 6 rods lost, the bot dead in the room
+  (let [rod (entity :item [10.5 64.0 8.5] :entity/item blaze/rod)
+        w (assoc (standing {40 rod}) :sortie/since 0 :time/now 200000)
+        grab {:intent/kind :collect-drops :intent/item :blaze_rod :intent/target [10 64 8]}]
+    (is (true? (blaze/sortie-over? w)))
+    (is (some? (blaze/near-rod w)))
+    (is (not (plan/interrupts? w row grab)) "the rod is picked up first")
+    (is (plan/interrupts? w row {:intent/kind :camp :intent/spawner [11 64 10]})
+        "a camp is still cut")))
+
+(deftest a-sortie-ends-when-the-bot-burns-or-the-room-is-on-it
+  ;; blaze-race-z4 landing 2: 10 blazes killed in 11 minutes, dead among 13 to 14 within 8
+  (let [crowd (into {}
+                    (map (fn [i] [(+ 50 i)
+                                  (entity :blaze [(+ 4.5 (* 0.5 i)) 65.0 8.5]
+                                          :entity/health 20.0)]))
+                    (range 5))
+        base (assoc (standing {}) :time/now 10000 :sortie/since 10000)]
+    (is (false? (blaze/sortie-over? base)))
+    (is (true? (blaze/sortie-over? (assoc base :player/on-fire? true))) "burning")
+    (is (true? (blaze/sortie-over? (assoc base :world/entities crowd))) "five within 8")
+    (is (false? (blaze/sortie-over? (assoc base :world/entities (select-keys crowd [50 51 52]))))
+        "three is the limit, not over")))
+
+(deftest ^:eftest/synchronized the-camp-clause-never-ends-in-nil-when-no-way-to-the-spawner-is-left
+  ;; blaze-race-z4 landing 5: :tunnel-to done on its last stand, to-spawner nil, the clause's value nil,
+  ;; {:plan/wait :nothing-to-do} for 400 ticks and the run ended with time left
+  (let [w (assoc (-> (standing {})
+                     with-spawner)
+                 :player/pos
+                 [60.5 64.0 60.5])]
+    (with-redefs [blaze/to-spawner (fn [_ _] nil)]
+      (let [i (with-redefs [blaze/search (fn [_] nil)] (next-intent w))]
+        (is (some? i) "an intent, never nil")
+        (is (nil? (:plan/wait i)) "and no wait: it ends the plan")
+        (is (= :walk (:intent/kind i)))
+        (is (= :explore (:intent/for i)))))))
+
+(deftest a-stalled-stand-is-forgotten-after-ten-minutes
+  (let [tunnel
+        (fn [w id at]
+          (memory/remember-intention
+           (assoc w :time/now at)
+           {:intent/id id :intent/kind :tunnel-to :intent/target [3 64 3] :intent/ended-at [1 64 1]}
+           :done))
+        w (-> (standing {})
+              (tunnel 1 1000)
+              (tunnel 2 2000))]
+    (is (contains? (blaze/stalled (assoc w :time/now 3000)) [3 64 3])
+        "two tunnels ended in one cell")
+    (is (empty? (blaze/stalled (assoc w :time/now (+ 2000 blaze/stall-memory-ms 1))))
+        "ten minutes on: tried again")))
+
+(deftest stalled-tunnels-to-two-stands-give-up-the-spawners-site
+  ;; blaze-race-z4 job 1 (41194927191): :tunnel-to flipped among the cells beside one spawner (x 2209-2211,
+  ;; y 60-61, z 1793-1795) for 13 minutes; a tunnel that went nowhere to two of them went nowhere to the site
+  (let [sp [12 70 8]
+        w (-> (standing {})
+              (memory/observe sp blaze/spawner))
+        [a b c] (blaze/cells-beside sp)
+        done
+        (fn [w id target ended-at]
+          (memory/remember-intention
+           w
+           {:intent/id id :intent/kind :tunnel-to :intent/target target :intent/ended-at ended-at}
+           :done))
+        stall (fn [w id target cell]
+                (-> w
+                    (done id target cell)
+                    (done (inc id) target cell)))
+        one (stall w 1 a [3 64 3])
+        two (stall one 3 b [3 64 3])]
+    (is (some? (blaze/to-spawner one sp)) "one stand stalled: another is tried")
+    (is (contains? (blaze/site-stalled two sp) c) "two stalled: every cell beside the spawner is")
+    (is (nil? (blaze/to-spawner two sp)) "the site is given up: the act goes on with the search")))
+
+(deftest the-sites-stalled-mark-expires-with-the-stalls
+  ;; the mark is derived from stalled, whose facts are forgotten after stall-memory-ms
+  (let [sp [12 70 8]
+        w (-> (standing {})
+              (memory/observe sp blaze/spawner))
+        [a b c] (blaze/cells-beside sp)
+        done
+        (fn [w id target at]
+          (memory/remember-intention
+           (assoc w :time/now at)
+           {:intent/id id :intent/kind :tunnel-to :intent/target target :intent/ended-at [3 64 3]}
+           :done))
+        two (-> w
+                (done 1 a 1000)
+                (done 2 a 1100)
+                (done 3 b 1200)
+                (done 4 b 1300))]
+    (is (contains? (blaze/site-stalled (assoc two :time/now 2000) sp) c))
+    (is (not (contains? (blaze/site-stalled (assoc two :time/now (+ 1300 blaze/stall-memory-ms 1))
+                                            sp)
+                        c))
+        "ten minutes on: the site is tried again")))
+
+(deftest an-open-hold-under-fire-is-cut-for-the-seal
+  ;; blaze-race-z5 landing 1: :pocket-hold ran 30 s open at hp 20 with 63 cobblestone and a pickaxe held,
+  ;; three fireballs and their burns in it, 20 to 0 in 60 s, no :seal ever: a running hold is not asked again
+  (let [line (entity :blaze [4.5 65.0 8.5] :entity/health 20.0)
+        loaded (fn [w]
+                 (-> w
+                     (assoc-in [:player/inventory 9] (item :cobblestone 62))
+                     (assoc-in [:player/inventory 10] (item :iron_pickaxe 1))))
+        base (-> (standing {7 line})
+                 in-pocket
+                 loaded)
+        hold {:intent/kind :pocket-hold :intent/heal-to 20.0}]
+    (is (= {:intent/kind :seal} (next-intent (assoc base :player/on-fire? true)))
+        "burning in the line: the seal")
+    (is (true? (boolean (plan/interrupts? (assoc base :player/on-fire? true) row hold)))
+        "so a running hold is cut for it")
+    (is (false? (boolean (plan/interrupts? (-> (standing {})
+                                               in-pocket
+                                               loaded)
+                                           row
+                                           hold)))
+        "nothing shooting: the hold runs")))
+
+(deftest a-sortie-is-not-cut-for-a-pocket-ahead
+  ;; blaze-race-z6 landings 1 and 2: 138 minutes of :camp (60 s), :camp failed :no-blaze, :tunnel-to, :pocket
+  ;; one second later, :camp: the sortie's first dig opened the pocket's wall (valid? false), and
+  ;; prepare-intent made a new pocket ahead and cut the tunnel; the leg never got past two cells
+  (let [w (-> (standing {})
+              (assoc :world/chunks {[0 0] (world/column rock)}
+                     :player/pos [5.5 64.0 8.5]
+                     :time/now 1000000)
+              with-spawner)]
+    (is (some? (blaze/prepare-intent w spawner-at)) "no sortie: a pocket ahead is made")
+    (is (nil? (blaze/prepare-intent (assoc w :sortie/since 990000) spawner-at))
+        "on a sortie: no pocket ahead")))
+
+(deftest a-long-shot-wall-place-is-cut-after-three-seconds
+  ;; blaze-race-z7 landing 2: a :place ran 17 s at the tunnel's end under fire (hp 20 to 9.5), 2 use-items
+  (let [far (entity :blaze [15.5 66.0 1.5] :entity/health 20.0)
+        w (-> (standing {7 far})
+              (assoc :time/now 100000 :player/struck-at 99000)
+              (assoc-in [:player/inventory 9] (item :cobblestone 40)))
+        i (blaze/long-shot-cover w)]
+    (is (= (+ 100000 blaze/long-shot-place-ms) (:intent/until i)))
+    (is (not (plan/interrupts? w row i)) "within its three seconds: it runs")
+    (is (true? (boolean (plan/interrupts? (assoc w :time/now 104000) row i))) "past them: cut")))
+
+(deftest the-stuck-watchdogs-avoid-window-keeps-the-pocket-from-re-forming
+  ;; blaze-race-z6 (run 41201377711): 12 of 12 watchdog firings in two jobs were followed within 50 ms
+  ;; by :pocket and then :camp, the explore walk undone
+  (let [w (-> (standing {})
+              (assoc :world/chunks {[0 0] (world/column pocket-walls)}
+                     :player/pos [5.5 64.0 8.5]
+                     :time/now 100000)
+              with-spawner)
+        avoid {:near [5.5 64.0 8.5] :until 400000}
+        sp spawner-at]
+    (is (some? (blaze/pocket-go (assoc w :health 20.0) sp false)) "no window: the pocket is found")
+    (is (nil? (blaze/pocket-go (assoc w :plan/avoid avoid) sp false)) "in the window: passed over")
+    (is (some? (blaze/pocket-go (assoc w :plan/avoid (assoc avoid :until 50000)) sp false))
+        "after it: the pocket is found again")
+    (is (not= :pocket (:intent/kind (next-intent (assoc w :plan/avoid avoid))))
+        "the row leaves through the search, not back to the pocket")
+    (is (not= :camp (:intent/kind (next-intent (assoc w :plan/avoid avoid)))))))
+
+(deftest ^:eftest/synchronized a-watched-void-retreat-covers-before-it-rests
+  ;; sim fortress probe 41215805587 (R1/1 seed 1, ci/simrace-from-fortress): :rest at [310 79 234] from
+  ;; t 83 s to 120 s with 2 and then 5 blazes 6.8 to 7.2 blocks off, hp 14.6 to 0.9, dead resting
+  (let [near (entity :blaze [15.5 65.0 8.5] :entity/health 20.0)
+        w (-> (standing {7 near})
+              (assoc :player/health 14.6 :player/food 20 :time/now 100000)
+              (assoc-in [:player/inventory 9] (item :cobblestone 40)))]
+    (with-redefs [combat/void-retreat? (constantly true)]
+      (let [i (blaze/healing w)]
+        (is (not= {:intent/kind :rest} i) "not a rest in the line of fire")
+        (is (= :place (:intent/kind i)) "a block laid between")))
+    (with-redefs [combat/void-retreat? (constantly true)]
+      (is (= {:intent/kind :rest} (blaze/healing (assoc w :player/inventory {})))
+          "nothing to lay, eat or dig: the rest on the lip, as before"))))
+
+(deftest the-long-shot-wall-is-not-laid-against-a-blaze-to-fight
+  ;; blaze-race-z8 job 6 (landing 6): two blazes at 0.7 to 3.1 blocks, hp 20 to 3.6 in 9 s, one attack sent:
+  ;; :fight, :place x4, :dodge, :pocket, :pillar, :dig, :seal in turns
+  (let [far (entity :blaze [15.5 66.0 1.5] :entity/health 20.0)
+        mid (entity :blaze [8.5 66.0 15.5] :entity/health 20.0)
+        w (-> (standing {7 far})
+              (assoc :time/now 100000 :player/struck-at 99000)
+              (assoc-in [:player/inventory 9] (item :cobblestone 40)))]
+    (is (some? (blaze/long-shot-cover w)) "a shooter beyond reach: the wall")
+    (is (nil? (blaze/long-shot-cover (assoc-in w [:world/entities 8] mid)))
+        "a blaze within 8 as well: it is fought, no wall")))
+
+(deftest a-blaze-at-hand-is-fought-by-one-row-for-the-whole-fight
+  ;; blaze-race-z8 job 6 (landing 6): two blazes at 0.7 to 3.1 blocks, hp 20 -> 18.4 -> 16.2 (burning) -> 13.7;
+  ;; :fight, :place x4, :dodge, :pocket, :pillar, :dig, :seal took turns, one attack sent in 9 s
+  (let [near (entity :blaze [10.5 64.5 8.5] :entity/health 20.0)
+        also (entity :blaze [8.5 64.5 11.0] :entity/health 20.0)
+        base (-> (standing {7 near 8 also})
+                 (assoc :time/now 100000 :player/struck-at 99500)
+                 (assoc-in [:player/inventory 9] (item :cobblestone 40)))
+        tick (fn [hp burning?] (assoc base :player/health hp :player/on-fire? burning?))
+        fight (fn [w] (:intent/kind (next-intent w)))
+        running {:intent/kind :fight
+                 :intent/target 7
+                 :intent/to-the-end? true
+                 :intent/yield? true
+                 :intent/goal :blaze-rods}]
+    (doseq [[hp burning?] [[20.0 false] [18.4 false] [16.2 true] [13.7 true] [12.0 true]]]
+      (is (= :fight (fight (tick hp burning?)))
+          (str "hp " hp " burning " burning? ": one row, the fight")))
+    (doseq [hp [20.0 16.2 12.0]]
+      (is (not (plan/interrupts? (tick hp true) row running)) (str "a running fight holds at " hp)))
+    (is (true? (plan/holds? running)) "and another row does not preempt it")
+    (testing "under low-health the retreat is one: not a fight"
+      (is (not= :fight (fight (tick 11.0 true)))))))
+
+(deftest the-steer-drops-an-unsealable-pocket-and-remembers-it
+  (let [row (first (filter #(= :blaze-rods (:goal/id %)) plan/goals))
+        site {:pocket/cell [8 64 8]
+              :pocket/stand nil
+              :pocket/dig []
+              :pocket/placed []
+              :pocket/here? true}
+        open-sky (-> (standing {})
+                     with-spawner
+                     (assoc :pocket/site site :time/now 5000))
+        out (plan/steer open-sky row)]
+    (is (pocket/in? open-sky) "the held site is the cell the bot stands in")
+    (is (nil? (:pocket/site out)) "dropped")
+    (is (contains? (:pocket/failed out) [8 64 8]) "remembered as failed")
+    (is (not ((blaze/pocket-ok? out spawner-at false) [8 64 8])) "and passed over as a refuge")
+    (testing "a roofed pocket is kept"
+      (let [kept (plan/steer (in-pocket (-> (standing {})
+                                            with-spawner
+                                            (assoc :time/now 5000)))
+                             row)]
+        (is (some? (:pocket/site kept)))
+        (is (empty? (:pocket/failed kept)))))))
+
+(deftest a-crowd-at-hand-is-not-a-committed-fight
+  ;; review of 3d9788a41: four or five blazes at hand and hp 20 is the room on the bot (z4 landing 2, z5)
+  (let [blz (fn [n]
+              (into {}
+                    (map (fn [i] [(+ 50 i)
+                                  (entity :blaze [(+ 9.5 (* 0.4 i)) 64.5 8.5]
+                                          :entity/health 20.0)]))
+                    (range n)))
+        w (fn [n] (assoc (standing (blz n)) :time/now 100000 :player/struck-at 99500))]
+    (is (some? (blaze/commit-fight (w 2))) "two at hand: committed")
+    (is (nil? (blaze/commit-fight (w 3)))
+        "three watching is a volley (outnumbered?): not committed")
+    (is (nil? (blaze/commit-fight (w 4))) "four at hand: not a committed fight")
+    (is (nil? (blaze/commit-fight (w 5))))
+    (is (not (blaze/committed-fight? (w 4) {:intent/kind :fight :intent/target 50})))))
+
+(deftest a-fire-lit-at-the-feet-cuts-the-running-intent
+  ;; blaze-race-z8 job 3: 14 in_fire hits, 19 s on one spot while :collect-drops of a rod in the fire ran
+  (let [fire (blocks/default-state :fire)
+        w (assoc (standing {}) :world/chunks {[0 0] (world/column {[8 64 8] fire})})
+        collect {:intent/kind :collect-drops :intent/item :blaze_rod :intent/target [8 64 8]}]
+    (is (blaze/burning-here? w) "fire in the feet's cell")
+    (is (true? (boolean (plan/interrupts? w row collect))) "so a running pick-up is cut")
+    (is (false? (boolean (plan/interrupts?
+                          w
+                          row
+                          {:intent/kind :walk :intent/for :fire-out :intent/target [9 64 8]})))
+        "the walk out is not")
+    (is (false? (boolean (plan/interrupts? w row {:intent/kind :dig :intent/target [8 64 8]})))
+        "nor the dig of the fire")
+    (is (false? (boolean (plan/interrupts? (standing {}) row collect))) "no fire: left alone")))
+
+(deftest a-long-shot-place-past-its-deadline-is-not-planned-again-at-once
+  ;; blaze-race-z8 job 5 (flip_trace2): 97 :place intents, each cut :interrupted because the fresh plan
+  ;; carried a new :until; with same-choice? ignoring :until the same place would run on for ever
+  (let [far (entity :blaze [15.5 66.0 1.5] :entity/health 20.0)
+        w (-> (standing {7 far})
+              (assoc :time/now 100000 :player/struck-at 99000)
+              (assoc-in [:player/inventory 9] (item :cobblestone 40)))
+        i (blaze/long-shot-cover w)]
+    (is (some? i))
+    (is (some? (blaze/long-shot-cover (assoc w :plan/intent (assoc i :intent/status :active))))
+        "within its three seconds the same place is the choice (kept running)")
+    (is (nil? (blaze/long-shot-cover (assoc w
+                                            :time/now 104000
+                                            :player/struck-at 103500
+                                            :plan/intent (assoc i :intent/status :active))))
+        "past them it is not: the cut goes through and the row chooses something else")))
+
+(deftest a-fire-the-box-reaches-into-is-a-fire-at-the-feet
+  ;; blaze-race-z9 job 3: in_fire x39 at [2349.2 58.1 2289.3]: the feet's cell clear, the neighbour at
+  ;; x 2348 holding fire, the box (0.3 either side) reaching into it
+  (let [fire (blocks/default-state :fire)
+        w (fn [pos]
+            (assoc (assoc (standing {}) :player/pos pos)
+                   :world/chunks
+                   {[0 0] (world/column {[7 64 8] fire})}))]
+    (is (false? (blaze/burning-here? (w [8.5 64.0 8.5]))) "centred, the box clear of x 7")
+    (is (true? (blaze/burning-here? (w [8.2 64.0 8.5])))
+        "8.2 - 0.3 = 7.9: the box is in the fire's cell")
+    (is (some #{[7 64 8]} (blaze/body-cells (w [8.2 64.0 8.5]))))))
+
+(deftest a-rod-a-step-away-is-picked-up-between-ten-and-twelve-health-under-a-swarm
+  ;; blaze-race-z9 job 4: 9 rods dropped, 2 taken; rods 709, 837 and 842 lay 300 s at 1.9 to 2.9 blocks
+  ;; with :collect-drops and :pocket alternating: near-rod from 10, refuge-needed? under 12 with a swarm
+  (let [rod (entity :item [10.5 64.0 8.5] :entity/item blaze/rod)
+        swarm (into {}
+                    (map (fn [i] [(+ 50 i)
+                                  (entity :blaze [14.5 66.0 (+ 6.0 i)] :entity/health 20.0)])
+                         (range 4)))
+        w (assoc (standing (merge {40 rod} swarm)) :player/health 11.0 :time/now 100000)
+        grab {:intent/kind :collect-drops :intent/item :blaze_rod :intent/target [10 64 8]}]
+    (is (blaze/refuge-needed? w) "hp 11 with a swarm: the refuge wants the pocket")
+    (is (some? (blaze/near-rod w)))
+    (is (= :collect-drops (:intent/kind (next-intent w))) "but the rod a step away first")
+    (is (not (plan/interrupts? w row grab)) "and the pick-up is not cut for the refuge")
+    (testing "alight: the refuge first"
+      (is (not= :collect-drops (:intent/kind (next-intent (assoc w :player/on-fire? true))))))))
+
+(deftest a-rod-pick-up-holds-the-refuge-off-for-two-seconds-only
+  ;; lead on z9 job 4: the grab that overrides the refuge under 12 hp runs one step and the pick-up, then the
+  ;; refuge wins, so it cannot become a stand in the swarm
+  (let [rod (entity :item [4.5 64.0 8.5] :entity/item blaze/rod)
+        swarm (into {}
+                    (map (fn [i] [(+ 50 i)
+                                  (entity :blaze [14.5 66.0 (+ 6.0 i)] :entity/health 20.0)])
+                         (range 4)))
+        w (assoc (standing (merge {40 rod} swarm))
+                 :world/chunks {[0 0] (world/column pocket-walls)}
+                 :player/pos [5.5 64.0 8.5]
+                 :player/health 11.0
+                 :time/now 100000)
+        grab {:intent/kind :collect-drops :intent/item :blaze_rod :intent/target [10 64 8]}
+        row (first (filter #(= :blaze-rods (:goal/id %)) plan/goals))]
+    (is (true? (blaze/grab-over-refuge? w)) "not begun: the grab first")
+    (is (true? (blaze/grab-over-refuge? (assoc w :rod-grab/since 99000))) "1 s into it: still")
+    (is (false? (blaze/grab-over-refuge? (assoc w :rod-grab/since 97000)))
+        "3 s in: the refuge wins")
+    (is (not (plan/interrupts? (assoc w :rod-grab/since 99000) row grab)))
+    (is (true? (boolean (plan/interrupts? (assoc w :rod-grab/since 97000) row grab)))
+        "past the 2 s: cut for the refuge")
+    (is (not= :collect-drops (:intent/kind (next-intent (assoc w :rod-grab/since 97000))))
+        "and the refuge is the choice")
+    (testing "steer notes the start and forgets it"
+      (let [on (plan/steer (assoc w :plan/intent (assoc grab :intent/status :active)) row)]
+        (is (= 100000 (:rod-grab/since on)))
+        (is (nil? (:rod-grab/since (plan/steer (assoc w :rod-grab/since 99000) row)))
+            "none running: forgotten")))))
+
+(deftest no-pocket-ahead-within-two-minutes-of-a-pocket-entered
+  ;; blaze-race-z9 jobs 1 and 6: :tunnel-to, 0.7 s later :pocket, :camp for 60 s, over and over for 20 minutes
+  (let [w (-> (standing {})
+              (assoc :world/chunks {[0 0] (world/column rock)}
+                     :player/pos [5.5 64.0 8.5]
+                     :time/now 1000000)
+              with-spawner)
+        entered (fn [w ago]
+                  (memory/remember-intention (assoc w :time/now (- 1000000 ago))
+                                             {:intent/id 77 :intent/kind :pocket}
+                                             :done))]
+    (is (some? (blaze/prepare-intent w spawner-at)) "no pocket entered: one is made ahead")
+    (is (nil? (blaze/prepare-intent (assoc (entered w 10000) :time/now 1000000) spawner-at))
+        "one entered 10 s ago: none")
+    (is (some? (blaze/prepare-intent
+                (assoc (entered w (+ blaze/prepare-after-pocket-ms 1000)) :time/now 1000000)
+                spawner-at))
+        "long ago: made again")))
+
+(deftest two-near-equidistant-spawners-do-not-flip-the-tunnel
+  ;; blaze-race-z9 job 5 (walk-restart's probe): spawners [2225 60 1726] and [2210 60 1794], both ~67 blocks
+  ;; from the bot; each new tunnel went to whichever was nearer to the eye, and the bot paced a block or
+  ;; two between tunnels: 61 to 74 tunnels alternating, 32 minutes
+  (let [w (fn [x & spawners]
+            (reduce #(memory/observe %1 %2 blaze/spawner)
+                    (assoc (standing {}) :player/pos [x 64.0 8.5])
+                    spawners))
+        tunnel (fn [w target]
+                 (memory/remember-intention
+                  w
+                  {:intent/id 5 :intent/kind :tunnel-to :intent/target target}
+                  :done))
+        a [12 64 8]
+        b [4 64 8]
+        far [90 64 8]]
+    (is (= a (blaze/nearest-spawner (w 9.0 a b))) "no tunnel yet: the nearer")
+    (is (= b (blaze/nearest-spawner (w 7.5 a b))))
+    (is (= a (blaze/nearest-spawner (tunnel (w 7.5 a b) (first (blaze/cells-beside a)))))
+        "after a tunnel to a stand of a: a, though b is a hair nearer")
+    (is (= b (blaze/nearest-spawner (tunnel (w 4.5 far b) (first (blaze/cells-beside far)))))
+        "the tunnel's own spawner 85 blocks off, b 0.5: b is chosen (more than the margin)")))
+
+(deftest the-fire-the-box-touches-in-a-pocket-is-punched-not-held-through
+  ;; blaze-race-z10 job 2 (18:23:19): :pocket-hold re-issued every 50 ms, 61 starts in 3 s, in_fire 37: with
+  ;; burning-here? reading the box, @out found fire in a neighbour cell, leave-fire had no clear cell in the
+  ;; walled pocket, and the hold ended at once (burning-here?) and was chosen again
+  (let [fire (blocks/default-state :fire)
+        w (-> (standing {})
+              in-pocket
+              (assoc :player/pos [8.2 64.0 8.5])
+              (assoc :world/chunks {[0 0] (world/column (assoc pocket-walls [7 64 8] fire))}))]
+    (is (blaze/burning-here? w) "the box reaches into [7 64 8]'s fire")
+    (is (= {:intent/kind :dig :intent/target [7 64 8]} (blaze/punch-fire-here w))
+        "so the fire is punched")
+    (is (not= :pocket-hold (:intent/kind (next-intent w))) "and the row does not hold through it")))

@@ -1,0 +1,15 @@
+;; Issue #262, round z10 on 539e2b0ec: six landings (1-6), one blaze-fortress-race run each. z9 (1bdbbad49): landing 4 15 kills in 24 min
+;; but 7 of 9 rods lost to a :collect-drops/:pocket flip; landing 3 a 166-pillar storm and 39 in_fire; landings 1 and 6 a sortie leg
+;; cut after 0.7 s by a pocket ahead for 30 min; landing 5 a tunnel flipping between two spawners. z10: the refuge waits 2 s for a
+;; rod a step away, a failed pillar is remembered, fire the box touches counts, no pocket ahead within 2 min of a pocket,
+;; the tunnel keeps its spawner (16-block margin), plus main with #658 (same-choice) and #661 (failure history).
+;; Rods held first (7 is a pass), kills per 10 min (s2k.ts), deaths.
+{:plans/label "blaze-race-z10"
+ :plans/jobs 6
+ :plans/issue 262
+ :plans/experiments [{:exp/name "blaze-fortress-race"
+                      :exp/kind :gym
+                      :exp/goal "blaze-fortress-race"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 1800}]}

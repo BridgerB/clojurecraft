@@ -220,7 +220,9 @@
    number), :lag-ticks,
    :slow-breaks f (blocks take f times their time to break by the server's clock, a loaded
    server's: a FINISH at the client's time is acked but the break comes later, full-ms),
-   :respawn [x y z] (where a new life begins; the spawn when absent, as a gym landing may differ
+   :respawn-in dimension (the dimension a new life begins in when the player dies there, as a
+   spawn the server holds for it does: the Nether for a race that starts at a fortress; absent, a death
+   anywhere but the overworld ends in the overworld), :respawn [x y z] (where a new life begins; the spawn when absent, as a gym landing may differ
    from the world spawn), :seed (where the loot rolls start, 0 when absent), :tick-seed (where
    a run's tick randomness starts; 0.5 every tick when absent), :kill-at ms (the
    player dies then, a fault as an input: a death mid-task), :dimension (the dimension the
@@ -241,8 +243,8 @@
    fountain's top when absent, the way it faces, its head harmless when absent, and its
    crystals, one on every spike when absent)."
   [{:keys [column columns decoded view-distance spawn keep-alive-every drop-clicks drop-breaks
-           inventory lag-ticks slow-breaks respawn seed tick-seed kill-at dimension nether food
-           difficulty day-time mobs stronghold end]
+           inventory lag-ticks slow-breaks respawn respawn-in seed tick-seed kill-at dimension
+           nether food difficulty day-time mobs stronghold end]
     :or {keep-alive-every keep-alive-every}}]
   (cond->
     {:sim/phase :handshake
@@ -284,6 +286,7 @@
     view-distance (assoc :sim/view-distance view-distance)
     kill-at (assoc :sim/kill-at kill-at)
     dimension (assoc :sim/dimension dimension)
+    respawn-in (assoc :sim/respawn-in respawn-in)
     food (assoc :sim/food food)
     nether (assoc :sim/nether nether)
     difficulty
@@ -1281,19 +1284,24 @@
   ;; bar with hunger (issue #260), eating nothing, no old container, then the teleport that
   ;; places it; issue #323's furnace survived here and refused every window-0 swap after death
   (if (and (= action (packet/value :client-command :perform-respawn)) (<= (:sim/health sim) 0.0))
-    (let [[x y z] (:sim/respawn sim)]
+    (let [[x y z] (:sim/respawn sim)
+          here (:sim/dimension sim dimension/overworld)
+          stays? (= here (:sim/respawn-in sim))]
       (-> sim
-          (cond-> (not= dimension/overworld (:sim/dimension sim dimension/overworld))
-                  (-> return-overworld
-                      (assoc :sim/view #{})))
+          (cond-> (and (not stays?) (not= dimension/overworld here)) return-overworld
+                  (or stays? (not= dimension/overworld here)) (assoc :sim/view #{}))
           (assoc :sim/health max-health
                  :sim/air max-air
                  :sim/player-pos [x y z]
-                 :sim/dimension dimension/overworld)
+                 :sim/dimension (if stays? here dimension/overworld))
           (dissoc :sim/eating :sim/window :sim/view-at)
           (cond-> (:sim/difficulty sim) (with-food-value hunger/fresh))
           (update :sim/respawns inc)
-          (send respawn)
+          (send (if stays?
+                  (assoc respawn
+                         :dimension-type (:dimension/id (dimension/by-name here))
+                         :dimension here)
+                  respawn))
           retell-entities
           (send {:packet/name :player-position
                  :teleport-id 2

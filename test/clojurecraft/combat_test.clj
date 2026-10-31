@@ -14,6 +14,7 @@
             [clojurecraft.fixtures :as fx :refer [packet]]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
+            [clojurecraft.memory :as memory]
             [clojurecraft.packet :as p]
             [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
@@ -899,3 +900,23 @@
            (:intent/kind
             (plan/next-intent (assoc digging :player/health 19.5) (row :defend) plan/goals)))
         "healed past 19: the fight")))
+
+(deftest a-pillar-that-failed-is-not-chosen-again-while-the-story-remembers-it
+  ;; blaze-race-z9 job 3: 166 :pillar :boxed in 28 s, one every 150 ms; start-intent forgot :plan/failed
+  ;; with the nook's :dig, so the pillar guard never held
+  (let [failed (fn [w id k reason at]
+                 (memory/remember-intention (assoc w :time/now at)
+                                            {:intent/id id :intent/kind k :intent/reason reason}
+                                            :failed))
+        w (-> {:world/facts (memory/empty-facts) :time/now 100000}
+              (failed 1 :pillar :boxed 99000))]
+    (is (true? (combat/pillar-failed? w)) "a pillar failed a second ago: not again")
+    (is (true? (combat/pillar-failed? (assoc w :plan/failed nil)))
+        "and :plan/failed forgotten changes nothing")
+    (is (false? (combat/pillar-failed? (assoc w :time/now (+ 99000 combat/pillar-memory-ms 1))))
+        "after the memory: tried again")
+    (is (true? (combat/wall-failed? (failed {:world/facts (memory/empty-facts) :time/now 100000}
+                                            2 :place
+                                            :no-support 99500)
+                                    [9 64 8]))
+        "a wall with no support a moment ago: no wall")))

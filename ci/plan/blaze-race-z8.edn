@@ -1,0 +1,13 @@
+;; Issue #262, round z8: six landings (1-6), one blaze-fortress-race run each. z7 (47768d53a): landing 1 5 kills, 2 rods taken
+;; in 11.8 min, burned in a 20 s open hold after the seal failed twice; landing 2 dead at 3m14 after a 17 s :place under fire
+;; (now cut after 3 s); landing 5 a tunnel loop 23 min. z8 adds the cannot-heal hold end and the place deadline. Rods held
+;; first (7 is a pass), then kills per 10 min (s2k.ts), deaths.
+{:plans/label "blaze-race-z8"
+ :plans/jobs 6
+ :plans/issue 262
+ :plans/experiments [{:exp/name "blaze-fortress-race"
+                      :exp/kind :gym
+                      :exp/goal "blaze-fortress-race"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 1800}]}

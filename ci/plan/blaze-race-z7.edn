@@ -1,0 +1,20 @@
+;; Issue #262, round z7: z6's landings 1, 2 and 5 on main with #650. z6 (b9090d2c3): landing 1 looped sortie -> prepare-intent's
+;; pocket ahead -> camp for 138 min (the first dig of the sortie invalidated the held pocket and prepare cut the leg);
+;; landing 2 sat 96 min in a hold at hp 6.2 with no food (no portal in the gym); landing 5 :blocked at 48 min (tunnel loop).
+;; z7: no pocket ahead on a sortie. Rods held first, kills per 10 min (s2k.ts), deaths.
+{:plans/label "blaze-race-z7"
+ :plans/jobs 3
+ :plans/issue 262
+ :plans/experiments [{:exp/name "blaze-fortress-race"
+                      :exp/kind :gym
+                      :exp/goal "blaze-fortress-race"
+                      :exp/runs 2
+                      :exp/bots 1
+                      :exp/est-s 1800}
+                     {:exp/name "blaze-fortress-race-5"
+                      :exp/kind :gym
+                      :exp/goal "blaze-fortress-race"
+                      :exp/runs 1
+                      :exp/from 5
+                      :exp/bots 1
+                      :exp/est-s 1800}]}

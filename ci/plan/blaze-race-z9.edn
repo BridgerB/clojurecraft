@@ -1,0 +1,14 @@
+;; Issue #262, round z9 on 1bdbbad49: six landings (1-6), one blaze-fortress-race run each. z8 (1f82c76e0): landing 3 11 kills in
+;; 22 min, 3 rods held, burned; landing 1 burned in a 4m45 open hold; landings 2 and 4 camped 12 min; landing 5 a :place storm
+;; (97 cuts), landing 6 seven rows in turns against two blazes. z9: committed close fight (crowd-capped), sealed? with wanted cells,
+;; unlayable pocket dropped, hold that cannot heal ends, fire at the feet cuts, avoid window, long-shot place deadline.
+;; Rods held first (7 is a pass), kills per 10 min (s2k.ts), deaths, on_fire per minute alive.
+{:plans/label "blaze-race-z9"
+ :plans/jobs 6
+ :plans/issue 262
+ :plans/experiments [{:exp/name "blaze-fortress-race"
+                      :exp/kind :gym
+                      :exp/goal "blaze-fortress-race"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 1800}]}
