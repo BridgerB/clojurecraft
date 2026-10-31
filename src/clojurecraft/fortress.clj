@@ -33,7 +33,8 @@
 (def reach 6)                         ; blocks from a fortress brick that count as at the fortress
 (def brick-min-y 32)                  ; bricks under this are below the lava sea's surface (y 31): never tunnel to them
 (def sight-radius 512)                ; how far a remembered brick may be and still be the target
-(def dead-cap 512)                     ; cells found to lead nowhere that are kept from one target to the next
+(def dead-cap 512)                     ; dead cells kept for one target
+(def dead-targets 4)                  ; other targets whose dead cells are kept
 (def steps-per-tunnel 32)             ; steps a :tunnel-to takes before the planner looks again
 (def explore-spacing 160)             ; blocks between the strips an exploring tunnel sweeps: a server shows 96 either side of the feet
 (def leg-max (* 3 explore-spacing))   ; the longest leg of the spiral: a leg longer than a judge window's walk only ever sweeps one strip
@@ -547,15 +548,24 @@
 
 (defn trail-of
   "The way back the world keeps for a tunnel to target: {:trail/target target :trail/cells the
-   feet cells steps began from, oldest first :trail/dead the cells found to lead nowhere}. A
-   trail kept for another target is not this one's: an empty one."
+   feet cells steps began from, oldest first :trail/dead the cells found to lead nowhere toward
+   target :trail/others [[target dead]] the dead cells of the last dead-targets other targets}. A
+   trail kept for another target is not this one's cells: an empty list. Its dead cells are kept,
+   by target, and come back when the target does: a cell is dead because no fresh step toward
+   *its* target leaves it (moves never offers the way straight back), so it may be the way to
+   another target, and is not dead for that one. The planner's target alternated between two
+   spawners, and each change forgot what the last tunnel to it had learnt."
   [world target]
   (let [t (:fortress/trail world)]
     (if (= target (:trail/target t))
       t
-      {:trail/target target
-       :trail/cells []
-       :trail/dead (let [dead (:trail/dead t #{})] (if (> (count dead) dead-cap) #{} dead))})))
+      (let [others (cond->> (remove #(= target (first %)) (:trail/others t []))
+                     (:trail/target t) (cons [(:trail/target t) (:trail/dead t #{})]))
+            dead (some #(when (= target (first %)) (second %)) (:trail/others t []))]
+        {:trail/target target
+         :trail/cells []
+         :trail/dead (if (> (count dead) dead-cap) #{} (or dead #{}))
+         :trail/others (vec (take dead-targets others))}))))
 
 (defn step-back
   "The move from feet back to the last cell of trail, or nil when the trail is empty, that cell is

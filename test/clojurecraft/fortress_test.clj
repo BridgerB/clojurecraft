@@ -1492,17 +1492,24 @@
     (is (fortress/fresh-move? feet [1 0 0] target #{cell} #{cell}) "a cell not stood in is")
     (is (not (fortress/fresh-move? feet nil target #{} #{})) "no move is none")))
 
-(deftest the-cells-found-dead-outlive-the-target-they-were-found-for
-  ;; the same tunnel's target alternated between two spawners 67 blocks off, and the trail was
-  ;; kept for the other target and learnt again each time
+(deftest the-cells-found-dead-are-kept-for-the-target-they-were-found-for
+  ;; a cell is dead because no fresh step toward its target leaves it, so it is not dead for
+  ;; another target (the way straight back is not offered); the target alternated between two
+  ;; spawners and each change forgot what the last tunnel to it had learnt
   (let [dead #{[2162 68 1747] [2161 70 1747]}
-        w {:fortress/trail {:trail/target [2209 60 1794] :trail/cells [[1 2 3]] :trail/dead dead}}
-        other (fortress/trail-of w [2224 60 1726])]
-    (is (= dead (:trail/dead other)) "the dead cells are kept")
-    (is (= [] (:trail/cells other)) "the way back is the other target's own")
-    (is (= #{}
-           (:trail/dead (fortress/trail-of {:fortress/trail {:trail/target [0 0 0]
-                                                             :trail/dead (set (for [x (range 600)]
-                                                                                [x 0 0]))}}
-                                           [1 1 1])))
-        "forgotten past dead-cap")))
+        a [2209 60 1794]
+        b [2224 60 1726]
+        w {:fortress/trail {:trail/target a :trail/cells [[1 2 3]] :trail/dead dead}}
+        on-b (fortress/trail-of w b)]
+    (is (= #{} (:trail/dead on-b)) "not dead for another target")
+    (is (= [] (:trail/cells on-b)) "the way back is the other target's own")
+    (is (= dead (:trail/dead (fortress/trail-of {:fortress/trail on-b} a))) "back with its target")
+    (is (= dead (:trail/dead (fortress/trail-of w a))) "the same target keeps its trail")
+    (testing "only the last few other targets are kept"
+      (let [w (reduce (fn [w n]
+                        (let [t (fortress/trail-of w [n 0 0])]
+                          {:fortress/trail (update t :trail/dead conj [n 1 1])}))
+                      {:fortress/trail
+                       {:trail/target [-1 0 0] :trail/cells [] :trail/dead #{[9 9 9]}}}
+                      (range 10))]
+        (is (<= (count (:trail/others (:fortress/trail w))) fortress/dead-targets))))))
