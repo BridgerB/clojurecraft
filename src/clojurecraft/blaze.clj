@@ -1479,6 +1479,17 @@
          (sort-by #(physics/distance pos (:entity/pos %)))
          first)))
 
+(defn nearby-blazes
+  "{eid entity} of the blazes alive within r blocks of the bot."
+  [world r]
+  (let [pos (:player/pos world)]
+    (into {}
+          (filter (fn [[_ e]]
+                    (and (= :blaze (entity/kind e))
+                         (not (entity/dead? e))
+                         (<= (physics/distance pos (:entity/pos e)) r))))
+          (:world/entities world))))
+
 (defn long-shot-cover
   "A :place of a filler block in the wall cell toward the shooter (combat/wall-cell: the feet's,
    then the eye's), or nil: the bot outside a pocket, hit within long-shot-ms, no blaze within
@@ -1489,7 +1500,11 @@
   [world]
   (when (and (not (pocket/in? world))
              (<= (- (:time/now world 0) (:player/struck-at world -1000000)) long-shot-ms)
-             (nil? (at-hand-blaze world)))
+             (nil? (at-hand-blaze world))
+             ;; one within 8 blocks is fought, not walled off: blaze-race-z8 job 6 flipped :fight,
+             ;; :place x4, :dodge, :pocket, :pillar, :dig and :seal against two blazes at 0.7 to 3 blocks
+             ;; and sent one attack in 9 s
+             (empty? (nearby-blazes world 8.0)))
     (when-let [e (shooter world)]
       (let [cell (combat/wall-cell world e)
             ;; over open air the cell has nothing to click: the block under it, which has, goes first
@@ -1577,17 +1592,6 @@
   "How many :fight intentions ended :done at or after ms t."
   [world t]
   (count (filter #(>= (:intention/at %) t) (memory/newest-dones world :fight 20))))
-
-(defn nearby-blazes
-  "{eid entity} of the blazes alive within r blocks of the bot."
-  [world r]
-  (let [pos (:player/pos world)]
-    (into {}
-          (filter (fn [[_ e]]
-                    (and (= :blaze (entity/kind e))
-                         (not (entity/dead? e))
-                         (<= (physics/distance pos (:entity/pos e)) r))))
-          (:world/entities world))))
 
 (defn sortie-over?
   "Is the sortie (:sortie/since, noted by steer when the bot left its pocket for the spawner's zone)

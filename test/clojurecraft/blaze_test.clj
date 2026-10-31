@@ -2009,3 +2009,15 @@
     (with-redefs [combat/void-retreat? (constantly true)]
       (is (= {:intent/kind :rest} (blaze/healing (assoc w :player/inventory {})))
           "nothing to lay, eat or dig: the rest on the lip, as before"))))
+
+(deftest the-long-shot-wall-is-not-laid-against-a-blaze-to-fight
+  ;; blaze-race-z8 job 6 (landing 6): two blazes at 0.7 to 3.1 blocks, hp 20 to 3.6 in 9 s, one attack sent:
+  ;; :fight, :place x4, :dodge, :pocket, :pillar, :dig, :seal in turns
+  (let [far (entity :blaze [15.5 66.0 1.5] :entity/health 20.0)
+        mid (entity :blaze [8.5 66.0 15.5] :entity/health 20.0)
+        w (-> (standing {7 far})
+              (assoc :time/now 100000 :player/struck-at 99000)
+              (assoc-in [:player/inventory 9] (item :cobblestone 40)))]
+    (is (some? (blaze/long-shot-cover w)) "a shooter beyond reach: the wall")
+    (is (nil? (blaze/long-shot-cover (assoc-in w [:world/entities 8] mid)))
+        "a blaze within 8 as well: it is fought, no wall")))
