@@ -17,6 +17,7 @@
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
             [clojurecraft.path :as path]
+            [clojurecraft.place :as place]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.terrain :as terrain]))
 
@@ -193,17 +194,30 @@
 
 (def seal-item "The block a pocket is sealed with." :cobblestone)
 
+(defn clear-of-body
+  "The cells that no part of the player's box at its exact position (place/inside-player?) and
+   neither of the pocket's own cells (c and the one over it) are in: the server refuses a block
+   into any player, and a standing one fills the feet and the head, a fractional x or z near a cell
+   edge the neighbour too. Blaze-race-t job 5 stood sealing 68 minutes on `placing [2154 73 1750]
+   refused with the body in it` at [2154.6 72.0 1750.6], blaze-race-m job 5 299 minutes on
+   [2153 73 1752]; blaze-race-u job 5 five refusals of [2149 73 1760]."
+  [world c cells]
+  (let [own #{c (plus c [0 1 0])}]
+    (filterv #(not (or (own %) (place/inside-player? world %))) cells)))
+
 (defn seal-cells
   "The cells a seal of the pocket at cell c places a block in, in order: for each open side
    (openings) the cell beside c at the feet, then the one over it; then the cell over the head when
-   it is no firm block."
+   it is no firm block; none of them in the body (clear-of-body)."
   [world c]
-  (vec (concat (for [s (openings world c)
-                     dy [0 1]
-                     :let [p (plus c [(first s) dy (second s)])]
-                     :when (not (solid-at? world p))]
-                 p)
-               (when-not (roofed? world c) [(plus c [0 2 0])]))))
+  (clear-of-body world
+                 c
+                 (concat (for [s (openings world c)
+                               dy [0 1]
+                               :let [p (plus c [(first s) dy (second s)])]
+                               :when (not (solid-at? world p))]
+                           p)
+                         (when-not (roofed? world c) [(plus c [0 2 0])]))))
 
 (defn sealed?
   "Is the site sealed: it names cells it placed blocks in (:pocket/placed) and every one is solid?"

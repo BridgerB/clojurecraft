@@ -164,3 +164,16 @@
       (is (intent/done? (:plan/intent w)))
       (is (true? (get-in w [:pocket/site :pocket/unsealable?])) "not sealed again at this site")
       (is (= (inc pocket/seal-limit-ms) (:pocket/seal-failed-at w))))))
+
+(deftest a-seal-never-targets-a-cell-the-body-fills
+  ;; blaze-race-t job 5: the player at [2154.6 72.0 1750.6] stood sealing 68 minutes on a block
+  ;; into [2154 73 1750], the cell over its own feet
+  (let [w (assoc (world-of {}) :player/pos [2154.6 72.0 1750.6])
+        c [2154 72 1750]]
+    (is (= [[2153 72 1750]]
+           (pocket/clear-of-body w c [[2154 73 1750] [2153 72 1750] [2154 72 1750]]))
+        "the head cell and the feet cell are the body's")
+    (testing "a neighbour a fractional position reaches into is the body's too"
+      (let [edge (assoc w :player/pos [2154.8 72.0 1750.5])]
+        (is (= [[2153 72 1750]] (pocket/clear-of-body edge c [[2155 72 1750] [2153 72 1750]]))
+            "x 2154.8 spans 2154.5 to 2155.1: [2155 72 1750] is in the box")))))
