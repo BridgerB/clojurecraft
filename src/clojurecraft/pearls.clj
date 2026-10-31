@@ -1598,7 +1598,9 @@
    never out-ranged) a walk to a cell beside the feet out of its sight (hide-cell; :intent/for
    :cover, so the walk ends only centred in the cell: for :pearls it ended at once one cell
    short and was planned again every 50 ms, gym plan run 40905321229 job 6), else a block of
-   the filler held on the line from the eye to it (line-cell), else a dig into the solid side away
+   the filler held on the line from the eye to it (line-cell), else, on open ground where no cell
+   on the line has anything to lay against, a block at the feet's level and one over it on its side
+   (wall-toward: the line to a ghast a little above is at the head's height), else a dig into the solid side away
    from it (dig-away) to stand in; from the others what combat/cover gives for the nearest (meal, a
    block between, a pillar, a nook dug under the feet). Nil when it only waits (cover's :plan/wait
    ends the plan) or nothing can be done."
@@ -1617,7 +1619,7 @@
                :intent/cell line
                :intent/for :pearls
                :intent/wall? true}
-              :else (dig-away world e))))
+              :else (or (wall-toward world (:entity/pos e) [0 1]) (dig-away world e)))))
     (when-let [[_ e] (entity/nearest (swarm world) (:player/pos world))]
       (let [c (combat/cover world e)] (when (:intent/kind c) (assoc c :intent/for :pearls))))))
 
@@ -1979,7 +1981,7 @@
                                      (not (live-menaced? world))
                                      (not (recently-shot? world))
                                      (or (wandering? world) (travel-caged? world)))
-                            (or (climb-out world) (dig-out world))))
+                            (or (climb-out world) (dig-out world) (uncage world))))
         csite-walk (delay (shelter-walk world csite))
         site-walk (delay (shelter-walk world site))
         overworld-death? (and (pos? (:stats/deaths world 0))

@@ -2815,3 +2815,26 @@
     (is (far? (assoc base :pearls/shot-at-ms 5000 :time/now 16000)) "eleven seconds on: travels")
     (is (pearls/recently-shot? (assoc base :pearls/shot-at-ms 5000)))
     (is (not (pearls/recently-shot? base)))))
+
+(deftest on-open-ground-a-block-is-laid-between-the-bot-and-a-ghast
+  ;; pearl-fight-c job 1 (plan run 41155212096, issue #263): ghast 88 at [2463 101 2235], the bot at
+  ;; [2474 99 2233] on open ground, "no cover" and stood in the fire. Offsets kept: 11 west, 2 up, 2 south
+  (let [ghast (mob :ghast [-2.5 66.0 10.5])
+        held {0 (item :iron_sword 1) 1 (item :cobblestone 64)}
+        w (-> (wide (standing {7 ghast}))
+              (assoc :player/inventory held))
+        wall {:intent/kind :place
+              :intent/item :cobblestone
+              :intent/cell [7 64 8]
+              :intent/for :pearls
+              :intent/wall? true}]
+    (is (pearls/shot-at? w))
+    (is (nil? (pearls/hide-cell w (get-in w [:world/entities 7])))
+        "open ground: nothing to hide in")
+    (is (nil? (pearls/line-cell w (get-in w [:world/entities 7])))
+        "and nothing to lay against on the line")
+    (is (= wall (pearls/cover-from w)) "so a block at the feet's level on its side")
+    (testing "then one over it"
+      (let [floor (-> (wide (standing {7 ghast} {[7 64 8] stone}))
+                      (assoc :player/inventory held))]
+        (is (= [7 65 8] (:intent/cell (pearls/cover-from floor))))))))
