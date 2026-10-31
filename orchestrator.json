@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-31T11:09:33.926Z",
+  "at" : "2026-10-31T11:20:31.572Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -36,11 +36,6 @@
     "number" : 135,
     "title" : "Bot stops at cast-one: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
-    "number" : 617,
-    "title" : "Bot stops at blaze-rods: no-log",
-    "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
     "number" : 342,
@@ -100,6 +95,11 @@
   }, {
     "number" : 618,
     "title" : "Bot stops at ingots: no-support",
+    "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 617,
+    "title" : "Bot stops at blaze-rods: no-log",
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
