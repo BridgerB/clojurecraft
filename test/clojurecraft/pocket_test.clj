@@ -257,3 +257,22 @@
     (is (true? (pocket/sealed? shut site)) "so it is sealed, placed or not")
     (is (false? (pocket/sealed? (world-of walled) site)) "an open side is not")
     (is (false? (pocket/sealed? shut nil)) "no site is nothing")))
+
+(deftest a-bot-off-the-middle-of-its-cell-is-not-sealed-in-by-its-own-body
+  ;; blaze-race-z13 jobs 4 and 6: the bot stood at x 2341.7 / z 2287.2, the open side cell was in its
+  ;; box, wanted-seal-cells (clear-of-body) was empty, sealed? read true and no :seal was chosen
+  (let [c [8 64 8]
+        off [8.2 64.0 8.5]
+        site {:pocket/cell c :pocket/stand nil :pocket/dig [] :pocket/placed []}
+        w (-> (world-of walled off)
+              (assoc-in [:player/inventory 9] {:item (recipe/item-id :cobblestone) :count 62})
+              (assoc-in [:player/inventory 10] {:item (recipe/item-id :iron_pickaxe) :count 1}))]
+    (is (empty? (pocket/wanted-seal-cells w c)) "the body fills the open side cell")
+    (is (= [[7 64 8] [7 65 8]] (pocket/open-seal-cells w c)) "but it is open")
+    (is (false? (pocket/sealed? w site)) "so the pocket is not sealed")
+    (is (pocket/can-seal? w site) "and a seal can be laid once centred")
+    (testing "the seal centres the bot instead of ending"
+      (let [w (assoc w :time/now 1000 :pocket/site site :plan/intent {:intent/kind :seal})
+            out (intent/run w (:plan/intent w) {:event/kind :tick :event/now 1000})]
+        (is (not (intent/done? (:plan/intent out))))
+        (is (true? (:control/forward? (:player/controls out))))))))
