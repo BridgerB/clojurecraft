@@ -1841,3 +1841,193 @@
                   plan/next-intent (constantly {:intent/kind :place :intent/item :cobblestone})]
       (let [w (plan/plan-tick w {:event/kind :tick :event/now 316050 :event/rand 0.5} [goal])]
         (is (= :regroup (get-in w [:plan/intent :intent/for])))))))
+
+;;; STUCK: no progress for stuck-ms sends the bot elsewhere
+
+(def pearls-table
+  [{:goal/id :ender-pearls :goal/target? true :goal/done? :never :goal/plan :pearls}])
+
+(def walker-table [{:goal/id :walker :goal/target? true :goal/done? :never :goal/plan :flip-test}])
+
+(defn frozen-world
+  "pearl-fight-i job 1 (run 41178660163) at ms into a run standing at one block: a :lookout
+   running, the burrow remembered, nothing held but a pickaxe."
+  [ms]
+  (-> (world-state [2390.5 69.0 2164.5])
+      (assoc
+       :plan/status :active
+       :plan/since 0
+       :plan/blacklist #{}
+       :time/now ms
+       :pearls/shelter [2390 69 2164]
+       :player/inventory {0 {:item 1 :count 1}}
+       :plan/intent
+       {:intent/kind :lookout :intent/status :active :intent/id 7 :intent/goal :ender-pearls})))
+
+(defn frozen
+  "frozen-world with the watch begun at 0 over table's row (the pearl hunt's by default)."
+  ([ms] (frozen ms pearls-table))
+  ([ms table]
+   (let [w (frozen-world ms)]
+     (assoc w
+            :plan/watch
+            (plan/watch-stamp (assoc w :time/now 0) (plan/progress-key w (first table)) 0 0)))))
+
+(deftest a-bot-at-one-block-for-stuck-ms-is-sent-elsewhere
+  (let [event {:event/kind :tick :event/now 0 :event/rand 0.25}
+        w (plan/watch (frozen (+ plan/stuck-ms 1000)) pearls-table event)]
+    (is (= 1 (:plan/unstuck w)))
+    (is (nil? (:plan/intent w)) "the lookout is dropped")
+    (is (not (contains? w :pearls/shelter)) "the burrow is forgotten")
+    (is (= [2390 69 2212] (:plan/explore w)) "explore-distance away, a quarter turn")
+    (is (= (+ plan/stuck-ms 1000) (get-in w [:plan/watch :at])) "the watch starts over")
+    (testing "before stuck-ms nothing changes but the look"
+      (let [w (plan/watch (frozen (- plan/stuck-ms 1000)) pearls-table event)]
+        (is (nil? (:plan/unstuck w)))
+        (is (= :lookout (get-in w [:plan/intent :intent/kind])))
+        (is (= (- plan/stuck-ms 1000) (get-in w [:plan/watch :checked])))))
+    (testing "a cursor holding an item waits for the next look"
+      (let [w (plan/watch (assoc (frozen (+ plan/stuck-ms 1000)) :window/cursor {:item 1 :count 1})
+                          pearls-table
+                          event)]
+        (is (nil? (:plan/unstuck w)))))))
+
+(deftest progress-or-a-move-restarts-the-watch
+  (let [event {:event/kind :tick :event/now 0 :event/rand 0.25}
+        late (+ plan/stuck-ms 1000)]
+    (testing "a pearl held"
+      (let [w (plan/watch (assoc-in (frozen late)
+                           [:player/inventory 1]
+                           {:item (recipe/item-id :ender_pearl) :count 1})
+                          pearls-table
+                          event)]
+        (is (nil? (:plan/unstuck w)))
+        (is (= late (get-in w [:plan/watch :at])))))
+    (testing "a move across stuck-extent blocks, for a row that counts moves"
+      (let [w (plan/watch (assoc (frozen late walker-table) :player/pos [2410.5 69.0 2164.5])
+                          walker-table
+                          event)]
+        (is (nil? (:plan/unstuck w)))
+        (is (= late (get-in w [:plan/watch :at])))))
+    (testing "a jitter of a block does not"
+      (let [w (plan/watch (assoc (frozen late walker-table) :player/pos [2391.5 69.0 2164.5])
+                          walker-table
+                          event)]
+        (is (= 1 (:plan/unstuck w)))))
+    (testing "the pearl row counts items and fights, not moves"
+      (let [w
+            (plan/watch (assoc (frozen late) :player/pos [2450.5 69.0 2164.5]) pearls-table event)]
+        (is (= 1 (:plan/unstuck w)))))))
+
+(deftest a-tunnel-loop-that-digs-netherrack-and-finds-nothing-is-stuck
+  ;; blaze-race-z job 1 (run 41173997255) tunnelled 106 min (473 :tunnel-to) round a ring 67 blocks
+  ;; across, digging netherrack every leg: items held changed, rods, fights and spawners never
+  (let [event {:event/kind :tick :event/now 0 :event/rand 0.75}
+        blaze-table
+        [{:goal/id :blaze-rods :goal/target? true :goal/done? :never :goal/plan :blaze-rods}]
+        start
+        (-> (frozen-world 0)
+            (assoc
+             :plan/intent
+             {:intent/kind :tunnel-to :intent/status :active :intent/id 3 :intent/goal :blaze-rods})
+            (dissoc :pearls/shelter)
+            (as-> w
+              (assoc w
+                     :plan/watch
+                     (plan/watch-stamp w (plan/progress-key w (first blaze-table)) 0 0))))
+        ring (fn [w k] ; a look a minute round the ring, a block more netherrack each time
+               (-> w
+                   (assoc :time/now (* k 60000)
+                          :player/pos [(+ 2157.5 (* 6 (mod k 12))) 60.0 1725.5]
+                          :player/inventory {0 {:item 1 :count 1} 1 {:item 5 :count (+ 10 k)}})
+                   (plan/watch blaze-table event)))
+        w (reduce ring start (range 1 22))]
+    (is (= 1 (:plan/unstuck w)) "twenty minutes of tunnelling and nothing found: sent elsewhere")
+    (is (some? (:plan/explore w)))))
+
+(deftest ^:eftest/synchronized the-explore-walk-starts-once
+  (let [w (-> (frozen 5000)
+              (dissoc :plan/intent)
+              (assoc :plan/explore [2390 69 2212]))
+        goal (first pearls-table)]
+    (with-redefs [plan/choose (constantly goal)
+                  plan/next-intent (constantly {:intent/kind :lookout})]
+      (let [w (plan/plan-tick w {:event/kind :tick :event/now 5050 :event/rand 0.5} pearls-table)]
+        (is (= :walk (get-in w [:plan/intent :intent/kind])))
+        (is (= [2390 69 2212] (get-in w [:plan/intent :intent/target])))
+        (is (= :explore (get-in w [:plan/intent :intent/for])))
+        (is (nil? (:plan/explore w)))))))
+
+(deftest a-stuck-pearl-hunt-forgets-its-anchors-and-restarts-its-clocks
+  ;; churn-guard's list: the burrow (:pearls/shelter, :pearls/mouth), the relocation, the boxed and
+  ;; given-up sets and the blacklist; the :pearls/gain clock restarts, :pearls/angry stays
+  (let [late (+ plan/stuck-ms 1000)
+        w (plan/watch (assoc (frozen late)
+                             :pearls/mouth [1 2 3]
+                             :pearls/relocate {:to [9 9 9]}
+                             :pearls/gain {:at 5 :n 2}
+                             :pearls/angry {7 100}
+                             :plan/boxed-at #{[1 1 1]}
+                             :plan/given-up #{[2 2 2]}
+                             :plan/blacklist #{[3 3 3]})
+                      pearls-table
+                      {:event/kind :tick :event/now 0 :event/rand 0.25})]
+    (is (= 1 (:plan/unstuck w)))
+    (is (every? #(not (contains? w %))
+                [:pearls/shelter :pearls/mouth :pearls/relocate :plan/boxed-at :plan/given-up]))
+    (is (= #{} (:plan/blacklist w)))
+    (is (= late (get-in w [:pearls/gain :at])) "the gain clock restarts")
+    (is (= {7 100} (:pearls/angry w)) "the motion record stays")))
+
+(deftest the-blaze-row-gets-twenty-minutes-and-keeps-a-defence
+  ;; blaze-rods: a camp can wait 14 to 16 min for its first blaze to be hurt; a :pocket, :seal or
+  ;; :pocket-hold running is not dropped, however long
+  (let [event {:event/kind :tick :event/now 0 :event/rand 0.25}
+        blaze-table
+        [{:goal/id :blaze-rods :goal/target? true :goal/done? :never :goal/plan :blaze-rods}]
+        at (fn [ms i]
+             (let [w (-> (frozen-world ms)
+                         (assoc :plan/intent
+                                (merge
+                                 {:intent/status :active :intent/id 3 :intent/goal :blaze-rods}
+                                 i)))]
+               (plan/watch (assoc w
+                                  :plan/watch
+                                  (plan/watch-stamp (assoc w :time/now 0)
+                                                    (plan/progress-key w (first blaze-table))
+                                                    0
+                                                    0))
+                           blaze-table
+                           event)))]
+    (is (nil? (:plan/unstuck (at (+ plan/stuck-ms 1000) {:intent/kind :camp})))
+        "10 min is not enough")
+    (is (= 1 (:plan/unstuck (at 1201000 {:intent/kind :camp}))) "20 min is")
+    (testing "a pocket held under fire is not dropped, a quiet one is"
+      (let [under-fire (fn [w] (assoc w :player/hurt-at 100 :time/tick 150))
+            held (fn [i] (under-fire (assoc (frozen-world 1201000) :plan/intent i)))
+            blaze-watch (fn [w]
+                          (plan/watch (assoc w
+                                             :plan/watch
+                                             (plan/watch-stamp
+                                              (assoc w :time/now 0)
+                                              (plan/progress-key w (first blaze-table))
+                                              0
+                                              0))
+                                      blaze-table
+                                      event))
+            hold {:intent/kind :pocket-hold
+                  :intent/status :active
+                  :intent/id 3
+                  :intent/goal :blaze-rods}]
+        (is (nil? (:plan/unstuck (blaze-watch (held hold)))) "hit 50 ticks ago: kept")
+        (is (= 1
+               (:plan/unstuck (blaze-watch
+                               (assoc (held hold) :time/tick (+ 100 plan/quiet-ticks 1)))))
+            "no damage for five minutes: dropped")
+        (is (= 1 (:plan/unstuck (blaze-watch (dissoc (held hold) :player/hurt-at))))
+            "never hurt: dropped")))))
+
+(deftest the-explore-walk-goes-back-the-way-the-bot-came
+  ;; never further into the room: toward the farthest cell of the trail
+  (let [w (assoc (frozen-world 0) :plan/trail [[2300 69 2164] [2380 69 2164]])]
+    (is (= [2342 69 2164] (plan/explore-cell w 0.25)))))
