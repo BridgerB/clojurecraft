@@ -1,7 +1,7 @@
 (ns clojurecraft.race-test
   "The race (issue #17): the claims reducer never grants one cell to two bots, the spiral visits
    every cell once, and the race's board and summary are functions of values."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.test :refer [are deftest is testing]]
             [clojure.test.check :as tc]
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]
@@ -303,19 +303,43 @@
 
 (deftest the-death-line-is-the-servers
   (let [f (java.io.File/createTempFile "server" ".log")]
-    (try
-      (spit
-       f
-       "[17:39:33] [Server thread/INFO]: Clj_r23 was burned to a crisp while fighting Blaze\n[17:39:44] [Server thread/INFO]: Clj_r24 was slain by Zombie\n")
-      (is (= "Clj_r24 was slain by Zombie"
-             (:death-message
-              (race/with-death-message {:server-log (str f)} "Clj_r24" {:reason :death})))
-          "the line for that bot from the server's log")
-      (is (nil? (:death-message
-                 (race/with-death-message {:server-log (str f)} "Clj_r24" {:reason :timeout})))
-          "only a run that ended in a death")
-      (is (=
-           {:reason :death}
-           (race/with-death-message {:server-log "no/such/server.log"} "Clj_r24" {:reason :death}))
-          "no log: the result as it was")
-      (finally (.delete f)))))
+    (try (spit
+          f
+          (str
+           "[17:39:33] [Server thread/INFO]: Clj_r23 was burned to a crisp while fighting Blaze\n"
+           "[17:39:44] [Server thread/INFO]: Clj_r24 tried to swim in lava\n"))
+         (let [died (fn [log bot] (race/with-death-message {:server-log log} bot {:reason :death}))]
+           (is (= "Clj_r24 tried to swim in lava" (:death-message (died (str f) "Clj_r24")))
+               "the line for that bot from the server's log")
+           (is (= :death-lava (:reason (died (str f) "Clj_r24"))) "its class names the reason")
+           (is (= :death-blaze (:reason (died (str f) "Clj_r23")))
+               "burned to a crisp while fighting Blaze: the blaze's")
+           (is (= :death-other (:reason (died "no/such/server.log" "Clj_r24"))) "no line: other"))
+         (is (= {:reason :timeout}
+                (race/with-death-message {:server-log (str f)} "Clj_r24" {:reason :timeout}))
+             "only a run that ended in a death")
+         (finally (.delete f)))))
+
+(deftest a-death-line-has-a-class-and-the-signature-names-it
+  (are [line class] (= class (race/death-class line))
+   "Clj_r23 was slain by Blaze" :blaze
+   "Clj_r23 was fireballed by Blaze" :blaze
+   "Clj_r23 was burned to a crisp while fighting Blaze" :blaze
+   "Clj_r01 was slain by Enderman" :enderman
+   "Clj_r01 was slain by Zombified Piglin" :piglin
+   "Clj_r01 was slain by Piglin Brute" :piglin
+   "Clj_r01 was shot by Piglin" :piglin
+   "Clj_r01 was fireballed by Ghast" :ghast
+   "Clj_r01 tried to swim in lava" :lava
+   "Clj_r01 burned to death" :fire
+   "Clj_r01 walked into fire" :fire
+   "Clj_r01 went up in flames" :fire
+   "Clj_r01 hit the ground too hard" :fall
+   "Clj_r01 fell from a high place" :fall
+   "Clj_r01 suffocated in a wall" :other
+   nil :other)
+  (is (= [:blaze-rods :death-blaze]
+         (failure/signature {:until "pearls-12"
+                             :reason :death-blaze
+                             :plan {:plan/goals #{:blaze-rods :ender-pearls} :plan/reached #{}}}))
+      "a blaze's death and a lava's are two signatures at one stage"))

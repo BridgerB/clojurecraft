@@ -591,17 +591,38 @@
                        #(str (rcon/command! % (str "data get entity " name " Dimension"))))
        (catch Exception e (str "truth failed: " (ex-message e)))))
 
+(defn death-class
+  "The class of a server death line (\"Clj_r23 was slain by Blaze\"), a keyword: :blaze, :enderman,
+   :piglin (a piglin, zombified or brute), :ghast, :lava, :fire, :fall, else :other (also a nil
+   line). The mob is asked first: \"burned to a crisp while fighting Blaze\" is a blaze's, not
+   fire's. A death at a stage is filed by its class, so a blaze's and a lava's get different
+   issues and owners."
+  [msg]
+  (let [m (str msg)]
+    (condp re-find m
+      #"Blaze" :blaze
+      #"Enderman" :enderman
+      #"Piglin" :piglin
+      #"Ghast" :ghast
+      #"lava" :lava
+      #"burned|fire|flames" :fire
+      #"fell from|hit the ground" :fall
+      :other)))
+
 (defn with-death-message
   "RESULT r with the server's death line for bot name (gym/death-message from the server's log,
-   the file :server-log names) as :death-message, when the run ended :death; r otherwise. The
-   cause the bot cannot tell: it is the server's word (\"Clj_r23 was slain by Blaze\")."
+   the file :server-log names) as :death-message, when the run ended :death, and its :reason the
+   class of that line (:death-blaze, :death-lava ..., death-class; :death-other with no line):
+   the signature [stage reason] names the cause. r otherwise. The cause the bot cannot tell: it is
+   the server's word."
   [{:keys [server-log]} name r]
   (if (= :death (:reason r))
     (let [f (some-> server-log
                     io/file)
           msg (when (and f (.exists f))
                 (try (gym/death-message (slurp f) name) (catch Exception _ nil)))]
-      (cond-> r msg (assoc :death-message msg)))
+      (cond-> (assoc r :reason (keyword (str "death-" (clojure.core/name (death-class msg)))))
+        msg (assoc :death-message msg)))
     r))
 
 (defn play-one!
