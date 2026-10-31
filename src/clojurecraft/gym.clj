@@ -734,7 +734,8 @@
     :gym/difficulty "normal"
     :gym/prereqs (into pearl-kit
                        ["minecraft:cooked_beef 32" "minecraft:cobblestone 64"
-                        "minecraft:netherrack 64" "minecraft:crafting_table 1" "minecraft:stick 8"])
+                        "minecraft:netherrack 64" "minecraft:crafting_table 1" "minecraft:stick 8"
+                        "minecraft:golden_boots 1"])
     :gym/timeout-ms trial-ms
     :gym/truth [(pearls-held "(1[2-9]|[2-9][0-9]|[1-9][0-9][0-9])")]}
    ;; issue #263: the same twelve pearls from where the race leaves the bot, at a fortress in the

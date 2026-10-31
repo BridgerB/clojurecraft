@@ -1532,8 +1532,9 @@
   ([world] (swarm world (:player/pos world)))
   ([world pos]
    (into {}
-         (filter (fn [[_ e]]
+         (filter (fn [[eid e]]
                    (and (not (entity/dead? e))
+                        (not (entity/spared? world eid e))
                         (not= :enderman (entity/kind e))
                         (= :monster (:category (blocks/mobs (entity/kind e))))
                         (<= (physics/distance pos (:entity/pos e))
@@ -2035,11 +2036,18 @@
         angry? (and near? (entity/creepy? e) (not (contains? (:plan/blacklist world #{}) eid)))
         in-reach? (and near?
                        (<= (physics/distance (game/eye world) (combat/aim e)) combat/attack-reach))
-        hurt? (< (:player/health world 20.0) danger-health)
         rested? (>= (:player/health world 20.0) (provoke-line world))
         meal (when-not rested? (blaze/meal world))
         home (shelter world)
         in? (and home (= home (intent/feet world)))
+        ;; out of a burrow the line an enderman is broken off from is combat's (15, then 19 while
+        ;; covering), not danger-health: the hunt fought on at 15.1 while :defend covered
+        ;; (pearl-fight-o job 2, plan run 41232709566); in the burrow it cannot be hit
+        hurt? (<
+               (:player/health world 20.0)
+               (if (and (not in?) (or ce e) (contains? combat/teleporters (entity/kind (or ce e))))
+                 (combat/break-line world (or ce e))
+                 danger-health))
         at-end? (= (:pearls/shelter world) (intent/feet world))
         [tid te] (threat world)
         [sid _] (struck-by world)
@@ -2134,13 +2142,15 @@
        :intent/hold? true
        :intent/yield? true
        :intent/for :pearls}
-      (and sid (not hurt?) (not in?)) {:intent/kind :fight :intent/target sid :intent/for :pearls}
+      (and sid (not hurt?) (not in?) (not digs?))
+      {:intent/kind :fight :intent/target sid :intent/for :pearls}
       (and tid (not hurt?) (not in?) (nil? home) (not swarmed?) (weak? te))
       {:intent/kind :fight :intent/target tid :intent/for :pearls}
       (and at-end? bid (blocked-out? world))
       (or (cut-out world) {:intent/kind :lookout :intent/for :pearls})
       (and near?
            (not in?)
+           (not digs?)
            (not (unfightable? world eid e))
            (or (entity/creepy? e)
                (and (not (pickaxe? world))
@@ -2420,11 +2430,15 @@
   ;; (answers-to-hand)
   [world _ e]
   (and (= :enderman (entity/kind e))
-       (some? (shelter world))
-       (or (= (shelter world) (intent/feet world))
-           (intent/routable?
-            world
-            {:intent/kind :walk :intent/target (shelter world) :intent/for :shelter}))))
+       (or (and (some? (shelter world))
+                (or (= (shelter world) (intent/feet world))
+                    (intent/routable?
+                     world
+                     {:intent/kind :walk :intent/target (shelter world) :intent/for :shelter})))
+           ;; no burrow yet: the hunt's own answer to one on the bot in the open is to cut one, never
+           ;; the open fight (62 of 64 kills in pearl-fight-m and -k were fought from a burrow with no
+           ;; hit, all 4 open ones with 3 swings or more lost)
+           (= :burrow (:intent/kind (hunt world))))))
 
 
 (def sword-acts

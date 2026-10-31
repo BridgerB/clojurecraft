@@ -9,7 +9,8 @@
    entities; a reader that wants one kind asks for it (kind, living?, item?). Issue #258: the
    world held item drops only, and combat, blazes, endermen and the dragon need every entity."
   (:require [clojurecraft.blocks :as blocks]
-            [clojurecraft.physics :as physics]))
+            [clojurecraft.physics :as physics]
+            [clojurecraft.recipe :as recipe]))
 
 (set! *warn-on-reflection* true)
 
@@ -134,13 +135,35 @@
                              (:entity/radius % breath-radius))
                         (vals (breaths world)))))))
 
+(def gold-armour
+  "The item names that make a piglin (not a brute) leave a player alone: any piece of golden armour worn."
+  #{:golden_helmet :golden_chestplate :golden_leggings :golden_boots})
+
+(defn gold-worn?
+  "Does the bot wear a piece of gold-armour? The inventory keeps worn armour at player slots 36 to 39."
+  [world]
+  (boolean (some #(some-> (get-in world [:player/inventory %])
+                          :item
+                          recipe/item-name
+                          gold-armour)
+                 (range 36 40))))
+
+(defn spared?
+  "Does the bot's gold armour (gold-worn?) make entity e, an id eid, no hostile: a piglin (a brute
+   and a zombified piglin are not spared) that has not struck the bot (:player/attacker)? Piglins
+   are neutral to a player in any gold. Pearl-fight-o jobs 4 and 6 (plan run 41232709566) were slain
+   by one in their first three minutes."
+  [world eid e]
+  (boolean (and (= :piglin (kind e)) (gold-worn? world) (not= eid (:player/attacker world)))))
+
 (defn hostiles
   "{eid entity} of the tracked entities that are hostile? now, or an attacker actively hitting
    the bot."
   [world]
   (into {}
         (filter (fn [[eid e]]
-                  (or (hostile? e) (and (= eid (:player/attacker world)) (not (dead? e))))))
+                  (or (and (hostile? e) (not (spared? world eid e)))
+                      (and (= eid (:player/attacker world)) (not (dead? e))))))
         (:world/entities world)))
 
 (defn nearest

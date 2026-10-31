@@ -5,7 +5,8 @@
             [clojurecraft.entity :as entity]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.observe]
-            [clojurecraft.plan :as plan]))
+            [clojurecraft.plan :as plan]
+            [clojurecraft.recipe :as recipe]))
 
 (use-fixtures :once fx/instrumented)
 
@@ -86,3 +87,19 @@
     (testing "it is a trial of its own, never a step of a run"
       (is (plan/aside? (first (filter #(= :entities (:goal/id %)) plan/goals))))
       (is (not-any? #{:entities} (plan/through (plan/current-until)))))))
+
+(deftest a-piglin-is-no-hostile-to-a-bot-in-gold-but-a-brute-and-an-attacker-are
+  ;; pearl-fight-o jobs 4 and 6 (plan run 41232709566): slain by a piglin 1m11 and 2m43 in, hits of
+  ;; 6.7. Piglins are neutral to a player wearing any gold; a brute is not
+  (let [w {:world/entities {1 (mob :piglin [3.0 64.0 0.0])
+                            2 (mob :piglin_brute [4.0 64.0 0.0])
+                            3 (mob :zombified_piglin [5.0 64.0 0.0])}}
+        gold (assoc w :player/inventory {36 {:item (recipe/item-id :golden_boots) :count 1}})
+        iron (assoc w :player/inventory {36 {:item (recipe/item-id :iron_boots) :count 1}})]
+    (is (= #{1 2 3} (set (keys (entity/hostiles w)))) "bare: all three")
+    (is (= #{1 2 3} (set (keys (entity/hostiles iron)))) "iron is no gold")
+    (is (entity/gold-worn? gold))
+    (is (= #{2 3} (set (keys (entity/hostiles gold))))
+        "gold: the piglin is spared, the brute is not")
+    (is (= #{1 2 3} (set (keys (entity/hostiles (assoc gold :player/attacker 1)))))
+        "one that has struck the bot is a hostile all the same")))

@@ -3106,3 +3106,29 @@
     (is (some? (pearls/menace w)) "an angry one within eight blocks")
     (is (= :burrow (:intent/kind (plan/next-intent w row plan/goals)))
         "a burrow is cut here all the same")))
+
+(deftest an-angry-enderman-in-reach-in-the-open-gets-a-burrow-not-a-fight
+  ;; pearl-fight-o jobs 1, 2 and 5 (plan run 41232709566): the hunt's own :fight in the open at 20,
+  ;; hits every 0.8 to 1.0 s, dead in 4 s; 62 of 64 kills were fought from a burrow with no hit
+  (let [angry (assoc (enderman [11.5 64.0 8.5]) :entity/creepy? true)
+        w (-> (standing {1 angry})
+              (assoc-in [:player/inventory 1] (item :iron_pickaxe 1))
+              (assoc :time/now 1000))]
+    (is (= :burrow (:intent/kind (plan/next-intent w row plan/goals))))
+    (is (combat/claimed-attacker? (assoc w :player/attacker 1) angry)
+        "and :defend leaves the one that hit to the hunt, whose answer is the burrow")
+    (testing "with no pickaxe there is no burrow to cut: the fight as before"
+      (let [bare (update w :player/inventory dissoc 1)]
+        (is (not (combat/claimed-attacker? (assoc bare :player/attacker 1) angry)))))))
+
+(deftest the-hunt-does-not-fight-an-enderman-at-15-after-breaking-off
+  ;; pearl-fight-o job 2: the hunt's :fight 73 resumed at 15.1 while :defend covered at 15
+  (let [angry (assoc (enderman [14.5 64.0 8.5]) :entity/creepy? true)
+        w (-> (standing {1 angry})
+              (assoc-in [:player/inventory 1] (item :iron_pickaxe 1))
+              (assoc :time/now 1000 :player/health 15.1))]
+    (is (not= :fight (:intent/kind (plan/next-intent w row plan/goals))))
+    (let [covering
+          (assoc w :player/health 17.1 :plan/last {:intent/kind :dig :intent/goal :defend})]
+      (is (not= :fight (:intent/kind (plan/next-intent covering row plan/goals)))
+          "after a cover the line is 19"))))
