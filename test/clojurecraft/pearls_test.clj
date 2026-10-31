@@ -2715,3 +2715,13 @@
     (is (= [:walk :pearls]
            ((juxt :intent/kind :intent/for) (plan/next-intent given-up row plan/goals)))
         "given up on: the wander goes")))
+
+(deftest an-angry-one-parked-beyond-eight-blocks-is-no-menace
+  ;; pearls-travel-b job 6 (stuck-retry): 41 minutes of lookouts with one given up on parked 12
+  ;; blocks off; pearl-fight-a job 3 (above) is killed by one that closed from 9 to 3 blocks
+  (let [angry (assoc (enderman [8.5 64.0 20.5]) :entity/creepy? true)
+        w (-> (standing {9 angry})
+              (assoc :plan/blacklist #{9}))]
+    (is (nil? (pearls/menace w)) "twelve blocks off")
+    (is (some? (pearls/menace (assoc-in w [:world/entities 9 :entity/pos] [8.5 64.0 15.5])))
+        "seven blocks off")))

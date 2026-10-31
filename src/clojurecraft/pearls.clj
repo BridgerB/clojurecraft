@@ -228,20 +228,24 @@
              (endermen (if (lured-out? world) world (dissoc world :plan/blacklist)) stare-range))
        (:player/pos world)))))
 
+(def menace-radius 8.0)               ; blocks from the feet within which an angry enderman, given up on or not, is a menace: travel-b job 6 stood 41 minutes on one parked 12 off, pearl-fight-a job 3 was killed by one that closed from 9 to 3 in a few seconds
+
 (defn menace
   "[eid entity] of the nearest angry enderman (entity/creepy?), blacklisted or fought out or not,
-   within danger-radius of the feet and danger-rise of their height, or nil."
-  [world]
-  (let [p (:player/pos world)]
-    (entity/nearest (into {}
-                          (filter (fn [[_ e]]
-                                    (let [q (:entity/pos e)]
-                                      (and (entity/creepy? e)
-                                           (<= (physics/distance p q) danger-radius)
-                                           (<= (abs (- (physics/y-of q) (physics/y-of p)))
-                                               danger-rise)))))
-                          (endermen (dissoc world :plan/blacklist) stare-range))
-                    p)))
+   within radius (menace-radius by default) of the feet and danger-rise of their height, or nil.
+   One parked farther off holds nothing (stuck-retry's wander walks past it)."
+  ([world] (menace world menace-radius))
+  ([world radius]
+   (let [p (:player/pos world)]
+     (entity/nearest (into {}
+                           (filter (fn [[_ e]]
+                                     (let [q (:entity/pos e)]
+                                       (and (entity/creepy? e)
+                                            (<= (physics/distance p q) radius)
+                                            (<= (abs (- (physics/y-of q) (physics/y-of p)))
+                                                danger-rise)))))
+                           (endermen (dissoc world :plan/blacklist) stare-range))
+                     p))))
 
 (defn menaced?
   "Does an angry enderman (entity/creepy?), blacklisted or not, stand within danger-radius of the
@@ -249,7 +253,7 @@
    it first. Sim probe 39885574495 (world R2, seed 5): two provoked at once, one killed, and the
    walk to its pearl, out of the burrow, was slain in five seconds by the other, beside it."
   [world]
-  (boolean (menace world)))
+  (boolean (menace world danger-radius)))
 
 (def stale-lookouts 12)              ; lookouts (five seconds each, a minute) stood with the burrow and nothing to do from it before it is given up for one cut beside the next enderman
 (def lure-lookouts 6)                 ; lookouts (half a minute) stood in the burrow over an angry enderman near its mouth that has not come before the bot shows itself at the mouth to bring it
