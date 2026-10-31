@@ -258,6 +258,9 @@
    [:plan/recoveries
     "times a run out of attempts or a :retrying wait started over instead of ending (plan/recover)"
     "after a recovery"]
+   [:plan/recover-at
+    "ms of the last recovery (plan/recover); another within recover-cooldown-ms does nothing"
+    "after a recovery"]
    [:plan/regroup
     "the cell back along the trail the next walk goes to, planning again from a new spot"
     "after a recovery, until the walk starts"]

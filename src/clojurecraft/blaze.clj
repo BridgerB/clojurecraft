@@ -1522,7 +1522,9 @@
                             (when (burning-twice? world) (here-intent world)))))
         prepare (delay (prepare-intent world sp))
         dodging (delay (dodge-intent world))
-        grab (delay (when-let [e (near-rod world)] (rod-intent world e)))
+        room (delay (rod-room world))
+        ;; a rod with no slot to be picked up into is not grabbed: the junk goes first (rod-room)
+        grab (delay (when-let [e (near-rod world)] (when-not @room (rod-intent world e))))
         waiting (delay (ambush world))
         stock (delay (when-not (hurt? world) (stocking world)))
         out (delay (when (burning-here? world) (leave-fire world)))
@@ -1546,7 +1548,7 @@
           @wary @wary
           @away @away
           (window/reserve-toss world) (window/reserve-toss world)
-          (rod-room world) (rod-room world)
+          @room @room
           (and lying (drops/under-reach? world lying)) (fetch-walk lying)
           lying
           {:intent/kind :collect-drops
