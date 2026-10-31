@@ -4,7 +4,10 @@
 ;;   clojure -M scripts/flip_trace2.clj run.edn.zst 40
 ;; Run it from a checkout of the commit that made the recording (its header names it).
 (require 'clojure.math
+         '[clojurecraft.blocks]
          '[clojurecraft.game :as game]
+         '[clojurecraft.intent]
+         '[clojurecraft.terrain]
          '[clojurecraft.main :as main]
          '[clojurecraft.memory :as memory]
          '[clojurecraft.plan :as plan]
@@ -28,15 +31,26 @@
                          (filter #(= id (:intention/id %)))
                          last
                          (#(select-keys % [:intention/kind :intention/event :intention/reason])))))
-      site-info (fn [w]
-                  (when-let [site (:pocket/site w)]
-                    {:can-seal? (when can-seal?
-                                  (try (boolean (can-seal? w site)) (catch Exception e (str e))))
-                     :placed (count (:pocket/placed site))
-                     :unsealable? (:pocket/unsealable? site)
-                     :seal-failed-at (:pocket/seal-failed-at w)
-                     :held
-                     (into {} (map (fn [[_ s]] [(:item s) (:count s)])) (:player/inventory w))}))
+      site-info
+      (fn [w]
+        (when-let [site (:pocket/site w)]
+          {:can-seal? (when can-seal?
+                        (try (boolean (can-seal? w site)) (catch Exception e (str e))))
+           :cell (:pocket/cell site)
+           :feet (clojurecraft.intent/feet w)
+           :placed (mapv (fn [c] [c
+                                  (some-> (clojurecraft.terrain/block-at w c)
+                                          clojurecraft.blocks/solid?)])
+                         (:pocket/placed site))
+           :wanted (when-let [wf (requiring-resolve 'clojurecraft.pocket/wanted-seal-cells)]
+                     (try (mapv (fn [c] [c
+                                         (some-> (clojurecraft.terrain/block-at w c)
+                                                 clojurecraft.blocks/solid?)])
+                                (wf w (:pocket/cell site)))
+                          (catch Exception e (str e))))
+           :unsealable? (:pocket/unsealable? site)
+           :seal-failed-at (:pocket/seal-failed-at w)
+           :held (into {} (map (fn [[_ s]] [(:item s) (:count s)])) (:player/inventory w))}))
       lines (volatile! [])]
   (reduce (fn [[w prev] e]
             (let [w (assoc (main/step w e) :bot/effects [])
