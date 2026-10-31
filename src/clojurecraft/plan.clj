@@ -136,6 +136,30 @@
   {:arglists '([world goal])}
   (fn [_world goal] (:goal/plan goal :needs)))
 
+(defmulti holds?
+  "Is the running intent i a defence that another row's choice must not cut: one that runs to its
+   own end, whatever row the planner chooses meanwhile? Keyed by :intent/kind; every intent of
+   the :defend row by default, a fight excepted (it ends by its own break-off), and refuge kinds
+   by a defmethod. Only an escape row (:goal/trap) preempts it. Blaze-race-n jobs 4 and 6 (run
+   41105083204) lost a :pocket and a :seal to :defend within 50 ms of a new attacker, and
+   pearls-travel-b job 1 (41134469333) flipped :eat and :back-off every 50 ms as a hoglin crossed
+   the defend radius, no intent ever finishing."
+  {:arglists '([i])}
+  :intent/kind)
+
+(defmethod holds? :default [i] (and (= :defend (:intent/goal i)) (not= :fight (:intent/kind i))))
+
+(defn held?
+  "Is running intent i kept against goal, the row chosen now: i serves another row, i is a
+   defence (holds?), and goal is no escape (:goal/trap)? False for nil i or goal."
+  [i goal]
+  (boolean (and i
+                goal
+                (:intent/goal i)
+                (not= (:goal/id goal) (:intent/goal i))
+                (not (:goal/trap goal))
+                (holds? i))))
+
 (defmethod interrupts? :default [_ _ _] false)
 (defmethod steer :default [world _] world)
 
@@ -469,7 +493,9 @@
    value, so done is re-derived, regressions re-plan automatically\"): no target left means
    :done, whatever is running; a running intent that serves another target than the one chosen
    now is preempted, as is one the chosen row's interrupts? cuts short, unless the row, planning again
-   without it, would start the same intent (same-choice?): that one keeps running. Either waits
+   without it, would start the same intent (same-choice?): that one keeps running. A defence
+   (holds?) is neither preempted nor cut by another row but an escape: it runs to its own end.
+   Either waits
    while the cursor holds an item. Otherwise the intent runs, or
    the chosen target's next intent starts."
   [world event table]
@@ -479,8 +505,9 @@
         i (:plan/intent world)
         active? (= :active (:plan/status world))
         goal (when active? (choose world table))
-        preempt? (and i goal (:intent/goal i) (not= (:goal/id goal) (:intent/goal i)))
-        cut-world (when (and i goal (not preempt?) (interrupts? world goal i))
+        held (held? i goal)
+        preempt? (and i goal (:intent/goal i) (not= (:goal/id goal) (:intent/goal i)) (not held))
+        cut-world (when (and i goal (not preempt?) (not held) (interrupts? world goal i))
                     (abandon-intent world i :interrupted))
         cut? (and cut-world (not (same-choice? i (next-intent cut-world goal table))))
         next (when (and goal (nil? i)) (next-intent world goal table))

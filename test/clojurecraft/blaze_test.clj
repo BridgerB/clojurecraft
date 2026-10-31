@@ -1565,6 +1565,26 @@
                 sp))
         "after the cooldown, one more")
     (is (= 14.0 blaze/pocket-approach))))
+(deftest a-bot-that-cannot-heal-goes-home-for-food-not-to-a-rest-without-end
+  ;; race lane 4 (run 40980342194) s1 r01, s2 r11 and s2 r16: one :rest for 200, 164 and 200 minutes at
+  ;; health 10.9, 10.2 and 9.0, food 17 (natural regeneration needs 18), 830 / 354 / 394 cobblestone and
+  ;; not a bite to eat; the stage had no way to food
+  (let [cobble (item :cobblestone 64)
+        portal [20 64 8]
+        w (-> (standing {1 cobble} {})
+              (assoc :player/health 9.0 :player/food 17)
+              (memory/observe portal (blocks/default-state :nether_portal)))]
+    (is (not (blaze/heals? w)) "food 17 and nothing to eat")
+    (is (= {:intent/kind :portal-home} (next-intent w)) "the way home for food, not a :rest")
+    (testing "a meal held: eaten, and the rest heals"
+      (is (= :eat
+             (:intent/kind (next-intent
+                            (assoc-in w [:player/inventory 2] (item :cooked_beef 4)))))))
+    (testing "food at 18: the rest heals, so it is the rest"
+      (is (= {:intent/kind :rest} (next-intent (assoc w :player/food 18)))))
+    (testing "no portal on record: the rest holds, as before"
+      (is (= {:intent/kind :rest} (next-intent (assoc w :world/facts (memory/empty-facts))))))))
+
 (deftest a-spawner-whose-walk-failed-is-tunnelled-to-not-given-up
   ;; race lane 4 s1 r15: `:walk [544 57 203]` failed :no-path at the fortress, the blacklist took the
   ;; spawner, and the bot searched far spirals for 4 hours; the stand beside it was open

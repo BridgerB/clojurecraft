@@ -220,10 +220,11 @@
 (defn at-spawner?
   "Is the bot where it camps by spawner sp: the feet within spawner-reach of it and level-with?
    it (where a tunnel to it ends), or the eye within camp-range with the spawner walkable? (on its
-   floor, not in a tunnel beside its room) and its top-in-sight?, or the eye within
-   intent/reach of it with the spawner walkable? (a walk to it would be done in its first tick
-   and chosen again every tick: snapshot test/issues/514/b10231346-R4-21-1, the bot 3.96 from it;
-   made a tunnel to the stand instead in blaze-race-n, `:tunnel-to` ×23 for 11 minutes). Gym blaze-fortress-b (run
+   floor, not in a tunnel beside its room) and its top-in-sight?, or the eye within intent/reach
+   of it with the spawner walkable? (a walk to it is done in its first tick and chosen again every
+   tick: snapshot test/issues/514/b10231346-R4-21-1, the bot 3.96 from the spawner at
+   [544 57 203]; race lane 4 s2 r08 and r09 flipped :tunnel-to between [543 57 203] and
+   [544 57 203] at that spawner). Gym blaze-fortress-b (run
    38893941350) tunnelled to within 6 of its spawner, four blocks over it in the wall, and
    camped there ten minutes: the blazes the spawner made in its room below were out of reach,
    every run; blaze-fortress-c (run 38895759229) run 3 came up under its spawner, three below
@@ -253,12 +254,17 @@
    stands side by side changed with them, so the tunnel's trail was kept for the other target and
    the same cells were dug again, 140 minutes (blaze-race-a run 5, 727b4c2b2: :tunnel-to
    [2209 60 1794] and [2210 60 1793] by turns every 14.5 s, 0 attacks to the five-hour cap; the
-   same on blaze-race-c, 3a082f7b7)."
+   same on blaze-race-c, 3a082f7b7). So is the target of the :tunnel-to running now: race lane 4
+   (run 40980342194) s2 r08 and r09 sent [543 57 203] and [544 57 203] by turns every 12 s, 539
+   and 681 intents, none ever done, each abandoned for the other."
   [world sp]
   (let [bl (:plan/blacklist world #{})
         open (remove bl (filter #(open? world %) (cells-beside sp)))
-        kept (->> (memory/newest-dones world :tunnel-to stand-memory)
-                  (keep :intention/target)
+        running (let [i (:plan/intent world)]
+                  (when (= :tunnel-to (:intent/kind i)) (:intent/target i)))
+        kept (->> (cons running
+                        (keep :intention/target
+                              (memory/newest-dones world :tunnel-to stand-memory)))
                   (filter (set open))
                   first)]
     (or kept
@@ -711,6 +717,12 @@
                (or (nil? last-end) (> (- (:time/now world 0) last-end) ambush-cooldown)))
       {:intent/kind :ambush})))
 
+(defn unhealing
+  "The food trip when the bot cannot heal (heals? false), else nil: where a rest would hold for
+   ever, the way out."
+  [world]
+  (when-not (heals? world) (food-trip world)))
+
 (def rest-intent {:intent/kind :rest})
 
 (def rest-churn 3)       ; rests done within rest-churn-ms after which a rest is not chosen again
@@ -785,6 +797,7 @@
            (and weid (< (combat/horizontal world e) combat/back-off-to))
            {:intent/kind :back-off :intent/target weid}
            @food @food
+           (and (empty? (watchers world)) (unhealing world)) (unhealing world)
            (in-open? world) nil
            (and (heals? world) (not (:player/on-fire? world))) (rest-here world)
            :else nil))))
@@ -827,6 +840,7 @@
            (and aid (not (combat/void-retreat? world ae)))
            {:intent/kind :back-off :intent/target aid}
            @food @food
+           (and (empty? (watchers world)) (unhealing world)) (unhealing world)
            (and (heals? world)
                 (not (:player/on-fire? world))
                 (nil? aid)
@@ -1461,6 +1475,24 @@
               (> (- now since) ambush-ms))
           (intent/done world)
           :else world)))
+
+;; ---------------------------------------------------------------- the :portal-home intent
+
+(defmethod intent/run :portal-home
+  ;; {:intent/kind :portal-home}: work the stand in the nearest remembered Nether portal block
+  ;; through build/work-op (its child a walk to it, the await); done in the overworld, failed
+  ;; :no-portal when none is on record
+  [world i event]
+  (let [p (home-portal world)]
+    (cond (not= dimension/nether (dimension/of world))
+          (-> world
+              (assoc :player/controls {})
+              intent/done)
+          (nil? p)
+          (-> world
+              (assoc :player/controls {})
+              (intent/fail :no-portal))
+          :else (build/work-op world i (home-op p) event))))
 
 ;; ---------------------------------------------------------------- the :camp intent
 

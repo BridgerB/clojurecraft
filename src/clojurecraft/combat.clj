@@ -394,8 +394,25 @@
 (def danger-margin 3.0)               ; health beyond the next hits' damage the bot keeps (#577): the enderman's 7 + 3 is retreat-health
 
 (def extra-hits
-  "{kind damage}: one hit on Normal of the kinds mob/kinds does not carry."
-  {:silverfish 1.0 :cave_spider 2.0 :husk 3.0 :drowned 3.0 :zombie_villager 3.0 :stray 3.0})
+  "{kind damage}: one hit on Normal of the kinds mob/kinds does not carry. The Nether's: a piglin
+   took 6.7 a hit through the pearl kit's armour (pearl-fight-a job 6, run 41143668588: 18.6 to 11.9 to
+   5.2), a hoglin 5.7 (pearls-travel-b job 1), rounded up as the line errs high."
+  {:silverfish 1.0
+   :cave_spider 2.0
+   :husk 3.0
+   :drowned 3.0
+   :zombie_villager 3.0
+   :stray 3.0
+   :wither_skeleton 5.0
+   :piglin 7.0
+   :zombified_piglin 7.0
+   :hoglin 6.0
+   :piglin_brute 8.0})
+
+(def pack-size 2)                      ; hostiles near that make a pack
+(def outmatched-line
+  "A health over every health there is: the danger-line of a pack the bot is not to fight."
+  21.0)
 
 (defn hit-damage
   "The damage of one hit of a mob kind on Normal: extra-hits, else mob/kinds' :melee, else its
@@ -403,12 +420,28 @@
   [kind]
   (or (extra-hits kind) (get-in mob/kinds [kind :melee]) (get-in mob/kinds [kind :shoot])))
 
+(defn melee-damage
+  "The damage of one melee hit of a mob kind on Normal (extra-hits, else mob/kinds' :melee), nil
+   for a kind that shoots or has no hit: a ranged mob's hits do not add up at range like a pack's."
+  [kind]
+  (or (extra-hits kind) (get-in mob/kinds [kind :melee])))
+
+(defn outmatched?
+  "Do pack-size or more of the melee hits (melee-damage of the hostiles near, all known: a blaze
+   or a skeleton, which shoot, is none, and the blaze row answers blazes itself) add up to
+   retreat-health or more in one round? Pearl-fight-a job 6 (run 41143668588) started :fight 93 at
+   17.6 health against piglins 87 and 93, two attackers landing hits of 6.7, and died at 2m56s.
+   Two zombies (6) and a zombie with a silverfish (4) are not outmatched; two piglins (12) are."
+  [hits]
+  (and (>= (count hits) pack-size) (every? some? hits) (>= (reduce + hits) retreat-health)))
+
 (defn danger-line
   "The health under which :defend backs away from, covers against, and no longer fights: the
    danger-margin plus the damage of one hit of every hostile within defend-radius of the feet
    (entity/hostiles), never more than retreat-health, and retreat-health itself when none is
    near or any has no known hit (hit-damage nil: a creeper, an unknown kind). #577: never fight
-   when the next hits can kill. One silverfish is 4, five are 8, a zombie and a silverfish 7, one
+   when the next hits can kill. A pack whose one round of hits is retreat-health or more
+   (outmatched?) is never fought: outmatched-line, over any health. One silverfish is 4, five are 8, a zombie and a silverfish 7, one
    enderman 10. Gym chain-w13 run 4 (job 4, run 40798605016) was bitten 25 times in 23 s by a
    silverfish at 9.3 health, backing away from another mob a back-off at a time, fighting
    nothing, and died: a line of 10 is for what hits hard, not for what bites. Armour is not
@@ -420,9 +453,9 @@
                                        defend-radius)))
                          (entity/hostiles world)))
         hits (map (comp hit-damage entity/kind) near)]
-    (if (or (empty? hits) (some nil? hits))
-      retreat-health
-      (min retreat-health (+ danger-margin (reduce + hits))))))
+    (cond (outmatched? (map (comp melee-damage entity/kind) near)) outmatched-line
+          (or (empty? hits) (some nil? hits)) retreat-health
+          :else (min retreat-health (+ danger-margin (reduce + hits))))))
 
 (defn breathed-on?
   "Does the bot stand in the dragon's breath (entity/in-breath?) in the End? A fight there is the
@@ -857,6 +890,13 @@
   (let [attacker (:player/attacker world)]
     (or (when-let [e (get threats attacker)] [attacker e])
         (entity/nearest threats (:player/pos world)))))
+
+(def refuge-kinds
+  "Intents of another row that shelter the bot (a pocket dug and sealed, held, opened): kept against
+   the :defend row, which would lay a block or back off in their place (plan/holds?)."
+  #{:pocket :seal :unseal :pocket-hold})
+
+(doseq [k refuge-kinds] (defmethod plan/holds? k [_] true))
 
 (defmethod plan/next-intent :defend
   ;; the attacker among the threats, else the nearest (defend-target): a creeper, or anything
