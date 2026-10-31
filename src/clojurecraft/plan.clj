@@ -103,6 +103,7 @@
 
 (def max-attempts 3)                  ; consecutive failed intents before the plan fails
 (def stall-ms 900000)                 ; ms with no intent done (progress?) after which a run out of attempts is a dead end: 15 min
+(def recover-cooldown-ms 10000)        ; ms between two recoveries: a recovery that fails again at once waits, it does not start over every 100 ms
 (def regroup-distance 8)              ; blocks from the feet a regroup walk goes back along the trail
 (def non-progress
   "What finishes without moving the run on: intents of these kinds or for these purposes are done
@@ -334,17 +335,24 @@
   "A run out of attempts that is not stalled (stalled?) tries again instead of ending: the failure
    counts start over, the last failure is forgotten (so the same intent is not refused as an
    identical retry), and the trail's cell regroup-distance back (regroup-cell) becomes the next
-   thing to walk to, planning again from a new spot. :plan/recoveries counts them. Blaze-race-u
+   thing to walk to, planning again from a new spot. :plan/recoveries counts them. Within
+   recover-cooldown-ms of the last one (:plan/recover-at) it changes nothing but the wait: pearl-fight-i
+   job 3 (run 41178660163) recovered 34 times in a second, the :defend row's :place and :pillar
+   failing three times in 300 ms each round, and was killed by the enderman it stood facing. Blaze-race-u
    (run 41156125534) ended at 4 health after three :place :no-support in 300 ms, and at 16 after a
    camp that found no blaze twice, with hours left."
   [world]
-  (let [cell (regroup-cell world)]
-    (-> world
-        (assoc :plan/attempts 0 :plan/unwalkable 0)
-        (update :plan/recoveries (fnil inc 0))
-        (dissoc :plan/failed :plan/waiting :plan/waiting-since :plan/waiting-ticks :plan/regroup)
-        (cond-> cell (assoc :plan/regroup cell))
-        (game/say (str "recover " (:plan/recoveries world 0) " regroup " (pr-str cell))))))
+  (let [now (:time/now world 0)
+        at (:plan/recover-at world)
+        cell (regroup-cell world)]
+    (if (and at (< (- now at) recover-cooldown-ms))
+      (dissoc world :plan/waiting :plan/waiting-since :plan/waiting-ticks)
+      (-> world
+          (assoc :plan/attempts 0 :plan/unwalkable 0 :plan/recover-at now)
+          (update :plan/recoveries (fnil inc 0))
+          (dissoc :plan/failed :plan/waiting :plan/waiting-since :plan/waiting-ticks :plan/regroup)
+          (cond-> cell (assoc :plan/regroup cell))
+          (game/say (str "recover " (:plan/recoveries world 0) " regroup " (pr-str cell)))))))
 
 (defn finish-intent
   "An intent that succeeds ends any failure streak: attempts and unwalkable walks count
@@ -585,7 +593,7 @@
           preempt? (plan-tick (abandon-intent world i :preempted) event table)
           cut? (plan-tick cut-world event table)
           i (run-intent world i event table)
-          (and (:plan/regroup world) (not (:goal/always? goal)))
+          (and (:plan/regroup world) (not (:goal/trap goal)))
           (start-intent (dissoc world :plan/regroup)
                         {:intent/kind :walk
                          :intent/target (:plan/regroup world)

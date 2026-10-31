@@ -479,6 +479,7 @@
 (s/def :plan/attempts nat-int?)
 (s/def :plan/done-at int?)
 (s/def :plan/recoveries nat-int?)
+(s/def :plan/recover-at int?)
 (s/def :plan/regroup ::block-pos)
 (s/def :plan/last (s/keys :req [:intent/kind]))
 (s/def :plan/ended (s/keys :req [:intent/kind :ended/at]))
