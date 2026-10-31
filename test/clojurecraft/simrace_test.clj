@@ -9,7 +9,9 @@
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
             [clojurecraft.memory :as memory]
+            [clojurecraft.mob :as mob]
             [clojurecraft.plan :as plan]
+            [clojurecraft.recipe :as recipe]
             [clojurecraft.sim :as sim]
             [clojurecraft.simrace :as simrace]
             [clojurecraft.wood]
@@ -376,3 +378,53 @@
     (is (some #(= :level-chunk-with-light (:packet/name %)) (:sim/out (:sim played)))
         "so the model sends its columns again")
     (is (= (:capture/columns bare) (get-in played [:sim :sim/columns])))))
+
+;; ---------------------------------------------------------------- a start at a fortress
+
+(def spawner-column
+  "The Nether chunk [0 0] with a spawner block floating at [8 70 8], over the bare stone floor
+   (y 63 and under) every other column of the test has."
+  (world/column-bytes {[8 70 8] mob/spawner-block} dimension/nether))
+
+(def nether-decoded
+  "Twenty-five Nether chunks round [0 0], decoded, the middle one holding the spawner."
+  (into {}
+        (for [cx (range -2 3)
+              cz (range -2 3)]
+          [[cx cz]
+           (chunk/decode
+            (if (= [0 0] [cx cz]) spawner-column (world/column-bytes {} dimension/nether)))])))
+
+(deftest a-kit-becomes-an-inventory
+  (let [inv (simrace/kit->inventory {:iron_pickaxe 1 :cobblestone 130 :iron_helmet 1})]
+    (is (= {:item (recipe/item-id :iron_helmet) :count 1} (get inv [:armour 0])) "worn")
+    (is (= [64 64 2] (map #(:count (get inv [:hotbar %])) [0 1 2])) "a count over a stack is split")
+    (is (= (recipe/item-id :iron_pickaxe) (:item (get inv [:hotbar 3]))))
+    (is (= inv (simrace/kit->inventory {:iron_helmet 1 :iron_pickaxe 1 :cobblestone 130}))
+        "the same kit, the same inventory")
+    (is (every? (comp pos? :count) (vals (simrace/kit->inventory simrace/fortress-kit-default))))))
+
+(deftest a-run-may-start-at-the-fortress-spawner-nearest-its-landing
+  ;; the model's fortress spawners (issue #495) are the cells holding a spawner block; the start is
+  ;; ground on the far side of them, thirty-two blocks off when there is some
+  (let [start (simrace/fortress-start nether-decoded [64 64 70])]
+    (is (= [8 70 8] (:spawner start)))
+    (is (= [-23.5 64.0 -23.5] (:spawn start)) "the first ground at the farthest ring")
+    (is (nil? (simrace/fortress-start {[0 0] (chunk/decode (world/column-bytes {}
+                                                                               dimension/nether))}
+                                      [64 64 70]))
+        "no spawner: no start")))
+
+(deftest a-fortress-start-plays-from-the-blaze-rods
+  ;; failures before the rods are not the run's to file: its goals are the stages from them up
+  (is (= [:blaze-rods :ender-pearls] (simrace/fortress-goals "pearls-12")))
+  (let [w (simrace/with-fortress
+           (assoc two-columns :capture/nether {:decoded nether-decoded :columns {}})
+           {:iron_sword 1})
+        go (simrace/go-of w "pearls-12")]
+    (is (= [-23.5 64.0 -23.5] (simrace/spawn-of w)))
+    (is (= [:blaze-rods :ender-pearls] (:go/goals go)))
+    (is (= [-23.5 64.0 -23.5] (:go/at go)))
+    (is (= (plan/through "pearls-12")
+           (:go/goals (simrace/go-of (dissoc w :capture/fortress) "pearls-12")))
+        "no fortress: the whole chain, as before")))
