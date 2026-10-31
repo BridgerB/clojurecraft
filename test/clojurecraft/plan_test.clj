@@ -1124,9 +1124,13 @@
   ;; max-unwalkable of them in a row do, and anything that succeeds starts the count again
   (let [no-path (fn [n]
                   {:intent/kind :walk :intent/reason :no-path :intent/target [n 64 0] :intent/id n})
-        active (plan/begin (world-state [0.5 64.0 0.5]) {:go/goals [:wood]} plan/goals)
+        begun (plan/begin (world-state [0.5 64.0 0.5]) {:go/goals [:wood]} plan/goals)
+        active (assoc begun :plan/since 0 :time/now (inc plan/stall-ms)) ; a run with nothing done for the stall
         fail-n (fn [n] (reduce plan/fail-intent active (map no-path (range n))))
         failed (fail-n plan/max-unwalkable)]
+    (is (= :active
+           (:plan/status (reduce plan/fail-intent begun (map no-path (range plan/max-unwalkable)))))
+        "a run not stalled starts over")
     (is (= :active (:plan/status (fail-n (dec plan/max-unwalkable)))))
     (is (= :failed (:plan/status failed)))
     (is (= :no-path (:plan/reason failed)))
@@ -1719,3 +1723,77 @@
       "its own row")
   (is (not (plan/held? nil pearls-row)))
   (is (not (plan/held? {:intent/kind :back-off :intent/goal :defend} nil))))
+
+;;; RETRY: three failures in a row start over; only a stalled run ends
+
+(defn place-failed
+  "blaze-race-u job 4 (run 41156125534) at the moment its third :place failed :no-support: feet at
+   [2345 57 2287], the trail it walked in :plan/trail, the clock at ms after the plan began."
+  [ms]
+  (let [fail (fn [w n]
+               (plan/fail-intent w
+                                 {:intent/kind :place
+                                  :intent/item :cobblestone
+                                  :intent/cell [2346 58 2287]
+                                  :intent/goal :blaze-rods
+                                  :intent/reason :no-support
+                                  :intent/id n}))
+        w (-> (world-state [2345.5 57.0 2287.5])
+              (assoc :plan/status :active
+                     :plan/since 0
+                     :plan/blacklist #{}
+                     :plan/attempts 0
+                     :time/now ms
+                     :plan/trail [[2288 72 2304] [2337 60 2290] [2344 60 2284] [2346 60 2283]]))]
+    (reduce fail w (range 1 4))))
+
+(deftest three-failures-in-a-row-start-over-and-do-not-end-the-run
+  (let [w (place-failed 316000)]
+    (is (= :active (:plan/status w)) "five minutes in, not stalled: the run goes on")
+    (is (zero? (:plan/attempts w)) "the count starts over")
+    (is (= 1 (:plan/recoveries w)))
+    (is (nil? (:plan/failed w)) "the last failure is forgotten, so the same intent is not refused")
+    (is (= [2337 60 2290] (:plan/regroup w))
+        "planning again from the trail's cell 8 or more back")))
+
+(deftest a-run-with-nothing-done-for-the-stall-ends-with-the-reason
+  (let [w (place-failed (+ plan/stall-ms 1000))]
+    (is (= :failed (:plan/status w)))
+    (is (= :no-support (:plan/reason w)))
+    (is (nil? (:plan/regroup w)))
+    (testing "an intent that moved the run on resets the clock"
+      (let [done (plan/finish-intent (assoc w :plan/status :active)
+                                     {:intent/kind :dig :intent/id 9})]
+        (is (not (plan/stalled? done)))
+        (is (= (:time/now w) (:plan/done-at done)))))
+    (testing "a rest, a back-off or a regroup walk is done but is no progress"
+      (doseq [i [{:intent/kind :rest} {:intent/kind :back-off}
+                 {:intent/kind :walk :intent/for :regroup}
+                 {:intent/kind :walk :intent/for :retreat}]]
+        (is (not (plan/progress? i)) (pr-str i))
+        (is (plan/stalled? (plan/finish-intent (assoc w :plan/status :active)
+                                               (assoc i :intent/id 9))))))))
+
+(deftest a-retrying-wait-starts-over-unless-stalled
+  (let [at (fn [ms reason]
+             (plan/wait (assoc (place-failed 0)
+                               :plan/status :active
+                               :time/now ms
+                               :plan/waiting-ticks plan/wait-ticks)
+                        reason))]
+    (is (= :active (:plan/status (at 200000 :retrying))))
+    (is (= 1 (:plan/recoveries (at 200000 :retrying))))
+    (is (= :failed (:plan/status (at (+ plan/stall-ms 1000) :retrying))) "a dead end still ends")
+    (is (= :failed (:plan/status (at 200000 :no-log))) "every other wait ends as it did")))
+
+(deftest ^:eftest/synchronized the-regroup-walk-starts-when-nothing-runs
+  (let [w (-> (place-failed 316000)
+              (dissoc :plan/intent))
+        goal {:goal/id :blaze-rods :goal/done? :never :goal/plan :flip-test}]
+    (with-redefs [plan/choose (constantly goal)
+                  plan/next-intent (constantly {:intent/kind :place :intent/item :cobblestone})]
+      (let [w (plan/plan-tick w {:event/kind :tick :event/now 316050 :event/rand 0.5} [goal])]
+        (is (= :walk (get-in w [:plan/intent :intent/kind])))
+        (is (= [2337 60 2290] (get-in w [:plan/intent :intent/target])))
+        (is (= :regroup (get-in w [:plan/intent :intent/for])))
+        (is (nil? (:plan/regroup w)) "taken once")))))
