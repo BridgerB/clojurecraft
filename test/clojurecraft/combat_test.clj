@@ -830,8 +830,9 @@
   ;; 8.5 to 2.8 to 0 in 3 s. The hole under the feet comes first for one that teleports
   (let [angry (assoc (mob :enderman [9.5 64.0 8.5] 40.0) :entity/creepy? true)
         kit {0 (item :stone_pickaxe 1) 1 (item :cobblestone 8) 2 (item :cooked_beef 4)}
-        w (-> (standing {7 angry})
-              (assoc :player/health 8.5 :player/food 10 :player/inventory kit))
+        w (->
+            (standing {7 angry})
+            (assoc :plan/goals #{:dragon} :player/health 8.5 :player/food 10 :player/inventory kit))
         i (plan/next-intent w (row :defend) plan/goals)]
     (is (= {:intent/kind :dig :intent/target [8 63 8]} (combat/cover w angry)))
     (is (= :dig (:intent/kind i)) (pr-str i))
