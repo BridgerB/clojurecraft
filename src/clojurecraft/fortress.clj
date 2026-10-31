@@ -33,6 +33,8 @@
 (def reach 6)                         ; blocks from a fortress brick that count as at the fortress
 (def brick-min-y 32)                  ; bricks under this are below the lava sea's surface (y 31): never tunnel to them
 (def sight-radius 512)                ; how far a remembered brick may be and still be the target
+(def dead-cap 512)                     ; dead cells kept for one target
+(def dead-targets 8)                  ; other targets whose dead cells are kept
 (def steps-per-tunnel 32)             ; steps a :tunnel-to takes before the planner looks again
 (def explore-spacing 160)             ; blocks between the strips an exploring tunnel sweeps: a server shows 96 either side of the feet
 (def leg-max (* 3 explore-spacing))   ; the longest leg of the spiral: a leg longer than a judge window's walk only ever sweeps one strip
@@ -531,13 +533,39 @@
 
 (def trail-cap 512)                   ; cells of the way back a tunnel keeps
 
+(defn fresh-move?
+  "May the move ahead from feet be taken as a step forward, not a retreat: it goes to a cell not
+   stood in (visited), or it gains height toward the target (gaining?) onto a cell not found to
+   lead nowhere (dead)? The gain exemption lets the way back up a stair still count (issue #526),
+   but into a dead cell it let a tunnel walk down onto it, step back up (undo), and down again,
+   thirty-two steps a tunnel with :retreats 0 and the visited count unmoving: blaze-race-z9 job 5
+   (run 41222838848), [2162 69 1748] and [2162 68 1747] by turns for thirty-one steps, then the
+   same in the next tunnel for 32 minutes."
+  [feet ahead target visited dead]
+  (boolean (and ahead
+                (or (and (gaining? feet ahead target) (not (contains? dead (plus feet ahead))))
+                    (not (retreat? feet ahead visited))))))
+
 (defn trail-of
   "The way back the world keeps for a tunnel to target: {:trail/target target :trail/cells the
-   feet cells steps began from, oldest first :trail/dead the cells found to lead nowhere}. A
-   trail kept for another target is not this one's: an empty one."
+   feet cells steps began from, oldest first :trail/dead the cells found to lead nowhere toward
+   target :trail/others [[target dead]] the dead cells of the last dead-targets other targets}. A
+   trail kept for another target is not this one's cells: an empty list. Its dead cells are kept,
+   by target, and come back when the target does: a cell is dead because no fresh step toward
+   *its* target leaves it (moves never offers the way straight back), so it may be the way to
+   another target, and is not dead for that one. The planner's target alternated between two
+   spawners, and each change forgot what the last tunnel to it had learnt."
   [world target]
   (let [t (:fortress/trail world)]
-    (if (= target (:trail/target t)) t {:trail/target target :trail/cells [] :trail/dead #{}})))
+    (if (= target (:trail/target t))
+      t
+      (let [others (cond->> (remove #(= target (first %)) (:trail/others t []))
+                     (:trail/target t) (cons [(:trail/target t) (:trail/dead t #{})]))
+            dead (some #(when (= target (first %)) (second %)) (:trail/others t []))]
+        {:trail/target target
+         :trail/cells []
+         :trail/dead (if (> (count dead) dead-cap) #{} (or dead #{}))
+         :trail/others (vec (take dead-targets others))}))))
 
 (defn step-back
   "The move from feet back to the last cell of trail, or nil when the trail is empty, that cell is
@@ -738,7 +766,7 @@
                                (boolean dry-only?)
                                seen
                                (boolean (:intent/bridge? i))))
-            fresh? (and ahead (or (gaining? feet ahead target) (not (retreat? feet ahead seen))))
+            fresh? (fresh-move? feet ahead target seen (:trail/dead trail))
             undo (when-not (or back fresh?) (step-back world feet trail (boolean dry-only?)))
             m (or back undo ahead)
             retreated (if (and ahead (not fresh?) (not undo)) (inc (long retreats)) 0)]
