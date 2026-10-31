@@ -4,6 +4,8 @@
 ;; out of its burrow and home again 130 times in 68 s with an angry enderman near (the way-home
 ;; branch no longer calls back a wander) and, before that, was denied a burrow where the watchdog
 ;; fired with the angry one on it (d9a32bbed). Row pearls-12-race-tools. Measure: passes of 6, time
+;; Also (combat): an enderman under the danger line ends the fight and the cover digs first (jobs 2, 3,
+;; 4, 6 of batch m died to one). Main merged through #661. Measure passes of 6, time
 ;; to 12, deaths by cause; in the logs, no walk flip longer than a few starts, flee ends off the lava.
 {:plans/label "pearl-fight-n"
  :plans/jobs 6
