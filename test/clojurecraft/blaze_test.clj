@@ -1826,3 +1826,27 @@
     (is (not (plan/interrupts? w row grab)) "the rod is picked up first")
     (is (plan/interrupts? w row {:intent/kind :camp :intent/spawner [11 64 10]})
         "a camp is still cut")))
+
+(deftest a-sortie-ends-when-the-bot-burns-or-the-room-is-on-it
+  ;; blaze-race-z4 landing 2: 10 blazes killed in 11 minutes, dead among 13 to 14 within 8
+  (let [crowd (into {}
+                    (map (fn [i] [(+ 50 i)
+                                  (entity :blaze [(+ 4.5 (* 0.5 i)) 65.0 8.5]
+                                          :entity/health 20.0)]))
+                    (range 5))
+        base (assoc (standing {}) :time/now 10000 :sortie/since 10000)]
+    (is (false? (blaze/sortie-over? base)))
+    (is (true? (blaze/sortie-over? (assoc base :player/on-fire? true))) "burning")
+    (is (true? (blaze/sortie-over? (assoc base :world/entities crowd))) "five within 8")
+    (is (false? (blaze/sortie-over? (assoc base :world/entities (select-keys crowd [50 51 52]))))
+        "three is the limit, not over")))
+
+(deftest ^:eftest/synchronized the-camp-clause-never-ends-in-nil-when-no-way-to-the-spawner-is-left
+  ;; blaze-race-z4 landing 5: :tunnel-to done on its last stand, to-spawner nil, the clause's value nil,
+  ;; {:plan/wait :nothing-to-do} for 400 ticks and the run ended with time left
+  (let [w (assoc (-> (standing {})
+                     with-spawner)
+                 :player/pos
+                 [60.5 64.0 60.5])]
+    (with-redefs [blaze/to-spawner (fn [_ _] nil)]
+      (is (some? (next-intent w)) "the search or the named wait, never nil"))))

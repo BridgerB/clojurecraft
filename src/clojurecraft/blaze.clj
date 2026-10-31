@@ -1522,6 +1522,7 @@
 (def sortie-line 14.0) ; health under which a sortie is over: back to the pocket to heal
 (def sortie-fights 2) ; fights ended on a sortie after which it is over
 (def sortie-ms 90000) ; ms a sortie may last
+(def sortie-crowd 3) ; blazes within at-reach (8) of the bot beyond which a sortie is over: the room is on it
 (def sortie-start-health 19.0) ; health a sortie is begun at
 (def sortie-rest-ms 45000) ; ms in the pocket with no fight before another sortie
 
@@ -1537,9 +1538,22 @@
   [world t]
   (count (filter #(>= (:intention/at %) t) (memory/newest-dones world :fight 20))))
 
+(defn nearby-blazes
+  "{eid entity} of the blazes alive within r blocks of the bot."
+  [world r]
+  (let [pos (:player/pos world)]
+    (into {}
+          (filter (fn [[_ e]]
+                    (and (= :blaze (entity/kind e))
+                         (not (entity/dead? e))
+                         (<= (physics/distance pos (:entity/pos e)) r))))
+          (:world/entities world))))
+
 (defn sortie-over?
   "Is the sortie (:sortie/since, noted by steer when the bot left its pocket for the spawner's zone)
-   over: sortie-fights fights ended since, or sortie-ms spent, or the health under sortie-line? Then
+   over: sortie-fights fights ended since, or sortie-ms spent, or the health under sortie-line, or
+   burning, or more than sortie-crowd blazes within 8 (the room is on the bot: blaze-race-z4
+   landing 2 died among 13 to 14)? Then
    the bot goes back to the pocket behind it, heals and goes again. Blaze-race-z2 landing 2 killed 4
    blazes in 3.4 minutes in the room at [2346 57 2288] and stayed there until dead; landing 1 stood
    at the tunnel's end among 6 and 7 blazes and flipped dodge, pocket and walk until dead."
@@ -1548,7 +1562,9 @@
     (boolean (and since
                   (or (>= (fights-since world since) sortie-fights)
                       (> (- (:time/now world 0) since) sortie-ms)
-                      (< (:player/health world 20.0) sortie-line))))))
+                      (< (:player/health world 20.0) sortie-line)
+                      (:player/on-fire? world)
+                      (> (count (nearby-blazes world 8.0)) sortie-crowd))))))
 
 (defn sortie-due?
   "Is it time for a sortie: in the pocket, healed to sortie-start-health, not burning, and no fight
@@ -1683,7 +1699,7 @@
            (not (at-spawner? world sp))
            (not (at-nook? world sp))
            (not (bait-here? world sp)))
-      (to-spawner world sp)
+      (or (to-spawner world sp) (search world) {:plan/wait :no-blaze})
       (and sp
            (or camping-in-pocket? (at-spawner? world sp) (at-nook? world sp) (bait-here? world sp))
            (not (hurt? world))
