@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-31T00:13:31.825Z",
+  "at" : "2026-10-31T00:18:55.409Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -8,28 +8,18 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : true
   }, {
-    "number" : 539,
-    "title" : "Bot stops at fortress: timeout",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 531,
     "title" : "Bot stops at ingots: boxed",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 618,
-    "title" : "Bot stops at ingots: no-support",
-    "labels" : [ "bot-failure", "sim" ],
-    "copilot" : true
+    "number" : 539,
+    "title" : "Bot stops at fortress: timeout",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : false
   }, {
     "number" : 611,
     "title" : "Bot stops at portal-kit: no-support",
-    "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
-  }, {
-    "number" : 622,
-    "title" : "Bot stops at portal: no-support",
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
@@ -37,6 +27,11 @@
     "title" : "Bot stops at blaze-rods: no-support",
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
+  }, {
+    "number" : 618,
+    "title" : "Bot stops at ingots: no-support",
+    "labels" : [ "bot-failure", "sim" ],
+    "copilot" : true
   }, {
     "number" : 538,
     "title" : "Bot stops at fortress: blocked",
@@ -51,6 +46,11 @@
     "number" : 71,
     "title" : "Bot stops at portal-kit: boxed",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 622,
+    "title" : "Bot stops at portal: no-support",
+    "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
     "number" : 514,
@@ -233,11 +233,11 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 539,
+    "issue" : 531,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 531,
+    "issue" : 539,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
