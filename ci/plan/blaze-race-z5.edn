@@ -1,0 +1,19 @@
+;; Issue #262, round z5 on 162d89e9a: z4's landings 1, 2 and 5. z4 landing 2 killed 10 blazes in 11 min (9 per 10 min) but
+;; lost 4 of 6 rods to a :collect-drops/:pocket flip (a spent sortie cut the pick-up): fixed. Landing 5: wall held, the
+;; tunnel stand flip is chain-dragon's. Rods held, kills per 10 min (s2k.ts), deaths, :seal/:unseal flips.
+{:plans/label "blaze-race-z5"
+ :plans/jobs 3
+ :plans/issue 262
+ :plans/experiments [{:exp/name "blaze-fortress-race"
+                      :exp/kind :gym
+                      :exp/goal "blaze-fortress-race"
+                      :exp/runs 2
+                      :exp/bots 1
+                      :exp/est-s 1800}
+                     {:exp/name "blaze-fortress-race-5"
+                      :exp/kind :gym
+                      :exp/goal "blaze-fortress-race"
+                      :exp/runs 1
+                      :exp/from 5
+                      :exp/bots 1
+                      :exp/est-s 1800}]}
