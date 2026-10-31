@@ -788,8 +788,9 @@
           failed (intent/run (assoc w :plan/intent i) i tick)]
       (is (intent/failed? (:plan/intent failed)) "the third dig the server would not do fails it")
       (is (= :rejected (get-in failed [:plan/intent :intent/reason])))
-      (is (= :failed (:plan/status (plan/fail-intent failed (:plan/intent failed)))))
-      (is (= :rejected (:plan/reason (plan/fail-intent failed (:plan/intent failed))))))))
+      (let [stalled (assoc failed :plan/since 0 :time/now (inc plan/stall-ms))] ; nothing done for the stall
+        (is (= :failed (:plan/status (plan/fail-intent stalled (:plan/intent stalled)))))
+        (is (= :rejected (:plan/reason (plan/fail-intent stalled (:plan/intent stalled)))))))))
 
 (deftest a-dig-the-server-did-not-do-is-dug-again-before-the-build-fails
   ;; real race 39405014440 bot Clj_r13 and race 39407278017 bot Clj_r03 (issue #44): the first
