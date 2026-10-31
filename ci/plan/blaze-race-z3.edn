@@ -1,0 +1,19 @@
+;; Issue #262, round z3: z2's landings 1, 2 and 5 with the dig-on reverted (z2: landing 1 and 2 dug on into the spawner
+;; room with 6-7 blazes in view, dead at 7 and 10 min; landing 2 killed 4 blazes in 3.4 min first). Landing 5 in z2
+;; bridged at [2159 69 1746] where the wall had no support (z: [2150 72 1757], 5 hits in 107 min). Rods held first.
+{:plans/label "blaze-race-z3"
+ :plans/jobs 3
+ :plans/issue 262
+ :plans/experiments [{:exp/name "blaze-fortress-race"
+                      :exp/kind :gym
+                      :exp/goal "blaze-fortress-race"
+                      :exp/runs 2
+                      :exp/bots 1
+                      :exp/est-s 1800}
+                     {:exp/name "blaze-fortress-race-5"
+                      :exp/kind :gym
+                      :exp/goal "blaze-fortress-race"
+                      :exp/runs 1
+                      :exp/from 5
+                      :exp/bots 1
+                      :exp/est-s 1800}]}
