@@ -1,0 +1,18 @@
+;; Issue #264, branch fix/264-eyes: the eyes stage as the race plays it. eyes-nether crafts in the
+;; Nether (a sealed room, rods and pearls in hand); eyes-nether-full does it with every one of
+;; the 36 slots taken (netherrack, warped stems, a sword) before the first powder.
+{:plans/label "eyes-a"
+ :plans/jobs 3
+ :plans/issue 264
+ :plans/experiments [{:exp/name "eyes-nether"
+                      :exp/kind :gym
+                      :exp/goal "eyes-nether"
+                      :exp/runs 1
+                      :exp/bots 1
+                      :exp/est-s 600}
+                     {:exp/name "eyes-nether-full"
+                      :exp/kind :gym
+                      :exp/goal "eyes-nether-full"
+                      :exp/runs 2
+                      :exp/bots 1
+                      :exp/est-s 600}]}

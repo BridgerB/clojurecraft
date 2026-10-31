@@ -38,6 +38,7 @@ Twelve, not fourteen. The issue asked for fourteen when the pearls allow (an eye
 ## Proof
 - `sim_test eyes-of-ender-from-rods-and-pearls`: seven rods and twelve pearls given on bare ground, against the model: done, twelve eyes, one rod left, nothing in the grid, no failed intent, no violation.
 - `eyes_test`: the waits and the first crafts from a few inventories; the row is an aside after the pearls.
+- Gym rows `eyes-nether` and `eyes-nether-full` (`gym.clj`, plan eyes-a): the same craft in the sealed Nether room of the pearl rows, and with all 36 slots taken (netherrack, warped stems, a sword) before the first powder: the race bot's pack when it reaches this stage; the craft has nowhere to put its result until junk is tossed (craft.clj fails `:inventory-full`).
 - Gym row `eyes` (`gym.clj`): a surface landing at Normal, seven rods and twelve pearls given, judged by `clear <bot> minecraft:ender_eye 0` finding twelve or more. Batch eyes-264a (plan run 38920108562, from branch gym/264) passed 6/6, each run done 20 to 30 s after landing.
 
 ## See also

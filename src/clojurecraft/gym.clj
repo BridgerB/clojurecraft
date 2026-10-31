@@ -769,6 +769,30 @@
     :gym/timeout-ms trial-ms
     :gym/truth [{:truth/cmd "clear {name} minecraft:ender_eye 0"
                  :truth/re "Found (1[2-9]|[2-9][0-9]) "}]}
+   ;; issue #264: the same twelve eyes as the race plays them: in the Nether (the sealed room of the
+   ;; pearl rows, where the chain leaves the bot after its pearls), the rods and pearls given
+   {:gym/name "eyes-nether"
+    :gym/goal :eyes-of-ender
+    :gym/until "eyes"
+    :gym/land :nether-arena
+    :gym/difficulty "normal"
+    :gym/prereqs ["minecraft:blaze_rod 7" "minecraft:ender_pearl 12"]
+    :gym/timeout-ms trial-ms
+    :gym/truth [{:truth/cmd "clear {name} minecraft:ender_eye 0"
+                 :truth/re "Found (1[2-9]|[2-9][0-9]) "}]}
+   ;; issue #264: the race bot's pack is full by then (netherrack and warped stems from its digs): every
+   ;; one of the 36 slots taken before the first powder, so the craft has nowhere to put its result
+   ;; until junk is tossed
+   {:gym/name "eyes-nether-full"
+    :gym/goal :eyes-of-ender
+    :gym/until "eyes"
+    :gym/land :nether-arena
+    :gym/difficulty "normal"
+    :gym/prereqs ["minecraft:netherrack 1920" "minecraft:warped_stem 192" "minecraft:iron_sword 1"
+                  "minecraft:blaze_rod 7" "minecraft:ender_pearl 12"]
+    :gym/timeout-ms trial-ms
+    :gym/truth [{:truth/cmd "clear {name} minecraft:ender_eye 0"
+                 :truth/re "Found (1[2-9]|[2-9][0-9]) "}]}
    ;; issue #265: one eye thrown on a surface landing at noon (no night mobs on the bot), its line
    ;; within bearing-within degrees of the way to the stronghold the server locates from the
    ;; landing (the bot throws where it stands; a stronghold is hundreds of blocks off, so the
