@@ -1,7 +1,8 @@
 (ns clojurecraft.race-test
   "The race (issue #17): the claims reducer never grants one cell to two bots, the spiral visits
    every cell once, and the race's board and summary are functions of values."
-  (:require [clojure.test :refer [are deftest is testing]]
+  (:require [clojure.math :as math]
+            [clojure.test :refer [are deftest is testing]]
             [clojure.test.check :as tc]
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]
@@ -343,3 +344,37 @@
                              :reason :death-blaze
                              :plan {:plan/goals #{:blaze-rods :ender-pearls} :plan/reached #{}}}))
       "a blaze's death and a lava's are two signatures at one stage"))
+
+(deftest a-pad-is-chosen-outside-the-fortress-and-clear-of-mobs
+  ;; the first deaths of the bots at the fortress came 14 to 27 s after landing (race 41229255270)
+  (let [fortress [200 -160]
+        cands (race/pad-candidates fortress 3)]
+    (is (= 24 (count (set cands))) "eight compass points at three distances")
+    (is (= (race/pad-of fortress 3) (first cands)) "the first is the 48-block pad")
+    (is (= [48 80 112]
+           (map #(long (math/hypot (double (- (first %) 200)) (double (- (second %) -160))))
+                [(first cands) (nth cands 8) (nth cands 16)]))
+        "the same points at 48, 80 and 112 blocks (axis points)")
+    (is (= (first cands) (race/choose-pad (constantly nil) cands)) "safe: the first")
+    (is (= (second cands) (race/choose-pad #(when (= % (first cands)) :bricks) cands))
+        "the first in the fortress: the next compass point")
+    (is (= (nth cands 8) (race/choose-pad #(when (some #{%} (take 8 cands)) :mobs) cands))
+        "all eight unsafe: the same points at 80")
+    (is (= (first cands) (race/choose-pad (constantly :bricks) cands))
+        "none safe: the nearest, as before")))
+
+(deftest the-probes-for-a-pad-are-within-the-range
+  (let [pad [100 -50 72]
+        cells (race/brick-probes pad)]
+    (is (= 75 (count cells)))
+    (is (every? (fn [[x y z]]
+                  (and (<= (abs (- x 100)) race/brick-range)
+                       (<= (abs (- z -50)) race/brick-range)
+                       (<= (abs (- y 72)) 8)))
+                cells))
+    (is (= "execute in minecraft:the_nether if block 100 72 -50 minecraft:nether_bricks"
+           (race/brick-test [100 72 -50] "minecraft:nether_bricks")))
+    (is
+     (=
+      "execute in minecraft:the_nether positioned 100 72 -50 if entity @e[type=minecraft:blaze,distance=..32]"
+      (race/mob-test pad "minecraft:blaze")))))
