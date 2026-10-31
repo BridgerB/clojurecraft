@@ -228,16 +228,22 @@
   [world p]
   (let [f (build/foundation world p)] (boolean (and f (not (place/inside-player? world f))))))
 
+(defn sealed?
+  "Is the site sealed: it names cells it placed blocks in (:pocket/placed), every one is solid, and
+   no cell a seal would still fill (wanted-seal-cells) is open? Blaze-race-z7 job 2 sat 19 s in
+   :pocket-hold under fireballs and burn with four placed cells solid and the four on its z sides
+   open: a :seal that ended :done when its stale list was solid, the bot having moved, and this test
+   said sealed (flip_trace2, run 41212534031)."
+  [world {:pocket/keys [cell placed]}]
+  (boolean (and (seq placed)
+                (every? #(solid-at? world %) placed)
+                (or (nil? cell) (empty? (wanted-seal-cells world cell))))))
+
 (defn seal-cells
   "The cells a seal of the pocket at cell c places a block in: wanted-seal-cells that can be laid
    (placeable?)."
   [world c]
   (filterv #(placeable? world %) (wanted-seal-cells world c)))
-
-(defn sealed?
-  "Is the site sealed: it names cells it placed blocks in (:pocket/placed) and every one is solid?"
-  [world {:pocket/keys [placed]}]
-  (boolean (and (seq placed) (every? #(solid-at? world %) placed))))
 
 (defn seal-ops
   "The ops that seal the cell: a place of item (default seal-item) in each of cells, standing in
@@ -388,11 +394,8 @@
         ;; the held cells are filtered each tick, not only when first noted: blaze-race-x job 5
         ;; (build: placing [2151 73 1757] refused with the body in it) refused two seals in a row
         ;; with seal-cells already clear of the body
-        cells (clear-of-body world
-                             (:pocket/cell site)
-                             (if (seq (:pocket/placed site))
-                               (:pocket/placed site)
-                               (seal-cells world (:pocket/cell site))))
+        cells (vec (distinct (concat (clear-of-body world (:pocket/cell site) (:pocket/placed site))
+                                     (seal-cells world (:pocket/cell site)))))
         world (cond-> world
                 (and site (not= cells (:pocket/placed site)))
                 (assoc-in [:pocket/site :pocket/placed] cells))]

@@ -269,6 +269,9 @@ Landing 2 held 96 minutes (`:pocket-hold` every 30 s) at hp 6.2 to 7.2, food 17,
 ## The watchdog's avoid window (issue #262, #647 and #653)
 The stuck watchdog drops the row's anchors and plans an explore walk; blaze-race-z6 (run 41201377711) showed 12 of 12 firings undone within about 46 ms by `:pocket` and then `:camp`. It now sets `:plan/avoid {:near feet :until ms}` (5 min) and `plan/avoiding?` says whether a cell is within 16 of it. `pocket-ok?` (so `pocket-go`, the held pocket, `prepare-intent` and `advance-intent`) and `bait-ok?` pass over a cell in the window, and with the window set at the feet and no explore walk planned (a hostile within 24: the watchdog plans none) the `:leave` clause takes the search (or `explore-away`) ahead of the pocket, the camp and the walk to the spawner.
 
+## sealed? lied (issue #262, blaze-race-z7 job 2, walk-restart's flip_trace2)
+The 19 s open `:pocket-hold` that burned landing 1 had :pocket/placed = four solid cells and four cells on its z sides still open (`wanted-seal-cells`), every tick `can-seal?` true: `sealed?` read only the placed list. A first `:seal` was cut `:interrupted` after 0.3 s, a second after the bot moved (wanted 6 cells, then 8) and ended `:done` when the 4 cells of its list were solid. `pocket/sealed?` now also needs no wanted cell open, and the `:seal` run's cells are the held list plus what is open now (`seal-cells`), so it is not done until the pocket is shut.
+
 ## Limits
 - Fireballs are not dodged or blocked: the bot is out of their line, in a pocket or sealed in one.
 - A blaze hovering higher than the eye can reach from under it is never hit (`pressing?` stops within 0.8 on the plane); the fight has no engage timeout, only `:ghost` after 25 swings in reach.

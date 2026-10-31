@@ -220,3 +220,12 @@
     (is (contains? (set (pocket/wanted-seal-cells w [8 64 8])) [8 66 8]))
     (is (not (pocket/can-seal? held site))
         "a pocket that cannot be roofed is not sealed over air")))
+
+(deftest a-pocket-with-its-placed-cells-solid-and-others-open-is-not-sealed
+  ;; blaze-race-z7 job 2 (flip_trace2): :pocket/placed 4 cells all solid, the 4 on the z sides open
+  (let [site {:pocket/cell [8 64 8] :pocket/stand nil :pocket/dig [] :pocket/placed [[7 64 8]]}
+        half (world-of (merge walled (solid [7 64 8])))
+        full (world-of (merge walled (solid [7 64 8] [7 65 8])))]
+    (is (= [[7 65 8]] (pocket/wanted-seal-cells half [8 64 8])) "the head cell is still open")
+    (is (false? (pocket/sealed? half site)) "the placed one solid is not a seal")
+    (is (true? (pocket/sealed? full (assoc site :pocket/placed [[7 64 8] [7 65 8]]))))))
