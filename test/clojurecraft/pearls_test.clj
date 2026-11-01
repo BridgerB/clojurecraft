@@ -3090,3 +3090,16 @@
       (is (= :pearls (:intent/for i))))
     (is (not (pearls/swarmed? walled)) "a wall between the bot and the blaze: no swarm")
     (is (nil? (pearls/leave-sight walled)) "and nothing to leave")))
+
+(deftest an-angry-enderman-near-keeps-the-bot-in-its-burrow-and-from-relocating
+  ;; pearl-fight-p job 3 (plan run 41256381552): the burrow went stale with 3217 angry 7 to 8 blocks
+  ;; off, the hunt walked out to a new site and was slain 3 blocks from it at 96 minutes
+  (let [angry (assoc (enderman [20.5 61.0 8.5]) :entity/creepy? true)
+        w (looked (burrowed [8.5 61.0 8.5] {7 angry}) 12)
+        alone (looked (burrowed [8.5 61.0 8.5] {}) 12)]
+    (is (pearls/stale? alone) "no enderman: a minute of lookouts gives the burrow up")
+    (is (nil? (pearls/shelter alone)))
+    (is (pearls/angry-within? w pearls/hold-radius))
+    (is (some? (pearls/shelter w)) "an angry one 12 blocks off: the burrow is held")
+    (let [far (assoc-in w [:world/entities 7 :entity/pos] [60.5 61.0 8.5])]
+      (is (not (pearls/angry-within? far pearls/hold-radius)) "52 blocks off: no hold"))))
