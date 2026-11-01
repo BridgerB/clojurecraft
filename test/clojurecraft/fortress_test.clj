@@ -1538,3 +1538,29 @@
         "another target's trail starts clean")
     (is (> (inc (fortress/carried-retreats 0 trail)) fortress/retreats-allowed)
         "the second tunnel's retreat is over the allowance: blocked at once, not a step")))
+
+(deftest a-tunnel-starts-with-a-pickaxe-that-will-last
+  ;; blaze-race-z14 job 5 (run 41256755663): the pickaxe wore out mid-tunnel and the bot dug by hand,
+  ;; 10 s a block, for the rest of the run. A tunnel with a worn pickaxe and a replacement at hand
+  ;; makes the replacement first
+  (let [goal (first (filter #(= :fortress (:goal/id %)) plan/goals))
+        stick {:item (recipe/item-id :stick) :count 2}
+        cobble {:item (recipe/item-id :cobblestone) :count 3}
+        table {:item (recipe/item-id :crafting_table) :count 1}
+        pick (fn [damage]
+               {:item (recipe/item-id :stone_pickaxe) :count 1 :components {:damage damage}})
+        w (fn [& slots]
+            (assoc (rock {})
+                   :world/facts (memory/empty-facts)
+                   :player/dimension dimension/nether
+                   :player/inventory (zipmap (range) slots)))
+        next #(plan/next-intent % goal plan/goals)]
+    (is (= 1 (fortress/pickaxes-wanted (w (pick 0) stick cobble table)))
+        "a fresh stone pickaxe: one")
+    (is (= 2 (fortress/pickaxes-wanted (w (pick 120) stick cobble table))) "11 digs left: two")
+    (is (= :tunnel-to (:intent/kind (next (w (pick 0) stick cobble table))))
+        "fresh: on with the tunnel")
+    (is (= :place (:intent/kind (next (w (pick 120) stick cobble table))))
+        "worn, and a replacement at hand: the table first, then the pickaxe")
+    (is (= :tunnel-to (:intent/kind (next (w (pick 120)))))
+        "worn and nothing to make another from: the tunnel goes on, by hand when it must")))

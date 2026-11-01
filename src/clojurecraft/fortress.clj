@@ -1073,6 +1073,19 @@
                    (and t-target (not= target t-target)) t-target)]
     (when (and back (not= back (intent/feet world))) back)))
 
+(def tunnel-digs 64) ; digs the best pickaxe should have left to start a tunnel: its steps open about two cells each
+
+(defn pickaxes-wanted
+  "How many pickaxes a tunnel should hold before it starts: two when the best one held has fewer
+   than tunnel-digs digs left (window/swings-left), so a fresh one is made first when it can be
+   made at hand, else one. Blaze-race-z14 job 5 (run 41256755663) wore its last pickaxe out inside
+   the loop, no cobblestone left to make another, and dug by hand 10 s a block."
+  [world]
+  (let [left (->> (vals (:player/inventory world))
+                  (filter #(= :pickaxe (:kind (blocks/tool (:item %)))))
+                  (keep window/swings-left))]
+    (if (and (seq left) (< (long (apply max left)) tunnel-digs)) 2 1)))
+
 (defmethod plan/next-intent :fortress
   ;; replace a missing pickaxe from held supplies and take the placed table along (the next
   ;; pickaxe is made where the bot stands, not out of four more planks: probe 39782256061, issue
@@ -1098,8 +1111,9 @@
                  :intent/target back
                  :intent/steps steps-per-tunnel
                  :intent/bridge? true})
-              (when (and grounded? (build/pickaxe-at-hand? world))
-                (make/decide world (assoc goal :goal/provides {:tag/pickaxes 1}) table))
+              (let [want (pickaxes-wanted world)]
+                (when (and grounded? (build/pickaxe-at-hand? world want))
+                  (make/decide world (assoc goal :goal/provides {:tag/pickaxes want}) table)))
               (and grounded? (intent/chain-next (:plan/last world) :take-table make/table-drops {}))
               (and grounded? (make/take-table-along world))
               (when brick
