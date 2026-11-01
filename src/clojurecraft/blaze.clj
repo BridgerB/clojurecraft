@@ -1434,6 +1434,27 @@
 
 (declare near-rod)
 
+(declare nearby-blazes)
+
+(def crowd-wait-ms 60000) ; ms a sealed bot waits for blazes to thin out before it opens the pocket
+(def exit-crowd 2)        ; blazes within at-reach (8) of a sealed pocket that keep it shut
+
+(defn melee-crowd?
+  "Are two or more blazes within melee reach (combat/melee-reach)? Then they hit for about
+   combat/melee-rate each a second and the fight is lost, not committed to."
+  [world]
+  (>= (count (nearby-blazes world combat/melee-reach)) 2))
+
+(defn crowd-waiting?
+  "Does a sealed bot keep the pocket shut: exit-crowd or more blazes within 8 now, noted by plan/steer
+   (:pocket/crowd-since) less than crowd-wait-ms ago? blaze-race-z14: the deaths came 4 to 20 s after an
+   :unseal at hp 20 with blazes about."
+  [world]
+  (let [since (:pocket/crowd-since world)]
+    (boolean (and since
+                  (< (- (:time/now world 0) since) crowd-wait-ms)
+                  (>= (count (nearby-blazes world 8.0)) exit-crowd)))))
+
 (defn hold-intent
   "What a bot in its pocket does, or nil: SEALED, while it burns or is under hold-to, eat when the
    food is under what heals (meal) else a :pocket-hold, until the fire is out, the health is up and the
@@ -1454,8 +1475,9 @@
                     (and (heals? world) (< (:player/health world 20.0) (hold-to world))))
           struck? (<= (- (:time/now world 0) (:player/struck-at world -1000000)) press-ms)]
       (cond (pocket/sealed? world site)
-            (if (and (or need? struck?)
-                     (not (and (near-rod world) (not (:player/on-fire? world)) (not struck?))))
+            (if (or (and (or need? struck?)
+                         (not (and (near-rod world) (not (:player/on-fire? world)) (not struck?))))
+                    (crowd-waiting? world))
               (or (meal world) {:intent/kind :pocket-hold :intent/heal-to (hold-to world)})
               ;; sealed, cannot heal, under low-health: opened, the next blaze in reach seals it again
               ;; (the flip of blaze-race-p job 4), so it stays shut and the row goes on without a hold
@@ -1491,6 +1513,7 @@
                (reignited? world)
                (and (< (:player/health world 20.0) low-health) (seq (swarm world)))
                (and (outnumbered? world) (not (peeking? world)))
+               (melee-crowd? world)
                (and (seq (watchers world)) (hurt? world)))))
 
 (defn here-intent
@@ -1767,7 +1790,10 @@
         world (if (rod-grab? world (:plan/intent world))
                 (update world :rod-grab/since #(or % (:time/now world 0)))
                 (dissoc world :rod-grab/since))
-        world (hurt-mark world)]
+        world (hurt-mark world)
+        world (if (and (pocket/in? world) (>= (count (nearby-blazes world 8.0)) exit-crowd))
+                (update world :pocket/crowd-since #(or % (:time/now world 0)))
+                (dissoc world :pocket/crowd-since))]
     (cond (leaky-pocket? world)
           ;; a pocket the hits come through is no refuge: forgotten, its cell remembered as failed
           (-> world
@@ -1817,6 +1843,9 @@
              ;; the sortie's cap: more than sortie-crowd blazes within 8, or a volley watching, is the room on
              ;; the bot, not a fight to commit to the end (the spawner-room deaths of z4 and z5)
              (<= (count (nearby-blazes world 8.0)) sortie-crowd)
+             ;; two blazes in melee cost about melee-rate each a second and a sword takes 2.4 s a blaze:
+             ;; that fight is lost (z14 job 6); the sealed pocket is the answer
+             (not (melee-crowd? world))
              (not (outnumbered? world))
              (not (burning-here? world))
              ;; a rod within a step is picked up before the next swing (near-rod, blaze-race-m race 4)
@@ -2157,6 +2186,7 @@
                 first? (game/say (pocket-line world "start")))]
     (cond (or (and (not (:player/on-fire? world))
                    (>= (:player/health world 20.0) (or heal-to engage-health))
+                   (not (crowd-waiting? world))
                    (or (not (sealed? world))
                        (> (- now (:player/struck-at world -1000000)) press-ms)))
               (and (some? (reach-blaze world))

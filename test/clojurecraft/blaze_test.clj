@@ -2048,11 +2048,17 @@
                  :intent/to-the-end? true
                  :intent/yield? true
                  :intent/goal :blaze-rods}]
-    (doseq [[hp burning?] [[20.0 false] [18.4 false] [16.2 true] [13.7 true] [12.0 true]]]
-      (is (= :fight (fight (tick hp burning?)))
-          (str "hp " hp " burning " burning? ": one row, the fight")))
+    ;; blaze-race-z14 job 6: two blazes in melee reach cost ~6 health a second and a sword takes 2.4 s a
+    ;; blaze, so that fight is lost: the pocket is the answer, not a commitment
+    (is (true? (blaze/melee-crowd? (tick 20.0 false))) "both are within melee reach")
+    (is (not= :fight (fight (tick 20.0 false))) "two in melee: no committed fight")
+    (let [lone (fn [hp burning?] (assoc (tick hp burning?) :world/entities {7 near}))]
+      (doseq [[hp burning?] [[20.0 false] [18.4 false] [16.2 true] [13.7 true] [12.0 true]]]
+        (is (= :fight (fight (lone hp burning?)))
+            (str "hp " hp " burning " burning? ": one in melee, the fight"))))
     (doseq [hp [20.0 16.2 12.0]]
-      (is (not (plan/interrupts? (tick hp true) row running)) (str "a running fight holds at " hp)))
+      (is (not (plan/interrupts? (assoc (tick hp true) :world/entities {7 near}) row running))
+          (str "a running fight holds at " hp)))
     (is (true? (plan/holds? running)) "and another row does not preempt it")
     (testing "under low-health the retreat is one: not a fight"
       (is (not= :fight (fight (tick 11.0 true)))))))
@@ -2358,6 +2364,36 @@
         "hit 2 s ago: sealed")
     (is (not= :seal (:intent/kind (blaze/hold-intent (assoc w :player/struck-at 50000))))
         "not hit lately")))
+
+(deftest a-sealed-bot-keeps-the-pocket-shut-while-a-crowd-is-outside
+  ;; blaze-race-z14: the deaths came 4 to 20 s after an :unseal at hp 20 with blazes about
+  (let [placed [[7 64 8] [7 65 8]]
+        walls (merge pocket-walls (into {} (map (fn [c] [c (blocks/default-state :stone)])) placed))
+        blz (fn [i] [(+ 60 i) (entity :blaze [(+ 13.5 i) 64.5 8.5] :entity/health 20.0)])
+        base (-> (standing {})
+                 (assoc :world/chunks {[0 0] (world/column walls)}
+                        :pocket/site (assoc pocket-site :pocket/placed placed)
+                        :time/now 100000
+                        :player/health 20.0
+                        :player/struck-at 0))
+        crowd (assoc base :world/entities (into {} (map blz) [0 1]) :pocket/crowd-since 90000)]
+    (is (pocket/sealed? base (:pocket/site base)))
+    (is (= :unseal (:intent/kind (blaze/hold-intent base))) "healthy and alone: opened")
+    (is (true? (blaze/crowd-waiting? crowd)))
+    (is (= :pocket-hold (:intent/kind (blaze/hold-intent crowd)))
+        "two blazes outside: it stays shut")
+    (is (= :unseal
+           (:intent/kind (blaze/hold-intent
+                          (assoc crowd :time/now (+ 90000 blaze/crowd-wait-ms 1)))))
+        "after crowd-wait-ms it opens anyway")))
+
+(deftest a-fight-yields-with-seconds-of-health-in-hand
+  (let [near (entity :blaze [10.5 64.5 8.5] :entity/health 20.0)
+        also (entity :blaze [8.5 64.5 11.0] :entity/health 20.0)
+        w (standing {7 near})]
+    (is (= combat/retreat-health (combat/yield-line (standing {}))) "no blaze near: the fixed line")
+    (is (> (combat/yield-line w) combat/retreat-health) "one in melee: four seconds of its damage")
+    (is (> (combat/yield-line (standing {7 near 8 also})) (combat/yield-line w)))))
 
 (deftest a-volley-in-sight-on-a-sortie-is-not-a-refuge
   ;; blaze-race-z12 job 4: 69 min, 0 real kills; the sortie stepped out of the pocket, 3 to 9 blazes watched it,
