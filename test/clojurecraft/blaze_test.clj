@@ -1264,14 +1264,18 @@
 (deftest a-burning-bot-in-the-tunnel-is-cut-for-its-refuge
   ;; blaze-race-k geared 4: :tunnel-to went on 35 s at [2344.6 60 2284.5] while the bot burned from
   ;; 20 hp to 0; nothing cut it: its refuge was not among what interrupts?
+  ;; The cell has to be sealable. An open landing is not a pocket (z16 job 5).
   (let [w (-> (standing {7 (entity :blaze [3.5 65.0 8.5] :entity/health 20.0)})
-              (assoc :player/on-fire? true))
+              (assoc :player/on-fire? true :world/chunks {[0 0] (world/column pocket-walls)}))
         tunnel {:intent/kind :tunnel-to :intent/target [2346 60 2281]}]
     (is (plan/interrupts? w row tunnel))
     (is (not (plan/interrupts? (assoc w :player/on-fire? false) row {:intent/kind :pocket-hold}))
         "the hold is the answer, not cut for itself")
-    (is (= :pocket (:intent/kind (next-intent w))) "the cell stood in is sealed in place")
-    (is (true? (:pocket/here? (:intent/site (next-intent w)))))))
+    ;; pocket-walls makes [8 64 8] a shaped pocket, so site-near returns it before here-intent.
+    ;; :pocket/here? is only the fallback for a sealable cell that is not already a pocket.
+    (is (= :pocket (:intent/kind (next-intent w))))
+    (is (= [8 64 8] (:pocket/cell (:intent/site (next-intent w))))
+        "the refuge is the walled cell stood in")))
 
 (def cobble (blocks/default-state :cobblestone))
 
@@ -1340,9 +1344,7 @@
         i (:plan/intent out)]
     (is (intent/done? i) "the site is no pocket here: done, not failed")
     (is (not (intent/failed? i)))
-    (is (= [8 64 8] (:pocket/cell (:pocket/site out)))
-        "the cell the feet stand in is held to be sealed")
-    (is (true? (:pocket/here? (:pocket/site out))))
+    (is (nil? (:pocket/site out)) "an open landing is not held: the roof cannot be laid")
     (testing
       "and there the openings are the cells to seal, every open side at the feet and the head; the roof over open air has no foundation but the head cell, and is none"
       (is (= #{[7 64 8] [9 64 8] [8 64 7] [8 64 9] [7 65 8] [9 65 8] [8 65 7] [8 65 9]}
@@ -1446,7 +1448,10 @@
         w (-> (standing {7 hand 8 fb})
               (assoc :player/pos [8.6 64.0 8.5] :time/now 0))]
     (is (= :dodge (:intent/kind (next-intent w))) "tick 1, hp 20: step out of the line")
-    (let [low (assoc w :player/health 11.4 :player/on-fire? true)]
+    (let [low (assoc w
+                     :player/health 11.4
+                     :player/on-fire? true
+                     :world/chunks {[0 0] (world/column pocket-walls)})]
       (is (not= :dodge (:intent/kind (next-intent low))) "tick 2, hp 11.4 and alight: not a dodge")
       (is (= :pocket (:intent/kind (next-intent low)))
           "the refuge: the cell stood in, sealed there"))
@@ -2044,8 +2049,9 @@
     (doseq [hp [20.0 16.2 12.0]]
       (is (not (plan/interrupts? (tick hp true) row running)) (str "a running fight holds at " hp)))
     (is (true? (plan/holds? running)) "and another row does not preempt it")
-    (testing "under low-health the retreat is one: not a fight"
-      (is (not= :fight (fight (tick 11.0 true)))))))
+    (testing "under low-health an open landing is not a pocket, so the fight stands"
+      (is (nil? (blaze/here-intent (tick 11.0 true))))
+      (is (= :fight (fight (tick 11.0 true)))))))
 
 (deftest the-steer-drops-an-unsealable-pocket-and-remembers-it
   (let [row (first (filter #(= :blaze-rods (:goal/id %)) plan/goals))
@@ -2173,8 +2179,12 @@
     (is (some? (blaze/near-rod w)))
     (is (= :collect-drops (:intent/kind (next-intent w))) "but the rod a step away first")
     (is (not (plan/interrupts? w row grab)) "and the pick-up is not cut for the refuge")
-    (testing "alight: the refuge first"
-      (is (not= :collect-drops (:intent/kind (next-intent (assoc w :player/on-fire? true))))))))
+    (testing "alight, and the cell can be sealed: the refuge first"
+      (is (not= :collect-drops
+                (:intent/kind (next-intent (assoc w
+                                                  :player/on-fire? true
+                                                  :world/chunks
+                                                  {[0 0] (world/column pocket-walls)}))))))))
 
 (deftest a-rod-pick-up-holds-the-refuge-off-for-two-seconds-only
   ;; lead on z9 job 4: the grab that overrides the refuge under 12 hp runs one step and the pick-up, then the

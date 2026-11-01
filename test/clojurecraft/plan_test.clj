@@ -1,5 +1,6 @@
 (ns clojurecraft.plan-test
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
+            [clojurecraft.blaze :as blaze]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.fixtures :as fx :refer [fold packet packets sent ticks]]
             [clojurecraft.game :as game]
@@ -9,6 +10,7 @@
             [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
+            [clojurecraft.pocket :as pocket]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.scoop :as scoop]
             [clojurecraft.spec]
@@ -2269,6 +2271,161 @@
     (testing "no trail at all: the row's own plan goes ahead"
       (let [w (tick (assoc (blocked-tunnels) :time/now 1050))]
         (is (nil? (get-in w [:plan/intent :intent/for])))))))
+
+;;; TUNNEL STALL: a hollow pocket at the feet must not cut the tunnel every tick
+
+(def tunnel-stall-goal {:goal/id :blaze-rods :goal/done? :never :goal/plan :tunnel-stall})
+
+(defn open-landing
+  "z16 job 5 (plan 41276280629) at the end: feet [2148.5 72.0 1763.5], a :tunnel-to
+   [2210 60 1793] that had not run, on an open landing. The floor is stone and the body, head
+   and roof are air, so the here-pocket cannot be roofed (unlayable?)."
+  []
+  (let [lx (bit-and 2148 15)
+        lz (bit-and 1763 15)
+        stone (blocks/default-state :stone)
+        col (world/column
+             {[lx 71 lz] stone [lx 72 lz] blocks/air [lx 73 lz] blocks/air [lx 74 lz] blocks/air})]
+    (-> (game/init fx/opts)
+        (assoc :bot/phase :play
+               :player/pos [2148.5 72.0 1763.5]
+               :player/loaded? true
+               :player/on-ground? true
+               :player/health 20.0
+               :plan/status :active
+               :plan/intents 7
+               :plan/intent
+               {:intent/kind :tunnel-to
+                :intent/target [2210 60 1793]
+                :intent/goal :blaze-rods
+                :intent/status :active
+                :intent/id 7
+                :intent/plan
+                {:intent/kind :tunnel-to :intent/target [2210 60 1793] :intent/goal :blaze-rods}}
+               :world/chunks {[(bit-shift-right 2148 4) (bit-shift-right 1763 4)] col}))))
+
+(defn tick-tunnel
+  "One plan-tick of w with interrupts? true and next-intent answering next. The running intent
+   is a no-op, so a tunnel that is kept is still the one that went in."
+  [w next]
+  (with-redefs [plan/choose (constantly tunnel-stall-goal)
+                plan/interrupts? (constantly true)
+                plan/next-intent (constantly next)
+                intent/run (fn [world _ _] world)]
+    (plan/plan-tick w {:event/kind :tick :event/now 50 :event/rand 0.5} [tunnel-stall-goal])))
+
+(deftest ^:eftest/synchronized a-hollow-pocket-at-the-feet-does-not-cut-the-tunnel
+  ;; z16 job 5: 57942 starts of :tunnel-to [2210 60 1793] alternating with :pocket, no stage and
+  ;; no dig, still at [2148 72 1763] after 300 min. here-site refuses the cell (nothing to lay the
+  ;; roof on). A pocket handed in at that cell anyway is still not a reason to cut the tunnel:
+  ;; steer drops the site and the next tick would choose the tunnel again.
+  (let [w (open-landing)
+        cell [2148 72 1763]
+        hollow
+        {:intent/kind :pocket
+         :intent/site
+         {:pocket/cell cell :pocket/here? true :pocket/stand nil :pocket/dig [] :pocket/placed []}}]
+    (is (= cell (intent/feet w)))
+    (is (nil? (pocket/here-site w)) "an open landing is not chosen")
+    (is (true? (pocket/unlayable? w cell)) "open roof: nothing to lay")
+    (testing "two ticks, the guard holding on each: the tunnel is still the one that was running"
+      (let [kept (tick-tunnel (tick-tunnel w hollow) hollow)]
+        (is (= 7 (get-in kept [:plan/intent :intent/id])))
+        (is (= :tunnel-to (get-in kept [:plan/intent :intent/kind])))
+        (is (= [2210 60 1793] (get-in kept [:plan/intent :intent/target])))
+        (is (= 7 (:plan/intents kept)) "no new intent was started")))
+    (testing "a pocket at the feet that can be sealed still cuts"
+      (let [cut (with-redefs [pocket/cannot-seal? (constantly false)] (tick-tunnel w hollow))]
+        (is (= :pocket (get-in cut [:plan/intent :intent/kind])))
+        (is (= 8 (:plan/intents cut)))))
+    (testing "a fight still cuts"
+      (let [cut (tick-tunnel w {:intent/kind :fight :intent/target 1})]
+        (is (= :fight (get-in cut [:plan/intent :intent/kind])))
+        (is (= 8 (:plan/intents cut)))))
+    (testing "a pocket that is not the cell the feet stand in still cuts"
+      (let [cut (tick-tunnel w
+                             {:intent/kind :pocket
+                              :intent/site {:pocket/cell [2200 60 1790]
+                                            :pocket/here? true
+                                            :pocket/stand nil
+                                            :pocket/dig []
+                                            :pocket/placed []}})]
+        (is (= :pocket (get-in cut [:plan/intent :intent/kind])))
+        (is (= 8 (:plan/intents cut)))))))
+
+(deftest ^:eftest/synchronized an-unlayable-landing-is-not-chosen-as-a-pocket
+  ;; z16 fold at t=233999 (probes 41303425892 and 41304181213): the running :tunnel-to was cut for
+  ;; a :pocket whose cell was the feet [2148 72 1763]. The cell is standable and unlayable.
+  ;; here-intent asked pocket/here-site, steer dropped the site, and :seal called plus on nil.
+  ;; The landing is reignited, in the Nether, with no spawner in memory.
+  (let [cell [2148 72 1763]
+        w (assoc (open-landing)
+                 :player/dimension "minecraft:the_nether"
+                 :player/ignitions [1000 2000]
+                 :time/now 5000)
+        goal {:goal/id :blaze-rods :goal/done? :never :goal/plan :blaze-rods}]
+    (is (true? (blaze/reignited? w)))
+    (is (nil? (blaze/here-intent w)) "no pocket at the unlayable feet")
+    (is (nil? (blaze/refuge-now w nil)))
+    (is (not (plan/interrupts? w goal (:plan/intent w))))
+    (is (not= cell (:pocket/cell (pocket/site-near w cell (constantly true)))))
+    (is (not= cell
+              (:pocket/cell (pocket/current (assoc w
+                                                   :pocket/site
+                                                   {:pocket/cell cell
+                                                    :pocket/here? true
+                                                    :pocket/stand nil
+                                                    :pocket/dig []
+                                                    :pocket/placed []})
+                                            cell
+                                            (constantly true)))))
+    (let [kept (with-redefs [plan/choose (constantly goal)
+                             intent/run (fn [world _ _] world)]
+                 (plan/plan-tick w {:event/kind :tick :event/now 5000 :event/rand 0.5} [goal]))]
+      (is (= 7 (get-in kept [:plan/intent :intent/id])))
+      (is (= :tunnel-to (get-in kept [:plan/intent :intent/kind])))
+      (is (= [2210 60 1793] (get-in kept [:plan/intent :intent/target]))))))
+
+(defn platform-landing
+  "The z16 landing on a stone platform: cells beside the feet can be sealed, the roof cannot.
+   open-landing is air beside the feet too, so unlayable? stays true when the head enters the
+   roof. On a platform it does not."
+  []
+  (let [lx (bit-and 2148 15)
+        lz (bit-and 1763 15)
+        stone (blocks/default-state :stone)
+        floor (into
+               {[lx 72 lz] blocks/air [lx 73 lz] blocks/air [lx 74 lz] blocks/air}
+               (for [x (range (dec lx) (+ lx 2)) z (range (dec lz) (+ lz 2))] [[x 71 z] stone]))]
+    (-> (open-landing)
+        (assoc :world/chunks
+               {[(bit-shift-right 2148 4) (bit-shift-right 1763 4)] (world/column floor)}))))
+
+(deftest ^:eftest/synchronized a-landing-the-head-reaches-into-is-not-chosen-as-a-pocket
+  ;; z16 fold at t=206299 (probe 41307472046): unlayable? was true on the world before the tick
+  ;; and the tick still started a :pocket at [2148 72 1763]. The box is 1.8 tall. At y 72.3 the
+  ;; head enters the roof cell, clear-of-body drops it, and unlayable? goes false on a platform
+  ;; whose sides can be laid. cannot-seal? stays true: the roof has nothing to click.
+  (let [cell [2148 72 1763]
+        raised (assoc (platform-landing)
+                      :player/pos [2148.5 72.3 1763.5]
+                      :player/dimension "minecraft:the_nether"
+                      :player/on-fire? true
+                      :time/now 5000)
+        goal {:goal/id :blaze-rods :goal/done? :never :goal/plan :blaze-rods}]
+    (is (= cell (intent/feet raised)))
+    (is (false? (pocket/unlayable? raised cell)) "the roof is in the head, so it is not counted")
+    (is (true? (pocket/cannot-seal? raised cell)))
+    (is (nil? (pocket/here-site raised)))
+    (is (nil? (blaze/here-intent raised)))
+    (is (nil? (blaze/refuge-now raised nil)))
+    (is (not (plan/interrupts? raised goal (:plan/intent raised))))
+    (let [kept
+          (with-redefs [plan/choose (constantly goal)
+                        intent/run (fn [world _ _] world)]
+            (plan/plan-tick raised {:event/kind :tick :event/now 5000 :event/rand 0.5} [goal]))]
+      (is (= 7 (get-in kept [:plan/intent :intent/id])))
+      (is (= :tunnel-to (get-in kept [:plan/intent :intent/kind]))))))
 
 ;;; DEATH RESTART: a death that loses the inventory starts the chain over
 

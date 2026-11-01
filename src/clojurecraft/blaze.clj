@@ -1484,7 +1484,9 @@
 
 (defn here-intent
   "A :pocket intent for the cell the feet stand in (pocket/here-site), sealed in place by the
-   :seal that follows, or nil when it is not standable: the refuge when no pocket is to be had."
+   :seal that follows, or nil when that cell is not standable or cannot be sealed (unlayable?):
+   the refuge when no pocket is to be had. An open landing is the second: choosing it cut the
+   tunnel every tick (z16 job 5)."
   [world]
   (when-let [site (pocket/here-site world)] {:intent/kind :pocket :intent/site site}))
 

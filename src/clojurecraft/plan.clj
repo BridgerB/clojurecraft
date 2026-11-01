@@ -919,13 +919,32 @@
                        (= (:intent/target i) (:intent/target next))
                        (= (:intent/for i) (:intent/for next)))))))
 
+(defn hollow-pocket?
+  "Is next a :pocket at the feet that cannot be sealed (pocket/cannot-seal?)? Steer drops such a
+   site the tick it is entered, the pocket ends at once, and the row chooses the tunnel again.
+   Cutting the tunnel for it never moves the bot. z16 job 5 (plan 41276280629) alternated :pocket
+   and :tunnel-to [2210 60 1793] from 05:21:34 until the 300 min timeout, still at the landing
+   [2148 72 1763], 0 digs. unlayable? is false for that landing once the head is in the roof;
+   cannot-seal? is not. plan cannot require pocket: pocket requires build and build requires
+   plan, so the predicate is resolved when it is asked."
+  [world next]
+  (boolean (when-let [c (and (= :pocket (:intent/kind next))
+                             (:player/pos world)
+                             (:pocket/cell (:intent/site next)))]
+             (and (= c (intent/feet world))
+                  (let [^clojure.lang.IFn cannot-seal? (requiring-resolve
+                                                        'clojurecraft.pocket/cannot-seal?)]
+                    (cannot-seal? world c))))))
+
 (defn plan-tick
   "One planning tick while :active. The goals are re-derived from the world every tick, even
    while an intent runs (docs/RICH-HICKEY.md: \"the planner runs every tick against the current
    value, so done is re-derived, regressions re-plan automatically\"): no target left means
    :done, whatever is running; a running intent that serves another target than the one chosen
    now is preempted, as is one the chosen row's interrupts? cuts short, unless the row, planning again
-   without it, would start the same intent (same-choice?): that one keeps running. A defence
+   without it, would start the same intent (same-choice?): that one keeps running. A :tunnel-to
+   also keeps running when the replacement is a hollow pocket at the feet (hollow-pocket?): it
+   ends at once and cutting the tunnel for it moves nothing. A defence
    (holds?) is neither preempted nor cut by another row but an escape: it runs to its own end.
    Either waits
    while the cursor holds an item. Otherwise the intent runs, or
@@ -941,7 +960,11 @@
         preempt? (and i goal (:intent/goal i) (not= (:goal/id goal) (:intent/goal i)) (not held))
         cut-world (when (and i goal (not preempt?) (not held) (interrupts? world goal i))
                     (abandon-intent world i :interrupted))
-        cut? (and cut-world (not (same-choice? i (next-intent cut-world goal table))))
+        replacement (when cut-world (next-intent cut-world goal table))
+        cut? (and cut-world
+                  (not (same-choice? i replacement))
+                  (not (and (= :tunnel-to (:intent/kind i))
+                            (hollow-pocket? cut-world replacement))))
         next (when (and goal (nil? i)) (next-intent world goal table))
         feet (when (:player/pos world) (intent/feet world))
         failed (:plan/failed world)
