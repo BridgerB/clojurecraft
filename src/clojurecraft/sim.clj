@@ -2563,17 +2563,18 @@
 (defn strike
   "A melee mob with the player in reach (on the plane within its :reach, feet within 1.5 in
    height) hits it every :every ticks for its damage scaled by the difficulty. A flier's strike is
-   its :contact (a blaze's 6 every :contact-every ticks, within :reach in space): a separate key,
-   because the bot's own tables read :melee as a kind it fights in a pack (combat/melee-damage)."
+   its :contact (a blaze's 6 every :contact-every ticks) and only when the boxes touch with a
+   clear line (mob/can-strike?): a separate key, because the bot's own tables read :melee as a
+   kind it fights in a pack (combat/melee-damage), and a reach of two through a wall is not a hit."
   [sim eid]
   (let [{:keys [type pos attack-at]} (get-in sim [:sim/mobs eid])
         k (mob/kinds type)
         player (:sim/player-pos sim)
-        now (:sim/now sim)]
-    (cond (not (and (or (:melee k) (:contact k))
-                    (mob/in-reach? type pos player)
-                    (>= now (or attack-at 0))))
-          sim
+        now (:sim/now sim)
+        can? (if (:flies k)
+               (mob/can-strike? (solid-fn sim) type pos player)
+               (mob/in-reach? type pos player))]
+    (cond (not (and (or (:melee k) (:contact k)) can? (>= now (or attack-at 0)))) sim
           :else
           (let [before (:sim/health sim)
                 sim (-> sim
@@ -3037,8 +3038,10 @@
 
 (defn fireball-path
   "What one tick does to a small fireball at pos flying along dir (mob/fireball :speed a tick, in
-   three samples): [:hit], [:wall last-free-pos] on the first solid cell, or [:fly pos'] to where it
-   ends the tick. A sample inside the living player's box (grown by the fireball's radius) is a hit."
+   three samples): [:wall last-free-pos] on the first solid cell, [:hit] when a sample in air is
+   inside the living player's box (grown by the fireball's radius), or [:fly pos'] to where it
+   ends the tick. The solid cell wins when a sample is in both, so a shot stops at a wall and
+   never hurts through it."
   [sim pos dir]
   (let [{:keys [speed radius]} mob/fireball
         player (:sim/player-pos sim)
@@ -3046,8 +3049,8 @@
         solid? (solid-fn sim)]
     (reduce (fn [[_ last] i]
               (let [p (mapv + pos (map #(* % speed (/ i 3.0)) dir))]
-                (cond (and alive? player (mob/hits-box? p player radius)) (reduced [:hit p])
-                      (solid? (mob/cell-of p)) (reduced [:wall last])
+                (cond (solid? (mob/cell-of p)) (reduced [:wall last])
+                      (and alive? player (mob/hits-box? p player radius)) (reduced [:hit p])
                       :else [:fly p])))
             [:fly pos]
             [1 2 3])))
