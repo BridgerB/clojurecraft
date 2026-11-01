@@ -6,7 +6,7 @@
    Nothing here is the bot's decision code.
 
    The plan: wear the race kit, walk into a spawner's wake, dig a 1x2 pocket outside the spawn
-   volume and inside the wake with a clear line to the spawner, and seal it. A blaze's melee is a touch with a clear line, so a sealed
+   volume and inside the wake, and seal it. A blaze's melee is a touch with a clear line, so a sealed
    wall holds; one that can see hovers and shoots. The sword band (farther than a
    blaze's reach, near enough to hit) is about a block wide, and a cobble seal opens only when
    the dig sends FINISH, settle plus the finish margin, about a second after the decision. So
@@ -63,6 +63,7 @@
 (def ^:private stand-below 8) ; levels under the spawner a floor may be
 (def ^:private stand-above 4) ; levels over it
 (def ^:private stand-attempts 6) ; stands tried before the expert stops alive
+(def ^:private searched-span 4) ; ring cells marked after :no-site. Probe 41289491940's six give-ups sat in one cluster; search-steps marked R4's whole ring (41293318253).
 (def ^:private stand-searches 6) ; path plans for the nearest stands: a walk is preferred to a tunnel
 (def ^:private window-cap 2) ; blazes that may have a line when the window opens
 
@@ -463,12 +464,13 @@
         (let [[sx _ sz] stand [cx _ cz] (:pocket/cell site)] [(- sx cx) (- sz cz)]))))
 
 (defn- find-site
-  "The nearest site pocket/site-near would hand the bot: blaze/pocket-ok? with a line required.
-   The opening does not have to point at the spawner. Probe 41289491940 stood in a ring of 17
-   to 21 cells and every stand was :no-site under that extra ask."
+  "The nearest site the bot digs on the way in: pocket/site-near with blaze/pocket-ok? and no
+   line asked (prepare-intent). A clear line to the block over the spawner is not that pocket.
+   Probe 41293318253 stood on the same cells as 41289491940 and each was still :no-site once
+   the line was required."
   [world spawner]
   (when (:player/pos world)
-    (pocket/site-near world (intent/feet world) (blaze/pocket-ok? world spawner true))))
+    (pocket/site-near world (intent/feet world) (blaze/pocket-ok? world spawner false))))
 
 (defn- stand-eye
   "The eye of a player standing in cell."
@@ -718,9 +720,8 @@
     world))
 
 (defn- mark-searched
-  "Ring cells within pocket/search-steps of the feet, the walk find-site just finished.
-   They are tried, so the next stand is outside that walk. The six :no-site give-ups in
-   probe 41289491940 were one cluster."
+  "Ring cells within searched-span of the feet. They are tried, so the next stand is outside
+   the cluster find-site just walked. A whole ring marked at once leaves only the spawner."
   [world]
   (let [feet (intent/feet world)
         sp (:expert/spawner world)]
@@ -729,7 +730,7 @@
       (reduce (fn [w [x y z]]
                 (if (<=
                      (+ (abs (- x (first feet))) (abs (- y (second feet))) (abs (- z (nth feet 2))))
-                     pocket/search-steps)
+                     searched-span)
                   (update w :expert/tried (fnil conj #{}) [x y z])
                   w))
               world
