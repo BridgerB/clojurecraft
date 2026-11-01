@@ -1,0 +1,15 @@
+;; Issue #262, round z17 on fix/262-peek3. Same six landings as z16.
+;; z16 (plan 41276280629, head 9c517a13a): 0 rods in every truth. Job 6 life of z15 had 14 real
+;; kills and 0 rods: the rods spawned in the fire the blaze stood in and were removed in 0.1 s.
+;; z17 punches that fire before the swing. z16 job 6 died 26 s after an unseal at hp 20, not
+;; burning, among exactly 8 blazes within 8. Eight now ends the sortie.
+;; Real kills (6-s rule) per 10 min, camp/ambush/pocket-hold minutes per job, rods held.
+{:plans/label "blaze-race-z17"
+ :plans/jobs 6
+ :plans/issue 262
+ :plans/experiments [{:exp/name "blaze-fortress-race"
+                      :exp/kind :gym
+                      :exp/goal "blaze-fortress-race"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 1800}]}

@@ -559,6 +559,7 @@
 (s/def :pocket/seal-failed-at number?)
 (s/def :pocket/prepared-at number?)
 (s/def :rod-grab/since number?)
+(s/def :pocket/crowd-since number?)
 (s/def :hurt/at number?)
 (s/def :hurt/hp number?)
 (s/def :pocket/hurt (s/keys :req-un [:hurt/at :hurt/hp]))

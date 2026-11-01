@@ -1,0 +1,18 @@
+;; Issue #262, round z16 on fix/262-peek3. Same six landings as z15.
+;; z15 (plan 41264249120, head 8d4eecc87): 0 rods. Jobs 1-4 died (slain or fireballed). Job 6 life 1
+;; disconnected after 90m with 14 real kills and 0 rods held; its retry was fireballed. Job 5 was
+;; still running when z16 was dispatched and was cancelled as the superseded round.
+;; z16 head fights the blaze that is meleeing (meleeing-blaze), commits two in the open only at
+;; combat/yield-line or over, and caps that line at 14 so the fight can start and swing. The 60 s
+;; crowd open happens only at full health and off the seal. The bot steps off fire, punches fire
+;; in and beside the pocket before sealing, and a sortie keeps moving while it burns.
+;; Real kills (6-s rule) per 10 min, camp/ambush/pocket-hold minutes per job, rods held.
+{:plans/label "blaze-race-z16"
+ :plans/jobs 6
+ :plans/issue 262
+ :plans/experiments [{:exp/name "blaze-fortress-race"
+                      :exp/kind :gym
+                      :exp/goal "blaze-fortress-race"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 1800}]}
