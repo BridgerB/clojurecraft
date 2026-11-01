@@ -2364,6 +2364,23 @@
               stuck? (assoc-in [:sim/mobs eid :route-at] now)
               (seq found) (assoc-in [:sim/mobs eid :route] found))))))
 
+(def sight-ms 250)                     ; a flier's line to the player is looked at this often (five ticks), not every tick: forty blocks of cells a look
+
+(defn sees-player
+  "[sim' sees?]: does mob eid have a clear line from its head to the player's eye? Looked at when
+   the last look is sight-ms old or older (kept in the mob, :sight [ms sees?]), so a blaze that
+   flies and shoots does not walk the line twice a tick; a look kept by a tick or two is the
+   server's own (Sensing caches a mob's sight for a tick)."
+  [sim eid]
+  (let [{:keys [type pos sight]} (get-in sim [:sim/mobs eid])
+        now (:sim/now sim)]
+    (cond (and sight (< (- now (first sight)) sight-ms)) [sim (second sight)]
+          :else
+          (let [ok? (boolean (mob/sight? (solid-fn sim)
+                                         (mob/head type pos)
+                                         (physics/eye (:sim/player-pos sim))))]
+            [(assoc-in sim [:sim/mobs eid :sight] [now ok?]) ok?]))))
+
 (defn fly
   "Mob eid, a flier (a blaze), a tick on toward the player as BlazeAttackGoal moves it: it stays
    where it hovers while the player is in its follow range with a clear line from its head to the
@@ -2373,17 +2390,17 @@
   (let [{:keys [type pos]} (get-in sim [:sim/mobs eid])
         k (mob/kinds type)
         player (:sim/player-pos sim)
-        [px py pz] player
-        sees? (mob/sight? (solid-fn sim) (mob/head type pos) (physics/eye player))]
-    (cond (or (:sim/still-blazes? sim)
-              (mob/in-reach? type pos player)
-              (and sees? (<= (physics/distance pos player) (:follow k))))
-          sim
+        [px py pz] player]
+    (cond (or (:sim/still-blazes? sim) (mob/in-reach? type pos player)) sim
           :else
-          (move-mob
-           sim
-           eid
-           (mob/fly-toward (free-fn sim) pos [px (inc py) pz] (:speed k) (mob/tall type))))))
+          (let [[sim sees?] (sees-player sim eid)]
+            (cond
+              (and sees? (<= (physics/distance pos player) (:follow k))) sim
+              :else
+              (move-mob
+               sim
+               eid
+               (mob/fly-toward (free-fn sim) pos [px (inc py) pz] (:speed k) (mob/tall type))))))))
 
 (defn walk
   "Mob eid a tick on toward the player (mob/step-toward), stopping where its kind fights from: a
@@ -2572,12 +2589,12 @@
         k (mob/kinds type)
         player (:sim/player-pos sim)
         eye (physics/eye player)
-        now (:sim/now sim)]
-    (cond (not (and (>= now (or shot-at 0))
-                    (not (mob/in-reach? type pos player))
-                    (<= (physics/distance (mob/head type pos) eye) (:range k))
-                    (mob/sight? (solid-fn sim) (mob/head type pos) eye)))
-          sim
+        now (:sim/now sim)
+        near? (and (>= now (or shot-at 0))
+                   (not (mob/in-reach? type pos player))
+                   (<= (physics/distance (mob/head type pos) eye) (:range k)))
+        [sim sees?] (if near? (sees-player sim eid) [sim false])]
+    (cond (not (and near? sees?)) sim
           :else
           (let [[step wait charged? fire?] (mob/volley-next (:volley k) (or shot-step 0))]
             (cond-> (-> sim
