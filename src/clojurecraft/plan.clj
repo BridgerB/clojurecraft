@@ -931,8 +931,9 @@
    :done, whatever is running; a running intent that serves another target than the one chosen
    now is preempted, as is one the chosen row's interrupts? cuts short, unless the row, planning again
    without it, would start the same intent (same-choice?): that one keeps running. A :tunnel-to
-   also keeps running when the replacement is a hollow pocket at the feet (hollow-pocket?): it
-   ends at once and cutting the tunnel for it moves nothing. A defence
+   also keeps running when the replacement, or the row's answer while the tunnel is still
+   the work in hand, is a hollow pocket at the feet (hollow-pocket?): it ends at once and
+   cutting the tunnel for it moves nothing. A defence
    (holds?) is neither preempted nor cut by another row but an escape: it runs to its own end.
    Either waits
    while the cursor holds an item. Otherwise the intent runs, or
@@ -949,10 +950,16 @@
         cut-world (when (and i goal (not preempt?) (not held) (interrupts? world goal i))
                     (abandon-intent world i :interrupted))
         replacement (when cut-world (next-intent cut-world goal table))
-        cut? (and cut-world
-                  (not (same-choice? i replacement))
-                  (not (and (= :tunnel-to (:intent/kind i))
-                            (hollow-pocket? cut-world replacement))))
+        ;; the row's answer while the tunnel is still the work in hand, not only what it
+        ;; answers once abandon has dropped it: those two differ, and the dropped one was
+        ;; the pocket the cut started. z16's fold (probe 41303425892) had next-intent name
+        ;; the unlayable here-pocket [2148 72 1763] with the tunnel still running, and the
+        ;; cut replaced it anyway.
+        hollow? (and cut-world
+                     (= :tunnel-to (:intent/kind i))
+                     (or (hollow-pocket? cut-world replacement)
+                         (hollow-pocket? world (next-intent world goal table))))
+        cut? (and cut-world (not (same-choice? i replacement)) (not hollow?))
         next (when (and goal (nil? i)) (next-intent world goal table))
         feet (when (:player/pos world) (intent/feet world))
         failed (:plan/failed world)
