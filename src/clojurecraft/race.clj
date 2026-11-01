@@ -428,6 +428,40 @@
    within fortress-near of it before the server is asked."
   (atom []))
 
+(def pool-step 600)                   ; Nether blocks between the points a pool of fortresses is searched from, ring by ring
+(def pool-apart 160)                  ; Nether blocks a fortress must stand from the others of the pool to be another
+(def pool-max-locates 40)             ; searches a pool makes at most
+
+(defn search-centres
+  "The Nether points [x z] a pool of fortresses is searched from, nearest first: the centre, then
+   rings of eight compass points at pool-step, 2 pool-step, ... from it."
+  [[cx cz]]
+  (cons [cx cz]
+        (for [r (iterate inc 1)
+              [dx dz] pad-compass]
+          [(+ cx (* r pool-step dx)) (+ cz (* r pool-step dz))])))
+
+(defn pool-add
+  "The pool with fortress f added when it stands at least pool-apart from each of the pool's, else
+   as it was."
+  [pool [fx fz :as f]]
+  (if (some (fn [[x z]] (< (math/hypot (double (- x fx)) (double (- z fz))) pool-apart)) pool)
+    pool
+    (conj pool f)))
+
+(defn fortress-for
+  "The fortress of slot i in the pool: i mod the pool's size, so each slot has a fortress of its own
+   while the pool has as many as there are slots, and the pool's fortresses are shared evenly
+   when it has fewer."
+  [pool i]
+  (nth pool (mod i (count pool))))
+
+(defn per-fortress
+  "The most bots of slots slots at once on one fortress of a pool of n: the slots over the pool,
+   rounded up (fortress-for)."
+  [slots n]
+  (if (pos? n) (long (math/ceil (/ slots (double n)))) slots))
+
 (defn locate-fortress!
   "The fortress for the landing [x z] (overworld coordinates; the Nether's are an eighth): one
    already located within fortress-near (nearby-fortress), else the nearest as the server locates
@@ -447,6 +481,45 @@
                      (throw (ex-info "no fortress located" {:reply reply})))]
           (swap! fortresses conj at)
           at))))
+
+(def fortress-pool
+  "The fortresses a race's slots land at, [[fx fz] ...] distinct (pool-add), a vector in an atom,
+   built by prepare! (build-pool!)."
+  (atom []))
+
+(defn locate-from!
+  "The fortress nearest the Nether point [nx nz] as the server locates it, [fx fz], or nil."
+  [rc [nx nz]]
+  (fixture/parse-located (rcon/command! rc
+                                        (str "execute in minecraft:the_nether positioned "
+                                             nx
+                                             " 64 "
+                                             nz
+                                             " run locate structure minecraft:fortress"))))
+
+(defn build-pool!
+  "Fill fortress-pool with up to slots distinct fortresses, searching from search-centres of
+   centre ([nx nz], Nether coordinates) one at a time (at most pool-max-locates searches), and log
+   how many were found and the most bots a fortress carries. Fortresses a landing set's landings
+   cannot supply (they are 40 Nether blocks apart, two or three fortresses): lane 2 of race
+   f8b28e3 had 41 bots in two fortresses, 26 of them at one, sharing blaze aggro, fire and
+   spawner refills that a solo player never meets."
+  [rc centre slots]
+  (reset! fortress-pool (loop [pool []
+                               cs (take pool-max-locates (search-centres centre))]
+                          (cond (or (>= (count pool) slots) (empty? cs)) pool
+                                :else
+                                (recur (if-let [f (locate-from! rc (first cs))]
+                                         (pool-add pool f)
+                                         pool)
+                                       (rest cs)))))
+  (let [n (count @fortress-pool)]
+    (cli/log "fortress pool" n
+             "distinct for" slots
+             "slots, at most" (per-fortress slots n)
+             "bots on a fortress:" @fortress-pool)
+    (when (< n (quot (inc slots) 2))
+      (cli/log "fortress pool short: more than 2 bots on a fortress"))))
 
 (def pads-built
   "The pads built so far on this server, #{[x z y] ...} (an atom): a pad is built once, before a
@@ -624,10 +697,15 @@
           rcon-port
           rcon-pass
           (fn [rc]
-            (let [t0 (System/currentTimeMillis)]
+            (let [t0 (System/currentTimeMillis)
+                  [x z] (landing-of landings (or landing-offset 0) 0)]
+              (build-pool! rc [(quot x 8) (quot z 8)] n)
               (doseq [i (range n)]
-                (let [landing (landing-of landings (or landing-offset 0) i)]
-                  (choose-pad! rc (locate-fortress! rc landing) i nil)))
+                (let [fortress (if (seq @fortress-pool)
+                                 (fortress-for @fortress-pool i)
+                                 (locate-fortress! rc
+                                                   (landing-of landings (or landing-offset 0) i)))]
+                  (choose-pad! rc fortress i nil)))
               (cli/log "prepared" n "pads in" (quot (- (System/currentTimeMillis) t0) 1000) "s"))))
          (catch Exception e (cli/log "prepare failed:" e)))))
 
@@ -639,7 +717,8 @@
    :race/kit). Returns where it stands ([x y z], standing-on the pad), or nil when the dimension
    never came; a landing that cannot locate a fortress throws."
   [rc name landing i kit]
-  (let [fortress (locate-fortress! rc landing)
+  (let [fortress
+        (if (seq @fortress-pool) (fortress-for @fortress-pool i) (locate-fortress! rc landing))
         pad (or (get @pads-chosen i) (choose-pad! rc fortress i nil))
         pad (if (mobs-near? rc pad) (choose-pad! rc fortress i [pad]) pad)]
     (build-pad! rc pad)
