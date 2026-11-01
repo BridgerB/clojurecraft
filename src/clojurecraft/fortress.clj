@@ -533,6 +533,14 @@
 
 (def trail-cap 512)                   ; cells of the way back a tunnel keeps
 
+(defn carried-retreats
+  "The retreats in a row a tunnel to this trail's target has taken: its own (the intent's) or the
+   trail's (:trail/retreats, kept across tunnels, a fresh step or a step back starts it again).
+   Blaze-race-z14 job 5 (run 41256755663) paced two cells for 33 minutes, one move a tunnel,
+   352 tunnels: the count lived in the intent and every new tunnel took its retreat afresh."
+  [intent-retreats trail]
+  (max (long intent-retreats) (long (:trail/retreats trail 0))))
+
 (defn fresh-move?
   "May the move ahead from feet be taken as a step forward, not a retreat: it goes to a cell not
    stood in (visited), or it gains height toward the target (gaining?) onto a cell not found to
@@ -769,20 +777,24 @@
             fresh? (fresh-move? feet ahead target seen (:trail/dead trail))
             undo (when-not (or back fresh?) (step-back world feet trail (boolean dry-only?)))
             m (or back undo ahead)
-            retreated (if (and ahead (not fresh?) (not undo)) (inc (long retreats)) 0)]
+            retreated
+            (if (and ahead (not fresh?) (not undo)) (inc (carried-retreats retreats trail)) 0)
+            kept (-> (if (or undo fresh?) (leave-cell trail feet (some? undo)) trail)
+                     (assoc :trail/retreats retreated))]
         (cond (or (nil? m) (> retreated retreats-allowed))
               (let [[cell block] (when (nil? m) (infested-ahead world feet target climb))]
                 (cond-> (-> world
                             (assoc :player/controls {})
+                            (assoc :fortress/trail kept)
                             (intent/fail :blocked))
                   cell (game/say (str "tunnel: refused " cell " " block " (infested)"))))
               :else
-              (cond-> (intent/assoc-intent (assoc world :player/controls {})
-                                           :intent/move m
-                                           :intent/from feet
-                                           :intent/retreats retreated
-                                           :intent/tunnel-visited (conj tunnel-visited feet))
-                (or undo fresh?) (assoc :fortress/trail (leave-cell trail feet (some? undo))))))
+              (-> (intent/assoc-intent (assoc world :player/controls {})
+                                       :intent/move m
+                                       :intent/from feet
+                                       :intent/retreats retreated
+                                       :intent/tunnel-visited (conj tunnel-visited feet))
+                  (assoc :fortress/trail kept))))
       :else
       (let [next (build/next-op world
                                 (into (into (underlay-ops world from move)
