@@ -36,7 +36,7 @@
 
 (defn selected
   "The test vars a parse selects: the named vars and namespaces, or every namespace under the
-   test directory, less the excluded namespaces."
+   test directory, less the excluded namespaces and the tests marked ^:target (run only when named with -v)."
   [{:keys [namespaces vars exclude]}]
   (let [found (if (or (seq namespaces) (seq vars))
                 (do (doseq [n (concat namespaces (map (comp symbol namespace) vars))] (require n)) ; find-tests wants them loaded
@@ -44,7 +44,11 @@
                 (eftest/find-tests test-dir))]
     ;; realized here, before the reducers are instrumented: find-tests loads a namespace as its
     ;; vars are walked, and a defmethod on an instrumented multimethod var cannot cast it
-    (vec (remove (fn [v] (contains? exclude (ns-name (:ns (meta v))))) found))))
+    (vec (remove (fn [v]
+                   (or (contains? exclude (ns-name (:ns (meta v))))
+                       ;; a ^:target test is a bar not yet cleared (stage17_test): named to run, never swept up
+                       (and (:target (meta v)) (empty? vars))))
+                 found))))
 
 (defn synchronized?
   "Is test var v to run alone: marked ^:eftest/synchronized itself or by its namespace?"

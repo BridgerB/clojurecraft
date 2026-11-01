@@ -32,6 +32,7 @@
             [clojurecraft.dimension :as dimension]
             [clojurecraft.end :as end]
             [clojurecraft.entity :as entity]
+            [clojurecraft.fire :as fire]
             [clojurecraft.fluid :as fluid]
             [clojurecraft.food :as food]
             [clojurecraft.hunger :as hunger]
@@ -220,7 +221,8 @@
    number), :lag-ticks,
    :slow-breaks f (blocks take f times their time to break by the server's clock, a loaded
    server's: a FINISH at the client's time is acked but the break comes later, full-ms),
-   :respawn-in dimension (the dimension a new life begins in when the player dies there, as a
+   :still-blazes? true (the model's blazes hover where they stand, as before they flew: for the tests that
+   pin the bot's own cover and fight, not the blaze's flight), :respawn-in dimension (the dimension a new life begins in when the player dies there, as a
    spawn the server holds for it does: the Nether for a race that starts at a fortress; absent, a death
    anywhere but the overworld ends in the overworld), :respawn [x y z] (where a new life begins; the spawn when absent, as a gym landing may differ
    from the world spawn), :seed (where the loot rolls start, 0 when absent), :tick-seed (where
@@ -244,7 +246,7 @@
    crystals, one on every spike when absent)."
   [{:keys [column columns decoded view-distance spawn keep-alive-every drop-clicks drop-breaks
            inventory lag-ticks slow-breaks respawn respawn-in seed tick-seed kill-at dimension
-           nether food difficulty day-time mobs stronghold end]
+           nether food difficulty day-time mobs stronghold end still-blazes?]
     :or {keep-alive-every keep-alive-every}}]
   (cond->
     {:sim/phase :handshake
@@ -287,6 +289,7 @@
     kill-at (assoc :sim/kill-at kill-at)
     dimension (assoc :sim/dimension dimension)
     respawn-in (assoc :sim/respawn-in respawn-in)
+    still-blazes? (assoc :sim/still-blazes? true)
     food (assoc :sim/food food)
     nether (assoc :sim/nether nether)
     difficulty
@@ -1294,7 +1297,7 @@
                  :sim/air max-air
                  :sim/player-pos [x y z]
                  :sim/dimension (if stays? here dimension/overworld))
-          (dissoc :sim/eating :sim/window :sim/view-at)
+          (dissoc :sim/eating :sim/window :sim/view-at :sim/fire)
           (cond-> (:sim/difficulty sim) (with-food-value hunger/fresh))
           (update :sim/respawns inc)
           (send (if stays?
@@ -2361,6 +2364,44 @@
               stuck? (assoc-in [:sim/mobs eid :route-at] now)
               (seq found) (assoc-in [:sim/mobs eid :route] found))))))
 
+(def sight-ms 250)                     ; a flier's line to the player is looked at this often (five ticks), not every tick: forty blocks of cells a look
+
+(defn sees-player
+  "[sim' sees?]: does mob eid have a clear line from its head to the player's eye? Looked at when
+   the last look is sight-ms old or older (kept in the mob, :sight [ms sees?]), so a blaze that
+   flies and shoots does not walk the line twice a tick; a look kept by a tick or two is the
+   server's own (Sensing caches a mob's sight for a tick)."
+  [sim eid]
+  (let [{:keys [type pos sight]} (get-in sim [:sim/mobs eid])
+        now (:sim/now sim)]
+    (cond (and sight (< (- now (first sight)) sight-ms)) [sim (second sight)]
+          :else
+          (let [ok? (boolean (mob/sight? (solid-fn sim)
+                                         (mob/head type pos)
+                                         (physics/eye (:sim/player-pos sim))))]
+            [(assoc-in sim [:sim/mobs eid :sight] [now ok?]) ok?]))))
+
+(defn fly
+  "Mob eid, a flier (a blaze), a tick on toward the player as BlazeAttackGoal moves it: it stays
+   where it hovers while the player is in its follow range with a clear line from its head to the
+   player's eye (it shoots from there, shoot), else it flies at the player (mob/fly-toward, a
+   block above the player's feet), and in reach it stays to strike."
+  [sim eid]
+  (let [{:keys [type pos]} (get-in sim [:sim/mobs eid])
+        k (mob/kinds type)
+        player (:sim/player-pos sim)
+        [px py pz] player]
+    (cond (or (:sim/still-blazes? sim) (mob/in-reach? type pos player)) sim
+          :else
+          (let [[sim sees?] (sees-player sim eid)]
+            (cond
+              (and sees? (<= (physics/distance pos player) (:follow k))) sim
+              :else
+              (move-mob
+               sim
+               eid
+               (mob/fly-toward (free-fn sim) pos [px (inc py) pz] (:speed k) (mob/tall type))))))))
+
 (defn walk
   "Mob eid a tick on toward the player (mob/step-toward), stopping where its kind fights from: a
    melee mob inside its reach, a shooter at :keep, a creeper a block off; one that does not walk
@@ -2368,11 +2409,14 @@
   [sim eid]
   (let [{:keys [type pos]} (get-in sim [:sim/mobs eid])
         k (mob/kinds type)
-        stop (cond (:melee k) (* 0.8 (:reach k))
+        ;; :contact on a ground mob (a magma cube) is its hit: not :melee, so the bot's pack
+        ;; line does not read it, and it still stops inside its reach
+        stop (cond (or (:melee k) (and (:contact k) (not (:flies k)))) (* 0.8 (:reach k))
                    (:shoot k) (:keep k)
                    :else 1.0)]
     (cond
       (not (pos? (:speed k 0.0))) sim
+      (:flies k) (fly sim eid)
       (:paths k) (trail sim eid stop)
       :else
       (move-mob
@@ -2432,19 +2476,179 @@
                 (teleport-mob sim eid (mob/toward-aim pos (physics/eye player) r1 r2 r3))]
             (cond-> sim landed? (assoc-in [:sim/mobs eid :far-ticks] 0))))))
 
+(defn tell-damage
+  "The model with a damage-event for the player queued: the hurt's source type (mob/damage-source of
+   cause, generic for one not there) and the mob that dealt it (eid, its id + 1 as the cause, as the
+   server numbers it), nil for none. The bot reads the strike from it (:player/hurt-at,
+   combat/striker)."
+  ([sim cause eid] (tell-damage sim cause eid eid))
+  ([sim cause eid direct]
+   (send sim
+         {:packet/name :damage-event
+          :entity-id (player-eid-of sim)
+          :source-type (get mob/damage-source cause 18)
+          :source-cause (if eid (inc eid) 0)
+          :source-direct (or direct 0)})))
+
+(defn tell-flags
+  "The model with the player's shared flags byte told to the client (set-entity-data): bits, the
+   on-fire bit while it burns, 0 when it is out."
+  [sim bits]
+  (send sim
+        {:packet/name :set-entity-data
+         :entity-id (player-eid-of sim)
+         :metadata {entity/flags-index bits}}))
+
+(defn ignite-player
+  "The model with the player set alight for ms (fire/ignite), the flags byte told when it was not
+   burning."
+  [sim ms]
+  (let [fresh? (nil? (:sim/fire sim))]
+    (cond-> (update sim :sim/fire fire/ignite (:sim/now sim) ms)
+      fresh? (tell-flags entity/on-fire-bit))))
+
+(defn tick-burn
+  "One game tick of the player's burning (fire/tick): a hurt of fire/burn-damage when one is due
+   (on_fire, told as a damage-event, armour takes none of it), the flags byte told when a fire block
+   lit it and when it ended or water put it out. A dead player burns no more."
+  [sim]
+  (let [pos (:sim/player-pos sim)
+        id (when pos (block-at sim (mapv #(long (math/floor %)) pos)))
+        env {:water? (boolean (and id (contains? blocks/water-states id)))
+             :flame? (boolean (and id (fire/flame? id)))}
+        before (:sim/fire sim)
+        [after event] (fire/tick before (:sim/now sim) env)]
+    (cond (<= (:sim/health sim) 0.0) (dissoc sim :sim/fire)
+          :else
+          (cond-> (if after (assoc sim :sim/fire after) (dissoc sim :sim/fire))
+            (and after (nil? before)) (tell-flags entity/on-fire-bit)
+            (= :out event) (tell-flags 0)
+            (= :hurt event)
+            (-> (hurt fire/burn-damage true :on_fire)
+                (tell-damage :on_fire nil))))))
+
+(defn in-lava?
+  "Are the player's feet in lava? The cell the feet stand in (block-at of the floored
+   position), which is where a body in a source stands."
+  [sim]
+  (when-let [pos (:sim/player-pos sim)]
+    (contains? blocks/lava-states (block-at sim (mapv #(long (math/floor (double %))) pos)))))
+
+(defn tick-lava
+  "One game tick of the player standing in lava (Entity.lavaHurt): fire/lava-damage, armour
+   takes none of it, and the player is set alight for fire/lava-ms. The hurt window lands the
+   four once a half-second; a swallowed one is not told. Runs after tick-burn, so the tick that
+   first steps in deals the four and not also that tick's burn. A dead player is left."
+  [sim]
+  (cond (or (<= (:sim/health sim) 0.0) (not (in-lava? sim))) sim
+        :else
+        (let [before (:sim/health sim)
+              sim (hurt sim fire/lava-damage false :lava)]
+          (cond-> (ignite-player sim fire/lava-ms)
+            (< (:sim/health sim) before) (tell-damage :lava nil)))))
+
+(defn tick-wither
+  "One game tick of the wither a skeleton put on the player (mob/wither-tick): mob/wither-damage
+   when one is due, armour takes none of it, told as a damage-event. The wither skeleton is the
+   cause, so a death by it classes as :wither. A dead player is left."
+  [sim]
+  (let [[after event] (mob/wither-tick (:sim/wither sim) (:sim/now sim))]
+    (cond (<= (:sim/health sim) 0.0) (dissoc sim :sim/wither)
+          :else
+          (cond-> (if after (assoc sim :sim/wither after) (dissoc sim :sim/wither))
+            (= :hurt event)
+            (-> (hurt mob/wither-damage false :wither_skeleton)
+                (tell-damage :wither nil))))))
+
 (defn strike
   "A melee mob with the player in reach (on the plane within its :reach, feet within 1.5 in
-   height) hits it every :every ticks for its damage scaled by the difficulty."
+   height) hits it every :every ticks for its damage scaled by the difficulty. A flier's strike is
+   its :contact (a blaze's 6 every :contact-every ticks, within :reach in space): a separate key,
+   because the bot's own tables read :melee as a kind it fights in a pack (combat/melee-damage)."
   [sim eid]
   (let [{:keys [type pos attack-at]} (get-in sim [:sim/mobs eid])
         k (mob/kinds type)
         player (:sim/player-pos sim)
         now (:sim/now sim)]
-    (cond (not (and (:melee k) (mob/in-reach? type pos player) (>= now (or attack-at 0)))) sim
+    (cond (not (and (or (:melee k) (:contact k))
+                    (mob/in-reach? type pos player)
+                    (>= now (or attack-at 0))))
+          sim
           :else
-          (-> sim
-              (assoc-in [:sim/mobs eid :attack-at] (+ now (* (:every k) physics/tick-ms)))
-              (hurt (armoured sim (mob/scaled (:melee k) (:sim/difficulty sim))) true type)))))
+          (let [before (:sim/health sim)
+                sim (-> sim
+                        (assoc-in [:sim/mobs eid :attack-at]
+                                  (+ now (* (or (:contact-every k) (:every k)) physics/tick-ms)))
+                        (hurt (armoured sim
+                                        (mob/scaled (or (:melee k) (:contact k))
+                                                    (:sim/difficulty sim)))
+                              true
+                              type)
+                        (tell-damage :mob_attack eid))]
+            ;; the wither only when the hit landed: a swallowed swing applies none
+            (cond-> sim
+              (and (:wither k) (< (:sim/health sim) before))
+              (update :sim/wither mob/wither-apply now))))))
+
+(def fireball-type (get blocks/entity-types :small_fireball)) ; add-entity's type for a blaze's fireball
+
+(defn spawn-fireball
+  "The model with a small fireball leaving blaze eid for the player's middle (mob/aim: four rolls of
+   the mobs' stream for the error), told to the client as the server does (add-entity with the
+   direction times 0.1 and its blaze as data, then its motion)."
+  [sim eid]
+  (let [{:keys [type pos]} (get-in sim [:sim/mobs eid])
+        [x y z] pos
+        from [x (+ y (:start-height mob/fireball)) z]
+        [px py pz] (:sim/player-pos sim)
+        [sim r1] (mob-roll sim)
+        [sim r2] (mob-roll sim)
+        [sim r3] (mob-roll sim)
+        [sim r4] (mob-roll sim)
+        dir (mob/aim from [px (+ py 0.9) pz] r1 r2 r3 r4)
+        fid (:sim/next-eid sim)]
+    (-> sim
+        (assoc :sim/next-eid (inc fid))
+        (assoc-in [:sim/fireballs fid]
+                  {:pos from :dir dir :owner eid :born (:sim/now sim) :kind type})
+        (send {:packet/name :add-entity
+               :entity-id fid
+               :uuid nil
+               :type fireball-type
+               :x (first from)
+               :y (second from)
+               :z (last from)
+               :vel (mapv #(* % (:vel-scale mob/fireball)) dir)
+               :pitch 0
+               :yaw 0
+               :head-yaw 0
+               :data eid}))))
+
+(defn volley
+  "Blaze eid's turn to shoot, as BlazeAttackGoal runs it: with the player farther than its reach,
+   within its range and a clear line from its head to the player's eye, and its timer due, one step
+   of its volley (mob/volley-next): the charge flag raised for the charge, a fireball at each of the
+   shots after it, the flag lowered and the rest. Off the line nothing moves on; the timer waits."
+  [sim eid]
+  (let [{:keys [type pos shot-step shot-at]} (get-in sim [:sim/mobs eid])
+        k (mob/kinds type)
+        player (:sim/player-pos sim)
+        eye (physics/eye player)
+        now (:sim/now sim)
+        near? (and (>= now (or shot-at 0))
+                   (not (mob/in-reach? type pos player))
+                   (<= (physics/distance (mob/head type pos) eye) (:range k)))
+        [sim sees?] (if near? (sees-player sim eid) [sim false])]
+    (cond (not (and near? sees?)) sim
+          :else
+          (let [[step wait charged? fire?] (mob/volley-next (:volley k) (or shot-step 0))]
+            (cond-> (-> sim
+                        (assoc-in [:sim/mobs eid :shot-step] step)
+                        (assoc-in [:sim/mobs eid :shot-at] (+ now (* wait physics/tick-ms)))
+                        (send {:packet/name :set-entity-data
+                               :entity-id eid
+                               :metadata {entity/blaze-flags-index (if charged? 1 0)}}))
+              fire? (spawn-fireball eid))))))
 
 (defn shoot
   "A shooter (a skeleton's arrow, a blaze's fireball) within its :range of the player, with a
@@ -2455,7 +2659,8 @@
         k (mob/kinds type)
         eye (physics/eye (:sim/player-pos sim))
         now (:sim/now sim)]
-    (cond (not (and (:shoot k)
+    (cond (:volley k) (volley sim eid)
+          (not (and (:shoot k)
                     (>= now (or attack-at 0))
                     (<= (physics/distance (mob/head type pos) eye) (:range k))
                     (mob/sight? (solid-fn sim) (mob/head type pos) eye)))
@@ -2463,7 +2668,9 @@
           :else
           (-> sim
               (assoc-in [:sim/mobs eid :attack-at] (+ now (* (:every k) physics/tick-ms)))
-              (hurt (armoured sim (mob/scaled (:shoot k) (:sim/difficulty sim))) true type)))))
+              (hurt (armoured sim (mob/scaled (:shoot k) (:sim/difficulty sim))) true type)
+              (tell-damage (or (:projectile k) type) eid)
+              (cond-> (:ignites k) (ignite-player (:ignites k)))))))
 
 (defn swell
   "A creeper within :swell of the player lights its fuse; with the player past unswell the fuse
@@ -2596,27 +2803,28 @@
 
 (defn spawn-pack
   "The model with a pack of n of kind walked out from [x y z]: each member mob/pack-step off
-   the last on x and on z (four wild-rolls), at the pack's height, placed where it stands (a cell
-   mob/nether-spot? and no nearer the player than mob/spawn-near) and skipped where it does
-   not, as NaturalSpawner.spawnCategoryForPosition walks and skips them."
-  [sim kind [x y z] n]
-  (let [player (:sim/player-pos sim)
-        at #(block-at sim %)
-        free? (free-fn sim)]
-    (first (reduce (fn [[sim x z] _]
-                     (let [[sim a] (wild-roll sim)
-                           [sim b] (wild-roll sim)
-                           [sim c] (wild-roll sim)
-                           [sim d] (wild-roll sim)
-                           x (+ x (mob/pack-step a b))
-                           z (+ z (mob/pack-step c d))
-                           pos [(+ x 0.5) (double y) (+ z 0.5)]]
-                       [(cond-> sim
-                          (and (mob/nether-spot? at free? [x y z])
-                               (>= (physics/distance pos player) mob/spawn-near))
-                          (add-mob kind pos {})) x z]))
-                   [sim x z]
-                   (range n)))))
+   the last on x and on z (four wild-rolls), at the pack's height, placed where it stands (spot?
+   of the cell, mob/nether-spot? when none is given, and no nearer the player than mob/spawn-near)
+   and skipped where it does not, as NaturalSpawner.spawnCategoryForPosition walks and skips them."
+  ([sim kind pos n] (spawn-pack sim kind pos n mob/nether-spot?))
+  ([sim kind [x y z] n spot?]
+   (let [player (:sim/player-pos sim)
+         at #(block-at sim %)
+         free? (free-fn sim)]
+     (first (reduce (fn [[sim x z] _]
+                      (let [[sim a] (wild-roll sim)
+                            [sim b] (wild-roll sim)
+                            [sim c] (wild-roll sim)
+                            [sim d] (wild-roll sim)
+                            x (+ x (mob/pack-step a b))
+                            z (+ z (mob/pack-step c d))
+                            pos [(+ x 0.5) (double y) (+ z 0.5)]]
+                        [(cond-> sim
+                           (and (spot? at free? [x y z])
+                                (>= (physics/distance pos player) mob/spawn-near))
+                           (add-mob kind pos {})) x z]))
+                    [sim x z]
+                    (range n))))))
 
 (defn try-nether-spawn
   "Every mob/spawn-every ticks in the Nether (wild-spawning?, under mob/hostile-cap), one try
@@ -2656,6 +2864,49 @@
                         [sim r4] (wild-roll sim)
                         spot (spots (min (dec (count spots)) (long (* r3 (count spots)))))]
                     (spawn-pack sim (mob/pick mob/warped-kinds r4) spot mob/enderman-pack)))))))
+
+(defn try-floor-spawn
+  "One try, on try-nether-spawn's cadence and cap, at a pack of n from kinds on the floors
+   spot? accepts: the same ring and the same wild-rolls, and nothing where the column has no
+   such floor. The overworld rolls none of it (wild-spawning?)."
+  [sim spot? kinds n]
+  (let [player (:sim/player-pos sim)]
+    (cond (not (and player
+                    (wild-spawning? sim)
+                    (zero? (mod (quot (:sim/now sim) physics/tick-ms) mob/spawn-every))
+                    (< (hostiles-near sim) mob/hostile-cap)))
+          sim
+          :else
+          (let [[sim r1] (wild-roll sim)
+                [sim r2] (wild-roll sim)
+                angle (* 2.0 math/PI r1)
+                dist (+ mob/spawn-near (* r2 (- mob/spawn-far mob/spawn-near)))
+                [px py pz] player
+                x (long (math/floor (+ px (* dist (math/cos angle)))))
+                z (long (math/floor (+ pz (* dist (math/sin angle)))))
+                fy (long (math/floor py))
+                at #(block-at sim %)
+                spots (vec (for [y (range (- fy mob/spawn-band) (inc (+ fy mob/spawn-band)))
+                                 :when (spot? at (free-fn sim) [x y z])]
+                             [x y z]))]
+            (cond (empty? spots) sim
+                  :else
+                  (let [[sim r3] (wild-roll sim)
+                        [sim r4] (wild-roll sim)
+                        spot (spots (min (dec (count spots)) (long (* r3 (count spots)))))]
+                    (spawn-pack sim (mob/pick kinds r4) spot n spot?)))))))
+
+(defn try-fortress-spawn
+  "Every mob/spawn-every ticks in the Nether, one mob on fortress brick (mob/fortress-kinds:
+   a wither skeleton or a magma cube, weights 8 and 3). A column with no brick spawns nothing."
+  [sim]
+  (try-floor-spawn sim mob/fortress-spot? mob/fortress-kinds 1))
+
+(defn try-crimson-spawn
+  "Every mob/spawn-every ticks in the Nether, one hoglin on crimson nylium (mob/crimson-kinds).
+   A column with none spawns nothing. Piglins are not modelled."
+  [sim]
+  (try-floor-spawn sim mob/crimson-spot? mob/crimson-kinds 1))
 
 (defn spawner-cells
   "The set of cells holding a spawner block in the decoded columns within one chunk of the
@@ -2784,12 +3035,96 @@
                                             (not (contains? (:sim/populated sim) [x z])))]
                              [x z]))))))
 
+(defn fireball-path
+  "What one tick does to a small fireball at pos flying along dir (mob/fireball :speed a tick, in
+   three samples): [:hit], [:wall last-free-pos] on the first solid cell, or [:fly pos'] to where it
+   ends the tick. A sample inside the living player's box (grown by the fireball's radius) is a hit."
+  [sim pos dir]
+  (let [{:keys [speed radius]} mob/fireball
+        player (:sim/player-pos sim)
+        alive? (pos? (:sim/health sim))
+        solid? (solid-fn sim)]
+    (reduce (fn [[_ last] i]
+              (let [p (mapv + pos (map #(* % speed (/ i 3.0)) dir))]
+                (cond (and alive? player (mob/hits-box? p player radius)) (reduced [:hit p])
+                      (solid? (mob/cell-of p)) (reduced [:wall last])
+                      :else [:fly p])))
+            [:fly pos]
+            [1 2 3])))
+
+(defn set-fire
+  "The model with a fire block in cell if it is air over a solid floor (a small fireball's end,
+   FireBlock canSurvive on the floor), told to the client: for good over netherrack or magma, else
+   until fire/block-until (kept in :sim/fires)."
+  [sim cell]
+  (let [below (mapv + cell [0 -1 0])
+        base (some-> (block-at sim below)
+                     blocks/name-of)
+        id (blocks/default-state :fire)]
+    (cond (not (and (= :air (blocks/name-of (block-at sim cell)))
+                    (some-> (block-at sim below)
+                            blocks/solid?)))
+          sim
+          :else
+          (let [until (fire/block-until base (:sim/now sim))]
+            (cond-> (-> sim
+                        (assoc-in [:sim/placed cell] id)
+                        (send {:packet/name :block-update :pos cell :state id}))
+              until (assoc-in [:sim/fires cell] until))))))
+
+(defn tick-fires
+  "One game tick of the fire blocks fireballs lit (:sim/fires {cell ms}): one past its time is air
+   again, told to the client."
+  [sim]
+  (reduce (fn [sim [cell until]]
+            (cond-> sim
+              (>= (:sim/now sim) until)
+              (-> (update :sim/fires dissoc cell)
+                  (assoc-in [:sim/placed cell] 0)
+                  (send {:packet/name :block-update :pos cell :state 0}))))
+          sim
+          (:sim/fires sim)))
+
+(defn tick-fireballs
+  "One game tick of every small fireball in flight (fireball-path), each move told (tell-move): one
+   that hits the player hurts it by its blaze's shot damage through the armour, sets it alight for
+   the blaze's :ignites and tells the damage; one that meets a block or is older than its life is
+   gone, told to the client."
+  [sim]
+  (reduce (fn [sim [fid {:keys [pos dir owner born kind]}]]
+            (let [[what at] (fireball-path sim pos dir)
+                  k (mob/kinds kind)
+                  old? (>= (- (:sim/now sim) born) (* (:life mob/fireball) physics/tick-ms))
+                  gone (fn [sim]
+                         (-> sim
+                             (update :sim/fireballs dissoc fid)
+                             (send {:packet/name :remove-entities :ids [fid]})))]
+              (cond (= :hit what)
+                    (->
+                      sim
+                      gone
+                      (hurt (armoured sim (mob/scaled (:shoot k) (:sim/difficulty sim))) true kind)
+                      (tell-damage :fireball owner fid)
+                      (ignite-player (:ignites k)))
+                    (= :wall what)
+                    (-> sim
+                        gone
+                        (set-fire (mob/cell-of at)))
+                    old? (gone sim)
+                    :else
+                    (-> sim
+                        (tell-move fid pos at)
+                        (assoc-in [:sim/fireballs fid :pos] at)))))
+          sim
+          (sort-by key (:sim/fireballs sim))))
+
 (defn tick-mobs
   "One game tick of the mobs: the day moves on (:sim/day-time), chunks coming near get their
    animals (populate), a hostile is tried for (try-spawn), the Nether's warped forests spawn
-   their endermen (try-nether-spawn) and its spawners run (tick-spawners), every mob acts in id
-   order (act-mob), and far hostiles despawn (despawn). A model with no difficulty and no mobs
-   only keeps its day."
+   their endermen (try-nether-spawn), its fortresses a wither skeleton or a magma cube
+   (try-fortress-spawn), its crimson forests a hoglin (try-crimson-spawn), and its spawners run
+   (tick-spawners), every mob acts in id order (act-mob), and far hostiles despawn (despawn). A
+   model with no difficulty and no mobs only keeps its day."
   [sim]
   (let [sim (cond-> sim (:sim/day-time sim) (update :sim/day-time inc))]
     (cond (not (or (:sim/difficulty sim) (seq (:sim/mobs sim)))) sim
@@ -2798,6 +3133,8 @@
                         populate
                         try-spawn
                         try-nether-spawn
+                        try-fortress-spawn
+                        try-crimson-spawn
                         tick-spawners)]
             (despawn (reduce act-mob sim (sort (keys (:sim/mobs sim)))))))))
 
@@ -2990,6 +3327,9 @@
   (-> (assoc sim :sim/now now)
       kill
       drown
+      tick-burn
+      tick-lava
+      tick-wither
       feed
       tick-eating
       tick-delayed
@@ -3000,6 +3340,8 @@
       through-end-portal
       tick-eyes
       tick-mobs
+      tick-fireballs
+      tick-fires
       keep-alive
       pick-up
       sync-health))

@@ -265,7 +265,9 @@
    :piglin_brute :piglin
    :hoglin :hoglin
    :wither_skeleton :wither
-   :ghast :ghast})
+   :ghast :ghast
+   :on_fire :fire
+   :lava :lava})
 
 (defn stopped?
   "Does a run stop at world: the plan done or failed, or, for a run that started at the fortress
