@@ -719,6 +719,21 @@
        (not-any? #(stand? world %)
                  (for [dx [-1 0 1] dz [-1 0 1] dy [-2 -1 0 1]] [(+ x dx) (+ y dy) (+ z dz)]))))
 
+(def hold-radius
+  "Blocks from the feet within which an angry enderman keeps the bot where it is: the burrow is not
+   given up (stale?) and no relocation begins while one stands this near."
+  16.0)
+
+(defn angry-within?
+  "Does an angry enderman (entity/creepy?, blacklisted or not) that is not parked (parked?: more
+   than park-near off and no closer for park-ms) stand within radius of the feet, height counted?"
+  [world radius]
+  (boolean (some (fn [[eid e]]
+                   (and (entity/creepy? e)
+                        (<= (physics/distance (:player/pos world) (:entity/pos e)) radius)
+                        (not (parked? world eid (:entity/pos e)))))
+                 (endermen (dissoc world :plan/blacklist) stare-range))))
+
 (defn shelter
   "The hunt's burrow (:pearls/shelter) while it is within shelter-reach of the feet, still a
    shelter? by the terrain and not given up after a minute with nothing to do from it (stale?),
@@ -728,7 +743,10 @@
     (when (and s
                (<= (physics/distance (intent/feet world) s) shelter-reach)
                (shelter? world s)
-               (not (stale? world)))
+               ;; with an angry one within hold-radius the bot waits inside: pearl-fight-p job 3 (plan
+               ;; run 41256381552) gave its burrow up as stale with 3217 angry 7 to 8 blocks off, walked
+               ;; out to a new site and was slain 3 blocks from it
+               (or (not (stale? world)) (angry-within? world hold-radius)))
       s)))
 
 (defn away
@@ -2443,7 +2461,7 @@
           (-> world
               (dissoc :pearls/relocate :pearls/shelter :pearls/mouth :plan/blacklist)
               (assoc-in [:pearls/gain :at] now))
-          (and (nil? r) g (>= (- now (:at g)) relocate-ms))
+          (and (nil? r) g (>= (- now (:at g)) relocate-ms) (not (angry-within? world hold-radius)))
           (assoc world
                  :pearls/relocate
                  {:from feet :at now :near (near-ids world (:player/pos world))})

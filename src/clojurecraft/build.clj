@@ -1553,14 +1553,15 @@
   (and (= :dig kind) (= :rejected reason)))
 
 (defn pickaxe-at-hand?
-  "Could a pickaxe be made without going out for anything: the needs planner's next step toward
+  "Could n pickaxes (one by default) be held without going out for anything: the needs planner's next step toward
    one (make/next-row over plan/goals) a craft or a table placed, not a gather, a mine or a scoop
    (make/fetch?)? A pickaxe that breaks with nothing at hand leaves the rest of a build to the
    hand: the sealed-pool cast's last few blocks, dug slowly, beat a climb for wood that is not
    there."
-  [world]
-  (let [row (make/next-row world {:goal/id :pickaxe :goal/provides {:tag/pickaxes 1}} plan/goals)]
-    (boolean (and (map? row) (not (make/fetch? row))))))
+  ([world] (pickaxe-at-hand? world 1))
+  ([world n]
+   (let [row (make/next-row world {:goal/id :pickaxe :goal/provides {:tag/pickaxes n}} plan/goals)]
+     (boolean (and (map? row) (not (make/fetch? row)))))))
 
 (def hand-dig-limit 10000)            ; ms by hand past which a block is never dug by hand: deepslate's 15 s, not stone's 7.5
 
