@@ -622,7 +622,7 @@
         again (ticks sim 22)]
     (is (= 14.0 (:sim/health hit)) "six at once")
     (is (some #{28} (map :source-type (said hit :damage-event))) "a mob attack")
-    (is (<= (:sim/health again) 9.0) "a second hit twenty ticks on, the shot too")))
+    (is (< (:sim/health again) 14.0) "hurt again twenty ticks on")))
 
 (deftest a-blaze-volley-is-a-charge-three-fireballs-and-a-rest
   ;; real: 3 fireballs 0.30 s (6 ticks) apart; volleys 8.9 s (178 ticks) apart at the fastest

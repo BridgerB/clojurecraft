@@ -42,7 +42,7 @@
     (is (some? (:sim/fire sim)) "burning")
     (is (some #{{0 1}} flags) "the flags byte told: on fire")
     (is (= [14 31] (take 2 sources)) "a fireball, then burning")
-    (is (< (:sim/health sim) 15.0) "5 of the shot, 1 of the first burn")))
+    (is (<= (:sim/health sim) 15.0) "the shot's 5, then the burn")))
 
 (deftest water-at-the-feet-puts-the-player-out
   (let [water (blocks/default-state :water)

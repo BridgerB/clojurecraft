@@ -1,0 +1,34 @@
+;; What a real blaze fight is, measured from packets: the figures the model's blazes are held to
+;; (blaze_parity_test.clj). Source: race f8b28e3 (d39 bots), lane 2, the 45 recordings of its s1 and
+;; s2 (Clj_r*.edn.zst), the Nether segments only, 1241 blazes in view, parsed from add-entity,
+;; move-entity-pos, entity-position-sync, set-entity-data, damage-event, set-health and the bot's
+;; own move-player-pos-rot sends. Dodge figures: dodge.clj's reading of blaze-race-l race 2.
+{:source "race f8b28e3, lane 2, 45 recordings, 1241 blazes in view"
+ ;; BlazeAttackGoal's cycle: 60 charge + 3 shots x 6 + 100 rest = 178 ticks = 8.9 s
+ :volley {:fireballs 3
+          :shot-gap-s 0.30
+          :cycle-min-s 8.9
+          :recorded-p10-cycle-s 8.89
+          :recorded-median-gap-s 19.6}
+ ;; metres from the bot (plane) and blocks over its feet, at every blaze move within 24 blocks
+ :hover {:dist-median 10.77
+         :dist-p25 6.91
+         :dist-p75 16.72
+         :dy-median 2.25
+         :speed-median 0.09
+         :speed-p90 1.95}
+ ;; health taken, per source (damage-event source type -> sum of set-health drops): burning 1.0 a hurt
+ :damage {:burn {:hurts 1778 :hp 1802 :per-hurt 1.0 :share 0.45}
+          :fireball {:hurts 508 :hp 1355 :per-hurt 2.7 :share 0.34}
+          :melee {:hurts 138 :hp 462 :per-hurt 3.36 :share 0.11}
+          :armour-points 14}
+ ;; fireballs launched within 12 blocks of the bot over fireball hits on it (a floor: the bot sat
+ ;; in pockets for most of them) and dodge.clj's 24 of 212 within 30 blocks
+ :hit-rate {:within-12 0.043 :within-30-dodging 0.113}
+ :tolerance {:volley-cycle-s 0.2
+             :shot-gap-s 0.05
+             :per-hurt 0.05
+             :hit-rate-open-min 0.043
+             :hit-rate-open-max 0.40
+             :burn-to-fireball-min 0.8
+             :burn-to-fireball-max 2.2}}

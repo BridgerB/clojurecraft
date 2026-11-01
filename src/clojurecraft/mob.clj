@@ -103,9 +103,9 @@
            :box [0.6 1.8]
            :speed 0.2
            :flies true
-           :melee 6.0
+           :contact 6.0
            :reach 2.0
-           :melee-every 20
+           :contact-every 20
            :follow 48.0
            :shoot 5.0
            :projectile :fireball

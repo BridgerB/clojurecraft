@@ -3455,6 +3455,7 @@
                                     :dimension dimension/nether
                                     :difficulty :easy
                                     :food 20
+                                    :still-blazes? true ; the bot's own cover and fight are pinned here, not the blazes' flight (#262)
                                     :inventory {[:hotbar 0] {:item (item :iron_sword) :count 1}}
                                     :mobs [{:type :blaze :pos [14.5 65.0 6.5]}
                                            {:type :blaze :pos [14.5 65.0 7.5]}
@@ -3485,6 +3486,7 @@
                                     :dimension dimension/nether
                                     :difficulty :easy
                                     :food 20
+                                    :still-blazes? true ; the bot's own cover and fight are pinned here, not the blazes' flight (#262)
                                     :inventory {[:hotbar 0] {:item (item :iron_sword) :count 1}}
                                     :mobs [{:type :blaze :pos [11.5 65.0 5.5]}
                                            {:type :blaze :pos [11.5 65.0 6.5]}
@@ -3512,21 +3514,22 @@
   ;; its cover
   (let [[w sim] (sim/run step
                          (game/init fx/opts)
-                         (sim/init {:column (world/column-bytes (assoc nether-wall
-                                                                       blaze-spawner-cell
-                                                                       mob/spawner-block)
-                                                                dimension/nether)
-                                    :spawn [8.5 64.0 8.5]
-                                    :dimension dimension/nether
-                                    :difficulty :easy
-                                    :food 20
-                                    :seed 3
-                                    :inventory {[:hotbar 0] {:item (item :iron_sword) :count 1}
-                                                [:hotbar 1] {:item (item :blaze_rod) :count 6}
-                                                [:armour 0] {:item (item :iron_helmet) :count 1}
-                                                [:armour 1] {:item (item :iron_chestplate) :count 1}
-                                                [:armour 2] {:item (item :iron_leggings) :count 1}
-                                                [:armour 3] {:item (item :iron_boots) :count 1}}})
+                         (sim/init
+                          {:column (world/column-bytes
+                                    (assoc nether-wall blaze-spawner-cell mob/spawner-block)
+                                    dimension/nether)
+                           :spawn [8.5 64.0 8.5]
+                           :dimension dimension/nether
+                           :difficulty :easy
+                           :food 20
+                           :seed 3
+                           :still-blazes? true ; the bot's own cover and fight are pinned here, not the blazes' flight (#262)
+                           :inventory {[:hotbar 0] {:item (item :iron_sword) :count 1}
+                                       [:hotbar 1] {:item (item :blaze_rod) :count 6}
+                                       [:armour 0] {:item (item :iron_helmet) :count 1}
+                                       [:armour 1] {:item (item :iron_chestplate) :count 1}
+                                       [:armour 2] {:item (item :iron_leggings) :count 1}
+                                       [:armour 3] {:item (item :iron_boots) :count 1}}})
                          #(or (plan/done? %) (plan/failed? %) (pos? (:stats/deaths % 0)))
                          240000
                          {:event/kind :go :go/goals [:blaze-rods]})]

@@ -840,6 +840,7 @@
                                     :difficulty :easy
                                     :food 20
                                     :seed 3
+                                    :still-blazes? true ; the bot's camp and fight are pinned here, not the blazes' flight (#262)
                                     :inventory {[:hotbar 0] (item :iron_sword 1)
                                                 [:hotbar 1] (item :blaze_rod 6)}
                                     :mobs blazes})

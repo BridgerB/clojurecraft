@@ -221,7 +221,8 @@
    number), :lag-ticks,
    :slow-breaks f (blocks take f times their time to break by the server's clock, a loaded
    server's: a FINISH at the client's time is acked but the break comes later, full-ms),
-   :respawn-in dimension (the dimension a new life begins in when the player dies there, as a
+   :still-blazes? true (the model's blazes hover where they stand, as before they flew: for the tests that
+   pin the bot's own cover and fight, not the blaze's flight), :respawn-in dimension (the dimension a new life begins in when the player dies there, as a
    spawn the server holds for it does: the Nether for a race that starts at a fortress; absent, a death
    anywhere but the overworld ends in the overworld), :respawn [x y z] (where a new life begins; the spawn when absent, as a gym landing may differ
    from the world spawn), :seed (where the loot rolls start, 0 when absent), :tick-seed (where
@@ -245,7 +246,7 @@
    crystals, one on every spike when absent)."
   [{:keys [column columns decoded view-distance spawn keep-alive-every drop-clicks drop-breaks
            inventory lag-ticks slow-breaks respawn respawn-in seed tick-seed kill-at dimension
-           nether food difficulty day-time mobs stronghold end]
+           nether food difficulty day-time mobs stronghold end still-blazes?]
     :or {keep-alive-every keep-alive-every}}]
   (cond->
     {:sim/phase :handshake
@@ -288,6 +289,7 @@
     kill-at (assoc :sim/kill-at kill-at)
     dimension (assoc :sim/dimension dimension)
     respawn-in (assoc :sim/respawn-in respawn-in)
+    still-blazes? (assoc :sim/still-blazes? true)
     food (assoc :sim/food food)
     nether (assoc :sim/nether nether)
     difficulty
@@ -2373,7 +2375,8 @@
         player (:sim/player-pos sim)
         [px py pz] player
         sees? (mob/sight? (solid-fn sim) (mob/head type pos) (physics/eye player))]
-    (cond (or (mob/in-reach? type pos player)
+    (cond (or (:sim/still-blazes? sim)
+              (mob/in-reach? type pos player)
               (and sees? (<= (physics/distance pos player) (:follow k))))
           sim
           :else
@@ -2507,18 +2510,25 @@
 
 (defn strike
   "A melee mob with the player in reach (on the plane within its :reach, feet within 1.5 in
-   height) hits it every :every ticks for its damage scaled by the difficulty."
+   height) hits it every :every ticks for its damage scaled by the difficulty. A flier's strike is
+   its :contact (a blaze's 6 every :contact-every ticks, within :reach in space): a separate key,
+   because the bot's own tables read :melee as a kind it fights in a pack (combat/melee-damage)."
   [sim eid]
   (let [{:keys [type pos attack-at]} (get-in sim [:sim/mobs eid])
         k (mob/kinds type)
         player (:sim/player-pos sim)
         now (:sim/now sim)]
-    (cond (not (and (:melee k) (mob/in-reach? type pos player) (>= now (or attack-at 0)))) sim
+    (cond (not (and (or (:melee k) (:contact k))
+                    (mob/in-reach? type pos player)
+                    (>= now (or attack-at 0))))
+          sim
           :else
           (-> sim
               (assoc-in [:sim/mobs eid :attack-at]
-                        (+ now (* (:melee-every k (:every k)) physics/tick-ms)))
-              (hurt (armoured sim (mob/scaled (:melee k) (:sim/difficulty sim))) true type)
+                        (+ now (* (or (:contact-every k) (:every k)) physics/tick-ms)))
+              (hurt (armoured sim (mob/scaled (or (:melee k) (:contact k)) (:sim/difficulty sim)))
+                    true
+                    type)
               (tell-damage :mob_attack eid)))))
 
 (def fireball-type (get blocks/entity-types :small_fireball)) ; add-entity's type for a blaze's fireball
