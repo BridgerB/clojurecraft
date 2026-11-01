@@ -2577,6 +2577,9 @@
                :y (second from)
                :z (last from)
                :vel (mapv #(* % (:vel-scale mob/fireball)) dir)
+               :pitch 0
+               :yaw 0
+               :head-yaw 0
                :data eid}))))
 
 (defn volley
