@@ -2095,9 +2095,12 @@
     (is (not= :fight (fight (tick 13.0 false)))
         "and not chosen again: a fight that ends the same tick")
     (let [lone (fn [hp burning?] (assoc (tick hp burning?) :world/entities {7 near}))]
-      (doseq [[hp burning?] [[20.0 false] [18.4 false] [16.2 true] [13.7 true] [12.0 true]]]
+      (doseq [[hp burning?] [[20.0 false] [18.4 false] [16.2 true]]]
         (is (= :fight (fight (lone hp burning?)))
-            (str "hp " hp " burning " burning? ": one in melee, the fight"))))
+            (str "hp " hp " burning " burning? ": one in melee, the fight")))
+      (doseq [[hp burning?] [[13.7 true] [12.0 true]]]
+        (is (not= :fight (fight (lone hp burning?)))
+            (str "hp " hp " burning " burning? ": under yield line 14.0, no new fight"))))
     (doseq [hp [20.0 16.2 12.0]]
       (is (not (plan/interrupts? (assoc (tick hp true) :world/entities {7 near}) row running))
           (str "a running fight holds at " hp)))

@@ -1603,9 +1603,9 @@
               ;; and nothing to open when no cell was placed (a cell shut on every side): no :unseal that
               ;; is done at once and chosen again
               (when (and (seq (:pocket/placed site))
-                         (or (heals? world) (>= (:player/health world 20.0) (low-health world))))
+                         (or (heals? world) (>= (:player/health world 20.0) unseal-health)))
                 {:intent/kind :unseal}))
-            (and (reach-blaze world) (>= (:player/health world 20.0) (low-health world))) nil
+            (and (reach-blaze world) (>= (:player/health world 20.0) unseal-health)) nil
             (and (or (pressed? world) (reach-blaze world) (struck-lately? world))
                  (pocket/can-seal? world site))
             {:intent/kind :seal}
