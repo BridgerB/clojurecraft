@@ -2102,9 +2102,8 @@
       (is (not (plan/interrupts? (assoc (tick hp true) :world/entities {7 near}) row running))
           (str "a running fight holds at " hp)))
     (is (true? (plan/holds? running)) "and another row does not preempt it")
-    (testing "under low-health an open landing is not a pocket, so the fight stands"
-      (is (nil? (blaze/here-intent (tick 11.0 true))))
-      (is (= :fight (fight (tick 11.0 true)))))))
+    (testing "under low-health the retreat is one: not a fight"
+      (is (not= :fight (fight (tick 11.0 true)))))))
 
 (deftest the-steer-drops-an-unsealable-pocket-and-remembers-it
   (let [row (first (filter #(= :blaze-rods (:goal/id %)) plan/goals))
@@ -2546,18 +2545,63 @@
   ;; blaze-race-z17 job 4 (plan 41299776731): at hp 12.1 with blaze 469 at hand in melee,
   ;; :pocket was interrupted 28 times in 3 s because plan/interrupts? saw (not (hurt? world))
   ;; and blaze 469 fightable, never protecting refuge-kinds; after 6 starts pocket-churning?
-  ;; blocked :pocket and :fight 469 churned 52 times yielding on tick 1 under yield-line 12.8.
+  ;; blocked :pocket. Running refuge intents must never be cut for a fightable blaze.
   (let [blaze (entity :blaze [9.5 64.0 8.5] :entity/health 20.0)
         w (-> (standing {469 blaze})
               (assoc :player/health 12.1 :time/now 100000))
         pocket-intent
-        {:intent/kind :pocket :intent/site {:pocket/cell [8 64 8]} :intent/goal :blaze-rods}
-        fight (blaze/commit-fight w)]
+        {:intent/kind :pocket :intent/site {:pocket/cell [8 64 8]} :intent/goal :blaze-rods}]
     (is (false? (plan/interrupts? w row pocket-intent))
-        "a running refuge intent is not cut for a fightable blaze")
-    (is (false? (:intent/yield? fight))
-        "a lone blaze in melee does not yield under yield-line 12.8")
-    (let [stepped (intent/run w fight nil)]
-      (is (not= :done (:intent/stage (:plan/intent stepped)))
-          "the fight does not yield on tick 1 in combat"))))
+        "a running refuge intent is not cut for a fightable blaze")))
+
+(deftest at-hp-under-yield-line-no-fight-starts-and-refuge-is-chosen
+  ;; blaze-race-z17 job 4 (plan 41299776731): at hp 12.1 with blaze 469 in melee (yield line 12.8),
+  ;; commit-fight was chosen because lone blazes were exempted from yield-fight?, yielding on tick 1
+  ;; and restarting 52 times. With start gate agreeing with yield line, no fight starts and refuge is chosen.
+  (let [blaze (entity :blaze [7.0 64.0 8.5] :entity/health 20.0)
+        w (-> (standing {469 blaze})
+              (assoc :player/pos [6.5 64.0 8.5]
+                     :player/health 12.1
+                     :time/now 100000
+                     :world/chunks {[0 0] (world/column pocket-walls)}
+                     :pocket/site pocket-site))]
+    (is (= 12.8 (combat/yield-line w)) "incoming-rate 3.2 gives yield line 12.8")
+    (is (false? (blaze/yield-fight? w)) "hp 12.1 is under yield line 12.8 plus margin")
+    (is (nil? (blaze/commit-fight w)) "no fight committed")
+    (is (true? (blaze/refuge-needed? w)) "refuge is needed under low-health with blaze about")
+    (is (= :pocket (:intent/kind (next-intent w))) "goes to refuge, not fight")))
+
+(deftest lone-blaze-fight-started-at-high-hp-yields-under-yield-line
+  ;; A lone-blaze fight started healthy (hp 18) carries :intent/yield? true and yields once hp falls
+  ;; under the yield line, without restarting.
+  (let [blaze (entity :blaze [9.5 64.0 8.5] :entity/health 20.0)
+        w (-> (standing {469 blaze})
+              (assoc :player/health 18.0 :time/now 100000))
+        fight (blaze/commit-fight w)]
+    (is (some? fight))
+    (is (true? (:intent/yield? fight)) "lone blaze carries :intent/yield? true")
+    (let [running (intent/run w fight {})]
+      (is (not= :done (:intent/stage (:plan/intent running))) "healthy fight does not yield")
+      (let [hurt-world (assoc w :player/health 12.5)
+            yielded (intent/run hurt-world fight {})]
+        (is (= :done (:intent/stage (:plan/intent yielded)))
+            "once health falls under yield line 12.8, the fight yields")
+        (is (nil? (blaze/commit-fight hurt-world))
+            "and once yielded, no new fight is committed")))))
+
+(deftest fire-below-a-hovering-blaze-is-punched-before-the-swing
+  ;; blazes hover in air, so fire burns on the floor below them or nearby, not in their own cell.
+  ;; blaze-race-z17: 0 of 6 jobs fired :fire-out because blaze-fire checked only the entity's cell.
+  (let [brick (blocks/default-state :nether_bricks)
+        fire (blocks/default-state :fire)
+        hovering (entity :blaze [10.5 67.0 8.5] :entity/health 20.0)
+        floor-blocks {[10 63 8] brick [11 63 8] brick [11 64 8] fire}
+        w (assoc (standing {7 hovering})
+                 :world/chunks {[0 0] (world/column floor-blocks)}
+                 :time/now 100000)
+        dig {:intent/kind :dig :intent/target [11 64 8] :intent/for :fire-out}]
+    (is (= [11 64 8] (blaze/blaze-fire w))
+        "fire on the floor within 2 blocks of the hovering blaze")
+    (is (nil? (blaze/commit-fight w)) "no fight committed while fire burns below")
+    (is (= dig (next-intent w)) "punched before the swing")))
 
