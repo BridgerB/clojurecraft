@@ -3154,3 +3154,31 @@
       (is (= :tunnel-to (:intent/kind (plan/next-intent inside row plan/goals)))
           "the hunt tunnels out along the trail, no stairs-up into the room"))
     (is (nil? (pearls/room-exit outside)) "outside the room: nothing to leave")))
+
+(deftest a-walk-that-sets-only-its-heading-is-turned-from-a-calm-endermans-eyes
+  ;; pearl-fight-p jobs 2 and 3 (plan run 41256381552, probe 41268180994): 20 of 22 endermen turned
+  ;; angry during a :walk whose look stared at their head for 8 to 13 ticks before, at 5 to 47 blocks
+  ;; (job 2 tick 1908: look [61.3 -17.3] at 5 blocks); look-off only turned an explicit
+  ;; :control/look, and a walk sets only :control/yaw
+  (let [calm (enderman [14.5 64.0 8.5])
+        w0 (standing {7 calm})
+        eye (game/eye w0)
+        [yaw pitch] (physics/look-at eye (mob/head :enderman [14.5 64.0 8.5]))
+        walking (-> w0
+                    (assoc :player/look [yaw pitch])
+                    (assoc :player/controls {:control/yaw yaw :control/forward? true})
+                    (assoc :plan/intent
+                           {:intent/kind :walk
+                            :intent/target [20 64 8]
+                            :intent/for :pearls
+                            :intent/status :active}))
+        out (plan/steer walking row)]
+    (is (mob/stared? (pearls/sight-fn w0) eye [yaw pitch] [14.5 64.0 8.5])
+        "the heading stares at it")
+    (is (= [yaw 90.0] (get-in out [:player/controls :control/look])) "turned straight down")
+    (is (:control/forward? (:player/controls out)) "still walking")
+    (testing "a heading away from it is left alone"
+      (let [away (-> walking
+                     (assoc :player/look [(+ yaw 180.0) 0.0])
+                     (assoc-in [:player/controls :control/yaw] (+ yaw 180.0)))]
+        (is (nil? (get-in (plan/steer away row) [:player/controls :control/look])))))))

@@ -2451,7 +2451,15 @@
   ;; one two or three blocks off on a walk or a tunnel, out of the burrow, and were slain in the
   ;; open. In the end a stare by chance is what the hunt wants: the enderman comes to the sword
   [world _]
-  (let [look (:control/look (:player/controls world))
+  (let [controls (:player/controls world)
+        ;; a walk sets only :control/yaw: the look it leaves is that heading and the pitch the bot
+        ;; had, which stares at an enderman straight ahead. Pearl-fight-p jobs 2 and 3 (plan run
+        ;; 41256381552, probe 41268180994): 20 of 22 enderman angers came on a walk with the look in
+        ;; the stare cone 8 to 13 ticks before, at 5 to 47 blocks
+        [pyaw ppitch] (:player/look world)
+        look (or (:control/look controls)
+                 (when (:control/yaw controls) [(:control/yaw controls) (or ppitch 0.0)])
+                 (when pyaw [pyaw (or ppitch 0.0)]))
         home (:pearls/shelter world)
         world (cond-> (relocation (track-gain (track-angry (uncovered-log world))))
                 (shot-at? world) (assoc :pearls/shot-at-ms (:time/now world 0)))]
@@ -2459,7 +2467,11 @@
               (= :provoke (:intent/kind (:plan/intent world)))
               (and home (= home (intent/feet world))))
           world
-          :else (assoc-in world [:player/controls :control/look] (look-off world look)))))
+          :else
+          (let [off (look-off world look)]
+            (if (and (nil? (:control/look controls)) (= off look))
+              world
+              (assoc-in world [:player/controls :control/look] off))))))
 
 (defn beset?
   "Does an angry enderman (entity/creepy?), blacklisted or not, stand within strike-range of the
