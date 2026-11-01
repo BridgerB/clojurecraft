@@ -351,6 +351,7 @@
                                          (<= (physics/distance pos (:entity/pos e)) 16.0))]
                           e))
          :watchers (count (blaze/watchers after))
+         :pocket (blaze/pocket-state after)
          :pos (some->> pos
                        (mapv #(long (math/round (double %)))))
          :intent (select-keys (:plan/intent after)

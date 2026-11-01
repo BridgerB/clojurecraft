@@ -325,3 +325,5 @@ Cause of the z13 jobs 4 and 6 holds (a regression from `sealed?` reading true fo
 `:pocket-hold` logs one `pocket-hold start|end` line (`pocket-line`): position, hp, fire, cell, `sealed?`, `can-seal?`, counts of open, wanted and placed cells, unsealable, failed, unlayable and `seal-failed-at`, so a hold under fireballs shows why no `:seal` was chosen. Logging only.
 
 The lure (z13, lead): a crowd of 4 to 8 blazes within 8 no longer ends a sortie (and with it the peek) unless they press the bot (struck within press-ms); more than `sortie-swarm` (8) within 8 ends it hit or not. The sortie stays at the mouth, a blaze that comes to it is fought alone; the first hits end it and the pocket is behind. z12 job 4 had 3 to 9 blazes in sight for 69 minutes and none shot.
+
+`pocket-state` is the held pocket as data (in?, sealed, can-seal, open, wanted, placed, unsealable, unlayable, failed, what `hold-intent` would do, pressed, a blaze in reach): the `pocket-hold start|end` log line prints it, and the sim race's TRACE lines carry it as `:pocket` (simfort-peek 41251085606 had 8 deaths in a `:pocket-hold` at [310.2 78 244.5] and no way to tell sealed from open).

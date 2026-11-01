@@ -2099,26 +2099,38 @@
 
 ;; ---------------------------------------------------------------- the :pocket-hold intent
 
+(defn pocket-state
+  "The held pocket as the hold reads it, a map (data, no effect on one), or nil with no site: whether the
+   feet are in it, sealed?, can-seal?, the cells open (wherever the body stands), wanted (the body
+   leaves free) and placed, unsealable, unlayable, the cells failed, what hold-intent would do now and
+   whether the bot is pressed. A hold under fireballs shows by it why no :seal was chosen
+   (blaze-race-z13 jobs 4 and 6, simfort-peek 41251085606)."
+  [world]
+  (when-let [site (:pocket/site world)]
+    (let [c (:pocket/cell site)]
+      {:in? (pocket/in? world)
+       :cell c
+       :sealed (pocket/sealed? world site)
+       :can-seal (when c (pocket/can-seal? world site))
+       :open (when c (count (pocket/open-seal-cells world c)))
+       :wanted (when c (count (pocket/wanted-seal-cells world c)))
+       :placed (count (:pocket/placed site))
+       :unsealable (boolean (:pocket/unsealable? site))
+       :unlayable (when c (pocket/unlayable? world c))
+       :failed (count (:pocket/failed world))
+       :seal-failed-at (:pocket/seal-failed-at world)
+       :hold (:intent/kind (hold-intent world))
+       :pressed (pressed? world)
+       :reach (some? (reach-blaze world))})))
+
 (defn pocket-line
-  "The log line for a hold that starts or ends (a decision, no effect on one): the pocket's state as the
-   hold reads it, so a hold under fireballs shows why no :seal was chosen (blaze-race-z13 jobs 4 and 6)."
+  "The log line for a hold that starts or ends: position, health, fire and the pocket-state."
   [world what]
-  (let [site (:pocket/site world)
-        c (:pocket/cell site)]
-    (str "pocket-hold " what
-         " pos " (mapv #(format "%.1f" (double %)) (:player/pos world))
-         " hp " (:player/health world)
-         " fire " (boolean (:player/on-fire? world))
-         " cell " (pr-str c)
-         " sealed " (pocket/sealed? world site)
-         " can-seal " (when c (pocket/can-seal? world site))
-         " open " (when c (count (pocket/open-seal-cells world c)))
-         " wanted " (when c (count (pocket/wanted-seal-cells world c)))
-         " placed " (count (:pocket/placed site))
-         " unsealable " (boolean (:pocket/unsealable? site))
-         " failed " (count (:pocket/failed world))
-         " unlayable " (when c (pocket/unlayable? world c))
-         " seal-failed-at " (:pocket/seal-failed-at world))))
+  (str "pocket-hold " what
+       " pos " (mapv #(format "%.1f" (double %)) (:player/pos world))
+       " hp " (:player/health world)
+       " fire " (boolean (:player/on-fire? world))
+       " " (pr-str (pocket-state world))))
 
 (defmethod intent/run :pocket-hold
   ;; {:intent/kind :pocket-hold :intent/heal-to h}: stand still in the pocket, out of every line but the
