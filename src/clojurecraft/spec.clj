@@ -218,6 +218,10 @@
 (s/def :forage/life nat-int?)
 (s/def :hunt/forage
   (s/keys :req [:forage/since :forage/leg] :opt [:forage/retry-at :forage/phase :forage/life]))
+(s/def :batch/smelt keyword?)
+(s/def :batch/makes pos-int?)
+(s/def :batch/at int?)
+(s/def :furnace/batch (s/keys :req [:batch/smelt :batch/makes :batch/at]))
 (s/def :trail/target (s/coll-of number? :kind vector? :count 3))
 (s/def :trail/cells (s/coll-of ::block-pos :kind vector?))
 (s/def :trail/dead (s/coll-of ::block-pos :kind set?))

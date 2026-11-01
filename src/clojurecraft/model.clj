@@ -354,6 +354,12 @@
    [:forage/retry-at
     "ms before which the search looks for no leg: set when no heading had a route at any reach (hunt/forage-retry-ms on)"
     "inside :hunt/forage, after such a look"]
+   [:furnace/batch
+    "the batch a smelt loaded into a furnace and has not yet taken: {:batch/smelt :batch/makes :batch/at}; make/collect-batch goes back to the furnace for it when the smelt was interrupted, since the planner counts the inventory only (issue #686)"
+    "after a :smelt's :load stage; gone once its :settle has emptied the furnace or its :close"]
+   [:batch/smelt "the furnace recipe id of the loaded batch" "inside :furnace/batch"]
+   [:batch/makes "the items the batch yields" "inside :furnace/batch"]
+   [:batch/at "ms the batch was loaded" "inside :furnace/batch"]
    [:fortress/trail
     "the way back a :tunnel-to to a target keeps across its tunnels: {:trail/target :trail/cells :trail/dead}; a cell no fresh step leaves is stepped back from to the last cell, never entered again (fortress/step-back, issue #502); another target starts a new one"
     "after a :tunnel-to chose a fresh step or a step back"]
