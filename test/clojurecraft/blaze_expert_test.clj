@@ -75,6 +75,10 @@
   (testing "the walk in is a walk to the stand"
     (is (= {:intent/kind :walk :intent/target [4 5 6] :intent/for :fight :expert/why :approach}
            (expert/choose (sit {:phase :approach :walk-to [4 5 6]})))))
+  (testing "a stand no walk reaches is tunnelled to"
+    (is (= {:intent/kind :tunnel-to :intent/target [4 5 6] :expert/why :approach}
+           (expert/choose (sit {:phase :approach
+                                :tunnel {:intent/kind :tunnel-to :intent/target [4 5 6]}})))))
   (testing "every stand tried and no pocket is a live stop"
     (let [act (expert/choose (sit {:phase :approach :approach 6}))]
       (is (:expert/stop act))

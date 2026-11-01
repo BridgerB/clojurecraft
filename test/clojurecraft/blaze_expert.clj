@@ -6,8 +6,8 @@
    Nothing here is the bot's decision code.
 
    The plan: wear the race kit, walk into a spawner's wake, dig a 1x2 pocket whose one window
-   faces the spawner, and seal it. A blaze that cannot see flies in at 0.2 blocks a tick and
-   strikes through walls; one that can see hovers and shoots. The sword band (farther than a
+   faces the spawner, and seal it. A blaze's melee is a touch with a clear line, so a sealed
+   wall holds; one that can see hovers and shoots. The sword band (farther than a
    blaze's reach, near enough to hit) is about a block wide, and a cobble seal opens only when
    the dig sends FINISH, settle plus the finish margin, about a second after the decision. So
    the window is opened only when the blaze's closing, at full speed and then at the speed it
@@ -29,6 +29,7 @@
             [clojurecraft.drops :as drops]
             [clojurecraft.eat :as eat]
             [clojurecraft.food :as food]
+            [clojurecraft.fortress :as fortress]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
@@ -56,7 +57,12 @@
 (def ^:private wake-min 6.0) ; blocks from the spawner a pocket cell must stand, outside the spawn box
 (def ^:private rod-reach 3.0) ; blocks: a rod is taken from the window, not chased across the room
 (def ^:private near-dy 8) ; blocks of height from the spawner the approach still counts as near
-(def ^:private approaches "Stand distances from the spawner, tried in order." [10 8 12 6 14 16])
+(def ^:private stand-near 8.0) ; blocks, on the plane, a stand must be from the spawner
+(def ^:private stand-far 12.0) ; and no farther: close enough to dig a pocket in the wake
+(def ^:private stand-below 8) ; levels under the spawner a floor may be
+(def ^:private stand-above 4) ; levels over it
+(def ^:private stand-attempts 6) ; stands tried before the expert stops alive
+(def ^:private stand-searches 6) ; path plans for the nearest stands: a walk is preferred to a tunnel
 
 (def ^:private armour-pieces
   "Worn before any fight, in the order they are put on."
@@ -211,11 +217,15 @@
   {:intent/kind :walk :intent/target (:retreat s) :intent/for :retreat :expert/why :retreat})
 
 (defn- approach-act
-  "Walk to the next stand, or stop alive when every stand has been tried."
+  "Walk to the next stand, tunnel when no walk reaches it, or stop alive when every stand
+   has been tried."
   [s]
-  (if (>= (:approach s 0) (:approaches s (count approaches)))
-    {:expert/stop true :expert/why :no-pocket}
-    {:intent/kind :walk :intent/target (:walk-to s) :intent/for :fight :expert/why :approach}))
+  (cond (>= (:approach s 0) (:approaches s stand-attempts))
+        {:expert/stop true :expert/why :no-pocket}
+        (:tunnel s) (assoc (:tunnel s) :expert/why :approach)
+        (:walk-to s)
+        {:intent/kind :walk :intent/target (:walk-to s) :intent/for :fight :expert/why :approach}
+        :else {:expert/why :wait}))
 
 (defn- cover
   "What danger does: seal when the pocket is open, eat when sealed and hungry and quiet,
@@ -363,13 +373,25 @@
             dy (abs (- (physics/y-of pos) (double (second spawner))))]
         (and (<= wake-min h (:wake mob/spawner)) (<= dy near-dy))))))
 
+(defn- at-stand?
+  "Is the bot at the chosen stand: within a walk's goal of it and about its height, or within
+   the reach the tunnel to it ends at (fortress/arrived?)?"
+  [world]
+  (when-let [cell (:expert/stand world)]
+    (when-let [pos (:player/pos world)]
+      (or (fortress/arrived? world cell (:expert/stand-reach world 0.5))
+          (and (<= (physics/horizontal-distance pos (physics/centre cell)) intent/goal-range)
+               (<= (abs (- (physics/y-of pos) (double (second cell)))) 1.0))))))
+
 (defn- phase-of
   "What the bot is doing: armour, the hotbar, the walk in, the dig, or the hold."
   [world spawner]
   (cond (missing-armour world) :wear
         (not (:expert/armed? world)) :arm
         (in-expert-pocket? world) :hold
-        (and (:expert/site world) (near-spawner? world spawner)) :pocket
+        ;; a site is chosen at the stand. The stand is in the ring, or on the spawner when
+        ;; the ring had no floor, which is inside wake-min and would otherwise stay :approach.
+        (and (:expert/site world) (or (near-spawner? world spawner) (at-stand? world))) :pocket
         :else :approach))
 
 (defn- opening-dir
@@ -442,23 +464,59 @@
                                frontier)]
                 (recur next (into seen next) (inc depth) (+ visited (count next)))))))))
 
-(defn- approach-cell
-  "The cell at dist from the spawner toward the feet, or away when the feet are already
-   closer. Its y is the spawner's."
-  [feet spawner dist]
-  (let [[fx _ fz] feet
-        [sx sy sz] spawner
-        dx (- fx sx)
-        dz (- fz sz)
-        h (math/hypot dx dz)
-        k (if (pos? h) (/ (- h dist) h) 0.0)]
-    [(long (math/floor (+ fx (* k (- sx fx))))) sy (long (math/floor (+ fz (* k (- sz fz)))))]))
+(defn- stand-eye
+  "The eye of a player standing in cell."
+  [[x y z]]
+  (physics/eye [(+ (double x) 0.5) (double y) (+ (double z) 0.5)]))
 
-(defn- at-stand?
-  "Is the bot within a walk's goal of the stand dist from the spawner?"
-  [world spawner dist]
-  (when-let [pos (:player/pos world)]
-    (<= (abs (- (physics/horizontal-distance pos (cell-centre spawner)) dist)) intent/goal-range)))
+(defn- sees-spawner?
+  "Is the line from a player in cell to the point a block over the spawner clear? The
+   spawner's own cell is solid, so the line aims where its blazes appear."
+  [world cell spawner]
+  (combat/clear? world (stand-eye cell) (update (physics/centre spawner) 1 + 1.0)))
+
+(defn- stand-band
+  "Standable cells in the ring around the spawner, nearest the feet first, with a clear
+   line to it. Cells already tried are left out."
+  [world spawner]
+  (let [[sx sy sz] spawner
+        at (path/cells world)
+        feet (intent/feet world)
+        tried (:expert/tried world #{})]
+    (->> (for [y (range (- sy stand-below) (+ sy stand-above 1))
+               x (range (- sx 12) (+ sx 13))
+               z (range (- sz 12) (+ sz 13))
+               :let [c [x y z]
+                     d (physics/horizontal-distance (physics/centre c) (physics/centre spawner))]
+               :when (and (<= stand-near d stand-far)
+                          (not (contains? tried c))
+                          (path/standable? at c)
+                          (sees-spawner? world c spawner))]
+           c)
+         (sort-by #(physics/distance (physics/centre feet) (physics/centre %)))
+         vec)))
+
+(defn- tunnel-intent
+  "The fortress's tunnel to cell, ending within reach of it. The same shape the bot's
+   :tunnel-to uses: a few steps, no climb first, a floor across a gap."
+  [cell reach]
+  {:intent/kind :tunnel-to
+   :intent/target cell
+   :intent/steps fortress/steps-per-tunnel
+   :intent/reach reach
+   :intent/climb 0
+   :intent/bridge? true})
+
+(defn- pick-stand
+  "A stand in the ring: the nearest of the nearest few that the path planner can reach, else
+   the nearest, to be tunnelled to. With none in the ring, the spawner itself."
+  [world spawner]
+  (let [band (stand-band world spawner)
+        walk (some (fn [c] (when (intent/routable? world {:intent/kind :walk :intent/target c}) c))
+                   (take stand-searches band))]
+    (cond walk {:cell walk :how :walk :reach 0.5}
+          (first band) {:cell (first band) :how :tunnel :reach 0.5}
+          :else {:cell spawner :how :tunnel :reach 2.0})))
 
 (defn- back-cell
   "The cell through the pocket's back wall, opposite the window."
@@ -499,8 +557,10 @@
     (fn [c] (if (contains? open c) false (solid? c)))))
 
 (defn- blaze-view
-  "What the policy needs of one blaze mob, or nil when it is too far to test."
-  [_sim solid? player mob]
+  "What the policy needs of one blaze mob, or nil when it is too far to test. Melee is the
+   strike that would land now (boxes touching, the real line clear), not a reach of two
+   through the seal. see? is the line with the seal's placed cells counted open."
+  [sim solid? player mob]
   (when-let [pos (:pos mob)]
     (let [dist (physics/distance pos player)]
       (when (<= dist sight-range)
@@ -508,7 +568,7 @@
          :pos pos
          :dist dist
          :box (mob/box-distance (physics/eye player) :blaze pos)
-         :melee? (mob/in-reach? :blaze pos player)
+         :melee? (mob/can-strike? (sim/solid-fn sim) :blaze pos player)
          :shot-step (:shot-step mob 0)
          :shot-at (:shot-at mob)
          :see? (mob/sight? solid? (mob/head :blaze pos) (physics/eye player))}))))
@@ -527,11 +587,17 @@
            vec))))
 
 (defn- any-melee?
-  "Is any mob, blaze or not, inside its reach of the sim's player?"
+  "Would any mob's hit land on the sim's player? A flier only when its boxes touch with a
+   clear line; anything else within its reach."
   [sim]
-  (let [player (:sim/player-pos sim)]
+  (let [player (:sim/player-pos sim)
+        solid? (sim/solid-fn sim)]
     (boolean (and player
-                  (some (fn [[_ m]] (mob/in-reach? (:type m) (:pos m) player)) (:sim/mobs sim))))))
+                  (some (fn [[_ m]]
+                          (if (:flies (mob/kinds (:type m)))
+                            (mob/can-strike? solid? (:type m) (:pos m) player)
+                            (mob/in-reach? (:type m) (:pos m) player)))
+                        (:sim/mobs sim))))))
 
 (defn- rod-drop
   "The blaze-rod drop within rod-reach of the feet that is not over a void, or nil. The
@@ -573,8 +639,9 @@
      :sealed? (boolean (and site (pocket/sealed? world site)))
      :can-seal? (boolean (and site (pocket/can-seal? world site)))
      :wearing (worn-set world)
-     :walk-to (when (and (:player/pos world) spawner (< idx (count approaches)))
-                (approach-cell (intent/feet world) spawner (nth approaches idx)))
+     :walk-to (when (= :walk (:expert/stand-how world)) (:expert/stand world))
+     :tunnel (when (= :tunnel (:expert/stand-how world))
+               (tunnel-intent (:expert/stand world) (:expert/stand-reach world 0.5)))
      :retreat (retreat-cell world sim)
      :back (back-cell world)
      :blazes (or blazes [])
@@ -587,7 +654,7 @@
      :rod? (some? drop)
      :collect-at (when drop (mapv #(long (math/floor %)) drop))
      :approach idx
-     :approaches (count approaches)
+     :approaches stand-attempts
      :spawner spawner}))
 
 ;; ---------------------------------------------------------------- driving the intents
@@ -631,11 +698,23 @@
     (assoc world :expert/armed? true)
     world))
 
+(defn- give-up-stand
+  "This stand has no pocket, or the way to it failed: remember the cell and try the next."
+  [world cell]
+  (cond-> (-> world
+              (dissoc :expert/stand :expert/stand-how :expert/stand-try :expert/stand-reach)
+              (update :expert/approach (fnil inc 0)))
+    cell (update :expert/tried (fnil conj #{}) cell)))
+
 (defn- note-approach
-  "A walk that failed advances to the next stand."
+  "A walk or a tunnel to the stand that failed advances to the next stand. A retreat's
+   walk is not one of those."
   [world prev]
-  (if (and (= :walk (:intent/kind prev)) (intent/failed? prev))
-    (update world :expert/approach (fnil inc 0))
+  (if (and prev
+           (intent/failed? prev)
+           (or (= :tunnel-to (:intent/kind prev))
+               (and (= :walk (:intent/kind prev)) (= :fight (:intent/for prev)))))
+    (give-up-stand world (:intent/target prev))
     world))
 
 (defn- note-pocket
@@ -644,9 +723,7 @@
   (if (and (= :pocket (:intent/kind prev))
            (or (intent/done? prev) (intent/failed? prev))
            (not (in-expert-pocket? world)))
-    (-> world
-        (dissoc :expert/site)
-        (update :expert/approach (fnil inc 0)))
+    (give-up-stand (dissoc world :expert/site) (:expert/stand world))
     world))
 
 (defn- note-unseal
@@ -667,25 +744,51 @@
         idx (:expert/approach world 0)]
     (cond (or (nil? (:player/pos world)) (nil? spawner)) world
           (in-expert-pocket? world) (assoc world :expert/approach 0)
-          (or (:expert/site world) (>= idx (count approaches)) (= idx (:expert/searched world)))
-          world
-          (at-stand? world spawner (nth approaches idx))
+          (or (:expert/site world) (>= idx stand-attempts) (= idx (:expert/searched world))) world
+          (at-stand? world)
           (if-let [site (find-site world spawner)]
             (assoc world :expert/site site :expert/searched idx)
             (-> world
                 (assoc :expert/searched idx)
-                (update :expert/approach (fnil inc 0))))
+                (give-up-stand (:expert/stand world))))
           :else world)))
+
+(defn- ensure-stand
+  "Choose the stand once for this attempt. A routable cell is walked; anything else in the
+   ring, or the spawner when the ring is empty, is tunnelled to."
+  [world]
+  (let [idx (:expert/approach world 0)
+        sp (:expert/spawner world)]
+    (cond (or (not= :approach (phase-of world sp))
+              (nil? sp)
+              (nil? (:player/pos world))
+              (>= idx stand-attempts)
+              (= idx (:expert/stand-try world)))
+          world
+          :else
+          (let [{:keys [cell how reach]} (pick-stand world sp)]
+            (assoc world
+                   :expert/stand cell
+                   :expert/stand-how how
+                   :expert/stand-reach reach
+                   :expert/stand-try idx)))))
 
 (defn- drive
   "One tick of the expert: choose, and run that intent, keeping it while it is the same act."
   [world sim event]
   (let [running (:plan/intent world)
-        world (if (= :unseal (:intent/kind running))
+        world (if (and running
+                       (intent/failed? running)
+                       (or (= :tunnel-to (:intent/kind running))
+                           (and (= :walk (:intent/kind running)) (= :fight (:intent/for running)))))
+                (note-approach world running)
+                world)
+        world (if (= :unseal (:intent/kind (:plan/intent world)))
                 world
                 (dissoc world :expert/unseal-at :expert/unseal-dist))
         world (-> world
                   note-armed
+                  ensure-stand
                   seek)
         sit (situation world sim)
         want (choose sit)
@@ -704,7 +807,6 @@
           :else
           (let [world (-> (drop-intent world)
                           (assoc :expert/why (:expert/why want))
-                          (note-approach i)
                           (note-pocket i)
                           (note-unseal want sit))]
             (if (:intent/kind want)
