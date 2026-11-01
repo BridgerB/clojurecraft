@@ -181,14 +181,20 @@
   (let [{:pocket/keys [cell] :as site} (:pocket/site world)]
     (boolean (and site (= cell (intent/feet world)) (valid? world (path/cells world) site)))))
 
+(declare unlayable?)
+
 (defn here-site
-  "The site that seals the cell the feet stand in, in place, or nil when it is not standable: a
-   cell with no dig, sealed by seal-ops on every open side and over the head. What a :pocket falls
-   back to when no way to a pocket is found (blaze-race-j geared 4 and race 2: three
-   :pocket no-path failures in 0.4 s ended the run at 17 hp)."
+  "The site that seals the cell the feet stand in, in place, or nil when it is not standable or
+   cannot be sealed (unlayable?): a cell with no dig, sealed by seal-ops on every open side and
+   over the head. What a :pocket falls back to when no way to a pocket is found (blaze-race-j
+   geared 4 and race 2: three :pocket no-path failures in 0.4 s ended the run at 17 hp). An open
+   landing is standable and unlayable (the roof has nothing to click). Choosing it anyway is the
+   stall: z16 job 5 (plan 41276280629) alternated that :pocket with :tunnel-to [2210 60 1793]
+   every tick from 233 s, still at [2148 72 1763], because steer drops the site the tick it is
+   entered and the row chooses it again."
   [world]
   (let [c (intent/feet world)]
-    (when (path/standable? (path/cells world) c)
+    (when (and (path/standable? (path/cells world) c) (not (unlayable? world c)))
       {:pocket/cell c :pocket/stand nil :pocket/dig [] :pocket/placed [] :pocket/here? true})))
 
 ;; ---------------------------------------------------------------- sealing
@@ -403,20 +409,13 @@
     (:pocket/site world) (assoc-in [:pocket/site :pocket/unsealable?] true)
     true intent/done))
 
-(defmethod intent/run :seal
-  ;; {:intent/kind :seal}: place seal-item in every open side of the pocket at the feet, at the feet
-  ;; and the head, and over the head when it has no roof, standing in it; the cells are noted in the
-  ;; held site (:pocket/placed) from the first tick, so sealed? and the unseal know them. Done when
-  ;; they are all solid.
-  [world i event]
-  (let [site (:pocket/site world)
-        ;; the held cells are filtered each tick, not only when first noted: blaze-race-x job 5
-        ;; (build: placing [2151 73 1757] refused with the body in it) refused two seals in a row
-        ;; with seal-cells already clear of the body
-        cells (clear-of-body world
-                             (:pocket/cell site)
-                             (distinct (concat (:pocket/placed site)
-                                               (seal-cells world (:pocket/cell site)))))
+(defn seal-at
+  "One tick of a :seal whose site names cell. The held cells are filtered each tick, not only when
+   first noted: blaze-race-x job 5 (build: placing [2151 73 1757] refused with the body in it)
+   refused two seals in a row with seal-cells already clear of the body."
+  [world i event site cell]
+  (let [cells
+        (clear-of-body world cell (distinct (concat (:pocket/placed site) (seal-cells world cell))))
         world (cond-> world
                 (and site (not= cells (:pocket/placed site)))
                 (assoc-in [:pocket/site :pocket/placed] cells))]
@@ -448,6 +447,22 @@
                (seal-ops (:pocket/cell site) cells (or (seal-filler world (count cells)) seal-item))
                event
                true)))))
+
+(defmethod intent/run :seal
+  ;; {:intent/kind :seal}: place seal-item in every open side of the pocket at the feet, at the feet
+  ;; and the head, and over the head when it has no roof, standing in it; the cells are noted in the
+  ;; held site (:pocket/placed) from the first tick, so sealed? and the unseal know them. Done when
+  ;; they are all solid. No cell (steer has dropped :pocket/site, or it never had one) fails
+  ;; :no-cell: seal-cells would call pocket/plus on nil and kill the bot's loop (z16 fold,
+  ;; probes 41303425892 and 41304181213).
+  [world i event]
+  (let [site (:pocket/site world)
+        cell (:pocket/cell site)]
+    (if-not cell
+      (-> world
+          (assoc :player/controls {})
+          (intent/fail :no-cell))
+      (seal-at world i event site cell))))
 
 (def reopen-ms 1500) ; ms after a hit within which an opening pocket is shut again, not opened further
 

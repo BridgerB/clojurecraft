@@ -150,6 +150,35 @@
           (is (pocket/can-seal? (assoc picked :pocket/seal-failed-at 1000 :time/now 70000)
                                 site)))))))
 
+(deftest here-site-is-the-feet-only-when-the-cell-can-be-sealed
+  ;; z16 job 5 stood on an open landing: standable, and the roof had nothing to click. Choosing
+  ;; that cell is the stall. A roofed cell with one opening is still a site.
+  (let [open (world-of {})]
+    (is (path/standable? (path/cells open) [8 64 8]))
+    (is (true? (pocket/unlayable? open [8 64 8])))
+    (is (nil? (pocket/here-site open)) "open air over a floor: the roof has nothing to click"))
+  (let [w (world-of walled)
+        site (pocket/here-site w)]
+    (is (= [8 64 8] (:pocket/cell site)))
+    (is (true? (:pocket/here? site)))
+    (is (false? (pocket/unlayable? w [8 64 8])))))
+
+(deftest a-seal-with-no-cell-fails-instead-of-crashing
+  ;; z16 fold (probes 41303425892 and 41304181213): :seal ran after steer dropped :pocket/site,
+  ;; and pocket/plus on the nil cell threw and killed the loop.
+  (let [tick {:event/kind :tick :event/now 1}
+        seal {:intent/kind :seal :intent/status :active :intent/id 1}
+        run (fn [w] (intent/run (assoc w :plan/intent seal) seal tick))]
+    (testing "no site at all"
+      (let [ran (run (world-of {}))]
+        (is (intent/failed? (:plan/intent ran)))
+        (is (= :no-cell (:intent/reason (:plan/intent ran))))
+        (is (= {} (:player/controls ran)))))
+    (testing "a site that names no cell"
+      (let [ran (run (assoc (world-of {}) :pocket/site {:pocket/cell nil}))]
+        (is (intent/failed? (:plan/intent ran)))
+        (is (= :no-cell (:intent/reason (:plan/intent ran))))))))
+
 (deftest a-seal-that-never-finishes-is-given-up
   ;; blaze-race-t job 5: :seal ran 68 minutes on a placement refused with the body in the cell
   (let [site {:pocket/cell [8 64 8] :pocket/stand nil :pocket/dig [] :pocket/placed [[7 64 8]]}
