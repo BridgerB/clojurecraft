@@ -310,6 +310,15 @@
         "a swim already begun is finished")
     (is (not (hunt/foraging? (assoc w :plan/intent {:intent/kind :flee :intent/status :active})))
         "so is a flee")
+    (is (not (hunt/foraging? (assoc w :plan/intent {:intent/kind :smelt :intent/status :active})))
+        "a smelt in the furnace is waited out, not left with the iron inside")
+    (is (not
+         (hunt/foraging?
+          (assoc w :plan/last {:intent/kind :dig :intent/status :done :intent/for :dig-gravel})))
+        "a dug block's drop is collected before the search")
+    (is (hunt/foraging?
+         (assoc w :plan/last {:intent/kind :dig :intent/status :done :intent/for :hunt}))
+        "the hunt's own dig is no reason")
     (is (not (hunt/foraging? (assoc w :player/in-water? true)))
         "in the water: the swim out comes first")
     (is (not (hunt/foraging?
