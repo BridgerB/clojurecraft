@@ -2946,6 +2946,39 @@
             [:fly pos]
             [1 2 3])))
 
+(defn set-fire
+  "The model with a fire block in cell if it is air over a solid floor (a small fireball's end,
+   FireBlock canSurvive on the floor), told to the client: for good over netherrack or magma, else
+   until fire/block-until (kept in :sim/fires)."
+  [sim cell]
+  (let [below (mapv + cell [0 -1 0])
+        base (some-> (block-at sim below)
+                     blocks/name-of)
+        id (blocks/default-state :fire)]
+    (cond (not (and (= :air (blocks/name-of (block-at sim cell)))
+                    (some-> (block-at sim below)
+                            blocks/solid?)))
+          sim
+          :else
+          (let [until (fire/block-until base (:sim/now sim))]
+            (cond-> (-> sim
+                        (assoc-in [:sim/placed cell] id)
+                        (send {:packet/name :block-update :pos cell :state id}))
+              until (assoc-in [:sim/fires cell] until))))))
+
+(defn tick-fires
+  "One game tick of the fire blocks fireballs lit (:sim/fires {cell ms}): one past its time is air
+   again, told to the client."
+  [sim]
+  (reduce (fn [sim [cell until]]
+            (cond-> sim
+              (>= (:sim/now sim) until)
+              (-> (update :sim/fires dissoc cell)
+                  (assoc-in [:sim/placed cell] 0)
+                  (send {:packet/name :block-update :pos cell :state 0}))))
+          sim
+          (:sim/fires sim)))
+
 (defn tick-fireballs
   "One game tick of every small fireball in flight (fireball-path), each move told (tell-move): one
    that hits the player hurts it by its blaze's shot damage through the armour, sets it alight for
@@ -2967,7 +3000,11 @@
                       (hurt (armoured sim (mob/scaled (:shoot k) (:sim/difficulty sim))) true kind)
                       (tell-damage :fireball owner fid)
                       (ignite-player (:ignites k)))
-                    (or (= :wall what) old?) (gone sim)
+                    (= :wall what)
+                    (-> sim
+                        gone
+                        (set-fire (mob/cell-of at)))
+                    old? (gone sim)
                     :else
                     (-> sim
                         (tell-move fid pos at)
@@ -3193,6 +3230,7 @@
       tick-eyes
       tick-mobs
       tick-fireballs
+      tick-fires
       keep-alive
       pick-up
       sync-health))

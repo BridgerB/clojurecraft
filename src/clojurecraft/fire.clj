@@ -25,6 +25,18 @@
   (let [until (+ now ms)] (if fire (update fire :until max until) {:until until :next now})))
 
 
+(def block-ms 3000)                   ; a fire block on a floor that does not burn for ever goes out after about this long (FireBlock.tick: age past 3 with nothing to burn)
+(def eternal-bases
+  "The blocks a fire on top of them never leaves (the infiniburn_nether tag): netherrack and magma."
+  #{:netherrack :magma_block})
+
+(defn block-until
+  "The ms a fire block lit at now over a floor of block name base goes out at, nil for ever: on
+   netherrack and magma it burns for good (the fire a fireball leaves in a fortress's netherrack,
+   which lights whoever walks through it again), else block-ms on."
+  [base now]
+  (when-not (contains? eternal-bases base) (+ now block-ms)))
+
 (defn flame?
   "Is block id (a state id) a fire or soul fire, whoever stands in it burns?"
   [id]

@@ -4,7 +4,8 @@
   (:require [clojure.test :refer [deftest is]]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.fire :as fire]
-            [clojurecraft.mob-test :as m]))
+            [clojurecraft.mob-test :as m]
+            [clojurecraft.sim :as sim]))
 
 (defn burn-run
   "Run fire/tick every 50 ms from now 0 to until-ms for a fire lit at 0 for ms, {:hurts n :out-at ms}."
@@ -58,3 +59,19 @@
                 (m/ticks 2))]
     (is (some? (:sim/fire sim)))
     (is (< (:sim/health sim) 20.0))))
+
+(deftest a-fireball-against-a-wall-leaves-fire-on-the-floor-for-good-over-netherrack
+  (let [rack (blocks/default-state :netherrack)
+        flame (blocks/default-state :fire)
+        on-rack (-> (m/arena {[5 63 0] rack} {} :normal m/night [])
+                    (sim/set-fire [5 64 0])
+                    (m/ticks 200))
+        on-stone (-> (m/arena {} {} :normal m/night [])
+                     (sim/set-fire [5 64 0])
+                     (m/ticks 100))]
+    (is (= flame (get-in on-rack [:sim/placed [5 64 0]])) "still burning after ten seconds")
+    (is (empty? (:sim/fires on-rack)) "no end set")
+    (is (zero? (get-in on-stone [:sim/placed [5 64 0]]))
+        "stone: air again after about three seconds")
+    (is (some #(= flame (:state %)) (m/said on-stone :block-update))
+        "the client was told of both")))

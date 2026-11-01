@@ -8,6 +8,11 @@ status: verified
 lastUpdated: 2026-10-22
 verifiedAgainst: HEAD
 sourceRefs:
+  - src/clojurecraft/sim.clj#defn volley
+  - src/clojurecraft/sim.clj#defn tick-fireballs
+  - src/clojurecraft/sim.clj#defn fly
+  - src/clojurecraft/mob.clj#defn volley-next
+  - test/clojurecraft/blaze_parity_test.clj#the-volley-matches-the-recorded-cycle-and-shot-gap
   - src/clojurecraft/fire.clj#defn tick
   - src/clojurecraft/sim.clj#defn tick-burn
   - test/clojurecraft/fire_test.clj#a-fireball-burns-five-seconds-one-health-a-second
@@ -100,11 +105,18 @@ Every mob hit, arrow and blast on the player passes through `armoured` (issue #2
 ## Fire on the player (issue #262, sim vs real blaze fights)
 The sim and the real race disagreed on stage 17 (f8b28e3: 6.8% of sim runs reached seven rods, 1.9% of real). Measured over 45 real recordings (lane 2, 1241 blazes in view, the Nether segments), burning was 1778 of 2600 hurts and 45% of all the health the blaze fights cost, and the sim had no fire at all. `fire.clj` is the rules: a small fireball's hit (`:ignites 5000` on the blaze row) sets the player on fire for five seconds (`fire/ignite`: a hurt at once, then every second, five in all, 1.0 each, `on_fire`, armour takes none), water at the feet puts it out, standing in a fire block lights it for eight seconds. `sim/tick-burn` applies it each tick (`:sim/fire`), tells the flags byte to the client (`tell-flags`, bit 0x01 of index 0, as the real server's `{0 1}` and `{0 0}`) and sends a `damage-event` for every hurt (`tell-damage`, source types `mob/damage-source` as the recordings number them: fireball 14, mob_attack 28, on_fire 31): the bot reads `:player/hurt-at` and the strike from them, which the model never sent before. `fire-test` pins them.
 
+## A blaze as the real one is (issue #262)
+Measured from the same 45 recordings (`test/clojurecraft/real_blaze.edn`, held by `blaze_parity_test`): a blaze is a flier that hovers where it first has a clear line to the player and shoots from there, flies at the player while it has none, and strikes in reach.
+- **Flight** (`sim/fly`, `mob/fly-toward`): BlazeAttackGoal. It stays while the player is in its follow range (48) with a clear line from its head to the player's eye, or in reach; otherwise it flies at the point a block over the player's feet at 0.2 a tick, along walls and never through them. `:still-blazes?` in `sim/init` keeps the old hovering-in-place for the tests that pin the bot's cover and fight, not the flight.
+- **Contact** (`:contact 6.0`, `:contact-every 20`, `:reach 2.0` in space): a separate key from `:melee`, because the bot's pack rules (`combat/melee-damage`) read `:melee` as a kind it fights in a pack and a blaze is answered by the blaze row. Recorded: 138 hits of 3.36 through 14 armour points.
+- **Volley** (`sim/volley`, `mob/volley-next`): a charge of 60 ticks (the flag at index 16 raised), three fireballs 6 ticks apart, a rest of 100: 178 ticks, the fastest recorded gap between volleys (8.9 s). The timer waits while there is no line, and a volley needs the player farther than its reach and within its range (48).
+- **Fireballs** (`sim/spawn-fireball`, `tick-fireballs`, `mob/fireball`): an entity (type small_fireball, the direction times 0.1 in its packet, its blaze as data, which is what `dodge.clj` reads) flying 0.55 a tick straight at the player's middle, a triangular error of half-width 1.1485 times the square root of the distance added on x and z (four rolls of the mobs' stream; about one fireball in five reaches the body at 10 blocks). It hurts by the blaze's shot damage through the armour, sets the player on fire, and tells a damage-event with the fireball as the direct source; at a solid cell it is gone and leaves a fire block on the floor there (`set-fire`): for good over netherrack and magma, about three seconds elsewhere (`fire/block-until`, `tick-fires`), lighting whoever stands in it.
+
 ## Fixtures
 `init`'s `:mobs [{:type kind :pos [x y z]}]` places a fixture's mobs, sent at login and never despawned; `with-mobs` does the same to a model already in play (the tests' arenas). A mob given acts with or without a difficulty (nil is Normal's damage); the player's health is told when a mob is present (`sync-health`).
 
 ## Limits
-Not modelled: pathfinding round walls for any kind but the enderman, knockback, an arrow's or fireball's flight (the damage lands as it is fired), a blast breaking blocks, an enderman's teleports out of water, rain, daylight or a non-living hurt (the model has no such hurt for it, no rain and no light; its teleports at its target are modelled, above), spiders climbing, mobs swimming, armour wearing out, `set-time` (the bot is not told the time of day), tracking range (every mob is sent however far), the Nether's hostiles outside a warped forest (`try-nether-spawn` spawns endermen on nylium and nothing else), and the biome itself (a warped forest's netherrack patches spawn nothing; a shroomlit cell spawns as a dark one does).
+Not modelled: pathfinding round walls for any kind but the enderman, knockback, an arrow's flight (the damage lands as it is fired; a blaze's fireball does fly), a blast breaking blocks, an enderman's teleports out of water, rain, daylight or a non-living hurt (the model has no such hurt for it, no rain and no light; its teleports at its target are modelled, above), spiders climbing, mobs swimming, armour wearing out, `set-time` (the bot is not told the time of day), tracking range (every mob is sent however far), the Nether's hostiles outside a warped forest (`try-nether-spawn` spawns endermen on nylium and nothing else), and the biome itself (a warped forest's netherrack patches spawn nothing; a shroomlit cell spawns as a dark one does).
 
 A respawn makes the client forget every entity, so the model tells it every mob and item again after the respawn packet (`retell-entities`, sim race 38900840841, issue #62): without it a bot that died on a stair never saw the zombie behind it, `:defend` never fought, and it died on the same stair until `:timeout`.
 
