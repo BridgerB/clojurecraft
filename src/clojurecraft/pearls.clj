@@ -196,10 +196,38 @@
                        (< (- (:time/now world 0) (:intention/at (first on-eid) 0))
                           fight-rest-ms))))))
 
+(def fight-giveups 3)                   ; fights on one enderman cut or failed within fight-giveup-ms, after which it is fought no more until it is in reach
+(def fight-giveup-ms 600000)           ; ms (ten minutes) over which those fights are counted
+(def fight-retry-ms 30000)             ; ms after a fight on an enderman failed that it is not fought again until within the sword's reach
+
+(defn unfightable?
+  "Is enderman e (id eid) no fight's target now: fought out (fought-out?), given up by a fight's
+   engage as not strikable (combat/given-up?: it is not within the sword's reach from here), or
+   failed a fight less than fight-retry-ms ago and not within the sword's reach now? A fight that
+   fails (:unreachable) blacklists its target, and an angry one is fought regardless of the
+   blacklist: runs 2 and 3 of gym plan run 40775811459 failed :fight :unreachable eight times and
+   held a fight thirteen minutes.
+   Run 4 of gym plan run 40747177526 (issue #263, pearls-12) planned :fight on one eight blocks
+   below it eight times in 10 ms, each given up and ended done at once, and the eight counted as
+   fought out: the walk that followed was no longer cut by it, and the bot walked on while it
+   took 20 health in five seconds, with no attack sent."
+  [world eid e]
+  (or (fought-out? world eid)
+      (combat/given-up? world eid e)
+      (boolean (when-let [at (memory/last-failed-at world :fight eid)]
+                 (and (not (combat/in-reach? world e))
+                      (or (< (- (:time/now world 0) at) fight-retry-ms)
+                          (>= (memory/failed-count-since world
+                                                         :fight
+                                                         eid
+                                                         (- (:time/now world 0) fight-giveup-ms))
+                              fight-giveups)))))))
+
 (defn lured-out?
   "Has the bot walked lure-tries times out to its burrow's mouth and back since the burrow was cut
    (memory/done-since: two :walk intentions done a lure, every walk since the burrow counted), so
-   that a blacklisted angry enderman near the mouth that never came is no reason to stay?"
+   that a blacklisted or unfightable angry enderman near the mouth that never came is no reason to
+   stay?"
   [world]
   (>= (or (memory/done-since world :walk :burrow) 0) (* 2 lure-tries)))
 
@@ -231,6 +259,7 @@
                        (let [p (:entity/pos e)]
                          (and (entity/creepy? e)
                               (not (fought-out? world eid))
+                              (not (and (lured-out? world) (unfightable? world eid e)))
                               (<= (physics/distance c p) danger-radius)
                               (<= (abs (- (physics/y-of p) (physics/y-of c))) danger-rise)))))
              (endermen (if (lured-out? world) world (dissoc world :plan/blacklist)) stare-range))
@@ -732,16 +761,18 @@
   (:hold-radius thresholds))
 
 (defn angry-within?
-  "Does an angry enderman (entity/creepy?, blacklisted or not) stand within radius of the feet
-   and danger-rise of their height?"
+  "Does an angry enderman (entity/creepy?, blacklisted or not, not once lured-out?) stand within
+   radius of the feet and danger-rise of their height?"
   [world radius]
-  (let [p (:player/pos world)]
-    (boolean (some (fn [[_ e]]
+  (let [p (:player/pos world)
+        bl (if (lured-out? world) world (dissoc world :plan/blacklist))]
+    (boolean (some (fn [[eid e]]
                      (let [q (:entity/pos e)]
                        (and (entity/creepy? e)
+                            (not (and (lured-out? world) (unfightable? world eid e)))
                             (<= (physics/distance p q) radius)
                             (<= (abs (- (physics/y-of q) (physics/y-of p))) danger-rise))))
-                   (endermen (dissoc world :plan/blacklist) stare-range)))))
+                   (endermen bl stare-range)))))
 
 (defn shelter
   "The hunt's burrow (:pearls/shelter) while it is within shelter-reach of the feet, still a
@@ -1455,34 +1486,7 @@
 (def loiter-radius 8)                  ; blocks on the plane (path/octile) within which twelve walks' ends are one place
 (def wander-reach 64)                  ; blocks a wander looks for ground to walk to, on each of the headings
 (def hold-patience-ms 12000)             ; ms a held fight waits with its target past strike-range before the hunt plans again (combat/hold-timeout-ms is a minute)
-(def fight-giveups 3)                   ; fights on one enderman cut or failed within fight-giveup-ms, after which it is fought no more until it is in reach
-(def fight-giveup-ms 600000)           ; ms (ten minutes) over which those fights are counted
-(def fight-retry-ms 30000)             ; ms after a fight on an enderman failed that it is not fought again until within the sword's reach
-
 (def struck-health 14.0)                ; health under which an enderman at hand has landed a hit (7 on Normal off 20): fought back, fought out or not
-
-(defn unfightable?
-  "Is enderman e (id eid) no fight's target now: fought out (fought-out?), given up by a fight's
-   engage as not strikable (combat/given-up?: it is not within the sword's reach from here), or
-   failed a fight less than fight-retry-ms ago and not within the sword's reach now? A fight that
-   fails (:unreachable) blacklists its target, and an angry one is fought regardless of the
-   blacklist: runs 2 and 3 of gym plan run 40775811459 failed :fight :unreachable eight times and
-   held a fight thirteen minutes.
-   Run 4 of gym plan run 40747177526 (issue #263, pearls-12) planned :fight on one eight blocks
-   below it eight times in 10 ms, each given up and ended done at once, and the eight counted as
-   fought out: the walk that followed was no longer cut by it, and the bot walked on while it
-   took 20 health in five seconds, with no attack sent."
-  [world eid e]
-  (or (fought-out? world eid)
-      (combat/given-up? world eid e)
-      (boolean (when-let [at (memory/last-failed-at world :fight eid)]
-                 (and (not (combat/in-reach? world e))
-                      (or (< (- (:time/now world 0) at) fight-retry-ms)
-                          (>= (memory/failed-count-since world
-                                                         :fight
-                                                         eid
-                                                         (- (:time/now world 0) fight-giveup-ms))
-                              fight-giveups)))))))
 
 (defn struck-by
   "[eid e] of the nearest angry enderman (entity/creepy?) within the sword's reach (combat/in-reach?)
@@ -2245,9 +2249,13 @@
   [world]
   (let [pos (:player/pos world)
         [eid e] (at-hand world)
-        [ceid ce] (entity/nearest
-                   (into {} (filter (comp entity/creepy? val)) (endermen world stare-range))
-                   pos)
+        [ceid ce] (entity/nearest (into {}
+                                        (filter (fn [[eid e]]
+                                                  (and (entity/creepy? e)
+                                                       (not (and (lured-out? world)
+                                                                 (unfightable? world eid e))))))
+                                        (endermen world stare-range))
+                                  pos)
         near? (and e (<= (physics/distance pos (:entity/pos e)) strike-range))
         angry? (and near? (entity/creepy? e) (not (contains? (:plan/blacklist world #{}) eid)))
         in-reach? (and near?
@@ -2365,7 +2373,7 @@
       {:intent/kind :fight :intent/target eid :intent/for :pearls}
       meal meal
       (or hurt? (and in? bid)) {:intent/kind :lookout :intent/for :pearls}
-      (and in? aid (lure? world) @mouth-walk) @mouth-walk
+      (and in? aid (not (lured-out? world)) (lure? world) @mouth-walk) @mouth-walk
       (and in? (or aid (angry-within? world hold-radius)))
       {:intent/kind :lookout :intent/for :pearls}
       @travel-walk @travel-walk
@@ -2409,6 +2417,7 @@
                     (when-let [c (stare-site world e)]
                       {:intent/kind :walk :intent/target c :intent/for :shelter}))
                   (->> far
+                       (remove (fn [[eid e]] (and (lured-out? world) (unfightable? world eid e))))
                        (sort-by (fn [[_ e]] (physics/distance (:player/pos world) (:entity/pos e))))
                        (take candidates)))
             (when-not (worn-out? world)
