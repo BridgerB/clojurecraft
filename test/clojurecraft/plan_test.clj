@@ -9,6 +9,7 @@
             [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
+            [clojurecraft.pocket :as pocket]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.scoop :as scoop]
             [clojurecraft.spec]
@@ -2269,6 +2270,85 @@
     (testing "no trail at all: the row's own plan goes ahead"
       (let [w (tick (assoc (blocked-tunnels) :time/now 1050))]
         (is (nil? (get-in w [:plan/intent :intent/for])))))))
+
+;;; TUNNEL STALL: a hollow pocket at the feet must not cut the tunnel every tick
+
+(def tunnel-stall-goal {:goal/id :blaze-rods :goal/done? :never :goal/plan :tunnel-stall})
+
+(defn open-landing
+  "z16 job 5 (plan 41276280629) at the end: feet [2148.5 72.0 1763.5], a :tunnel-to
+   [2210 60 1793] that had not run, on an open landing. The floor is stone and the body, head
+   and roof are air, so the here-pocket cannot be roofed (unlayable?)."
+  []
+  (let [lx (bit-and 2148 15)
+        lz (bit-and 1763 15)
+        stone (blocks/default-state :stone)
+        col (world/column
+             {[lx 71 lz] stone [lx 72 lz] blocks/air [lx 73 lz] blocks/air [lx 74 lz] blocks/air})]
+    (-> (game/init fx/opts)
+        (assoc :bot/phase :play
+               :player/pos [2148.5 72.0 1763.5]
+               :player/loaded? true
+               :player/on-ground? true
+               :player/health 20.0
+               :plan/status :active
+               :plan/intents 7
+               :plan/intent
+               {:intent/kind :tunnel-to
+                :intent/target [2210 60 1793]
+                :intent/goal :blaze-rods
+                :intent/status :active
+                :intent/id 7
+                :intent/plan
+                {:intent/kind :tunnel-to :intent/target [2210 60 1793] :intent/goal :blaze-rods}}
+               :world/chunks {[(bit-shift-right 2148 4) (bit-shift-right 1763 4)] col}))))
+
+(defn tick-tunnel
+  "One plan-tick of w with interrupts? true and next-intent answering next. The running intent
+   is a no-op, so a tunnel that is kept is still the one that went in."
+  [w next]
+  (with-redefs [plan/choose (constantly tunnel-stall-goal)
+                plan/interrupts? (constantly true)
+                plan/next-intent (constantly next)
+                intent/run (fn [world _ _] world)]
+    (plan/plan-tick w {:event/kind :tick :event/now 50 :event/rand 0.5} [tunnel-stall-goal])))
+
+(deftest ^:eftest/synchronized a-hollow-pocket-at-the-feet-does-not-cut-the-tunnel
+  ;; z16 job 5: 57942 starts of :tunnel-to [2210 60 1793] alternating with :pocket, no stage and
+  ;; no dig, still at [2148 72 1763] after 300 min. The pocket is the here-site and unlayable, so
+  ;; steer drops it and the next tick cuts the tunnel before it chooses a move.
+  (let [w (open-landing)
+        cell [2148 72 1763]
+        here (pocket/here-site w)
+        hollow {:intent/kind :pocket :intent/site here}]
+    (is (= cell (intent/feet w)))
+    (is (= cell (:pocket/cell here)) "the logged here-pocket")
+    (is (true? (:pocket/here? here)))
+    (is (true? (pocket/unlayable? w cell)) "open roof: nothing to lay")
+    (testing "two ticks, the guard holding on each: the tunnel is still the one that was running"
+      (let [kept (tick-tunnel (tick-tunnel w hollow) hollow)]
+        (is (= 7 (get-in kept [:plan/intent :intent/id])))
+        (is (= :tunnel-to (get-in kept [:plan/intent :intent/kind])))
+        (is (= [2210 60 1793] (get-in kept [:plan/intent :intent/target])))
+        (is (= 7 (:plan/intents kept)) "no new intent was started")))
+    (testing "a pocket at the feet that can be sealed still cuts"
+      (let [cut (with-redefs [pocket/unlayable? (constantly false)] (tick-tunnel w hollow))]
+        (is (= :pocket (get-in cut [:plan/intent :intent/kind])))
+        (is (= 8 (:plan/intents cut)))))
+    (testing "a fight still cuts"
+      (let [cut (tick-tunnel w {:intent/kind :fight :intent/target 1})]
+        (is (= :fight (get-in cut [:plan/intent :intent/kind])))
+        (is (= 8 (:plan/intents cut)))))
+    (testing "a pocket that is not the cell the feet stand in still cuts"
+      (let [cut (tick-tunnel w
+                             {:intent/kind :pocket
+                              :intent/site {:pocket/cell [2200 60 1790]
+                                            :pocket/here? true
+                                            :pocket/stand nil
+                                            :pocket/dig []
+                                            :pocket/placed []}})]
+        (is (= :pocket (get-in cut [:plan/intent :intent/kind])))
+        (is (= 8 (:plan/intents cut)))))))
 
 ;;; DEATH RESTART: a death that loses the inventory starts the chain over
 
