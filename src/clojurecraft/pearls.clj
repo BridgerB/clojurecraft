@@ -37,6 +37,7 @@
             [clojurecraft.dimension :as dimension]
             [clojurecraft.drops :as drops]
             [clojurecraft.entity :as entity]
+            [clojurecraft.fortress :as fortress]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.make :as make]
@@ -2021,7 +2022,11 @@
                                            cz [(dec z0) (inc z1)]]
                                        [cx (nth feet 1) cz])]
                          (first (sort-by #(physics/distance feet %) corners))))]
-        {:intent/kind :tunnel-to :intent/target c :intent/reach 1.5 :intent/for :pearls}))))
+        {:intent/kind :tunnel-to
+         :intent/target c
+         :intent/reach 1.5
+         :intent/steps fortress/steps-per-tunnel
+         :intent/for :pearls}))))
 
 (defn travel
   "The walk to a warped forest, or nil: none in the Nether when the bot is in one (in-forest?);

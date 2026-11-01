@@ -741,13 +741,19 @@
    {:intent/keys [target steps taken move from climb tunnel-visited child search retreats airborne]
     dry-only? :intent/dry?
     r :intent/reach
-    :or {taken 0 r reach climb climb-past tunnel-visited #{} retreats 0 airborne 0}
+    :or {taken 0
+         steps steps-per-tunnel
+         r reach
+         climb climb-past
+         tunnel-visited #{}
+         retreats 0
+         airborne 0}
     :as i} event]
   (let [world (cond-> world search (assoc :fortress/search search)) ; the spiral's leg, kept for the planner's next look
         feet (intent/feet world)
         shaft (shaft-tick world feet target i event)] ; nil on an ordinary step, else that tick's world
     (cond
-      (or (arrived? world target r) (>= taken steps))
+      (or (arrived? world target r) (and steps (>= taken steps)))
       (-> world
           (assoc :player/controls {})
           (intent/assoc-intent :intent/ended-at feet)

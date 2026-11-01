@@ -8,6 +8,7 @@
             [clojurecraft.blocks :as blocks]
             [clojurecraft.combat :as combat]
             [clojurecraft.fixtures :as fx]
+            [clojurecraft.fortress :as fortress]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.make]
@@ -3185,7 +3186,11 @@
                                  forest))
         "no spawner known: straight")
     (let [i (pearls/room-exit inside)]
-      (is (= {:intent/kind :tunnel-to :intent/target [5 64 8] :intent/reach 1.5 :intent/for :pearls}
+      (is (= {:intent/kind :tunnel-to
+              :intent/target [5 64 8]
+              :intent/reach 1.5
+              :intent/steps fortress/steps-per-tunnel
+              :intent/for :pearls}
              i))
       (is (= :tunnel-to (:intent/kind (plan/next-intent inside row plan/goals)))
           "the hunt tunnels out along the trail, no stairs-up into the room"))
@@ -3222,7 +3227,9 @@
       (is (= :tunnel-to (:intent/kind i)))
       (is (= exit-cell (:intent/target i)))
       (is (= 1.5 (:intent/reach i))
-          "reach 1.5 prevents tunnel-to from completing 6 blocks away on tick 0"))
+          "reach 1.5 prevents tunnel-to from completing 6 blocks away on tick 0")
+      (is (= fortress/steps-per-tunnel (:intent/steps i))
+          "carries steps-per-tunnel to bound steps before planner looks again"))
     (testing
       "walk to cover along the trail uses :for :cover so arrived? requires standing in the cell"
       (when-let [i (pearls/leave-sight w)]
