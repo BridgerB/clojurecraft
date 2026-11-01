@@ -1,0 +1,11 @@
+;; Issue #263, round r on current main (includes #702 burrow-outwalk, #695 hunt-table, #694 gaze/blaze-room/cover, #693 burrow-hold).
+;; Row pearls-12-race-tools x6. Measure: passes of 6, time to 12, deaths by cause, pearls at 30/60/90/120.
+{:plans/label "pearl-fight-r"
+ :plans/jobs 6
+ :plans/issue 263
+ :plans/experiments [{:exp/name "pearls-12-race-tools"
+                      :exp/kind :gym
+                      :exp/goal "pearls-12-race-tools"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 18000}]}
