@@ -17,6 +17,7 @@
             [clojurecraft.fortress]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
+            [clojurecraft.inventory :as inventory]
             [clojurecraft.make :as make]
             [clojurecraft.memory :as memory]
             [clojurecraft.observe]
@@ -553,3 +554,26 @@
         "no water in reach: the pickaxe for the climb first")
     (is (= :fill-bucket (:goal/id (make/next-row wet kit plan/goals)))
         "a source in reach and in sight: scoop it")))
+
+(deftest iron-cooking-in-a-furnace-is-collected-not-mined-again
+  ;; issue #686: the planner counts the inventory only, and four raw iron loaded into a furnace
+  ;; left the inventory empty of iron; the smelt cut short, the bot went mining. A batch the smelt
+  ;; loaded (:furnace/batch) is gone back to
+  (let [batch {:smelt :iron_ingot_from_smelting_raw_iron :makes 4 :at 48000}
+        w (-> (with-furnace (world-holding {:stone_pickaxe 1} false))
+              (assoc :time/now 54150))
+        next-intent #(plan/next-intent % (ingots 4) plan/goals)]
+    (is (= {:intent/kind :open-container :intent/target [7 64 5]}
+           (next-intent (assoc w :furnace/batch batch)))
+        "the furnace within reach is opened, not the mine gone down")
+    (is (not= :open-container (:intent/kind (next-intent w)))
+        "with nothing remembered the planner does as it does today")
+    (is (not= :open-container
+              (:intent/kind (next-intent
+                             (assoc w :furnace/batch (assoc batch :at 0) :time/now 2000000))))
+        "a batch left for half an hour is let go")
+    (is (= :smelt
+           (:intent/kind (next-intent (-> (assoc w :furnace/batch batch)
+                                          (assoc-in [:window/open :window/menu-type]
+                                                    (:menu-type (inventory/layouts :furnace)))))))
+        "the window open: a smelt that empties the furnace into the inventory")))

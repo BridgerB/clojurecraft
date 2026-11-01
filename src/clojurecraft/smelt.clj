@@ -21,6 +21,11 @@
    furnace's own ticks move the window's state id too, so a load is judged by the slots it
    should have filled, not by the state id alone.
 
+   A batch loaded and not yet taken is remembered (:furnace/batch, set at the end of :load,
+   cleared once the furnace is emptied at :settle or closed), so a smelt interrupted after the
+   load is gone back to (make/collect-batch) and not mined for again: the planner counts the
+   inventory only (issue #686).
+
    A lost click is recovered here rather than by failing: what a failed smelt leaves on the
    cursor or in the furnace is not in the inventory, so the planner, which plans from the
    inventory, could not plan for it again (lost)."
@@ -169,8 +174,10 @@
           (window/tossable world v) (window/toss world v (window/tossable world v))
           (own-slot-holding v) (window/click world v (inventory/shift-click (own-slot-holding v)))
           :else
-          (if-let [{:keys [clicks] n :count} (load-plan world v r count)]
-            (let [result (recipe/item-id (:smelt/result r))]
+          ;; the furnace is empty: whatever a batch left in it is in the inventory (:furnace/batch)
+          (if-let [{:keys [clicks] n :count} (load-plan (dissoc world :furnace/batch) v r count)]
+            (let [world (dissoc world :furnace/batch)
+                  result (recipe/item-id (:smelt/result r))]
               (intent/assoc-intent world
                                    :intent/stage :load
                                    :intent/clicks clicks
@@ -179,15 +186,16 @@
                                    :intent/result result
                                    :intent/makes (* n (:smelt/count r))
                                    :intent/before (inventory/item-count world result)))
-            (intent/fail world :no-ingredient)))))
+            (intent/fail (dissoc world :furnace/batch) :no-ingredient)))))
 
 (defmethod stage :load
-  [world {:intent/keys [clicks]} v]
+  [world {:intent/keys [clicks smelt makes]} v]
   (if (seq clicks)
     (-> world
         (window/click v (first clicks))
         (intent/assoc-intent :intent/clicks (vec (rest clicks))))
     (-> world
+        (assoc :furnace/batch {:smelt smelt :makes makes :at (now world)})
         (intent/assoc-intent :intent/stage :cook :intent/since (now world))
         (intent/dissoc-intent :intent/clicks :intent/cook-by))))
 
@@ -258,7 +266,7 @@
         :else
         (-> world
             (game/emit {:packet/name :container-close :window-id (:view/id v)})
-            (dissoc :window/open)
+            (dissoc :window/open :furnace/batch)
             intent/done)))
 
 (defn lost
