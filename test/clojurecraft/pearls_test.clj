@@ -3202,3 +3202,25 @@
     (is (some? (pearls/shelter w)) "an angry one 12 blocks off: the burrow is held")
     (let [far (assoc-in w [:world/entities 7 :entity/pos] [60.5 61.0 8.5])]
       (is (not (pearls/angry-within? far pearls/hold-radius)) "52 blocks off: no hold"))))
+
+(deftest hunt-thresholds-table-is-loaded-and-complete
+  ;; the hunt thresholds are loaded from resources/clojurecraft/hunt.edn
+  (let [t pearls/thresholds]
+    (is (map? t) "the thresholds are an EDN map")
+    (is (= 64.0 (:seek-radius t) pearls/seek-radius))
+    (is (= 64.0 (:stare-range t) pearls/stare-range))
+    (is (= 6.0 (:stare-from t) pearls/stare-from))
+    (is (= 6.0 (:provoke-range t) pearls/provoke-range))
+    (is (= 3.0 (:provoke-home-reach t) pearls/provoke-home-reach))
+    (is (= 18.0 (:provoke-health t) pearls/provoke-health))
+    (is (= 3.0 (:provoke-margin t) pearls/provoke-margin))
+    (is (= 480000 (:relocate-ms t) pearls/relocate-ms))
+    (is (= 32.0 (:relocate-dist t) pearls/relocate-dist))
+    (is (= 420000 (:relocate-timeout-ms t) pearls/relocate-timeout-ms))
+    (is (= 180000 (:relocate-patience-ms t) pearls/relocate-patience-ms))
+    (is (= 8.0 (:swarm-radius t) pearls/swarm-radius))
+    (is (= 16.0 (:hold-radius t) pearls/hold-radius))
+    (is (= 10.0 (:danger-health t) pearls/danger-health))
+    (is (= [15.0 19.0] (:break-line t) pearls/break-line))
+    (is (= 15.0 (:break-hp t) pearls/break-hp))
+    (is (= 19.0 (:resume-hp t) pearls/resume-hp))))

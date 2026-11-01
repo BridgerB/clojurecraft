@@ -26,7 +26,9 @@
    (only a projectile or a non-living source moves it). So the stare is from range only, and the
    fight's look is combat/aim, its legs, never its head. Water hurts it and it teleports out of
    rain and water: the trap rows already keep the bot from fighting while it stands in water."
-  (:require [clojure.math :as math]
+  (:require [clojure.edn :as edn]
+            [clojure.java.io :as io]
+            [clojure.math :as math]
             [clojure.string :as str]
             [clojurecraft.armour :as armour]
             [clojurecraft.blaze :as blaze]
@@ -55,8 +57,12 @@
 
 (def pearl :ender_pearl)               ; the item a kill may drop
 
+(def thresholds
+  "Tuning parameters and thresholds for the hunt, read from resources/clojurecraft/hunt.edn."
+  (edn/read-string (slurp (io/resource "clojurecraft/hunt.edn"))))
+
 (def hunt-radius 32.0)                ; blocks from the feet an enderman is hunted within
-(def seek-radius 64.0)                ; blocks from the feet an enderman is walked toward, none nearer
+(def seek-radius (:seek-radius thresholds)) ; blocks from the feet an enderman is walked toward, none nearer
 (def lookout-ms 5000)                 ; ms a :lookout stands turning before the plan looks again
 (def lookout-turn 0.09)               ; degrees of yaw a :lookout turns a ms: a full turn in four seconds
 (def roam-reach 16)                   ; blocks a roam walks from the feet, at the least, to look round somewhere else
@@ -65,8 +71,9 @@
 (def headings ; the eight ways a roam may go, a quarter turn of each other in pairs
   [[1 0] [1 1] [0 1] [-1 1] [-1 0] [-1 -1] [0 -1] [1 -1]])
 (def strike-range 4.5)                ; blocks from the feet, height counted, within which an enderman is at hand (hunt/strike-range: past a walk's reach)
-(def stare-range 64.0)                ; blocks to the head within which a provoke stares, with a clear line: the enderman's follow range
-(def stare-from 6.0)                  ; never stare nearer: an angry enderman stared at within 4 teleports away
+(def stare-range (:stare-range thresholds)) ; blocks to the head within which a provoke stares, with a clear line: the enderman's follow range
+(def stare-from (:stare-from thresholds)) ; never stare nearer: an angry enderman stared at within 4 teleports away
+(def provoke-range (or (:provoke-range thresholds) stare-from)) ; blocks within which a stare can provoke an enderman
 (def stare-ms 3000)                   ; ms a provoke stares at most before the enderman says it has a target (creepy)
 (def burrow-depth 3)                  ; stairs down a burrow cuts: from the third, the ground roofs a tunnel two high
 (def burrow-length 2)                 ; tunnel steps past the stairs: two keep the bot out of an enderman's reach from the last stair
@@ -722,7 +729,7 @@
 (def hold-radius
   "Blocks from the feet within which an angry enderman keeps the bot where it is: the burrow is not
    given up (stale?) and no relocation begins while one stands this near."
-  16.0)
+  (:hold-radius thresholds))
 
 (defn angry-within?
   "Does an angry enderman (entity/creepy?, blacklisted or not) that is not parked (parked?: more
@@ -985,7 +992,7 @@
 (def vantage-tries 8)                 ; vantages, nearest the feet first, a route is asked for before none is taken: the route is the costly test
 (def vantage-nodes 1500)              ; expansions a route to or from a vantage may spend: it lies within shelter-reach, and sixteen such routes may be asked in one planner tick
 
-(def provoke-home-reach 3.0)              ; blocks from the burrow's end within which an enderman is provoked from outside the mouth: a provoked one is at the bot in about a second, and four hits fell it in the 3.6 s a walk of six blocks home took (gym plan run 40747177526 run 6)
+(def provoke-home-reach (:provoke-home-reach thresholds)) ; blocks from the burrow's end within which an enderman is provoked from outside the mouth: a provoked one is at the bot in about a second, and four hits fell it in the 3.6 s a walk of six blocks home took (gym plan run 40747177526 run 6)
 
 (defn vantage
   "A walk to look from within the burrow's reach, with none of ms provokable from here: a cell
@@ -1432,10 +1439,13 @@
   (let [{:intent/keys [kind for status]} (:plan/last world)]
     (and (= :walk kind) (= :shelter for) (= :done status))))
 
-(def provoke-margin 3.0)                ; health a provoke keeps over the two hits it risks before the bot is back in its burrow
-(def provoke-health 18.0)             ; health under which no enderman is provoked, from the mouth or anywhere: the bot rests in its burrow first (sim-endermen3's probe 39847287615: in worlds R1, R2 and R4 the first death came of a provoke 4 to 8 blocks off at 10.8 to 17.8 health just outside the burrow, the enderman landing three to five blows in five seconds); away from the mouth (a vantage) only at full health
+(def provoke-margin (:provoke-margin thresholds)) ; health a provoke keeps over the two hits it risks before the bot is back in its burrow
+(def provoke-health (:provoke-health thresholds)) ; health under which no enderman is provoked, from the mouth or anywhere: the bot rests in its burrow first (sim-endermen3's probe 39847287615: in worlds R1, R2 and R4 the first death came of a provoke 4 to 8 blocks off at 10.8 to 17.8 health just outside the burrow, the enderman landing three to five blows in five seconds); away from the mouth (a vantage) only at full health
 
-(def danger-health combat/retreat-health) ; health under which the hunt never fights, provokes or goes toward an enderman: one enderman hit (7 on Normal, ns doc) plus a margin, the same line combat breaks a fight off at. At or under it the bot backs off, walks home, eats or rests where it stands until its health is back over it (issue #563, probe 40022662598: after the second stone sword was crafted the hunt re-fought an angry enderman it had just backed away from, again and again down to 1.3 health, one hit from death)
+(def danger-health (or (:danger-health thresholds) combat/retreat-health)) ; health under which the hunt never fights, provokes or goes toward an enderman: one enderman hit (7 on Normal, ns doc) plus a margin, the same line combat breaks a fight off at. At or under it the bot backs off, walks home, eats or rests where it stands until its health is back over it (issue #563, probe 40022662598: after the second stone sword was crafted the hunt re-fought an angry enderman it had just backed away from, again and again down to 1.3 health, one hit from death)
+(def break-line (:break-line thresholds)) ; health thresholds for breaking off an open fight with an enderman [break-hp resume-hp]
+(def break-hp (or (:break-hp thresholds) (first break-line)))
+(def resume-hp (or (:resume-hp thresholds) (second break-line)))
 
 
 (def wander-lookouts 60)                 ; lookouts (five seconds each, five minutes) stood with no walk taken since before the hunt goes elsewhere (wander)
@@ -1538,7 +1548,7 @@
   [world e]
   (wall-toward world (:entity/pos e) [0 1]))
 
-(def swarm-radius 8.0)                  ; blocks from the feet within which a monster counts toward a swarm
+(def swarm-radius (:swarm-radius thresholds)) ; blocks from the feet within which a monster counts toward a swarm
 
 (def ranged-kinds
   "Kinds that hurt from where they hover, not from the sword's reach: they count toward a swarm
@@ -2066,10 +2076,10 @@
           (shelter-walk world s))]
     (when (and walk (intent/routable? world walk)) walk)))
 
-(def relocate-ms 480000)              ; ms without a pearl gained before the hunt leaves the place for another (8 minutes)
-(def relocate-dist 32.0)              ; blocks from where it began that a relocation walks before it is over
-(def relocate-timeout-ms 420000)      ; ms a relocation goes on at most (seven minutes) before the clock starts again
-(def relocate-patience-ms 180000)     ; ms a relocation waits in place for an angry enderman near to come or go (menaced?) before it walks past one that is parked (live-menaced?)
+(def relocate-ms (:relocate-ms thresholds)) ; ms without a pearl gained before the hunt leaves the place for another (8 minutes)
+(def relocate-dist (:relocate-dist thresholds)) ; blocks from where it began that a relocation walks before it is over
+(def relocate-timeout-ms (:relocate-timeout-ms thresholds)) ; ms a relocation goes on at most (seven minutes) before the clock starts again
+(def relocate-patience-ms (:relocate-patience-ms thresholds)) ; ms a relocation waits in place for an angry enderman near to come or go (menaced?) before it walks past one that is parked (live-menaced?)
 (def cluster-radius 24.0)             ; blocks round an enderman within which the others count toward how thick the place is
 
 (defn pearls-held
