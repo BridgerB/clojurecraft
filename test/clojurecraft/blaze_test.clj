@@ -2583,10 +2583,10 @@
         fight (blaze/commit-fight w)]
     (is (some? fight))
     (is (true? (:intent/yield? fight)) "lone blaze carries :intent/yield? true")
-    (let [running (intent/run w fight {})]
+    (let [running (intent/run w fight {:event/kind :tick})]
       (is (not= :done (:intent/stage (:plan/intent running))) "healthy fight does not yield")
       (let [hurt-world (assoc w :player/health 12.5)
-            yielded (intent/run hurt-world fight {})]
+            yielded (intent/run hurt-world fight {:event/kind :tick})]
         (is (= :done (:intent/stage (:plan/intent yielded)))
             "once health falls under yield line 12.8, the fight yields")
         (is (nil? (blaze/commit-fight hurt-world))
