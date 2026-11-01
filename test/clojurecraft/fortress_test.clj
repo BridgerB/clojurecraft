@@ -1473,6 +1473,13 @@
         "no netherrack: cobblestone, above the reserve")
     (is (= :cobblestone (stairs/building-filler (w :cobblestone 5) 1))
         "below the reserve and nothing else: still laid, a tunnel is not stopped")
+    (is
+     (nil? (stairs/building-filler (w :cobblestone 3) 1))
+     "but the last three are a stone pickaxe's: z14 job 5 laid them all and ended with no pickaxe")
+    (is (= :dirt (stairs/building-filler (w :cobblestone 3 :dirt 4) 1))
+        "another filler is laid before them")
+    (is (= :cobblestone (stairs/building-filler (w :cobblestone 4) 1))
+        "one above the pickaxe's three")
     (is (= :cobblestone (stairs/filler (w :cobblestone 64 :netherrack 160) 1))
         "seals and cover still take filler's cobblestone first")
     (is (= :netherrack (fortress/walk-filler (w :cobblestone 64 :netherrack 160) [1 63 0])))))

@@ -818,7 +818,7 @@
               ;; never placed with a block that is not held (sim snapshots R2-17-1 and
               ;; R2-12-1, issue #410)
               (and (= :place (:build/op next))
-                   (or (nil? (stairs/filler world 1))
+                   (or (nil? (stairs/building-filler world 1))
                        (and (= :floor (:build/step next))
                             (nil? (walk-filler world (:build/pos next))))))
               (reduce intent/dissoc-intent
