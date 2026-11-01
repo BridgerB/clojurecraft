@@ -74,12 +74,18 @@
         tol (:tolerance real)]
     ;; the table's sim column, printed for the PR and the probes: the real hit rate (0.043 within 12
     ;; blocks) is a floor, the bot sat in pockets for most of those fireballs; a bot standing in the
-    ;; open at ten blocks is hit about one in five
-    (println "PARITY open-ground hit rate" (format "%.3f" (double rate))
-             "of" (count fireball-ticks)
-             "fireballs; burn hp" burn-hp
-             "fireball hp" fireball-hp
-             "; real floor" (get-in real [:hit-rate :within-12]))
+    ;; open at ten blocks is hit about one in five. eftest replaces *out* and System/out and shows
+    ;; them only when a test fails, so the line is written to the process's real stdout.
+    (let [line (str "PARITY open-ground hit rate " (format "%.3f" (double rate))
+                    " of " (count fireball-ticks)
+                    " fireballs; burn hp " burn-hp
+                    " fireball hp " fireball-hp
+                    " ; real floor " (get-in real [:hit-rate :within-12]))
+          ^java.io.PrintStream out (java.io.PrintStream. (java.io.FileOutputStream.
+                                                          java.io.FileDescriptor/out)
+                                                         true
+                                                         "UTF-8")]
+      (.println out line))
     (is (<= (:hit-rate-open-min tol) rate (:hit-rate-open-max tol)) (str "hit rate " rate))
     (is (<= (:burn-to-fireball-min tol) (/ burn-hp fireball-hp) (:burn-to-fireball-max tol))
         "the burn costs about what the fireballs do")))
