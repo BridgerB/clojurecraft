@@ -2,15 +2,19 @@
   "The model's blaze held to what the real ones do (test/clojurecraft/real_blaze.edn, race f8b28e3,
    lane 2, 45 recordings): the volley's cycle and shot gap, the share of a fireball and of a melee
    hit the armour leaves, the burn's per-hurt damage, the hit rate and the burn-to-fireball split on
-   a bot that stands in the open at ten blocks. A change to the blaze, the fireball, the fire or the
-   armour in the model that drifts from the recordings fails here."
+   a bot that stands in the open at ten blocks, and how many blazes stand within 16 at a tick the
+   bot is hurt. A change to the blaze, the fireball, the fire, the spawner or the armour in the
+   model that drifts from the recordings fails here."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.test :refer [deftest is]]
+            [clojurecraft.dimension :as dimension]
             [clojurecraft.fire :as fire]
             [clojurecraft.mob :as mob]
             [clojurecraft.mob-test :as m]
-            [clojurecraft.sim :as sim]))
+            [clojurecraft.physics :as physics]
+            [clojurecraft.sim :as sim]
+            [clojurecraft.world :as world]))
 
 (def real (edn/read-string (slurp (io/resource "clojurecraft/real_blaze.edn"))))
 
@@ -42,6 +46,41 @@
                    (update :burn-hp + (* (by 31) fire/burn-damage))))))))
 
 (def run (delay (scene 5400)))
+
+(defn median
+  "The median of xs, or nil when xs is empty. An even count averages the two middle values."
+  [xs]
+  (let [s (vec (sort xs))
+        n (count s)
+        mid (quot n 2)]
+    (cond (zero? n) nil
+          (odd? n) (nth s mid)
+          :else (/ (+ (nth s (dec mid)) (nth s mid)) 2.0))))
+
+(defn crowd
+  "One blaze spawner, the player in the open eight blocks off it and within its wake, for n
+   ticks, health put back after each tick. The blazes within 16 of the feet at every tick that
+   deals damage, and the blazes left at the end."
+  [n]
+  (let [start (-> (sim/init {:column (world/column-bytes m/fortress-floor dimension/nether)
+                             :spawn [12.5 64.0 4.5]
+                             :dimension dimension/nether
+                             :difficulty :normal
+                             :food 20})
+                  (assoc :sim/phase :play :sim/player-pos [12.5 64.0 4.5] :sim/on-ground? true))]
+    (loop [s start
+           i 1
+           counts []]
+      (if (> i n)
+        {:counts counts :left (count (m/blazes-of s))}
+        (let [s' (m/ticks (assoc s :sim/health 20.0 :sim/out []) 1)
+              hurt? (some #(= :damage-event (:packet/name %)) (:sim/out s'))
+              near (count (filter (fn [[_ {:keys [pos]}]]
+                                    (<= (physics/distance pos (:sim/player-pos s')) 16.0))
+                                  (m/blazes-of s')))]
+          (recur s' (inc i) (cond-> counts hurt? (conj near))))))))
+
+(def crowd-run (delay (crowd 2400)))
 
 (deftest the-volley-matches-the-recorded-cycle-and-shot-gap
   (let [ticks (:fireball-ticks @run)
@@ -89,3 +128,19 @@
     (is (<= (:hit-rate-open-min tol) rate (:hit-rate-open-max tol)) (str "hit rate " rate))
     (is (<= (:burn-to-fireball-min tol) (/ burn-hp fireball-hp) (:burn-to-fireball-max tol))
         "the burn costs about what the fireballs do")))
+
+(deftest blazes-within-sixteen-at-a-damage-tick-are-about-seven
+  (let [{:keys [counts left]} @crowd-run
+        med (median counts)
+        tol (:tolerance real)
+        line (str "PARITY blazes within 16 at a damage tick: median " med
+                  " of " (count counts)
+                  " ticks; left " left
+                  " ; real median " (get-in real [:crowd :within-16-median])
+                  " p90 " (get-in real [:crowd :within-16-p90]))
+        ^java.io.PrintStream out
+        (java.io.PrintStream. (java.io.FileOutputStream. java.io.FileDescriptor/out) true "UTF-8")]
+    (.println out line)
+    (is (some? med) "the fight dealt damage")
+    (is (<= (:crowd-median-min tol) med (:crowd-median-max tol)) (str "median " med))
+    (is (<= left (:crowd-median-max tol)) "the cap holds at the end")))
