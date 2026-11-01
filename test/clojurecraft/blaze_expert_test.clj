@@ -38,6 +38,15 @@
       (is (not (:expert/done act)))
       (is (= :eat (:intent/kind act)))
       (is (= :cooked_beef (:intent/item act)))))
+  (testing "the pick goes onto the hotbar before the sword"
+    (is (= {:intent/kind :equip :intent/item :stone_pickaxe :expert/why :arm-pick}
+           (expert/choose (sit {:phase :arm :holding nil})))))
+  (testing "the sword goes onto the hotbar once the pick is there, even while the pick is in hand"
+    (is (= {:intent/kind :equip :intent/item :iron_sword :expert/why :arm-sword}
+           (expert/choose (sit {:phase :arm :holding :stone_pickaxe :pick-hotbar? true})))))
+  (testing "both tools on the hotbar is not another equip"
+    (is (= {:expert/why :wait}
+           (expert/choose (sit {:phase :arm :pick-hotbar? true :sword-hotbar? true})))))
   (testing "armour goes on before anything else"
     (is (= {:intent/kind :wear :intent/item :iron_helmet :expert/why :wear}
            (expert/choose (sit {:phase :wear :wearing #{}})))))

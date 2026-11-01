@@ -232,14 +232,18 @@
         :else {:expert/why :wait}))
 
 (defn- gear-act
-  "The next piece of armour, or the pick then the sword onto the hotbar."
+  "The next piece of armour, or the pick then the sword onto the hotbar. Which is in the hand
+   does not matter: selecting the sword would otherwise equip the pick again, and the two
+   swap forever."
   [s]
   (cond (= :wear (:phase s))
         (when-let [item (first (remove (:wearing s #{}) armour-pieces))]
           {:intent/kind :wear :intent/item item :expert/why :wear})
-        (not= :stone_pickaxe (:holding s))
+        (not (:pick-hotbar? s))
         {:intent/kind :equip :intent/item :stone_pickaxe :expert/why :arm-pick}
-        :else {:intent/kind :equip :intent/item :iron_sword :expert/why :arm-sword}))
+        (not (:sword-hotbar? s))
+        {:intent/kind :equip :intent/item :iron_sword :expert/why :arm-sword}
+        :else {:expert/why :wait}))
 
 (defn- before-close
   "While still outside the pocket: step away from fire, and do not close the spawner under
@@ -313,6 +317,14 @@
   "The item name in the hand, or nil."
   [world]
   (recipe/item-name (get-in world [:player/inventory (:player/held-slot world 0) :item])))
+
+(defn- hotbar-has?
+  "Is item's id in a hotbar slot? The hand can select it, and a dig must not send it back
+   to the main inventory."
+  [world item]
+  (let [id (recipe/item-id item)]
+    (boolean (some (fn [[slot stack]] (and (inventory/hotbar? slot) (= id (:item stack))))
+                   (:player/inventory world)))))
 
 (defn- worn-set
   "The armour pieces worn now."
@@ -554,6 +566,8 @@
      :struck? (struck? world now)
      :food (:player/food world)
      :holding (holding-name world)
+     :pick-hotbar? (hotbar-has? world :stone_pickaxe)
+     :sword-hotbar? (hotbar-has? world :iron_sword)
      :phase (phase-of world spawner)
      :site (:expert/site world)
      :sealed? (boolean (and site (pocket/sealed? world site)))
@@ -607,17 +621,15 @@
   (dissoc want :expert/why :expert/done :expert/stop))
 
 (defn- note-armed
-  "The sword equip finished and the sword is in hand: the hotbar is armed, and a later dig
-   selecting the pick does not arm again."
+  "Both tools are on the hotbar: arming is over, and a later dig selecting the pick does
+   not arm again. Waiting until the sword equip is done never happens, because the hand
+   holding the sword asks for the pick."
   [world]
-  (let [i (:plan/intent world)]
-    (if (and (not (:expert/armed? world))
-             (= :iron_sword (holding-name world))
-             (= :equip (:intent/kind i))
-             (= :iron_sword (:intent/item i))
-             (intent/done? i))
-      (assoc world :expert/armed? true)
-      world)))
+  (if (and (not (:expert/armed? world))
+           (hotbar-has? world :stone_pickaxe)
+           (hotbar-has? world :iron_sword))
+    (assoc world :expert/armed? true)
+    world))
 
 (defn- note-approach
   "A walk that failed advances to the next stand."
@@ -726,7 +738,9 @@
    :fireballs (count (:sim/fireballs sim))
    :sealed? (boolean (when-let [site (:pocket/site world)] (pocket/sealed? world site)))
    :phase (phase-of world (:expert/spawner world))
-   :holding (holding-name world)})
+   :holding (holding-name world)
+   :armed? (boolean (:expert/armed? world))
+   :pos (:player/pos world)})
 
 (defn- log-progress
   "Print EXPERT-ROD when the count rose and EXPERT-MIN each simulated minute. Returns world
