@@ -3224,3 +3224,24 @@
     (is (= [15.0 19.0] (:break-line t) pearls/break-line))
     (is (= 15.0 (:break-hp t) pearls/break-hp))
     (is (= 19.0 (:resume-hp t) pearls/resume-hp))))
+
+(deftest with-an-angry-enderman-near-the-burrow-no-out-walk-relocates-or-wanders
+  ;; pearl-fight-q (plan run 41275336100) jobs 1, 2, 4 and 5 ping-ponged between burrow shelter
+  ;; and an out-walk (relocate/wander/stare) when an angry enderman stood 8 to 16 blocks off; job 2
+  ;; took 145 steps out until stuck explore drove the bot into the open where enderman 1236 slew it
+  (let [angry (assoc (enderman [20.5 61.0 8.5]) :entity/creepy? true)
+        w (-> (looked (burrowed [8.5 61.0 8.5] {7 angry}) 12)
+              (assoc :pearls/relocate {:from [8 61 8] :at 0 :near #{}} :time/now 200000))
+        inside-intent (plan/next-intent w row plan/goals)
+        out-walk {:intent/kind :walk :intent/target [30 61 8] :intent/for :relocate}
+        stepped-out (assoc w :player/pos [7.5 61.0 8.5])]
+    (testing "inside the burrow, next-intent stays in lookout and never starts an out-walk"
+      (is (= :lookout (:intent/kind inside-intent)))
+      (is (= :pearls (:intent/for inside-intent))))
+    (testing "stepping out of the burrow with an angry enderman within hold-radius is interrupted"
+      (is (plan/interrupts? stepped-out row out-walk)))
+    (testing "outside the burrow with an angry enderman within hold-radius routes way-home"
+      (let [i (plan/next-intent stepped-out row plan/goals)]
+        (is (= :walk (:intent/kind i)))
+        (is (= [8 61 8] (:intent/target i)))
+        (is (= :shelter (:intent/for i)))))))
