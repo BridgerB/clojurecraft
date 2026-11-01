@@ -5,8 +5,8 @@
    every blaze's position, health, volley step and the fireballs in flight. It is a yardstick.
    Nothing here is the bot's decision code.
 
-   The plan: wear the race kit, walk into a spawner's wake, dig a 1x2 pocket whose one window
-   faces the spawner, and seal it. A blaze's melee is a touch with a clear line, so a sealed
+   The plan: wear the race kit, walk into a spawner's wake, dig a 1x2 pocket outside the spawn
+   volume and inside the wake with a clear line to the spawner, and seal it. A blaze's melee is a touch with a clear line, so a sealed
    wall holds; one that can see hovers and shoots. The sword band (farther than a
    blaze's reach, near enough to hit) is about a block wide, and a cobble seal opens only when
    the dig sends FINISH, settle plus the finish margin, about a second after the decision. So
@@ -21,6 +21,7 @@
             [clojure.math :as math]
             [clojure.string :as str]
             [clojurecraft.armour :as armour]
+            [clojurecraft.blaze :as blaze]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.capture :as capture]
             [clojurecraft.combat :as combat]
@@ -54,7 +55,7 @@
 (def ^:private blaze-speed 0.2) ; blocks a tick a blaze closes while it cannot see
 (def ^:private band-pad 0.15) ; blocks outside a blaze's reach the sword band starts
 (def ^:private sight-range 32.0) ; blocks: blazes farther than this are not sight-tested
-(def ^:private wake-min 6.0) ; blocks from the spawner a pocket cell must stand, outside the spawn box
+(def ^:private wake-min 6.0) ; horizontal blocks from the spawner the approach counts as arrived
 (def ^:private rod-reach 3.0) ; blocks: a rod is taken from the window, not chased across the room
 (def ^:private near-dy 8) ; blocks of height from the spawner the approach still counts as near
 (def ^:private stand-near 8.0) ; blocks, on the plane, a stand must be from the spawner
@@ -461,67 +462,13 @@
       (when-let [stand (:pocket/stand site)]
         (let [[sx _ sz] stand [cx _ cz] (:pocket/cell site)] [(- sx cx) (- sz cz)]))))
 
-(defn- faces?
-  "Does dir out of cell point toward the spawner?"
-  [dir cell spawner]
-  (let [[dx dz] dir [cx _ cz] cell [sx _ sz] spawner] (pos? (+ (* dx (- sx cx)) (* dz (- sz cz))))))
-
-(defn- in-wake?
-  "Is cell between wake-min and the spawner's wake of the spawner's centre?"
-  [cell spawner]
-  (let [d (physics/distance (cell-centre cell) (cell-centre spawner))]
-    (<= wake-min d (:wake mob/spawner))))
-
-(defn- site-ok?
-  "Does site face the spawner and stand in the wake?"
-  [world site spawner]
-  (let [cell (:pocket/cell site)
-        dir (opening-dir world site)]
-    (boolean (and cell dir (in-wake? cell spawner) (faces? dir cell spawner)))))
-
-(defn- neighbours
-  "The standable steps site-near walks: four sides, and one up or down."
-  [[x y z]]
-  (mapcat (fn [[dx dz]] (map (fn [dy] [(+ x dx) (+ y dy) (+ z dz)]) [0 -1 1])) pocket/sides))
-
-(defn- existing-site
-  "A pocket that is already a pocket at c and faces the spawner, or nil."
-  [world at spawner c]
-  (when (and (pocket/pocket? world at c) (in-wake? c spawner))
-    (let [site {:pocket/cell c :pocket/stand nil :pocket/dig [] :pocket/placed []}]
-      (when (site-ok? world site spawner) site))))
-
-(defn- dug-site
-  "A dig-in from c whose window would face the spawner, or nil."
-  [world spawner c]
-  (some (fn [side]
-          (when-let [site (pocket/dig-in world c side)] (when (site-ok? world site spawner) site)))
-        pocket/sides))
-
 (defn- find-site
-  "The nearest pocket cell to the feet whose window faces the spawner and whose cell is in
-   the wake, an existing pocket before a dig-in, or nil. The walk is pocket/search-steps
-   and pocket/search-nodes, the same bounds as site-near."
+  "The nearest site pocket/site-near would hand the bot: blaze/pocket-ok? with a line required.
+   The opening does not have to point at the spawner. Probe 41289491940 stood in a ring of 17
+   to 21 cells and every stand was :no-site under that extra ask."
   [world spawner]
-  (let [feet (intent/feet world)
-        at (path/cells world)]
-    (loop [frontier [feet]
-           seen #{feet}
-           depth 0
-           visited 0]
-      (let [hit (or (some #(existing-site world at spawner %) frontier)
-                    (some #(dug-site world spawner %) frontier))]
-        (cond hit hit
-              (or (empty? frontier) (>= depth pocket/search-steps) (>= visited pocket/search-nodes))
-              nil
-              :else
-              (let [next (into []
-                               (comp (mapcat neighbours)
-                                     (remove seen)
-                                     (filter #(path/standable? at %))
-                                     (distinct))
-                               frontier)]
-                (recur next (into seen next) (inc depth) (+ visited (count next)))))))))
+  (when (:player/pos world)
+    (pocket/site-near world (intent/feet world) (blaze/pocket-ok? world spawner true))))
 
 (defn- stand-eye
   "The eye of a player standing in cell."
@@ -770,9 +717,28 @@
     (assoc world :expert/armed? true)
     world))
 
+(defn- mark-searched
+  "Ring cells within pocket/search-steps of the feet, the walk find-site just finished.
+   They are tried, so the next stand is outside that walk. The six :no-site give-ups in
+   probe 41289491940 were one cluster."
+  [world]
+  (let [feet (intent/feet world)
+        sp (:expert/spawner world)]
+    (if-not (and (:player/pos world) sp)
+      world
+      (reduce (fn [w [x y z]]
+                (if (<=
+                     (+ (abs (- x (first feet))) (abs (- y (second feet))) (abs (- z (nth feet 2))))
+                     pocket/search-steps)
+                  (update w :expert/tried (fnil conj #{}) [x y z])
+                  w))
+              world
+              (ring-cells world sp false)))))
+
 (defn- give-up-stand
   "This stand has no pocket, or the way to it failed: remember the cell and try the next.
-   reason is the intent's :intent/reason, or :no-site, :pocket, :no-stand."
+   reason is the intent's :intent/reason, or :no-site, :pocket, :no-stand. A :no-site also
+   marks the ring cells the search already walked."
   [world cell reason]
   (say "EXPERT-GIVEUP"
        (pr-str {:set (:expert/set world)
@@ -784,7 +750,8 @@
   (cond-> (-> world
               (dissoc :expert/stand :expert/stand-how :expert/stand-try :expert/stand-reach)
               (update :expert/approach (fnil inc 0)))
-    cell (update :expert/tried (fnil conj #{}) cell)))
+    cell (update :expert/tried (fnil conj #{}) cell)
+    (= reason :no-site) mark-searched))
 
 (defn- note-approach
   "A walk or a tunnel to the stand that failed advances to the next stand. A retreat's
