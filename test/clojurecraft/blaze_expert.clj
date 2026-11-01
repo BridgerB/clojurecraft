@@ -833,6 +833,89 @@
                      :expert/stand-try idx)
               (assoc world :expert/approach stand-attempts :expert/stand-try idx))))))
 
+(defn- dead-blazes
+  "Eids of blazes whose death has started."
+  [sim]
+  (into #{}
+        (keep (fn [[eid m]] (when (and (= :blaze (:type m)) (:dead-at m)) eid)))
+        (:sim/mobs sim)))
+
+(defn- rod-eids
+  "Eids of blaze-rod item entities lying in the sim."
+  [sim]
+  (let [id (recipe/item-id :blaze_rod)]
+    (into #{} (keep (fn [[eid {:keys [item]}]] (when (= id (:item item)) eid))) (:sim/items sim))))
+
+(defn- finish-window
+  "The open window has closed, or the run has ended with it open. Print EXPERT-SORTIE and add
+   the window's hits to the run. Kills are counted as each blaze dies."
+  [world sim]
+  (if-let [w (:expert/window world)]
+    (let [health (:player/health world 0.0)
+          hits (+ (:hits w 0.0) (max 0.0 (- (double (:health w 0.0)) (double health))))
+          dead (into (:dead-seen w #{}) (dead-blazes sim))
+          seen (into (:seen w #{}) (rod-eids sim))
+          kills (count (remove (:dead w #{}) dead))
+          drops (count (remove (:drops w #{}) seen))
+          pickups (max 0 (- (rod-count world) (:rods w 0)))]
+      (say "EXPERT-SORTIE"
+           (pr-str {:set (:expert/set world)
+                    :seed (:expert/seed world)
+                    :t (:t w)
+                    :ms (- (:time/now world 0) (:t w 0))
+                    :why (:why w)
+                    :seers (:seers w 0)
+                    :hits hits
+                    :kills kills
+                    :drops drops
+                    :pickups pickups}))
+      (-> world
+          (dissoc :expert/window)
+          (update :expert/sorties (fnil inc 0))
+          (update :expert/hits (fnil + 0.0) hits)))
+    world))
+
+(defn- track-window
+  "Remember how many blazes would see through the seal, every rod entity, and each death.
+   An open hold is a sortie: the seal is down. It ends when the seal is up, and that prints
+   EXPERT-SORTIE."
+  [world sim sit]
+  (let [n (count (seers sit))
+        open? (and (= :hold (:phase sit)) (:site sit) (not (:sealed? sit)))
+        dead (dead-blazes sim)
+        fresh (count (remove (:expert/dead world #{}) dead))
+        world (-> world
+                  (assoc :expert/seers n :expert/dead dead)
+                  (update :expert/kills (fnil + 0) fresh)
+                  (update :expert/rod-seen (fnil into #{}) (rod-eids sim))
+                  (cond-> (and (= :hold (:phase sit)) (:sealed? sit))
+                          (update :expert/seer-max (fnil max 0) n)))]
+    (cond (and open? (nil? (:expert/window world)))
+          (assoc world
+                 :expert/window
+                 {:t (:now sit 0)
+                  :why (:expert/why world)
+                  :seers n
+                  :health (:health sit 0.0)
+                  :hits 0.0
+                  :rods (:rods sit 0)
+                  :dead dead
+                  :dead-seen dead
+                  :drops (rod-eids sim)
+                  :seen (rod-eids sim)})
+          (and open? (:expert/window world))
+          (let [w (:expert/window world)
+                health (:health sit 0.0)]
+            (assoc world
+                   :expert/window
+                   (-> w
+                       (assoc :health health)
+                       (update :hits + (max 0.0 (- (double (:health w)) (double health))))
+                       (update :dead-seen into dead)
+                       (update :seen into (rod-eids sim)))))
+          (and (not open?) (:expert/window world)) (finish-window world sim)
+          :else world)))
+
 (defn- drive
   "One tick of the expert: choose, and run that intent, keeping it while it is the same act."
   [world sim event]
@@ -851,6 +934,7 @@
                   ensure-stand
                   seek)
         sit (situation world sim)
+        world (track-window world sim sit)
         want (choose sit)
         world (if (= :peek (:expert/why want))
                 (assoc world :expert/peeking? true)
@@ -900,6 +984,8 @@
    :intent (get-in world [:plan/intent :intent/kind])
    :why (:expert/why world)
    :blazes (count (filter #(= :blaze (:type %)) (vals (:sim/mobs sim))))
+   :seers (:expert/seers world 0)
+   :seer-max (:expert/seer-max world 0)
    :fireballs (count (:sim/fireballs sim))
    :sealed? (boolean (when-let [site (:pocket/site world)] (pocket/sealed? world site)))
    :phase (phase-of world (:expert/spawner world))
@@ -979,7 +1065,13 @@
      :left? (= :done end)
      :end end
      :health (:player/health world)
-     :why (:expert/why world)}))
+     :why (:expert/why world)
+     :seers-max (:expert/seer-max world 0)
+     :sorties (:expert/sorties world 0)
+     :hits (:expert/hits world 0)
+     :kills (:expert/kills world 0)
+     :drops (count (:expert/rod-seen world))
+     :pickups rods}))
 
 (defn- play
   "Run the expert on a fresh handshake until it leaves, dies, or max-ms passes."
@@ -1046,7 +1138,8 @@
                               " " (pr-str (mapv str (take 6 (.getStackTrace e)))))}]
         (say "EXPERT" (pr-str line))
         line)
-      (let [line (result-line (merge (:world played) tag) (:sim played))]
+      (let [world (finish-window (:world played) (:sim played))
+            line (result-line (merge world tag) (:sim played))]
         (say "EXPERT" (pr-str line))
         line))))
 
