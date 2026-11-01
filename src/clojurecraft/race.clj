@@ -548,32 +548,35 @@
   [[x y z] block]
   (str "execute in minecraft:the_nether if block " x " " y " " z " " block))
 
+(def ground-drop 3)                   ; blocks the floor may fall away round a pad and still be ground: the Nether's floors are not level, a step down of three is no ledge
 (def ground-top 100)
 (def ground-bottom 40)               ; the lava sea is at y 31; a pad is cut well over it
 
 (defn ground-y
   "The height of the first ground under the roof for a pad at [x z], from ground-top down to
    ground-bottom: ground under the cell, air in it and the two over it, and ground under every
-   cell of ground-ring at the same height (a ledge is not ground), or nil. Race 9d15bd6, lane 7:
+   cell of ground-ring within ground-drop below it (a ledge is not ground, a slope is), or nil. The first version asked the ring at exactly the pad's floor: of 16 pads chosen in lane 2 of race f8b28e3, 15 fell back to y 72 after 333 and 192 `:no-ground` rejections. Race 9d15bd6, lane 7:
    Clj_r04 and Clj_r08 stepped off a pad built at the fixed y 72 into a cavern and fell 37 blocks into
    the lava sea (\"tried to swim in lava\" at y 31): no arrival by portal ever leaves a platform
    with nothing round it."
   [rc [x z _]]
-  (with-loaded
-   rc
-   [(- x 24) (- z 24) (+ x 24) (+ z 24)]
-   (fn []
-     (let [ok? #(fixture/passed? (rcon/command! rc %))
-           air? (fn [c]
-                  (or (ok? (air-test c "minecraft:air")) (ok? (air-test c "minecraft:cave_air"))))]
-       (loop [y ground-top]
-         (cond (< y ground-bottom) nil
-               (and (ok? (ground-test [x (dec y) z]))
-                    (every? air? [[x y z] [x (inc y) z] [x (+ y 2) z]])
-                    (every? (fn [[dx dz]] (ok? (ground-test [(+ x dx) (dec y) (+ z dz)])))
-                            ground-ring))
-               y
-               :else (recur (dec y))))))))
+  (with-loaded rc
+               [(- x 24) (- z 24) (+ x 24) (+ z 24)]
+               (fn []
+                 (let [ok? #(fixture/passed? (rcon/command! rc %))
+                       air? (fn [c]
+                              (or (ok? (air-test c "minecraft:air"))
+                                  (ok? (air-test c "minecraft:cave_air"))))]
+                   (loop [y ground-top]
+                     (cond (< y ground-bottom) nil
+                           (and (ok? (ground-test [x (dec y) z]))
+                                (every? air? [[x y z] [x (inc y) z] [x (+ y 2) z]])
+                                (every? (fn [[dx dz]]
+                                          (some #(ok? (ground-test [(+ x dx) (- y %) (+ z dz)]))
+                                                (range 1 (inc ground-drop))))
+                                        ground-ring))
+                           y
+                           :else (recur (dec y))))))))
 
 (defn pad-unsafe
   "Why the pad is no landing, :bricks (inside the fortress's body) or :mobs (a danger-mob near), or

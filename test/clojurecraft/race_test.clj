@@ -396,3 +396,8 @@
   ;; among them; sweeps and retaliation at a shared spawner
   (is (= ["team add racers" "team modify racers friendlyFire false"] race/team-commands))
   (is (= "team join racers Clj_r07" (race/team-join-command "Clj_r07"))))
+
+(deftest the-floor-round-a-pad-may-slope
+  ;; race f8b28e3, lane 2: 525 candidates answered :no-ground and 15 of 16 pads fell back to y 72
+  (is (= 3 race/ground-drop) "a floor three lower is a slope, a deeper drop is a ledge")
+  (is (< race/ground-drop 8)))
