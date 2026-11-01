@@ -32,6 +32,7 @@
             [clojurecraft.dimension :as dimension]
             [clojurecraft.end :as end]
             [clojurecraft.entity :as entity]
+            [clojurecraft.fire :as fire]
             [clojurecraft.fluid :as fluid]
             [clojurecraft.food :as food]
             [clojurecraft.hunger :as hunger]
@@ -1294,7 +1295,7 @@
                  :sim/air max-air
                  :sim/player-pos [x y z]
                  :sim/dimension (if stays? here dimension/overworld))
-          (dissoc :sim/eating :sim/window :sim/view-at)
+          (dissoc :sim/eating :sim/window :sim/view-at :sim/fire)
           (cond-> (:sim/difficulty sim) (with-food-value hunger/fresh))
           (update :sim/respawns inc)
           (send (if stays?
@@ -2432,6 +2433,56 @@
                 (teleport-mob sim eid (mob/toward-aim pos (physics/eye player) r1 r2 r3))]
             (cond-> sim landed? (assoc-in [:sim/mobs eid :far-ticks] 0))))))
 
+(defn tell-damage
+  "The model with a damage-event for the player queued: the hurt's source type (mob/damage-source of
+   cause, generic for one not there) and the mob that dealt it (eid, its id + 1 as the cause, as the
+   server numbers it), nil for none. The bot reads the strike from it (:player/hurt-at,
+   combat/striker)."
+  [sim cause eid]
+  (send sim
+        {:packet/name :damage-event
+         :entity-id (player-eid-of sim)
+         :source-type (get mob/damage-source cause 18)
+         :source-cause (if eid (inc eid) 0)
+         :source-direct (or eid 0)}))
+
+(defn tell-flags
+  "The model with the player's shared flags byte told to the client (set-entity-data): bits, the
+   on-fire bit while it burns, 0 when it is out."
+  [sim bits]
+  (send sim
+        {:packet/name :set-entity-data
+         :entity-id (player-eid-of sim)
+         :metadata {entity/flags-index bits}}))
+
+(defn ignite-player
+  "The model with the player set alight for ms (fire/ignite), the flags byte told when it was not
+   burning."
+  [sim ms]
+  (let [fresh? (nil? (:sim/fire sim))]
+    (cond-> (update sim :sim/fire fire/ignite (:sim/now sim) ms)
+      fresh? (tell-flags entity/on-fire-bit))))
+
+(defn tick-burn
+  "One game tick of the player's burning (fire/tick): a hurt of fire/burn-damage when one is due
+   (on_fire, told as a damage-event, armour takes none of it), the flags byte told when a fire block
+   lit it and when it ended or water put it out. A dead player burns no more."
+  [sim]
+  (let [pos (:sim/player-pos sim)
+        id (when pos (block-at sim (mapv #(long (math/floor %)) pos)))
+        env {:water? (boolean (and id (contains? blocks/water-states id)))
+             :flame? (boolean (and id (fire/flame? id)))}
+        before (:sim/fire sim)
+        [after event] (fire/tick before (:sim/now sim) env)]
+    (cond (<= (:sim/health sim) 0.0) (dissoc sim :sim/fire)
+          :else
+          (cond-> (if after (assoc sim :sim/fire after) (dissoc sim :sim/fire))
+            (and after (nil? before)) (tell-flags entity/on-fire-bit)
+            (= :out event) (tell-flags 0)
+            (= :hurt event)
+            (-> (hurt fire/burn-damage true :on_fire)
+                (tell-damage :on_fire nil))))))
+
 (defn strike
   "A melee mob with the player in reach (on the plane within its :reach, feet within 1.5 in
    height) hits it every :every ticks for its damage scaled by the difficulty."
@@ -2444,7 +2495,8 @@
           :else
           (-> sim
               (assoc-in [:sim/mobs eid :attack-at] (+ now (* (:every k) physics/tick-ms)))
-              (hurt (armoured sim (mob/scaled (:melee k) (:sim/difficulty sim))) true type)))))
+              (hurt (armoured sim (mob/scaled (:melee k) (:sim/difficulty sim))) true type)
+              (tell-damage :mob_attack eid)))))
 
 (defn shoot
   "A shooter (a skeleton's arrow, a blaze's fireball) within its :range of the player, with a
@@ -2463,7 +2515,9 @@
           :else
           (-> sim
               (assoc-in [:sim/mobs eid :attack-at] (+ now (* (:every k) physics/tick-ms)))
-              (hurt (armoured sim (mob/scaled (:shoot k) (:sim/difficulty sim))) true type)))))
+              (hurt (armoured sim (mob/scaled (:shoot k) (:sim/difficulty sim))) true type)
+              (tell-damage (or (:projectile k) type) eid)
+              (cond-> (:ignites k) (ignite-player (:ignites k)))))))
 
 (defn swell
   "A creeper within :swell of the player lights its fuse; with the player past unswell the fuse
@@ -2990,6 +3044,7 @@
   (-> (assoc sim :sim/now now)
       kill
       drown
+      tick-burn
       feed
       tick-eating
       tick-delayed

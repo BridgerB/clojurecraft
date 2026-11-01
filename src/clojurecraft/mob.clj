@@ -104,6 +104,8 @@
            :speed 0.0
            :follow 48.0
            :shoot 5.0
+           :projectile :fireball
+           :ignites 5000
            :every 60
            :range 16.0
            :keep 16.0
@@ -586,6 +588,12 @@
   (- (long (math/floor (* pack-walk r1))) (long (math/floor (* pack-walk r2)))))
 
 ;; ---------------------------------------------------------------- spawners
+
+(def damage-source
+  "The damage-event source-type ids the server sends for what hurts the player, by what hurt:
+   as seen in race f8b28e3's recordings (26.1.2): a small fireball 14, a mob's melee 28, burning 31,
+   standing in fire 21, a fall 10, an arrow 0. A cause not here is generic (18)."
+  {:fireball 14 :mob_attack 28 :on_fire 31 :in_fire 21 :fall 10 :arrow 0})
 
 (def spawner-block
   "The state id of a spawner block: a fortress's makes blazes (every spawner the model's Nether

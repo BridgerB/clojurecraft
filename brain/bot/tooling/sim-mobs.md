@@ -8,6 +8,9 @@ status: verified
 lastUpdated: 2026-10-22
 verifiedAgainst: HEAD
 sourceRefs:
+  - src/clojurecraft/fire.clj#defn tick
+  - src/clojurecraft/sim.clj#defn tick-burn
+  - test/clojurecraft/fire_test.clj#a-fireball-burns-five-seconds-one-health-a-second
   - src/clojurecraft/mob.clj#def kinds
   - src/clojurecraft/mob.clj#def warped-kinds
   - src/clojurecraft/mob.clj#defn nether-spot?
@@ -93,6 +96,9 @@ Probe 39779112668 showed the pearl hunt in R1-R3 provoking endermen that never r
 
 ## Armour
 Every mob hit, arrow and blast on the player passes through `armoured` (issue #263): the points and toughness of the pieces in window 0's four armour slots (`mob/armour-points`, read from `ArmorMaterials`) take their share by `mob/absorbed` (CombatRules: armour counts for points − damage / (2 + toughness / 4), at least a fifth of the points and at most 20, 4% a point), after the difficulty scales the hit. Without it an enderman's 7 a second beat every sword before the fight's break-off ([[ender-pearls]]). Starving, drowning and lava are not mob hits and pass untouched. The pieces never wear out.
+
+## Fire on the player (issue #262, sim vs real blaze fights)
+The sim and the real race disagreed on stage 17 (f8b28e3: 6.8% of sim runs reached seven rods, 1.9% of real). Measured over 45 real recordings (lane 2, 1241 blazes in view, the Nether segments), burning was 1778 of 2600 hurts and 45% of all the health the blaze fights cost, and the sim had no fire at all. `fire.clj` is the rules: a small fireball's hit (`:ignites 5000` on the blaze row) sets the player on fire for five seconds (`fire/ignite`: a hurt at once, then every second, five in all, 1.0 each, `on_fire`, armour takes none), water at the feet puts it out, standing in a fire block lights it for eight seconds. `sim/tick-burn` applies it each tick (`:sim/fire`), tells the flags byte to the client (`tell-flags`, bit 0x01 of index 0, as the real server's `{0 1}` and `{0 0}`) and sends a `damage-event` for every hurt (`tell-damage`, source types `mob/damage-source` as the recordings number them: fireball 14, mob_attack 28, on_fire 31): the bot reads `:player/hurt-at` and the strike from them, which the model never sent before. `fire-test` pins them.
 
 ## Fixtures
 `init`'s `:mobs [{:type kind :pos [x y z]}]` places a fixture's mobs, sent at login and never despawned; `with-mobs` does the same to a model already in play (the tests' arenas). A mob given acts with or without a difficulty (nil is Normal's damage); the player's health is told when a mob is present (`sync-health`).
