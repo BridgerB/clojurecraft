@@ -968,7 +968,9 @@
           preempt? (plan-tick (abandon-intent world i :preempted) event table)
           cut? (plan-tick cut-world event table)
           i (run-intent world i event table)
-          (and (:plan/explore world) (not (:goal/trap goal)) (not (held? world goal)))
+          (and (:plan/explore world) (held? world goal))
+          (plan-tick (dissoc world :plan/explore) event table)
+          (and (:plan/explore world) (not (:goal/trap goal)))
           (start-intent (dissoc world :plan/explore)
                         {:intent/kind :walk
                          :intent/target (:plan/explore world)

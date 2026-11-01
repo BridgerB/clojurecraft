@@ -2587,7 +2587,7 @@
       (and (not (contains? answers-to-hand (:intent/kind i)))
            (not (:intent/wall? i))
            (not (and (= :walk (:intent/kind i)) (= (:intent/target i) (:pearls/shelter world))))
-           (or (out-walk? world i) (not= (:pearls/shelter world) (intent/feet world)))
+           (not= (:pearls/shelter world) (intent/feet world))
            (or (beset? world)
                (and (out-walk? world i)
                     (some? (shelter world))

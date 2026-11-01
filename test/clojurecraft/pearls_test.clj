@@ -3261,6 +3261,7 @@
   (let [angry (assoc (enderman [20.5 61.0 8.5]) :entity/creepy? true)
         w (-> (looked (burrowed [8.5 61.0 8.5] {7 angry}) 12)
               (assoc :plan/status :active
+                     :plan/goals #{:ender-pearls}
                      :plan/watch
                      {:key [0 0 0 0] :lo [8.5 61.0 8.5] :hi [8.5 61.0 8.5] :at 0 :checked 0}
                      :time/now (+ plan/stuck-ms 100000)))
