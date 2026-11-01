@@ -3090,3 +3090,33 @@
       (is (= :pearls (:intent/for i))))
     (is (not (pearls/swarmed? walled)) "a wall between the bot and the blaze: no swarm")
     (is (nil? (pearls/leave-sight walled)) "and nothing to leave")))
+
+(deftest out-of-the-trail-the-bot-leaves-a-blazes-sight-by-the-nearest-cover-and-never-digs-in-it
+  ;; chain-dragon's race f8b28e39d, Clj_r11: a shaft dug straight up under fire, place :no-support
+  ;; and pillar :boxed, repeating, with no trail cell out of sight; and the rods bots of race
+  ;; 9d15bd69b went from 20 to 3.3 hp digging and pillaring in a blaze's view
+  (let [blaze {:entity/type (blocks/entity-types :blaze)
+               :entity/pos [14.5 64.0 8.5]
+               :entity/seen-at 0
+               :entity/health 20.0}
+        stone (blocks/default-state :stone)
+        floor (into {} (for [x (range 0 16) z (range 0 16)] [[x 63 z] stone]))
+        wall (into {} (for [y (range 64 68) z (range 6 11)] [[5 y z] stone]))
+        open (-> (standing {9 blaze})
+                 (assoc :world/chunks {[0 0] (world/column floor)}))
+        walled (assoc open :world/chunks {[0 0] (world/column (merge floor wall))})
+        hurt #(assoc % :player/health 6.0)
+        digging? #(contains? #{:dig :pillar :place} (:intent/kind %))]
+    (testing "a wall within reach: a walk to a cell behind it, trail or none"
+      (let [i (pearls/leave-sight walled)]
+        (is (= :walk (:intent/kind i)) (pr-str i))
+        (is (< (first (:intent/target i)) 5) "west of the wall, out of the blaze's line")
+        (is (pearls/unseen-from? walled [blaze] (:intent/target i)))
+        (is (not (digging? (plan/next-intent (hurt walled) row plan/goals))))))
+    (testing "no cover at all and under danger-health: a back-off, never a dig or a pillar"
+      (let [i (pearls/leave-sight (hurt open))]
+        (is (nil? (pearls/near-cover-cell open)) "open floor: no cell out of sight within reach")
+        (is (= {:intent/kind :back-off :intent/target 9 :intent/for :pearls} i))
+        (is (not (digging? (plan/next-intent (hurt open) row plan/goals))))))
+    (testing "healthy with no cover: the old branches, no back-off"
+      (is (nil? (pearls/leave-sight open))))))

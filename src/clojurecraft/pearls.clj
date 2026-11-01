@@ -1563,6 +1563,13 @@
 
 (def eye-height 1.62)                   ; blocks over a cell's floor that a standing bot's eye is
 
+(defn unseen-from?
+  "Is cell [x y z], a standing eye over it, out of the sight of every entity in shooters (no clear
+   line, combat/clear?, to its aim)?"
+  [world shooters-seq [x y z]]
+  (let [eye [(+ x 0.5) (+ y eye-height) (+ z 0.5)]]
+    (every? #(not (combat/clear? world eye (combat/aim %))) shooters-seq)))
+
 (defn out-of-sight-cell
   "The newest cell of the fortress trail (:fortress/trail, the feet cells a tunnel began its steps
    from, oldest first) from which no entity of shooters has a clear line to a standing eye, or nil.
@@ -1572,21 +1579,50 @@
   (let [ss (vals (shooters world))]
     (when (seq ss)
       (->> (reverse (:trail/cells (:fortress/trail world)))
-           (filter (fn [[x y z]]
-                     (let [eye [(+ x 0.5) (+ y eye-height) (+ z 0.5)]]
-                       (every? #(not (combat/clear? world eye (combat/aim %))) ss))))
+           (filter #(unseen-from? world ss %))
+           first))))
+
+(def cover-reach 5)                     ; blocks round the feet within which a standable cell out of a shooter's sight is looked for
+
+(defn near-cover-cell
+  "The nearest cell within cover-reach (the plane, two up or down) that the feet could stand on
+   (path/standable?) and that no entity of shooters has a clear line to, or nil: the way out of a
+   shooter's sight when the trail has no cell for it (a race bot that tunnelled in a different way,
+   or a trail reset by another tunnel). Clj_r11 of race f8b28e39d (chain-dragon) dug a shaft
+   straight up under fire, place :no-support and pillar :boxed, repeating, until dead."
+  [world]
+  (let [ss (vals (shooters world))
+        feet (intent/feet world)
+        [fx fy fz] feet]
+    (when (seq ss)
+      (->> (for [dx (range (- cover-reach) (inc cover-reach))
+                 dz (range (- cover-reach) (inc cover-reach))
+                 dy (range -2 3)]
+             [(+ fx dx) (+ fy dy) (+ fz dz)])
+           (filter #(path/standable? world %))
+           (sort-by #(path/octile feet %))
+           (filter #(unseen-from? world ss %))
            first))))
 
 (defn leave-sight
-  "The walk back along the trail to the newest cell out of every shooter's sight, or nil: when a
-   shooter has a clear line to the bot (combat/seen?), no enderman is tracked within seek-radius,
-   and such a cell is routable. Pure."
+  "The intent that gets the bot out of the shooters' sight, or nil: with a shooter in view
+   (combat/seen?) and no enderman tracked within seek-radius, a routable walk to the newest
+   fortress trail cell out of sight (out-of-sight-cell), else to the nearest cell round the feet out
+   of sight (near-cover-cell), else, at under danger-health, a back-off from the nearest shooter in
+   view: never a dig or a pillar in its sight, which is where the rod bots' hp went from 20 to 3.3
+   in 37 s (probe 41251668076). Pure."
   [world]
-  (when (and (some #(combat/seen? world %) (vals (shooters world)))
-             (empty? (endermen world seek-radius)))
-    (when-let [c (out-of-sight-cell world)]
-      (let [i {:intent/kind :walk :intent/target c :intent/for :pearls}]
-        (when (intent/routable? world i) i)))))
+  (let [shot (into {} (filter (fn [[_ e]] (combat/seen? world e))) (shooters world))]
+    (when (and (seq shot) (empty? (endermen world seek-radius)))
+      (let [walk (fn [c]
+                   (when c
+                     (let [i {:intent/kind :walk :intent/target c :intent/for :pearls}]
+                       (when (intent/routable? world i) i))))]
+        (or (walk (out-of-sight-cell world))
+            (walk (near-cover-cell world))
+            (when (< (:player/health world 20.0) danger-health)
+              (let [[eid _] (entity/nearest shot (:player/pos world))]
+                {:intent/kind :back-off :intent/target eid :intent/for :pearls})))))))
 
 (defn shot-at?
   "Is a ghast within its :range (mob/kinds) with a clear line from the eye (combat/seen?)? Never
