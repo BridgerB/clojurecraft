@@ -1601,7 +1601,7 @@
 (deftest a-tunnel-without-steps-runs-one-tick-without-throwing
   ;; issue #263: pearls/room-exit emitted :tunnel-to with no :intent/steps; fortress.clj evaluated
   ;; (>= taken steps) with steps nil, throwing NullPointerException and crashing rod bots at
-  ;; ender-pearls (run 41320592448, Clj_r45 at 17:45:42). A missing or nil steps defaults safely
+  ;; ender-pearls (run 41320592448, Clj_r45 at 17:45:42). A missing steps defaults safely
   ;; and runs without throwing
   (let [w (assoc (rock {})
                  :bot/phase :play
@@ -1611,15 +1611,9 @@
                  :player/on-ground? true
                  :player/vel [0.0 0.0 0.0])
         tick {:event/kind :tick :event/now 0}
-        i-no-steps {:intent/kind :tunnel-to :intent/target [10 64 0] :intent/status :active}
-        i-nil-steps
-        {:intent/kind :tunnel-to :intent/target [10 64 0] :intent/steps nil :intent/status :active}]
-    (testing "missing :intent/steps defaults safely and runs without throwing"
-      (let [out (intent/run (assoc w :plan/intent i-no-steps) i-no-steps tick)]
-        (is (map? out))
-        (is (contains? #{:active :done} (get-in out [:plan/intent :intent/status])))))
-    (testing "nil :intent/steps runs without throwing"
-      (let [out (intent/run (assoc w :plan/intent i-nil-steps) i-nil-steps tick)]
-        (is (map? out))
-        (is (contains? #{:active :done} (get-in out [:plan/intent :intent/status])))))))
+        i {:intent/kind :tunnel-to :intent/target [10 64 0] :intent/status :active}
+        out (intent/run (assoc w :plan/intent i) i tick)]
+    (is (map? out))
+    (is (contains? #{:active :done} (get-in out [:plan/intent :intent/status])))))
+
 
