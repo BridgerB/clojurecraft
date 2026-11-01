@@ -1943,7 +1943,7 @@
    while the health is at low-health (12) or more, or nil. In the pocket the target stays the one
    at hand, and two in melee are not committed: the seal is the answer. In the open, two in melee
    are committed only when yield-fight? (at combat/yield-line or over). Committed for its whole
-   duration, to the end (:intent/to-the-end?), yielding under the yield line (:intent/yield?).
+   duration, to the end (:intent/to-the-end?), yielding under the yield line on a crowd (:intent/yield?).
    Blaze-race-z8 job 6 (landing 6): two blazes at 0.7 to 3.1 blocks and hp 20 to 3.6 in 9 s, one
    attack sent, because :fight, :place x4, :dodge, :pocket, :pillar, :dig and :seal took turns
    every 0.1 to 0.3 s: with a blaze in melee range no row held."
@@ -1965,7 +1965,10 @@
     (when-let [[eid] (if (pocket/in? world)
                        (at-hand-blaze world)
                        (or (meleeing-blaze world) (at-hand-blaze world)))]
-      {:intent/kind :fight :intent/target eid :intent/to-the-end? true :intent/yield? true})))
+      {:intent/kind :fight
+       :intent/target eid
+       :intent/to-the-end? true
+       :intent/yield? (melee-crowd? world)})))
 
 (defn committed-fight?
   "Is running intent i a :fight with a blaze at hand and the health at low-health or more?"
@@ -2013,7 +2016,9 @@
           (not (and (rod-grab? world i) (grab-over-refuge? world)))
           (some? (refuge-now world (nearest-spawner world))))
      (and (not (hurt? world))
+          (yield-fight? world)
           (not= :fight (:intent/kind i))
+          (not (contains? refuge-kinds (:intent/kind i)))
           (not (and (= :cover (:intent/for i)) (crowded? world)))
           (not (and (= :collect-drops (:intent/kind i)) (some? (near-rod world))))
           (not (and (= :dig (:intent/kind i)) (= :fire-out (:intent/for i))))
@@ -2114,7 +2119,10 @@
            (not (crowded? world))
            (yield-fight? world)
            (nil? (blaze-fire world)))
-      {:intent/kind :fight :intent/target heid :intent/to-the-end? true :intent/yield? true}
+      {:intent/kind :fight
+       :intent/target heid
+       :intent/to-the-end? true
+       :intent/yield? (melee-crowd? world)}
       @wary @wary
       @away @away
       (window/reserve-toss world) (window/reserve-toss world)

@@ -2541,3 +2541,23 @@
                     (memory/remember-intention {:intent/id 91 :intent/kind :pocket} :done))]
         (is (true? (blaze/peeking? out)))
         (is (false? (blaze/peeking? (dissoc out :plan/intent))) "no tunnel running: not a peek")))))
+
+(deftest refuge-intent-is-never-interrupted-for-a-fightable-blaze
+  ;; blaze-race-z17 job 4 (plan 41299776731): at hp 12.1 with blaze 469 at hand in melee,
+  ;; :pocket was interrupted 28 times in 3 s because plan/interrupts? saw (not (hurt? world))
+  ;; and blaze 469 fightable, never protecting refuge-kinds; after 6 starts pocket-churning?
+  ;; blocked :pocket and :fight 469 churned 52 times yielding on tick 1 under yield-line 12.8.
+  (let [blaze (entity :blaze [9.5 64.0 8.5] :entity/health 20.0)
+        w (-> (standing {469 blaze})
+              (assoc :player/health 12.1 :time/now 100000))
+        pocket-intent
+        {:intent/kind :pocket :intent/site {:pocket/cell [8 64 8]} :intent/goal :blaze-rods}
+        fight (blaze/commit-fight w)]
+    (is (false? (plan/interrupts? w row pocket-intent))
+        "a running refuge intent is not cut for a fightable blaze")
+    (is (false? (:intent/yield? fight))
+        "a lone blaze in melee does not yield under yield-line 12.8")
+    (let [stepped (intent/run w fight nil)]
+      (is (not= :done (:intent/stage (:plan/intent stepped)))
+          "the fight does not yield on tick 1 in combat"))))
+
