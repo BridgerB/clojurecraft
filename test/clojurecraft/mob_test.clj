@@ -690,6 +690,51 @@
     (is (some #{28} (map :source-type (said hit :damage-event))) "a mob attack")
     (is (< (:sim/health again) 14.0) "hurt again twenty ticks on")))
 
+(def pocket
+  "A sealed 1x2 at [4 64 4]: air at the feet and the head, cobble on every side and the roof.
+   The arena's own stone is the floor under y 64."
+  (let [air #{[4 64 4] [4 65 4]}]
+    (into {}
+          (for [x (range 3 6)
+                y (range 64 67)
+                z (range 3 6)
+                :when (not (air [x y z]))]
+            [[x y z] (blocks/default-state :cobblestone)]))))
+
+(defn in-pocket
+  "The arena with the player standing in the pocket at feet."
+  [feet mobs]
+  (assoc (arena pocket {} :normal night mobs) :sim/player-pos feet))
+
+(deftest a-sealed-pocket-blocks-a-blaze-two-blocks-off
+  ;; feet [4.5 64 4.5], blaze [6.5 64 4.5]: two blocks, the old reach, with cobble at x 5
+  ;; between the boxes. The boxes do not meet and the line crosses the wall.
+  (let [feet [4.5 64.0 4.5]
+        blaze [6.5 64.0 4.5]
+        sim (in-pocket feet [{:type :blaze :pos blaze}])
+        later (ticks sim 22)]
+    (is (not (mob/touches? :blaze blaze feet)) "two blocks is not a touch")
+    (is (mob/touches? :blaze [1.0 64.0 0.5] [0.5 64.0 0.5]) "the open strike still meets")
+    (is (= 20.0 (:sim/health later)) "no contact through the wall")
+    (is (not-any? #(= 28 (:source-type %)) (said later :damage-event)))
+    (is (nil? (:sim/fire later)) "the wall does not light the pocket")))
+
+(deftest a-fireball-stops-at-the-pocket-wall-and-does-not-burn-through-it
+  ;; the player stands against the cobble, so the box grown by the fireball's radius reaches
+  ;; into that cell. A sample there is a wall, not a hit, and the fire is left outside.
+  (let [feet [4.8 64.0 4.5]
+        from [6.05 65.4 4.5]
+        eye (physics/eye feet)
+        dir (mob/aim from eye 0.5 0.5 0.5 0.5)
+        sim (-> (in-pocket feet [])
+                (assoc-in [:sim/fireballs 90] {:pos from :dir dir :owner 91 :born 0 :kind :blaze}))
+        later (ticks sim 20)]
+    (is (= :wall (first (sim/fireball-path sim from dir))) "the cobble stops it")
+    (is (= 20.0 (:sim/health later)) "nothing through the wall")
+    (is (nil? (:sim/fire later)) "and it does not catch")
+    (is (empty? (:sim/fireballs later)))
+    (is (not-any? #(#{14 31} (:source-type %)) (said later :damage-event)))))
+
 (deftest a-blaze-volley-is-a-charge-three-fireballs-and-a-rest
   ;; real: 3 fireballs 0.30 s (6 ticks) apart; volleys 8.9 s (178 ticks) apart at the fastest
   (let [v (:volley (mob/kinds :blaze))

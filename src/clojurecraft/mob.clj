@@ -459,15 +459,37 @@
            :else pos))))
 
 (defn in-reach?
-  "Is a melee mob of kind at pos near enough to hit a player at target: on the plane within its
-   :reach, the feet within 1.5 in height? A flier (BlazeAttackGoal: distance squared under 4) strikes
-   within :reach of the target in space, feet to feet."
+  "Is a mob of kind at pos near enough to close on a player at target: on the plane within its
+   :reach, the feet within 1.5 in height? A flier (BlazeAttackGoal: distance squared under 4) is
+   within :reach in space, feet to feet. That is where it hovers to strike. The hit itself is
+   can-strike?: the boxes have to meet, and the line has to be clear."
   [kind pos target]
   (let [k (kinds kind)]
     (if (:flies k)
       (<= (physics/distance pos target) (:reach k 0.0))
       (and (<= (flat-distance pos target) (:reach k 0.0))
            (< (abs (- (second pos) (second target))) 1.5)))))
+
+(defn touches?
+  "Do the hitboxes of a mob of kind at pos and a player with feet at target meet? A blaze's
+   melee is that touch (MeleeAttackGoal: the attack box meets the target's box), not a reach
+   of two across a gap or a wall."
+  [kind pos target]
+  (let [[w h] (:box (kinds kind))
+        [x y z] pos
+        [tx ty tz] target]
+    (and (<= (abs (- x tx)) (+ (/ w 2.0) physics/half-width))
+         (<= (abs (- z tz)) (+ (/ w 2.0) physics/half-width))
+         (<= y (+ ty physics/height))
+         (<= ty (+ y h)))))
+
+(defn can-strike?
+  "May a flier at pos strike a player at target: the boxes touch (touches?) and nothing solid
+   stands between its head and the player's eye (sight?). Vanilla's melee is that pair
+   (MeleeAttackGoal meets the target's box, and Sensing.hasLineOfSight). A reach of two
+   through a sealed wall is not a hit."
+  [solid? kind pos target]
+  (and (touches? kind pos target) (sight? solid? (head kind pos) (physics/eye target))))
 
 (defn fly-toward
   "A flier at pos one tick on toward target at speed blocks a tick, in space: the straight step when
