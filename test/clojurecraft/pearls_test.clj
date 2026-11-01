@@ -3235,9 +3235,17 @@
         inside-intent (plan/next-intent w row plan/goals)
         out-walk {:intent/kind :walk :intent/target [30 61 8] :intent/for :relocate}
         stepped-out (assoc w :player/pos [7.5 61.0 8.5])]
-    (testing "inside the burrow, next-intent stays in lookout and never starts an out-walk"
-      (is (= :lookout (:intent/kind inside-intent)))
+    (testing
+      "inside the burrow with an angry enderman, the hunt holds the fight and never relocates"
+      (is (= :fight (:intent/kind inside-intent)))
+      (is (:intent/hold? inside-intent))
       (is (= :pearls (:intent/for inside-intent))))
+    (testing
+      "when the held fight gave up or blacklisted, it stays in lookout, never starting an out-walk"
+      (let [w-bl (assoc w :plan/blacklist #{7})
+            i (plan/next-intent w-bl row plan/goals)]
+        (is (= :lookout (:intent/kind i)))
+        (is (= :pearls (:intent/for i)))))
     (testing "stepping out of the burrow with an angry enderman within hold-radius is interrupted"
       (is (plan/interrupts? stepped-out row out-walk)))
     (testing "outside the burrow with an angry enderman within hold-radius routes way-home"
@@ -3245,3 +3253,29 @@
         (is (= :walk (:intent/kind i)))
         (is (= [8 61 8] (:intent/target i)))
         (is (= :shelter (:intent/for i)))))))
+
+(deftest while-an-angry-enderman-is-within-the-hold-radius-the-burrow-is-held-not-stuck
+  ;; the stuck watchdog's forced explore (stuck 0 :ender-pearls explore) walked job 2 of round q
+  ;; out into the open at 63 min, where enderman 1236 slew it. While an angry enderman is within
+  ;; the hold radius, the stuck watchdog must count the row as held, not stuck: no unstick, no explore walk.
+  (let [angry (assoc (enderman [20.5 61.0 8.5]) :entity/creepy? true)
+        w (-> (looked (burrowed [8.5 61.0 8.5] {7 angry}) 12)
+              (assoc :plan/status :active
+                     :plan/watch
+                     {:key [0 0 0 0] :lo [8.5 61.0 8.5] :hi [8.5 61.0 8.5] :at 0 :checked 0}
+                     :time/now (+ plan/stuck-ms 100000)))
+        watched (plan/watch w plan/goals {:event/rand 0.5})]
+    (testing
+      "the watchdog counts the burrow as held, not stuck: watch is restamped, unstuck not incremented"
+      (is (plan/held? w row))
+      (is (= 0 (:plan/unstuck watched 0)))
+      (is (nil? (:plan/explore watched)))
+      (is (= (:time/now w) (:at (:plan/watch watched))))
+      "watch timestamp restamped to now")
+    (testing
+      "even with :plan/explore in world, plan-tick does not start an explore walk out of the burrow"
+      (let [with-explore (assoc w :plan/explore [40 61 8])
+            stepped
+            (plan/plan-tick with-explore {:event/kind :tick :event/now (:time/now w)} plan/goals)]
+        (is (not= :explore (get-in stepped [:plan/intent :intent/for])) "no explore walk started")
+        (is (not= [40 61 8] (get-in stepped [:plan/intent :intent/target])))))))

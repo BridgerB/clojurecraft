@@ -194,16 +194,25 @@
 
 (defmethod holds? :default [i] (and (= :defend (:intent/goal i)) (not= :fight (:intent/kind i))))
 
+(defmulti held-goal?
+  "Is goal held by a threat or defense so the watchdog treats it as held, not stuck?"
+  {:arglists '([world goal])}
+  (fn [_world goal] (:goal/plan goal :needs)))
+
+(defmethod held-goal? :default [_ _] false)
+
 (defn held?
-  "Is running intent i kept against goal, the row chosen now: i serves another row, i is a
-   defence (holds?), and goal is no escape (:goal/trap)? False for nil i or goal."
-  [i goal]
-  (boolean (and i
-                goal
-                (:intent/goal i)
-                (not= (:goal/id goal) (:intent/goal i))
-                (not (:goal/trap goal))
-                (holds? i))))
+  "Is running intent i kept against goal, or (with world) is goal held so the watchdog treats
+   it as held, not stuck?"
+  ([i goal]
+   (if (and i (contains? i :intent/kind))
+     (boolean (and goal
+                   (:intent/goal i)
+                   (not= (:goal/id goal) (:intent/goal i))
+                   (not (:goal/trap goal))
+                   (holds? i)))
+     (held-goal? i goal)))
+  ([world goal _] (held-goal? world goal)))
 
 (defmethod interrupts? :default [_ _ _] false)
 (defmethod steer :default [world _] world)
@@ -761,7 +770,8 @@
         (reduce (fn [w path] (cond-> w (get-in w path) (assoc-in path now)))
                 w
                 (get clocks (:goal/plan goal) [])))
-      (cond-> (not (menaced? world)) (assoc :plan/explore (explore-cell world r)))
+      (cond-> (not (or (menaced? world) (held? world goal)))
+              (assoc :plan/explore (explore-cell world r)))
       (update :plan/avoid
               #(if (and (:until %) (< now (:until %)))
                  %
@@ -788,7 +798,8 @@
             (cond (nil? goal) world
                   (or (and (not (contains? fact-rows (:goal/plan goal)))
                            (>= (extent w) stuck-extent))
-                      (not= k (:key w)))
+                      (not= k (:key w))
+                      (held? world goal))
                   (assoc world :plan/watch (watch-stamp world k now now))
                   (or (< (- now (:at w)) (get stuck-after (:goal/plan goal) stuck-ms))
                       (and (menaced? world)
@@ -957,7 +968,7 @@
           preempt? (plan-tick (abandon-intent world i :preempted) event table)
           cut? (plan-tick cut-world event table)
           i (run-intent world i event table)
-          (and (:plan/explore world) (not (:goal/trap goal)))
+          (and (:plan/explore world) (not (:goal/trap goal)) (not (held? world goal)))
           (start-intent (dissoc world :plan/explore)
                         {:intent/kind :walk
                          :intent/target (:plan/explore world)

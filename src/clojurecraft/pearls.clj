@@ -732,13 +732,16 @@
   (:hold-radius thresholds))
 
 (defn angry-within?
-  "Does an angry enderman (entity/creepy?, blacklisted or not) stand within radius of the feet,
-   height counted?"
+  "Does an angry enderman (entity/creepy?, blacklisted or not) stand within radius of the feet
+   and danger-rise of their height?"
   [world radius]
-  (boolean (some (fn [[_ e]]
-                   (and (entity/creepy? e)
-                        (<= (physics/distance (:player/pos world) (:entity/pos e)) radius)))
-                 (endermen (dissoc world :plan/blacklist) stare-range))))
+  (let [p (:player/pos world)]
+    (boolean (some (fn [[_ e]]
+                     (let [q (:entity/pos e)]
+                       (and (entity/creepy? e)
+                            (<= (physics/distance p q) radius)
+                            (<= (abs (- (physics/y-of q) (physics/y-of p))) danger-rise))))
+                   (endermen (dissoc world :plan/blacklist) stare-range)))))
 
 (defn shelter
   "The hunt's burrow (:pearls/shelter) while it is within shelter-reach of the feet, still a
@@ -2560,6 +2563,12 @@
                   (or (nil? e)
                       (> (physics/distance (:player/pos world) (:entity/pos e)) strike-range))))))
 
+(defmethod plan/held-goal? :pearls
+  ;; with an angry enderman within hold-radius and a burrow held, the hunt waits inside: the stuck
+  ;; watchdog counts this as held, not stuck, and never forces an explore walk out of the burrow
+  [world _]
+  (boolean (and (shelter world) (angry-within? world hold-radius))))
+
 (defmethod plan/interrupts? :pearls
   ;; any running intent but an answer (answers-to-hand) or the walk home ends with an angry
   ;; enderman at hand (beset?), and the hunt plans again: home, the fight held there, or the
@@ -2578,7 +2587,7 @@
       (and (not (contains? answers-to-hand (:intent/kind i)))
            (not (:intent/wall? i))
            (not (and (= :walk (:intent/kind i)) (= (:intent/target i) (:pearls/shelter world))))
-           (not= (:pearls/shelter world) (intent/feet world))
+           (or (out-walk? world i) (not= (:pearls/shelter world) (intent/feet world)))
            (or (beset? world)
                (and (out-walk? world i)
                     (some? (shelter world))
