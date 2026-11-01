@@ -446,3 +446,15 @@
     (is (= r (simrace/death-ended r died false :blaze)) "from spawn, no change")
     (is (= {:ok true :reason :goal} (simrace/death-ended {:ok true :reason :goal} died true :blaze))
         "a goal reached before the death is a success")))
+
+(deftest the-worlds-of-a-set-start-at-different-fortress-places
+  ;; sim race 41256365892: five worlds of R1 died at two places, one Nether and the nearest spawner
+  ;; to each landing being the same few; a salt picks another spawner and turns the ring
+  (let [starts (map #(simrace/fortress-start nether-decoded [64 64 70] %) (range 8))]
+    (is (= [-23.5 64.0 -23.5] (:spawn (first starts))) "salt 0 is the nearest spawner's, as before")
+    (is (every? some? starts))
+    (is (< 1 (count (distinct (map :spawn starts)))) "the ring's turn alone gives another place")
+    (is (= (nth starts 3) (simrace/fortress-start nether-decoded [64 64 70] 3))
+        "the same salt, the same start")
+    (is (= 0 (simrace/world-number {})) "no file, no number")
+    (is (= 41 (simrace/world-number {:capture/file "cache/sim-worlds/R1/41.edn.gz"})))))
