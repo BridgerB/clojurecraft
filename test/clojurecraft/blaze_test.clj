@@ -1271,8 +1271,11 @@
     (is (plan/interrupts? w row tunnel))
     (is (not (plan/interrupts? (assoc w :player/on-fire? false) row {:intent/kind :pocket-hold}))
         "the hold is the answer, not cut for itself")
-    (is (= :pocket (:intent/kind (next-intent w))) "the cell stood in is sealed in place")
-    (is (true? (:pocket/here? (:intent/site (next-intent w)))))))
+    ;; pocket-walls makes [8 64 8] a shaped pocket, so site-near returns it before here-intent.
+    ;; :pocket/here? is only the fallback for a sealable cell that is not already a pocket.
+    (is (= :pocket (:intent/kind (next-intent w))))
+    (is (= [8 64 8] (:pocket/cell (:intent/site (next-intent w))))
+        "the refuge is the walled cell stood in")))
 
 (def cobble (blocks/default-state :cobblestone))
 
