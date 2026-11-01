@@ -1522,6 +1522,11 @@
 
 (def swarm-radius 8.0)                  ; blocks from the feet within which a monster counts toward a swarm
 
+(def ranged-kinds
+  "Kinds that hurt from where they hover, not from the sword's reach: they count toward a swarm
+   only with a clear line to the eye (combat/seen?), and the bot gets out of their sight."
+  #{:blaze :ghast})
+
 (defn swarm
   "{eid entity} of the monsters (blocks/mobs category) alive within swarm-radius of pos (the feet when
    not given) that are
@@ -1536,8 +1541,52 @@
                         (not= :enderman (entity/kind e))
                         (= :monster (:category (blocks/mobs (entity/kind e))))
                         (<= (physics/distance pos (:entity/pos e))
-                            (or (:range (mob/kinds (entity/kind e))) swarm-radius)))))
+                            (or (:range (mob/kinds (entity/kind e))) swarm-radius))
+                        ;; a blaze behind a wall hits nobody: pearl-fight-o's race bots (race 9d15bd69b,
+                        ;; Clj_r24 and four more) stood `swarmed?` by one 19 to 29 blocks off for the
+                        ;; rest of their lives, and travel is gated on it
+                        (or (not (contains? ranged-kinds (entity/kind e)))
+                            (not= pos (:player/pos world))
+                            (combat/seen? world e)))))
          (:world/entities world))))
+
+(defn shooters
+  "{eid entity} of the ranged-kinds alive within their :range of the feet, in sight or not."
+  [world]
+  (into {}
+        (filter (fn [[_ e]]
+                  (and (not (entity/dead? e))
+                       (contains? ranged-kinds (entity/kind e))
+                       (<= (physics/distance (:player/pos world) (:entity/pos e))
+                           (or (:range (mob/kinds (entity/kind e))) swarm-radius)))))
+        (:world/entities world)))
+
+(def eye-height 1.62)                   ; blocks over a cell's floor that a standing bot's eye is
+
+(defn out-of-sight-cell
+  "The newest cell of the fortress trail (:fortress/trail, the feet cells a tunnel began its steps
+   from, oldest first) from which no entity of shooters has a clear line to a standing eye, or nil.
+   The way back out of a blaze room is the way the bot tunnelled in: the race's rod bots (race
+   9d15bd69b, Clj_r24, r35, r04, r02, r11) had no other walk and died in it."
+  [world]
+  (let [ss (vals (shooters world))]
+    (when (seq ss)
+      (->> (reverse (:trail/cells (:fortress/trail world)))
+           (filter (fn [[x y z]]
+                     (let [eye [(+ x 0.5) (+ y eye-height) (+ z 0.5)]]
+                       (every? #(not (combat/clear? world eye (combat/aim %))) ss))))
+           first))))
+
+(defn leave-sight
+  "The walk back along the trail to the newest cell out of every shooter's sight, or nil: when a
+   shooter has a clear line to the bot (combat/seen?), no enderman is tracked within seek-radius,
+   and such a cell is routable. Pure."
+  [world]
+  (when (and (some #(combat/seen? world %) (vals (shooters world)))
+             (empty? (endermen world seek-radius)))
+    (when-let [c (out-of-sight-cell world)]
+      (let [i {:intent/kind :walk :intent/target c :intent/for :pearls}]
+        (when (intent/routable? world i) i)))))
 
 (defn shot-at?
   "Is a ghast within its :range (mob/kinds) with a clear line from the eye (combat/seen?)? Never
@@ -2100,6 +2149,7 @@
                        (and (or angry? in-reach?) (not (unfightable? world eid e))) eid
                        :else tid)]
     (cond
+      (and (not in?) (leave-sight world)) (leave-sight world)
       (and (shot-at? world) (not in?) (cover-from world)) (cover-from world)
       (and home (not in?) (or ce near? hurt? tid aid swarmed?) (intent/routable? world way-home))
       way-home
