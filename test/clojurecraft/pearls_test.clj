@@ -4,6 +4,7 @@
    server model's enderman."
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [clojurecraft.armour :as armour]
+            [clojurecraft.blaze :as blaze]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.combat :as combat]
             [clojurecraft.fixtures :as fx]
@@ -3063,3 +3064,163 @@
         "six stems held: the hunt goes on, the pickaxe made when it falls under spare-digs")
     (is (= :lookout (:intent/kind (plan/next-intent (with 200 0) row plan/goals)))
         "digs to spare: no reserve is cut")))
+
+(deftest a-blaze-behind-a-wall-is-no-swarm-and-one-in-sight-sends-the-bot-back-along-its-trail
+  ;; race 9d15bd69b (lanes 41244936722 and 41245191737): Clj_r24, r35, r04, r02 and r11 held 7 to 9
+  ;; rods and died on the pearl stage in the blaze room, \`swarmed?\` by a blaze 19 to 29 blocks off,
+  ;; digging down and pillaring in its fireballs (hp 20 to 3.3 in 37 s, probe 41251668076); the
+  ;; hunt's travel is gated on swarmed? and nothing walked them out
+  (let [blaze {:entity/type (blocks/entity-types :blaze)
+               :entity/pos [14.5 64.0 8.5]
+               :entity/seen-at 0
+               :entity/health 20.0}
+        stone (blocks/default-state :stone)
+        wall (into {} (for [y (range 64 68) z (range 6 11)] [[5 y z] stone]))
+        floor (into {} (for [x (range 0 16) z (range 0 16)] [[x 63 z] stone]))
+        w (-> (standing {9 blaze})
+              (assoc :world/chunks {[0 0] (world/column (merge floor wall))})
+              (assoc :fortress/trail {:trail/target [20 64 8] :trail/cells [[1 64 8] [3 64 8]]}))
+        walled (assoc-in w
+                [:world/chunks [0 0]]
+                (world/column
+                 (merge floor (into {} (for [y (range 64 68) z (range 4 14)] [[11 y z] stone])))))]
+    (is (pearls/swarmed? w) "a blaze in the open sight of the bot is a swarm")
+    (let [i (plan/next-intent w row plan/goals)]
+      (is (= :walk (:intent/kind i)) (pr-str i))
+      (is (= [3 64 8] (:intent/target i)) "the newest trail cell behind the wall")
+      (is (= :pearls (:intent/for i))))
+    (is (not (pearls/swarmed? walled)) "a wall between the bot and the blaze: no swarm")
+    (is (nil? (pearls/leave-sight walled)) "and nothing to leave")))
+
+(deftest out-of-the-trail-the-bot-leaves-a-blazes-sight-by-the-nearest-cover-and-never-digs-in-it
+  ;; chain-dragon's race f8b28e39d, Clj_r11: a shaft dug straight up under fire, place :no-support
+  ;; and pillar :boxed, repeating, with no trail cell out of sight; and the rods bots of race
+  ;; 9d15bd69b went from 20 to 3.3 hp digging and pillaring in a blaze's view
+  (let [blaze {:entity/type (blocks/entity-types :blaze)
+               :entity/pos [14.5 64.0 8.5]
+               :entity/seen-at 0
+               :entity/health 20.0}
+        stone (blocks/default-state :stone)
+        floor (into {} (for [x (range 0 16) z (range 0 16)] [[x 63 z] stone]))
+        wall (into {} (for [y (range 64 68) z (range 6 11)] [[5 y z] stone]))
+        open (-> (standing {9 blaze})
+                 (assoc :world/chunks {[0 0] (world/column floor)}))
+        walled (assoc open :world/chunks {[0 0] (world/column (merge floor wall))})
+        hurt #(assoc % :player/health 6.0)
+        digging? #(contains? #{:dig :pillar :place} (:intent/kind %))]
+    (testing "a wall within reach: a walk to a cell behind it, trail or none"
+      (let [i (pearls/leave-sight walled)]
+        (is (= :walk (:intent/kind i)) (pr-str i))
+        (is (< (first (:intent/target i)) 5) "west of the wall, out of the blaze's line")
+        (is (pearls/unseen-from? walled [blaze] (:intent/target i)))
+        (is (not (digging? (plan/next-intent (hurt walled) row plan/goals))))))
+    (testing "no cover at all and under danger-health: a back-off, never a dig or a pillar"
+      (let [i (pearls/leave-sight (hurt open))]
+        (is (nil? (pearls/near-cover-cell open)) "open floor: no cell out of sight within reach")
+        (is (= {:intent/kind :back-off :intent/target 9 :intent/for :pearls} i))
+        (is (not (digging? (plan/next-intent (hurt open) row plan/goals))))))
+    (testing "healthy with no cover: the old branches, no back-off"
+      (is (nil? (pearls/leave-sight open))))))
+
+(deftest the-blaze-room-is-no-way-to-travel-nor-to-climb-out
+  ;; Clj_r11 of race f8b28e39d (replayed on main, probe 41267637866): leave-sight walked the bot out
+  ;; of the room and the travel to the forest beyond walked it back in, flip after flip; Clj_r02
+  ;; (probe 41267636159): the climb-out from a sealed pocket opened straight up into 23 blazes
+  (let [nether-world (fn [pos]
+                       (-> (standing {})
+                           (assoc :player/dimension "minecraft:the_nether" :player/pos pos)
+                           (memory/observe [30 64 8] blaze/spawner)
+                           (assoc :fortress/trail
+                                  {:trail/target [30 64 8]
+                                   :trail/cells [[0 64 8] [5 64 8] [20 64 8]]})))
+        outside (nether-world [8.5 64.0 8.5])
+        inside (nether-world [30.5 64.0 12.5])
+        forest [50 65 8]
+        boxes (pearls/room-boxes outside)]
+    (is (= 1 (count boxes)) "one room round the spawner")
+    (is (pearls/crosses-room? boxes [8 64 8] forest) "the straight line goes through it")
+    (let [step (fn [pos]
+                 (let [w (assoc outside :player/pos (mapv #(+ 0.5 %) pos))]
+                   (pearls/room-waypoint w forest)))
+          wp1 (step [8 64 8])
+          wp2 (step wp1)
+          wp3 (step wp2)]
+      (is (not= forest wp1))
+      (is (not (pearls/crosses-room? boxes [8 64 8] wp1)) "the first leg is clear")
+      (is (not (pearls/crosses-room? boxes wp1 wp2)) "and so is the second")
+      (is (= forest wp3) "from the second waypoint the forest is in the clear")
+      (is (not (pearls/crosses-room? boxes wp2 forest))))
+    (is (= [5 64 8] (pearls/room-waypoint inside forest))
+        "from inside: the newest trail cell outside the room, the way it came")
+    (is (= forest
+           (pearls/room-waypoint (assoc (standing {}) :player/dimension "minecraft:the_nether")
+                                 forest))
+        "no spawner known: straight")
+    (let [i (pearls/room-exit inside)]
+      (is (= {:intent/kind :tunnel-to :intent/target [5 64 8] :intent/for :pearls} i))
+      (is (= :tunnel-to (:intent/kind (plan/next-intent inside row plan/goals)))
+          "the hunt tunnels out along the trail, no stairs-up into the room"))
+    (is (nil? (pearls/room-exit outside)) "outside the room: nothing to leave")))
+
+(deftest a-walk-that-sets-only-its-heading-is-turned-from-a-calm-endermans-eyes
+  ;; pearl-fight-p jobs 2 and 3 (plan run 41256381552, probe 41268180994): 20 of 22 endermen turned
+  ;; angry during a :walk whose look stared at their head for 8 to 13 ticks before, at 5 to 47 blocks
+  ;; (job 2 tick 1908: look [61.3 -17.3] at 5 blocks); look-off only turned an explicit
+  ;; :control/look, and a walk sets only :control/yaw
+  (let [calm (enderman [14.5 64.0 8.5])
+        w0 (standing {7 calm})
+        eye (game/eye w0)
+        [yaw pitch] (physics/look-at eye (mob/head :enderman [14.5 64.0 8.5]))
+        walking (-> w0
+                    (assoc :player/look [yaw pitch])
+                    (assoc :player/controls {:control/yaw yaw :control/forward? true})
+                    (assoc :plan/intent
+                           {:intent/kind :walk
+                            :intent/target [20 64 8]
+                            :intent/for :pearls
+                            :intent/status :active}))
+        out (plan/steer walking row)]
+    (is (mob/stared? (pearls/sight-fn w0) eye [yaw pitch] [14.5 64.0 8.5])
+        "the heading stares at it")
+    (is (= [yaw 90.0] (get-in out [:player/controls :control/look])) "turned straight down")
+    (is (:control/forward? (:player/controls out)) "still walking")
+    (testing "a heading away from it is left alone"
+      (let [away (-> walking
+                     (assoc :player/look [(+ yaw 180.0) 0.0])
+                     (assoc-in [:player/controls :control/yaw] (+ yaw 180.0)))]
+        (is (nil? (get-in (plan/steer away row) [:player/controls :control/look])))))))
+
+(deftest an-angry-enderman-near-keeps-the-bot-in-its-burrow-and-from-relocating
+  ;; pearl-fight-p job 3 (plan run 41256381552): the burrow went stale with 3217 angry 7 to 8 blocks
+  ;; off, the hunt walked out to a new site and was slain 3 blocks from it at 96 minutes
+  (let [angry (assoc (enderman [20.5 61.0 8.5]) :entity/creepy? true)
+        w (looked (burrowed [8.5 61.0 8.5] {7 angry}) 12)
+        alone (looked (burrowed [8.5 61.0 8.5] {}) 12)]
+    (is (pearls/stale? alone) "no enderman: a minute of lookouts gives the burrow up")
+    (is (nil? (pearls/shelter alone)))
+    (is (pearls/angry-within? w pearls/hold-radius))
+    (is (some? (pearls/shelter w)) "an angry one 12 blocks off: the burrow is held")
+    (let [far (assoc-in w [:world/entities 7 :entity/pos] [60.5 61.0 8.5])]
+      (is (not (pearls/angry-within? far pearls/hold-radius)) "52 blocks off: no hold"))))
+
+(deftest hunt-thresholds-table-is-loaded-and-complete
+  ;; the hunt thresholds are loaded from resources/clojurecraft/hunt.edn
+  (let [t pearls/thresholds]
+    (is (map? t) "the thresholds are an EDN map")
+    (is (= 64.0 (:seek-radius t) pearls/seek-radius))
+    (is (= 64.0 (:stare-range t) pearls/stare-range))
+    (is (= 6.0 (:stare-from t) pearls/stare-from))
+    (is (= 6.0 (:provoke-range t) pearls/provoke-range))
+    (is (= 3.0 (:provoke-home-reach t) pearls/provoke-home-reach))
+    (is (= 18.0 (:provoke-health t) pearls/provoke-health))
+    (is (= 3.0 (:provoke-margin t) pearls/provoke-margin))
+    (is (= 480000 (:relocate-ms t) pearls/relocate-ms))
+    (is (= 32.0 (:relocate-dist t) pearls/relocate-dist))
+    (is (= 420000 (:relocate-timeout-ms t) pearls/relocate-timeout-ms))
+    (is (= 180000 (:relocate-patience-ms t) pearls/relocate-patience-ms))
+    (is (= 8.0 (:swarm-radius t) pearls/swarm-radius))
+    (is (= 16.0 (:hold-radius t) pearls/hold-radius))
+    (is (= 10.0 (:danger-health t) pearls/danger-health))
+    (is (= [15.0 19.0] (:break-line t) pearls/break-line))
+    (is (= 15.0 (:break-hp t) pearls/break-hp))
+    (is (= 19.0 (:resume-hp t) pearls/resume-hp))))

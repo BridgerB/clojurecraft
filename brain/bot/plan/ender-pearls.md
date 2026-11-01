@@ -36,7 +36,10 @@ sourceRefs:
   - test/clojurecraft/pearls_test.clj#a-roam-with-every-end-spent-walks-to-the-farthest-again
   - test/clojurecraft/pearls_test.clj#a-calm-one-given-up-on-at-hand-gets-no-burrow-cut-for-it
   - src/clojurecraft/gym.clj#def pearl-kit
-  - src/clojurecraft/pearls.clj#def stare-from 6.0
+  - src/clojurecraft/pearls.clj#def thresholds
+  - resources/clojurecraft/hunt.edn#:seek-radius
+  - test/clojurecraft/pearls_test.clj#hunt-thresholds-table-is-loaded-and-complete
+  - src/clojurecraft/pearls.clj#def stare-from (:stare-from thresholds)
   - src/clojurecraft/pearls.clj#def stare-ms 3000
   - src/clojurecraft/pearls.clj#def burrow-depth 3
   - src/clojurecraft/pearls.clj#def burrow-length 2
@@ -45,7 +48,7 @@ sourceRefs:
   - src/clojurecraft/pearls.clj#defn away
   - src/clojurecraft/pearls.clj#defmethod intent/run :burrow
   - src/clojurecraft/pearls.clj#defmethod intent/run :lookout
-  - src/clojurecraft/pearls.clj#def seek-radius 64.0
+  - src/clojurecraft/pearls.clj#def seek-radius (:seek-radius thresholds)
   - src/clojurecraft/combat.clj#defmethod fight-stage :approach
   - src/clojurecraft/entity.clj#def creepy-index 17
   - src/clojurecraft/mob.clj#defn tall

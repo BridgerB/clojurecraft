@@ -17,6 +17,7 @@
             [clojurecraft.fixtures :as fx]
             [clojurecraft.fortress :as fortress]
             [clojurecraft.game :as game]
+            [clojurecraft.hunt :as hunt]
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
             [clojurecraft.main :as main]
@@ -2657,6 +2658,33 @@
     (let [w' (step w e)]
       ((:effects tap) (subvec (:bot/effects w') (count (:bot/effects w))))
       w')))
+
+(deftest an-interrupted-smelt-is-gone-back-to-not-mined-for-again
+  ;; issue #686: the iron kit gym with the forage let to cut into a smelt (hunt/foraging? true once
+  ;; the cook has begun, as before the guard of #673): four raw iron are left in the furnace and
+  ;; the inventory shows none. The planner goes back for them
+  (let [cut (atom false)
+        foraging? hunt/foraging?
+        [w sim] (with-redefs [hunt/foraging? (fn [w]
+                                               (if (and (not @cut)
+                                                        (= :smelt (:intent/kind (:plan/intent w)))
+                                                        (= :cook (:intent/stage (:plan/intent w))))
+                                                 (reset! cut true)
+                                                 (foraging? w)))]
+                  (sim/run step
+                           (game/init fx/opts)
+                           (sim/init {:column (world/column-bytes kit-column)
+                                      :spawn [8.5 64.0 8.5]
+                                      :inventory kit-start
+                                      :seed 4})
+                           #(or (plan/done? %) (plan/failed? %))
+                           900000
+                           {:event/kind :go :go/goals [:iron-kit]}))]
+    (is @cut "the smelt was cut once")
+    (is (= :done (:plan/status w)) (pr-str (plan/summary w)))
+    (is (= 1 (:water_bucket (held w))))
+    (is (= 1 (:flint_and_steel (held w))))
+    (is (empty? (:sim/violations sim)))))
 
 (deftest the-iron-kit-from-a-stone-pickaxe-and-its-recording-replays
   (let [path (str (System/getProperty "java.io.tmpdir") "/clojurecraft-iron-kit.edn")

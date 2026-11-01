@@ -1473,6 +1473,15 @@
         "no netherrack: cobblestone, above the reserve")
     (is (= :cobblestone (stairs/building-filler (w :cobblestone 5) 1))
         "below the reserve and nothing else: still laid, a tunnel is not stopped")
+    (is
+     (nil? (stairs/building-filler (w :cobblestone 3 :stick 8) 1))
+     "with the sticks to make one the last three are a stone pickaxe's: z14 job 5 laid them all and ended with 8 sticks and no pickaxe")
+    (is (= :cobblestone (stairs/building-filler (w :cobblestone 3) 1))
+        "with no sticks they make no pickaxe: laid")
+    (is (= :dirt (stairs/building-filler (w :cobblestone 3 :stick 8 :dirt 4) 1))
+        "another filler is laid before them")
+    (is (= :cobblestone (stairs/building-filler (w :cobblestone 4 :stick 8) 1))
+        "one above the pickaxe's three")
     (is (= :cobblestone (stairs/filler (w :cobblestone 64 :netherrack 160) 1))
         "seals and cover still take filler's cobblestone first")
     (is (= :netherrack (fortress/walk-filler (w :cobblestone 64 :netherrack 160) [1 63 0])))))
@@ -1513,3 +1522,45 @@
                        {:trail/target [-1 0 0] :trail/cells [] :trail/dead #{[9 9 9]}}}
                       (range 10))]
         (is (<= (count (:trail/others (:fortress/trail w))) fortress/dead-targets))))))
+
+(deftest the-retreats-of-a-target-are-kept-across-its-tunnels
+  ;; blaze-race-z14 job 5 (run 41256755663): 352 tunnels to [2144 72 1760], each one move
+  ;; ([-1 -1 0] from [2157 63 1748], then [1 1 0] back) and :blocked, :retreats 1 every time, the
+  ;; count living in the intent
+  (let [a [2144 72 1760]
+        trail (assoc (fortress/trail-of {} a) :trail/retreats 1)]
+    (is (= 1 (fortress/carried-retreats 0 trail)) "a new tunnel starts from the trail's count")
+    (is (= 2 (fortress/carried-retreats 2 trail)) "its own, when more")
+    (is (= 0 (fortress/carried-retreats 0 (fortress/trail-of {} a)))
+        "a trail new for the target has none")
+    (is (= 0
+           (fortress/carried-retreats 0 (fortress/trail-of {:fortress/trail trail} [2175 56 1733])))
+        "another target's trail starts clean")
+    (is (> (inc (fortress/carried-retreats 0 trail)) fortress/retreats-allowed)
+        "the second tunnel's retreat is over the allowance: blocked at once, not a step")))
+
+(deftest a-tunnel-starts-with-a-pickaxe-that-will-last
+  ;; blaze-race-z14 job 5 (run 41256755663): the pickaxe wore out mid-tunnel and the bot dug by hand,
+  ;; 10 s a block, for the rest of the run. A tunnel with a worn pickaxe and a replacement at hand
+  ;; makes the replacement first
+  (let [goal (first (filter #(= :fortress (:goal/id %)) plan/goals))
+        stick {:item (recipe/item-id :stick) :count 2}
+        cobble {:item (recipe/item-id :cobblestone) :count 3}
+        table {:item (recipe/item-id :crafting_table) :count 1}
+        pick (fn [damage]
+               {:item (recipe/item-id :stone_pickaxe) :count 1 :components {:damage damage}})
+        w (fn [& slots]
+            (assoc (rock {})
+                   :world/facts (memory/empty-facts)
+                   :player/dimension dimension/nether
+                   :player/inventory (zipmap (range) slots)))
+        next #(plan/next-intent % goal plan/goals)]
+    (is (= 1 (fortress/pickaxes-wanted (w (pick 0) stick cobble table)))
+        "a fresh stone pickaxe: one")
+    (is (= 2 (fortress/pickaxes-wanted (w (pick 120) stick cobble table))) "11 digs left: two")
+    (is (= :tunnel-to (:intent/kind (next (w (pick 0) stick cobble table))))
+        "fresh: on with the tunnel")
+    (is (= :place (:intent/kind (next (w (pick 120) stick cobble table))))
+        "worn, and a replacement at hand: the table first, then the pickaxe")
+    (is (= :tunnel-to (:intent/kind (next (w (pick 120)))))
+        "worn and nothing to make another from: the tunnel goes on, by hand when it must")))

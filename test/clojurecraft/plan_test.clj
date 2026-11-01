@@ -2253,7 +2253,8 @@
         (is (= :walk (get-in w [:plan/intent :intent/kind])))
         (is (= far (get-in w [:plan/intent :intent/target])))
         (is (= :regroup (get-in w [:plan/intent :intent/for])))))
-    (testing "none routable: a tunnel along its own trail to its farthest cell"
+    (testing
+      "none routable: no escape tunnel (z14 job 5 planned it 352 times); the row's plan goes ahead"
       (let [w (with-redefs [plan/routable? (constantly false)]
                 (with-redefs [plan/choose (constantly goal)
                               plan/next-intent (constantly {:intent/kind :tunnel-to
@@ -2261,9 +2262,10 @@
                   (plan/plan-tick (assoc (blocked-tunnels :trail [far]) :time/now 1050)
                                   {:event/kind :tick :event/now 1050 :event/rand 0.5}
                                   [goal])))]
-        (is (= :tunnel-to (get-in w [:plan/intent :intent/kind])))
-        (is (= far (get-in w [:plan/intent :intent/target])))
-        (is (= :regroup (get-in w [:plan/intent :intent/for])))))
+        (is (nil? (get-in w [:plan/intent :intent/for])))
+        (is (nil? (plan/leave-area (with-redefs [plan/routable? (constantly false)]
+                                     (blocked-tunnels :trail [far]))))
+            "leave-area has only the walk")))
     (testing "no trail at all: the row's own plan goes ahead"
       (let [w (tick (assoc (blocked-tunnels) :time/now 1050))]
         (is (nil? (get-in w [:plan/intent :intent/for])))))))

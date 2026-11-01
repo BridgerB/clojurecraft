@@ -533,6 +533,14 @@
 
 (def trail-cap 512)                   ; cells of the way back a tunnel keeps
 
+(defn carried-retreats
+  "The retreats in a row a tunnel to this trail's target has taken: its own (the intent's) or the
+   trail's (:trail/retreats, kept across tunnels, a fresh step or a step back starts it again).
+   Blaze-race-z14 job 5 (run 41256755663) paced two cells for 33 minutes, one move a tunnel,
+   352 tunnels: the count lived in the intent and every new tunnel took its retreat afresh."
+  [intent-retreats trail]
+  (max (long intent-retreats) (long (:trail/retreats trail 0))))
+
 (defn fresh-move?
   "May the move ahead from feet be taken as a step forward, not a retreat: it goes to a cell not
    stood in (visited), or it gains height toward the target (gaining?) onto a cell not found to
@@ -769,20 +777,24 @@
             fresh? (fresh-move? feet ahead target seen (:trail/dead trail))
             undo (when-not (or back fresh?) (step-back world feet trail (boolean dry-only?)))
             m (or back undo ahead)
-            retreated (if (and ahead (not fresh?) (not undo)) (inc (long retreats)) 0)]
+            retreated
+            (if (and ahead (not fresh?) (not undo)) (inc (carried-retreats retreats trail)) 0)
+            kept (-> (if (or undo fresh?) (leave-cell trail feet (some? undo)) trail)
+                     (assoc :trail/retreats retreated))]
         (cond (or (nil? m) (> retreated retreats-allowed))
               (let [[cell block] (when (nil? m) (infested-ahead world feet target climb))]
                 (cond-> (-> world
                             (assoc :player/controls {})
+                            (assoc :fortress/trail kept)
                             (intent/fail :blocked))
                   cell (game/say (str "tunnel: refused " cell " " block " (infested)"))))
               :else
-              (cond-> (intent/assoc-intent (assoc world :player/controls {})
-                                           :intent/move m
-                                           :intent/from feet
-                                           :intent/retreats retreated
-                                           :intent/tunnel-visited (conj tunnel-visited feet))
-                (or undo fresh?) (assoc :fortress/trail (leave-cell trail feet (some? undo))))))
+              (-> (intent/assoc-intent (assoc world :player/controls {})
+                                       :intent/move m
+                                       :intent/from feet
+                                       :intent/retreats retreated
+                                       :intent/tunnel-visited (conj tunnel-visited feet))
+                  (assoc :fortress/trail kept))))
       :else
       (let [next (build/next-op world
                                 (into (into (underlay-ops world from move)
@@ -806,7 +818,7 @@
               ;; never placed with a block that is not held (sim snapshots R2-17-1 and
               ;; R2-12-1, issue #410)
               (and (= :place (:build/op next))
-                   (or (nil? (stairs/filler world 1))
+                   (or (nil? (stairs/building-filler world 1))
                        (and (= :floor (:build/step next))
                             (nil? (walk-filler world (:build/pos next))))))
               (reduce intent/dissoc-intent
@@ -1061,6 +1073,19 @@
                    (and t-target (not= target t-target)) t-target)]
     (when (and back (not= back (intent/feet world))) back)))
 
+(def tunnel-digs 64) ; digs the best pickaxe should have left to start a tunnel: its steps open about two cells each
+
+(defn pickaxes-wanted
+  "How many pickaxes a tunnel should hold before it starts: two when the best one held has fewer
+   than tunnel-digs digs left (window/swings-left), so a fresh one is made first when it can be
+   made at hand, else one. Blaze-race-z14 job 5 (run 41256755663) wore its last pickaxe out inside
+   the loop, no cobblestone left to make another, and dug by hand 10 s a block."
+  [world]
+  (let [left (->> (vals (:player/inventory world))
+                  (filter #(= :pickaxe (:kind (blocks/tool (:item %)))))
+                  (keep window/swings-left))]
+    (if (and (seq left) (< (long (apply max left)) tunnel-digs)) 2 1)))
+
 (defmethod plan/next-intent :fortress
   ;; replace a missing pickaxe from held supplies and take the placed table along (the next
   ;; pickaxe is made where the bot stands, not out of four more planks: probe 39782256061, issue
@@ -1086,8 +1111,9 @@
                  :intent/target back
                  :intent/steps steps-per-tunnel
                  :intent/bridge? true})
-              (when (and grounded? (build/pickaxe-at-hand? world))
-                (make/decide world (assoc goal :goal/provides {:tag/pickaxes 1}) table))
+              (let [want (pickaxes-wanted world)]
+                (when (and grounded? (build/pickaxe-at-hand? world want))
+                  (make/decide world (assoc goal :goal/provides {:tag/pickaxes want}) table)))
               (and grounded? (intent/chain-next (:plan/last world) :take-table make/table-drops {}))
               (and grounded? (make/take-table-along world))
               (when brick
