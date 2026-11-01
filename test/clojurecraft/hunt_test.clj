@@ -310,6 +310,8 @@
         "a swim already begun is finished")
     (is (not (hunt/foraging? (assoc w :plan/intent {:intent/kind :flee :intent/status :active})))
         "so is a flee")
+    (is (not (hunt/foraging? (assoc w :plan/intent {:intent/kind :smelt :intent/status :active})))
+        "a smelt in the furnace is waited out, not left with the iron inside")
     (is (not (hunt/foraging? (assoc w :player/in-water? true)))
         "in the water: the swim out comes first")
     (is (not (hunt/foraging?

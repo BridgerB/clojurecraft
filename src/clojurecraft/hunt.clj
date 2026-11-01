@@ -294,7 +294,9 @@
    already begun (an escape is finished: the box leaves the water before the swim is done, and
    a forage there preempted it), not afloat? (in water the swim out comes first), the feet under
    the open sky (animals live on the surface: a bot deep in its mine has none to find), health
-   at least forage-health and no hostile within forage-wary. Issue #501: bots went into the Nether with no food because
+   at least forage-health and no hostile within forage-wary, and no smelt running: the batch in the
+   furnace is lost to the planner, which plans from the inventory (the iron kit gym, once four
+   raw iron were loaded together, left the furnace at 6 s of 40 and mined for more). Issue #501: bots went into the Nether with no food because
    nothing looked for animals past the 48 blocks the server shows, and herds are about one chunk
    in ten."
   [world]
@@ -303,7 +305,7 @@
                   (or (nil? retry-at) (>= (:time/now world 0) retry-at))
                   (zero? (:plan/attempts world 0))
                   (zero? (:plan/unwalkable world 0))
-                  (not (#{:build :dig :swim-out :flee} (:intent/kind (:plan/intent world))))
+                  (not (#{:build :dig :swim-out :flee :smelt} (:intent/kind (:plan/intent world))))
                   (not (afloat? world))
                   (>= (:player/health world 20.0) forage-health)
                   (nil? (entity/nearest (entity/hostiles world) (:player/pos world) forage-wary))
