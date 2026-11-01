@@ -1,0 +1,18 @@
+;; Issue #263, branch fix/263-teleporter-break, batch p: the stage-18 levers after batch o (plan run
+;; 41232709566: 6 of 6 dead, three enderman fights in the open at 20 hp with hits every 0.8 to 1.0 s,
+;; two piglins in the first three minutes). With a pickaxe in hand the hunt cuts a burrow rather than
+;; fight an enderman in the open and :defend leaves the one that hit to the hunt in that case
+;; (62 of 64 kills in batches m and k came from burrow holds with no hit, every open fight of 3 swings or
+;; more was lost); a plain piglin is no hostile to a bot wearing gold (entity/spared?), golden boots
+;; are in the row's kit; the enderman break-off is 15 and 19 while covering (combat/break-line). No
+;; place.clj change (on fix/263-place-edge). Row pearls-12-race-tools. Measure: passes of 6, time to
+;; 12, deaths by cause, pearls at 30/60/90/120, hp at the start of each final fight.
+{:plans/label "pearl-fight-p"
+ :plans/jobs 6
+ :plans/issue 263
+ :plans/experiments [{:exp/name "pearls-12-race-tools"
+                      :exp/kind :gym
+                      :exp/goal "pearls-12-race-tools"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 18000}]}
