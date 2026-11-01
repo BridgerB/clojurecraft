@@ -1857,7 +1857,18 @@
         base (assoc (standing {}) :time/now 10000 :sortie/since 10000)]
     (is (false? (blaze/sortie-over? base)))
     (is (true? (blaze/sortie-over? (assoc base :player/on-fire? true))) "burning")
-    (is (true? (blaze/sortie-over? (assoc base :world/entities crowd))) "five within 8")
+    (is (false? (blaze/sortie-over? (assoc base :world/entities crowd)))
+        "five within 8 and none pressing: the lure, the bot stays at the mouth")
+    (is (true? (blaze/sortie-over? (assoc base :world/entities crowd :player/struck-at 9000)))
+        "five within 8 and hit: the room is on it")
+    (is (true? (blaze/sortie-over? (assoc base
+                                          :world/entities
+                                          (into crowd
+                                                (map (fn [i] [(+ 70 i)
+                                                              (entity :blaze [(+ 8.5 i) 65.0 9.5]
+                                                                      :entity/health 20.0)]))
+                                                (range 5)))))
+        "ten within 8 even unhit")
     (is (false? (blaze/sortie-over? (assoc base :world/entities (select-keys crowd [50 51 52]))))
         "three is the limit, not over")))
 
