@@ -361,6 +361,9 @@
    [:trail/cells
     "the feet cells steps began from, oldest first, the last one a step back from the feet"
     "inside :fortress/trail"]
+   [:trail/retreats
+    "retreats in a row the tunnels to this target have taken, kept across tunnels; a fresh step or a step back starts it again (fortress/carried-retreats)"
+    "inside :fortress/trail"]
    [:trail/dead "the feet cells found to lead nowhere, which no fresh step enters again"
     "inside :fortress/trail"]
    [:trail/others

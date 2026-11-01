@@ -221,6 +221,7 @@
 (s/def :trail/target (s/coll-of number? :kind vector? :count 3))
 (s/def :trail/cells (s/coll-of ::block-pos :kind vector?))
 (s/def :trail/dead (s/coll-of ::block-pos :kind set?))
+(s/def :trail/retreats nat-int?)
 (s/def :trail/others (s/coll-of (s/tuple ::block-pos :trail/dead) :kind vector?))
 (s/def :fortress/trail (s/keys :req [:trail/target :trail/cells :trail/dead]))
 
