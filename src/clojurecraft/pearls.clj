@@ -1935,16 +1935,21 @@
                    (filter #(and (not (crosses-room? boxes feet %))
                                  (not (crosses-room? boxes % target))))
                    first)
-              (->> (for [[x0 _ z0 x1 _ z1] boxes
-                         cx [(dec x0) (inc x1)]
-                         cz [(dec z0) (inc z1)]
-                         :let [c [cx (nth feet 1) cz]]
-                         :when (and (not (in-room? boxes c))
-                                    (not (crosses-room? boxes feet c))
-                                    (not (crosses-room? boxes c target)))]
-                     c)
-                   (sort-by #(+ (physics/distance feet %) (physics/distance % target)))
-                   first)
+              (let [corners (for [[x0 _ z0 x1 _ z1] boxes
+                                  cx [(dec x0) (inc x1)]
+                                  cz [(dec z0) (inc z1)]
+                                  :let [c [cx (nth feet 1) cz]]
+                                  :when (and (not (in-room? boxes c))
+                                             (not (crosses-room? boxes feet c)))]
+                              c)
+                    total #(+ (physics/distance feet %) (physics/distance % target))]
+                ;; a corner both legs clear of the room, else the one whose first leg is clear and
+                ;; the whole way shortest: the next call, from the corner, picks the next corner
+                (or (->> corners
+                         (filter #(not (crosses-room? boxes % target)))
+                         (sort-by total)
+                         first)
+                    (first (sort-by total corners))))
               target))))
 
 (defn room-exit

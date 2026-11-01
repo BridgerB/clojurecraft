@@ -3139,10 +3139,17 @@
         boxes (pearls/room-boxes outside)]
     (is (= 1 (count boxes)) "one room round the spawner")
     (is (pearls/crosses-room? boxes [8 64 8] forest) "the straight line goes through it")
-    (let [wp (pearls/room-waypoint outside forest)]
-      (is (not= forest wp))
-      (is (not (pearls/crosses-room? boxes [8 64 8] wp)) "the first leg is clear")
-      (is (not (pearls/crosses-room? boxes wp forest)) "and so is the second"))
+    (let [step (fn [pos]
+                 (let [w (assoc outside :player/pos (mapv #(+ 0.5 %) pos))]
+                   (pearls/room-waypoint w forest)))
+          wp1 (step [8 64 8])
+          wp2 (step wp1)
+          wp3 (step wp2)]
+      (is (not= forest wp1))
+      (is (not (pearls/crosses-room? boxes [8 64 8] wp1)) "the first leg is clear")
+      (is (not (pearls/crosses-room? boxes wp1 wp2)) "and so is the second")
+      (is (= forest wp3) "from the second waypoint the forest is in the clear")
+      (is (not (pearls/crosses-room? boxes wp2 forest))))
     (is (= [5 64 8] (pearls/room-waypoint inside forest))
         "from inside: the newest trail cell outside the room, the way it came")
     (is (= forest
