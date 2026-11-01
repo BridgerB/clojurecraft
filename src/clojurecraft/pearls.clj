@@ -732,14 +732,16 @@
   (:hold-radius thresholds))
 
 (defn angry-within?
-  "Does an angry enderman (entity/creepy?, blacklisted or not) that is not parked (parked?: more
-   than park-near off and no closer for park-ms) stand within radius of the feet, height counted?"
+  "Does an angry enderman (entity/creepy?, blacklisted or not) stand within radius of the feet
+   and danger-rise of their height?"
   [world radius]
-  (boolean (some (fn [[eid e]]
-                   (and (entity/creepy? e)
-                        (<= (physics/distance (:player/pos world) (:entity/pos e)) radius)
-                        (not (parked? world eid (:entity/pos e)))))
-                 (endermen (dissoc world :plan/blacklist) stare-range))))
+  (let [p (:player/pos world)]
+    (boolean (some (fn [[_ e]]
+                     (let [q (:entity/pos e)]
+                       (and (entity/creepy? e)
+                            (<= (physics/distance p q) radius)
+                            (<= (abs (- (physics/y-of q) (physics/y-of p))) danger-rise))))
+                   (endermen (dissoc world :plan/blacklist) stare-range)))))
 
 (defn shelter
   "The hunt's burrow (:pearls/shelter) while it is within shelter-reach of the feet, still a
@@ -2269,6 +2271,7 @@
                                        (not hurt?)
                                        (not swarmed?)
                                        (not (recently-shot? world))
+                                       (not (and home (angry-within? world hold-radius)))
                                        (not (if (< (- (:time/now world 0)
                                                       (:at (:pearls/relocate world)))
                                                    relocate-patience-ms)
@@ -2277,6 +2280,7 @@
                               (relocate-walk world)))
         wander-walk (delay (when (and (not hurt?)
                                       (not swarmed?)
+                                      (not (and home (angry-within? world hold-radius)))
                                       (not (live-menaced? world))
                                       (not (recently-shot? world))
                                       (wandering? world))
@@ -2302,7 +2306,10 @@
       (and (not in?) (leave-sight world)) (leave-sight world)
       (and (not in?) (room-exit world)) (room-exit world)
       (and (shot-at? world) (not in?) (cover-from world)) (cover-from world)
-      (and home (not in?) (or ce near? hurt? tid aid swarmed?) (intent/routable? world way-home))
+      (and home
+           (not in?)
+           (or ce near? hurt? tid aid swarmed? (angry-within? world hold-radius))
+           (intent/routable? world way-home))
       way-home
       (and swarmed? (not in?) (nil? home) (cover-from world)) (cover-from world)
       (and swarmed? in?)
@@ -2335,13 +2342,14 @@
                     (not (contains? (:plan/blacklist world #{}) eid)))))
       {:intent/kind :fight :intent/target eid :intent/for :pearls}
       meal meal
+      (or hurt? (and in? bid)) {:intent/kind :lookout :intent/for :pearls}
+      (and in? aid (lure? world) @mouth-walk) @mouth-walk
+      (and in? (or aid (angry-within? world hold-radius)))
+      {:intent/kind :lookout :intent/for :pearls}
       @travel-walk @travel-walk
       @relocate-now @relocate-now
       @wander-walk @wander-walk
       @cage-break @cage-break
-      (or hurt? (and in? bid)) {:intent/kind :lookout :intent/for :pearls}
-      (and in? aid (lure? world) @mouth-walk) @mouth-walk
-      (and in? aid) {:intent/kind :lookout :intent/for :pearls}
       (and csite @csite-walk) @csite-walk
       digs? {:intent/kind :burrow :intent/dir dir :intent/for :pearls}
       (and site @site-walk) @site-walk
@@ -2555,6 +2563,12 @@
                   (or (nil? e)
                       (> (physics/distance (:player/pos world) (:entity/pos e)) strike-range))))))
 
+(defmethod plan/held-goal? :pearls
+  ;; with an angry enderman within hold-radius and a burrow held, the hunt waits inside: the stuck
+  ;; watchdog counts this as held, not stuck, and never forces an explore walk out of the burrow
+  [world _]
+  (boolean (and (shelter world) (angry-within? world hold-radius))))
+
 (defmethod plan/interrupts? :pearls
   ;; any running intent but an answer (answers-to-hand) or the walk home ends with an angry
   ;; enderman at hand (beset?), and the hunt plans again: home, the fight held there, or the
@@ -2575,7 +2589,9 @@
            (not (and (= :walk (:intent/kind i)) (= (:intent/target i) (:pearls/shelter world))))
            (not= (:pearls/shelter world) (intent/feet world))
            (or (beset? world)
-               (and (out-walk? world i) (some? (shelter world)) (some? (angry-near world)))
+               (and (out-walk? world i)
+                    (some? (shelter world))
+                    (or (some? (angry-near world)) (angry-within? world hold-radius)))
                (some? (first (struck-by world)))
                (shot-at? world)
                (and (= :lookout (:intent/kind i)) (some? (first (threat world)))))
