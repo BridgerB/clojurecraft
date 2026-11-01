@@ -120,7 +120,7 @@
       (is (= :unseal (:intent/kind act)))
       (is (= :peek (:expert/why act)))))
   (testing "an open window with nobody that would see steps out to the opening"
-    (is (= {:intent/kind :walk :intent/target [8 64 4] :intent/for :peek :expert/why :peek}
+    (is (= {:intent/kind :walk :intent/target [8 64 4] :intent/for :cover :expert/why :peek}
            (expert/choose
             (sit {:sealed? false :blazes [(blaze {:see? false :dist 8.0})] :peek-cell [8 64 4]})))))
   (testing "an unseal whose blaze has stopped closing is aborted before the block opens"
@@ -130,4 +130,67 @@
                                               :unseal-at 0
                                               :unseal-dist 6.6
                                               :now 500
-                                              :blazes [(blaze {})]})))))))
+                                              :blazes [(blaze {})]}))))))
+  (testing "a sealed hold with no seer waits out the first 20 s"
+    (is (= {:expert/why :wait}
+           (expert/choose (sit {:holding :stone_pickaxe
+                                :blazes [(blaze {:see? false :dist 12.0})]
+                                :peek-cell [1 2 3]
+                                :zero-since 0
+                                :now 0})))))
+  (testing "20 s at 0 seers steps one cell toward the blaze"
+    (let [act (expert/choose (sit {:holding :stone_pickaxe
+                                   :blazes [(blaze {:see? false :dist 12.0})]
+                                   :zero-since 0
+                                   :now 20000
+                                   :step-cell [9 64 4]
+                                   :feet [8 64 4]
+                                   :peek-cell [8 64 4]}))]
+      (is (= :unseal (:intent/kind act)))
+      (is (= :peek-step (:expert/why act)))))
+  (testing "an open step walks the one cell, not the old opening"
+    (is (= {:intent/kind :walk :intent/target [9 64 4] :intent/for :cover :expert/why :peek-step}
+           (expert/choose (sit {:sealed? false
+                                :blazes [(blaze {:see? false :dist 12.0})]
+                                :zero-since 0
+                                :now 20000
+                                :step-cell [9 64 4]
+                                :feet [8 64 4]
+                                :peek-cell [8 64 4]})))))
+  (testing "a hit while stepped out walks home, and the walk continues after the hit"
+    (is (= {:intent/kind :walk :intent/target [1 64 1] :intent/for :cover :expert/why :return}
+           (expert/choose (sit {:sealed? false
+                                :struck? true
+                                :away? true
+                                :home [1 64 1]
+                                :blazes [(blaze {:dist 2.6 :box 2.4})]}))))
+    (is (= {:intent/kind :walk :intent/target [1 64 1] :intent/for :cover :expert/why :return}
+           (expert/choose (sit {:sealed? false
+                                :returning? true
+                                :away? true
+                                :home [1 64 1]
+                                :blazes [(blaze {:see? false :dist 8.0})]})))))
+  (testing "20 s outside with no line walks home"
+    (is (= {:intent/kind :walk :intent/target [1 64 1] :intent/for :cover :expert/why :return}
+           (expert/choose (sit {:sealed? false
+                                :away? true
+                                :home [1 64 1]
+                                :out-since 0
+                                :now 20000
+                                :zero-since 0
+                                :blazes [(blaze {:see? false :dist 12.0})]
+                                :peek-cell [8 64 4]})))))
+  (testing "a carve fills a side once the dig is open"
+    (is (= {:intent/kind :place :intent/item :cobblestone :intent/cell [5 5 6] :expert/why :carve}
+           (expert/choose (sit {:phase :carve
+                                :place-cell [5 5 6]
+                                :place-item :cobblestone
+                                :holding :stone_pickaxe
+                                :pick-hotbar? true})))))
+  (testing "a carve digs the solid cell, the pick in hand"
+    (is (= {:intent/kind :dig :intent/target [4 5 6] :expert/why :carve}
+           (expert/choose
+            (sit {:phase :carve :dig-cell [4 5 6] :holding :stone_pickaxe :pick-hotbar? true}))))
+    (is (= {:intent/kind :equip :intent/item :stone_pickaxe :expert/why :arm-pick}
+           (expert/choose
+            (sit {:phase :carve :dig-cell [4 5 6] :holding :iron_sword :pick-hotbar? true}))))))

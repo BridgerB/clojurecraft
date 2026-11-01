@@ -13,10 +13,13 @@
    the window is opened between volleys when at most two blazes would see, on the nearest
    whose landing is in that band, and the dig is dropped before FINISH when the landing leaves
    the band. The seal goes back up on a hit, on fire, or when a volley starts charging in view
-   and nothing stands in the band. With nobody there to strike, it peeks: the window opens, or
-   the bot steps into the opening, so one blaze is drawn to it. A volley already past its charge
-   is never given the line back. Rods are taken from the window. The run leaves only at seven
-   rods and full health. No act succeeds by dying."
+   and nothing stands in the band. The pocket is a cell 8 to 14 blocks from the spawner whose
+   opening has a line, both ways, to a blaze and to the spawn volume: the same sight test a blaze
+   uses on the player. With nobody there to strike it peeks, and if seers stay at 0 for 20 s it
+   steps one cell toward the nearest blaze along a line-clear path, then comes back and reseals
+   when it is hit or burning. Where no 1x2 is already there it digs one into solid blocks. A
+   volley already past its charge is never given the line back. Rods are taken from the window.
+   The run leaves only at seven rods and full health. No act succeeds by dying."
   (:require [clojure.java.io :as io]
             [clojure.math :as math]
             [clojure.string :as str]
@@ -55,9 +58,7 @@
 (def ^:private blaze-speed 0.2) ; blocks a tick a blaze closes while it cannot see
 (def ^:private band-pad 0.15) ; blocks outside a blaze's reach the sword band starts
 (def ^:private sight-range 32.0) ; blocks: blazes farther than this are not sight-tested
-(def ^:private wake-min 6.0) ; horizontal blocks from the spawner the approach counts as arrived
 (def ^:private rod-reach 3.0) ; blocks: a rod is taken from the window, not chased across the room
-(def ^:private near-dy 8) ; blocks of height from the spawner the approach still counts as near
 (def ^:private stand-near 8.0) ; blocks, on the plane, a stand must be from the spawner
 (def ^:private stand-far 12.0) ; and no farther: close enough to dig a pocket in the wake
 (def ^:private stand-below 8) ; levels under the spawner a floor may be
@@ -66,6 +67,14 @@
 (def ^:private searched-span 4) ; ring cells marked after :no-site. Probe 41289491940's six give-ups sat in one cluster; search-steps marked R4's whole ring (41293318253).
 (def ^:private stand-searches 6) ; path plans for the nearest stands: a walk is preferred to a tunnel
 (def ^:private window-cap 2) ; blazes that may have a line when the window opens
+(def ^:private pocket-near 8.0) ; blocks from the spawner a pocket cell must be
+(def ^:private pocket-far 14.0) ; and no farther: outside the spawn volume, inside the wake
+(def ^:private zero-seer-ms 20000) ; ms seers may stay at 0 before one step toward a blaze
+(def ^:private scan-every-ms 5000) ; ms between pocket searches while none is chosen
+(def ^:private step-budget 80) ; standable cells a peek step will look through
+(def ^:private volume-tries 12) ; air cells of the spawn volume a line is tried against
+(def ^:private miss-stands 8) ; stands logged when site-near finds no 1x2
+(def ^:private miss-rows 24) ; side rows of those stands printed at most
 
 (def ^:private armour-pieces
   "Worn before any fight, in the order they are put on."
@@ -320,19 +329,97 @@
   [s]
   (and (:unseal-at s) (:sealed? s) (pos? (:unseal-dist s 0)) (nil? (sortie-target s))))
 
+(defn- calm-blaze?
+  "Is some blaze between volleys and not already in melee, so a window may be opened on it?"
+  [s]
+  (boolean (some #(and (between-volleys? %) (not (:melee? %))) (:blazes s))))
+
+(defn- zero-long?
+  "Have seers been 0 for zero-seer-ms? The clock is :zero-since, set while the hold sees none."
+  [s]
+  (boolean (and (:zero-since s) (>= (- (:now s 0) (:zero-since s)) zero-seer-ms))))
+
+(defn- peek-hold?
+  "Is an open window still inside the 20 s a fresh seal is allowed before anyone is drawn?
+   A situation with no clock (the policy tests) is not held: it steps to the opening at once."
+  [s]
+  (boolean
+   (and (not (:sealed? s)) (:zero-since s) (< (- (:now s 0) (:zero-since s)) zero-seer-ms))))
+
 (defn- peek?
   "Lure one blaze to the window. Nobody is in the band to strike, at most two would see,
-   and some blaze is still between volleys. Sealed, the window opens. Open, with nothing
-   that would see, the bot steps into the opening. A blaze that sees and then loses the
-   line closes for five ticks (BlazeAttackGoal's lastSeen), which is the draw."
+   and some blaze is still between volleys. Sealed, the window opens for a blaze that would
+   see, or after zero-seer-ms at 0 seers. Open, with nothing that would see, the bot steps
+   into the opening, but not during the first 20 s of a hold: that time seals the pocket.
+   A blaze that sees and then loses the line closes for five ticks (BlazeAttackGoal's
+   lastSeen), which is the draw."
   [s]
   (and (= :hold (:phase s))
        (nil? (sortie-target s))
        (nil? (fight-target s))
        (<= (count (seers s)) window-cap)
-       (some #(and (between-volleys? %) (not (:melee? %))) (:blazes s))
-       (or (and (:sealed? s) (or (seq (seers s)) (:peek-cell s)))
-           (and (not (:sealed? s)) (:peek-cell s) (empty? (seers s))))))
+       (calm-blaze? s)
+       (or (and (:sealed? s) (or (seq (seers s)) (and (:peek-cell s) (zero-long? s))))
+           (and (not (:sealed? s)) (:peek-cell s) (empty? (seers s)) (not (peek-hold? s))))))
+
+(defn- peek-step?
+  "Seers have been 0 long enough to leave the cell: a line-clear step toward a blaze is ready,
+   and some blaze is between volleys so the step is not into a shot."
+  [s]
+  (and (= :hold (:phase s))
+       (empty? (seers s))
+       (nil? (sortie-target s))
+       (nil? (fight-target s))
+       (:step-cell s)
+       (not (:returning? s))
+       (calm-blaze? s)))
+
+(defn- step-home?
+  "The step out has stood with no line long enough. Walk back and reseal rather than stay out."
+  [s]
+  (and (= :hold (:phase s))
+       (empty? (seers s))
+       (:away? s)
+       (:home s)
+       (nil? (:step-cell s))
+       (:out-since s)
+       (>= (- (:now s 0) (:out-since s)) zero-seer-ms)))
+
+(defn- stand-walk
+  "Walk that ends standing in cell. :peek arrives when the eye is within intent/reach, so a step
+   of one cell would finish where it started and the feet would never enter it."
+  [cell why]
+  {:intent/kind :walk :intent/target cell :intent/for :cover :expert/why why})
+
+(defn- return-act
+  "Walk back to the pocket cell. The seal goes up once the feet are in it."
+  [s]
+  (stand-walk (:home s) :return))
+
+(defn- peek-step-act
+  "Open the seal, or take the one step. Standing on the step cell waits for a line."
+  [s]
+  (cond (:sealed? s)
+        (if (= :stone_pickaxe (:holding s))
+          {:intent/kind :unseal :expert/why :peek-step}
+          {:intent/kind :equip :intent/item :stone_pickaxe :expert/why :arm-pick})
+        (and (:step-cell s) (not= (:step-cell s) (:feet s))) (stand-walk (:step-cell s) :peek-step)
+        :else {:expert/why :wait}))
+
+(defn- carve-act
+  "Dig the 1x2, fill the sides that are not the window, then walk into it."
+  [s]
+  (cond (and (:dig-cell s) (or (not (:pick-hotbar? s)) (not= :stone_pickaxe (:holding s))))
+        {:intent/kind :equip :intent/item :stone_pickaxe :expert/why :arm-pick}
+        (:dig-cell s) {:intent/kind :dig :intent/target (:dig-cell s) :expert/why :carve}
+        (:place-cell s)
+        {:intent/kind :place
+         :intent/item (:place-item s :cobblestone)
+         :intent/cell (:place-cell s)
+         :expert/why :carve}
+        (:carve-walk s)
+        {:intent/kind :walk :intent/target (:carve-walk s) :intent/for :fight :expert/why :carve}
+        :else {:expert/why :wait}))
 
 (defn- peek-act
   "Open the seal, or step to the opening once it is open. The pick has to be in hand
@@ -342,8 +429,7 @@
         (if (= :stone_pickaxe (:holding s))
           {:intent/kind :unseal :expert/why :peek}
           {:intent/kind :equip :intent/item :stone_pickaxe :expert/why :arm-pick})
-        (:peek-cell s)
-        {:intent/kind :walk :intent/target (:peek-cell s) :intent/for :peek :expert/why :peek}
+        (:peek-cell s) (stand-walk (:peek-cell s) :peek)
         :else {:expert/why :wait}))
 
 (defn- rod-act
@@ -368,15 +454,18 @@
                   (:retreat s) (retreat-act s)
                   :else {:expert/why :wait})
             (#{:wear :arm} (:phase s)) (gear-act s)
-            (#{:approach :pocket} (:phase s))
+            (#{:approach :pocket :carve} (:phase s))
             (or (before-close s)
-                (if (and (= :pocket (:phase s)) (:site s))
-                  {:intent/kind :pocket :intent/site (:site s) :expert/why :pocket}
-                  (approach-act s)))
-            (danger? s) (cover s)
+                (cond (= :carve (:phase s)) (carve-act s)
+                      (and (= :pocket (:phase s)) (:site s))
+                      {:intent/kind :pocket :intent/site (:site s) :expert/why :pocket}
+                      :else (approach-act s)))
+            (danger? s) (if (and (:away? s) (:home s)) (return-act s) (cover s))
             (fight-target s) (fight-act s (fight-target s))
             (abort? s) (seal-act :abort)
             (sortie-target s) (sortie-act s)
+            (peek-step? s) (peek-step-act s)
+            (or (and (:returning? s) (:away? s) (:home s)) (step-home? s)) (return-act s)
             (peek? s) (peek-act s)
             (rod-act s) (rod-act s)
             (and (= :hold (:phase s)) (not (:sealed? s)) (:can-seal? s)) (seal-act :close))
@@ -425,15 +514,6 @@
         held (:pocket/cell (:pocket/site world))]
     (boolean (and want held (= want held) (pocket/in? world)))))
 
-(defn- near-spawner?
-  "Is the bot inside the spawner's wake and outside the spawn box, close in height?"
-  [world spawner]
-  (let [pos (:player/pos world)]
-    (when (and pos spawner)
-      (let [h (physics/horizontal-distance pos (cell-centre spawner))
-            dy (abs (- (physics/y-of pos) (double (second spawner))))]
-        (and (<= wake-min h (:wake mob/spawner)) (<= dy near-dy))))))
-
 (defn- at-stand?
   "Is the bot at the chosen stand: within a walk's goal of it and about its height, or within
    the reach the tunnel to it ends at (fortress/arrived?)?"
@@ -445,14 +525,16 @@
                (<= (abs (- (physics/y-of pos) (double (second cell)))) 1.0))))))
 
 (defn- phase-of
-  "What the bot is doing: armour, the hotbar, the walk in, the dig, or the hold."
-  [world spawner]
+  "What the bot is doing: armour, the hotbar, the walk in, the dig, or the hold. A pocket or a
+   carve starts only once the feet are at its opening, so a site chosen in the wake is walked
+   to before it is dug. spawner is unused: the phase is the feet and the site, and callers pass
+   the spawner they already hold."
+  [world _spawner]
   (cond (missing-armour world) :wear
         (not (:expert/armed? world)) :arm
         (or (in-expert-pocket? world) (:expert/peeking? world)) :hold
-        ;; a site is chosen at the stand. The stand is in the ring, or on the spawner when
-        ;; the ring had no floor, which is inside wake-min and would otherwise stay :approach.
-        (and (:expert/site world) (or (near-spawner? world spawner) (at-stand? world))) :pocket
+        (and (:expert/carve world) (at-stand? world)) :carve
+        (and (:expert/site world) (at-stand? world)) :pocket
         :else :approach))
 
 (defn- opening-dir
@@ -463,19 +545,306 @@
       (when-let [stand (:pocket/stand site)]
         (let [[sx _ sz] stand [cx _ cz] (:pocket/cell site)] [(- sx cx) (- sz cz)]))))
 
-(defn- find-site
-  "The nearest site the bot digs on the way in: pocket/site-near with blaze/pocket-ok? and no
-   line asked (prepare-intent). A clear line to the block over the spawner is not that pocket.
-   Probe 41293318253 stood on the same cells as 41289491940 and each was still :no-site once
-   the line was required."
-  [world spawner]
-  (when (:player/pos world)
-    (pocket/site-near world (intent/feet world) (blaze/pocket-ok? world spawner false))))
+(defn- log-tag
+  "m plus the run's set, seed and time, for one EXPERT line."
+  [world m]
+  (merge {:set (:expert/set world) :seed (:expert/seed world) :t (:time/now world 0)} m))
+
+(defn- block-name
+  "The block name at cell, or nil when the cell is unloaded."
+  [world c]
+  (some-> (terrain/block-at world c)
+          blocks/name-of))
+
+(defn- inward
+  "The [dx dz] from an opening back into the pocket, the reverse of side."
+  [[dx dz]]
+  [(- dx) (- dz)])
+
+(defn- dig-why
+  "Why pocket/dig-in from stand along inward fails, with the blocks around the pocket cell.
+   Nil when the dig holds."
+  [world stand dir]
+  (when-not (pocket/dig-in world stand dir)
+    (let [[dx dz] dir
+          pf (pocket/plus stand [dx 0 dz])
+          ph (pocket/plus pf [0 1 0])
+          back (inward dir)
+          floor (pocket/plus pf [0 -1 0])
+          roof (pocket/plus pf [0 2 0])
+          sides (mapv (fn [s]
+                        {:side s
+                         :feet (block-name world (pocket/plus pf [(first s) 0 (second s)]))
+                         :head (block-name world (pocket/plus pf [(first s) 1 (second s)]))
+                         :shut? (pocket/shut? world pf s)})
+                      (remove #{back} pocket/sides))
+          lava? (contains? blocks/lava-states (terrain/block-at world floor))]
+      {:stand stand
+       :cell pf
+       :side dir
+       :feet (block-name world pf)
+       :head (block-name world ph)
+       :diggable? [(pocket/diggable-at? world pf) (pocket/diggable-at? world ph)]
+       :sides sides
+       :roof (block-name world roof)
+       :roof? (pocket/roofed? world pf)
+       :floor (block-name world floor)
+       :floor? (pocket/solid-at? world floor)
+       :lava? lava?
+       :why (cond (not (pocket/diggable-at? world pf)) :feet
+                  (not (pocket/diggable-at? world ph)) :head
+                  (not (every? :shut? sides)) :side
+                  (not (pocket/roofed? world pf)) :roof
+                  (not (pocket/solid-at? world floor)) :floor
+                  lava? :lava
+                  :else :shape)})))
+
+(defn- living-blazes
+  "Blazes still alive, each with :eid."
+  [sim]
+  (into []
+        (keep (fn [[eid m]]
+                (when (and (= :blaze (:type m)) (:pos m) (not (:dead-at m))) (assoc m :eid eid))))
+        (:sim/mobs sim)))
+
+(defn- line-both?
+  "Does mob/sight? hold from a to b and from b to a? sight? skips the start cell, so one
+   direction can see through a block the other stops on. Both is the line a blaze and the bot
+   agree on."
+  [solid? a b]
+  (and (mob/sight? solid? a b) (mob/sight? solid? b a)))
+
+(defn- sees-blaze?
+  "Does eye have a line both ways to some living blaze's head?"
+  [solid? eye blazes]
+  (boolean (some (fn [b] (line-both? solid? eye (mob/head :blaze (:pos b))))
+                 (sort-by #(physics/distance eye (:pos %)) blazes))))
+
+(defn- volume-heads
+  "Heads of a blaze standing in each non-solid cell of the spawner's spawn volume. The line to
+   the volume aims there, not at the block over the spawner."
+  [sim spawner]
+  (let [solid? (sim/solid-fn sim)
+        [sx sy sz] spawner]
+    (vec (for [x (range (- sx blaze/spawn-range) (inc (+ sx blaze/spawn-range)))
+               y (range (- sy blaze/spawn-height) (inc (+ sy blaze/spawn-height)))
+               z (range (- sz blaze/spawn-range) (inc (+ sz blaze/spawn-range)))
+               :let [c [x y z]]
+               :when (and (not (solid? c)) (blaze/in-spawn-volume? spawner c))]
+           (mob/head :blaze [(+ (double x) 0.5) (double y) (+ (double z) 0.5)])))))
+
+(defn- sees-volume?
+  "Does eye have a line both ways to some air cell of the spawn volume, the nearest first?"
+  [solid? eye heads]
+  (boolean (some (fn [h] (line-both? solid? eye h))
+                 (take volume-tries (sort-by #(physics/distance eye %) heads)))))
+
+(defn- band-cells
+  "Cells whose centres are between pocket-near and pocket-far of the spawner's centre."
+  [spawner]
+  (let [[sx sy sz] spawner
+        r (long (math/ceil pocket-far))]
+    (vec (for [x (range (- sx r) (inc (+ sx r)))
+               y (range (- sy r) (inc (+ sy r)))
+               z (range (- sz r) (inc (+ sz r)))
+               :let [c [x y z]]
+               :when (<= pocket-near
+                         (physics/distance (cell-centre spawner) (cell-centre c))
+                         pocket-far)]
+           c))))
 
 (defn- stand-eye
   "The eye of a player standing in cell."
   [[x y z]]
   (physics/eye [(+ (double x) 0.5) (double y) (+ (double z) 0.5)]))
+
+(defn- los-openings
+  "Openings in the band whose eye has a line both ways to a blaze and to the spawn volume.
+   The pocket cell is a wall to dig, or a pocket that already has that one opening. The stand
+   is the air cell the window faces."
+  [world sim spawner blazes at]
+  (let [solid? (sim/solid-fn sim)
+        heads (volume-heads sim spawner)
+        tried (:expert/tried world #{})]
+    (when (and (seq blazes) (seq heads))
+      (vec
+       (for [c (band-cells spawner)
+             :when (and (not (contains? tried c))
+                        (not (blaze/in-spawn-volume? spawner c))
+                        (blaze/awake-from? spawner c))
+             :let [head (pocket/plus c [0 1 0])
+                   wall? (and (pocket/solid-at? world c)
+                              (pocket/diggable-at? world c)
+                              (pocket/diggable-at? world head))
+                   made? (and (not wall?) (pocket/pocket? world at c))]
+             :when (or wall? made?)
+             [dx dz] pocket/sides
+             :let [side [dx dz]
+                   stand (pocket/plus c [dx 0 dz])
+                   eye (stand-eye stand)]
+             :when (and (not (contains? tried stand))
+                        (not (blaze/in-spawn-volume? spawner stand))
+                        (path/standable? at stand)
+                        (or wall? (= (pocket/openings world c) [side]))
+                        (sees-blaze? solid? eye blazes)
+                        (sees-volume? solid? eye heads))]
+         {:cell c :stand stand :side side :wall? wall?})))))
+
+(defn- place-cells
+  "Cells to fill so the 1x2 keeps one opening: the three sides other than side, the roof, and
+   the floor, wherever those are air. The window itself is left for the seal."
+  [world cell side]
+  (let [floor (pocket/plus cell [0 -1 0])]
+    (vec (concat (for [s (remove #{side} pocket/sides)
+                       dy [0 1]
+                       :let [p (pocket/plus cell [(first s) dy (second s)])]
+                       :when (not (pocket/solid-at? world p))]
+                   p)
+                 (when-not (pocket/roofed? world cell) [(pocket/plus cell [0 2 0])])
+                 (when-not (pocket/solid-at? world floor) [floor])))))
+
+(defn- carve-of
+  "The solid cells of a 1x2 at opening, dug by the expert when dig-in will not take the shape,
+   and the air cells that have to be filled so only the window stays open. Nil when there is
+   nothing solid to dig, or the floor is lava."
+  [world {:keys [cell stand side]}]
+  (let [head (pocket/plus cell [0 1 0])
+        floor (pocket/plus cell [0 -1 0])
+        solids (filterv #(and (pocket/solid-at? world %) (pocket/diggable-at? world %))
+                        [cell head])]
+    (when (and (seq solids)
+               (pocket/diggable-at? world cell)
+               (pocket/diggable-at? world head)
+               (not (contains? blocks/lava-states (terrain/block-at world floor))))
+      {:cells solids :place (place-cells world cell side) :stand stand :cell cell :side side})))
+
+(defn- opening-site
+  "A pocket site for opening: one that already exists, else a dig-in. Nil when the shape is
+   not one dig-in will keep, which is when the expert digs the 1x2 itself."
+  [world at {:keys [cell stand side wall?]}]
+  (let [dir (inward side)
+        dug (pocket/dig-in world stand dir)]
+    (cond (and (not wall?) (pocket/pocket? world at cell) (= (pocket/openings world cell) [side]))
+          {:pocket/cell cell :pocket/stand stand :pocket/dig [] :pocket/placed []}
+          (and dug (= (:pocket/cell dug) cell)) dug
+          :else nil)))
+
+(defn- shut-count
+  "How many of the three sides other than the opening are shut."
+  [world cell side]
+  (count (filter #(pocket/shut? world cell %) (remove #{side} pocket/sides))))
+
+(defn- pick-opening
+  "The best opening: an existing pocket, else a dig-in, else a 1x2 the expert digs. Closer to
+   the nearest blaze, then more of the other sides shut, then a roof."
+  [world at openings blazes]
+  (let [ranked (keep (fn [o]
+                       (let [site (opening-site world at o)
+                             carve (when-not site (carve-of world o))
+                             eye (stand-eye (:stand o))
+                             near (apply min
+                                         (map #(physics/distance eye (mob/head :blaze (:pos %)))
+                                              blazes))]
+                         (when (or site carve)
+                           {:key [(if site (if (seq (:pocket/dig site)) 1 0) 2)
+                                  (if (pocket/roofed? world (:cell o)) 0 1)
+                                  (- (shut-count world (:cell o) (:side o))) near]
+                            :site site
+                            :carve carve
+                            :stand (:stand o)})))
+                     openings)]
+    (first (sort-by :key ranked))))
+
+(defn- travel-of
+  "How to reach cell: a walk when one routes, otherwise the fortress tunnel."
+  [world cell]
+  (if (intent/routable? world {:intent/kind :walk :intent/target cell})
+    {:how :walk :reach 0.5}
+    {:how :tunnel :reach 0.5}))
+
+(defn- adopt-stand
+  "world headed for cell by how."
+  [world cell how reach]
+  (assoc world
+         :expert/stand cell
+         :expert/stand-how how
+         :expert/stand-reach reach
+         :expert/stand-try (:expert/approach world 0)))
+
+(defn- miss-lines
+  "Why dig-in fails around the nearest standable cells in the band: the blocks site-near
+   walked past. At most miss-rows."
+  [world spawner at]
+  (let [feet (intent/feet world)
+        stands (->> (band-cells spawner)
+                    (filter #(path/standable? at %))
+                    (sort-by #(physics/distance (physics/centre feet) (physics/centre %)))
+                    (take miss-stands))]
+    (vec
+     (take
+      miss-rows
+      (for [stand stands side pocket/sides :let [why (dig-why world stand side)] :when why] why)))))
+
+(defn- log-shape
+  "Once, why pocket/site-near finds no 1x2, and why each line-of-sight opening is not a dig-in.
+   Later scans stay quiet."
+  [world spawner at openings]
+  (if (:expert/logged-shape? world)
+    world
+    (let [near
+          (when (:player/pos world)
+            (pocket/site-near world (intent/feet world) (blaze/pocket-ok? world spawner false)))
+          misses (when-not near (miss-lines world spawner at))]
+      (say "EXPERT-SITENEAR"
+           (pr-str (log-tag world
+                            {:found (some? near)
+                             :cell (:pocket/cell near)
+                             :los (count openings)
+                             :misses (count misses)})))
+      (doseq [row misses] (say "EXPERT-NOSITE" (pr-str (log-tag world row))))
+      (doseq [o openings
+              :let [why (dig-why world (:stand o) (inward (:side o)))]
+              :when why]
+        (say "EXPERT-POCKET-MISS" (pr-str (log-tag world (assoc why :los true)))))
+      (assoc world :expert/logged-shape? true))))
+
+(defn- search-pocket
+  "Choose the pocket: an opening in the band with a line both ways to a blaze and to the spawn
+   volume. An existing pocket or a dig-in is handed to :pocket. Anything else solid is dug by
+   the expert. Nothing yet logs the blocks and waits for the blazes to move."
+  [world sim spawner]
+  (let [blazes (living-blazes sim)
+        at (path/cells world)
+        openings (los-openings world sim spawner blazes at)
+        picked (pick-opening world at openings blazes)
+        world (log-shape world spawner at openings)]
+    (cond (:site picked)
+          (let [{:keys [how reach]} (travel-of world (:stand picked))]
+            (say "EXPERT-POCKET"
+                 (pr-str (log-tag world
+                                  {:cell (get-in picked [:site :pocket/cell])
+                                   :stand (:stand picked)
+                                   :how how
+                                   :dig (count (get-in picked [:site :pocket/dig]))})))
+            (-> world
+                (assoc :expert/site (:site picked))
+                (dissoc :expert/carve)
+                (adopt-stand (:stand picked) how reach)))
+          (:carve picked)
+          (let [carve (:carve picked)
+                {:keys [how reach]} (travel-of world (:stand carve))]
+            (say "EXPERT-CARVE"
+                 (pr-str (log-tag world
+                                  {:cell (:cell carve)
+                                   :stand (:stand carve)
+                                   :cells (:cells carve)
+                                   :how how
+                                   :why (dig-why world (:stand carve) (inward (:side carve)))})))
+            (-> world
+                (dissoc :expert/site)
+                (assoc :expert/carve carve)
+                (adopt-stand (:stand carve) how reach)))
+          :else world)))
 
 (defn- sees-spawner?
   "Is the line from a player in cell to the point a block over the spawner clear? The
@@ -673,6 +1042,29 @@
      :approach idx
      :approaches stand-attempts
      :spawner spawner
+     :feet (when (:player/pos world) (intent/feet world))
+     :home (:pocket/cell (:expert/site world))
+     :away? (boolean (and (:pocket/cell (:expert/site world))
+                          (:player/pos world)
+                          (not= (intent/feet world) (:pocket/cell (:expert/site world)))
+                          (or (:expert/peeking? world) (:expert/returning? world))))
+     :returning? (boolean (:expert/returning? world))
+     :zero-since (:expert/zero-since world)
+     :peek-step-at (:expert/peek-step-at world)
+     :step-cell (:expert/step-cell world)
+     :out-since (:expert/out-since world)
+     :dig-cell (when-let [c (:expert/carve world)]
+                 (first (filter #(pocket/solid-at? world %) (:cells c))))
+     :place-cell (when-let [c (:expert/carve world)]
+                   (when (not-any? #(pocket/solid-at? world %) (:cells c))
+                     (first (remove #(pocket/solid-at? world %) (:place c)))))
+     :place-item (or (pocket/seal-filler world 1) pocket/seal-item)
+     :carve-walk (when-let [c (:expert/carve world)]
+                   (when (and (:player/pos world)
+                              (not= (intent/feet world) (:cell c))
+                              (not-any? #(pocket/solid-at? world %) (:cells c))
+                              (not-any? #(not (pocket/solid-at? world %)) (:place c)))
+                     (:cell c)))
      :peek-cell (when-let [site (:pocket/site world)]
                   (when-let [[dx dz] (opening-dir world site)]
                     (when (or (not (zero? dx)) (not (zero? dz)))
@@ -694,11 +1086,13 @@
     world))
 
 (defn- same-act?
-  "Is the running intent the act want names: same kind, target, item, site and hold?"
+  "Is the running intent the act want names: same kind, target, cell, item, site and hold?
+   :intent/cell is the place's block, which :intent/target does not carry."
   [i want]
   (and i
        (= (:intent/kind i) (:intent/kind want))
        (= (:intent/target i) (:intent/target want))
+       (= (:intent/cell i) (:intent/cell want))
        (= (:intent/item i) (:intent/item want))
        (= (:intent/site i) (:intent/site want))
        (= (boolean (:intent/hold? i)) (boolean (:intent/hold? want)))))
@@ -755,14 +1149,21 @@
     (= reason :no-site) mark-searched))
 
 (defn- note-approach
-  "A walk or a tunnel to the stand that failed advances to the next stand. A retreat's
-   walk is not one of those."
+  "A walk or a tunnel to the stand that failed, or a carve dig that failed, advances to the
+   next opening. The pocket is dropped with the stand, so the next search can pick another.
+   A retreat's walk is not one of those, and neither is a peek."
   [world prev]
   (if (and prev
            (intent/failed? prev)
            (or (= :tunnel-to (:intent/kind prev))
-               (and (= :walk (:intent/kind prev)) (= :fight (:intent/for prev)))))
-    (give-up-stand world (:intent/target prev) (:intent/reason prev))
+               (and (= :walk (:intent/kind prev)) (= :fight (:intent/for prev)))
+               (and (#{:dig :place} (:intent/kind prev)) (:expert/carve world))))
+    (let [stand (:expert/stand world)
+          cell (or (:intent/target prev) (:intent/cell prev))]
+      (-> world
+          (dissoc :expert/site :expert/carve)
+          (give-up-stand stand (or (:intent/reason prev) :travel))
+          (cond-> cell (update :expert/tried (fnil conj #{}) cell))))
     world))
 
 (defn- note-pocket
@@ -785,30 +1186,32 @@
     world))
 
 (defn- seek
-  "Look for a pocket once, at the current stand, when the bot has arrived there. No site
-   advances to the next stand. A site already chosen is kept."
-  [world]
-  (let [spawner (:expert/spawner world)
-        idx (:expert/approach world 0)]
-    (cond (or (nil? (:player/pos world)) (nil? spawner)) world
+  "Choose the line-of-sight pocket once a blaze is alive and the feet are in the spawner's wake.
+   A pocket already chosen is kept. No blaze yet, or no opening with a line yet, waits: the run
+   does not stop :no-pocket while a blaze can still move onto a line."
+  [world sim]
+  (let [sp (:expert/spawner world)
+        now (:time/now world 0)
+        feet (when (:player/pos world) (intent/feet world))]
+    (cond (or (nil? feet) (nil? sp)) world
           (in-expert-pocket? world) (assoc world :expert/approach 0)
-          (or (:expert/site world) (>= idx stand-attempts) (= idx (:expert/searched world))) world
-          (at-stand? world)
-          (if-let [site (find-site world spawner)]
-            (assoc world :expert/site site :expert/searched idx)
-            (-> world
-                (assoc :expert/searched idx)
-                (give-up-stand (:expert/stand world) :no-site)))
-          :else world)))
+          (or (:expert/site world)
+              (:expert/carve world)
+              (empty? (living-blazes sim))
+              (not (blaze/awake-from? sp feet))
+              (and (:expert/scan-at world) (< (- now (:expert/scan-at world)) scan-every-ms)))
+          world
+          :else (assoc (search-pocket world sim sp) :expert/scan-at now))))
 
 (defn- ensure-stand
-  "Choose the stand once for this attempt. A routable cell with a clear line is walked;
-   anything else in that line, or a standable cell when the line is empty, is tunnelled to.
-   The spawner is the last try. Nothing left stops the approach."
+  "Walk a ring stand into the wake until the pocket search has an opening to go to. An empty
+   ring does not end the run."
   [world]
   (let [idx (:expert/approach world 0)
         sp (:expert/spawner world)]
-    (cond (or (not= :approach (phase-of world sp))
+    (cond (or (:expert/site world)
+              (:expert/carve world)
+              (not= :approach (phase-of world sp))
               (nil? sp)
               (nil? (:player/pos world))
               (>= idx stand-attempts)
@@ -832,7 +1235,7 @@
                      :expert/stand-how how
                      :expert/stand-reach reach
                      :expert/stand-try idx)
-              (assoc world :expert/approach stand-attempts :expert/stand-try idx))))))
+              (assoc world :expert/stand-try idx))))))
 
 (defn- dead-blazes
   "Eids of blazes whose death has started."
@@ -917,29 +1320,176 @@
           (and (not open?) (:expert/window world)) (finish-window world sim)
           :else world)))
 
+(defn- feet-cell
+  "The cell the feet stand in, or nil before the player has a position."
+  [world]
+  (when (:player/pos world) (intent/feet world)))
+
+(defn- note-carved
+  "The 1x2 is open and the feet are in it: hold that cell as a pocket so it can be sealed."
+  [world]
+  (if-let [c (:expert/carve world)]
+    (let [feet (feet-cell world)]
+      (if (and feet
+               (= feet (:cell c))
+               (not-any? #(pocket/solid-at? world %) (:cells c))
+               (not-any? #(not (pocket/solid-at? world %)) (:place c)))
+        (let [site {:pocket/cell (:cell c)
+                    :pocket/stand (:stand c)
+                    :pocket/dig []
+                    :pocket/placed []
+                    :pocket/here? true}]
+          (-> world
+              (dissoc :expert/carve)
+              (assoc :expert/site site :pocket/site site)))
+        world))
+    world))
+
+(defn- note-returning
+  "Home again: the walk back is over."
+  [world]
+  (let [home (:pocket/cell (:expert/site world))]
+    (if (and home (= (feet-cell world) home)) (dissoc world :expert/returning?) world)))
+
+(defn- note-out
+  "Remember when the feet left the pocket, so a step that finds no line is not stood in."
+  [world]
+  (let [home (:pocket/cell (:expert/site world))
+        feet (feet-cell world)
+        away
+        (and home feet (not= feet home) (or (:expert/peeking? world) (:expert/returning? world)))]
+    (cond (not away) (dissoc world :expert/out-since)
+          (:expert/out-since world) world
+          :else (assoc world :expert/out-since (:time/now world 0)))))
+
+(defn- note-zero
+  "Start the 0-seer clock on a hold that sees none. A line, or leaving the hold, clears it.
+   :expert/seers is last tick's count: one tick late on a 20 s clock."
+  [world]
+  (let [phase (phase-of world (:expert/spawner world))
+        n (:expert/seers world 0)
+        now (:time/now world 0)]
+    (if (or (not= phase :hold) (pos? n))
+      (dissoc world :expert/zero-since :expert/peek-step-at :expert/step-cell)
+      (if (:expert/zero-since world) world (assoc world :expert/zero-since now)))))
+
+(defn- nearest-blaze
+  "The living blaze closest to the player, or nil."
+  [world sim]
+  (when-let [pos (:player/pos world)]
+    (->> (living-blazes sim)
+         (sort-by #(physics/distance pos (:pos %)))
+         first)))
+
+(defn- line-step
+  "The first standable step from feet to a cell whose eye has a line both ways to blaze,
+   outside the spawn volume. Nil when feet already has that line, or none is within
+   step-budget."
+  [world sim spawner feet blaze]
+  (let [at (path/cells world)
+        solid? (sim/solid-fn sim)
+        head (mob/head :blaze (:pos blaze))
+        goal? (fn [c]
+                (and (not (blaze/in-spawn-volume? spawner c))
+                     (line-both? solid? (stand-eye c) head)))]
+    (when-not (goal? feet)
+      (loop [q [feet]
+             i 0
+             seen #{feet}
+             parent {}
+             left step-budget]
+        (when (and (< i (count q)) (pos? left))
+          (let [c (nth q i)]
+            (if (and (not= c feet) (goal? c))
+              (loop [x c]
+                (let [p (get parent x)]
+                  (cond (nil? p) nil
+                        (= p feet) x
+                        :else (recur p))))
+              (let [nxt (into []
+                              (comp (map (fn [[dx dz]] (pocket/plus c [dx 0 dz])))
+                                    (remove seen)
+                                    (filter #(and (path/standable? at %)
+                                                  (not (blaze/in-spawn-volume? spawner %)))))
+                              pocket/sides)]
+                (recur (into q nxt)
+                       (inc i)
+                       (into seen nxt)
+                       (into parent (map (fn [n] [n c]) nxt))
+                       (dec left))))))))))
+
+(defn- latch-step
+  "After zero-seer-ms at 0 seers, remember the one cell to step toward. The choice is kept
+   for zero-seer-ms, including a miss, so the search does not run every tick."
+  [world sim]
+  (let [now (:time/now world 0)
+        since (:expert/zero-since world)
+        at (:expert/peek-step-at world)]
+    (cond (or (nil? since) (< (- now since) zero-seer-ms))
+          (dissoc world :expert/step-cell :expert/peek-step-at)
+          (and at (< (- now at) zero-seer-ms)) world
+          :else
+          (let [feet (feet-cell world)
+                sp (:expert/spawner world)
+                blaze (nearest-blaze world sim)
+                cell (when (and feet blaze sp) (line-step world sim sp feet blaze))]
+            (if cell
+              (do (say "EXPERT-STEP"
+                       (pr-str (log-tag world {:feet feet :to cell :blaze (:pos blaze)})))
+                  (assoc world :expert/step-cell cell :expert/peek-step-at now))
+              (do (when (or (nil? (:expert/noline-at world))
+                            (>= (- now (:expert/noline-at world)) zero-seer-ms))
+                    (say "EXPERT-NOLINE" (pr-str (log-tag world {:feet feet :blaze (:pos blaze)}))))
+                  (-> world
+                      (dissoc :expert/step-cell)
+                      (assoc :expert/peek-step-at now :expert/noline-at now))))))))
+
+(defn- note-act
+  "Remember a peek, the step's clock and a walk home. Peeking stays set while the feet are
+   still outside, so one waiting tick does not drop the hold."
+  [world want sit]
+  (let [why (:expert/why want)
+        home (:pocket/cell (:expert/site world))
+        feet (feet-cell world)
+        away (and home feet (not= feet home))
+        world (cond (= :return why)
+                    (assoc world
+                           :expert/peeking? true
+                           :expert/returning? true
+                           :expert/zero-since (:now sit 0)
+                           :expert/peek-step-at nil
+                           :expert/step-cell nil)
+                    (#{:peek :peek-step} why) (assoc world :expert/peeking? true)
+                    (and away (:expert/peeking? world)) world
+                    :else (dissoc world :expert/peeking?))]
+    (if (and (= :peek-step why)
+             (= :walk (:intent/kind want))
+             (not (and (= (:intent/target want) (:expert/step-cell world))
+                       (:expert/peek-step-at world))))
+      (assoc world :expert/peek-step-at (:now sit 0) :expert/step-cell (:intent/target want))
+      world)))
+
 (defn- drive
   "One tick of the expert: choose, and run that intent, keeping it while it is the same act."
   [world sim event]
   (let [running (:plan/intent world)
-        world (if (and running
-                       (intent/failed? running)
-                       (or (= :tunnel-to (:intent/kind running))
-                           (and (= :walk (:intent/kind running)) (= :fight (:intent/for running)))))
-                (note-approach world running)
-                world)
+        world (if (and running (intent/failed? running)) (note-approach world running) world)
         world (if (= :unseal (:intent/kind (:plan/intent world)))
                 world
                 (dissoc world :expert/unseal-at :expert/unseal-dist))
         world (-> world
                   note-armed
                   ensure-stand
-                  seek)
+                  (seek sim)
+                  note-carved
+                  note-returning
+                  note-out
+                  note-zero
+                  (latch-step sim))
         sit (situation world sim)
         world (track-window world sim sit)
         want (choose sit)
-        world (if (= :peek (:expert/why want))
-                (assoc world :expert/peeking? true)
-                (dissoc world :expert/peeking?))
+        world (note-act world want sit)
         i (:plan/intent world)]
     (cond (:expert/done want)
           (-> (drop-intent world)
