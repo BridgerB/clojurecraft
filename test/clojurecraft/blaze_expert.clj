@@ -696,7 +696,8 @@
                           (note-pocket i)
                           (note-unseal want sit))]
             (if (:intent/kind want)
-              (intent/run (plan/start-intent world (want-keys want)) event)
+              (let [world (plan/start-intent world (want-keys want))]
+                (intent/run world (:plan/intent world) event))
               (assoc world :player/controls {}))))))
 
 (defn- note-progress
@@ -845,7 +846,7 @@
         world0 (merge (game/init {:host "sim" :port 0 :name "Clj_expert"}) tag)
         played (try (play world0 (expert-init w seed) max-ms)
                     (catch Exception e {:crashed e :world world0 :sim {}}))]
-    (if-let [e (:crashed played)]
+    (if-let [^Exception e (:crashed played)]
       (let [line {:set (:capture/set w)
                   :file (:expert/file tag)
                   :seed seed
