@@ -840,6 +840,34 @@
            (first (pearls/angry-near (lured (dissoc given-up :plan/blacklist) pearls/lure-tries))))
         "one not given up on still holds the bot in")))
 
+(deftest an-unreachable-angry-enderman-that-never-comes-to-the-lure-holds-the-burrow-no-longer
+  ;; gym batch pearl-fight-r (plan run 41306509324): runs 2, 3, 4 and 5 timed out after five
+  ;; hours in endless shelter <-> mouth ping-pongs (452 to 944 each) over an angry enderman
+  ;; within hold-radius and danger-rise (e.g. run 2: enderman 2511 at [2451.5 43.0 2182.5],
+  ;; 4 blocks below in a cave), whose held fights were cut after 12 s by held-idle? (:abandoned).
+  ;; Not blacklisted, it held angry-within? and angry-near forever even after lure-tries lures;
+  ;; once lured-out, an unfightable angry enderman holds the burrow no longer, stale surrenders
+  ;; the shelter, and the bot does not plan endless mouth walks or lookouts
+  (let [angry (assoc (enderman [3.5 59.0 12.5]) :entity/creepy? true)
+        w (assoc (burrowed [8.5 61.0 8.5] {7 angry}) :time/now 60000)
+        fight {:intent/id 1 :intent/kind :fight :intent/target 7 :intent/since 0 :intent/hold? true}
+        cut (reduce #(memory/remember-intention %1 (assoc fight :intent/id (+ 100 %2)) :abandoned)
+                    (lured w pearls/lure-tries)
+                    (range pearls/fight-giveups))]
+    (is (pearls/unfightable? cut 7 angry) "cut fight-giveups times: unfightable")
+    (is (pearls/lured-out? cut) "lure-tries lures walked")
+    (is (nil? (pearls/angry-near cut)) "unfightable one near mouth holds angry-near no longer")
+    (is (not (pearls/angry-within? cut pearls/hold-radius)) "and holds angry-within? no longer")
+    (let [stale-burrow
+          (reduce
+           #(memory/remember-intention %1 {:intent/id (+ 1000 %2) :intent/kind :lookout} :done)
+           cut
+           (range pearls/stale-lookouts))]
+      (is (pearls/stale? stale-burrow) "stale after stale-lookouts lookouts")
+      (is (nil? (pearls/shelter stale-burrow)) "burrow is surrendered as stale")
+      (is (not= :lookout (:intent/kind (plan/next-intent stale-burrow row plan/goals)))
+          "plans to move on, not sit in lookouts"))))
+
 (deftest one-given-up-on-in-the-stairs-is-cut-out-past
   ;; sim probe 40102602895 (world R3, seed 4): in its burrow from minute 26 to 60 over an
   ;; angry one, blacklisted, standing in its stairs out of reach: blocking kept it in,
