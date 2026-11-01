@@ -461,6 +461,54 @@
     (is (= -5 (mob/pack-step 0.0 0.99)))
     (is (= 0 (mob/pack-step 0.5 0.5)))))
 
+(defn wither-run
+  "Run mob/wither-tick every 50 ms from a wither applied at 0, {:hurts n :out-at ms}."
+  [until-ms]
+  (loop [now 0
+         w (mob/wither-apply nil 0)
+         hurts 0]
+    (let [[w' event] (mob/wither-tick w now)]
+      (cond (or (nil? w') (= :out event)) {:hurts (cond-> hurts (= :hurt event) inc) :out-at now}
+            (> now until-ms) {:hurts hurts :out-at nil}
+            :else (recur (+ now 50) w' (cond-> hurts (= :hurt event) inc))))))
+
+(deftest a-withers-five-points-land-over-ten-seconds-and-a-second-hit-extends-it
+  (is (= {:hurts 5 :out-at 10000} (wither-run 12000)) "at 2, 4, 6, 8 and 10 seconds")
+  (is (= {:until 12000 :next 2000} (mob/wither-apply (mob/wither-apply nil 0) 2000))
+      "the next hurt stays, the end moves out"))
+
+(deftest a-wither-skeleton-hits-for-eight-and-the-wither-ignores-armour
+  ;; the hit is 8 on Normal (easy scales it); the wither's point is 1 and armour takes none
+  (let [sim (arena {} {} nil night [{:type :wither_skeleton :pos [1.0 64.0 0.5]}])
+        hit (ticks sim 1)
+        later (ticks (assoc hit :sim/mobs {}) 40)
+        worn {[:armour 0] {:item (recipe/item-id :iron_helmet) :count 1}
+              [:armour 1] {:item (recipe/item-id :iron_chestplate) :count 1}
+              [:armour 2] {:item (recipe/item-id :iron_leggings) :count 1}
+              [:armour 3] {:item (recipe/item-id :iron_boots) :count 1}}
+        armoured (ticks (arena {} worn nil night [{:type :wither_skeleton :pos [1.0 64.0 0.5]}]) 1)
+        armoured-later (ticks (assoc armoured :sim/mobs {}) 40)]
+    (is (= 12.0 (:sim/health hit)) "eight off twenty")
+    (is (= {:until 10050 :next 2050} (:sim/wither hit)) "first point two seconds on")
+    (is (= 11.0 (:sim/health later)) "that point, and no second swing")
+    (is (= [28 18] (map :source-type (said later :damage-event))) "melee, then the wither")
+    (is (close? (- 20.0 (mob/absorbed 8.0 15 0.0)) (:sim/health armoured))
+        "full iron takes its share of the eight")
+    (is (close? (dec (:sim/health armoured)) (:sim/health armoured-later))
+        "and none of the wither's one")))
+
+(deftest a-magma-cube-hits-for-four-and-a-hoglin-for-six
+  ;; medium magma cube (the one row; large is 6, small is 3) and a hoglin's 6, the middle of
+  ;; vanilla's 3 to 8 on Normal
+  (is (= 16.0
+         (:sim/health (ticks (arena {} {} nil night [{:type :magma_cube :pos [1.2 64.0 0.5]}]) 1))))
+  (is (= 14.0
+         (:sim/health (ticks (arena {} {} nil night [{:type :hoglin :pos [1.5 64.0 0.5]}]) 1)))))
+
+(deftest the-overworlds-night-does-not-roll-a-fortress-mob
+  (is (not-any? #{:wither_skeleton :magma_cube :hoglin :blaze} (map first mob/hostile-kinds)))
+  (is (every? pos-int? (map second mob/hostile-kinds))))
+
 (deftest a-warped-forest-spawns-packs-of-endermen-by-day-and-netherrack-spawns-nothing
   ;; issue #263: vanilla spawns the Nether's hostiles by biome, the warped forest's list being
   ;; the enderman alone in packs of four, in any light the model tells (the overworld's night
@@ -478,6 +526,22 @@
                 mobs)
         "in the ring, a pack's walk past it at most")
     (is (empty? (:sim/mobs (nether-play {} 7 500))) "a stone floor is no warped forest")))
+
+(def brick-floor
+  "A column's top at y 63 of nether bricks: a fortress's floor, as the model tells one."
+  (into {} (for [x (range 16) z (range 16)] [[x 63 z] (blocks/default-state :nether_bricks)])))
+
+(def crimson-floor
+  "A column's top at y 63 of crimson nylium."
+  (into {} (for [x (range 16) z (range 16)] [[x 63 z] (blocks/default-state :crimson_nylium)])))
+
+(deftest a-fortress-floor-spawns-wither-skeletons-and-magma-cubes-and-crimson-spawns-hoglins
+  (let [fort (vals (:sim/mobs (nether-play brick-floor 7 500)))
+        wood (vals (:sim/mobs (nether-play crimson-floor 7 500)))]
+    (is (seq fort) "five tries, one mob each")
+    (is (every? #{:wither_skeleton :magma_cube} (map :type fort)) "the structure's two kinds")
+    (is (every? #(= :hoglin (:type %)) wood) "the crimson forest's hoglin")
+    (is (seq wood))))
 
 (deftest the-overworld-spends-no-roll-of-the-nethers-stream
   ;; the Nether's spawns roll from their own stream (sim/wild-roll), so the overworld's night

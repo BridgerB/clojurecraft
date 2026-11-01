@@ -5,7 +5,8 @@
    Igniting (ignite) sets the burning to last ms from now and hurts at once, then every second
    while it lasts (burn-damage, on_fire: armour does not take any of it); a fire already burning is
    kept as it is unless the new one outlasts it. Water puts it out (tick). Standing in a fire
-   block lights it again every tick (in-fire-ms).
+   block lights it again every tick (in-fire-ms). Lava is the server's lavaHurt: four points, and
+   fifteen seconds of this same fire (lava-damage, lava-ms); the model applies that in sim/tick-lava.
 
    The real numbers: race f8b28e3, lane 2, 45 recordings, 3599 blazes in view (test/clojurecraft/real_blaze.edn): the burn was 1.0 per hurt in 1778 hurts, 45% of all health the
    blaze fights cost, and a small fireball's hit sets fire for five seconds (SmallFireball)."
@@ -15,6 +16,8 @@
 
 (def fireball-ms 5000)                ; a small fireball's hit sets the target on fire for this long
 (def in-fire-ms 8000)                 ; standing in a fire block (in_fire: Entity.lavaIgnite / FireBlock.entityInside)
+(def lava-ms 15000)                   ; standing in lava sets the player on fire for this long (Entity.lavaHurt, igniteForSeconds 15)
+(def lava-damage 4.0)                 ; one lava hurt (Entity.lavaHurt); the hurt window lands it once a half-second
 (def burn-damage 1.0)                 ; one hurt of burning (the on_fire damage type, 1.0 in every recorded hurt)
 (def burn-every-ms 1000)              ; between two hurts of one burning (every 20th game tick)
 

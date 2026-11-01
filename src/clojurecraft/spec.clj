@@ -802,6 +802,9 @@
 (s/def :sim.hurt/at int?)
 (s/def :sim.hurt/last number?)
 (s/def :sim/hurt (s/keys :req-un [:sim.hurt/at :sim.hurt/last])) ; the last hurt: when, how hard
+(s/def :sim.wither/until int?)
+(s/def :sim.wither/next int?)
+(s/def :sim/wither (s/keys :req-un [:sim.wither/until :sim.wither/next])) ; a wither skeleton's wither: when it ends, when it next hurts
 ;; mobs in the model (issue #260): each one's kind, place, health and clocks (mob.clj, sim/tick-mobs)
 (s/def :sim.mob/type (set (keys mob/kinds)))
 (s/def :sim.mob/pos ::vec3)

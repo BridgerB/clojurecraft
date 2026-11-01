@@ -427,6 +427,7 @@
    "A bot that reached fortress corridors far from any spawner resumes spiral search and tunnels away through netherrack into the Nether (issue #262, probe 40580596249, sim R2/12 s2): the bot walks open fortress corridors toward unexplored bricks (corridor-walk) or tunnels/bridges toward the nearest unvisited brick (fortress-search) before resorting to the spiral"
    "Resting beside an active spawner in the open under 14 health or after killing a burst, waiting for fireballs to hit (issue #262, probe 40597529086, sim R1/1 s1 and R1/17 s1): hide and in-open? treat the active spawner within line of sight as a threat, taking cover behind a wall before resting, never resting in the open, and terminating rest immediately when exposed or healthy enough to fight"
    "Wither skeletons beside the spawner" "Zombified piglins aggro'd beside the spawner"
+   "Lava underfoot, four every half-second then fifteen seconds of fire, and the fortress's wither skeletons (eight plus wither) and magma cubes and a crimson forest's hoglins, which the sim did not fight (census probe 41273182218)"
    "Peaceful: no blazes at all"]
   :problem/done
   "RCON: seven or more blaze rods in the bot's inventory (clear <bot> minecraft:blaze_rod 0), from the nether arena's spawner and from a fortress pad."

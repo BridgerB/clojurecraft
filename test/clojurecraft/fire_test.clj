@@ -6,7 +6,8 @@
             [clojurecraft.fire :as fire]
             [clojurecraft.mob :as mob]
             [clojurecraft.mob-test :as m]
-            [clojurecraft.sim :as sim]))
+            [clojurecraft.sim :as sim]
+            [clojurecraft.simrace :as simrace]))
 
 (defn burn-run
   "Run fire/tick every 50 ms from now 0 to until-ms for a fire lit at 0 for ms, {:hurts n :out-at ms}."
@@ -62,6 +63,25 @@
                 (m/ticks 2))]
     (is (nil? (:sim/fire sim)))
     (is (some #{{0 0}} (map :metadata (m/said sim :set-entity-data))) "told out")))
+
+(deftest lava-deals-four-a-half-second-and-lights-fifteen-seconds-of-fire
+  ;; Entity.lavaHurt: 4, and igniteForSeconds(15). The hurt window lands the 4 once a
+  ;; half-second, and tick-lava runs after tick-burn so the first tick is only the 4.
+  (let [lava (blocks/default-state :lava)
+        once (-> (m/arena {[0 64 0] lava} {} nil m/night [])
+                 (m/ticks 1))
+        flags (map :metadata (filter #(= 1 (:entity-id %)) (m/said once :set-entity-data)))]
+    (is (= 16.0 (:sim/health once)) "four off twenty")
+    (is (= (+ 50 fire/lava-ms) (:until (:sim/fire once))) "fifteen seconds, from this tick")
+    (is (= [24] (map :source-type (m/said once :damage-event))) "lava, source type 24")
+    (is (some #{{0 1}} flags) "the flags byte told: on fire")
+    (is (= 12.0 (:sim/health (m/ticks once 10))) "the second four at tick 11")
+    (let [dead (-> (m/arena {[0 64 0] lava} {} nil m/night [])
+                   (assoc :sim/health 4.0)
+                   (m/ticks 1))]
+      (is (= 0.0 (:sim/health dead)))
+      (is (= [:lava] (:sim/death-causes dead)))
+      (is (= :lava (:lava simrace/death-classes)) "a fortress run files it :death-lava"))))
 
 (deftest standing-in-a-fire-block-burns
   (let [flame (blocks/default-state :fire)

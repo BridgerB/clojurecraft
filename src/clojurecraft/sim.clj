@@ -2409,7 +2409,9 @@
   [sim eid]
   (let [{:keys [type pos]} (get-in sim [:sim/mobs eid])
         k (mob/kinds type)
-        stop (cond (:melee k) (* 0.8 (:reach k))
+        ;; :contact on a ground mob (a magma cube) is its hit: not :melee, so the bot's pack
+        ;; line does not read it, and it still stops inside its reach
+        stop (cond (or (:melee k) (and (:contact k) (not (:flies k)))) (* 0.8 (:reach k))
                    (:shoot k) (:keep k)
                    :else 1.0)]
     (cond
@@ -2525,6 +2527,39 @@
             (-> (hurt fire/burn-damage true :on_fire)
                 (tell-damage :on_fire nil))))))
 
+(defn in-lava?
+  "Are the player's feet in lava? The cell the feet stand in (block-at of the floored
+   position), which is where a body in a source stands."
+  [sim]
+  (when-let [pos (:sim/player-pos sim)]
+    (contains? blocks/lava-states (block-at sim (mapv #(long (math/floor (double %))) pos)))))
+
+(defn tick-lava
+  "One game tick of the player standing in lava (Entity.lavaHurt): fire/lava-damage, armour
+   takes none of it, and the player is set alight for fire/lava-ms. The hurt window lands the
+   four once a half-second; a swallowed one is not told. Runs after tick-burn, so the tick that
+   first steps in deals the four and not also that tick's burn. A dead player is left."
+  [sim]
+  (cond (or (<= (:sim/health sim) 0.0) (not (in-lava? sim))) sim
+        :else
+        (let [before (:sim/health sim)
+              sim (hurt sim fire/lava-damage false :lava)]
+          (cond-> (ignite-player sim fire/lava-ms)
+            (< (:sim/health sim) before) (tell-damage :lava nil)))))
+
+(defn tick-wither
+  "One game tick of the wither a skeleton put on the player (mob/wither-tick): mob/wither-damage
+   when one is due, armour takes none of it, told as a damage-event. The wither skeleton is the
+   cause, so a death by it classes as :wither. A dead player is left."
+  [sim]
+  (let [[after event] (mob/wither-tick (:sim/wither sim) (:sim/now sim))]
+    (cond (<= (:sim/health sim) 0.0) (dissoc sim :sim/wither)
+          :else
+          (cond-> (if after (assoc sim :sim/wither after) (dissoc sim :sim/wither))
+            (= :hurt event)
+            (-> (hurt mob/wither-damage false :wither_skeleton)
+                (tell-damage :wither nil))))))
+
 (defn strike
   "A melee mob with the player in reach (on the plane within its :reach, feet within 1.5 in
    height) hits it every :every ticks for its damage scaled by the difficulty. A flier's strike is
@@ -2540,13 +2575,20 @@
                     (>= now (or attack-at 0))))
           sim
           :else
-          (-> sim
-              (assoc-in [:sim/mobs eid :attack-at]
-                        (+ now (* (or (:contact-every k) (:every k)) physics/tick-ms)))
-              (hurt (armoured sim (mob/scaled (or (:melee k) (:contact k)) (:sim/difficulty sim)))
-                    true
-                    type)
-              (tell-damage :mob_attack eid)))))
+          (let [before (:sim/health sim)
+                sim (-> sim
+                        (assoc-in [:sim/mobs eid :attack-at]
+                                  (+ now (* (or (:contact-every k) (:every k)) physics/tick-ms)))
+                        (hurt (armoured sim
+                                        (mob/scaled (or (:melee k) (:contact k))
+                                                    (:sim/difficulty sim)))
+                              true
+                              type)
+                        (tell-damage :mob_attack eid))]
+            ;; the wither only when the hit landed: a swallowed swing applies none
+            (cond-> sim
+              (and (:wither k) (< (:sim/health sim) before))
+              (update :sim/wither mob/wither-apply now))))))
 
 (def fireball-type (get blocks/entity-types :small_fireball)) ; add-entity's type for a blaze's fireball
 
@@ -2761,27 +2803,28 @@
 
 (defn spawn-pack
   "The model with a pack of n of kind walked out from [x y z]: each member mob/pack-step off
-   the last on x and on z (four wild-rolls), at the pack's height, placed where it stands (a cell
-   mob/nether-spot? and no nearer the player than mob/spawn-near) and skipped where it does
-   not, as NaturalSpawner.spawnCategoryForPosition walks and skips them."
-  [sim kind [x y z] n]
-  (let [player (:sim/player-pos sim)
-        at #(block-at sim %)
-        free? (free-fn sim)]
-    (first (reduce (fn [[sim x z] _]
-                     (let [[sim a] (wild-roll sim)
-                           [sim b] (wild-roll sim)
-                           [sim c] (wild-roll sim)
-                           [sim d] (wild-roll sim)
-                           x (+ x (mob/pack-step a b))
-                           z (+ z (mob/pack-step c d))
-                           pos [(+ x 0.5) (double y) (+ z 0.5)]]
-                       [(cond-> sim
-                          (and (mob/nether-spot? at free? [x y z])
-                               (>= (physics/distance pos player) mob/spawn-near))
-                          (add-mob kind pos {})) x z]))
-                   [sim x z]
-                   (range n)))))
+   the last on x and on z (four wild-rolls), at the pack's height, placed where it stands (spot?
+   of the cell, mob/nether-spot? when none is given, and no nearer the player than mob/spawn-near)
+   and skipped where it does not, as NaturalSpawner.spawnCategoryForPosition walks and skips them."
+  ([sim kind pos n] (spawn-pack sim kind pos n mob/nether-spot?))
+  ([sim kind [x y z] n spot?]
+   (let [player (:sim/player-pos sim)
+         at #(block-at sim %)
+         free? (free-fn sim)]
+     (first (reduce (fn [[sim x z] _]
+                      (let [[sim a] (wild-roll sim)
+                            [sim b] (wild-roll sim)
+                            [sim c] (wild-roll sim)
+                            [sim d] (wild-roll sim)
+                            x (+ x (mob/pack-step a b))
+                            z (+ z (mob/pack-step c d))
+                            pos [(+ x 0.5) (double y) (+ z 0.5)]]
+                        [(cond-> sim
+                           (and (spot? at free? [x y z])
+                                (>= (physics/distance pos player) mob/spawn-near))
+                           (add-mob kind pos {})) x z]))
+                    [sim x z]
+                    (range n))))))
 
 (defn try-nether-spawn
   "Every mob/spawn-every ticks in the Nether (wild-spawning?, under mob/hostile-cap), one try
@@ -2821,6 +2864,49 @@
                         [sim r4] (wild-roll sim)
                         spot (spots (min (dec (count spots)) (long (* r3 (count spots)))))]
                     (spawn-pack sim (mob/pick mob/warped-kinds r4) spot mob/enderman-pack)))))))
+
+(defn try-floor-spawn
+  "One try, on try-nether-spawn's cadence and cap, at a pack of n from kinds on the floors
+   spot? accepts: the same ring and the same wild-rolls, and nothing where the column has no
+   such floor. The overworld rolls none of it (wild-spawning?)."
+  [sim spot? kinds n]
+  (let [player (:sim/player-pos sim)]
+    (cond (not (and player
+                    (wild-spawning? sim)
+                    (zero? (mod (quot (:sim/now sim) physics/tick-ms) mob/spawn-every))
+                    (< (hostiles-near sim) mob/hostile-cap)))
+          sim
+          :else
+          (let [[sim r1] (wild-roll sim)
+                [sim r2] (wild-roll sim)
+                angle (* 2.0 math/PI r1)
+                dist (+ mob/spawn-near (* r2 (- mob/spawn-far mob/spawn-near)))
+                [px py pz] player
+                x (long (math/floor (+ px (* dist (math/cos angle)))))
+                z (long (math/floor (+ pz (* dist (math/sin angle)))))
+                fy (long (math/floor py))
+                at #(block-at sim %)
+                spots (vec (for [y (range (- fy mob/spawn-band) (inc (+ fy mob/spawn-band)))
+                                 :when (spot? at (free-fn sim) [x y z])]
+                             [x y z]))]
+            (cond (empty? spots) sim
+                  :else
+                  (let [[sim r3] (wild-roll sim)
+                        [sim r4] (wild-roll sim)
+                        spot (spots (min (dec (count spots)) (long (* r3 (count spots)))))]
+                    (spawn-pack sim (mob/pick kinds r4) spot n spot?)))))))
+
+(defn try-fortress-spawn
+  "Every mob/spawn-every ticks in the Nether, one mob on fortress brick (mob/fortress-kinds:
+   a wither skeleton or a magma cube, weights 8 and 3). A column with no brick spawns nothing."
+  [sim]
+  (try-floor-spawn sim mob/fortress-spot? mob/fortress-kinds 1))
+
+(defn try-crimson-spawn
+  "Every mob/spawn-every ticks in the Nether, one hoglin on crimson nylium (mob/crimson-kinds).
+   A column with none spawns nothing. Piglins are not modelled."
+  [sim]
+  (try-floor-spawn sim mob/crimson-spot? mob/crimson-kinds 1))
 
 (defn spawner-cells
   "The set of cells holding a spawner block in the decoded columns within one chunk of the
@@ -3035,9 +3121,10 @@
 (defn tick-mobs
   "One game tick of the mobs: the day moves on (:sim/day-time), chunks coming near get their
    animals (populate), a hostile is tried for (try-spawn), the Nether's warped forests spawn
-   their endermen (try-nether-spawn) and its spawners run (tick-spawners), every mob acts in id
-   order (act-mob), and far hostiles despawn (despawn). A model with no difficulty and no mobs
-   only keeps its day."
+   their endermen (try-nether-spawn), its fortresses a wither skeleton or a magma cube
+   (try-fortress-spawn), its crimson forests a hoglin (try-crimson-spawn), and its spawners run
+   (tick-spawners), every mob acts in id order (act-mob), and far hostiles despawn (despawn). A
+   model with no difficulty and no mobs only keeps its day."
   [sim]
   (let [sim (cond-> sim (:sim/day-time sim) (update :sim/day-time inc))]
     (cond (not (or (:sim/difficulty sim) (seq (:sim/mobs sim)))) sim
@@ -3046,6 +3133,8 @@
                         populate
                         try-spawn
                         try-nether-spawn
+                        try-fortress-spawn
+                        try-crimson-spawn
                         tick-spawners)]
             (despawn (reduce act-mob sim (sort (keys (:sim/mobs sim)))))))))
 
@@ -3239,6 +3328,8 @@
       kill
       drown
       tick-burn
+      tick-lava
+      tick-wither
       feed
       tick-eating
       tick-delayed
