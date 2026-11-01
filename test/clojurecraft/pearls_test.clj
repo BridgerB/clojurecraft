@@ -3063,3 +3063,30 @@
         "six stems held: the hunt goes on, the pickaxe made when it falls under spare-digs")
     (is (= :lookout (:intent/kind (plan/next-intent (with 200 0) row plan/goals)))
         "digs to spare: no reserve is cut")))
+
+(deftest a-blaze-behind-a-wall-is-no-swarm-and-one-in-sight-sends-the-bot-back-along-its-trail
+  ;; race 9d15bd69b (lanes 41244936722 and 41245191737): Clj_r24, r35, r04, r02 and r11 held 7 to 9
+  ;; rods and died on the pearl stage in the blaze room, \`swarmed?\` by a blaze 19 to 29 blocks off,
+  ;; digging down and pillaring in its fireballs (hp 20 to 3.3 in 37 s, probe 41251668076); the
+  ;; hunt's travel is gated on swarmed? and nothing walked them out
+  (let [blaze {:entity/type (blocks/entity-types :blaze)
+               :entity/pos [14.5 64.0 8.5]
+               :entity/seen-at 0
+               :entity/health 20.0}
+        stone (blocks/default-state :stone)
+        wall (into {} (for [y (range 64 68) z (range 6 11)] [[5 y z] stone]))
+        floor (into {} (for [x (range 0 16) z (range 0 16)] [[x 63 z] stone]))
+        w (-> (standing {9 blaze})
+              (assoc :world/chunks {[0 0] (world/column (merge floor wall))})
+              (assoc :fortress/trail {:trail/target [20 64 8] :trail/cells [[1 64 8] [3 64 8]]}))
+        walled (assoc-in w
+                [:world/chunks [0 0]]
+                (world/column
+                 (merge floor (into {} (for [y (range 64 68) z (range 4 14)] [[11 y z] stone])))))]
+    (is (pearls/swarmed? w) "a blaze in the open sight of the bot is a swarm")
+    (let [i (plan/next-intent w row plan/goals)]
+      (is (= :walk (:intent/kind i)) (pr-str i))
+      (is (= [3 64 8] (:intent/target i)) "the newest trail cell behind the wall")
+      (is (= :pearls (:intent/for i))))
+    (is (not (pearls/swarmed? walled)) "a wall between the bot and the blaze: no swarm")
+    (is (nil? (pearls/leave-sight walled)) "and nothing to leave")))

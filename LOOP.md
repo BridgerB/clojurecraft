@@ -38,6 +38,16 @@
 - **Race blockers already fixed on main:** pickaxe table kept (#628), spawner kept after a failed walk (#629), tunnel stand flip (#630, #637), return without food (#631, #640), the defence hold (#632), retry regroup (#633, #646), junk tossed for a rod (#645), 4 free slots (#648), the stuck watchdog (#647, #650, #651). Food at Nether entry is still low (#641 didn't work: the portal is underground; a longer surface search is in test).
 - **The sim race** has rarely given rods (3 in 946 at the fortress before Oct 30): check the model's blazes and spawners against the real race before trusting a sim number.
 
+## 4a. ML principles (Bridger, 2026-10-31; from ~/Developer/ML.md)
+Apply these to 17, 18 and then 19, in this order.
+1. **The sim and the real race must agree.** A sim number counts only after a parity table, real vs sim on the same fortress moments, matches within tolerance. It compares blaze aggro range, volley rate, fireball hit rate, damage and burn, the bot's hits per swing, hits from out of sight, and the mix of mobs and hazards. Keep the recorded real moments as a parity test that runs on every sim change; a gap is a sim bug until shown otherwise. Owner: stuck-retry.
+2. **The real race is the honest metric.** Gym rates and fortress-start sims are curriculum numbers: report them, never call a stage passed on them. Report every rate as k/n.
+3. **A scripted expert per stage.** Before tuning a stage, a privileged expert must pass it in the parity-checked sim. The expert knows true blaze and enderman positions and plays an ideal pocket, sortie or hunt, with the race kit. Its rate is the ceiling. If the expert fails, fix the plan, kit or gate, not the bot's thresholds. Stage 17 first, then 18, then 19.
+4. **Structure beats magnitude.** Every fix names its structural cause from a log line. A PR that only moves a threshold needs a sweep (5) behind it.
+5. **Sweep numbers in the sim, don't hand-tune them per round.** Combat and hunt thresholds (yield line, crowd counts, press time, pocket hold, sortie length, relocation time) live in one EDN table. Once parity holds, a sim sweep over hundreds of fortress starts picks the values, and one real round confirms them.
+6. **Reverse curriculum; practise every phase.** Fortress start for 17, rods-in-hand start for 18, rods-and-pearls start for 19, each with the race kit. Move the race's start earlier only when the later phase passes.
+7. **Observation discipline.** The bot uses only what the server sends; the sim must send only that too (no out-of-sight entity, no hidden block). A leak in the sim is a parity bug.
+
 ## 5. Workers
 - The lead (Opus, main chat) does no bot-fixing. Sonnet subagents do the item work: read runs, find the cause with log lines, write the fix and unit tests from logged states, push, dispatch rounds, write status lines (T/status-<name>.md) and PR bodies (T/pr-<name>.md). They own their loop per T/fast-loop.md: audit partial rounds, fix, push and dispatch the next round in the same session.
 - The lead: picks items, writes briefs, audits every round itself, verifies claims against logs, reviews diffs (design, shared-code risk, RICH-HICKEY), opens PRs and merges with T/merge-when-green.sh, resolves overlaps between workers (one owner per file area), reports.

@@ -52,6 +52,7 @@
             [clojurecraft.stronghold :as stronghold]
             [clojurecraft.swim]
             [clojurecraft.sword]
+            [clojurecraft.vein]
             [clojurecraft.viewer :as viewer]
             [clojurecraft.watch :as watch]
             [clojurecraft.wood])
