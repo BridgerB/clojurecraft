@@ -3,11 +3,16 @@ title: Ender pearls
 description: How the bot gets twelve ender pearls (issue #263) - endermen hunted with the sword, never bartered; the loot table, the warped forest and the enderman's stare and teleport rules read from the jar; the :pearls plan (the kill's drop, the fight, a stare from range to provoke, a walk), the :provoke intent, the two goal rows, the sim test and the model's armour.
 type: reference
 tags: [bot, plan, combat, nether, goals, intents]
-aliases: [:pearls, :provoke, :burrow, :lookout, cut-reach, roam-reaches, at-hand, lure?, lure-lookouts, mouth-cells, :pearls/shelter, :entity/creepy?, :intent/hold?, :ender-pearls, :ender-pearl, pearls-12, pearls-1, :unprovoked, :no-enderman, stare-from, stare-range, :toward, roam-goal, descend, descend-radius, spare-digs, spare?, memory/arrived, vantage, threat, stale?, warped-origins, ascend, pearl-arena, dig-out, cheapest-heading, lured-out?, lure-tries, :no-sword, make-sword, sword/payable, sword/serviceable, burning-at, brink?, provoke-health, at-site?, make-pickaxe, worn-pick?, floored-length, blocked-out?, cut-out, reaches?]
+aliases: [:pearls, :provoke, :burrow, :lookout, cut-reach, roam-reaches, at-hand, lure?, lure-lookouts, mouth-cells, :pearls/shelter, :entity/creepy?, :intent/hold?, :ender-pearls, :ender-pearl, pearls-12, pearls-1, :unprovoked, :no-enderman, stare-from, stare-range, :toward, roam-goal, descend, descend-radius, spare-digs, spare?, memory/arrived, vantage, threat, stale?, warped-origins, ascend, pearl-arena, dig-out, cheapest-heading, lured-out?, lure-tries, :no-sword, make-sword, sword/payable, sword/serviceable, burning-at, brink?, provoke-health, at-site?, make-pickaxe, worn-pick?, floored-length, blocked-out?, cut-out, reaches?, trail-cells, out-of-sight-cell, room-boxes, room-exit, room-waypoint]
 status: verified
-lastUpdated: 2026-10-24
+lastUpdated: 2026-11-01
 verifiedAgainst: HEAD
 sourceRefs:
+  - src/clojurecraft/pearls.clj#defn trail-cells
+  - src/clojurecraft/pearls.clj#defn out-of-sight-cell
+  - src/clojurecraft/pearls.clj#defn room-boxes
+  - src/clojurecraft/pearls.clj#defn room-exit
+  - src/clojurecraft/pearls.clj#defn room-waypoint
   - src/clojurecraft/memory.clj#defn forest-fact
   - src/clojurecraft/pearls.clj#defn travel-caged?
   - test/clojurecraft/pearls_test.clj#a-hunt-with-no-warped-forest-near-travels-or-explores
@@ -232,6 +237,8 @@ A running intent is cut by a threat only when the hunt would choose a different 
 A fight cut or failed `fight-giveups` (3) times within ten minutes is not planned again until the enderman is in reach, a loiter wanders whatever is tracked, and the walk out of a ghast's sight is a walk `:for :cover`, which ends only centred in its cell (gym run 40905321229 job 6).
 
 Travel: a chunk with `forest-min` (12) or more warped nylium blocks is a fact (`memory/forest-fact`, one a chunk like a pool, kept after the chunk unloads, `memory/warped-chunks`). In the Nether and not in a forest (`in-forest?`: a known forest chunk within `forest-reach` chunks), with no enderman tracked and the bot not hurt, swarmed or menaced, the hunt `travel`s: a walk to the cell over the nearest known forest's nylium, else `explore` (a far-walk along a heading, never to ground arrived at). The gym row `pearls-12-from-fortress` starts at a fortress as the race does (real race 40980342194, Clj_r13: two hours round a fortress, no pearl).
+
+Leaving the blaze room (issue #263): after blaze rods, the hunt leaves any blaze room (`room-boxes`, 12 blocks round a spawner) along the fortress trail before travelling to a forest. `trail-cells` combines the fortress tunnel trail (`:fortress/trail`) and the plan trail (`:plan/trail`, the corridor route the bot actually walked from the fortress entrance to the spawner). In shooters' sight, `leave-sight` walks out along `out-of-sight-cell` outside the room using `:for :cover` (ending centred in the cell, no tick-0 churn); inside the room, local `near-cover-cell` is skipped so `room-exit` tunnels along the trail outside the room (`:intent/reach 1.5`, no early done); and `room-waypoint` steers travel away from the blaze room toward the trail exit or corner (real race 41294596356 s1 Clj_r07 and 13 other rod bots).
 
 One enderman at a time: no enderman is provoked while an angry one is coming (`coming?`: the nearest angry one within stare range that is not `unfightable?`); churn-a run 3 provoked 1310, 1561 and 1691 in 14 s and had three within 2.5 blocks.
 

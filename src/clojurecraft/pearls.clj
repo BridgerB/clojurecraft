@@ -1600,15 +1600,53 @@
   (let [eye [(+ x 0.5) (+ y eye-height) (+ z 0.5)]]
     (every? #(not (combat/clear? world eye (combat/aim %))) shooters-seq)))
 
-(defn out-of-sight-cell
-  "The newest cell of the fortress trail (:fortress/trail, the feet cells a tunnel began its steps
-   from, oldest first) from which no entity of shooters has a clear line to a standing eye, or nil.
-   The way back out of a blaze room is the way the bot tunnelled in: the race's rod bots (race
-   9d15bd69b, Clj_r24, r35, r04, r02, r11) had no other walk and died in it."
+(def room-margin
+  "Blocks round a known spawner, on the plane and up and down, that count as its blaze room: a walk
+   or a dig-out that goes through it goes into the fireballs."
+  12)
+
+(defn room-boxes
+  "The boxes [x0 y0 z0 x1 y1 z1], one for each spawner on record in the bot's dimension
+   (memory/positions-now), room-margin round it. Pure."
   [world]
-  (let [ss (vals (shooters world))]
+  (vec (for [[x y z] (memory/positions-now world [blaze/spawner])]
+         [(- x room-margin) (- y room-margin) (- z room-margin) (+ x room-margin) (+ y room-margin)
+          (+ z room-margin)])))
+
+(defn in-room?
+  "Is point [x y z] (a cell or a position) inside one of boxes?"
+  [boxes [x y z]]
+  (boolean (some (fn [[x0 y0 z0 x1 y1 z1]] (and (<= x0 x x1) (<= y0 y y1) (<= z0 z z1))) boxes)))
+
+(defn crosses-room?
+  "Does the straight line from point a to point b pass through one of boxes, sampled every two
+   blocks? Pure."
+  [boxes a b]
+  (let [d (physics/distance a b)
+        n (max 1 (quot (inc (long d)) 2))]
+    (boolean (some (fn [k]
+                     (let [t (/ k (double n))] (in-room? boxes (mapv #(+ %1 (* t (- %2 %1))) a b))))
+                   (range (inc n))))))
+
+(defn trail-cells
+  "The trail cells available to leave the spawner or blaze room: the cells of the fortress tunnel
+   trail (:fortress/trail, newest first), then the cells of the plan trail (:plan/trail, newest
+   first) which records where the bot actually walked from the fortress entrance to the spawner.
+   Pure."
+  [world]
+  (concat (reverse (:trail/cells (:fortress/trail world))) (rseq (:plan/trail world []))))
+
+(defn out-of-sight-cell
+  "The newest cell of the fortress trail (:fortress/trail, then :plan/trail) outside every blaze
+   room from which no entity of shooters has a clear line to a standing eye, or nil.
+   The way back out of a blaze room is the way the bot tunnelled or walked in: the race's rod bots
+   had no other walk and died in it."
+  [world]
+  (let [ss (vals (shooters world))
+        boxes (room-boxes world)]
     (when (seq ss)
-      (->> (reverse (:trail/cells (:fortress/trail world)))
+      (->> (trail-cells world)
+           (remove #(in-room? boxes %))
            (filter #(unseen-from? world ss %))
            first))))
 
@@ -1638,18 +1676,19 @@
   "The intent that gets the bot out of the shooters' sight, or nil: with a shooter in view
    (combat/seen?) and no enderman tracked within seek-radius, a routable walk to the newest
    fortress trail cell out of sight (out-of-sight-cell), else to the nearest cell round the feet out
-   of sight (near-cover-cell), else, at under danger-health, a back-off from the nearest shooter in
-   view: never a dig or a pillar in its sight, which is where the rod bots' hp went from 20 to 3.3
-   in 37 s (probe 41251668076). Pure."
+   of sight (near-cover-cell) when outside every blaze room, else, at under danger-health, a
+   back-off from the nearest shooter in view: never a dig or a pillar in its sight, which is where
+   the rod bots' hp went from 20 to 3.3 in 37 s (probe 41251668076). Pure."
   [world]
   (let [shot (into {} (filter (fn [[_ e]] (combat/seen? world e))) (shooters world))]
     (when (and (seq shot) (empty? (endermen world seek-radius)))
       (let [walk (fn [c]
                    (when c
-                     (let [i {:intent/kind :walk :intent/target c :intent/for :pearls}]
-                       (when (intent/routable? world i) i))))]
+                     (let [i {:intent/kind :walk :intent/target c :intent/for :cover}]
+                       (when (intent/routable? world i) i))))
+            in-blaze-room? (in-room? (room-boxes world) (intent/feet world))]
         (or (walk (out-of-sight-cell world))
-            (walk (near-cover-cell world))
+            (when-not in-blaze-room? (walk (near-cover-cell world)))
             (when (< (:player/health world 20.0) danger-health)
               (let [[eid _] (entity/nearest shot (:player/pos world))]
                 {:intent/kind :back-off :intent/target eid :intent/for :pearls})))))))
@@ -1913,34 +1952,6 @@
             best (apply max-key away ends)]
         {:intent/kind :walk :intent/target (second best) :intent/for :pearls}))))
 
-(def room-margin
-  "Blocks round a known spawner, on the plane and up and down, that count as its blaze room: a walk
-   or a dig-out that goes through it goes into the fireballs."
-  12)
-
-(defn room-boxes
-  "The boxes [x0 y0 z0 x1 y1 z1], one for each spawner on record in the bot's dimension
-   (memory/positions-now), room-margin round it. Pure."
-  [world]
-  (vec (for [[x y z] (memory/positions-now world [blaze/spawner])]
-         [(- x room-margin) (- y room-margin) (- z room-margin) (+ x room-margin) (+ y room-margin)
-          (+ z room-margin)])))
-
-(defn in-room?
-  "Is point [x y z] (a cell or a position) inside one of boxes?"
-  [boxes [x y z]]
-  (boolean (some (fn [[x0 y0 z0 x1 y1 z1]] (and (<= x0 x x1) (<= y0 y y1) (<= z0 z z1))) boxes)))
-
-(defn crosses-room?
-  "Does the straight line from point a to point b pass through one of boxes, sampled every two
-   blocks? Pure."
-  [boxes a b]
-  (let [d (physics/distance a b)
-        n (max 1 (quot (inc (long d)) 2))]
-    (boolean (some (fn [k]
-                     (let [t (/ k (double n))] (in-room? boxes (mapv #(+ %1 (* t (- %2 %1))) a b))))
-                   (range (inc n))))))
-
 (defn room-waypoint
   "The first walk target for getting from the feet to target without going through the blaze room
    (room-boxes), or target itself when the line is clear or no better is found. From inside the
@@ -1954,13 +1965,20 @@
         feet (intent/feet world)]
     (cond (empty? boxes) target
           (in-room? boxes feet)
-          (or (->> (reverse (:trail/cells (:fortress/trail world)))
+          (or (->> (trail-cells world)
                    (remove #(in-room? boxes %))
                    first)
+              (let [corners (for [[x0 _ z0 x1 _ z1] boxes
+                                  cx [(dec x0) (inc x1)]
+                                  cz [(dec z0) (inc z1)]
+                                  :let [c [cx (nth feet 1) cz]]]
+                              c)
+                    total #(+ (physics/distance feet %) (physics/distance % target))]
+                (first (sort-by total corners)))
               target)
           (not (crosses-room? boxes feet target)) target
           :else
-          (or (->> (reverse (:trail/cells (:fortress/trail world)))
+          (or (->> (trail-cells world)
                    (remove #(in-room? boxes %))
                    (filter #(and (not (crosses-room? boxes feet %))
                                  (not (crosses-room? boxes % target))))
@@ -1988,14 +2006,18 @@
    rod bots' climb-out and dig-out opened straight up into the room (Clj_r02 of race f8b28e39d:
    :tunnel then :stairs-up from a sealed pocket under 23 blazes, probe 41267636159)."
   [world]
-  (let [boxes (room-boxes world)]
-    (when (and (seq boxes)
-               (in-room? boxes (intent/feet world))
-               (empty? (endermen world seek-radius)))
-      (when-let [c (->> (reverse (:trail/cells (:fortress/trail world)))
-                        (remove #(in-room? boxes %))
-                        first)]
-        {:intent/kind :tunnel-to :intent/target c :intent/for :pearls}))))
+  (let [boxes (room-boxes world)
+        feet (intent/feet world)]
+    (when (and (seq boxes) (in-room? boxes feet) (empty? (endermen world seek-radius)))
+      (when-let [c (or (->> (trail-cells world)
+                            (remove #(in-room? boxes %))
+                            first)
+                       (let [corners (for [[x0 _ z0 x1 _ z1] boxes
+                                           cx [(dec x0) (inc x1)]
+                                           cz [(dec z0) (inc z1)]]
+                                       [cx (nth feet 1) cz])]
+                         (first (sort-by #(physics/distance feet %) corners))))]
+        {:intent/kind :tunnel-to :intent/target c :intent/reach 1.5 :intent/for :pearls}))))
 
 (defn travel
   "The walk to a warped forest, or nil: none in the Nether when the bot is in one (in-forest?);
