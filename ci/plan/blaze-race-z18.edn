@@ -1,0 +1,14 @@
+;; Issue #262, round z18 on fix/262-peek3. Same six landings as z17.
+;; z17 (plan 41299776731, head 426ca7b21): 15 rods held across round, Job 3 won (7 rods, 125 min).
+;; z18 punches fire on the floor under hovering blazes, gates fight starts above the yield line
+;; (+2 hp margin), keeps fight yielding for all blazes, and protects refuge intents.
+;; Real kills (6-s rule) per 10 min, camp/ambush/pocket-hold minutes per job, rods held.
+{:plans/label "blaze-race-z18"
+ :plans/jobs 6
+ :plans/issue 262
+ :plans/experiments [{:exp/name "blaze-fortress-race"
+                      :exp/kind :gym
+                      :exp/goal "blaze-fortress-race"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 1800}]}
