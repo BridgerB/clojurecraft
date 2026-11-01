@@ -195,7 +195,7 @@
         (window/click v (first clicks))
         (intent/assoc-intent :intent/clicks (vec (rest clicks))))
     (-> world
-        (assoc :furnace/batch {:smelt smelt :makes makes :at (now world)})
+        (assoc :furnace/batch {:batch/smelt smelt :batch/makes makes :batch/at (now world)})
         (intent/assoc-intent :intent/stage :cook :intent/since (now world))
         (intent/dissoc-intent :intent/clicks :intent/cook-by))))
 

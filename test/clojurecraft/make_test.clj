@@ -559,7 +559,7 @@
   ;; issue #686: the planner counts the inventory only, and four raw iron loaded into a furnace
   ;; left the inventory empty of iron; the smelt cut short, the bot went mining. A batch the smelt
   ;; loaded (:furnace/batch) is gone back to
-  (let [batch {:smelt :iron_ingot_from_smelting_raw_iron :makes 4 :at 48000}
+  (let [batch {:batch/smelt :iron_ingot_from_smelting_raw_iron :batch/makes 4 :batch/at 48000}
         w (-> (with-furnace (world-holding {:stone_pickaxe 1} false))
               (assoc :time/now 54150))
         next-intent #(plan/next-intent % (ingots 4) plan/goals)]
@@ -570,7 +570,7 @@
         "with nothing remembered the planner does as it does today")
     (is (not= :open-container
               (:intent/kind (next-intent
-                             (assoc w :furnace/batch (assoc batch :at 0) :time/now 2000000))))
+                             (assoc w :furnace/batch (assoc batch :batch/at 0) :time/now 2000000))))
         "a batch left for half an hour is let go")
     (is (= :smelt
            (:intent/kind (next-intent (-> (assoc w :furnace/batch batch)

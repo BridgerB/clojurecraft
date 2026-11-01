@@ -443,7 +443,7 @@
    only: a smelt interrupted after the load (a forage, a defence, a flee) had its iron in the
    furnace and the inventory showed none, so the iron kit gym mined for more (issue #686)."
   [world]
-  (let [{:keys [smelt at]} (:furnace/batch world)]
+  (let [{:batch/keys [smelt at]} (:furnace/batch world)]
     (when (and smelt
                (not= :smelt (:intent/kind (:plan/intent world)))
                (< (- (:time/now world 0) at) batch-ttl)
