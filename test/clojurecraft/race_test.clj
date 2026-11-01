@@ -415,3 +415,8 @@
     (is (= 9 (count (set cs))) "then rings of eight points, all different")
     (is (= #{600} (set (map (fn [[x z]] (max (abs (- x 10)) (abs (- z 20)))) (rest cs))))
         "the first ring is race/pool-step off")))
+
+(deftest the-floor-round-a-pad-may-slope
+  ;; race f8b28e3, lane 2: 525 candidates answered :no-ground and 15 of 16 pads fell back to y 72
+  (is (= 3 race/ground-drop) "a floor three lower is a slope, a deeper drop is a ledge")
+  (is (< race/ground-drop 8)))
