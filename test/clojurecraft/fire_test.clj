@@ -4,6 +4,7 @@
   (:require [clojure.test :refer [deftest is]]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.fire :as fire]
+            [clojurecraft.mob :as mob]
             [clojurecraft.mob-test :as m]
             [clojurecraft.sim :as sim]))
 
@@ -35,7 +36,16 @@
     (is (= :hurt event))))
 
 (deftest a-blaze-shot-sets-the-player-on-fire-and-the-model-tells-the-bot
-  (let [sim (-> (m/arena {} {} :normal m/night [{:type :blaze :pos [9.5 64.0 0.5]}])
+  ;; a volley charges for 60 ticks and the fireball can miss, so this is one already in flight,
+  ;; aimed with no error, a tick from the body (the path test's point)
+  (let [from [1.2 65.2 0.5]
+        sim (-> (m/arena {} {} :normal m/night [{:type :blaze :pos [9.5 64.0 0.5]}])
+                (assoc-in [:sim/fireballs 50]
+                          {:pos from
+                           :dir (mob/aim from [0.5 64.9 0.5] 0.5 0.5 0.5 0.5)
+                           :owner 100
+                           :born 0
+                           :kind :blaze})
                 (m/ticks 3))
         said (partial m/said sim)
         flags (map :metadata (filter #(= 1 (:entity-id %)) (said :set-entity-data)))

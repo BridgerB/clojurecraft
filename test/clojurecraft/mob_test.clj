@@ -583,7 +583,9 @@
           bs (blazes-of later)]
       (is (<= 1 (count bs) 6) "a batch of four tries, never past the cap")
       (is (every? #(mob/spawner-crowded? sp (:pos %)) (vals bs)) "in the box about it")
-      (is (= (count bs) (count (said later :add-entity))) "each told to the client"))))
+      (is (= (count bs)
+             (count (filter #(= (mob/type-id :blaze) (:type %)) (said later :add-entity))))
+          "each blaze told to the client (a fireball is an entity too)"))))
 
 (deftest a-spawner-the-player-is-far-from-or-a-peaceful-one-makes-none
   (is (empty? (blazes-of (ticks (in-fortress [8.5 64.0 -10.5] :normal) 900))) "asleep")
@@ -646,8 +648,9 @@
         (recur sim (inc i) now (into at (repeat (- now seen) i)))))))
 
 (deftest a-blaze-with-a-line-charges-then-fires-three-fireballs-six-ticks-apart
+  ;; 242 stops after the next volley's first shot (239); its second and third are at 245 and 251
   (let [sim (arena {} {} :normal night [{:type :blaze :pos [9.5 65.0 0.5]}])
-        at (fireball-ticks sim 260)]
+        at (fireball-ticks sim 242)]
     (is (= 4 (count at)) "three, then one more once the rest is over")
     (is (= [6 6] (map - (rest (take 3 at)) (take 2 at))) "six ticks apart")
     (is (<= 60 (first at) 63) "after a charge of 60")
