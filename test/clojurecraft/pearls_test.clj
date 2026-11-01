@@ -4,6 +4,7 @@
    server model's enderman."
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [clojurecraft.armour :as armour]
+            [clojurecraft.blaze :as blaze]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.combat :as combat]
             [clojurecraft.fixtures :as fx]
@@ -3120,3 +3121,36 @@
         (is (not (digging? (plan/next-intent (hurt open) row plan/goals))))))
     (testing "healthy with no cover: the old branches, no back-off"
       (is (nil? (pearls/leave-sight open))))))
+
+(deftest the-blaze-room-is-no-way-to-travel-nor-to-climb-out
+  ;; Clj_r11 of race f8b28e39d (replayed on main, probe 41267637866): leave-sight walked the bot out
+  ;; of the room and the travel to the forest beyond walked it back in, flip after flip; Clj_r02
+  ;; (probe 41267636159): the climb-out from a sealed pocket opened straight up into 23 blazes
+  (let [nether-world (fn [pos]
+                       (-> (standing {})
+                           (assoc :player/dimension "minecraft:the_nether" :player/pos pos)
+                           (memory/observe [30 64 8] blaze/spawner)
+                           (assoc :fortress/trail
+                                  {:trail/target [30 64 8]
+                                   :trail/cells [[0 64 8] [5 64 8] [20 64 8]]})))
+        outside (nether-world [8.5 64.0 8.5])
+        inside (nether-world [30.5 64.0 12.5])
+        forest [50 65 8]
+        boxes (pearls/room-boxes outside)]
+    (is (= 1 (count boxes)) "one room round the spawner")
+    (is (pearls/crosses-room? boxes [8 64 8] forest) "the straight line goes through it")
+    (let [wp (pearls/room-waypoint outside forest)]
+      (is (not= forest wp))
+      (is (not (pearls/crosses-room? boxes [8 64 8] wp)) "the first leg is clear")
+      (is (not (pearls/crosses-room? boxes wp forest)) "and so is the second"))
+    (is (= [5 64 8] (pearls/room-waypoint inside forest))
+        "from inside: the newest trail cell outside the room, the way it came")
+    (is (= forest
+           (pearls/room-waypoint (assoc (standing {}) :player/dimension "minecraft:the_nether")
+                                 forest))
+        "no spawner known: straight")
+    (let [i (pearls/room-exit inside)]
+      (is (= {:intent/kind :tunnel-to :intent/target [5 64 8] :intent/for :pearls} i))
+      (is (= :tunnel-to (:intent/kind (plan/next-intent inside row plan/goals)))
+          "the hunt tunnels out along the trail, no stairs-up into the room"))
+    (is (nil? (pearls/room-exit outside)) "outside the room: nothing to leave")))
