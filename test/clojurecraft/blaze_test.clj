@@ -1246,7 +1246,7 @@
                    (for [x [7 8 9] z [7 8 9] y [64 65] :when (not= [x z] [8 8])] [[x y z] stone]))
         w (-> (standing {})
               (assoc :world/chunks {[0 0] (world/column shut)} :player/on-fire? true))]
-    (is (= {:intent/kind :dig :intent/target [8 64 8]} (next-intent w)))))
+    (is (= {:intent/kind :dig :intent/target [8 64 8] :intent/for :fire-out} (next-intent w)))))
 
 (deftest hurt-in-an-open-pocket-with-a-blaze-in-reach-the-opening-is-sealed
   ;; blaze-race-k geared 2: :pocket and :back-off 658 alternated every 0.4 s for 8 s, burning,
@@ -1841,8 +1841,10 @@
     (is (plan/interrupts? w row {:intent/kind :camp :intent/spawner [11 64 10]})
         "a camp is still cut")))
 
-(deftest a-sortie-ends-when-the-bot-burns-or-the-room-is-on-it
-  ;; blaze-race-z4 landing 2: 10 blazes killed in 11 minutes, dead among 13 to 14 within 8
+(deftest a-sortie-keeps-moving-while-it-burns-and-ends-when-the-room-is-on-it
+  ;; blaze-race-z4 landing 2: 10 blazes killed in 11 minutes, dead among 13 to 14 within 8.
+  ;; blaze-race-z15: on_fire was 40 to 58 percent of the health lost. A fireball hits about
+  ;; 4 percent of the time while the bot keeps moving; standing still is how the burn stacks.
   (let [crowd (into {}
                     (map (fn [i] [(+ 50 i)
                                   (entity :blaze [(+ 4.5 (* 0.5 i)) 65.0 8.5]
@@ -1850,7 +1852,8 @@
                     (range 5))
         base (assoc (standing {}) :time/now 10000 :sortie/since 10000)]
     (is (false? (blaze/sortie-over? base)))
-    (is (true? (blaze/sortie-over? (assoc base :player/on-fire? true))) "burning")
+    (is (false? (blaze/sortie-over? (assoc base :player/on-fire? true)))
+        "burning: the sortie keeps moving")
     (is (false? (blaze/sortie-over? (assoc base :world/entities crowd)))
         "five within 8 and none pressing: the lure, the bot stays at the mouth")
     (is (true? (blaze/sortie-over? (assoc base :world/entities crowd :player/struck-at 9000)))
