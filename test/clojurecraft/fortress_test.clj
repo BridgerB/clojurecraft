@@ -1029,6 +1029,39 @@
     (is (nil? (:intent/move i')) "move dropped to choose another")
     (is (contains? (:intent/tunnel-visited i') [1 64 0]) "cell marked visited")))
 
+(deftest a-tunnel-step-whose-place-is-unanswered-marks-cell-visited-and-continues
+  ;; z16 job 5 fold: a place the server never acked failed the whole tunnel :no-answer, the
+  ;; target was blacklisted, and the next tick started a pocket at the landing
+  (let [op (assoc (build/place-op [1 63 0] [0 64 0] nil :floor) :build/item :cobblestone)
+        w (assoc (rock {[1 63 0] air})
+                 :world/facts (memory/empty-facts)
+                 :bot/phase :play
+                 :bot/effects []
+                 :time/now 0
+                 :time/tick 0
+                 :player/pos [0.5 64.0 0.5]
+                 :player/on-ground? true
+                 :player/vel [0.0 0.0 0.0]
+                 :player/inventory {0 {:item (recipe/item-id :cobblestone) :count 64}}
+                 :plan/intent
+                 {:intent/kind :tunnel-to
+                  :intent/target [10 64 0]
+                  :intent/steps 8
+                  :intent/move [1 0 0]
+                  :intent/from [0 64 0]
+                  :intent/op op
+                  :intent/child {:intent/kind :place
+                                 :intent/cell [1 63 0]
+                                 :intent/status :failed
+                                 :intent/reason :no-answer}
+                  :intent/status :active})
+        w' (intent/run w (:plan/intent w) {:event/kind :tick :event/now 0})
+        i' (:plan/intent w')]
+    (is (= :active (:intent/status i')) "tunnel remains active")
+    (is (nil? (:intent/reason i')) "no failure reason left")
+    (is (nil? (:intent/move i')) "move dropped to choose another")
+    (is (contains? (:intent/tunnel-visited i') [1 64 0]) "cell marked visited")))
+
 (deftest an-overworld-step-opens-no-cell-by-water
   ;; issue #265: the way to a stronghold's portal room runs through aquifers; a :tunnel-to with
   ;; :intent/dry? takes no step whose opened cells touch water, the Nether's rule (safe?) aside

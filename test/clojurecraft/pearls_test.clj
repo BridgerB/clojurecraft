@@ -3088,7 +3088,7 @@
     (let [i (plan/next-intent w row plan/goals)]
       (is (= :walk (:intent/kind i)) (pr-str i))
       (is (= [3 64 8] (:intent/target i)) "the newest trail cell behind the wall")
-      (is (= :pearls (:intent/for i))))
+      (is (= :cover (:intent/for i))))
     (is (not (pearls/swarmed? walled)) "a wall between the bot and the blaze: no swarm")
     (is (nil? (pearls/leave-sight walled)) "and nothing to leave")))
 
@@ -3157,10 +3157,49 @@
                                  forest))
         "no spawner known: straight")
     (let [i (pearls/room-exit inside)]
-      (is (= {:intent/kind :tunnel-to :intent/target [5 64 8] :intent/for :pearls} i))
+      (is (= {:intent/kind :tunnel-to :intent/target [5 64 8] :intent/reach 1.5 :intent/for :pearls}
+             i))
       (is (= :tunnel-to (:intent/kind (plan/next-intent inside row plan/goals)))
           "the hunt tunnels out along the trail, no stairs-up into the room"))
     (is (nil? (pearls/room-exit outside)) "outside the room: nothing to leave")))
+
+(deftest after-rods-the-bot-leaves-the-blaze-room-along-the-plan-trail-and-never-churns-in-place
+  ;; real race 41294596356 s1, Clj_r07 and 13 other rod bots (issue #263): held 7 rods, switched to
+  ;; :ender-pearls, and died to blazes 1 to 5 blocks from the spawner. :fortress/trail had been cleared
+  ;; or held only local cells, so out-of-sight-cell was nil and room-exit returned nil or was shadowed
+  ;; by leave-sight's near-cover-cell. The walk was planned with :intent/for :pearls; not being in
+  ;; standing-walks, arrived? finished the walk on tick 0 when d <= 4.0 blocks, replanning every 50 ms
+  ;; (churn x150 to x600) until the bot died standing in blaze fire.
+  (let [blaze {:entity/type (blocks/entity-types :blaze)
+               :entity/pos [892.5 60.0 -204.5]
+               :entity/seen-at 0
+               :entity/health 20.0}
+        spawner-pos [889 60 -206]
+        bot-pos [890.5 60.0 -203.9]
+        exit-cell [902 63 -198]
+        w (-> (standing {9 blaze})
+              (assoc :player/dimension "minecraft:the_nether" :player/pos bot-pos)
+              (memory/observe spawner-pos blaze/spawner)
+              (assoc :fortress/trail {:trail/target spawner-pos :trail/cells []})
+              (assoc :plan/trail
+                     [[976 48 -176] [958 49 -190] [926 63 -190] exit-cell [897 61 -204]
+                      [890 60 -204]]))
+        boxes (pearls/room-boxes w)]
+    (is (pearls/in-room? boxes [890 60 -204]) "bot feet are inside the blaze room")
+    (is (not (pearls/in-room? boxes exit-cell))
+        "exit cell on :plan/trail is outside the blaze room")
+    (is (= exit-cell (pearls/room-waypoint w [2000 60 2000]))
+        "room-waypoint navigates toward the trail exit cell, not directly through the spawner room")
+    (let [i (pearls/room-exit w)]
+      (is (= :tunnel-to (:intent/kind i)))
+      (is (= exit-cell (:intent/target i)))
+      (is (= 1.5 (:intent/reach i))
+          "reach 1.5 prevents tunnel-to from completing 6 blocks away on tick 0"))
+    (testing
+      "walk to cover along the trail uses :for :cover so arrived? requires standing in the cell"
+      (when-let [i (pearls/leave-sight w)]
+        (is (= :cover (:intent/for i))
+            "must be :cover to ensure standing-walks centres in the cell")))))
 
 (deftest a-walk-that-sets-only-its-heading-is-turned-from-a-calm-endermans-eyes
   ;; pearl-fight-p jobs 2 and 3 (plan run 41256381552, probe 41268180994): 20 of 22 endermen turned
@@ -3224,3 +3263,59 @@
     (is (= [15.0 19.0] (:break-line t) pearls/break-line))
     (is (= 15.0 (:break-hp t) pearls/break-hp))
     (is (= 19.0 (:resume-hp t) pearls/resume-hp))))
+
+(deftest with-an-angry-enderman-near-the-burrow-no-out-walk-relocates-or-wanders
+  ;; pearl-fight-q (plan run 41275336100) jobs 1, 2, 4 and 5 ping-ponged between burrow shelter
+  ;; and an out-walk (relocate/wander/stare) when an angry enderman stood 8 to 16 blocks off; job 2
+  ;; took 145 steps out until stuck explore drove the bot into the open where enderman 1236 slew it
+  (let [angry (assoc (enderman [20.5 61.0 8.5]) :entity/creepy? true)
+        w (-> (looked (burrowed [8.5 61.0 8.5] {7 angry}) 12)
+              (assoc :pearls/relocate {:from [8 61 8] :at 0 :near #{}} :time/now 200000))
+        inside-intent (plan/next-intent w row plan/goals)
+        out-walk {:intent/kind :walk :intent/target [30 61 8] :intent/for :relocate}
+        stepped-out (assoc w :player/pos [7.5 61.0 8.5])]
+    (testing
+      "inside the burrow with an angry enderman, the hunt holds the fight and never relocates"
+      (is (= :fight (:intent/kind inside-intent)))
+      (is (:intent/hold? inside-intent))
+      (is (= :pearls (:intent/for inside-intent))))
+    (testing
+      "when the held fight gave up or blacklisted, it stays in lookout, never starting an out-walk"
+      (let [w-bl (assoc w :plan/blacklist #{7})
+            i (plan/next-intent w-bl row plan/goals)]
+        (is (= :lookout (:intent/kind i)))
+        (is (= :pearls (:intent/for i)))))
+    (testing "stepping out of the burrow with an angry enderman within hold-radius is interrupted"
+      (is (plan/interrupts? stepped-out row out-walk)))
+    (testing "outside the burrow with an angry enderman within hold-radius routes way-home"
+      (let [i (plan/next-intent stepped-out row plan/goals)]
+        (is (= :walk (:intent/kind i)))
+        (is (= [8 61 8] (:intent/target i)))
+        (is (= :shelter (:intent/for i)))))))
+
+(deftest while-an-angry-enderman-is-within-the-hold-radius-the-burrow-is-held-not-stuck
+  ;; the stuck watchdog's forced explore (stuck 0 :ender-pearls explore) walked job 2 of round q
+  ;; out into the open at 63 min, where enderman 1236 slew it. While an angry enderman is within
+  ;; the hold radius, the stuck watchdog must count the row as held, not stuck: no unstick, no explore walk.
+  (let [angry (assoc (enderman [20.5 61.0 8.5]) :entity/creepy? true)
+        w (-> (looked (burrowed [8.5 61.0 8.5] {7 angry}) 12)
+              (assoc :plan/status :active
+                     :plan/goals #{:ender-pearls}
+                     :plan/watch
+                     {:key [0 0 0 0] :lo [8.5 61.0 8.5] :hi [8.5 61.0 8.5] :at 0 :checked 0}
+                     :time/now (+ plan/stuck-ms 100000)))
+        watched (plan/watch w plan/goals {:event/rand 0.5})]
+    (testing
+      "the watchdog counts the burrow as held, not stuck: watch is restamped, unstuck not incremented"
+      (is (plan/held? w row))
+      (is (= 0 (:plan/unstuck watched 0)))
+      (is (nil? (:plan/explore watched)))
+      (is (= (:time/now w) (:at (:plan/watch watched))))
+      "watch timestamp restamped to now")
+    (testing
+      "even with :plan/explore in world, plan-tick does not start an explore walk out of the burrow"
+      (let [with-explore (assoc w :plan/explore [40 61 8])
+            stepped
+            (plan/plan-tick with-explore {:event/kind :tick :event/now (:time/now w)} plan/goals)]
+        (is (not= :explore (get-in stepped [:plan/intent :intent/for])) "no explore walk started")
+        (is (not= [40 61 8] (get-in stepped [:plan/intent :intent/target])))))))
