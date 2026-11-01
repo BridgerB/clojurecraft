@@ -18,9 +18,10 @@
    is a fortress's, memory/nether-landmark-kinds) is walked to, or tunnelled to by the fortress's
    steps when no route reaches it, and camped by until its blazes come; with no spawner known (or each one
    given-up?: stands beside it blocked), the next leg of the fortress row's spiral search, and a wait :no-blaze
-   only when no heading has a way to go. Before all of it, a blaze at hand (within 4, at-hand-blaze) is fought when
-   the bot is not hurt, and ends any other running intent (plan/interrupts?): it follows into any cover. The
-   fight carries :intent/yield?, so under combat/retreat-health it ends and the cover, the meal or the rest
+   only when no heading has a way to go. Before all of it, the blaze meleeing the bot (meleeing-blaze), else
+   one at hand (within 4, at-hand-blaze), is fought when the bot is not hurt and the fight can be held
+   (yield-fight?), and ends any other running intent (plan/interrupts?): it follows into any cover. The
+   fight carries :intent/yield?, so under combat/yield-line it ends and the cover, the meal or the rest
    follows, not combat's straight retreat. The :defend row answers anything else hostile within 4 first; blazes it
    leaves to this row while it is worked (combat/answers), or its fights would override the
    cover. A zombified piglin that has struck (combat/striker) is backed away from by :defend, and this row
@@ -133,6 +134,25 @@
          (filter (fn [[_ e]] (<= (physics/distance pos (:entity/pos e)) at-hand)))
          (sort-by (fn [[_ e]] (physics/distance pos (:entity/pos e))))
          (some (fn [[_ e :as ee]] (when (reachable? world e) ee))))))
+
+(defn meleeing-blaze
+  "[eid entity] of the blaze in melee (combat/melee-reach) to fight, or nil: the one that last
+   struck (combat/striker) while the strike is fresh, even when it is not reachable? (a nearer
+   one that can be walked to is the wrong sword), else the nearest within melee reach that is
+   reachable?. Blaze-race-z14 job 6: :fight 556 swung 0 times in 4 s while blazes 640 and 587 hit."
+  [world]
+  (let [pos (:player/pos world)
+        [id e :as hit] (combat/striker world)
+        in-melee? (fn [ent]
+                    (and (= :blaze (entity/kind ent))
+                         (not (entity/dead? ent))
+                         (<= (physics/distance pos (:entity/pos ent)) combat/melee-reach)))]
+    (if (and e (in-melee? e) (not (contains? (:plan/blacklist world #{}) id)))
+      hit
+      (->> (blazes world)
+           (filter (fn [[_ ent]] (in-melee? ent)))
+           (sort-by (fn [[_ ent]] (physics/distance pos (:entity/pos ent))))
+           (some (fn [[_ ent :as ee]] (when (reachable? world ent) ee)))))))
 
 (defn fetch-walk
   "The walk onto the cell drop e lies in: the feet there are in the pickup box of a drop in a pit
@@ -930,8 +950,29 @@
           (when (contains? fire-blocks
                            (some-> (terrain/block-at world c)
                                    blocks/name-of))
-            {:intent/kind :dig :intent/target c}))
+            {:intent/kind :dig :intent/target c :intent/for :fire-out}))
         (body-cells world)))
+
+(defn fire-beside
+  "The nearest cell holding fire in the pocket or beside it, or nil: the pocket cell, the cell
+   over it, and the four sides at the feet and the head. Punched out before a seal is laid. A
+   seal over or next to fire lights the bot as it shuts (blaze-race-z15: on_fire was 40 to 58
+   percent of the health lost in the fights)."
+  [world]
+  (when-let [cell (:pocket/cell (:pocket/site world))]
+    (let [fire? (fn [c]
+                  (contains? fire-blocks
+                             (some-> (terrain/block-at world c)
+                                     blocks/name-of)))
+          cells (into [cell (pocket/plus cell [0 1 0])]
+                      (mapcat (fn [[dx dz]] [(pocket/plus cell [dx 0 dz])
+                                             (pocket/plus cell [dx 1 dz])])
+                       pocket/sides))
+          pos (:player/pos world)]
+      (->> cells
+           (filter fire?)
+           (sort-by #(physics/distance pos (physics/centre %)))
+           first))))
 
 (defn leave-fire
   "A walk to the nearest standable cell within fire-out-reach with no fire in it or over it, or
@@ -1201,11 +1242,12 @@
 (defn fightable-blaze
   "[eid entity] of the blaze fought before anything else: in the pocket (pocket/in?) the nearest
    within reach (reach-blaze), none when the opening is sealed (a blaze at the block is no target:
-   the seal is opened first), elsewhere the one at hand (at-hand-blaze)."
+   the seal is opened first), elsewhere the one meleeing the bot (meleeing-blaze) or, with none,
+   the one at hand (at-hand-blaze)."
   [world]
   (cond (sealed? world) nil
         (pocket/in? world) (reach-blaze world)
-        :else (at-hand-blaze world)))
+        :else (or (meleeing-blaze world) (at-hand-blaze world))))
 
 (defn pocket-ok?
   "The predicate of a pocket cell for the spawner at cell sp (nil: any cell): outside the volume
@@ -1441,19 +1483,46 @@
 
 (defn melee-crowd?
   "Are two or more blazes within melee reach (combat/melee-reach)? Then they hit for about
-   combat/melee-rate each a second and the fight is lost, not committed to."
+   combat/melee-rate each a second. A fight on them is committed only at combat/yield-line or
+   over; under it the fight ends the tick it starts."
   [world]
   (>= (count (nearby-blazes world combat/melee-reach)) 2))
 
-(defn crowd-waiting?
-  "Does a sealed bot keep the pocket shut: exit-crowd or more blazes within 8 now, noted by plan/steer
-   (:pocket/crowd-since) less than crowd-wait-ms ago? blaze-race-z14: the deaths came 4 to 20 s after an
-   :unseal at hp 20 with blazes about."
+(defn exit-dir
+  "The horizontal [dx dz] from the pocket cell toward the cells placed to seal it, or nil when
+   nothing is placed or the placed cells cancel. The side the opening is on."
+  [site]
+  (let [[cx _ cz] (:pocket/cell site)]
+    (when (and cx (seq (:pocket/placed site)))
+      (let [dx (reduce + (map (fn [[x]] (- x cx)) (:pocket/placed site)))
+            dz (reduce + (map (fn [[_ _ z]] (- z cz)) (:pocket/placed site)))]
+        (when-not (and (zero? dx) (zero? dz)) [dx dz])))))
+
+(defn crowd-on-exit?
+  "Is a blaze within 8 on the seal's side (exit-dir): its position relative to the pocket cell's
+   centre has a positive dot with that direction? Opening then steps into the crowd."
   [world]
-  (let [since (:pocket/crowd-since world)]
-    (boolean (and since
-                  (< (- (:time/now world 0) since) crowd-wait-ms)
-                  (>= (count (nearby-blazes world 8.0)) exit-crowd)))))
+  (when-let [[dx dz] (exit-dir (:pocket/site world))]
+    (let [[cx _ cz] (:pocket/cell (:pocket/site world))]
+      (boolean (some (fn [[_ e]]
+                       (let [[x _ z] (:entity/pos e)]
+                         (pos? (+ (* (- x (+ cx 0.5)) dx) (* (- z (+ cz 0.5)) dz)))))
+                     (nearby-blazes world 8.0))))))
+
+(defn crowd-waiting?
+  "Does a sealed bot keep the pocket shut: exit-crowd or more blazes within 8, noted by plan/steer
+   (:pocket/crowd-since)? The wait ends only once it has lasted crowd-wait-ms AND the health is
+   full-health AND the crowd is not standing on the seal's side (crowd-on-exit?). blaze-race-z14
+   died 4 to 20 s after an :unseal at hp 20; blaze-race-z15 jobs 1 to 4 ended every hold at hp 20
+   and stepped out into the blazes."
+  [world]
+  (let [since (:pocket/crowd-since world)
+        crowd? (and since (>= (count (nearby-blazes world 8.0)) exit-crowd))
+        open? (and since
+                   (>= (- (:time/now world 0) since) crowd-wait-ms)
+                   (>= (:player/health world 20.0) full-health)
+                   (not (crowd-on-exit? world)))]
+    (boolean (and crowd? (not open?)))))
 
 (defn hold-intent
   "What a bot in its pocket does, or nil: SEALED, while it burns or is under hold-to, eat when the
@@ -1473,8 +1542,12 @@
           ;; is for the fire only (blaze-race-z6 landing 2 held 96 minutes at hp 6.2, food 17, none held)
           need? (or (:player/on-fire? world)
                     (and (heals? world) (< (:player/health world 20.0) (hold-to world))))
-          struck? (<= (- (:time/now world 0) (:player/struck-at world -1000000)) press-ms)]
-      (cond (pocket/sealed? world site)
+          struck? (<= (- (:time/now world 0) (:player/struck-at world -1000000)) press-ms)
+          ;; an open pocket punches out the fire in it and beside it before the seal and before the
+          ;; blaze in the opening: a seal laid next to fire lights the bot as it shuts (z15)
+          beside (when-not (pocket/sealed? world site) (fire-beside world))]
+      (cond beside {:intent/kind :dig :intent/target beside :intent/for :fire-out}
+            (pocket/sealed? world site)
             (if (or (and (or need? struck?)
                          (not (and (near-rod world) (not (:player/on-fire? world)) (not struck?))))
                     (crowd-waiting? world))
@@ -1500,16 +1573,19 @@
             (and (pressed? world) (hide world)) (hide world)
             need? (or (meal world) {:intent/kind :pocket-hold :intent/heal-to (hold-to world)})))))
 
-(declare peeking?)
+(declare peeking? on-sortie?)
 
 (defn refuge-needed?
-  "Is a pocket wanted now: the bot burns or caught fire twice within reignite-ms (reignited?), is
-   under low-health with a blaze about (swarm), a volley of blazes watches it (outnumbered?), or it
-   is hurt (under retreat-health) with blazes watching? Not merely under engage-health: the pocket
-   and a rod to pick up flipped every 0.35 s for 13 s (blaze-race-p job 4, 22:41:40, 37 times) and
-   five rods lay till they despawned. Leave the fight to heal, as a human does."
+  "Is a pocket wanted now: the bot burns (not on a sortie that is still going: on-sortie?) or
+   caught fire twice within reignite-ms (reignited?), is under low-health with a blaze about
+   (swarm), a volley of blazes watches it (outnumbered?), or it is hurt (under retreat-health)
+   with blazes watching? Not merely under engage-health: the pocket and a rod to pick up flipped
+   every 0.35 s for 13 s (blaze-race-p job 4, 22:41:40, 37 times) and five rods lay till they
+   despawned. Leave the fight to heal, as a human does. A sortie keeps moving while it burns:
+   blaze-race-z15 lost 40 to 58 percent of its health to on_fire, and the first fireball ended
+   the walk."
   [world]
-  (boolean (or (:player/on-fire? world)
+  (boolean (or (and (:player/on-fire? world) (not (on-sortie? world)))
                (reignited? world)
                (and (< (:player/health world 20.0) low-health) (seq (swarm world)))
                (and (outnumbered? world) (not (peeking? world)))
@@ -1534,15 +1610,16 @@
 
 (defn dodge-intent
   "A :dodge intent out of the line of the fireballs in flight toward the bot (dodge/intent-for), or
-   nil: none when it stands sealed in its pocket (a block stops them), is under low-health or alight
-   (the refuge comes first: blaze-race-m race 4 at 17:30:30 alternated :fight, :dodge, :pocket and
-   :seal in six seconds, a dodge cutting the seal each time, and died), or no cell is clear in time.
-   Blaze-race-k and -l: 3.5 to 4 fireball hits a kill, each lighting the bot, half of all damage the
-   burning after; the lines are known the tick a fireball spawns."
+   nil: none when it stands sealed in its pocket (a block stops them), is under low-health, or is
+   alight and not on a sortie (the refuge comes first: blaze-race-m race 4 at 17:30:30 alternated
+   :fight, :dodge, :pocket and :seal in six seconds, a dodge cutting the seal each time, and died).
+   On a sortie it dodges while it burns: standing still is how the next fireball lands. None when
+   no cell is clear in time. Blaze-race-k and -l: 3.5 to 4 fireball hits a kill, each lighting the
+   bot, half of all damage the burning after; the lines are known the tick a fireball spawns."
   [world]
   (when (and (not (sealed? world))
              (>= (:player/health world 20.0) low-health)
-             (not (:player/on-fire? world)))
+             (or (not (:player/on-fire? world)) (on-sortie? world)))
     (dodge/intent-for world)))
 
 (def no-dodge-kinds
@@ -1698,9 +1775,11 @@
 (defn sortie-over?
   "Is the sortie (:sortie/since, noted by steer when the bot left its pocket for the spawner's zone)
    over: sortie-fights fights ended since, or sortie-ms spent, or the health under sortie-line, or
-   burning, or more than sortie-crowd blazes within 8 that press it (struck within press-ms), or
-   more than sortie-swarm within 8 hit or not (the room is on the bot: blaze-race-z4 landing 2 died
-   among 13 to 14; blazes in sight that do not shoot are the lure, the bot stays at the mouth)? Then
+   more than sortie-crowd blazes within 8 that press it (struck within press-ms), or more than
+   sortie-swarm within 8 hit or not (the room is on the bot: blaze-race-z4 landing 2 died among 13
+   to 14; blazes in sight that do not shoot are the lure, the bot stays at the mouth)? Burning does
+   not end it: a fireball hits about 4 percent of the time while the bot keeps moving, and standing
+   still is how the burn stacks (blaze-race-z15, on_fire 40 to 58 percent of the health lost). Then
    the bot goes back to the pocket behind it, heals and goes again. Blaze-race-z2 landing 2 killed 4
    blazes in 3.4 minutes in the room at [2346 57 2288] and stayed there until dead; landing 1 stood
    at the tunnel's end among 6 and 7 blazes and flipped dodge, pocket and walk until dead."
@@ -1710,19 +1789,23 @@
                   (or (>= (fights-since world since) sortie-fights)
                       (> (- (:time/now world 0) since) sortie-ms)
                       (< (:player/health world 20.0) sortie-line)
-                      (:player/on-fire? world)
                       (let [n (count (nearby-blazes world 8.0))]
                         (or (> n sortie-swarm)
                             (and (> n sortie-crowd)
                                  (<= (- (:time/now world 0) (:player/struck-at world -1000000))
                                      press-ms)))))))))
 
+(defn on-sortie?
+  "Is the bot on a sortie (:sortie/since) that is not over (sortie-over?)?"
+  [world]
+  (boolean (and (some? (:sortie/since world)) (not (sortie-over? world)))))
+
 (defn peeking?
   "Is the bot on a sortie that is not over (sortie-over?), or a tunnel out of its pocket begun
    within peek-after-pocket-ms of a pocket entered, at hp sortie-line or more? Then a volley of
    blazes watching it (outnumbered?) is what it came for, not a refuge: the first seconds in their
-   sight draw one or two to the mouth and the hits are struck, and the sortie's own end (burning,
-   hp under 14, two fights, 90 s, a crowd within 8) is the retreat. Blaze-race-z12 job 4: 69 minutes,
+   sight draw one or two to the mouth and the hits are struck, and the sortie's own end (hp under
+   14, two fights, 90 s, a crowd within 8) is the retreat. Burning does not end it. Blaze-race-z12 job 4: 69 minutes,
    0 real kills: :camp 60 s, :camp failed :no-blaze, :tunnel-to, :pocket 0.7 s later, :camp, with 3
    to 9 blazes 4.4 to 6.6 blocks from the pocket and none attacking it."
   [world]
@@ -1831,26 +1914,37 @@
                 (let [since (:rod-grab/since world)]
                   (or (nil? since) (< (- (:time/now world 0) since) rod-grab-ms))))))
 
+(defn yield-fight?
+  "May a yielding fight be chosen: fewer than two blazes in melee (melee-crowd?), or the health at
+   combat/yield-line or over? Under that line with two in melee the fight ends the tick it starts
+   and the row chooses it again (blaze-race-z15 job 4: :fight 540 for 31 s, 609 reissues, 0 swings)."
+  [world]
+  (or (not (melee-crowd? world)) (>= (:player/health world 20.0) (combat/yield-line world))))
+
 (defn commit-fight
-  "A :fight on the blaze at hand (at-hand-blaze) while the health is at low-health (12) or more,
-   the line under which a pocket seals a blaze out and the retreat is one, or nil: committed for its whole duration, to the end (:intent/to-the-end?), yielding under
-   retreat-health (:intent/yield?) so the retreat that follows is one. Blaze-race-z8 job 6 (landing 6):
-   two blazes at 0.7 to 3.1 blocks and hp 20 to 3.6 in 9 s, one attack sent, because :fight, :place
-   x4, :dodge, :pocket, :pillar, :dig and :seal took turns every 0.1 to 0.3 s: with a blaze in melee
-   range no row held."
+  "A :fight on the blaze meleeing the bot (meleeing-blaze), else the one at hand (at-hand-blaze),
+   while the health is at low-health (12) or more, or nil. In the pocket the target stays the one
+   at hand, and two in melee are not committed: the seal is the answer. In the open, two in melee
+   are committed only when yield-fight? (at combat/yield-line or over). Committed for its whole
+   duration, to the end (:intent/to-the-end?), yielding under the yield line (:intent/yield?).
+   Blaze-race-z8 job 6 (landing 6): two blazes at 0.7 to 3.1 blocks and hp 20 to 3.6 in 9 s, one
+   attack sent, because :fight, :place x4, :dodge, :pocket, :pillar, :dig and :seal took turns
+   every 0.1 to 0.3 s: with a blaze in melee range no row held."
   [world]
   (when (and (>= (:player/health world 20.0) low-health)
              ;; the sortie's cap: more than sortie-crowd blazes within 8, or a volley watching, is the room on
              ;; the bot, not a fight to commit to the end (the spawner-room deaths of z4 and z5)
              (<= (count (nearby-blazes world 8.0)) sortie-crowd)
-             ;; two blazes in melee cost about melee-rate each a second and a sword takes 2.4 s a blaze:
-             ;; that fight is lost (z14 job 6); the sealed pocket is the answer
-             (not (melee-crowd? world))
+             (yield-fight? world)
+             ;; two in the pocket are sealed out; two in the open are fought when the line allows it
+             (or (not (pocket/in? world)) (not (melee-crowd? world)))
              (not (outnumbered? world))
              (not (burning-here? world))
              ;; a rod within a step is picked up before the next swing (near-rod, blaze-race-m race 4)
              (nil? (near-rod world)))
-    (when-let [[eid] (at-hand-blaze world)]
+    (when-let [[eid] (if (pocket/in? world)
+                       (at-hand-blaze world)
+                       (or (meleeing-blaze world) (at-hand-blaze world)))]
       {:intent/kind :fight :intent/target eid :intent/to-the-end? true :intent/yield? true})))
 
 (defn committed-fight?
@@ -1961,7 +2055,9 @@
                          (pocket-go world sp false)))
         waiting (delay (ambush world))
         stock (delay (when-not (hurt? world) (stocking world)))
-        out (delay (when (burning-here? world) (leave-fire world)))
+        out (delay (or (when (burning-here? world) (leave-fire world))
+                       (when-let [c (and (pocket/in? world) (fire-beside world))]
+                         {:intent/kind :dig :intent/target c :intent/for :fire-out})))
         fire (delay (when (and sp (at-spawner? world sp)) (put-out world sp)))
         table-along (delay (when (or (nil? sp) (not (at-spawner? world sp)))
                              (or
@@ -1980,7 +2076,9 @@
       @heal @heal
       @grab @grab
       @retreat @retreat
-      (and (not (hurt? world)) heid (not (crowded? world)))
+      ;; two in melee under the yield line is a fight that ends the tick it starts and is chosen
+      ;; again (z15 job 4): not another :fight
+      (and (not (hurt? world)) heid (not (crowded? world)) (yield-fight? world))
       {:intent/kind :fight :intent/target heid :intent/to-the-end? true :intent/yield? true}
       @wary @wary
       @away @away
@@ -1991,7 +2089,8 @@
       {:intent/kind :collect-drops
        :intent/item :blaze_rod
        :intent/target (hunt/cell (:entity/pos lying))}
-      (and (not (hurt? world)) beid) {:intent/kind :fight :intent/target beid :intent/yield? true}
+      (and (not (hurt? world)) beid (yield-fight? world))
+      {:intent/kind :fight :intent/target beid :intent/yield? true}
       @passive @passive
       @waiting @waiting
       @stock @stock
