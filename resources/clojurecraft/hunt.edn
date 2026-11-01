@@ -1,0 +1,36 @@
+;; Thresholds and tuning parameters for stage 18 ender pearl hunting (issue #263).
+;; Read in one place by clojurecraft.pearls so a sim sweep can vary them.
+{;; Blocks from the feet an enderman is walked toward, none nearer
+ :seek-radius 64.0
+ ;; Blocks to the head within which a provoke stares with a clear line: the enderman's follow range
+ :stare-range 64.0
+ ;; Never stare nearer: an angry enderman stared at within 4 blocks teleports away
+ :stare-from 6.0
+ ;; Blocks within which a stare can provoke an enderman (alias of stare-from for minimum provoke range)
+ :provoke-range 6.0
+ ;; Blocks from the burrow's end within which an enderman is provoked from outside the mouth
+ :provoke-home-reach 3.0
+ ;; Health under which no enderman is provoked from the mouth or anywhere (rests in burrow first)
+ :provoke-health 18.0
+ ;; Health a provoke keeps over the two hits it risks before the bot is back in its burrow
+ :provoke-margin 3.0
+ ;; Ms without a pearl gained before the hunt leaves the place for another (8 minutes)
+ :relocate-ms 480000
+ ;; Blocks from where it began that a relocation walks before it is over
+ :relocate-dist 32.0
+ ;; Ms a relocation goes on at most (seven minutes) before the clock starts again
+ :relocate-timeout-ms 420000
+ ;; Ms a relocation waits in place for an angry enderman near to come or go before it walks past one parked
+ :relocate-patience-ms 180000
+ ;; Blocks from the feet within which a monster counts toward a swarm
+ :swarm-radius 8.0
+ ;; Blocks from the feet within which an angry enderman keeps the bot where it is:
+ ;; the burrow is not given up (stale?) and no relocation begins while one stands this near
+ :hold-radius 16.0
+ ;; Break line: health under which an open fight with a teleporter (enderman) breaks off (15.0),
+ ;; and health to heal back up to before resuming an open fight after covering (19.0)
+ :break-line [15.0 19.0]
+ :break-hp 15.0
+ :resume-hp 19.0
+ ;; Health under which the hunt never fights, provokes or goes toward an enderman (combat/retreat-health)
+ :danger-health 10.0}
