@@ -173,6 +173,12 @@
 
 (def pickaxe-cobble 3) ; cobblestone a building filler never lays: a stone pickaxe's, for the one a tunnel breaks
 
+(defn pickaxe-reserve
+  "The cobblestone kept back for a replacement pickaxe: pickaxe-cobble when the sticks to make one
+   are held (two), else 0 (the cobblestone alone makes none)."
+  [held]
+  (if (>= (get held :stick 0) 2) pickaxe-cobble 0))
+
 (defn building-filler
   "The filler a tunnel's floors and steps are laid from, or nil: the Nether's own rock first (a
    tunnel digs hundreds), then the rest of fillers in order, cobblestone only above n plus
@@ -187,7 +193,8 @@
         need (fn [item] (if (= :cobblestone item) (+ n cobble-reserve) n))]
     (or (first (filter #(>= (get held % 0) (need %))
                        (cons :netherrack (remove #{:netherrack} fillers))))
-        (first (filter #(>= (get held % 0) (if (= :cobblestone %) (+ n pickaxe-cobble) n)) fillers))
+        (first (filter #(>= (get held % 0) (if (= :cobblestone %) (+ n (pickaxe-reserve held)) n))
+                       fillers))
         (planks-of held n)
         (first (filter #(>= (get held % 0) n) last-resorts)))))
 
