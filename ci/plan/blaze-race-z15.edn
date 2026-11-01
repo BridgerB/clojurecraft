@@ -1,0 +1,14 @@
+;; Issue #262, round z15 on fix/262-peek3 (main with the seal hotfix #678 + the peek + the lure + the pocket-state log): six landings (1-6). z12 (9f31e304c): job 1 10 real kills in 10.7 min,
+;; job 4 69 min 0 real kills (the sortie cut 0.7 s after it stepped into 3-9 blazes' sight: outnumbered? made the refuge win).
+;; z15: peeking? -- on a sortie (hp >= 14, not over) a volley in sight is neither a refuge nor a hide; the sortie's own end is the retreat.
+;; z15: z14 (b0be31bd3) 0 rods: pocket holds worked (sealed, hp back to 20) but 4 of 5 deaths came 4-20 s after an :unseal at hp 20 in melee of two blazes. New: an open pocket that is hit is sealed (struck-lately?), no committed fight with two blazes in melee, yield line from incoming damage rate, the pocket stays shut for up to 60 s while 2+ blazes are within 8.
+;; Real kills (6-s rule) per 10 min, camp/ambush/pocket-hold minutes per job, rods held.
+{:plans/label "blaze-race-z15"
+ :plans/jobs 6
+ :plans/issue 262
+ :plans/experiments [{:exp/name "blaze-fortress-race"
+                      :exp/kind :gym
+                      :exp/goal "blaze-fortress-race"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 1800}]}
