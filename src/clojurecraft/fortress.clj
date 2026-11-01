@@ -846,10 +846,12 @@
                           (intent/dissoc-intent :intent/reason)
                           intent/done)
                       ;; a floor placement the server refused (:rejected, chain-a2 run 3 in
-                      ;; the portal room): the step is given up and its cell counted visited,
-                      ;; as a step with nothing to lay is, never the tunnel failed for one cell
+                      ;; the portal room) or never answered (:no-answer): the step is given up
+                      ;; and its cell counted visited, as a step with nothing to lay is, never
+                      ;; the tunnel failed for one cell. z16 job 5's fold (plan 41276280629)
+                      ;; acks none of the places the folded bot sends.
                       (and (intent/failed? i)
-                           (= :rejected (:intent/reason i))
+                           (contains? #{:rejected :no-answer} (:intent/reason i))
                            (= :place (:build/op next)))
                       (reduce intent/dissoc-intent
                               (-> world

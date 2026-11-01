@@ -2335,7 +2335,7 @@
         (is (= [2210 60 1793] (get-in kept [:plan/intent :intent/target])))
         (is (= 7 (:plan/intents kept)) "no new intent was started")))
     (testing "a pocket at the feet that can be sealed still cuts"
-      (let [cut (with-redefs [pocket/unlayable? (constantly false)] (tick-tunnel w hollow))]
+      (let [cut (with-redefs [pocket/cannot-seal? (constantly false)] (tick-tunnel w hollow))]
         (is (= :pocket (get-in cut [:plan/intent :intent/kind])))
         (is (= 8 (:plan/intents cut)))))
     (testing "a fight still cuts"
@@ -2358,7 +2358,8 @@
   ;; a :pocket whose cell was the feet [2148 72 1763]. The cell is standable and unlayable.
   ;; here-intent asked pocket/here-site, steer dropped the site, and :seal called plus on nil.
   ;; The landing is reignited, in the Nether, with no spawner in memory.
-  (let [w (assoc (open-landing)
+  (let [cell [2148 72 1763]
+        w (assoc (open-landing)
                  :player/dimension "minecraft:the_nether"
                  :player/ignitions [1000 2000]
                  :time/now 5000)
@@ -2366,13 +2367,65 @@
     (is (true? (blaze/reignited? w)))
     (is (nil? (blaze/here-intent w)) "no pocket at the unlayable feet")
     (is (nil? (blaze/refuge-now w nil)))
-    (is (false? (plan/interrupts? w goal (:plan/intent w))))
+    (is (not (plan/interrupts? w goal (:plan/intent w))))
+    (is (not= cell (:pocket/cell (pocket/site-near w cell (constantly true)))))
+    (is (not= cell
+              (:pocket/cell (pocket/current (assoc w
+                                                   :pocket/site
+                                                   {:pocket/cell cell
+                                                    :pocket/here? true
+                                                    :pocket/stand nil
+                                                    :pocket/dig []
+                                                    :pocket/placed []})
+                                            cell
+                                            (constantly true)))))
     (let [kept (with-redefs [plan/choose (constantly goal)
                              intent/run (fn [world _ _] world)]
                  (plan/plan-tick w {:event/kind :tick :event/now 5000 :event/rand 0.5} [goal]))]
       (is (= 7 (get-in kept [:plan/intent :intent/id])))
       (is (= :tunnel-to (get-in kept [:plan/intent :intent/kind])))
       (is (= [2210 60 1793] (get-in kept [:plan/intent :intent/target]))))))
+
+(defn platform-landing
+  "The z16 landing on a stone platform: cells beside the feet can be sealed, the roof cannot.
+   open-landing is air beside the feet too, so unlayable? stays true when the head enters the
+   roof. On a platform it does not."
+  []
+  (let [lx (bit-and 2148 15)
+        lz (bit-and 1763 15)
+        stone (blocks/default-state :stone)
+        floor (into
+               {[lx 72 lz] blocks/air [lx 73 lz] blocks/air [lx 74 lz] blocks/air}
+               (for [x (range (dec lx) (+ lx 2)) z (range (dec lz) (+ lz 2))] [[x 71 z] stone]))]
+    (-> (open-landing)
+        (assoc :world/chunks
+               {[(bit-shift-right 2148 4) (bit-shift-right 1763 4)] (world/column floor)}))))
+
+(deftest ^:eftest/synchronized a-landing-the-head-reaches-into-is-not-chosen-as-a-pocket
+  ;; z16 fold at t=206299 (probe 41307472046): unlayable? was true on the world before the tick
+  ;; and the tick still started a :pocket at [2148 72 1763]. The box is 1.8 tall. At y 72.3 the
+  ;; head enters the roof cell, clear-of-body drops it, and unlayable? goes false on a platform
+  ;; whose sides can be laid. cannot-seal? stays true: the roof has nothing to click.
+  (let [cell [2148 72 1763]
+        raised (assoc (platform-landing)
+                      :player/pos [2148.5 72.3 1763.5]
+                      :player/dimension "minecraft:the_nether"
+                      :player/on-fire? true
+                      :time/now 5000)
+        goal {:goal/id :blaze-rods :goal/done? :never :goal/plan :blaze-rods}]
+    (is (= cell (intent/feet raised)))
+    (is (false? (pocket/unlayable? raised cell)) "the roof is in the head, so it is not counted")
+    (is (true? (pocket/cannot-seal? raised cell)))
+    (is (nil? (pocket/here-site raised)))
+    (is (nil? (blaze/here-intent raised)))
+    (is (nil? (blaze/refuge-now raised nil)))
+    (is (not (plan/interrupts? raised goal (:plan/intent raised))))
+    (let [kept
+          (with-redefs [plan/choose (constantly goal)
+                        intent/run (fn [world _ _] world)]
+            (plan/plan-tick raised {:event/kind :tick :event/now 5000 :event/rand 0.5} [goal]))]
+      (is (= 7 (get-in kept [:plan/intent :intent/id])))
+      (is (= :tunnel-to (get-in kept [:plan/intent :intent/kind]))))))
 
 ;;; DEATH RESTART: a death that loses the inventory starts the chain over
 

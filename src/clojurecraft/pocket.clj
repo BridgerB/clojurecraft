@@ -125,12 +125,22 @@
                                [cx _ cz] cell]
                            (some? (dig-in world stand [(- cx sx) (- cz sz)]))))))))
 
+(declare cannot-seal?)
+
+(defn- feet-no-seal?
+  "Is c the cell the feet stand in, and one a seal cannot finish (cannot-seal?)? site-near and
+   current must not return it: here-site already refuses it, and a pocket-shaped cell can still
+   be unsealable."
+  [world c]
+  (boolean (and c (:player/pos world) (= c (intent/feet world)) (cannot-seal? world c))))
+
 (defn site-near
   "The nearest site to the feet by walking, or nil: of the cells reached (steps of walk within
    search-steps, search-nodes visited; at is path/cells) the first that is a pocket (a site with no
    dig), or else has a wall to dig a pocket into (dig-in), at each distance an existing pocket
    before a dug one. ok? is asked of the cell of a site: false drops it (outside a spawner's
-   volume, within its wake)."
+   volume, within its wake). The cell the feet stand in is dropped when it cannot be sealed
+   (feet-no-seal?)."
   ([world feet ok?] (site-near world feet ok? search-nodes))
   ([world feet ok? nodes]
    (let [at (path/cells world)]
@@ -139,12 +149,15 @@
             depth 0
             visited 0]
        (let [here (fn [c]
-                    (when (and (pocket? world at c) (ok? c))
+                    (when (and (pocket? world at c) (ok? c) (not (feet-no-seal? world c)))
                       {:pocket/cell c :pocket/stand nil :pocket/dig [] :pocket/placed []}))
              dug (fn [c]
                    (some (fn [s]
                            (let [site (dig-in world c s)]
-                             (when (and site (ok? (:pocket/cell site))) site)))
+                             (when (and site
+                                        (ok? (:pocket/cell site))
+                                        (not (feet-no-seal? world (:pocket/cell site))))
+                               site)))
                          sides))
              hit (or (some here frontier) (some dug frontier))]
          (cond hit hit
@@ -171,8 +184,11 @@
    cell, else the nearest found (site-near, within nodes cells visited), else nil."
   ([world feet ok?] (current world feet ok? search-nodes))
   ([world feet ok? nodes]
-   (let [held (held-valid world)]
-     (if (and held (ok? (:pocket/cell held))) held (site-near world feet ok? nodes)))))
+   (let [held (held-valid world)
+         cell (:pocket/cell held)]
+     (if (and held (ok? cell) (not (feet-no-seal? world cell)))
+       held
+       (site-near world feet ok? nodes)))))
 
 (defn in?
   "Are the feet in the held site's cell, and is it still a valid? one? The bot is in cover: one
@@ -181,20 +197,19 @@
   (let [{:pocket/keys [cell] :as site} (:pocket/site world)]
     (boolean (and site (= cell (intent/feet world)) (valid? world (path/cells world) site)))))
 
-(declare unlayable?)
-
 (defn here-site
   "The site that seals the cell the feet stand in, in place, or nil when it is not standable or
-   cannot be sealed (unlayable?): a cell with no dig, sealed by seal-ops on every open side and
+   cannot be sealed (cannot-seal?): a cell with no dig, sealed by seal-ops on every open side and
    over the head. What a :pocket falls back to when no way to a pocket is found (blaze-race-j
    geared 4 and race 2: three :pocket no-path failures in 0.4 s ended the run at 17 hp). An open
-   landing is standable and unlayable (the roof has nothing to click). Choosing it anyway is the
-   stall: z16 job 5 (plan 41276280629) alternated that :pocket with :tunnel-to [2210 60 1793]
-   every tick from 233 s, still at [2148 72 1763], because steer drops the site the tick it is
-   entered and the row chooses it again."
+   landing is standable and cannot be sealed (the roof has nothing to click). unlayable? misses
+   that roof once the head reaches into it. Choosing the cell is the stall: z16 job 5 (plan
+   41276280629) alternated that :pocket with :tunnel-to [2210 60 1793] from 233 s, still at
+   [2148 72 1763], because steer drops the site the tick the bot lands and the row chooses it
+   again."
   [world]
   (let [c (intent/feet world)]
-    (when (and (path/standable? (path/cells world) c) (not (unlayable? world c)))
+    (when (and (path/standable? (path/cells world) c) (not (cannot-seal? world c)))
       {:pocket/cell c :pocket/stand nil :pocket/dig [] :pocket/placed [] :pocket/here? true})))
 
 ;; ---------------------------------------------------------------- sealing
@@ -240,6 +255,17 @@
    it (the same cell t, u, x and y job 5 refused)."
   [world p]
   (let [f (build/foundation world p)] (boolean (and f (not (place/inside-player? world f))))))
+
+(defn cannot-seal?
+  "Does a seal of c need a block that has nothing to click, counting a cell the body currently
+   fills? unlayable? asks only wanted-seal-cells, and clear-of-body drops a cell the box reaches
+   into. The roof of an open landing is that cell once the head enters it (the box is 1.8 tall:
+   feet at y 72.3 reach y 74), so unlayable? goes false while the roof still has no neighbour.
+   A cell the body fills that already has a click (place/support) does not count: the body moves.
+   z16 job 5's fold cut :tunnel-to for [2148 72 1763] at t=206299 on that miss."
+  [world c]
+  (boolean (some (fn [p] (and (not (placeable? world p)) (not (place/support world p))))
+                 (open-seal-cells world c))))
 
 (defn seal-cells
   "The cells a seal of the pocket at cell c places a block in: wanted-seal-cells that can be laid

@@ -3,8 +3,9 @@
 ;; z16 job 5 (plan 41276280629) alternates the two from about 233 s and never chooses a move.
 ;;   clojure -J-Xmx12g -M scripts/flip_stall.clj run.edn.zst [old|fix]
 ;; Run the old half from a checkout of the commit that made the recording. The fix half is that
-;; checkout with this branch's plan.clj and pocket.clj copied over it. Nothing here puts a tunnel
-;; back or swallows a failure: the fix half keeps the tunnel by the bot's own code, or it fails.
+;; checkout with this branch's plan.clj, pocket.clj and fortress.clj copied over it. Nothing here
+;; puts a tunnel back or swallows a failure: the fix half keeps the tunnel by the bot's own code,
+;; or it fails.
 (require '[clojurecraft.game :as game]
          '[clojurecraft.intent :as intent]
          '[clojurecraft.main :as main]
@@ -55,6 +56,12 @@
        :from-move (:intent/move i)
        :to (select-keys (:plan/intent after) [:intent/id :intent/kind :intent/target])
        :to-cell (:pocket/cell (:intent/site (:plan/intent after)))
+       :to-here? (boolean (:pocket/here? (:intent/site (:plan/intent after))))
+       :feet-after (intent/feet after)
+       :unlayable-after
+       (boolean ((requiring-resolve 'clojurecraft.pocket/unlayable?) after (intent/feet after)))
+       :cannot-seal (boolean (when-let [f (requiring-resolve 'clojurecraft.pocket/cannot-seal?)]
+                               (f before feet)))
        :site-after (:pocket/cell (:pocket/site after))})
     (catch Exception e {:cut-threw (ex-message e) :cut-ex (class e) :t t})))
 
@@ -125,6 +132,7 @@
                                        stepped-kind (:intent/kind (:plan/intent stepped))
                                        _ (when (and (= :tunnel-to (:intent/kind prev))
                                                     (not= :tunnel-to stepped-kind)
+                                                    (>= t stall-from)
                                                     (< @cuts cuts-to-print))
                                            (vswap! cuts inc)
                                            (prn (cut-line before stepped t)))

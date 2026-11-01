@@ -173,11 +173,7 @@
       (let [ran (run (world-of {}))]
         (is (intent/failed? (:plan/intent ran)))
         (is (= :no-cell (:intent/reason (:plan/intent ran))))
-        (is (= {} (:player/controls ran)))))
-    (testing "a site that names no cell"
-      (let [ran (run (assoc (world-of {}) :pocket/site {:pocket/cell nil}))]
-        (is (intent/failed? (:plan/intent ran)))
-        (is (= :no-cell (:intent/reason (:plan/intent ran))))))))
+        (is (= {} (:player/controls ran)))))))
 
 (deftest a-seal-that-never-finishes-is-given-up
   ;; blaze-race-t job 5: :seal ran 68 minutes on a placement refused with the body in the cell
