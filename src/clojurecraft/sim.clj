@@ -2362,6 +2362,26 @@
               stuck? (assoc-in [:sim/mobs eid :route-at] now)
               (seq found) (assoc-in [:sim/mobs eid :route] found))))))
 
+(defn fly
+  "Mob eid, a flier (a blaze), a tick on toward the player as BlazeAttackGoal moves it: it stays
+   where it hovers while the player is in its follow range with a clear line from its head to the
+   player's eye (it shoots from there, shoot), else it flies at the player (mob/fly-toward, a
+   block above the player's feet), and in reach it stays to strike."
+  [sim eid]
+  (let [{:keys [type pos]} (get-in sim [:sim/mobs eid])
+        k (mob/kinds type)
+        player (:sim/player-pos sim)
+        [px py pz] player
+        sees? (mob/sight? (solid-fn sim) (mob/head type pos) (physics/eye player))]
+    (cond (or (mob/in-reach? type pos player)
+              (and sees? (<= (physics/distance pos player) (:follow k))))
+          sim
+          :else
+          (move-mob
+           sim
+           eid
+           (mob/fly-toward (free-fn sim) pos [px (inc py) pz] (:speed k) (mob/tall type))))))
+
 (defn walk
   "Mob eid a tick on toward the player (mob/step-toward), stopping where its kind fights from: a
    melee mob inside its reach, a shooter at :keep, a creeper a block off; one that does not walk
@@ -2374,6 +2394,7 @@
                    :else 1.0)]
     (cond
       (not (pos? (:speed k 0.0))) sim
+      (:flies k) (fly sim eid)
       (:paths k) (trail sim eid stop)
       :else
       (move-mob
@@ -2494,7 +2515,8 @@
     (cond (not (and (:melee k) (mob/in-reach? type pos player) (>= now (or attack-at 0)))) sim
           :else
           (-> sim
-              (assoc-in [:sim/mobs eid :attack-at] (+ now (* (:every k) physics/tick-ms)))
+              (assoc-in [:sim/mobs eid :attack-at]
+                        (+ now (* (:melee-every k (:every k)) physics/tick-ms)))
               (hurt (armoured sim (mob/scaled (:melee k) (:sim/difficulty sim))) true type)
               (tell-damage :mob_attack eid)))))
 

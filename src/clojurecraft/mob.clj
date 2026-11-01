@@ -101,7 +101,11 @@
               :loot [[:ender_pearl 0 1]]}
    :blaze {:health 20.0
            :box [0.6 1.8]
-           :speed 0.0
+           :speed 0.2
+           :flies true
+           :melee 6.0
+           :reach 2.0
+           :melee-every 20
            :follow 48.0
            :shoot 5.0
            :projectile :fireball
@@ -392,10 +396,28 @@
 
 (defn in-reach?
   "Is a melee mob of kind at pos near enough to hit a player at target: on the plane within its
-   :reach, the feet within 1.5 in height?"
+   :reach, the feet within 1.5 in height? A flier (BlazeAttackGoal: distance squared under 4) strikes
+   within :reach of the target in space, feet to feet."
   [kind pos target]
-  (and (<= (flat-distance pos target) (:reach (kinds kind) 0.0))
-       (< (abs (- (second pos) (second target))) 1.5)))
+  (let [k (kinds kind)]
+    (if (:flies k)
+      (<= (physics/distance pos target) (:reach k 0.0))
+      (and (<= (flat-distance pos target) (:reach k 0.0))
+           (< (abs (- (second pos) (second target))) 1.5)))))
+
+(defn fly-toward
+  "A flier at pos one tick on toward target at speed blocks a tick, in space: the straight step when
+   its body (n cells tall, free? of a cell) fits there, else the steps along each axis alone that
+   fit, else it stays. A blaze flies through the open and along walls, never through them."
+  [free? pos target speed n]
+  (let [d (physics/distance pos target)
+        k (min speed d)
+        to (if (pos? d) (mapv (fn [p t] (+ p (* k (/ (- t p) d)))) pos target) pos)
+        fits? (fn [c] (stands-in? free? (cell-of c) n))
+        axis (fn [i] (assoc pos i (nth to i)))]
+    (cond (zero? k) pos
+          (fits? to) to
+          :else (or (first (filter fits? (map axis [0 2 1]))) pos))))
 
 ;; ---------------------------------------------------------------- a route round a wall (issue #263)
 

@@ -595,3 +595,30 @@
                 (ticks 900))]
     (is (empty? (blazes-of sim)))
     (is (not (contains? (:sim/spawners sim) sp)))))
+
+;; ---------------------------------------------------------------- a blaze flies (issue #262)
+;; real: race f8b28e3 lane 2 (45 recordings): blazes hover 10.8 blocks from the bot (median) and
+;; strike at melee range for 6 (3.36 through the armour the bot wore: 14 points)
+
+(deftest armour-takes-the-recorded-share-of-a-fireball-and-a-blaze-s-melee
+  (is (< (abs (- 2.7 (mob/absorbed 5.0 14 0.0))) 0.005) "a fireball: 2.7 in 508 recorded hits")
+  (is (< (abs (- 3.36 (mob/absorbed 6.0 14 0.0))) 0.005) "a melee hit: 3.36 in 138 recorded hits"))
+
+(deftest a-blaze-with-a-clear-line-hovers-where-it-is
+  (let [sim (arena {} {} :normal night [{:type :blaze :pos [9.5 65.0 0.5]}])
+        later (ticks sim 60)]
+    (is (= [9.5 65.0 0.5] (:pos (val (the-mob later :blaze)))))))
+
+(deftest a-blaze-with-a-wall-between-flies-to-the-wall-and-no-further
+  (let [sim (arena wall {} :normal night [{:type :blaze :pos [9.5 65.0 0.5]}])
+        later (ticks sim 100)
+        [x _ _] (:pos (val (the-mob later :blaze)))]
+    (is (< 4.9 x 5.7) "up to the wall's far face (x 5), never through it")))
+
+(deftest a-blaze-in-reach-strikes-for-six-every-second
+  (let [sim (arena {} {} :normal night [{:type :blaze :pos [1.0 64.0 0.5]}])
+        hit (ticks sim 1)
+        again (ticks sim 22)]
+    (is (= 14.0 (:sim/health hit)) "six at once")
+    (is (some #{28} (map :source-type (said hit :damage-event))) "a mob attack")
+    (is (<= (:sim/health again) 9.0) "a second hit twenty ticks on, the shot too")))
