@@ -1581,6 +1581,13 @@
 
 (def eye-height 1.62)                   ; blocks over a cell's floor that a standing bot's eye is
 
+(defn unseen-from?
+  "Is cell [x y z], a standing eye over it, out of the sight of every entity in shooters (no clear
+   line, combat/clear?, to its aim)?"
+  [world shooters-seq [x y z]]
+  (let [eye [(+ x 0.5) (+ y eye-height) (+ z 0.5)]]
+    (every? #(not (combat/clear? world eye (combat/aim %))) shooters-seq)))
+
 (defn out-of-sight-cell
   "The newest cell of the fortress trail (:fortress/trail, the feet cells a tunnel began its steps
    from, oldest first) from which no entity of shooters has a clear line to a standing eye, or nil.
@@ -1590,21 +1597,50 @@
   (let [ss (vals (shooters world))]
     (when (seq ss)
       (->> (reverse (:trail/cells (:fortress/trail world)))
-           (filter (fn [[x y z]]
-                     (let [eye [(+ x 0.5) (+ y eye-height) (+ z 0.5)]]
-                       (every? #(not (combat/clear? world eye (combat/aim %))) ss))))
+           (filter #(unseen-from? world ss %))
+           first))))
+
+(def cover-reach 5)                     ; blocks round the feet within which a standable cell out of a shooter's sight is looked for
+
+(defn near-cover-cell
+  "The nearest cell within cover-reach (the plane, two up or down) that the feet could stand on
+   (path/standable?) and that no entity of shooters has a clear line to, or nil: the way out of a
+   shooter's sight when the trail has no cell for it (a race bot that tunnelled in a different way,
+   or a trail reset by another tunnel). Clj_r11 of race f8b28e39d (chain-dragon) dug a shaft
+   straight up under fire, place :no-support and pillar :boxed, repeating, until dead."
+  [world]
+  (let [ss (vals (shooters world))
+        feet (intent/feet world)
+        [fx fy fz] feet]
+    (when (seq ss)
+      (->> (for [dx (range (- cover-reach) (inc cover-reach))
+                 dz (range (- cover-reach) (inc cover-reach))
+                 dy (range -2 3)]
+             [(+ fx dx) (+ fy dy) (+ fz dz)])
+           (filter #(path/standable? world %))
+           (sort-by #(path/octile feet %))
+           (filter #(unseen-from? world ss %))
            first))))
 
 (defn leave-sight
-  "The walk back along the trail to the newest cell out of every shooter's sight, or nil: when a
-   shooter has a clear line to the bot (combat/seen?), no enderman is tracked within seek-radius,
-   and such a cell is routable. Pure."
+  "The intent that gets the bot out of the shooters' sight, or nil: with a shooter in view
+   (combat/seen?) and no enderman tracked within seek-radius, a routable walk to the newest
+   fortress trail cell out of sight (out-of-sight-cell), else to the nearest cell round the feet out
+   of sight (near-cover-cell), else, at under danger-health, a back-off from the nearest shooter in
+   view: never a dig or a pillar in its sight, which is where the rod bots' hp went from 20 to 3.3
+   in 37 s (probe 41251668076). Pure."
   [world]
-  (when (and (some #(combat/seen? world %) (vals (shooters world)))
-             (empty? (endermen world seek-radius)))
-    (when-let [c (out-of-sight-cell world)]
-      (let [i {:intent/kind :walk :intent/target c :intent/for :pearls}]
-        (when (intent/routable? world i) i)))))
+  (let [shot (into {} (filter (fn [[_ e]] (combat/seen? world e))) (shooters world))]
+    (when (and (seq shot) (empty? (endermen world seek-radius)))
+      (let [walk (fn [c]
+                   (when c
+                     (let [i {:intent/kind :walk :intent/target c :intent/for :pearls}]
+                       (when (intent/routable? world i) i))))]
+        (or (walk (out-of-sight-cell world))
+            (walk (near-cover-cell world))
+            (when (< (:player/health world 20.0) danger-health)
+              (let [[eid _] (entity/nearest shot (:player/pos world))]
+                {:intent/kind :back-off :intent/target eid :intent/for :pearls})))))))
 
 (defn shot-at?
   "Is a ghast within its :range (mob/kinds) with a clear line from the eye (combat/seen?)? Never
@@ -1865,6 +1901,90 @@
             best (apply max-key away ends)]
         {:intent/kind :walk :intent/target (second best) :intent/for :pearls}))))
 
+(def room-margin
+  "Blocks round a known spawner, on the plane and up and down, that count as its blaze room: a walk
+   or a dig-out that goes through it goes into the fireballs."
+  12)
+
+(defn room-boxes
+  "The boxes [x0 y0 z0 x1 y1 z1], one for each spawner on record in the bot's dimension
+   (memory/positions-now), room-margin round it. Pure."
+  [world]
+  (vec (for [[x y z] (memory/positions-now world [blaze/spawner])]
+         [(- x room-margin) (- y room-margin) (- z room-margin) (+ x room-margin) (+ y room-margin)
+          (+ z room-margin)])))
+
+(defn in-room?
+  "Is point [x y z] (a cell or a position) inside one of boxes?"
+  [boxes [x y z]]
+  (boolean (some (fn [[x0 y0 z0 x1 y1 z1]] (and (<= x0 x x1) (<= y0 y y1) (<= z0 z z1))) boxes)))
+
+(defn crosses-room?
+  "Does the straight line from point a to point b pass through one of boxes, sampled every two
+   blocks? Pure."
+  [boxes a b]
+  (let [d (physics/distance a b)
+        n (max 1 (quot (inc (long d)) 2))]
+    (boolean (some (fn [k]
+                     (let [t (/ k (double n))] (in-room? boxes (mapv #(+ %1 (* t (- %2 %1))) a b))))
+                   (range (inc n))))))
+
+(defn room-waypoint
+  "The first walk target for getting from the feet to target without going through the blaze room
+   (room-boxes), or target itself when the line is clear or no better is found. From inside the
+   room: the newest fortress trail cell outside every box, the way the bot came in. From outside
+   with the line through it: the newest trail cell outside the boxes from which the line to
+   target is clear, else the nearest corner of a box, a block past its margin, whose two legs
+   are clear. Clj_r11 of race f8b28e39d (replayed on main, probe 41267637866) was walked out of the
+   room by leave-sight and walked back in by the travel to the forest beyond it, flip after flip."
+  [world target]
+  (let [boxes (room-boxes world)
+        feet (intent/feet world)]
+    (cond (empty? boxes) target
+          (in-room? boxes feet)
+          (or (->> (reverse (:trail/cells (:fortress/trail world)))
+                   (remove #(in-room? boxes %))
+                   first)
+              target)
+          (not (crosses-room? boxes feet target)) target
+          :else
+          (or (->> (reverse (:trail/cells (:fortress/trail world)))
+                   (remove #(in-room? boxes %))
+                   (filter #(and (not (crosses-room? boxes feet %))
+                                 (not (crosses-room? boxes % target))))
+                   first)
+              (let [corners (for [[x0 _ z0 x1 _ z1] boxes
+                                  cx [(dec x0) (inc x1)]
+                                  cz [(dec z0) (inc z1)]
+                                  :let [c [cx (nth feet 1) cz]]
+                                  :when (and (not (in-room? boxes c))
+                                             (not (crosses-room? boxes feet c)))]
+                              c)
+                    total #(+ (physics/distance feet %) (physics/distance % target))]
+                ;; a corner both legs clear of the room, else the one whose first leg is clear and
+                ;; the whole way shortest: the next call, from the corner, picks the next corner
+                (or (->> corners
+                         (filter #(not (crosses-room? boxes % target)))
+                         (sort-by total)
+                         first)
+                    (first (sort-by total corners))))
+              target))))
+
+(defn room-exit
+  "The :tunnel-to along the fortress trail to its newest cell outside every blaze room, or nil:
+   while the feet are inside one (room-boxes) and no enderman is tracked within seek-radius. The
+   rod bots' climb-out and dig-out opened straight up into the room (Clj_r02 of race f8b28e39d:
+   :tunnel then :stairs-up from a sealed pocket under 23 blazes, probe 41267636159)."
+  [world]
+  (let [boxes (room-boxes world)]
+    (when (and (seq boxes)
+               (in-room? boxes (intent/feet world))
+               (empty? (endermen world seek-radius)))
+      (when-let [c (->> (reverse (:trail/cells (:fortress/trail world)))
+                        (remove #(in-room? boxes %))
+                        first)]
+        {:intent/kind :tunnel-to :intent/target c :intent/for :pearls}))))
+
 (defn travel
   "The walk to a warped forest, or nil: none in the Nether when the bot is in one (in-forest?);
    to the cell over the nylium nearest of the nearest known forest chunk (nearest-forest), else
@@ -1873,7 +1993,9 @@
   [world]
   (when (and (= dimension/nether (dimension/of world)) (not (in-forest? world)))
     (if-let [pos (nearest-forest world)]
-      {:intent/kind :walk :intent/target (update pos 1 inc) :intent/for :pearls}
+      {:intent/kind :walk
+       :intent/target (room-waypoint world (update pos 1 inc))
+       :intent/for :pearls}
       (explore world))))
 
 (defn travel-caged?
@@ -2168,6 +2290,7 @@
                        :else tid)]
     (cond
       (and (not in?) (leave-sight world)) (leave-sight world)
+      (and (not in?) (room-exit world)) (room-exit world)
       (and (shot-at? world) (not in?) (cover-from world)) (cover-from world)
       (and home (not in?) (or ce near? hurt? tid aid swarmed?) (intent/routable? world way-home))
       way-home
@@ -2351,7 +2474,15 @@
   ;; one two or three blocks off on a walk or a tunnel, out of the burrow, and were slain in the
   ;; open. In the end a stare by chance is what the hunt wants: the enderman comes to the sword
   [world _]
-  (let [look (:control/look (:player/controls world))
+  (let [controls (:player/controls world)
+        ;; a walk sets only :control/yaw: the look it leaves is that heading and the pitch the bot
+        ;; had, which stares at an enderman straight ahead. Pearl-fight-p jobs 2 and 3 (plan run
+        ;; 41256381552, probe 41268180994): 20 of 22 enderman angers came on a walk with the look in
+        ;; the stare cone 8 to 13 ticks before, at 5 to 47 blocks
+        [pyaw ppitch] (:player/look world)
+        look (or (:control/look controls)
+                 (when (:control/yaw controls) [(:control/yaw controls) (or ppitch 0.0)])
+                 (when pyaw [pyaw (or ppitch 0.0)]))
         home (:pearls/shelter world)
         world (cond-> (relocation (track-gain (track-angry (uncovered-log world))))
                 (shot-at? world) (assoc :pearls/shot-at-ms (:time/now world 0)))]
@@ -2359,7 +2490,11 @@
               (= :provoke (:intent/kind (:plan/intent world)))
               (and home (= home (intent/feet world))))
           world
-          :else (assoc-in world [:player/controls :control/look] (look-off world look)))))
+          :else
+          (let [off (look-off world look)]
+            (if (and (nil? (:control/look controls)) (= off look))
+              world
+              (assoc-in world [:player/controls :control/look] off))))))
 
 (defn beset?
   "Does an angry enderman (entity/creepy?), blacklisted or not, stand within strike-range of the
