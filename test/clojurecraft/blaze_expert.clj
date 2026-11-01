@@ -862,7 +862,9 @@
                   :end :crashed
                   :health nil
                   :why :crashed
-                  :error (.getMessage e)}]
+                  :error (str (.getName (class e))
+                              ": " (.getMessage e)
+                              " " (pr-str (mapv str (take 6 (.getStackTrace e)))))}]
         (say "EXPERT" (pr-str line))
         line)
       (let [line (result-line (merge (:world played) tag) (:sim played))]
