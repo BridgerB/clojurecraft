@@ -5,7 +5,7 @@ type: reference
 tags: [bot, crafting, intents, furnace, smelting]
 aliases: [:smelt, smelt.clj, burn-order, batch, fuel-clicks, lay, lost click, resync, intent/resync, intent/lost]
 status: verified
-lastUpdated: 2026-10-15
+lastUpdated: 2026-11-01
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/smelt.clj#defmethod intent/run :smelt
@@ -21,6 +21,9 @@ sourceRefs:
   - src/clojurecraft/window.clj#defn lost
   - src/clojurecraft/window.clj#defn resync-click
   - src/clojurecraft/make.clj#defmethod plan/act :smelt
+  - src/clojurecraft/make.clj#defn collect-batch
+  - test/clojurecraft/make_test.clj#iron-cooking-in-a-furnace-is-collected-not-mined-again
+  - test/clojurecraft/sim_test.clj#an-interrupted-smelt-is-gone-back-to-not-mined-for-again
   - test/clojurecraft/sim_test.clj#four-raw-iron-and-a-coal-become-four-ingots-in-a-placed-furnace
   - test/clojurecraft/sim_test.clj#a-second-stack-of-fuel-is-loaded-when-the-first-burns-out
   - test/clojurecraft/sim_test.clj#every-lost-smelt-click-is-recovered-from-the-servers-slots
@@ -47,10 +50,13 @@ The needs planner's generated smelt rows (one per `smelting.edn` recipe: the inp
 
 ## Stages
 1. **`:settle`**: an unknown recipe fails `:unknown-recipe`; no state id yet waits up to 5 s (`:no-window`); a loaded cursor is put down; with no slot free, a junk stack is thrown out (`window/tossable`, [[window-views]]; race 38805920624 bot Clj_r09 shift-clicked a furnace's leftover output into 36 full slots and failed `:inventory-full`, issue #192); anything in the furnace's input, fuel or output is shift-clicked out; then `load-plan` (fuel, then input; nil fails `:no-ingredient`) records the clicks, the batch (capped by the input stack), `:intent/result`, `:intent/makes` and `:intent/before`.
-2. **`:load`**: the next planned click, or on to `:cook`.
+2. **`:load`**: the next planned click, or on to `:cook`, recording the batch as `:furnace/batch` (`{:batch/smelt :batch/makes :batch/at}`).
 3. **`:cook`**: done cooking when the output holds the batch → `:take`. First it waits (5 s, else `:not-loaded`) until the furnace holds the input and either fuel or a fire (`loaded?`), and sets `:intent/cook-by` to now + input × cook ticks × 50 ms + 5 s. When the fire is out, the fuel slot empty and input left, it lays fuel from the next held stack and returns through `:load` (`:out-of-fuel` when none). Past `cook-by` it fails `:not-cooked` only once the furnace has stopped cooking (`cooking?`: a fire going and the input still in it): the deadline is the bot's clock and the cook the server's ticks. Race 38805920624 runner 5 (issues #199, #200) ran both servers behind, over 200 "Can't keep up" each; bot Clj_r17's cooked three raw iron in 53 s against the 35 s deadline, and the smelt failed 1.2 s before the second ingot came out. A furnace that cooks gives an item within its cook total of the server's ticks, so the wait ends; one whose input is gone or whose fire is out with no fuel fails as before (`a-furnace-still-cooking-past-the-deadline-is-waited-on`).
 4. **`:take`**: shift-click the output until the inventory holds before + makes (5 s, else `:not-taken`).
-5. **`:close`**: put a loaded cursor down, shift-click anything left out, then `container-close`: done.
+5. **`:close`**: put a loaded cursor down, shift-click anything left out, then `container-close`: done, and the batch is forgotten.
+
+## An interrupted smelt
+The planner counts the inventory only, so raw iron loaded into a furnace is no iron held. A smelt cut after `:load` (the forage, a defence, a flee) would send the bot mining again with the iron cooking behind it: the iron kit gym, with four raw iron loaded together, left the furnace at 6 s of 40 (issue #686, probe 41261418243). `make/collect-batch`, tried in `make/decide` before the needs planner, goes back: with a `:furnace/batch` younger than `batch-ttl` (half an hour), a furnace remembered within `table-search` and no smelt running, it opens the furnace within reach or walks to it, and a `:smelt` of the batch's recipe empties the furnace into the inventory at its `:settle` (which forgets the batch) and loads whatever raw input is held again. `an-interrupted-smelt-is-gone-back-to-not-mined-for-again` cuts the first cook of the gym and requires the water bucket and flint and steel.
 
 ## A lost click
 A furnace's own ticks move the window's state id, and what a failed smelt leaves on the cursor or in the furnace is not in the inventory the planner plans from, so a planner retry could not find it. So an unanswered click (`window/waiting` overdue) is recovered inside the intent (`lost`, which calls `window/lost`): the next click is a resync, then a lost take or close carries on and a lost settle or load click starts over at `:settle`. The third loss fails `:stale-window`.

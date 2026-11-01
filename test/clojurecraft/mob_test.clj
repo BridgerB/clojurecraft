@@ -2,7 +2,8 @@
   "Mobs in the server model (issue #260): the rules (mob.clj) and the model spawning, walking,
    hitting, shooting, blasting and dying by them, from fixtures (:mobs given) as every combat
    stage's sim tests start, and the whole bot against them."
-  (:require [clojure.test :refer [deftest is testing use-fixtures]]
+  (:require [clojure.math :as math]
+            [clojure.test :refer [deftest is testing use-fixtures]]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.dimension :as dimension]
             [clojurecraft.entity :as entity]
@@ -460,6 +461,54 @@
     (is (= -5 (mob/pack-step 0.0 0.99)))
     (is (= 0 (mob/pack-step 0.5 0.5)))))
 
+(defn wither-run
+  "Run mob/wither-tick every 50 ms from a wither applied at 0, {:hurts n :out-at ms}."
+  [until-ms]
+  (loop [now 0
+         w (mob/wither-apply nil 0)
+         hurts 0]
+    (let [[w' event] (mob/wither-tick w now)]
+      (cond (or (nil? w') (= :out event)) {:hurts (cond-> hurts (= :hurt event) inc) :out-at now}
+            (> now until-ms) {:hurts hurts :out-at nil}
+            :else (recur (+ now 50) w' (cond-> hurts (= :hurt event) inc))))))
+
+(deftest a-withers-five-points-land-over-ten-seconds-and-a-second-hit-extends-it
+  (is (= {:hurts 5 :out-at 10000} (wither-run 12000)) "at 2, 4, 6, 8 and 10 seconds")
+  (is (= {:until 12000 :next 2000} (mob/wither-apply (mob/wither-apply nil 0) 2000))
+      "the next hurt stays, the end moves out"))
+
+(deftest a-wither-skeleton-hits-for-eight-and-the-wither-ignores-armour
+  ;; the hit is 8 on Normal (easy scales it); the wither's point is 1 and armour takes none
+  (let [sim (arena {} {} nil night [{:type :wither_skeleton :pos [1.0 64.0 0.5]}])
+        hit (ticks sim 1)
+        later (ticks (assoc hit :sim/mobs {}) 40)
+        worn {[:armour 0] {:item (recipe/item-id :iron_helmet) :count 1}
+              [:armour 1] {:item (recipe/item-id :iron_chestplate) :count 1}
+              [:armour 2] {:item (recipe/item-id :iron_leggings) :count 1}
+              [:armour 3] {:item (recipe/item-id :iron_boots) :count 1}}
+        armoured (ticks (arena {} worn nil night [{:type :wither_skeleton :pos [1.0 64.0 0.5]}]) 1)
+        armoured-later (ticks (assoc armoured :sim/mobs {}) 40)]
+    (is (= 12.0 (:sim/health hit)) "eight off twenty")
+    (is (= {:until 10050 :next 2050} (:sim/wither hit)) "first point two seconds on")
+    (is (= 11.0 (:sim/health later)) "that point, and no second swing")
+    (is (= [28 18] (map :source-type (said later :damage-event))) "melee, then the wither")
+    (is (close? (- 20.0 (mob/absorbed 8.0 15 0.0)) (:sim/health armoured))
+        "full iron takes its share of the eight")
+    (is (close? (dec (:sim/health armoured)) (:sim/health armoured-later))
+        "and none of the wither's one")))
+
+(deftest a-magma-cube-hits-for-four-and-a-hoglin-for-six
+  ;; medium magma cube (the one row; large is 6, small is 3) and a hoglin's 6, the middle of
+  ;; vanilla's 3 to 8 on Normal
+  (is (= 16.0
+         (:sim/health (ticks (arena {} {} nil night [{:type :magma_cube :pos [1.2 64.0 0.5]}]) 1))))
+  (is (= 14.0
+         (:sim/health (ticks (arena {} {} nil night [{:type :hoglin :pos [1.5 64.0 0.5]}]) 1)))))
+
+(deftest the-overworlds-night-does-not-roll-a-fortress-mob
+  (is (not-any? #{:wither_skeleton :magma_cube :hoglin :blaze} (map first mob/hostile-kinds)))
+  (is (every? pos-int? (map second mob/hostile-kinds))))
+
 (deftest a-warped-forest-spawns-packs-of-endermen-by-day-and-netherrack-spawns-nothing
   ;; issue #263: vanilla spawns the Nether's hostiles by biome, the warped forest's list being
   ;; the enderman alone in packs of four, in any light the model tells (the overworld's night
@@ -477,6 +526,22 @@
                 mobs)
         "in the ring, a pack's walk past it at most")
     (is (empty? (:sim/mobs (nether-play {} 7 500))) "a stone floor is no warped forest")))
+
+(def brick-floor
+  "A column's top at y 63 of nether bricks: a fortress's floor, as the model tells one."
+  (into {} (for [x (range 16) z (range 16)] [[x 63 z] (blocks/default-state :nether_bricks)])))
+
+(def crimson-floor
+  "A column's top at y 63 of crimson nylium."
+  (into {} (for [x (range 16) z (range 16)] [[x 63 z] (blocks/default-state :crimson_nylium)])))
+
+(deftest a-fortress-floor-spawns-wither-skeletons-and-magma-cubes-and-crimson-spawns-hoglins
+  (let [fort (vals (:sim/mobs (nether-play brick-floor 7 500)))
+        wood (vals (:sim/mobs (nether-play crimson-floor 7 500)))]
+    (is (seq fort) "five tries, one mob each")
+    (is (every? #{:wither_skeleton :magma_cube} (map :type fort)) "the structure's two kinds")
+    (is (every? #(= :hoglin (:type %)) wood) "the crimson forest's hoglin")
+    (is (seq wood))))
 
 (deftest the-overworld-spends-no-roll-of-the-nethers-stream
   ;; the Nether's spawns roll from their own stream (sim/wild-roll), so the overworld's night
@@ -582,7 +647,9 @@
           bs (blazes-of later)]
       (is (<= 1 (count bs) 6) "a batch of four tries, never past the cap")
       (is (every? #(mob/spawner-crowded? sp (:pos %)) (vals bs)) "in the box about it")
-      (is (= (count bs) (count (said later :add-entity))) "each told to the client"))))
+      (is (= (count bs)
+             (count (filter #(= (mob/type-id :blaze) (:type %)) (said later :add-entity))))
+          "each blaze told to the client (a fireball is an entity too)"))))
 
 (deftest a-spawner-the-player-is-far-from-or-a-peaceful-one-makes-none
   (is (empty? (blazes-of (ticks (in-fortress [8.5 64.0 -10.5] :normal) 900))) "asleep")
@@ -595,3 +662,198 @@
                 (ticks 900))]
     (is (empty? (blazes-of sim)))
     (is (not (contains? (:sim/spawners sim) sp)))))
+
+(def cap-wall
+  "fortress-floor with cobble across the chunk at z 6, from y 64 to 66. A player at z 4.5 has
+   no line to a blaze in the spawn box (z 8 to 16), and is still within the spawner's 16."
+  (into fortress-floor
+        (for [x (range 16) y (range 64 67)] [[x y 6] (blocks/default-state :cobblestone)])))
+
+(deftest a-sealed-player-does-not-pull-blazes-out-of-the-cap
+  ;; the old flight chased with no line until it was in reach, left the counting box, and the
+  ;; spawner filled the box again. Thirty seconds of that is dozens. The cap holds them.
+  (let [sim (-> (sim/init {:column (world/column-bytes cap-wall dimension/nether)
+                           :spawn [8.5 64.0 4.5]
+                           :dimension dimension/nether
+                           :difficulty :normal
+                           :food 20})
+                (assoc :sim/phase :play :sim/player-pos [8.5 64.0 4.5] :sim/on-ground? true)
+                (ticks 1800))
+        bs (vals (blazes-of sim))]
+    (is (<= 1 (count bs) 6) "awake, and never past maxNearbyEntities")
+    (is (every? #(mob/spawner-crowded? sp (:pos %)) bs) "still in the counting box")))
+
+;; ---------------------------------------------------------------- a blaze flies (issue #262)
+;; real: race f8b28e3 lane 2 (45 recordings): blazes hover 10.8 blocks from the bot (median) and
+;; strike at melee range for 6 (3.36 through the armour the bot wore: 14 points)
+
+(deftest armour-takes-the-recorded-share-of-a-fireball-and-a-blaze-s-melee
+  (is (< (abs (- 2.7 (mob/absorbed 5.0 14 0.0))) 0.005) "a fireball: 2.7 in 508 recorded hits")
+  (is (< (abs (- 3.36 (mob/absorbed 6.0 14 0.0))) 0.005) "a melee hit: 3.36 in 138 recorded hits"))
+
+(deftest a-blaze-with-a-clear-line-hovers-where-it-is
+  (let [sim (arena {} {} :normal night [{:type :blaze :pos [9.5 65.0 0.5]}])
+        later (ticks sim 60)]
+    (is (= [9.5 65.0 0.5] (:pos (val (the-mob later :blaze)))))))
+
+(deftest a-blaze-that-has-never-seen-the-player-stays
+  ;; NearestAttackableTargetGoal is constructed with mustSee, so no line means no target and
+  ;; BlazeAttackGoal does not run. Flying at the wall is what emptied the spawner's cap box.
+  (let [sim (arena wall {} :normal night [{:type :blaze :pos [9.5 65.0 0.5]}])
+        later (ticks sim 100)]
+    (is (= [9.5 65.0 0.5] (:pos (val (the-mob later :blaze)))))))
+
+(deftest a-blaze-that-loses-the-line-closes-for-five-ticks-and-then-stays
+  (let [sim (arena wall {} :normal night [{:type :blaze :pos [9.5 65.0 0.5]}])
+        eid (key (the-mob sim :blaze))
+        going (ticks (assoc-in sim [:sim/mobs eid :seen?] true) 4)
+        stopped (ticks going 20)
+        x (fn [s] (first (:pos (val (the-mob s :blaze)))))]
+    (is (< (x going) 9.5) "lastSeen under 5: it still moves")
+    (is (> (x going) 8.0) "four ticks at 0.2, not the whole gap")
+    (is (= (x going) (x stopped)) "then it stays, short of the wall")))
+
+(deftest a-blaze-in-reach-strikes-for-six-every-second
+  (let [sim (arena {} {} :normal night [{:type :blaze :pos [1.0 64.0 0.5]}])
+        hit (ticks sim 1)
+        again (ticks sim 22)]
+    (is (= 14.0 (:sim/health hit)) "six at once")
+    (is (some #{28} (map :source-type (said hit :damage-event))) "a mob attack")
+    (is (< (:sim/health again) 14.0) "hurt again twenty ticks on")))
+
+(def pocket
+  "A sealed 1x2 at [4 64 4]: air at the feet and the head, cobble on every side and the roof.
+   The arena's own stone is the floor under y 64."
+  (let [air #{[4 64 4] [4 65 4]}]
+    (into {}
+          (for [x (range 3 6)
+                y (range 64 67)
+                z (range 3 6)
+                :when (not (air [x y z]))]
+            [[x y z] (blocks/default-state :cobblestone)]))))
+
+(defn in-pocket
+  "The arena with the player standing in the pocket at feet."
+  [feet mobs]
+  (assoc (arena pocket {} :normal night mobs) :sim/player-pos feet))
+
+(deftest a-sealed-pocket-blocks-a-blaze-two-blocks-off
+  ;; feet [4.5 64 4.5], blaze [6.5 64 4.5]: two blocks, the old reach, with cobble at x 5
+  ;; between the boxes. The boxes do not meet and the line crosses the wall.
+  (let [feet [4.5 64.0 4.5]
+        blaze [6.5 64.0 4.5]
+        sim (in-pocket feet [{:type :blaze :pos blaze}])
+        later (ticks sim 22)]
+    (is (not (mob/touches? :blaze blaze feet)) "two blocks is not a touch")
+    (is (mob/touches? :blaze [1.0 64.0 0.5] [0.5 64.0 0.5]) "the open strike still meets")
+    (is (= 20.0 (:sim/health later)) "no contact through the wall")
+    (is (not-any? #(= 28 (:source-type %)) (said later :damage-event)))
+    (is (nil? (:sim/fire later)) "the wall does not light the pocket")))
+
+(deftest a-fireball-stops-at-the-pocket-wall-and-does-not-burn-through-it
+  ;; the player stands against the cobble, so the box grown by the fireball's radius reaches
+  ;; into that cell. A sample there is a wall, not a hit, and the fire is left outside.
+  (let [feet [4.8 64.0 4.5]
+        from [6.05 65.4 4.5]
+        eye (physics/eye feet)
+        dir (mob/aim from eye 0.5 0.5 0.5 0.5)
+        sim (-> (in-pocket feet [])
+                (assoc-in [:sim/fireballs 90] {:pos from :dir dir :owner 91 :born 0 :kind :blaze}))
+        later (ticks sim 20)]
+    (is (= :wall (first (sim/fireball-path sim from dir))) "the cobble stops it")
+    (is (= 20.0 (:sim/health later)) "nothing through the wall")
+    (is (nil? (:sim/fire later)) "and it does not catch")
+    (is (empty? (:sim/fireballs later)))
+    (is (not-any? #(#{14 31} (:source-type %)) (said later :damage-event)))))
+
+(deftest a-blaze-volley-is-a-charge-three-fireballs-and-a-rest
+  ;; real: 3 fireballs 0.30 s (6 ticks) apart; volleys 8.9 s (178 ticks) apart at the fastest
+  (let [v (:volley (mob/kinds :blaze))
+        steps (rest (iterate (fn [[step]] (mob/volley-next v step)) [0]))]
+    (is (= [[1 60 true false] [2 6 true true] [3 6 true true] [4 6 true true] [0 100 false false]]
+           (take 5 steps)))
+    (is (= 178 (reduce + (map second (take 5 steps)))))))
+
+(defn fireball-ticks
+  "The ticks (1 on) at which the model has a new small fireball for the client, over n ticks."
+  [sim n]
+  (loop [sim sim
+         i 1
+         seen 0
+         at []]
+    (if (> i n)
+      at
+      (let [sim (ticks sim 1)
+            now (count (filter #(= sim/fireball-type (:type %)) (said sim :add-entity)))]
+        (recur sim (inc i) now (into at (repeat (- now seen) i)))))))
+
+(deftest a-blaze-with-a-line-charges-then-fires-three-fireballs-six-ticks-apart
+  ;; 242 stops after the next volley's first shot (239); its second and third are at 245 and 251
+  (let [sim (arena {} {} :normal night [{:type :blaze :pos [9.5 65.0 0.5]}])
+        at (fireball-ticks sim 242)]
+    (is (= 4 (count at)) "three, then one more once the rest is over")
+    (is (= [6 6] (map - (rest (take 3 at)) (take 2 at))) "six ticks apart")
+    (is (<= 60 (first at) 63) "after a charge of 60")
+    (is (<= 237 (nth at 3) 241) "the next volley 178 ticks on")))
+
+(deftest a-blaze-without-a-line-does-not-charge
+  (is (empty? (fireball-ticks (arena wall {} :normal night [{:type :blaze :pos [9.5 65.0 0.5]}])
+                              100))))
+
+(deftest a-blaze-within-two-of-a-sealed-bot-does-not-fire
+  ;; 26.1.2 Blaze$BlazeAttackGoal.tick: distanceSquared < 4 and no line of sight returns before
+  ;; any shot. The volley runs only at distanceSquared >= 4 with a line. Feet [4.5 64 4.5],
+  ;; blaze [6.2 64 4.5]: 1.7 blocks, cobble at x 5 between them.
+  (let [feet [4.5 64.0 4.5]
+        blaze [6.2 64.0 4.5]
+        sim (in-pocket feet [{:type :blaze :pos blaze}])]
+    (is (< (physics/distance blaze feet) 2.0))
+    (is (empty? (fireball-ticks sim 200)) "no volley through the seal")
+    (is (= blaze (:pos (val (the-mob (ticks sim 40) :blaze)))) "and it does not close through it")
+    (is (= 20.0 (:sim/health (ticks sim 40))))))
+
+(deftest a-blaze-just-outside-two-blocks-with-a-line-still-fires
+  ;; distance 2.5: past the melee test (distance squared of 4), so the volley is not frozen
+  (let [sim (arena {} {} :normal night [{:type :blaze :pos [3.0 64.0 0.5]}])
+        at (fireball-ticks sim 80)]
+    (is (seq at) "a charge, then a fireball")
+    (is (<= 60 (first at) 63))))
+
+(deftest a-fireball-flies-0-55-a-tick-hits-the-player-s-box-and-stops-at-a-wall
+  (let [path (fn [sim from]
+               (sim/fireball-path sim from (mob/aim from [0.5 64.9 0.5] 0.5 0.5 0.5 0.5)))
+        open (arena {} {} :normal night [])
+        walled (arena wall {} :normal night [])]
+    (is (= :hit (first (path open [1.2 65.2 0.5]))) "inside the box's reach this tick")
+    (is (= :fly (first (path open [9.5 65.4 0.5]))) "nine blocks off is sixteen ticks")
+    (is (< 8.9 (first (second (path open [9.5 65.4 0.5]))) 9.0) "0.55 nearer in a tick")
+    (is (= :wall (first (path walled [5.2 65.4 0.5]))) "the wall's cell at x 4 stops it")))
+
+(deftest a-fireball-reaching-the-player-hurts-through-the-armour-and-sets-fire
+  (let [dir (mob/aim [4.5 65.4 0.5] [0.5 64.9 0.5] 0.5 0.5 0.5 0.5)
+        sim (-> (arena {} {} :normal night [])
+                (assoc-in [:sim/fireballs 90]
+                          {:pos [4.5 65.4 0.5] :dir dir :owner 91 :born 0 :kind :blaze})
+                (ticks 12))]
+    (is (= 15.0 (:sim/health sim)) "five, none armoured")
+    (is (some? (:sim/fire sim)) "alight")
+    (is (empty? (:sim/fireballs sim)) "spent")
+    (is (some #{14} (map :source-type (said sim :damage-event))) "a fireball")
+    (is (some #(= [90] (:ids %)) (said sim :remove-entities)))))
+
+(deftest a-blaze-s-aim-misses-as-often-as-the-formula-says
+  ;; triangular error of half-width 1.1485 * sqrt(distance) on x and z: at 10 blocks about one
+  ;; fireball in five passes within the box's half width and the fireball's radius (0.45) of the middle (the recordings: 24 of 212
+  ;; within 30 blocks hit, with the bot dodging)
+  (let [rolls (range 0.05 1.0 0.1)
+        from [10.5 65.4 0.5]
+        near (for [r1 rolls
+                   r2 rolls
+                   r3 rolls
+                   r4 rolls
+                   :let [[dx dy dz] (mob/aim from [0.5 64.9 0.5] r1 r2 r3 r4)
+                         t (/ 10.0 (- dx))
+                         miss (math/sqrt (+ (* t t dz dz)
+                                            (let [dh (- (+ 65.4 (* t dy)) 64.9)] (* dh dh))))]]
+               (< miss 0.45))]
+    (is (< 0.15 (/ (count (filter true? near)) (count near)) 0.35))))

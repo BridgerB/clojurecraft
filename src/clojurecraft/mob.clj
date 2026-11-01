@@ -19,8 +19,10 @@
    stops at what it cannot step up; an enderman stuck so finds a route, route), knockback, an
    arrow's flight (the damage lands when the skeleton fires), a blast breaking blocks, an
    enderman's teleports out of water, rain, daylight or a non-living hurt (its teleports at its
-   target are, toward-aim and away-aim), spiders climbing, mobs swimming, armour wearing out. The
-   armour the player wears takes its share of a mob's hit (absorbed, issue #263)."
+   target are, toward-aim and away-aim), spiders climbing, mobs swimming, armour wearing out, a
+   magma cube's other sizes (the row is the medium one: 4 health, 4 on Normal) and a hoglin's
+   swing landing anywhere from 3 to 8 (the row uses 6). The armour the player wears takes its
+   share of a mob's hit (absorbed, issue #263). A wither skeleton's wither does not (wither-tick)."
   (:require [clojure.math :as math]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.physics :as physics]
@@ -101,13 +103,52 @@
               :loot [[:ender_pearl 0 1]]}
    :blaze {:health 20.0
            :box [0.6 1.8]
-           :speed 0.0
+           :speed 0.2
+           :flies true
+           :contact 6.0
+           :reach 2.0
+           :contact-every 20
            :follow 48.0
            :shoot 5.0
-           :every 60
-           :range 16.0
+           :projectile :fireball
+           :ignites 5000
+           :volley {:charge 60 :shots 3 :between 6 :rest 100}
+           :range 48.0
            :keep 16.0
            :loot [[:blaze_rod 0 1]]}
+   ;; a fortress's own hostiles (structure spawn_overrides: wither_skeleton weight 8, magma_cube 3).
+   ;; No :weight: the overworld's night rule does not roll them (hostile-kinds). :melee is omitted
+   ;; on the magma cube because combat/hit-damage reads it and the bot's line for a magma cube
+   ;; stays unknown; its hit is :contact, which only the model strikes with.
+   :wither_skeleton {:health 20.0
+                     :box [0.7 2.4]
+                     :speed 0.137
+                     :follow 16.0
+                     :melee 8.0
+                     :every 20
+                     :reach 1.4
+                     :wither true
+                     :undead true
+                     :hostile true
+                     :loot [[:bone 0 2] [:coal 0 1]]}
+   :magma_cube {:health 4.0
+                :box [1.0 1.0]
+                :speed 0.11
+                :follow 16.0
+                :contact 4.0
+                :every 20
+                :reach 1.5
+                :hostile true
+                :loot [[:magma_cream 0 1]]}
+   :hoglin {:health 40.0
+            :box [1.4 1.4]
+            :speed 0.15
+            :follow 16.0
+            :melee 6.0
+            :every 20
+            :reach 2.0
+            :hostile true
+            :loot [[:porkchop 2 4]]}
    :ghast {:health 10.0
            :box [4.0 4.0]
            :speed 0.0
@@ -139,8 +180,12 @@
   (get blocks/entity-types kind))
 
 (def hostile-kinds
-  "The kinds the night rule spawns, with their weights, in a fixed order so a roll replays."
-  (vec (sort-by key (into {} (for [[k v] kinds :when (:hostile v)] [k (:weight v)])))))
+  "The kinds the night rule spawns, with their weights, in a fixed order so a roll replays.
+   A hostile with no :weight (a fortress's wither skeleton or magma cube, a crimson hoglin)
+   despawns and is not rolled into an overworld night."
+  (vec (sort-by key
+                (into {}
+                      (for [[k v] kinds :when (and (:hostile v) (:weight v))] [k (:weight v)])))))
 
 (def passive-kinds
   "The animals a chunk is given when it is first loaded, in a fixed order."
@@ -170,6 +215,31 @@
 (def herd 3)                          ; animals in a chunk's herd
 (def burn-every 20)                   ; game ticks between a burning undead's hurts
 (def burn-damage 1.0)
+
+(def wither-ms 10000)                 ; a wither skeleton's wither lasts ten seconds (Wither effect, every difficulty)
+(def wither-every-ms 2000)            ; one point every forty ticks
+(def wither-damage 1.0)               ; that point; armour takes none of it
+
+(defn wither-apply
+  "The wither after a wither skeleton's hit lands at now: nil becomes
+   {:until now+wither-ms :next now+wither-every-ms} (the first hurt two seconds on, so the hit's
+   own window does not swallow it; five hurts, the last as it ends), and one already on the
+   player keeps its next hurt and the later end."
+  [wither now]
+  (let [until (+ now wither-ms)]
+    (if wither (update wither :until max until) {:until until :next (+ now wither-every-ms)})))
+
+(defn wither-tick
+  "[wither' event] after one game tick at now: :hurt when a point is due and the effect has not
+   run past its end (the last point lands on :until, then it clears), :out once it has ended
+   with none due, else nil."
+  [wither now]
+  (cond (nil? wither) [nil nil]
+        (and (>= now (:next wither)) (<= (:next wither) (:until wither)))
+        (let [next (+ (:next wither) wither-every-ms)]
+          (if (> next (:until wither)) [nil :hurt] [(assoc wither :next next) :hurt]))
+        (>= now (:until wither)) [nil :out]
+        :else [wither nil]))
 
 ;; ---------------------------------------------------------------- damage
 
@@ -389,11 +459,51 @@
            :else pos))))
 
 (defn in-reach?
-  "Is a melee mob of kind at pos near enough to hit a player at target: on the plane within its
-   :reach, the feet within 1.5 in height?"
+  "Is a mob of kind at pos near enough to close on a player at target: on the plane within its
+   :reach, the feet within 1.5 in height? A flier (BlazeAttackGoal: distance squared under 4) is
+   within :reach in space, feet to feet. That is where it hovers to strike. The hit itself is
+   can-strike?: the boxes have to meet, and the line has to be clear."
   [kind pos target]
-  (and (<= (flat-distance pos target) (:reach (kinds kind) 0.0))
-       (< (abs (- (second pos) (second target))) 1.5)))
+  (let [k (kinds kind)]
+    (if (:flies k)
+      (<= (physics/distance pos target) (:reach k 0.0))
+      (and (<= (flat-distance pos target) (:reach k 0.0))
+           (< (abs (- (second pos) (second target))) 1.5)))))
+
+(defn touches?
+  "Do the hitboxes of a mob of kind at pos and a player with feet at target meet? A blaze's
+   melee is that touch (MeleeAttackGoal: the attack box meets the target's box), not a reach
+   of two across a gap or a wall."
+  [kind pos target]
+  (let [[w h] (:box (kinds kind))
+        [x y z] pos
+        [tx ty tz] target]
+    (and (<= (abs (- x tx)) (+ (/ w 2.0) physics/half-width))
+         (<= (abs (- z tz)) (+ (/ w 2.0) physics/half-width))
+         (<= y (+ ty physics/height))
+         (<= ty (+ y h)))))
+
+(defn can-strike?
+  "May a flier at pos strike a player at target: the boxes touch (touches?) and nothing solid
+   stands between its head and the player's eye (sight?). Vanilla's melee is that pair
+   (MeleeAttackGoal meets the target's box, and Sensing.hasLineOfSight). A reach of two
+   through a sealed wall is not a hit."
+  [solid? kind pos target]
+  (and (touches? kind pos target) (sight? solid? (head kind pos) (physics/eye target))))
+
+(defn fly-toward
+  "A flier at pos one tick on toward target at speed blocks a tick, in space: the straight step when
+   its body (n cells tall, free? of a cell) fits there, else the steps along each axis alone that
+   fit, else it stays. A blaze flies through the open and along walls, never through them."
+  [free? pos target speed n]
+  (let [d (physics/distance pos target)
+        k (min speed d)
+        to (if (pos? d) (mapv (fn [p t] (+ p (* k (/ (- t p) d)))) pos target) pos)
+        fits? (fn [c] (stands-in? free? (cell-of c) n))
+        axis (fn [i] (assoc pos i (nth to i)))]
+    (cond (zero? k) pos
+          (fits? to) to
+          :else (or (first (filter fits? (map axis [0 2 1]))) pos))))
 
 ;; ---------------------------------------------------------------- a route round a wall (issue #263)
 
@@ -551,6 +661,16 @@
    Nether spawns by biome; the model tells a warped forest by its floor (warped-floor?)."
   [[:enderman 1]])
 
+(def fortress-kinds
+  "The kinds a fortress's brick floor spawns, with their weights, beside the blaze spawner:
+   wither skeleton 8 and magma cube 3, the structure's spawn_overrides (fortress.json). Blazes
+   stay the spawner's. One mob a try, the model's rate, not the structure's minCount."
+  [[:wither_skeleton 8] [:magma_cube 3]])
+
+(def crimson-kinds
+  "The kind a crimson forest's floor spawns: the hoglin, weight 1. Piglins are not modelled."
+  [[:hoglin 1]])
+
 (def enderman-pack 4)                 ; endermen a warped forest's spawn tries for at once (the biome's spawner: minCount and maxCount both 4)
 (def pack-walk 6)                     ; each pack member steps nextInt(6) - nextInt(6) on x and on z from the last (NaturalSpawner.spawnCategoryForPosition)
 
@@ -565,14 +685,50 @@
   [id]
   (contains? warped-floor-states id))
 
+(defn on-floor?
+  "May a mob n cells tall spawn with its feet in cell [x y z]: floor? of the block under them
+   and those n cells free?"
+  [floor? n at free? [x y z :as cell]]
+  (let [below (at [x (dec y) z])] (boolean (and below (floor? below) (stands-in? free? cell n)))))
+
 (defn nether-spot?
   "May an enderman spawn with its feet in cell [x y z]: warped nylium under them and its tall
    cells free? Any light: the model's light is 0 everywhere, under the Nether's limit of 7
    (the dimension's monster_spawn_light_level) that vanilla's Monster.checkMonsterSpawnRules
    tests, so the shroomlit cells it would refuse are not told apart."
-  [at free? [x y z :as cell]]
-  (let [below (at [x (dec y) z])]
-    (boolean (and below (warped-floor? below) (stands-in? free? cell (tall :enderman))))))
+  [at free? cell]
+  (on-floor? warped-floor? (tall :enderman) at free? cell))
+
+(def fortress-floor-states
+  "The states of a fortress's brick: nether bricks, their fence and their stairs, the floor
+   the model tells a fortress by (its structure box is not read)."
+  (into (blocks/states-of :nether_bricks)
+        (concat (blocks/states-of :nether_brick_fence) (blocks/states-of :nether_brick_stairs))))
+
+(defn fortress-floor?
+  "Is state id a fortress's brick floor (fortress-floor-states)?"
+  [id]
+  (contains? fortress-floor-states id))
+
+(defn fortress-spot?
+  "May a wither skeleton spawn with its feet in cell: fortress brick under them and its three
+   cells free? A magma cube is shorter, so a spot that fits the skeleton fits it too."
+  [at free? cell]
+  (on-floor? fortress-floor? (tall :wither_skeleton) at free? cell))
+
+(def crimson-floor-states
+  "The states of crimson nylium: the crimson forest's floor, where the model spawns its hoglins."
+  (blocks/states-of :crimson_nylium))
+
+(defn crimson-floor?
+  "Is state id a crimson forest's floor (crimson nylium)?"
+  [id]
+  (contains? crimson-floor-states id))
+
+(defn crimson-spot?
+  "May a hoglin spawn with its feet in cell: crimson nylium under them and its cells free?"
+  [at free? cell]
+  (on-floor? crimson-floor? (tall :hoglin) at free? cell))
 
 (defn nether-spots
   "The cells of column x z from lo to hi an enderman may spawn in (nether-spot?), lowest first."
@@ -587,6 +743,54 @@
 
 ;; ---------------------------------------------------------------- spawners
 
+(def fireball
+  "A blaze's small fireball as the server flies it, from race f8b28e3's recordings (45, 1241 blazes)
+   and dodge.clj's reading of blaze-race-l: it leaves at :start-height over the blaze's feet, flies
+   straight at :speed blocks a tick (|vel| in its packet is the direction times 0.1), aimed at the
+   target's middle with a triangular error of half-width :error-scale times the square root of the
+   distance on x and z (BlazeAttackGoal: triangle(0, 2.297 * 0.5 * sqrt(distance))), hits within
+   :radius of the player's box for :damage, sets it alight, and is gone after :life ticks or on the
+   first solid cell."
+  {:speed 0.55 :vel-scale 0.1 :start-height 1.4 :error-scale 1.1485 :radius 0.15 :life 80})
+
+(defn volley-next
+  "[step' wait charged? fire?] after one step of a blaze's volley (BlazeAttackGoal's attackStep) from
+   step, for the kind's :volley {:charge :shots :between :rest} in ticks: step 1 charges (wait
+   :charge), steps 2 to 1 + shots each fire a fireball (wait :between), the next step rests (wait
+   :rest) and starts over at 0. A cycle is charge + shots x between + rest ticks, 178 for the real
+   blaze: its fastest recorded gap between volleys was 8.9 s."
+  [{:keys [charge shots between rest]} step]
+  (let [step' (inc step)]
+    (cond (= 1 step') [1 charge true false]
+          (<= step' (inc shots)) [step' between true true]
+          :else [0 rest false false])))
+
+(defn aim
+  "The unit direction of a small fireball from point from at target, a triangular error added to x
+   and z: r1 - r2 and r3 - r4 are rolls in [0, 1) twice over (each difference triangular on -1 to 1),
+   scaled by the half-width fireball's :error-scale times the square root of the distance."
+  [from target r1 r2 r3 r4]
+  (let [d (physics/distance from target)
+        h (* (:error-scale fireball) (math/sqrt d))
+        [fx fy fz] from
+        [tx ty tz] target
+        v [(- (+ tx (* h (- r1 r2))) fx) (- ty fy) (- (+ tz (* h (- r3 r4))) fz)]
+        n (math/sqrt (double (reduce + (map * v v))))]
+    (if (pos? n) (mapv #(/ % n) v) [0.0 0.0 0.0])))
+
+(defn hits-box?
+  "Is point p inside the box of a player with feet at feet (0.6 wide, 1.8 high), grown by r?"
+  [[x y z] [fx fy fz] r]
+  (and (<= (abs (- x fx)) (+ 0.3 r)) (<= (- fy r) y (+ fy 1.8 r)) (<= (abs (- z fz)) (+ 0.3 r))))
+
+(def damage-source
+  "The damage-event source-type ids the server sends for what hurts the player, by what hurt:
+   as seen in race f8b28e3's recordings (26.1.2): a small fireball 14, a mob's melee 28, burning 31,
+   standing in fire 21, a fall 10, an arrow 0. Lava is 24, read from the registry order of an
+   earlier version and the lava hits in those recordings (the registry itself is still undecoded).
+   A cause not here is generic (18), which is what a wither's tick is told as."
+  {:fireball 14 :mob_attack 28 :on_fire 31 :in_fire 21 :lava 24 :fall 10 :arrow 0})
+
 (def spawner-block
   "The state id of a spawner block: a fortress's makes blazes (every spawner the model's Nether
    holds, a dungeon's zombies being the overworld's)."
@@ -594,10 +798,14 @@
 
 (def spawner
   "A blaze spawner as vanilla 26.1.2 runs it (BaseSpawner): :wake the distance from its centre a
-   player must be within for it to run; :delay [lo hi] the ticks to the next spawn, rolled from
-   lo to hi; :batch [lo hi] the blazes one spawn tries for; :cap the blazes of its kind that may
-   stand within :near blocks of it before it makes no more; :box [x y z] the cells round it a
-   blaze is placed in; :light the greatest light level a blaze spawns in."
+   player must be within for it to run (requiredPlayerRange 16, hasNearbyAlivePlayer from the
+   block's centre; serverTick returns at once when the player is farther); :delay [lo hi] the
+   ticks to the next spawn, rolled from lo to hi; :batch [lo hi] the blazes one spawn tries for
+   (spawnCount 4); :cap the blazes of its kind already in the counting box at which the attempt
+   is skipped and the delay rolled again (maxNearbyEntities 6); :near the blocks that box is
+   grown by (spawnRange 4: AABB of the block, inflated, is [x-4, x+5] on each axis); :box
+   [x y z] the cells round it a blaze is placed in; :light the greatest light level a blaze
+   spawns in. A spawner mob is not despawned: the cap is what stops the pile-up."
   {:kind :blaze :wake 16.0 :delay [200 800] :batch [4 4] :cap 6 :near 4 :box [9 3 9] :light 11})
 
 (def interior-light
@@ -627,8 +835,10 @@
   (spawner-between (:batch spawner) r))
 
 (defn spawner-crowded?
-  "Is a blaze at mob position m within the cells a spawner at cell [x y z] counts: its :near
-   blocks each way of the cell, the cell's own span included (the box vanilla counts blazes in)?"
+  "Is a blaze at mob position m inside the box a spawner at cell [x y z] counts? Vanilla counts
+   entities of the spawned class whose box meets AABB(pos, pos+1).inflate(spawnRange): from
+   x - :near to x + :near + 1 on each axis, the cell's own span included. The feet stand in for
+   that box."
   [[x y z] [mx my mz]]
   (let [n (:near spawner)]
     (and (<= (- x n) mx (+ x n 1)) (<= (- y n) my (+ y n 1)) (<= (- z n) mz (+ z n 1)))))

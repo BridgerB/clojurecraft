@@ -510,22 +510,13 @@
 
 (defn leave-area
   "The intent that takes a bot out of an area its tunnels were blocked in (area-blocked?): a walk
-   to a trail cell regroup-distance or more away that has a route (regroup-cell), else a tunnel
-   along its own trail to its farthest cell (the way it came is open), else nil."
+   to a trail cell regroup-distance or more away that has a route (regroup-cell), else nil and the
+   row's plan goes ahead under the retry rules. It had a tunnel along the bot's own trail as a
+   fallback, and that was itself blocked: blaze-race-z14 job 5 (run 41256755663) planned it 352
+   times in 33 minutes, the failure history never asked about it (it is not the row's plan)."
   [world]
-  (let [cell (regroup-cell world)
-        feet (when (:player/pos world) (intent/feet world))
-        far (seq (filter #(>= (physics/horizontal-distance % feet) regroup-distance)
-                         (:plan/trail world [])))
-        back (when far (apply max-key #(physics/horizontal-distance % feet) far))]
-    (cond cell {:intent/kind :walk :intent/target cell :intent/for :regroup}
-          back
-          {:intent/kind :tunnel-to
-           :intent/target back
-           :intent/steps 32
-           :intent/bridge? true
-           :intent/for :regroup}
-          :else nil)))
+  (when-let [cell (regroup-cell world)]
+    {:intent/kind :walk :intent/target cell :intent/for :regroup}))
 
 (defn recover
   "A run out of attempts that is not stalled (stalled?) tries again instead of ending: the failure

@@ -396,3 +396,27 @@
   ;; among them; sweeps and retaliation at a shared spawner
   (is (= ["team add racers" "team modify racers friendlyFire false"] race/team-commands))
   (is (= "team join racers Clj_r07" (race/team-join-command "Clj_r07"))))
+
+(deftest each-slot-has-a-fortress-of-its-own-while-the-pool-allows
+  ;; race f8b28e3, lane 2: 41 Nether bots in two fortresses, 26 at one: shared blaze aggro, fire and
+  ;; spawner refills a solo player never meets
+  (let [pool
+        (reduce race/pool-add [] [[100 100] [150 120] [800 100] [100 900] [820 130] [-700 -600]])]
+    (is (= [[100 100] [800 100] [100 900] [-700 -600]] pool) "fortresses within 160 blocks are one")
+    (is (= [[100 100] [800 100] [100 900] [-700 -600] [100 100]]
+           (map #(race/fortress-for pool %) (range 5)))
+        "slot i has fortress i mod n")
+    (is (= 1 (race/per-fortress 10 10)) "ten fortresses, ten slots: one bot each")
+    (is (= 2 (race/per-fortress 10 5)))
+    (is (= 4 (race/per-fortress 10 3)) "a pool of three: four bots on one")
+    (is (= 10 (race/per-fortress 10 0)) "no pool: as before"))
+  (let [cs (take 9 (race/search-centres [10 20]))]
+    (is (= [10 20] (first cs)) "the landing's own first")
+    (is (= 9 (count (set cs))) "then rings of eight points, all different")
+    (is (= #{600} (set (map (fn [[x z]] (max (abs (- x 10)) (abs (- z 20)))) (rest cs))))
+        "the first ring is race/pool-step off")))
+
+(deftest the-floor-round-a-pad-may-slope
+  ;; race f8b28e3, lane 2: 525 candidates answered :no-ground and 15 of 16 pads fell back to y 72
+  (is (= 3 race/ground-drop) "a floor three lower is a slope, a deeper drop is a ledge")
+  (is (< race/ground-drop 8)))

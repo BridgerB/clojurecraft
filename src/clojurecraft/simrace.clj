@@ -178,37 +178,56 @@
     (boolean (and floor feet head (blocks/solid? floor) (blocks/air? feet) (blocks/air? head)))))
 
 (defn fortress-start
-  "Where a run starts at a fortress in the decoded columns of a captured Nether: the cell where the
-   spawner nearest the landing's Nether coordinates ([x z y] landing, an eighth of the overworld's,
-   as the server's locate reads them) has ground to stand on, at the farthest of fortress-rings
-   from it, 8 vertically either way. {:spawn [x y z] :spawner [x y z]}, or nil when the Nether
-   holds no spawner or no ground round it."
-  [decoded [lx lz _]]
-  (let [spawners (vec (chunk/find-blocks decoded #(= % mob/spawner-block)))
-        nx (quot lx 8)
-        nz (quot lz 8)]
-    (when (seq spawners)
-      (let [[sx sy sz] (apply min-key (fn [[x _ z]] (+ (abs (- x nx)) (abs (- z nz)))) spawners)
-            ring (fn [r]
-                   (for [dx (range (- r) (inc r))
-                         dz (range (- r) (inc r))
-                         :when (= r (max (abs dx) (abs dz)))]
-                     [(+ sx dx) (+ sz dz)]))
-            cell (some (fn [[x z]]
-                         (some (fn [y] (when (standable-cell? decoded [x y z]) [x y z]))
-                               (map #(+ sy %) [0 1 -1 2 -2 3 -3 4 -4 5 -5 6 -6 7 -7 8 -8])))
-                       (mapcat ring fortress-rings))]
-        (when cell
-          {:spawn (let [[x y z] cell] [(+ x 0.5) (double y) (+ z 0.5)]) :spawner [sx sy sz]})))))
+  "Where a run starts at a fortress in the decoded columns of a captured Nether: ground at the
+   farthest of fortress-rings from a spawner, 8 vertically either way. The spawners are ordered by
+   their distance to the landing's Nether coordinates ([x z y] landing, an eighth of the overworld's,
+   as the server's locate reads them); salt picks the (mod salt count)th, 0 the nearest, and turns the
+   ring's cells (salt times 7919) round, so the worlds of one set, one Nether, do not all start
+   alike. {:spawn [x y z] :spawner [x y z]}, or nil when the Nether holds no spawner or no ground
+   round the one picked."
+  ([decoded landing] (fortress-start decoded landing 0))
+  ([decoded [lx lz _] salt]
+   (let [spawners (vec (chunk/find-blocks decoded #(= % mob/spawner-block)))
+         nx (quot lx 8)
+         nz (quot lz 8)
+         near (fn [[x y z]] [(+ (abs (- x nx)) (abs (- z nz))) x y z])]
+     (when (seq spawners)
+       (let [[sx sy sz] (nth (sort-by near spawners) (mod salt (count spawners)))
+             ring (fn [r]
+                    (let [cells (vec (for [dx (range (- r) (inc r))
+                                           dz (range (- r) (inc r))
+                                           :when (= r (max (abs dx) (abs dz)))]
+                                       [(+ sx dx) (+ sz dz)]))
+                          turn (mod (* salt 7919) (count cells))]
+                      (concat (subvec cells turn) (subvec cells 0 turn))))
+             cell (some (fn [[x z]]
+                          (some (fn [y] (when (standable-cell? decoded [x y z]) [x y z]))
+                                (map #(+ sy %) [0 1 -1 2 -2 3 -3 4 -4 5 -5 6 -6 7 -7 8 -8])))
+                        (mapcat ring fortress-rings))]
+         (when cell
+           {:spawn (let [[x y z] cell] [(+ x 0.5) (double y) (+ z 0.5)]) :spawner [sx sy sz]}))))))
+
+(defn world-number
+  "The number of world w in its set (cache/sim-worlds/R1/7.edn.gz is 7), 0 for a world with no
+   file or a name that is no number."
+  [w]
+  (or (some-> (:capture/file w)
+              io/file
+              .getName
+              (str/split #"\.")
+              first
+              parse-long)
+      0))
 
 (defn with-fortress
-  "World w with a start at its set's fortress (:capture/fortress {:spawn :spawner :kit}) when it
-   has a captured Nether (:capture/nether) with one (fortress-start) and kit, a map of items;
-   otherwise w as it is, which a from-fortress race then leaves out (fortress-worlds)."
+  "World w with a start at a fortress of its set's Nether (:capture/fortress {:spawn :spawner
+   :inventory}) when it has a captured Nether (:capture/nether) with one (fortress-start, salted by
+   the world's number in its set: the worlds of a set start at different spawners and sides) and
+   kit, a map of items; otherwise w as it is, which a from-fortress race then leaves out."
   [w kit]
   (if-let [start (some-> (:capture/nether w)
                          :decoded
-                         (fortress-start (:capture/landing w)))]
+                         (fortress-start (:capture/landing w) (world-number w)))]
     (assoc w :capture/fortress (assoc start :inventory (kit->inventory kit)))
     w))
 
@@ -246,7 +265,9 @@
    :piglin_brute :piglin
    :hoglin :hoglin
    :wither_skeleton :wither
-   :ghast :ghast})
+   :ghast :ghast
+   :on_fire :fire
+   :lava :lava})
 
 (defn stopped?
   "Does a run stop at world: the plan done or failed, or, for a run that started at the fortress
@@ -904,7 +925,13 @@
                  files)
         ws (if (= "fortress" from)
              (let [with (filterv :capture/fortress ws)]
-               (cli/log "from fortress:" (count with) "of" (count ws) "worlds have one")
+               (cli/log "from fortress:"
+                        (count with)
+                        "of"
+                        (count ws)
+                        "worlds have one,"
+                        (count (distinct (map #(get-in % [:capture/fortress :spawn]) with)))
+                        "distinct starts")
                with)
              ws)
         deadline (when budget (+ (System/currentTimeMillis) (* 60000 (Long/parseLong budget))))

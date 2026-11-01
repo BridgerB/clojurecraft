@@ -284,6 +284,16 @@
                (when-let [pos (:player/pos world)]
                  (physics/touching-water? (terrain/fluid-fn world) pos)))))
 
+(defn chain-pending?
+  "Is the intent that just ended a link of a chain whose next link has not begun: a walk to a
+   block (:intent/pickup?) before its dig, or a dig before the collect of its drop? A forage
+   between them leaves the drop lying: the iron kit gym's gravel, dug and left for the search for
+   animals, and the bot went down the mine for more gravel."
+  [world]
+  (let [{:intent/keys [kind status pickup? for]} (:plan/last world)]
+    (boolean
+     (and (= :done status) (not= :hunt for) (or (= :dig kind) (and (= :walk kind) pickup?))))))
+
 (defn foraging?
   "Does the bot go on looking for animals: provisioning?, the phase's forage-budget not past since its first leg, no look
    for a route lately that found none (:forage/retry-at), no failed intent in a row
@@ -294,7 +304,9 @@
    already begun (an escape is finished: the box leaves the water before the swim is done, and
    a forage there preempted it), not afloat? (in water the swim out comes first), the feet under
    the open sky (animals live on the surface: a bot deep in its mine has none to find), health
-   at least forage-health and no hostile within forage-wary. Issue #501: bots went into the Nether with no food because
+   at least forage-health and no hostile within forage-wary, no chain between its links (chain-pending?), and no smelt running: the batch in the
+   furnace is lost to the planner, which plans from the inventory (the iron kit gym, once four
+   raw iron were loaded together, left the furnace at 6 s of 40 and mined for more). Issue #501: bots went into the Nether with no food because
    nothing looked for animals past the 48 blocks the server shows, and herds are about one chunk
    in ten."
   [world]
@@ -303,7 +315,9 @@
                   (or (nil? retry-at) (>= (:time/now world 0) retry-at))
                   (zero? (:plan/attempts world 0))
                   (zero? (:plan/unwalkable world 0))
-                  (not (#{:build :dig :swim-out :flee} (:intent/kind (:plan/intent world))))
+                  (not (#{:build :dig :swim-out :flee :smelt :collect :place}
+                        (:intent/kind (:plan/intent world))))
+                  (not (chain-pending? world))
                   (not (afloat? world))
                   (>= (:player/health world 20.0) forage-health)
                   (nil? (entity/nearest (entity/hostiles world) (:player/pos world) forage-wary))

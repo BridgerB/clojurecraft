@@ -218,9 +218,14 @@
 (s/def :forage/life nat-int?)
 (s/def :hunt/forage
   (s/keys :req [:forage/since :forage/leg] :opt [:forage/retry-at :forage/phase :forage/life]))
+(s/def :batch/smelt keyword?)
+(s/def :batch/makes pos-int?)
+(s/def :batch/at int?)
+(s/def :furnace/batch (s/keys :req [:batch/smelt :batch/makes :batch/at]))
 (s/def :trail/target (s/coll-of number? :kind vector? :count 3))
 (s/def :trail/cells (s/coll-of ::block-pos :kind vector?))
 (s/def :trail/dead (s/coll-of ::block-pos :kind set?))
+(s/def :trail/retreats nat-int?)
 (s/def :trail/others (s/coll-of (s/tuple ::block-pos :trail/dead) :kind vector?))
 (s/def :fortress/trail (s/keys :req [:trail/target :trail/cells :trail/dead]))
 
@@ -803,6 +808,9 @@
 (s/def :sim.hurt/at int?)
 (s/def :sim.hurt/last number?)
 (s/def :sim/hurt (s/keys :req-un [:sim.hurt/at :sim.hurt/last])) ; the last hurt: when, how hard
+(s/def :sim.wither/until int?)
+(s/def :sim.wither/next int?)
+(s/def :sim/wither (s/keys :req-un [:sim.wither/until :sim.wither/next])) ; a wither skeleton's wither: when it ends, when it next hurts
 ;; mobs in the model (issue #260): each one's kind, place, health and clocks (mob.clj, sim/tick-mobs)
 (s/def :sim.mob/type (set (keys mob/kinds)))
 (s/def :sim.mob/pos ::vec3)

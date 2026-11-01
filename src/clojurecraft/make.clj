@@ -430,6 +430,39 @@
              (window/tossable world (window/view world :inventory)))
     {:intent/kind :toss}))
 
+(declare at-container)
+
+(def batch-ttl "ms a batch left in a furnace is still gone back to." 1800000)
+
+(defn collect-batch
+  "The intent that goes back to a furnace a smelt left loaded (:furnace/batch, set by the smelt's
+   :load stage): open the remembered furnace within reach, or walk to it; once the window is open
+   a :smelt of the batch's recipe empties the furnace into the inventory (its :settle) and loads
+   whatever raw input is held again. nil with no batch, one older than batch-ttl, no furnace
+   remembered within table-search, or a smelt already running. The planner counts the inventory
+   only: a smelt interrupted after the load (a forage, a defence, a flee) had its iron in the
+   furnace and the inventory showed none, so the iron kit gym mined for more (issue #686)."
+  [world]
+  (let [{:batch/keys [smelt at]} (:furnace/batch world)]
+    (when (and smelt
+               (not= :smelt (:intent/kind (:plan/intent world)))
+               (< (- (:time/now world 0) at) batch-ttl)
+               (near world :furnace))
+      (at-container world
+                    :furnace
+                    :no-furnace
+                    {:intent/kind :smelt :intent/smelt smelt :intent/count 1}))))
+
+(defmulti vein
+  "The next intent of taking the rest of an ore vein in sight before the planner moves on, or nil
+   (clojurecraft.vein, which needs the mine and the armour and so cannot be required here)."
+  {:arglists '([world])}
+  (constantly :vein)
+  :default
+  :none)
+
+(defmethod vein :none [_] nil)
+
 (defn decide
   "The next intent toward goal: continue a log chain or a table pick-up in flight, else take the
    table along (take-table), make room (make-room) or act on the row the needs planner reaches
@@ -437,6 +470,8 @@
   [world goal table]
   (or (wood/continue-gather world)
       (intent/chain-next (:plan/last world) :take-table table-drops {})
+      (collect-batch world)
+      (vein world)
       (let [row (next-row world goal table)]
         (cond (nil? row) nil
               (= :stuck row) {:plan/wait :stuck}

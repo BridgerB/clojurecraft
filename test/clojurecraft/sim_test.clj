@@ -17,6 +17,7 @@
             [clojurecraft.fixtures :as fx]
             [clojurecraft.fortress :as fortress]
             [clojurecraft.game :as game]
+            [clojurecraft.hunt :as hunt]
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
             [clojurecraft.main :as main]
@@ -2658,6 +2659,36 @@
       ((:effects tap) (subvec (:bot/effects w') (count (:bot/effects w))))
       w')))
 
+(deftest ^:eftest/synchronized an-interrupted-smelt-is-gone-back-to-not-mined-for-again
+  ;; issue #686 (PR #689): the iron kit gym with the forage let to cut into a smelt
+  ;; (hunt/foraging? true once the cook has begun, as before the guard of #673): four raw iron
+  ;; are left in the furnace and the inventory shows none. The planner goes back for them.
+  ;; with-redefs is JVM-global. eftest runs the suite in parallel, so this mark makes
+  ;; runner/run-split run the test alone, before the rest, and the redef cannot reach the
+  ;; iron-kit replay beside it.
+  (let [cut (atom false)
+        foraging? hunt/foraging?
+        [w sim] (with-redefs [hunt/foraging? (fn [w]
+                                               (if (and (not @cut)
+                                                        (= :smelt (:intent/kind (:plan/intent w)))
+                                                        (= :cook (:intent/stage (:plan/intent w))))
+                                                 (reset! cut true)
+                                                 (foraging? w)))]
+                  (sim/run step
+                           (game/init fx/opts)
+                           (sim/init {:column (world/column-bytes kit-column)
+                                      :spawn [8.5 64.0 8.5]
+                                      :inventory kit-start
+                                      :seed 4})
+                           #(or (plan/done? %) (plan/failed? %))
+                           900000
+                           {:event/kind :go :go/goals [:iron-kit]}))]
+    (is @cut "the smelt was cut once")
+    (is (= :done (:plan/status w)) (pr-str (plan/summary w)))
+    (is (= 1 (:water_bucket (held w))))
+    (is (= 1 (:flint_and_steel (held w))))
+    (is (empty? (:sim/violations sim)))))
+
 (deftest the-iron-kit-from-a-stone-pickaxe-and-its-recording-replays
   (let [path (str (System/getProperty "java.io.tmpdir") "/clojurecraft-iron-kit.edn")
         tap (record/tap! path)
@@ -3455,6 +3486,7 @@
                                     :dimension dimension/nether
                                     :difficulty :easy
                                     :food 20
+                                    :still-blazes? true ; the bot's own cover and fight are pinned here, not the blazes' flight (#262)
                                     :inventory {[:hotbar 0] {:item (item :iron_sword) :count 1}}
                                     :mobs [{:type :blaze :pos [14.5 65.0 6.5]}
                                            {:type :blaze :pos [14.5 65.0 7.5]}
@@ -3485,6 +3517,7 @@
                                     :dimension dimension/nether
                                     :difficulty :easy
                                     :food 20
+                                    :still-blazes? true ; the bot's own cover and fight are pinned here, not the blazes' flight (#262)
                                     :inventory {[:hotbar 0] {:item (item :iron_sword) :count 1}}
                                     :mobs [{:type :blaze :pos [11.5 65.0 5.5]}
                                            {:type :blaze :pos [11.5 65.0 6.5]}
@@ -3512,21 +3545,22 @@
   ;; its cover
   (let [[w sim] (sim/run step
                          (game/init fx/opts)
-                         (sim/init {:column (world/column-bytes (assoc nether-wall
-                                                                       blaze-spawner-cell
-                                                                       mob/spawner-block)
-                                                                dimension/nether)
-                                    :spawn [8.5 64.0 8.5]
-                                    :dimension dimension/nether
-                                    :difficulty :easy
-                                    :food 20
-                                    :seed 3
-                                    :inventory {[:hotbar 0] {:item (item :iron_sword) :count 1}
-                                                [:hotbar 1] {:item (item :blaze_rod) :count 6}
-                                                [:armour 0] {:item (item :iron_helmet) :count 1}
-                                                [:armour 1] {:item (item :iron_chestplate) :count 1}
-                                                [:armour 2] {:item (item :iron_leggings) :count 1}
-                                                [:armour 3] {:item (item :iron_boots) :count 1}}})
+                         (sim/init
+                          {:column (world/column-bytes
+                                    (assoc nether-wall blaze-spawner-cell mob/spawner-block)
+                                    dimension/nether)
+                           :spawn [8.5 64.0 8.5]
+                           :dimension dimension/nether
+                           :difficulty :easy
+                           :food 20
+                           :seed 3
+                           :still-blazes? true ; the bot's own cover and fight are pinned here, not the blazes' flight (#262)
+                           :inventory {[:hotbar 0] {:item (item :iron_sword) :count 1}
+                                       [:hotbar 1] {:item (item :blaze_rod) :count 6}
+                                       [:armour 0] {:item (item :iron_helmet) :count 1}
+                                       [:armour 1] {:item (item :iron_chestplate) :count 1}
+                                       [:armour 2] {:item (item :iron_leggings) :count 1}
+                                       [:armour 3] {:item (item :iron_boots) :count 1}}})
                          #(or (plan/done? %) (plan/failed? %) (pos? (:stats/deaths % 0)))
                          240000
                          {:event/kind :go :go/goals [:blaze-rods]})]
