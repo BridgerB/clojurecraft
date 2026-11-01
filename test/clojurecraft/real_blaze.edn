@@ -25,10 +25,16 @@
  ;; fireballs launched within 12 blocks of the bot over fireball hits on it (a floor: the bot sat
  ;; in pockets for most of them) and dodge.clj's 24 of 212 within 30 blocks
  :hit-rate {:within-12 0.043 :within-30-dodging 0.113}
+ ;; blazes within 16 of the bot at a tick the bot takes damage. Corrected count from the same
+ ;; recordings: median about 7, p90 15. One spawner's cap is 6, so a fight at one spawner lands
+ ;; near the median; dozens is the pile-up the cap is there to stop.
+ :crowd {:within-16-median 7 :within-16-p90 15}
  :tolerance {:volley-cycle-s 0.2
              :shot-gap-s 0.05
              :per-hurt 0.05
              :hit-rate-open-min 0.043
              :hit-rate-open-max 0.40
              :burn-to-fireball-min 0.8
-             :burn-to-fireball-max 2.2}}
+             :burn-to-fireball-max 2.2
+             :crowd-median-min 3
+             :crowd-median-max 12}}

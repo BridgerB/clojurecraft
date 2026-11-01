@@ -798,10 +798,14 @@
 
 (def spawner
   "A blaze spawner as vanilla 26.1.2 runs it (BaseSpawner): :wake the distance from its centre a
-   player must be within for it to run; :delay [lo hi] the ticks to the next spawn, rolled from
-   lo to hi; :batch [lo hi] the blazes one spawn tries for; :cap the blazes of its kind that may
-   stand within :near blocks of it before it makes no more; :box [x y z] the cells round it a
-   blaze is placed in; :light the greatest light level a blaze spawns in."
+   player must be within for it to run (requiredPlayerRange 16, hasNearbyAlivePlayer from the
+   block's centre; serverTick returns at once when the player is farther); :delay [lo hi] the
+   ticks to the next spawn, rolled from lo to hi; :batch [lo hi] the blazes one spawn tries for
+   (spawnCount 4); :cap the blazes of its kind already in the counting box at which the attempt
+   is skipped and the delay rolled again (maxNearbyEntities 6); :near the blocks that box is
+   grown by (spawnRange 4: AABB of the block, inflated, is [x-4, x+5] on each axis); :box
+   [x y z] the cells round it a blaze is placed in; :light the greatest light level a blaze
+   spawns in. A spawner mob is not despawned: the cap is what stops the pile-up."
   {:kind :blaze :wake 16.0 :delay [200 800] :batch [4 4] :cap 6 :near 4 :box [9 3 9] :light 11})
 
 (def interior-light
@@ -831,8 +835,10 @@
   (spawner-between (:batch spawner) r))
 
 (defn spawner-crowded?
-  "Is a blaze at mob position m within the cells a spawner at cell [x y z] counts: its :near
-   blocks each way of the cell, the cell's own span included (the box vanilla counts blazes in)?"
+  "Is a blaze at mob position m inside the box a spawner at cell [x y z] counts? Vanilla counts
+   entities of the spawned class whose box meets AABB(pos, pos+1).inflate(spawnRange): from
+   x - :near to x + :near + 1 on each axis, the cell's own span included. The feet stand in for
+   that box."
   [[x y z] [mx my mz]]
   (let [n (:near spawner)]
     (and (<= (- x n) mx (+ x n 1)) (<= (- y n) my (+ y n 1)) (<= (- z n) mz (+ z n 1)))))

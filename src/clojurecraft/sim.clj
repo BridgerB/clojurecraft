@@ -2366,6 +2366,8 @@
 
 (def sight-ms 250)                     ; a flier's line to the player is looked at this often (five ticks), not every tick: forty blocks of cells a look
 
+(def lost-sight 5)                     ; ticks BlazeAttackGoal still moves after the line goes (lastSeen < 5). Inside two blocks with no line it returns at once. A blaze that has never seen the player has no target (NearestAttackableTargetGoal's mustSee) and does not use these ticks.
+
 (defn sees-player
   "[sim' sees?]: does mob eid have a clear line from its head to the player's eye? Looked at when
    the last look is sight-ms old or older (kept in the mob, :sight [ms sees?]), so a blaze that
@@ -2382,25 +2384,38 @@
             [(assoc-in sim [:sim/mobs eid :sight] [now ok?]) ok?]))))
 
 (defn fly
-  "Mob eid, a flier (a blaze), a tick on toward the player as BlazeAttackGoal moves it: it stays
-   where it hovers while the player is in its follow range with a clear line from its head to the
-   player's eye (it shoots from there, shoot), else it flies at the player (mob/fly-toward, a
-   block above the player's feet), and in reach it stays to strike."
+  "Mob eid, a flier (a blaze), one tick of BlazeAttackGoal's movement (26.1.2
+   Blaze$BlazeAttackGoal.tick). Distance squared under 4 (inside :reach) and no line: it stays,
+   and it does not shoot. Inside :reach with a line: it closes on the feet and strike melees.
+   At :reach or beyond, inside follow, with a line: it stays and volley shoots. With no line,
+   and only after it has seen the player, it keeps closing for lost-sight ticks, then stays.
+   It does not fly at a player it has never seen, so a sealed pocket does not pull the
+   spawner's blazes out of the cap box."
   [sim eid]
-  (let [{:keys [type pos]} (get-in sim [:sim/mobs eid])
+  (let [{:keys [type pos seen? lost]} (get-in sim [:sim/mobs eid])
         k (mob/kinds type)
-        player (:sim/player-pos sim)
-        [px py pz] player]
-    (cond (or (:sim/still-blazes? sim) (mob/in-reach? type pos player)) sim
+        player (:sim/player-pos sim)]
+    (cond (:sim/still-blazes? sim) sim
           :else
-          (let [[sim sees?] (sees-player sim eid)]
-            (cond
-              (and sees? (<= (physics/distance pos player) (:follow k))) sim
-              :else
-              (move-mob
-               sim
-               eid
-               (mob/fly-toward (free-fn sim) pos [px (inc py) pz] (:speed k) (mob/tall type))))))))
+          (let [[sim sees?] (sees-player sim eid)
+                d (physics/distance pos player)
+                close? (< d (:reach k))
+                seen?' (boolean (or seen? sees?))
+                lost' (cond sees? 0
+                            seen?' (inc (or lost 0))
+                            :else lost-sight)
+                sim (-> sim
+                        (assoc-in [:sim/mobs eid :seen?] seen?')
+                        (assoc-in [:sim/mobs eid :lost] lost'))
+                toward #(move-mob
+                         %
+                         eid
+                         (mob/fly-toward (free-fn %) pos player (:speed k) (mob/tall type)))]
+            (cond (and close? (not sees?)) sim
+                  (and sees? close?) (toward sim)
+                  (and sees? (<= d (:follow k))) sim
+                  (and seen?' (< lost' lost-sight)) (toward sim)
+                  :else sim)))))
 
 (defn walk
   "Mob eid a tick on toward the player (mob/step-toward), stopping where its kind fights from: a
@@ -2626,10 +2641,12 @@
                :data eid}))))
 
 (defn volley
-  "Blaze eid's turn to shoot, as BlazeAttackGoal runs it: with the player farther than its reach,
-   within its range and a clear line from its head to the player's eye, and its timer due, one step
-   of its volley (mob/volley-next): the charge flag raised for the charge, a fireball at each of the
-   shots after it, the flag lowered and the rest. Off the line nothing moves on; the timer waits."
+  "Blaze eid's turn to shoot, as BlazeAttackGoal runs it: at least :reach out (distance squared
+   of 4; inside that, seen, it melees, and with no line it stays), within its range and a clear
+   line from its head to the player's eye, and its timer due, one step of its volley
+   (mob/volley-next): the charge flag raised for the charge, a fireball at each of the shots
+   after it, the flag lowered and the rest. Off the line nothing moves on; the timer waits. A
+   blaze within two blocks of a sealed bot has no line, so it does not fire."
   [sim eid]
   (let [{:keys [type pos shot-step shot-at]} (get-in sim [:sim/mobs eid])
         k (mob/kinds type)
@@ -2637,7 +2654,7 @@
         eye (physics/eye player)
         now (:sim/now sim)
         near? (and (>= now (or shot-at 0))
-                   (not (mob/in-reach? type pos player))
+                   (>= (physics/distance pos player) (:reach k))
                    (<= (physics/distance (mob/head type pos) eye) (:range k)))
         [sim sees?] (if near? (sees-player sim eid) [sim false])]
     (cond (not (and near? sees?)) sim
@@ -2931,8 +2948,11 @@
 
 (defn spawn-batch
   "The model after the spawner at cell sp spawns: a batch rolled (mob/spawner-batch), cut to the
-   room it has (mob/spawner-room), each try five rolls of the mobs' stream, each blaze placed
-   where one fits (mob/spawner-spawns)."
+   room it has (mob/spawner-room). None when six of its kind already stand in the counting box:
+   BaseSpawner.serverTick counts that class in AABB(pos, pos+1).inflate(spawnRange) and, at
+   maxNearbyEntities (6), calls delay and returns, skipping the rest of the attempt. Each try
+   takes five rolls of the mobs' stream, and a blaze is placed where one fits
+   (mob/spawner-spawns). The caller rolls the next delay either way."
   [sim sp]
   (let [[sim rb] (mob-roll sim)
         tries (min (mob/spawner-batch rb) (mob/spawner-room (spawner-nearby sim sp)))

@@ -663,6 +663,26 @@
     (is (empty? (blazes-of sim)))
     (is (not (contains? (:sim/spawners sim) sp)))))
 
+(def cap-wall
+  "fortress-floor with cobble across the chunk at z 6, from y 64 to 66. A player at z 4.5 has
+   no line to a blaze in the spawn box (z 8 to 16), and is still within the spawner's 16."
+  (into fortress-floor
+        (for [x (range 16) y (range 64 67)] [[x y 6] (blocks/default-state :cobblestone)])))
+
+(deftest a-sealed-player-does-not-pull-blazes-out-of-the-cap
+  ;; the old flight chased with no line until it was in reach, left the counting box, and the
+  ;; spawner filled the box again. Thirty seconds of that is dozens. The cap holds them.
+  (let [sim (-> (sim/init {:column (world/column-bytes cap-wall dimension/nether)
+                           :spawn [8.5 64.0 4.5]
+                           :dimension dimension/nether
+                           :difficulty :normal
+                           :food 20})
+                (assoc :sim/phase :play :sim/player-pos [8.5 64.0 4.5] :sim/on-ground? true)
+                (ticks 1800))
+        bs (vals (blazes-of sim))]
+    (is (<= 1 (count bs) 6) "awake, and never past maxNearbyEntities")
+    (is (every? #(mob/spawner-crowded? sp (:pos %)) bs) "still in the counting box")))
+
 ;; ---------------------------------------------------------------- a blaze flies (issue #262)
 ;; real: race f8b28e3 lane 2 (45 recordings): blazes hover 10.8 blocks from the bot (median) and
 ;; strike at melee range for 6 (3.36 through the armour the bot wore: 14 points)
@@ -676,11 +696,22 @@
         later (ticks sim 60)]
     (is (= [9.5 65.0 0.5] (:pos (val (the-mob later :blaze)))))))
 
-(deftest a-blaze-with-a-wall-between-flies-to-the-wall-and-no-further
+(deftest a-blaze-that-has-never-seen-the-player-stays
+  ;; NearestAttackableTargetGoal is constructed with mustSee, so no line means no target and
+  ;; BlazeAttackGoal does not run. Flying at the wall is what emptied the spawner's cap box.
   (let [sim (arena wall {} :normal night [{:type :blaze :pos [9.5 65.0 0.5]}])
-        later (ticks sim 100)
-        [x _ _] (:pos (val (the-mob later :blaze)))]
-    (is (< 4.9 x 5.7) "up to the wall's far face (x 5), never through it")))
+        later (ticks sim 100)]
+    (is (= [9.5 65.0 0.5] (:pos (val (the-mob later :blaze)))))))
+
+(deftest a-blaze-that-loses-the-line-closes-for-five-ticks-and-then-stays
+  (let [sim (arena wall {} :normal night [{:type :blaze :pos [9.5 65.0 0.5]}])
+        eid (key (the-mob sim :blaze))
+        going (ticks (assoc-in sim [:sim/mobs eid :seen?] true) 4)
+        stopped (ticks going 20)
+        x (fn [s] (first (:pos (val (the-mob s :blaze)))))]
+    (is (< (x going) 9.5) "lastSeen under 5: it still moves")
+    (is (> (x going) 8.0) "four ticks at 0.2, not the whole gap")
+    (is (= (x going) (x stopped)) "then it stays, short of the wall")))
 
 (deftest a-blaze-in-reach-strikes-for-six-every-second
   (let [sim (arena {} {} :normal night [{:type :blaze :pos [1.0 64.0 0.5]}])
@@ -768,6 +799,25 @@
 (deftest a-blaze-without-a-line-does-not-charge
   (is (empty? (fireball-ticks (arena wall {} :normal night [{:type :blaze :pos [9.5 65.0 0.5]}])
                               100))))
+
+(deftest a-blaze-within-two-of-a-sealed-bot-does-not-fire
+  ;; 26.1.2 Blaze$BlazeAttackGoal.tick: distanceSquared < 4 and no line of sight returns before
+  ;; any shot. The volley runs only at distanceSquared >= 4 with a line. Feet [4.5 64 4.5],
+  ;; blaze [6.2 64 4.5]: 1.7 blocks, cobble at x 5 between them.
+  (let [feet [4.5 64.0 4.5]
+        blaze [6.2 64.0 4.5]
+        sim (in-pocket feet [{:type :blaze :pos blaze}])]
+    (is (< (physics/distance blaze feet) 2.0))
+    (is (empty? (fireball-ticks sim 200)) "no volley through the seal")
+    (is (= blaze (:pos (val (the-mob (ticks sim 40) :blaze)))) "and it does not close through it")
+    (is (= 20.0 (:sim/health (ticks sim 40))))))
+
+(deftest a-blaze-just-outside-two-blocks-with-a-line-still-fires
+  ;; distance 2.5: past the melee test (distance squared of 4), so the volley is not frozen
+  (let [sim (arena {} {} :normal night [{:type :blaze :pos [3.0 64.0 0.5]}])
+        at (fireball-ticks sim 80)]
+    (is (seq at) "a charge, then a fireball")
+    (is (<= 60 (first at) 63))))
 
 (deftest a-fireball-flies-0-55-a-tick-hits-the-player-s-box-and-stops-at-a-wall
   (let [path (fn [sim from]
