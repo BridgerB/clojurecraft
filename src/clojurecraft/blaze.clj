@@ -1403,6 +1403,14 @@
                     (nil? (reach-blaze world))
                     (<= (- (:time/now world 0) (:player/struck-at world -1000000)) press-ms)))))
 
+(defn struck-lately?
+  "Was the bot struck within press-ms, whether or not a blaze is in sight to press it (pressed? wants a
+   watcher)? An open pocket that is being hit is to be sealed. simfort-peek3 (41256795298): a pocket open
+   by two cells held 9 s with :pressed false, :watchers 0 and the nearest blaze 11 blocks off, hp 8 to 1.9,
+   :hold :pocket-hold, never :seal."
+  [world]
+  (<= (- (:time/now world 0) (:player/struck-at world -1000000)) press-ms))
+
 (def full-health 20.0) ; the health a hold in the pocket stays until when a rest can heal
 (def low-health 12.0)  ; under it the bot goes to its pocket to heal, whoever is in sight
 (def reignite-ms 30000) ; a second ignition within this of the first sends it too
@@ -1457,7 +1465,8 @@
                          (or (heals? world) (>= (:player/health world 20.0) low-health)))
                 {:intent/kind :unseal}))
             (and (reach-blaze world) (>= (:player/health world 20.0) low-health)) nil
-            (and (or (pressed? world) (reach-blaze world)) (pocket/can-seal? world site))
+            (and (or (pressed? world) (reach-blaze world) (struck-lately? world))
+                 (pocket/can-seal? world site))
             {:intent/kind :seal}
             (reach-blaze world)
             (let [[_ e] (reach-blaze world) c (combat/cover world e)] (when (:intent/kind c) c))

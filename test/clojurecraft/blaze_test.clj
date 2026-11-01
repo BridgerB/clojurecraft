@@ -2342,6 +2342,23 @@
     (is (not= :pocket (:intent/kind (next-intent shut))))
     (is (not= :unseal (:intent/kind (next-intent shut))))))
 
+(deftest an-open-pocket-that-is-being-hit-is-sealed-though-no-blaze-is-in-sight
+  ;; simfort-peek3 41256795298: 9 s in an open pocket, hp 8 to 1.9, no watcher, the nearest blaze 11 off
+  (let [w (-> (standing {})
+              (assoc :world/chunks {[0 0] (world/column pocket-walls)}
+                     :pocket/site (assoc pocket-site :pocket/placed [])
+                     :time/now 100000
+                     :player/health 12.0)
+              (assoc-in [:player/inventory 9] (item :cobblestone 40))
+              (assoc-in [:player/inventory 10] (item :iron_pickaxe 1)))]
+    (is (not (pocket/sealed? w (:pocket/site w))))
+    (is (pocket/can-seal? w (:pocket/site w)))
+    (is (false? (blaze/pressed? w)) "no watcher, not burning: not pressed")
+    (is (= :seal (:intent/kind (blaze/hold-intent (assoc w :player/struck-at 98000))))
+        "hit 2 s ago: sealed")
+    (is (not= :seal (:intent/kind (blaze/hold-intent (assoc w :player/struck-at 50000))))
+        "not hit lately")))
+
 (deftest a-volley-in-sight-on-a-sortie-is-not-a-refuge
   ;; blaze-race-z12 job 4: 69 min, 0 real kills; the sortie stepped out of the pocket, 3 to 9 blazes watched it,
   ;; outnumbered? made the refuge win, back to camp 0.7 s later, 31 minutes
