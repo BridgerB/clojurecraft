@@ -1221,12 +1221,22 @@
                   (awake-from? sp c)
                   (or (not see?) (sees-spawner? world sp c)))))))
 
+(def pocket-churn-starts 6) ; :pocket intents begun within pocket-churn-ms after which none is chosen
+(def pocket-churn-ms 5000)
+
+(defn pocket-churning?
+  "Have pocket-churn-starts :pocket intents begun within pocket-churn-ms (the story, not the
+   intent: each one ends at once and the next is chosen)? Blaze-race-z11 job 3: 61 starts in 3 s from
+   19:42:03, dead at 19:42:18; z10 job 2 the same with :pocket-hold. None is chosen while it lasts."
+  [world]
+  (>= (memory/started-count-within? world :pocket pocket-churn-ms) pocket-churn-starts))
+
 (defn pocket-go
   "A :pocket intent for the nearest site (pocket/current, with the line to the spawner asked when
    see?), or nil when the feet are in the pocket already or none is found: a pocket that exists
    is walked into, a wall is dug into."
   [world sp see?]
-  (when-not (pocket/in? world)
+  (when-not (or (pocket/in? world) (pocket-churning? world))
     (when-let [site (pocket/current world (intent/feet world) (pocket-ok? world sp see?))]
       {:intent/kind :pocket :intent/site site})))
 
@@ -1263,6 +1273,9 @@
    fought at the wall, the others blind to the bot?"
   [world c]
   (<= 1 (count-blazes-seen world c) seen-by-at-most))
+
+(def passive-ms 120000) ; ms without a fight or a tunnel done after which a healthy idle bot goes to the spawner
+(def passive-health 16.0) ; health a passive sortie is begun at
 
 (def advance-step 4.0) ; blocks nearer the spawner an advanced pocket is at least
 (def advance-wait-ms 120000) ; ms in a pocket before another nearer the spawner is made
@@ -1438,7 +1451,10 @@
               (or (meal world) {:intent/kind :pocket-hold :intent/heal-to (hold-to world)})
               ;; sealed, cannot heal, under low-health: opened, the next blaze in reach seals it again
               ;; (the flip of blaze-race-p job 4), so it stays shut and the row goes on without a hold
-              (when (or (heals? world) (>= (:player/health world 20.0) low-health))
+              ;; and nothing to open when no cell was placed (a cell shut on every side): no :unseal that
+              ;; is done at once and chosen again
+              (when (and (seq (:pocket/placed site))
+                         (or (heals? world) (>= (:player/health world 20.0) low-health)))
                 {:intent/kind :unseal}))
             (and (reach-blaze world) (>= (:player/health world 20.0) low-health)) nil
             (and (or (pressed? world) (reach-blaze world)) (pocket/can-seal? world site))
@@ -1674,6 +1690,37 @@
                   (not (recent? :fight))
                   (not (recent? :pocket))))))
 
+(def leak-ms 3000)   ; ms after the first hurt in a pocket that a further hit means the pocket lets them in
+(def leak-loss 6.0)  ; health lost since that first hurt that, with a further hit, makes the pocket a leak
+
+(defn hurt-mark
+  "The world with :pocket/hurt noted: {:at ms :hp h} from the first hurt (burning or struck within
+   press-ms) in the held pocket, kept while it lasts, dropped when the bot is out of the pocket or
+   unhurt (not burning, no hit within press-ms)."
+  [world]
+  (let [now (:time/now world 0)
+        hurt? (or (:player/on-fire? world)
+                  (<= (- now (:player/struck-at world -1000000)) press-ms))]
+    (cond (or (not (pocket/in? world)) (not hurt?)) (dissoc world :pocket/hurt)
+          (:pocket/hurt world) world
+          :else (assoc world :pocket/hurt {:at now :hp (:player/health world 20.0)}))))
+
+(defn leaky-pocket?
+  "Does the held pocket let the blazes in: it is called a refuge (sealed, or one that cannot be sealed:
+   no seal is chosen) yet the bot was hit again leak-ms after it was first hurt in it and has lost
+   leak-loss health since (:pocket/hurt)? A burning bot loses health after the last hit, so a hit
+   after the first leak-ms is what tells. Blaze-race-z13 jobs 4 and 6: 16.6 s and 10.7 s in a
+   :pocket-hold at hp 20 to 0, 4 and 7 fireballs, the hold never ending because no :seal was chosen."
+  [world]
+  (let [{:keys [at hp]} (:pocket/hurt world)
+        site (:pocket/site world)]
+    (boolean (and at
+                  site
+                  (pocket/in? world)
+                  (or (pocket/sealed? world site) (not (pocket/can-seal? world site)))
+                  (>= (:player/struck-at world -1000000) (+ at leak-ms))
+                  (<= (:player/health world 20.0) (- hp leak-loss))))))
+
 (declare rod-grab?)
 
 (defmethod plan/steer :blaze-rods
@@ -1683,8 +1730,14 @@
   (let [sp (nearest-spawner world)
         world (if (rod-grab? world (:plan/intent world))
                 (update world :rod-grab/since #(or % (:time/now world 0)))
-                (dissoc world :rod-grab/since))]
-    (cond (and (pocket/in? world) (pocket/unlayable? world (:pocket/cell (:pocket/site world))))
+                (dissoc world :rod-grab/since))
+        world (hurt-mark world)]
+    (cond (leaky-pocket? world)
+          ;; a pocket the hits come through is no refuge: forgotten, its cell remembered as failed
+          (-> world
+              (update :pocket/failed (fnil conj #{}) (:pocket/cell (:pocket/site world)))
+              (dissoc :pocket/site :sortie/since :pocket/hurt))
+          (and (pocket/in? world) (pocket/unlayable? world (:pocket/cell (:pocket/site world))))
           ;; an unsealable pocket is no refuge: forgotten, and its cell remembered as failed
           (-> world
               (update :pocket/failed (fnil conj #{}) (:pocket/cell (:pocket/site world)))
@@ -1781,6 +1834,23 @@
              (some? (fightable-blaze world)))
         (under-fire? world i))))
 
+(defn passive?
+  "Is the bot healthy and idle at the fortress: hp at passive-health or more, not burning, no blaze
+   within 8, not on a sortie, no rod near, and no fight and no tunnel done for passive-ms (the later of
+   their ends, else the plan's start)? Blaze-race-z10 jobs 1, 4 and 5 spent 50 of 57 minutes camping,
+   ambushing, tunnelling or in a pocket with 0 to 9 real kills."
+  [world]
+  (let [now (:time/now world 0)
+        last-at (apply max
+                       (or (:plan/since world) 0)
+                       (keep #(:intention/at (memory/last-done world %)) [:fight :tunnel-to]))]
+    (boolean (and (>= (:player/health world 20.0) passive-health)
+                  (not (:player/on-fire? world))
+                  (nil? (:sortie/since world))
+                  (empty? (nearby-blazes world 8.0))
+                  (nil? (near-rod world))
+                  (> (- now last-at) passive-ms)))))
+
 (defmethod plan/next-intent :blaze-rods
   ;; a tunnel to the spawner or on the search first makes the pickaxe it lacks from what is held
   ;; (the :fortress row's rule): sim race 39742401798 R4-6-2 (issue #504) tunnelled 25 blocks in
@@ -1810,6 +1880,7 @@
         (delay (when (and (not in-pocket?) (refuge-needed? world) (not (grab-over-refuge? world)))
                  (or (pocket-go world sp false) (when (burning-twice? world) (here-intent world)))))
         prepare (delay (prepare-intent world sp))
+        passive (delay (when (and sp (passive? world)) (to-spawner world sp)))
         ;; the stuck watchdog fired here with a hostile near (no explore walk planned): leave through the
         ;; search, never back to the pocket or the camp it dropped (blaze-race-z6: 12 of 12 firings undone
         ;; by pocket-go within 46 ms)
@@ -1855,6 +1926,7 @@
        :intent/item :blaze_rod
        :intent/target (hunt/cell (:entity/pos lying))}
       (and (not (hurt? world)) beid) {:intent/kind :fight :intent/target beid :intent/yield? true}
+      @passive @passive
       @waiting @waiting
       @stock @stock
       @fire @fire
@@ -1873,18 +1945,18 @@
            (or camping-in-pocket? (at-spawner? world sp) (at-nook? world sp) (bait-here? world sp))
            (not (hurt? world))
            (not (:player/on-fire? world)))
-      (or (when (and in-pocket? (sortie-due? world)) (to-spawner world sp))
-          (when (and in-pocket? (idle? world)) (or (advance-intent world sp) (bait-walk world sp)))
-          (when-not (idle? world) (pocket-go world sp true))
-          (when-let [n (and (not in-pocket?)
-                            (not (at-nook? world sp))
-                            (not (bait-here? world sp))
-                            (nook world sp))]
-            {:intent/kind :walk
-             :intent/target n
-             :intent/for :nook
-             :intent/max-nodes corridor-nodes})
-          {:intent/kind :camp :intent/spawner sp})
+      (or
+       (when (and in-pocket? (sortie-due? world)) (to-spawner world sp))
+       (when (and in-pocket? (idle? world))
+         (or (advance-intent world sp)
+             (when-not (memory/started-within? world :pocket 20000) (bait-walk world sp))))
+       (when-not (idle? world) (pocket-go world sp true))
+       (when-let [n (and (not in-pocket?)
+                         (not (at-nook? world sp))
+                         (not (bait-here? world sp))
+                         (nook world sp))]
+         {:intent/kind :walk :intent/target n :intent/for :nook :intent/max-nodes corridor-nodes})
+       {:intent/kind :camp :intent/spawner sp})
       :else (or (search world) {:plan/wait :no-blaze}))))
 
 ;; ---------------------------------------------------------------- the :ambush intent
@@ -1999,6 +2071,27 @@
 
 ;; ---------------------------------------------------------------- the :pocket-hold intent
 
+(defn pocket-line
+  "The log line for a hold that starts or ends (a decision, no effect on one): the pocket's state as the
+   hold reads it, so a hold under fireballs shows why no :seal was chosen (blaze-race-z13 jobs 4 and 6)."
+  [world what]
+  (let [site (:pocket/site world)
+        c (:pocket/cell site)]
+    (str "pocket-hold " what
+         " pos " (mapv #(format "%.1f" (double %)) (:player/pos world))
+         " hp " (:player/health world)
+         " fire " (boolean (:player/on-fire? world))
+         " cell " (pr-str c)
+         " sealed " (pocket/sealed? world site)
+         " can-seal " (when c (pocket/can-seal? world site))
+         " open " (when c (count (pocket/open-seal-cells world c)))
+         " wanted " (when c (count (pocket/wanted-seal-cells world c)))
+         " placed " (count (:pocket/placed site))
+         " unsealable " (boolean (:pocket/unsealable? site))
+         " failed " (count (:pocket/failed world))
+         " unlayable " (when c (pocket/unlayable? world c))
+         " seal-failed-at " (:pocket/seal-failed-at world))))
+
 (defmethod intent/run :pocket-hold
   ;; {:intent/kind :pocket-hold :intent/heal-to h}: stand still in the pocket, out of every line but the
   ;; opening's, until the fire is out and the health is at h (and, sealed, the last hit older than
@@ -2007,10 +2100,12 @@
   ;; again)
   [world {:intent/keys [since heal-to]} _]
   (let [now (:time/now world)
+        first? (nil? since)
         since (or since now)
-        world (-> world
-                  (assoc :player/controls {})
-                  (intent/assoc-intent :intent/since since))]
+        world (cond-> (-> world
+                          (assoc :player/controls {})
+                          (intent/assoc-intent :intent/since since))
+                first? (game/say (pocket-line world "start")))]
     (cond (or (and (not (:player/on-fire? world))
                    (>= (:player/health world 20.0) (or heal-to engage-health))
                    (or (not (sealed? world))
@@ -2021,5 +2116,7 @@
               (not (pocket/in? world))
               (burning-here? world)
               (> (- now since) hold-ms))
-          (intent/done world)
+          (-> world
+              (game/say (pocket-line world "end"))
+              intent/done)
           :else world)))

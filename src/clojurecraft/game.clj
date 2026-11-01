@@ -343,7 +343,7 @@
             (nil? carried) (dissoc :window/cursor))]
     (cond (zero? window-id)
           (reduce (fn [w [i item]] (inventory/set-window-0-slot w i item))
-                  (assoc w :window/state-id state-id)
+                  (assoc w :window/state-id state-id :inventory/life (:stats/deaths w 0))
                   (map-indexed vector items))
           (inventory/open? w window-id)
           (reduce (fn [w [i item]] (inventory/set-open-window-slot w i item))

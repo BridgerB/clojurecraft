@@ -31,5 +31,6 @@
                   :main-opts ["-m" "clojurecraft.runner"]}}
  :deps {datascript/datascript {:mvn/version "1.8.1"}
         org.clojure/clojure {:mvn/version "1.12.6"}
-        org.clojure/core.async {:mvn/version "1.9.865"}}
+        org.clojure/core.async {:mvn/version "1.9.865"}
+        org.clojure/data.json {:mvn/version "2.5.2"}}
  :paths ["src" "resources"]}

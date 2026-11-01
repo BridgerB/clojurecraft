@@ -2267,3 +2267,54 @@
     (testing "no trail at all: the row's own plan goes ahead"
       (let [w (tick (assoc (blocked-tunnels) :time/now 1050))]
         (is (nil? (get-in w [:plan/intent :intent/for])))))))
+
+;;; DEATH RESTART: a death that loses the inventory starts the chain over
+
+(defn eight-reached
+  "A chained run from spawn (until the water bucket) with eight milestones reached, as the local
+   full run of 2026-10-31 had them when it suffocated in a wall: it has died once, and the new life's
+   window contents have arrived (:inventory/life 1) holding the given items."
+  [items]
+  (-> (world-state [0.5 64.0 0.5])
+      (plan/begin {:go/goals [:wood :kit :pickaxe :cobblestone :stone-pickaxe :furnace :ingots
+                              :bucket :water-bucket]
+                   :go/chain? true}
+                  plan/goals)
+      (assoc :plan/reached
+             #{:wood :kit :pickaxe :cobblestone :stone-pickaxe :furnace :ingots :bucket}
+             :plan/reached-after {:wood 100 :kit 200}
+             :stats/deaths 1
+             :inventory/life 1
+             :player/inventory items)))
+
+(deftest a-death-that-took-the-inventory-starts-the-chain-over
+  (let [w (plan/reach (eight-reached {}) plan/goals)]
+    (is (= #{} (:plan/reached w)) "nothing holds now")
+    (is (= #{:wood :kit :pickaxe :cobblestone :stone-pickaxe :furnace :ingots :bucket}
+           (:plan/best w))
+        "the furthest ever is kept")
+    (is (= #{:wood :kit :pickaxe :cobblestone :stone-pickaxe :furnace :ingots :bucket}
+           (plan/milestones-ever w)))
+    (is (= {:wood 100 :kit 200} (:plan/reached-after w)) "when they were reached is left alone")
+    (is (= 1 (:plan/lives w)) "judged once for this life")
+    (is (= :wood (:goal/id (plan/choose w plan/goals))) "the chain starts at the wood")))
+
+(deftest a-death-that-kept-the-inventory-changes-nothing
+  (let [w (plan/reach (eight-reached {0 {:item 1 :count 30} 1 {:item 2 :count 12}}) plan/goals)]
+    (is (= 8 (count (:plan/reached w))) "keep_inventory: the milestones stay")
+    (is (nil? (:plan/best w)))
+    (is (= 1 (:plan/lives w)) "and the life is judged")
+    (is (not= :wood (:goal/id (plan/choose w plan/goals))))))
+
+(deftest the-chain-waits-for-the-new-lifes-contents-and-for-a-chain
+  (let [early (plan/reach (assoc (eight-reached {}) :inventory/life 0) plan/goals)
+        dead (plan/reach (assoc (eight-reached {}) :player/dead? true) plan/goals)
+        gym (plan/reach (assoc (eight-reached {}) :plan/chain? false) plan/goals)
+        again (plan/reach (assoc (plan/reach (eight-reached {}) plan/goals) :plan/reached #{:wood})
+                          plan/goals)]
+    (is (= 8 (count (:plan/reached early))) "the respawn's contents have not come: not judged")
+    (is (zero? (:plan/lives early 0)))
+    (is (= 8 (count (:plan/reached dead))) "still dead")
+    (is (= 8 (count (:plan/reached gym))) "a gym stage keeps re-deriving: not this rule's")
+    (is (= #{:wood} (:plan/reached again))
+        "one check a life: the next stage reached in this life stays")))

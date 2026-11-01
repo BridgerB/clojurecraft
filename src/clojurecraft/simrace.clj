@@ -236,6 +236,38 @@
    :go/chain? true
    :go/at (spawn-of w)})
 
+(def death-classes
+  "The class of a death by the mob that dealt it, as race/death-class names them from a real
+   server's line: a model cause not here (:starve, :drown, :scheduled, :unknown) is :other."
+  {:blaze :blaze
+   :enderman :enderman
+   :piglin :piglin
+   :zombified_piglin :piglin
+   :piglin_brute :piglin
+   :hoglin :hoglin
+   :wither_skeleton :wither
+   :ghast :ghast})
+
+(defn stopped?
+  "Does a run stop at world: the plan done or failed, or, for a run that started at the fortress
+   (fortress? true), the bot has died once (death-ended)?"
+  [world fortress?]
+  (boolean
+   (or (plan/done? world) (plan/failed? world) (and fortress? (pos? (:stats/deaths world 0))))))
+
+(defn death-ended
+  "RESULT r of a run that started at the fortress (fortress? true) with its :reason the class of
+   its first death (:death-blaze, :death-other ..., from cause, the model's word for what dealt
+   it) when the run ended at that death without reaching its goal: the real race ends such a run
+   there (main/death-ended, race/with-death-message), and a sim that respawned the bot at the
+   start for ever (sim race lanes of 9d15bd6: 861 and 1722 deaths in a run) measured nothing. r
+   as it is otherwise, a run that reached its goal before dying included."
+  [r world fortress? cause]
+  (let [ended (main/death-ended r world fortress?)]
+    (cond-> ended
+      (= :death (:reason ended))
+      (assoc :reason (keyword (str "death-" (name (get death-classes cause :other))))))))
+
 (defn death-note
   "Facts from the tick a run dies on: when, where, what it held, the intent it was in, and
    the three nearest hostiles. Printed as a DEATH line. Not part of the run's result."
@@ -335,7 +367,8 @@
    in), :run/last (the moment of the
    stopping tick) and :run/moments (the moments sim/play-from kept, every half minute, the
    last six minutes), from which a failure's snapshot is chosen (dropped from the lines written).
-   The two counters do not change a decision. A death prints a DEATH line (death-note: the
+   A run that starts at the fortress ends at its first death (death-ended), as the real race's
+   does. The two counters do not change a decision. A death prints a DEATH line (death-note: the
    intent, the position, the nearest hostiles) and a respawn prints a RESPAWN line. Neither
    line is part of the result. Its
    :go names the landing (:go/at), as race/land-bot! does for a real bot: the plan's
@@ -395,11 +428,14 @@
                     :respawn-in dimension/nether)
              (and (:capture/nether w) (not fortress)) (assoc :nether (:capture/nether w))
              food (assoc :food food)))
-          #(or (plan/done? %) (plan/failed? %))
+          #(stopped? % (boolean fortress))
           max-ms
           (go-of w until))
          ok (and (nil? crashed) (main/ok? world until))]
-     (assoc (cond-> (main/result world until ok)
+     (assoc (cond-> (death-ended (main/result world until ok)
+                                 world
+                                 (boolean fortress)
+                                 (first (:sim/death-causes sim)))
               crashed (assoc :reason :crashed :error (str crashed)))
             :run/world (select-keys w [:capture/set :capture/landing])
             :run/seed seed
@@ -605,7 +641,7 @@
         halted (volatile! false)
         stop? #(or (plan/done? %)
                    (plan/failed? %)
-                   (contains? (:plan/reached %) stage)
+                   (contains? (plan/milestones-ever %) stage)
                    (vreset! halted (boolean (halt?))))
         {world' :world crashed :crashed}
         (sim/play-from step m stop? (window-of snap) (go-of w until) nil)]
@@ -637,7 +673,9 @@
         (timeout-signature? snap)
         (not (or (:ok played)
                  (= :done (get-in played [:plan :plan/status]))
-                 (contains? (set (get-in played [:plan :plan/reached])) (stage-of snap))))
+                 (contains? (into (set (get-in played [:plan :plan/reached]))
+                                  (get-in played [:plan :plan/best]))
+                            (stage-of snap))))
         :else (= (:snapshot/signature snap) (:run/signature played))))
 
 (defn stage-until

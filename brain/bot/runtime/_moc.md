@@ -15,6 +15,7 @@ The process around the reducers: the loop, the clock, effects, and what a run pr
 
 - [[main-loop]] - run-loop's alts over socket, events and the 50 ms tick; apply-event!; stop, hold, exit.
 - [[telemetry-watch]] - --telemetry: a watch on the atom writes what changed, never slowing the loop.
+- [[viewer]] - --viewer: a watch on the atom serves a 3D view of the world and the thinking panel.
 - [[result-line]] - every field of RESULT and the `--until` values.
 
 ## See also

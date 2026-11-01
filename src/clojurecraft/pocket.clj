@@ -16,6 +16,7 @@
             [clojurecraft.build :as build]
             [clojurecraft.intent :as intent]
             [clojurecraft.path :as path]
+            [clojurecraft.physics :as physics]
             [clojurecraft.place :as place]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.stairs :as stairs]
@@ -205,19 +206,25 @@
   (let [own #{c (plus c [0 1 0])}]
     (filterv #(not (or (own %) (place/inside-player? world %))) cells)))
 
-(defn wanted-seal-cells
-  "The cells a seal of the pocket at cell c would fill, in order: for each open side (openings) the
-   cell beside c at the feet, then the one over it; then the cell over the head when it is no firm
-   block; none of them in the body (clear-of-body). Some may not be placeable (placeable?)."
+(defn open-seal-cells
+  "The cells a seal of the pocket at cell c would fill, wherever the body stands: for each open side
+   (openings) the cell beside c at the feet, then the one over it; then the cell over the head when it
+   is no firm block. A cell the body reaches into is open all the same: blaze-race-z13 jobs 4 and 6
+   stood off the middle of the cell (x 2341.7, z 2287.2), the side cell was in the body, the seal
+   saw nothing to fill, `sealed?` read true and the bot held open under fireballs until dead."
   [world c]
-  (clear-of-body world
-                 c
-                 (concat (for [s (openings world c)
-                               dy [0 1]
-                               :let [p (plus c [(first s) dy (second s)])]
-                               :when (not (solid-at? world p))]
-                           p)
-                         (when-not (roofed? world c) [(plus c [0 2 0])]))))
+  (vec (concat (for [s (openings world c)
+                     dy [0 1]
+                     :let [p (plus c [(first s) dy (second s)])]
+                     :when (not (solid-at? world p))]
+                 p)
+               (when-not (roofed? world c) [(plus c [0 2 0])]))))
+
+(defn wanted-seal-cells
+  "The open-seal-cells that can be laid now: none of them in the body (clear-of-body). Some may not
+   be placeable (placeable?)."
+  [world c]
+  (clear-of-body world c (open-seal-cells world c)))
 
 (defn placeable?
   "Can a block be laid in cell p: a solid neighbour to click (place/support), or a cell under it
@@ -241,9 +248,11 @@
    open: a :seal that ended :done when its stale list was solid, the bot having moved, and this test
    said sealed (flip_trace2, run 41212534031)."
   [world {:pocket/keys [cell placed]}]
-  (boolean (and (seq placed)
-                (every? #(solid-at? world %) placed)
-                (or (nil? cell) (empty? (wanted-seal-cells world cell))))))
+  (boolean (and (every? #(solid-at? world %) placed)
+                (or (nil? cell) (empty? (open-seal-cells world cell)))
+                ;; a site that names no cell and has no cell to seal is a cell shut on every side (a pocket
+                ;; the bot dug into rock and stands in): sealed. Without a cell it is nothing (nil cell).
+                (or (seq placed) (some? cell)))))
 
 (defn unlayable?
   "Does the pocket at cell c want a block that cannot be laid (wanted-seal-cells that are not
@@ -292,10 +301,12 @@
    support or the body in the cell, is not tried at the next cell either while a blaze hits:
    blaze-race-p job 3 sealed, failed :no-support, walked 26 blocks and sealed again)?"
   [world {:pocket/keys [cell unsealable?]}]
-  (let [n (count (seal-cells world cell))
+  (let [open (open-seal-cells world cell)
+        ;; a cell the body reaches into is laid once the :seal has centred the bot
+        n (count (filterv #(or (place/inside-player? world %) (placeable? world %)) open))
         failed (:pocket/seal-failed-at world)]
     (and (not unsealable?)
-         (= n (count (wanted-seal-cells world cell)))
+         (= n (count open))
          (or (nil? failed) (> (- (:time/now world 0) failed) seal-retry-ms))
          (pickaxe-held? world)
          (pos? n)
@@ -409,7 +420,22 @@
         world (cond-> world
                 (and site (not= cells (:pocket/placed site)))
                 (assoc-in [:pocket/site :pocket/placed] cells))]
-    (cond (not (and site (seq cells) (= (:pocket/cell site) (intent/feet world))))
+    (cond (and site
+               (empty? cells)
+               (= (:pocket/cell site) (intent/feet world))
+               (seq (open-seal-cells world (:pocket/cell site))))
+          ;; every open cell is in the body: centre in the cell, then they can be laid
+          (if (seal-overdue? world i)
+            (give-up-seal world)
+            (-> world
+                (intent/assoc-intent :intent/started (or (:intent/started i) (:time/now world 0)))
+                (assoc :player/controls
+                       (intent/toward world
+                                      (assoc (physics/centre (:pocket/cell site))
+                                             1
+                                             (double (second (:pocket/cell site))))
+                                      0))))
+          (not (and site (seq cells) (= (:pocket/cell site) (intent/feet world))))
           (-> world
               (assoc :player/controls {})
               intent/done)

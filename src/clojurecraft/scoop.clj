@@ -95,6 +95,25 @@
   [[x y z]]
   [(+ x 0.5) (+ y surface-height) (+ z 0.5)])
 
+(defn ray-samples
+  "[cell point] for every sample of the ray from the eye to point (ray-cells' own): the point
+   probed, ray-margin off the line each way, and the cell it is in; but the cell point is in."
+  [world point]
+  (let [eye (game/eye world)
+        d (physics/distance eye point)
+        dir (mapv #(/ (- %2 %1) d) eye point)
+        end (mapv #(long (math/floor %)) point)
+        m ray-margin]
+    (for [k (range 0 (/ d ray-step))
+          :let [p (mapv #(+ %1 (* k ray-step %2)) eye dir)]
+          dx [(- m) m]
+          dy [(- m) m]
+          dz [(- m) m]
+          :let [q (mapv + p [dx dy dz])
+                cell (mapv #(long (math/floor %)) q)]
+          :when (not= end cell)]
+      [cell q])))
+
 (defn ray-cells
   "The cells the ray from the eye to point passes through or within ray-margin of, sampled every
    ray-step, but the cell point is in. The game casts a bucket's ray exactly, so a ray that grazes
@@ -105,28 +124,31 @@
    it and filled nothing, while the model's sampled ray filled the bucket, so only real runs
    failed."
   [world point]
-  (let [eye (game/eye world)
-        d (physics/distance eye point)
-        dir (mapv #(/ (- %2 %1) d) eye point)
-        end (mapv #(long (math/floor %)) point)
-        m ray-margin]
-    (->> (for [k (range 0 (/ d ray-step))
-               :let [p (mapv #(+ %1 (* k ray-step %2)) eye dir)]
-               dx [(- m) m]
-               dy [(- m) m]
-               dz [(- m) m]]
-           (mapv #(long (math/floor (+ %1 %2))) p [dx dy dz]))
-         (remove #(= end %))
-         distinct)))
+  (distinct (map first (ray-samples world point))))
+
+(def snow-top
+  "The height of a one-layer snow layer's outline, the part of its cell a bucket's ray stops at
+   (SnowLayerBlock's shape for one layer: 2 of 16 pixels)."
+  0.125)
+
+(defn snow-clear?
+  "Does the sample of a ray at point q, in cell, pass over a one-layer snow layer in that cell
+   (above snow-top)? A bank of snow is the cell the bot stands in, and its ray down to the water
+   crosses the cell far above the snow: the whole cell was refused as a block, and the bot walked
+   between two banks, seeing neither, turning half round each time (flag #2, 2026-10-31)."
+  [world cell q]
+  (and (= path/one-layer-snow (terrain/block-at world cell))
+       (> (- (physics/y-of q) (physics/y-of cell)) snow-top)))
 
 (defn clear?
   "Is every cell of the ray from the eye to point (ray-cells) loaded and air or water (the
    game's ray stops at any block with an outline, a grass tuft on the bank as much as a wall; a
    water cell it passes, or fills the bucket from, which is as good)?"
   [world point]
-  (every? #(when-let [id (terrain/block-at world %)]
-             (or (blocks/air? id) (contains? blocks/water-states id)))
-          (ray-cells world point)))
+  (every? (fn [[cell q]]
+            (when-let [id (terrain/block-at world cell)]
+              (or (blocks/air? id) (contains? blocks/water-states id) (snow-clear? world cell q))))
+          (ray-samples world point)))
 
 (defn surface-points
   "The points on the surface of the source at [x y z] the eyes may aim at: its aim-point, then
@@ -296,6 +318,16 @@
 (def max-candidates 3)                ; the nearest of each kind a route is planned to
 (def underground-depth 8)             ; feet this far under the landing are underground: climb out before a hunt
 
+(defn stable-first
+  "targets with the target of the walk that just ended for `for` first, when it is among them: two
+   near-equal candidates, nearest first, swap places as the feet move, and the walk turned between
+   them (flag #2, 2026-10-31)."
+  [world for targets]
+  (let [last-walk (:plan/last world)
+        prev (when (and (= :walk (:intent/kind last-walk)) (= for (:intent/for last-walk)))
+               (:intent/target last-walk))]
+    (if (some #{prev} targets) (cons prev (remove #{prev} targets)) targets)))
+
 (defn first-walk
   "A walk tagged for to the first of targets (the max-candidates first that it has not already
    arrived at) a route reaches (intent/routable?), or nil. A walk already arrived would end
@@ -305,7 +337,7 @@
    after each failure, forty times and more, the landing itself the target (sim snapshot
    real-5-s2-Clj_r08, issue #54, 510 cells blacklisted and the bot at a tenth of its health)."
   [world for targets]
-  (->> targets
+  (->> (stable-first world for targets)
        (remove (:plan/blacklist world #{}))
        (map (fn [t] {:intent/kind :walk :intent/target t :intent/for for}))
        (remove #(intent/arrived? world

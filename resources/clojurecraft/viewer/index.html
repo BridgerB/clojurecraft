@@ -1,0 +1,685 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>clojurecraft viewer</title>
+<!-- The page of clojurecraft.viewer. The world is drawn by steve's renderer (web/viewer.js and
+     web/worker.js, vendored by dev/viewer/build.ts; Babylon from a CDN): /assets.json once (the
+     game's models, blockstates and textures, read from the local client jar), then each column
+     from /column when its version in /frame moves. The panel shows what the bot is thinking. -->
+<style>
+  /* the 3D view on the left 60%, the panel (as data/local-runs/panel.ts laid it out) on the right 40% */
+  html,body { margin:0; height:100%; background:#1d1f21; color:#ddd; font:14px system-ui,sans-serif; overflow:hidden; }
+  #view { position:fixed; left:0; top:0; width:60vw; height:100vh; display:block; outline:none; background:#000; }
+  #side { position:fixed; right:0; top:0; width:40vw; height:100vh; overflow-y:auto; overflow-x:hidden; padding:12px; box-sizing:border-box; }
+  body.embed #view { width:100vw; } body.embed #side, body.embed .mcgrid { display:none; } body.embed #crosshair { left:50vw; } body.embed #status { left:10px; }
+  #status { position:fixed; left:10px; bottom:72px; color:#fff; text-shadow:0 0 3px #000; font-size:12px; }
+  #crosshair { position:fixed; left:30vw; top:50%; width:18px; height:18px; margin:-9px 0 0 -9px; pointer-events:none; mix-blend-mode:difference; }
+  #crosshair:before, #crosshair:after { content:""; position:absolute; background:#fff; }
+  #crosshair:before { left:8px; top:0; width:2px; height:18px; } #crosshair:after { top:8px; left:0; height:2px; width:18px; }
+  h2 { margin:12px 0 6px; font-size:14px; color:#9ab; }
+  .bar { display:flex; gap:24px; font-size:16px; flex-wrap:wrap; }
+  .eqline { font-size:12px; color:#9ab; margin:6px 0; }
+  .ctl { display:flex; gap:8px; margin:12px 0; align-items:center; }
+  .ctl input { flex:1; min-width:0; padding:8px; background:#111; color:#eee; border:1px solid #555; border-radius:4px; }
+  button { padding:8px 14px; background:#335; color:#fff; border:1px solid #557; border-radius:4px; cursor:pointer; font:inherit; }
+  button.on { background:#a33; }
+  .mbox { height:78px; box-sizing:border-box; padding:8px 12px; border-radius:6px; background:#262a2f; border-left:6px solid #567; overflow:hidden; }
+  .mbox .ml { font-size:11px; color:#9ab; text-transform:uppercase; letter-spacing:.05em; }
+  .mbox .mm { font-size:15px; margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .mbox .ms { font-size:12px; color:#aab; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .mbox.why .mm { white-space:normal; font-size:14px; line-height:1.35; } .mbox.why { height:84px; border-color:#c9f; }
+  .mbox.ok { border-color:#3c7; } .mbox.red { border-color:#f55; background:#3a2020; } .mbox.goal { border-color:#ffd54a; } .mbox.dim { opacity:.6; }
+  .mbox.act { border-color:#6bf; } .mbox.step { border-color:#8d8; }
+  .marrow { text-align:center; color:#666; height:14px; line-height:14px; font-size:13px; }
+  .dots { display:inline-flex; gap:3px; margin-right:8px; vertical-align:middle; }
+  .dots i { width:10px; height:10px; border-radius:50%; background:#444; display:inline-block; }
+  .dots i.d { background:#3c7; } .dots i.c { background:#ffd54a; box-shadow:0 0 6px #ffd54a; }
+  #hist { height:150px; overflow-y:auto; }
+  .h { font-size:12px; padding:3px 8px; border-left:4px solid #567; margin:2px 0; background:#23272b; } .h.i { border-color:#e55; } .h.r { border-color:#e95; }
+  .flow { display:flex; flex-wrap:wrap; align-items:center; gap:4px; }
+  .node { padding:6px 9px; border-radius:14px; background:#2a2f36; border:1px solid #444; font-size:12px; }
+  .node.hot { background:#5a1e1e; border-color:#f55; box-shadow:0 0 10px #f55; font-weight:700; }
+  .n { background:#262a2e; padding:6px 8px; margin:4px 0; border-radius:4px; font-size:12px; } .n b { color:#ffd54a; }
+  #tip { position:fixed; z-index:20; pointer-events:none; background:#100010e0; border:2px solid #2a0a5a; color:#fff; padding:4px 8px; font:14px monospace; display:none; }
+  .mcgrid { position:fixed; display:grid; grid-template-columns:repeat(9,44px); gap:2px; padding:3px; background:rgba(0,0,0,.45); border:2px solid rgba(255,255,255,.25); z-index:5; }
+  .mcgrid .s { width:44px; height:44px; background:rgba(139,139,139,.35); border:2px solid rgba(0,0,0,.4); box-sizing:border-box; position:relative; overflow:hidden; }
+  .mcgrid .s.sel { border:3px solid #fff; box-shadow:0 0 0 1px #000; }
+  .mcgrid .ic { width:34px; height:34px; margin:3px auto 0; display:block; image-rendering:pixelated; object-fit:cover; object-position:top; }
+  .mcgrid .c { position:absolute; color:#fff; text-shadow:2px 2px 0 #3f3f3f; font:700 14px monospace; right:2px; bottom:0; }
+  .hudbar { left:30vw; bottom:14px; transform:translateX(-50%); }
+  .inv { left:10px; top:10px; grid-template-columns:repeat(9,34px); } .inv .s { width:34px; height:34px; } .inv .ic { width:26px; height:26px; margin:2px auto 0; } .inv .c { font-size:11px; }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/babylonjs@9.13.0/babylon.js"></script>
+</head>
+<body>
+<canvas id="view"></canvas>
+<div id="crosshair"></div>
+<div id="status">connecting…</div>
+<div id="hudinv" class="mcgrid inv"></div>
+<div id="hudhot" class="mcgrid hudbar"></div><div id="tip"></div>
+<div id="side">
+  <div class="bar"><b id="who">…</b><span id="hp"></span><span id="food"></span><span id="pos"></span></div>
+  <div class="ctl"><button id="pb">Pause</button>
+    <input id="note" placeholder="What's wrong right now? (Enter to save)">
+    <button id="flagb">Flag</button> <span id="msg"></span></div>
+  <h2>Its mind, top to bottom</h2>
+  <div id="mind"></div>
+  <h2>Focus changes (newest first)</h2><div id="hist"></div>
+  <div class="eqline">armour: <span id="eq"></span></div>
+  <h2>Around it: facing up · rings 16 / 32 / 64 m · ↑ above ↓ below</h2>
+  <canvas id="radar" width="520" height="520" style="width:100%;max-width:440px;aspect-ratio:1;background:#14171a;border-radius:50%;display:block"></canvas>
+  <div id="near" style="font-size:12px;margin:4px 0"></div>
+  <h2>Flagged</h2><div id="notes"></div>
+</div>
+<script type="module">
+import * as R from "/web/viewer.js";
+const B = globalThis.BABYLON;
+const $ = (id) => document.getElementById(id);
+
+// ---------------------------------------------------------------- the renderer, as steve's embed sets it up
+const canvas = $("view");
+const viewer = R.createViewer(canvas, { workerUrl: "/web/worker.js", textureUrl: "/tex/entity/player/wide/steve.png" });
+const fit = () => { const w = canvas.clientWidth, h = canvas.clientHeight; if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; R.resizeViewer(viewer, w, h); } };
+new ResizeObserver(fit).observe(canvas); fit();
+globalThis.viewer = viewer; // for the console
+
+const toMap = (o) => new Map(Object.entries(o));
+async function applyAssets(a) {
+  const images = new Map();
+  await Promise.all(a.textureNames.map((n) => fetch(`data:image/png;base64,${a.textureData[n]}`).then((r) => r.blob())
+    .then(createImageBitmap).then((bmp) => images.set(n, bmp)).catch(() => {})));
+  const atlas = R.createTextureAtlas(a.textureNames.filter((n) => images.has(n)), (n) => images.get(n.replace(".png", "")));
+  const states = R.prepareBlockStates(a.blockStates, a.blockModels, atlas.uvMap);
+  for (const w of viewer.worldRenderer.workers) w.postMessage({ type: "registryData", blocks: a.blocks, biomes: a.biomes });
+  const t = a.tints;
+  R.setViewerAssets(viewer, atlas, states, { grass: toMap(t.grass), foliage: toMap(t.foliage), water: toMap(t.water),
+    redstone: toMap(t.redstone), constant: toMap(t.constant), grassDefault: t.grassDefault, foliageDefault: t.foliageDefault, waterDefault: t.waterDefault });
+  R.setEntityModels(a.entityModels || {});
+}
+
+// ---------------------------------------------------------------- columns: fetched again when their version moves
+const versions = new Map(), inflight = new Set();
+const FETCHES = 4; // columns in flight at once, nearest first, so the ground under the bot draws before the horizon
+function syncColumns(cols, pos, radius) {
+  const [px, pz] = [Math.floor(pos[0]) >> 4, Math.floor(pos[2]) >> 4];
+  const wanted = Object.entries(cols).filter(([key, v]) => versions.get(key) !== v && !inflight.has(key))
+    .map(([key, v]) => { const [x, z] = key.split(",").map(Number); return [Math.hypot(x - px, z - pz), key, v]; })
+    .sort((a, b) => a[0] - b[0]).slice(0, Math.max(0, FETCHES - inflight.size));
+  for (const [, key, v] of wanted) {
+    inflight.add(key);
+    const [x, z] = key.split(",");
+    fetch(`/column?x=${x}&z=${z}`).then((r) => r.json()).then((c) => {
+      if (!c.buf) return;
+      const col = R.createChunkColumn({ minY: c.minY, worldHeight: c.height, maxBitsPerBlock: R.GLOBAL_BITS_PER_BLOCK, maxBitsPerBiome: R.GLOBAL_BITS_PER_BIOME });
+      const bytes = R.fromBase64(c.buf);
+      R.loadChunkColumn(col, bytes, true);
+      if (q.get("light") !== "0") try { lightColumn(c, bytes); } catch (e) { console.error("light", c.x, c.z, e); }
+      R.addViewerColumn(viewer, c.x, c.z, col, c.minY, c.height);
+      versions.set(key, v);
+    }).finally(() => inflight.delete(key));
+  }
+  const [bx, bz] = [Math.floor(pos[0]) >> 4, Math.floor(pos[2]) >> 4];
+  for (const key of [...versions.keys()]) {
+    const [cx, cz] = key.split(",").map(Number);
+    if (!(key in cols) && Math.max(Math.abs(cx - bx), Math.abs(cz - bz)) > radius + 2) { R.removeViewerColumn(viewer, cx, cz); versions.delete(key); lightCols.delete(key); }
+  }
+}
+
+// ---------------------------------------------------------------- a new run: the bot's server restarted (a new world, a new bot)
+function resetWorld() {
+  lightCols.clear(); lightBox = null;
+  for (const key of [...versions.keys()]) { const [cx, cz] = key.split(",").map(Number); R.removeViewerColumn(viewer, cx, cz); }
+  versions.clear();
+  for (const id of [...ents.keys()]) R.removeViewerEntity(viewer, id);
+  ents.clear();
+  cur = null;
+}
+
+// ---------------------------------------------------------------- entities: the bot itself in orbit, the rest always
+const rad = (d) => d * Math.PI / 180;
+const yawOf = (deg) => Math.PI - rad(deg);        // the game's degrees → typecraft's radians (fromNotchianYaw)
+const pitchOf = (deg) => -rad(deg);
+const BOT = -1;
+const ents = new Map(); // id → {target, cur, name}
+function syncEntities(list, f) {
+  const want = new Map(list.map((e) => [e.id, { name: e.kind === "item" ? "item" : e.kind || "unknown", x: e.pos[0], y: e.pos[1], z: e.pos[2], yaw: yawOf(e.yaw || 0) }]));
+  if (mode === "third" && f.pos) want.set(BOT, { name: "player", user: f.name, x: f.pos[0], y: f.pos[1], z: f.pos[2], yaw: yawOf(f.look ? f.look[0] : 0) });
+  for (const [id, e] of want) {
+    const have = ents.get(id);
+    if (!have || have.name !== e.name) {
+      if (have) R.removeViewerEntity(viewer, id);
+      R.addViewerEntity(viewer, id, e.name, e.user || null, e.x, e.y, e.z, e.yaw);
+      ents.set(id, { name: e.name, target: e, cur: { ...e } });
+    } else have.target = e;
+  }
+  for (const id of [...ents.keys()]) if (!want.has(id)) { R.removeViewerEntity(viewer, id); ents.delete(id); }
+}
+
+// ---------------------------------------------------------------- the camera: the bot's eyes, always. ?orbit=1 (debugging only, no button) orbits
+// round the bot instead, dragged and wheeled, from ?theta=&phi=&dist=
+const q = new URLSearchParams(location.search);
+const mode = q.get("orbit") === "1" ? "third" : "first";
+if (q.get("embed") === "1") document.body.classList.add("embed"); // the 3D view alone, for a page that frames it
+const orbit = { theta: -0.8, phi: 0.9, dist: 9 };
+for (const k of ["theta", "phi", "dist"]) if (q.has(k)) orbit[k] = Number(q.get(k));
+if (mode === "third") {
+  let drag = null;
+  canvas.addEventListener("pointerdown", (e) => { drag = [e.clientX, e.clientY]; });
+  addEventListener("pointerup", () => { drag = null; });
+  addEventListener("pointermove", (e) => { if (!drag) return;
+    orbit.theta -= (e.clientX - drag[0]) * 0.008; orbit.phi = Math.min(1.5, Math.max(0.1, orbit.phi - (e.clientY - drag[1]) * 0.008)); drag = [e.clientX, e.clientY]; });
+  canvas.addEventListener("wheel", (e) => { e.preventDefault(); orbit.dist = Math.min(60, Math.max(2, orbit.dist * (1 + e.deltaY * 0.001))); }, { passive: false });
+}
+
+let pose = null, cur = null;
+const lerpAngle = (a, b, t) => a + ((((b - a) % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI) - Math.PI) * t;
+function aim(t) {
+  if (!pose) return;
+  if (!cur || Math.hypot(pose.x - cur.x, pose.y - cur.y, pose.z - cur.z) > 24) cur = { ...pose };
+  for (const k of ["x", "y", "z", "pitch"]) cur[k] += (pose[k] - cur[k]) * t;
+  cur.yaw = lerpAngle(cur.yaw, pose.yaw, t);
+  if (mode === "first") { R.setViewerCamera(viewer, R.vec3(cur.x, cur.y, cur.z), cur.yaw, cur.pitch); return; }
+  // the eye on a sphere round the bot's chest, turned to it the way the renderer turns its camera
+  // (typecraft's yaw: 0 looks north, -z; pitch up is positive)
+  const dx = -orbit.dist * Math.sin(orbit.phi) * Math.cos(orbit.theta), dy = -orbit.dist * Math.cos(orbit.phi), dz = -orbit.dist * Math.sin(orbit.phi) * Math.sin(orbit.theta);
+  const eye = [cur.x + 0 - dx, cur.y + 1.2 - dy, cur.z - dz];
+  R.setViewerCamera(viewer, R.vec3(eye[0], eye[1] - 1.6, eye[2]), Math.atan2(-dx, -dz), Math.atan2(dy, Math.hypot(dx, dz)));
+}
+
+// ---------------------------------------------------------------- the panel (data/local-runs/panel.ts's layout and words, from the frame)
+const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const nice = (id) => id.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+// ---------------------------------------------------------------- the radar: what the bot cares about round it, heading up
+// Shown: every hostile (the defend and danger rules are about them); animals only while it is hungry
+// (food under 14: the hunt's prey); endermen only on the pearls stage, blazes only on the rods stage;
+// item drops within 16 (what it picks up); and the block its intent heads for, with a line to it.
+const eggs = {};
+const egg = (k) => { if (!eggs[k]) { const im = new Image(); im.src = "/tex/item/" + k + "_spawn_egg.png"; eggs[k] = im; } return eggs[k]; };
+const PREY = new Set(["cow", "pig", "sheep", "chicken", "rabbit", "mooshroom"]);
+function cares(e, f, d) {
+  if (f.rules) return !!e.cares; // the bot's own rules, from the frame (viewer/care)
+  const goal = f.intent && f.intent["intent/goal"];
+  if (e.kind === "player") return false;
+  if (e.hostile) return true;
+  if (e.kind === "enderman") return goal === "ender-pearls";
+  if (e.kind === "blaze") return goal === "blaze-rods";
+  if (e.kind === "item") return d <= 16;
+  return PREY.has(e.kind) && (f.food ?? 20) < 14;
+}
+function radar(f, p) {
+  const c = $("radar"), g = c.getContext("2d"), W = c.width, R = W / 2 - 14, cx = W / 2, cy = W / 2, S = R / 64;
+  g.clearRect(0, 0, W, W); g.strokeStyle = "#2c3238"; g.lineWidth = 1; g.fillStyle = "#55606a"; g.font = "13px system-ui";
+  for (const r of [16, 32, 64]) { g.beginPath(); g.arc(cx, cy, r * S, 0, 7); g.stroke(); g.fillText(r + " m", cx + 4, cy - r * S + 14); }
+  const y = ((f.look && f.look[0]) || 0) * Math.PI / 180, fx = -Math.sin(y), fz = Math.cos(y), rx = -Math.cos(y), rz = -Math.sin(y);
+  const at = (dx, dz) => [cx - (dx * rx + dz * rz) * S, cy - (dx * fx + dz * fz) * S];
+  // the target of the running intent (or its child's), and a line to it
+  let t = f.intent && (f.intent["intent/target"] || (f.intent["intent/child"] || {})["intent/target"]);
+  if (Array.isArray(t) && t.length === 3) {
+    const [tx, ty] = at(t[0] + 0.5 - p[0], t[2] + 0.5 - p[2]), dy = Math.round(t[1] - Math.floor(p[1])), d = Math.hypot(t[0] + 0.5 - p[0], t[2] + 0.5 - p[2]);
+    g.strokeStyle = "#ffd54a"; g.setLineDash([6, 5]); g.lineWidth = 2; g.beginPath(); g.moveTo(cx, cy); g.lineTo(tx, ty); g.stroke(); g.setLineDash([]);
+    g.fillStyle = "#ffd54a"; g.fillRect(tx - 6, ty - 6, 12, 12);
+    g.font = "bold 13px system-ui"; g.fillText("target " + d.toFixed(0) + "m" + (dy > 0 ? " ↑" + dy : dy < 0 ? " ↓" + (-dy) : ""), tx + 10, ty + 4);
+  }
+  if (Array.isArray(f.route) && f.route.length) { // the route its walk is following, cell by cell
+    g.strokeStyle = f["route-kind"] === "walk" || !f["route-kind"] ? "#26e6ff" : "#ff8a1f"; g.lineWidth = 2; g.beginPath(); g.moveTo(cx, cy);
+    for (const c of f.route) { const [x2, y2] = at(c[0] + 0.5 - p[0], c[2] + 0.5 - p[2]); g.lineTo(x2, y2); }
+    g.stroke();
+  }
+  g.fillStyle = "#fff"; g.beginPath(); g.moveTo(cx, cy - 11); g.lineTo(cx - 8, cy + 8); g.lineTo(cx, cy + 3); g.lineTo(cx + 8, cy + 8); g.closePath(); g.fill();
+  const shown = (f.entities || []).map((e) => ({ e, dx: e.pos[0] - p[0], dy: e.pos[1] - p[1], dz: e.pos[2] - p[2] }))
+    .map((o) => ({ ...o, d: Math.hypot(o.dx, o.dy, o.dz) })).filter((o) => o.d <= 64 && cares(o.e, f, o.d)).sort((a, b) => b.d - a.d);
+  for (const { e, dx, dy, dz, d } of shown) {
+    const [sx, sy] = at(dx, dz), col = e.hostile ? "#ff5a5a" : e.kind === "item" ? "#9ab" : "#5fb0ff";
+    g.fillStyle = col; g.beginPath(); g.arc(sx, sy, e.hostile ? 7 : 5, 0, 7); g.fill();
+    const im = egg(e.kind); if (im.complete && im.naturalWidth) g.drawImage(im, sx - 9, sy - 27, 18, 18);
+    const v = Math.round(dy);
+    g.fillStyle = e.hostile ? "#ffb0b0" : "#c8d0d8"; g.font = (e.hostile ? "bold " : "") + "12px system-ui";
+    g.fillText(nice(e.kind === "item" ? e.item || "item" : e.kind) + " " + d.toFixed(0) + "m" + (v > 1 ? " ↑" + v : v < -1 ? " ↓" + (-v) : ""), sx + 10, sy + 4);
+  }
+  const h = shown.filter((o) => o.e.hostile).reverse();
+  $("near").innerHTML = h.length ? "<b style=color:#f88>Hostile:</b> " + h.map((o) => esc(nice(o.e.kind)) + " " + o.d.toFixed(0) + " m").join(" · ")
+    : "<span style=color:#3c7>No hostile it has to mind (within " + 32 + " m, its search's wary radius)</span>";
+}
+const KIND = { walk: "walking to", dig: "digging", collect: "picking up", craft: "crafting", place: "placing a block", "open-container": "opening",
+  "stairs-down": "digging a staircase down", "stairs-up": "digging a staircase up", fight: "fighting", smelt: "smelting", mine: "mining",
+  "tunnel-to": "tunnelling to", eat: "eating", forage: "foraging for food", pillar: "pillaring up", scoop: "scooping water",
+  "back-off": "backing off from", burrow: "digging a burrow", lookout: "watching for endermen", build: "building" };
+// short words for the goals the panel names; any other goal shows its own doc from the goal table (/meta)
+const DOC = { wood: "hold one log", kit: "sticks, then a crafting table", pickaxe: "a wooden pickaxe", cobblestone: "three cobblestone",
+  "stone-pickaxe": "a stone pickaxe", furnace: "a furnace placed near (8 cobblestone)", ingots: "four iron ingots: mine iron ore, smelt it",
+  bucket: "an empty bucket (3 ingots)", "water-bucket": "fill the bucket at surface water", "flint-and-steel": "flint (from gravel) + an ingot",
+  "iron-kit": "flint and steel + a water bucket", "portal-kit": "a second bucket etc. for the portal cast", gear: "iron sword, helmet, chestplate, leggings",
+  "cast-one": "one obsidian cast for the frame", portal: "a nether portal cast from lava and water", nether: "light it and go through",
+  fortress: "reach a nether fortress", "blaze-rods": "seven blaze rods", "ender-pearls": "twelve ender pearls", "escape-water": "out of water first",
+  "escape-lava": "off lava first", defend: "a hostile within 4 blocks: answer it", eat: "food under 14 and has food: eat",
+  hunt: "get food: hungry with none, or stocking 6 food early (once it has a stone pickaxe)", heal: "eat for health", "wear-armour": "put on armour it holds",
+  armour: "make helmet/chestplate from spare ingots", sword: "make the best sword it can", cook: "cook raw meat in the furnace",
+  regear: "remake gear after a death", "return-nether": "go back through a portal" };
+const FOR = { bank: "water it remembers on the surface, to fill the bucket from", log: "a log to chop", trees: "trees it remembers",
+  surface: "the surface (it is underground)", shelter: "a safe spot", hunt: "an animal to kill for food", "log-hunt": "trees while hungry",
+  food: "food", pearls: "endermen for pearls", retreat: "safety, away from danger", build: "the portal it is building", lava: "lava for the portal",
+  stronghold: "the stronghold", explore: "new ground, to find what it needs", opening: "a way out", cover: "cover from what is attacking it",
+  rod: "a blaze rod on the ground", nook: "a nook to hide in", scoop: "water to scoop", rise: "higher ground", relocate: "a new hunting spot",
+  regroup: "a spot it can walk from", corridor: "the fortress corridor", fire: "fire to put out", "fire-out": "out of fire", site: "a building site",
+  "water-hunt": "water", footing: "solid footing", foothold: "a foothold", valley: "a valley", churn: "a new spot (it was stuck)",
+  boxed: "a way out of the box it is in" };
+const say = (i) => i ? ((KIND[i["intent/kind"]] || i["intent/kind"]) + " " + [i["intent/target"], i["intent/item"], i["intent/recipe"],
+  i["intent/for"] && ("for " + i["intent/for"])].filter(Boolean).join(" ")) : "";
+const dur = (ms) => { const s = Math.max(0, Math.round(ms / 1000)); return s >= 60 ? Math.floor(s / 60) + "m " + String(s % 60).padStart(2, "0") + "s" : s + "s"; };
+const since = (h, pred) => { let a = null; for (let k = h.length - 1; k >= 0 && pred(h[k]); k--) a = h[k].at; return a; };
+const box = (cls, label, main, sub) => `<div class="mbox ${cls}"><div class=ml>${label}</div><div class=mm>${main}</div><div class=ms>${sub || "&nbsp;"}</div></div><div class=marrow>↓</div>`;
+let meta = { chain: [], always: [], radius: 3 }, icons = {};
+const doc = (id) => DOC[id] || (meta.docs && meta.docs[id]) || "";
+const iconSrc = (item) => { const t = icons[item]; if (!t) return "";
+  return t.startsWith("item/") ? `/tex/${t}.png` : `data:image/png;base64,${assets.textureData[t.replace("block/", "")] || ""}`; };
+const cell = (it, sel) => `<div class="s${sel ? " sel" : ""}"${it ? ` data-n="${esc(nice(it.item))}${it.count > 1 ? " × " + it.count : ""}"` : ""}>` +
+  (it ? (iconSrc(it.item) ? `<img class=ic src="${iconSrc(it.item)}">` : `<small>${esc(it.item)}</small>`) + `<span class=c>${it.count > 1 ? it.count : ""}</span>` : "") + "</div>";
+document.addEventListener("mousemove", (e) => { const c = e.target.closest && e.target.closest(".mcgrid .s[data-n]"), tip = $("tip");
+  if (!c) { tip.style.display = "none"; return; } tip.textContent = c.dataset.n; tip.style.display = "block"; tip.style.left = (e.clientX + 14) + "px"; tip.style.top = (e.clientY + 10) + "px"; });
+function mind(f) {
+  const i = f.intent, g = i && i["intent/goal"], reached = new Set(f.reached || []), h = f.history || [], now = f.now, p = f.pos || [0, 0, 0];
+  const chain = meta.chain.map((r) => r.id), always = new Set(meta.always.map((r) => r.id));
+  const host = (f.entities || []).filter((e) => e.hostile).map((e) => [Math.hypot(e.pos[0] - p[0], e.pos[1] - p[1], e.pos[2] - p[2]), e]).sort((a, b) => a[0] - b[0]);
+  const hostTxt = host[0] ? host[0][1].kind + " " + host[0][0].toFixed(0) + " m" : "none";
+  const isI = always.has(g);
+  let s = box(isI ? "red" : "ok", "1 · Safety first", isI ? "INTERRUPTED by <b>" + esc(g) + "</b>: " + esc(doc(g)) : "All clear, so it follows the plan",
+    "nearest hostile " + esc(hostTxt) + " · food " + (f.food ?? "?") + " · health " + String(f.health ?? "?").slice(0, 4));
+  const next = chain.find((x) => !reached.has(x)), stage = isI ? next : g, n = chain.indexOf(stage) + 1;
+  const onGoal = since(h, (e) => e.goal === g);
+  s += box(isI ? "dim" : "goal", "2 · The plan: stage " + (n || "?") + " of " + chain.length, "<b>" + esc(stage || "done") + "</b>: " + esc(doc(stage)),
+    "<span class=dots>" + chain.map((x) => `<i class="${reached.has(x) ? "d" : ""}${x === stage ? " c" : ""}" title="${esc(x + ": " + doc(x))}"></i>`).join("") + "</span>" + (onGoal ? " on this for " + dur(now - onGoal) : ""));
+  const tg = i && i["intent/target"], fo = i && i["intent/for"];
+  let why = "";
+  if (Array.isArray(tg) && tg.length === 3) {
+    const dy = tg[1] - Math.floor(p[1]), d = Math.hypot(tg[0] - p[0], tg[2] - p[2]);
+    why = (fo ? "It is heading for " + esc(FOR[fo] || fo) + " at <b>" + tg.join(", ") + "</b>" : "Target <b>" + tg.join(", ") + "</b>") + "<br>" +
+      (dy > 0 ? "that is " + dy + " blocks <b>above</b> it" : dy < 0 ? "that is " + (-dy) + " blocks <b>below</b> it" : "at its level") + ", " + d.toFixed(0) + " blocks across";
+  } else why = fo ? "for " + esc(FOR[fo] || fo) : (i && i["intent/recipe"] ? "it needs a " + esc(i["intent/recipe"].replace(/_/g, " ")) + " for this stage" : "");
+  s += box("why", "3 · Why this action", why || "&nbsp;", "");
+  const onAct = since(h, (e) => e.goal === g && e.kind === (i && i["intent/kind"]) && JSON.stringify(e.target) === JSON.stringify(tg));
+  s += box("act", "4 · Doing", i ? esc(say({ ...i, "intent/for": null })) : (f.wait || f.waiting ? "waiting: " + esc(JSON.stringify(f.wait || f.waiting)) : "choosing"),
+    (i && i["intent/stage"] ? "stage " + esc(i["intent/stage"]) + " · " : "") + (onAct ? "for " + dur(now - onAct) : ""));
+  const steps = [];
+  for (let c = i && i["intent/child"]; c; c = c["intent/child"]) steps.push(esc(say(c)) + (c["intent/stage"] ? " (" + esc(c["intent/stage"]) + ")" : ""));
+  s += box("step", "5 · This step", steps.join(" → ") || "—", "").split("<div class=marrow>")[0];
+  $("mind").innerHTML = s;
+  $("hist").innerHTML = h.slice().reverse().map((e, k, r) => { const prev = r[k + 1];
+    const re = prev && prev.goal === e.goal && prev.kind === e.kind && JSON.stringify(prev.target) !== JSON.stringify(e.target);
+    return `<div class="h${always.has(e.goal) ? " i" : ""}${re ? " r" : ""}">${Math.round((now - e.at) / 1000)}s ago · <b>${esc(e.goal)}</b> · ${esc(say({ "intent/kind": e.kind, "intent/target": e.target }))}${e.stage ? " (" + esc(e.stage) + ")" : ""}${re ? " · <i>changed its mind: new target</i>" : ""}</div>`; }).join("");
+}
+function panel(f) {
+  $("who").textContent = f.name || "bot";
+  $("hp").textContent = "health " + String(f.health ?? "?").slice(0, 4);
+  $("food").textContent = "food " + (f.food ?? "?");
+  $("pos").textContent = f.pos ? "pos " + f.pos.map((v) => v.toFixed(1)).join(", ") + ((f.dimension || "").includes("nether") ? " · nether" : (f.dimension || "").includes("end") ? " · end" : "") : "";
+  const inv = f.inventory || Object.fromEntries((f.hotbar || []).map((it, k) => [k, it]).filter((x) => x[1])), at = (k) => inv[k]; // an older bot: the hotbar alone
+  $("hudhot").innerHTML = [...Array(9)].map((_, k) => cell(at(k), k === f.held)).join("");
+  $("hudinv").innerHTML = [...Array(27)].map((_, k) => cell(at(k + 9))).join("");
+  $("eq").textContent = [39, 38, 37, 36, 40].map((k) => at(k) && nice(at(k).item)).filter(Boolean).join(", ") || "none";
+  const p = f.pos || [0, 0, 0];
+  radar(f, p);
+  paused = !!f.paused; $("pb").textContent = paused ? "Resume" : "Pause"; $("pb").className = paused ? "on" : "";
+  mind(f);
+}
+let paused = false;
+const post = async (w, body = "") => (await fetch("/" + w, { method: "POST", body })).json();
+$("pb").onclick = () => post(paused ? "go" : "pause");
+async function flag() { const t = $("note").value.trim(); if (!t) return; const r = await post("bad", t); $("note").value = "";
+  $("msg").textContent = "saved #" + r.n; setTimeout(() => ($("msg").textContent = ""), 3000); notes(); }
+$("flagb").onclick = flag;
+$("note").onkeydown = (e) => { if (e.key === "Enter") flag(); };
+async function notes() { try { const ns = await (await fetch("/notes")).json();
+  $("notes").innerHTML = ns.map((n) => `<div class=n><b>#${n.n}</b> ${esc(n.at)} · ${esc(n.note)} · <i>${esc(n.intent ? say(n.intent) : "")}</i></div>`).join(""); } catch (_) {} }
+notes(); setInterval(notes, 5000);
+
+// ---------------------------------------------------------------- first person: the arm or the held item, its swing, the cracks, the outline
+// All of it from the bot's own data: the held item is hotbar[held] (its inventory), a swing is one of
+// the arm packets it sent (frame.swings counts them), the cracks are its dig's elapsed time over the
+// dig's own expected time (frame.dig), the outline the block its eyes' ray meets (frame.looking).
+const scene = viewer.scene, cam = viewer.camera;
+const NEAREST = B.Texture.NEAREST_SAMPLINGMODE;
+const texOf = (name) => {
+  const url = name.startsWith("item/") ? `/tex/${name}.png` : `data:image/png;base64,${assets.textureData[name.replace("block/", "")] || ""}`;
+  const t = new B.Texture(url, scene, true, true, NEAREST); t.hasAlpha = true; return t; };
+const matOf = (tex, name) => { const m = new B.StandardMaterial(name, scene); m.diffuseTexture = tex; m.useAlphaFromDiffuseTexture = true;
+  m.emissiveColor = new B.Color3(0.35, 0.35, 0.35); m.specularColor = B.Color3.Black(); m.backFaceCulling = false;
+  m.transparencyMode = B.Material.MATERIAL_ALPHATEST; m.alphaCutOff = 0.1; return m; };
+// The hand is vanilla's ItemInHandRenderer, op for op: a PoseStack (pose) applied to the item model in
+// Minecraft's view space, which is this camera's local space (x right, y up, looking along -z): the
+// swing's bob, applyItemArmTransform, applyItemArmAttackTransform, then the item model's own
+// display.firstperson_righthand (translate /16, rotate x then y then z, scale), then -0.5 to centre
+// the 16-pixel model. The empty hand is renderPlayerArm with the player model's right arm.
+const DEG = Math.PI / 180, Mx = B.Matrix;
+const poseStack = (ops) => ops.reduce((m, [k, a, b, c]) => (k === "t" ? Mx.Translation(a, b, c) : k === "s" ? Mx.Scaling(a, b, c)
+  : k === "x" ? Mx.RotationX(a * DEG) : k === "y" ? Mx.RotationY(a * DEG) : Mx.RotationZ(a * DEG)).multiply(m), Mx.Identity());
+const place = (node, m) => { const s = new B.Vector3(), q = new B.Quaternion(), p = new B.Vector3(); m.decompose(s, q, p);
+  node.scaling.copyFrom(s); node.rotationQuaternion = q; node.position.copyFrom(p); };
+const hand = new B.TransformNode("hand", scene); hand.parent = cam; hand.setEnabled(mode === "first");
+if (mode !== "first") $("crosshair").style.display = "none";
+cam.minZ = 0.05; // the world's faces next to the eye are not clipped
+cam.fov = Math.min(110, Math.max(30, Number(new URLSearchParams(location.search).get("fov")) || 90)) * DEG; // vertical, as vanilla's slider; 90 unless ?fov= says (Bridger found 70 narrow)
+// the hand is drawn by its own camera, as vanilla draws it with its own projection: this one frames it as a
+// 16:9 window at vanilla's 70 degrees would (the same horizontal field), so a narrower view does not push the
+// item off its right edge; it sees only the hand's layer, and draws over the world
+const HAND = 0x20000000;
+const handCam = new B.FreeCamera("handcam", B.Vector3.Zero(), scene);
+handCam.minZ = 0.01; handCam.rotationQuaternion = new B.Quaternion(); handCam.layerMask = HAND;
+handCam.fovMode = B.Camera.FOVMODE_HORIZONTAL_FIXED; handCam.fov = 2 * Math.atan(Math.tan(35 * DEG) * 16 / 9);
+if (mode === "first") scene.activeCameras = [cam, handCam];
+const skin = new B.Texture("/tex/entity/player/wide/steve.png", scene, true, true, NEAREST);
+const armUV = new B.Vector4(44 / 64, 1 - 20 / 64, 48 / 64, 1 - 32 / 64); // the right arm's front, the shoulder at the pivot (model y down)
+const arm = B.MeshBuilder.CreateBox("arm", { width: 4 / 16, height: 12 / 16, depth: 4 / 16, faceUV: Array(6).fill(armUV) }, scene);
+arm.position.set(-1 / 16, 4 / 16, 0); // the cube (-3,-2,-2) 4x12x4 round the model's centre
+arm.material = matOf(skin, "arm"); arm.parent = hand;
+// the item models' first-person transforms, from the jar (/held); vanilla's generated/handheld and block ones until then
+const FLAT = { rotation: [0, -90, 25], translation: [1.13, 3.2, 1.13], scale: [0.68, 0.68, 0.68] };
+const BLOCK = { rotation: [0, 45, 0], translation: [0, 0, 0], scale: [0.4, 0.4, 0.4] };
+let heldInfo = {};
+fetch("/held").then((r) => r.ok ? r.json() : {}).then((h) => { heldInfo = h; heldName = undefined; }).catch(() => {});
+let heldName = null, held = null, heldDisplay = null;
+function flatItem(tex) { // the sprite on the model's 0..1 square at z 0.5, u along +x, v down from +y: never mirrored
+  const m = new B.Mesh("held", scene), v = new B.VertexData();
+  v.positions = [0, 0, 0.5, 1, 0, 0.5, 1, 1, 0.5, 0, 1, 0.5];
+  v.uvs = [0, 0, 1, 0, 1, 1, 0, 1]; v.indices = [0, 1, 2, 0, 2, 3, 0, 2, 1, 0, 3, 2]; v.normals = [0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1];
+  v.applyToMesh(m); m.material = matOf(tex, "held"); return m;
+}
+function holdItem(f) {
+  const it = f.hotbar && f.hotbar[f.held];
+  const name = it ? it.item : null;
+  if (name === heldName) return;
+  heldName = name;
+  if (held) { held.dispose(false, true); held = null; }
+  const icon = name && icons[name], info = (name && heldInfo[name]) || {};
+  arm.setEnabled(!icon); // vanilla draws the item without the arm
+  if (!icon) return;
+  const flat = info.kind ? info.kind === "flat" : icon.startsWith("item/");
+  heldDisplay = info.display || (flat ? FLAT : BLOCK);
+  if (flat) held = flatItem(texOf(icon));
+  else { held = B.MeshBuilder.CreateBox("held", { size: 1 }, scene); held.position.set(0.5, 0.5, 0.5); held.material = matOf(texOf(icon), "held"); }
+  const node = new B.TransformNode("model", scene); node.parent = hand; held.parent = node; held.metadata = node;
+  held.layerMask = HAND; held.renderingGroupId = 1;
+}
+arm.layerMask = HAND; arm.renderingGroupId = 1; // over the world, as vanilla's hand is
+let swings = null, swingAt = -1e9;
+const SWING_MS = 300; // vanilla's swing: 6 ticks
+function swingTo(f) {
+  if (swings !== null && (f.swings ?? 0) > swings) swingAt = performance.now();
+  swings = f.swings ?? 0;
+}
+function animateHand(now) {
+  cam.computeWorldMatrix(true); // the hand camera stands where the eye does, turned as it is
+  handCam.position.copyFrom(cam.position); if (cam.rotationQuaternion) handCam.rotationQuaternion.copyFrom(cam.rotationQuaternion);
+  const f = Math.min(1, Math.max(0, (now - swingAt) / SWING_MS)), p = f < 1 ? f : 0, sq = Math.sqrt(p), PI = Math.PI;
+  if (held) {
+    const d = heldDisplay, t = d.translation || [0, 0, 0], r = d.rotation || [0, 0, 0], s = d.scale || [1, 1, 1];
+    place(hand, poseStack([
+      ["t", -0.4 * Math.sin(sq * PI), 0.2 * Math.sin(sq * 2 * PI), -0.2 * Math.sin(p * PI)],
+      ["t", 0.56, -0.52, -0.72],                                                     // applyItemArmTransform
+      ["y", 45 + Math.sin(p * p * PI) * -20], ["z", Math.sin(sq * PI) * -20], ["x", Math.sin(sq * PI) * -80], ["y", -45], // applyItemArmAttackTransform
+      ["t", t[0] / 16, t[1] / 16, t[2] / 16], ["x", r[0]], ["y", r[1]], ["z", r[2]], ["s", s[0], s[1], s[2]], // the model's firstperson_righthand
+      ["t", -0.5, -0.5, -0.5]]));
+    return;
+  }
+  place(hand, poseStack([                                                               // renderPlayerArm
+    ["t", -0.3 * Math.sin(sq * PI) + 0.64, 0.4 * Math.sin(sq * 2 * PI) - 0.6, -0.4 * Math.sin(p * PI) - 0.72],
+    ["y", 45], ["y", Math.sin(sq * PI) * 70], ["z", Math.sin(p * p * PI) * -20],
+    ["t", -1, 3.6, 3.5], ["z", 120], ["x", 200], ["y", -135], ["t", 5.6, 0, 0],
+    ["t", -5 / 16, 2 / 16, 0]]));                                                  // the right arm's pivot
+}
+const crack = B.MeshBuilder.CreateBox("crack", { size: 1 }, scene); // the block's own six faces, 0..1 each crack.isPickable = false; crack.setEnabled(false);
+const crackMats = [];
+function showCrack(f) {
+  const d = f.dig;
+  if (!d || !d.pos) { crack.setEnabled(false); return; }
+  const stage = Math.min(9, Math.floor(d.progress * 10));
+  if (!crackMats[stage]) { // multiplied over the block, as vanilla blends its destroy textures (dark lines darken, the rest leaves it be)
+    const m = matOf(texOf("block/destroy_stage_" + stage), "crack" + stage);
+    m.disableLighting = true; m.emissiveColor = new B.Color3(1, 1, 1);
+    m.transparencyMode = B.Material.MATERIAL_ALPHATESTANDBLEND; m.alphaMode = B.Engine.ALPHA_MULTIPLY;
+    m.backFaceCulling = true; m.zOffset = -2; crackMats[stage] = m; } // the outer faces only, pulled a hair toward the eye (vanilla's polygon offset)
+  crack.material = crackMats[stage];
+  crack.position.set(d.pos[0] + 0.5, d.pos[1] + 0.5, d.pos[2] + 0.5); crack.setEnabled(true);
+}
+const edges = [[0,0,0,1,0,0],[0,0,0,0,1,0],[0,0,0,0,0,1],[1,1,1,0,1,1],[1,1,1,1,0,1],[1,1,1,1,1,0],[1,0,0,1,1,0],[1,0,0,1,0,1],[0,1,0,1,1,0],[0,1,0,0,1,1],[0,0,1,1,0,1],[0,0,1,0,1,1]]
+  .map(([a, b, c, d, e, g]) => [new B.Vector3(a - 0.501, b - 0.501, c - 0.501).scale(1.002), new B.Vector3(d - 0.501, e - 0.501, g - 0.501).scale(1.002)]);
+const lookBox = B.MeshBuilder.CreateLineSystem("look", { lines: edges }, scene);
+lookBox.color = new B.Color3(0, 0, 0); lookBox.alpha = 0.45; lookBox.isPickable = false; lookBox.setEnabled(false);
+// the route the walk follows, as a line through the cells' feet in the world (steve draws its pathfinder's the same way)
+let routeLine = null, routeKey = "";
+function showRoute(f) {
+  const r = Array.isArray(f.route) ? f.route : [], key = JSON.stringify(r) + f["route-kind"];
+  if (key === routeKey) return;
+  routeKey = key;
+  if (routeLine) { routeLine.dispose(); routeLine = null; }
+  if (r.length < 1 || !f.pos) return;
+  const pts = [new B.Vector3(f.pos[0], f.pos[1] + 0.1, f.pos[2]), ...r.map((c) => new B.Vector3(c[0] + 0.5, c[1] + 0.1, c[2] + 0.5))];
+  routeLine = B.MeshBuilder.CreateLines("route", { points: pts }, scene);
+  routeLine.color = f["route-kind"] === "walk" || !f["route-kind"] ? new B.Color3(0.15, 0.9, 1) : new B.Color3(1, 0.5, 0.12); // steve's colours: a clear walk, cells to dig routeLine.isPickable = false;
+}
+function showLook(f) {
+  const c = f.looking;
+  lookBox.setEnabled(!!c);
+  if (c) lookBox.position.set(c[0] + 0.5, c[1] + 0.5, c[2] + 0.5);
+}
+
+// ---------------------------------------------------------------- light: vanilla's sky light and block light, worked out here from the blocks
+// The bot does not keep the server's light arrays (2 KB a section in every bot's world), so the page works
+// the light out from the same blocks the way the game does: sky light 15 down every column to its first
+// block that stops or dims light, then spread to the neighbours less one a block (water and leaves one
+// more); block light from the blocks that glow, spread the same way. Each face of a section's mesh is then
+// darkened by the brighter of the two in the cell it faces, with vanilla's curve, f / (4 - 3f).
+const EMIT = { torch: 14, wall_torch: 14, lantern: 15, soul_lantern: 10, lava: 15, glowstone: 15, fire: 15, soul_fire: 10,
+  sea_lantern: 15, jack_o_lantern: 15, shroomlight: 15, beacon: 15, campfire: 15, soul_campfire: 10, end_rod: 14,
+  redstone_torch: 7, redstone_wall_torch: 7, magma_block: 3, crying_obsidian: 10, glow_lichen: 7, ochre_froglight: 15,
+  verdant_froglight: 15, pearlescent_froglight: 15, nether_portal: 11, end_portal: 15, end_gateway: 15, amethyst_cluster: 5,
+  large_amethyst_bud: 4, medium_amethyst_bud: 2, small_amethyst_bud: 1, brown_mushroom: 1, dragon_egg: 1, sea_pickle: 6,
+  respawn_anchor: 0, conduit: 15, copper_bulb: 15, light: 15, sculk_catalyst: 6, enchanting_table: 7, ender_chest: 7,
+  brewing_stand: 1, end_portal_frame: 1, glow_berries: 0, cave_vines: 0 };
+const DIM = /water|leaves|ice$|cobweb|slime_block|honey_block/; // vanilla's light opacity 1: a block of it dims light by one more
+let stateOpaque = null, stateEmit = null, stateDim = null;
+function lightTables() {
+  if (stateOpaque) return;
+  const bl = assets.blocks.slice().sort((a, b) => a.minStateId - b.minStateId);
+  const count = (b) => (b.states || []).reduce((n, s) => n * ((s.values && s.values.length) || 2), 1);
+  const max = bl.reduce((m, b) => Math.max(m, b.minStateId + count(b)), 0);
+  stateOpaque = new Uint8Array(max); stateEmit = new Uint8Array(max); stateDim = new Uint8Array(max);
+  for (const b of bl) for (let s = b.minStateId; s < b.minStateId + count(b); s++) {
+    stateOpaque[s] = !b.transparent && b.boundingBox === "block" ? 1 : 0;
+    stateEmit[s] = EMIT[b.name] || 0;
+    stateDim[s] = DIM.test(b.name) ? 1 : 0;
+  }
+}
+// a column's sections decoded from the bytes /column sends (the wire's paletted containers), and the
+// highest cell in each x,z that stops or dims light (where the sky's 15 ends)
+const lightCols = new Map();
+function readVarint(b, o) { let v = 0, s = 0, x; do { x = b[o.i++]; v |= (x & 127) << s; s += 7; } while (x & 128); return v >>> 0; }
+function readContainer(b, o, entries, maxBits) {
+  const bits = b[o.i++];
+  if (bits === 0) { const v = readVarint(b, o); return v; }
+  let pal = null;
+  if (bits <= maxBits) { const n = readVarint(b, o); pal = new Array(n); for (let k = 0; k < n; k++) pal[k] = readVarint(b, o); }
+  const per = Math.floor(64 / bits), nl = Math.ceil(entries / per), mask = (1 << bits) - 1, out = new Uint16Array(entries);
+  let e = 0;
+  for (let l = 0; l < nl; l++) {
+    const hi = ((b[o.i] << 24) | (b[o.i + 1] << 16) | (b[o.i + 2] << 8) | b[o.i + 3]) >>> 0;
+    const lo = ((b[o.i + 4] << 24) | (b[o.i + 5] << 16) | (b[o.i + 6] << 8) | b[o.i + 7]) >>> 0;
+    o.i += 8;
+    for (let k = 0; k < per && e < entries; k++, e++) {
+      const off = k * bits;
+      const v = off + bits <= 32 ? (lo >>> off) & mask : off >= 32 ? (hi >>> (off - 32)) & mask : ((lo >>> off) | (hi << (32 - off))) & mask;
+      out[e] = pal ? pal[v] : v;
+    }
+  }
+  return out;
+}
+function lightColumn(c, bytes) {
+  lightTables();
+  const o = { i: 0 }, n = c.height / 16, secs = new Array(n);
+  for (let s = 0; s < n; s++) { o.i += 4; secs[s] = readContainer(bytes, o, 4096, 8); readContainer(bytes, o, 64, 3); }
+  const top = new Int16Array(256).fill(c.minY - 1);
+  for (let xz = 0; xz < 256; xz++) {
+    for (let s = n - 1, found = false; s >= 0 && !found; s--) {
+      const sec = secs[s];
+      if (typeof sec === "number") { if (stateOpaque[sec] || stateDim[sec]) { top[xz] = c.minY + s * 16 + 15; found = true; } continue; }
+      for (let ly = 15; ly >= 0; ly--) { const id = sec[(ly << 8) | xz]; if (stateOpaque[id] || stateDim[id]) { top[xz] = c.minY + s * 16 + ly; found = true; break; } }
+    }
+  }
+  lightCols.set(`${c.x},${c.z}`, { minY: c.minY, secs, top });
+  lightDirty = true;
+}
+function stateAt(col, x, y, z) {
+  const s = (y - col.minY) >> 4, sec = col.secs[s];
+  if (sec === undefined) return 0;
+  return typeof sec === "number" ? sec : sec[((y & 15) << 8) | ((z & 15) << 4) | (x & 15)];
+}
+// the light round the bot: a box of the loaded columns, 48 blocks above and below its feet
+let lightBox = null, lightDirty = false, lightAt = null;
+const LY = 48;
+function computeLight(pos) {
+  const r = meta.radius, bcx = Math.floor(pos[0]) >> 4, bcz = Math.floor(pos[2]) >> 4, W = (2 * r + 1) * 16, H = 2 * LY;
+  const X0 = (bcx - r) * 16, Z0 = (bcz - r) * 16, Y0 = Math.floor(pos[1]) - LY, N = W * W * H;
+  const st = new Uint16Array(N), sky = new Uint8Array(N), blk = new Uint8Array(N), q = new Int32Array(N);
+  const idx = (x, y, z) => ((y * W) + z) * W + x;
+  const cols = [];
+  for (let cz = -r; cz <= r; cz++) for (let cx = -r; cx <= r; cx++) cols.push(lightCols.get(`${bcx + cx},${bcz + cz}`));
+  let qh = 0, qt = 0;
+  for (let z = 0; z < W; z++) for (let x = 0; x < W; x++) {
+    const col = cols[(z >> 4) * (2 * r + 1) + (x >> 4)];
+    const wx = X0 + x, wz = Z0 + z, top = col ? col.top[((wz & 15) << 4) | (wx & 15)] : 1e9;
+    for (let y = 0; y < H; y++) {
+      const wy = Y0 + y, i = idx(x, y, z), id = col ? stateAt(col, wx, wy, wz) : 0;
+      st[i] = id;
+      if (wy > top) { sky[i] = 15; q[qt++] = i; }
+      if (stateEmit[id]) { blk[i] = stateEmit[id]; }
+    }
+  }
+  const WW = W * W;
+  const spread = (lv) => { // breadth first from every lit cell; each step costs one, a dimming block one more
+    const go = (n, l) => { if (stateOpaque[st[n]]) return; const nl = l - 1 - stateDim[st[n]]; if (nl > lv[n]) { lv[n] = nl; q[qt] = n; qt = qt + 1 === N ? 0 : qt + 1; } };
+    while (qh !== qt) {
+      const i = q[qh]; qh = qh + 1 === N ? 0 : qh + 1;
+      const l = lv[i]; if (l <= 1) continue;
+      const x = i % W, z = ((i / W) | 0) % W, y = (i / WW) | 0;
+      if (x > 0) go(i - 1, l); if (x < W - 1) go(i + 1, l);
+      if (z > 0) go(i - W, l); if (z < W - 1) go(i + W, l);
+      if (y > 0) go(i - WW, l); if (y < H - 1) go(i + WW, l);
+    }
+  };
+  spread(sky);
+  qh = 0; qt = 0;
+  for (let i = 0; i < N; i++) if (blk[i]) q[qt++] = i;
+  spread(blk);
+  lightBox = { X0, Y0, Z0, W, H, sky, blk, cols: lightCols, r, bcx, bcz };
+  lightAt = pos.slice();
+}
+function lightOf(wx, wy, wz) {
+  const b = lightBox;
+  const x = wx - b.X0, y = wy - b.Y0, z = wz - b.Z0;
+  if (x >= 0 && z >= 0 && x < b.W && z < b.W && y >= 0 && y < b.H) { const i = ((y * b.W) + z) * b.W + x; return Math.max(b.sky[i], b.blk[i]); }
+  const col = lightCols.get(`${wx >> 4},${wz >> 4}`);
+  return col && wy <= col.top[((wz & 15) << 4) | (wx & 15)] ? 0 : 15; // outside the box: open sky or the dark under it
+}
+// vanilla's light curve at its default brightness (50%: halfway to 1 - (1 - b)^4), never quite black
+const curve = (l) => { const f = l / 15, b = f / (4 - 3 * f); return Math.max(0.08, (b + (1 - (1 - b) ** 4)) / 2); };
+function lightMesh(m) {
+  if (!lightBox || !m.name.startsWith("section_")) return;
+  const p = m.getVerticesData("position"), n = m.getVerticesData("normal");
+  if (!p || !n) return;
+  if (!m.metadata || !m.metadata.lit) m.metadata = { ...(m.metadata || {}), lit: m.getVerticesData("color").slice() };
+  const base = m.metadata.lit, out = new Float32Array(base.length), mp = m.position;
+  for (let v = 0; v < p.length / 3; v += 4) { // a face is four vertices; it takes the light of the cell it faces
+    const cx = (p[v * 3] + p[v * 3 + 3] + p[v * 3 + 6] + p[v * 3 + 9]) / 4 + mp.x, cy = (p[v * 3 + 1] + p[v * 3 + 4] + p[v * 3 + 7] + p[v * 3 + 10]) / 4 + mp.y,
+      cz = (p[v * 3 + 2] + p[v * 3 + 5] + p[v * 3 + 8] + p[v * 3 + 11]) / 4 + mp.z;
+    // the cell it faces, or for a face inside its own cell (a plant's cross, a slab's top) that cell
+    const k = curve(Math.max(lightOf(Math.floor(cx + n[v * 3] * 0.5), Math.floor(cy + n[v * 3 + 1] * 0.5), Math.floor(cz + n[v * 3 + 2] * 0.5)),
+      lightOf(Math.floor(cx - n[v * 3] * 0.01), Math.floor(cy - n[v * 3 + 1] * 0.01), Math.floor(cz - n[v * 3 + 2] * 0.01))));
+    for (let j = v; j < v + 4 && j < p.length / 3; j++) {
+      out[j * 4] = base[j * 4] * k; out[j * 4 + 1] = base[j * 4 + 1] * k; out[j * 4 + 2] = base[j * 4 + 2] * k; out[j * 4 + 3] = base[j * 4 + 3];
+    }
+  }
+  m.setVerticesData("color", out, true);
+}
+scene.onNewMeshAddedObservable.add((m) => { if (m.name.startsWith("section_")) setTimeout(() => lightMesh(m), 0); });
+setInterval(() => { // again when columns arrived, or the bot moved 8 blocks from where it was last worked out
+  if (!pose || !lightCols.size) return;
+  const p = [pose.x, pose.y, pose.z];
+  if (!lightDirty && lightAt && Math.hypot(p[0] - lightAt[0], p[1] - lightAt[1], p[2] - lightAt[2]) < 8) return;
+  lightDirty = false;
+  const t0 = performance.now();
+  computeLight(p);
+  const t1 = performance.now();
+  for (const m of scene.meshes) lightMesh(m);
+  globalThis.lightMs = [Math.round(t1 - t0), Math.round(performance.now() - t1)]; // for the console: working out, applying
+}, 1500);
+// the hand and what it holds take the light where the eyes are, as vanilla's do
+setInterval(() => {
+  if (!lightBox || !pose) return;
+  const k = curve(lightOf(Math.floor(pose.x), Math.floor(pose.y + 1.62), Math.floor(pose.z)));
+  for (const m of [arm, held]) if (m && m.material) { m.material.diffuseColor = new B.Color3(k, k, k); m.material.emissiveColor = new B.Color3(0.35 * k, 0.35 * k, 0.35 * k); }
+}, 500);
+
+// ---------------------------------------------------------------- sky and fog: the biome underfoot's sky colour, fog to the edge of what is loaded
+let skyName = null;
+function sky(f) {
+  const name = f.biome != null && assets.biomes[f.biome] ? assets.biomes[f.biome].name : "plains";
+  // near the bottom of the overworld vanilla darkens the sky and fog by ((eye y - min y) / 32)^2, the void's
+  // darkness (FogRenderer.setupColor: the clear colour scale 1/32 over the height above the build floor, -64)
+  const eye = (f.pos ? f.pos[1] : 64) + 1.62, dark = (f.dimension || "").includes("overworld") || !f.dimension ? Math.min(1, Math.max(0, (eye + 64) / 32)) ** 2 : 1;
+  const key = name + ":" + dark.toFixed(2);
+  if (key === skyName) return;
+  skyName = key;
+  const c = ((assets.skies || {})[name] || [0.47, 0.65, 1]).map((v) => v * dark);
+  const scene = viewer.scene;
+  scene.clearColor = new B.Color4(c[0], c[1], c[2], 1);
+  scene.fogMode = B.Scene.FOGMODE_LINEAR;
+  scene.fogColor = new B.Color3(c[0], c[1], c[2]);
+  scene.fogStart = meta.radius * 16 * 0.55;
+  scene.fogEnd = meta.radius * 16;
+}
+
+// ---------------------------------------------------------------- polling and the render loop
+let down = false, lastRun = null; // the bot was away (its run ended), the last frame of this run
+async function poll() {
+  try {
+    const f = await (await fetch("/frame")).json();
+    if (f.pos) {
+      pose = { x: f.pos[0], y: f.pos[1], z: f.pos[2], yaw: yawOf(f.look ? f.look[0] : 0), pitch: pitchOf(f.look ? f.look[1] : 0) };
+      if (down || (lastRun && (f.name !== lastRun.name || f.dimension !== lastRun.dimension || (f.tick ?? 0) < (lastRun.tick ?? 0) - 100))) resetWorld();
+      down = false; lastRun = f;
+      panel(f); sky(f); holdItem(f); swingTo(f); showCrack(f); showLook(f); showRoute(f); syncEntities(f.entities || [], f); syncColumns(f.columns || {}, f.pos, meta.radius);
+      $("status").textContent = `${versions.size} columns`;
+    } else { $("status").textContent = "new world loading… (waiting for the bot to spawn)"; down = true; }
+  } catch (e) { $("status").textContent = "new world loading… (the bot is restarting)"; down = true; }
+  setTimeout(poll, 100);
+}
+let last = performance.now();
+function loop() {
+  const now = performance.now(), t = Math.min(1, (now - last) / 90); last = now;
+  try {
+    aim(t); animateHand(now);
+    for (const [id, e] of ents) {
+      const c = e.cur, g = e.target;
+      c.x += (g.x - c.x) * t; c.y += (g.y - c.y) * t; c.z += (g.z - c.z) * t; c.yaw = lerpAngle(c.yaw, g.yaw, t);
+      R.updateViewerEntity(viewer, id, c.x, c.y, c.z, c.yaw);
+    }
+    R.renderViewer(viewer);
+  } catch (_) { /* an entity mesh hiccup must not stop the loop */ }
+  requestAnimationFrame(loop);
+}
+
+$("status").textContent = "loading the game's assets…";
+const assets = await (await fetch("/assets.json", { cache: "no-cache" })).json();
+await applyAssets(assets);
+meta = await (await fetch("/meta")).json();
+meta.docs = Object.fromEntries([...meta.chain, ...meta.always].map((r) => [r.id, r.doc]));
+icons = await (await fetch("/icons")).json();
+poll(); loop();
+
+// a changed page reloads itself, so an edit reaches an open tab without a restart of the bot
+const page = await (await fetch("/", { cache: "no-store" })).text();
+setInterval(async () => { try { if ((await (await fetch("/", { cache: "no-store" })).text()) !== page) location.reload(); } catch (_) {} }, 15000);
+</script>
+</body>
+</html>

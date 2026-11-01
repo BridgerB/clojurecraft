@@ -318,6 +318,18 @@
          (sort-by #(nth % 2))
          vec)))
 
+(defn block-states
+  "{name-kw [[property [value ...]] ...]} for every block with properties, from
+   reports/blocks.json, in the report's order: a state's id counts through them with the last
+   property fastest (the viewer derives a state's properties from it)."
+  [reports]
+  (let [j (json/read-str (slurp (io/file reports "blocks.json")))]
+    (into (sorted-map)
+          (for [[n m] j
+                :let [props (get m "properties")]
+                :when (seq props)]
+            [(name-kw n) (mapv (fn [[k vs]] [k (vec vs)]) props)]))))
+
 (defn registry
   "{name-kw protocol-id} for the entries of registry reg (e.g. \"minecraft:item\") in
    reports/registries.json, sorted by name."
@@ -403,6 +415,7 @@
         (write-map (io/file out "mobs.edn") probe-hdr (mobs probe))
         (println "wrote" (str out "/{hardness,materials,fuel,needs-tool,shapes,mobs}.edn"))))
     (write-rows (io/file out "blocks.edn") hdr (blocks reports))
+    (write-map (io/file out "block-states.edn") hdr (block-states reports))
     (write-map (io/file out "packets.edn") hdr (packets reports))
     (write-map (io/file out "items.edn") hdr (registry reports "minecraft:item"))
     (write-map (io/file out "entity-types.edn") hdr (registry reports "minecraft:entity_type"))
@@ -410,4 +423,5 @@
     (write-map (io/file out "components.edn")
                hdr
                (registry reports "minecraft:data_component_type"))
-    (println "wrote" (str out "/{blocks,packets,items,entity-types,menus,components}.edn"))))
+    (println "wrote"
+             (str out "/{blocks,block-states,packets,items,entity-types,menus,components}.edn"))))

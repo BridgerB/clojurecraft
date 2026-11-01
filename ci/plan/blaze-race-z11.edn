@@ -1,0 +1,13 @@
+;; Issue #262, round z11 on main f750a1e61 (#665, the z10 code and the first gym pass): six landings (1-6), one blaze-fortress-race
+;; run each. z10 (74904d2ea): landing 6 PASS 8 rods in 19m48s; landing 3 10 kills in 10 min 5 rods held, burned; landing 2 burned at
+;; 6m23s (hold flip, fixed); landing 4 38 kills in 58 min but 3 rods held; landings 1 and 5 0 kills (camp / tunnel).
+;; Rods held first (7 is a pass), kills per 10 min (s2k.ts), rods per kill, deaths.
+{:plans/label "blaze-race-z11"
+ :plans/jobs 6
+ :plans/issue 262
+ :plans/experiments [{:exp/name "blaze-fortress-race"
+                      :exp/kind :gym
+                      :exp/goal "blaze-fortress-race"
+                      :exp/runs 6
+                      :exp/bots 1
+                      :exp/est-s 1800}]}

@@ -270,6 +270,14 @@
    [:plan/failures
     "[{:choice choice-keys-of-the-plan :feet cell :at ms}]: the intents that failed in the last 30 s, up to 8, kept across the intents that start after them; the planner refuses a plan that failed from these feet, or 3 times, and backs away instead (plan/failed-before?)"
     "after an intent fails"]
+   [:plan/best
+    "the milestones a chained run reached that a death which took the inventory sent back (plan/restart-after-death): :plan/reached starts over, the records and the race's counting read :plan/reached and this (plan/milestones-ever)"
+    "after the first such death"]
+   [:plan/lives "the deaths (:stats/deaths) the planner has judged, one check per life"
+    "after the first death"]
+   [:inventory/life
+    "the :stats/deaths when the last window-0 contents arrived: the new life's contents are in once it equals :stats/deaths"
+    "after a container-set-content of window 0"]
    [:plan/recover-at
     "ms of the last recovery (plan/recover); another within recover-cooldown-ms does nothing"
     "after a recovery"]
@@ -507,6 +515,9 @@
    [:pocket/failed
     "a set of pocket cells that cannot be sealed (a wanted cell that cannot be laid: the roof over open air): noted by plan/steer for the blaze-rods row when the bot stands in one, and pocket-ok? passes over them. Such a pocket is no refuge against blazes (blaze-race-z7 landing 1)"
     "after the bot stood in an unsealable pocket"]
+   [:pocket/hurt
+    "{:at ms :hp h}: the first hurt (burning or struck within press-ms) of the bot in its held pocket, noted by plan/steer for the blaze-rods row, kept while the hurt lasts, dropped out of the pocket or unhurt; a further hit leak-ms after it with leak-loss health lost makes the pocket a leak (leaky-pocket?): dropped and its cell added to :pocket/failed"
+    "while the bot is hurt in a held pocket"]
    [:rod-grab/since
     "ms (:time/now) the running rod pick-up began (noted by plan/steer for the blaze-rods row, forgotten when none runs): the pick-up holds the refuge off for rod-grab-ms (2 s), then the refuge wins"
     "while a :collect-drops or :walk :for :rod of a rod within a step runs"]
@@ -746,6 +757,9 @@
    [:chunk/column "the decoded column, added on the reader thread; never recorded"
     "level-chunk packets"]
    [:chunk/min-y "a column's lowest block y: -64 for 24 sections, 0 for 16 (the Nether, the End)"
+    "every decoded column"]
+   [:chunk/biomes
+    "a column's biome containers, one a section in order, as the wire holds them (64 cells of server biome registry ids); read only by the viewer's tints"
     "every decoded column"]])
 
 (def by-attribute

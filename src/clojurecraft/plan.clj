@@ -245,16 +245,57 @@
   [world table]
   (boolean (seq (remove #(here? world %) (undone world table)))))
 
+(def kept-items
+  "Items (their count) a bot may hold after a death for it to have kept its inventory: fewer than
+   this, the death took it (keep_inventory false)."
+  3)
+
+(defn held-items
+  "How many items the player holds in all, by their counts."
+  [world]
+  (reduce + 0 (map #(or (:count %) 0) (vals (:player/inventory world)))))
+
+(defn milestones-ever
+  "The milestones the run has ever reached: :plan/reached and :plan/best (what the stages that a
+   death which lost the inventory took back were: the race's records count them)."
+  [world]
+  (into (:plan/reached world #{}) (:plan/best world)))
+
+(defn restart-after-death
+  "A chained run after a death that lost the inventory starts its chain over. The server's
+   respawn contents of the new life have arrived (:inventory/life is :stats/deaths) and the bot
+   holds fewer than kept-items: :plan/reached goes back to nothing (reach then re-derives what
+   holds), the stages it had are kept in :plan/best, and :plan/reached-after is left alone.
+   A bot that kept its inventory (keep_inventory true, the races) is unchanged. One check per
+   life (:plan/lives). A local full run on a server with keep_inventory false suffocated in a wall,
+   respawned at spawn with nothing and went on as the water-bucket row, crafting wooden pickaxes
+   from scratch under its label, with wood, kit, pickaxe, cobblestone, stone-pickaxe, furnace,
+   ingots and bucket reached for ever (issue #670)."
+  [world]
+  (let [deaths (:stats/deaths world 0)]
+    (cond (or (not (:plan/chain? world))
+              (<= deaths (:plan/lives world 0))
+              (:player/dead? world)
+              (not= deaths (:inventory/life world)))
+          world
+          :else
+          (cond-> (assoc world :plan/lives deaths)
+            (< (held-items world) kept-items)
+            (-> (update :plan/best (fnil into #{}) (:plan/reached world #{}))
+                (assoc :plan/reached #{}))))))
+
 (defn reach
   "A chained run's milestones: on a :plan/chain? plan, every target in play that holds now joins
    :plan/reached and stays there for the run, the escapes excepted. A run from spawn spends what
    an earlier step made (the pickaxe takes the kit's sticks, the water bucket the bucket): the
    step was reached, so it is not done again; a tool that breaks is made again by the needs of
-   the step that uses it. A gym stage, one target, keeps re-deriving. Each milestone's time is
-   kept beside it, ms since the plan began (:plan/reached-after): how fast a stage goes."
+   the step that uses it. A death that took the inventory (restart-after-death) starts the chain
+   over. A gym stage, one target, keeps re-deriving. Each milestone's time is kept beside it, ms
+   since the plan began (:plan/reached-after): how fast a stage goes."
   [world table]
   (if (:plan/chain? world)
-    (let [new (into []
+    (let [world (restart-after-death world)
+          new (into []
                     (comp (remove :goal/always?)
                           (remove #(contains? (:plan/reached world #{}) (:goal/id %))) ; reached is reached: never asked again
                           (filter #(done-by world %))
@@ -262,7 +303,8 @@
                     (in-play world table))
           after (- (:time/now world 0) (:plan/since world (:time/now world 0)))]
       (cond-> (update world :plan/reached (fnil into #{}) new)
-        (seq new) (update :plan/reached-after (fnil into {}) (map (fn [g] [g after])) new)))
+        (seq new) (update :plan/reached-after (fnil into {}) (map (fn [g] [g after])) new)
+        (seq new) (update :plan/best (fnil into #{}) new)))
     world))
 
 (defn begin

@@ -305,10 +305,33 @@
   [set offset i]
   (let [[x z _] (landings/landing-for set (inc (+ offset i)))] [x z]))
 
+(def team
+  "The scoreboard team every racer joins: friendly fire off, so a bot's sweep or a retaliation never hurts another."
+  "racers")
+
+(def team-commands
+  "What a race asks of its server once beside the gamerule: the team of racers, friendly fire off.
+   A sword's sweep hits the players beside its target; at a spawner several bots stand together, the
+   one struck fought back (combat: the striker is answered), and 47 of 344 deaths of lanes 1 to 6
+   of race 9d15bd6 were a bot killed by a bot (\"was slain by Clj_r24\", 44 of the 83 \"other\"
+   deaths). A team with friendly fire off takes no damage from its own."
+  [(str "team add " team) (str "team modify " team " friendlyFire false")])
+
+(defn team-join-command
+  "The RCON command that puts bot name in the team of racers."
+  [name]
+  (str "team join " team " " name))
+
 (defn set-gamerules!
-  "What every race asks of its server once: keep inventories over deaths."
+  "What every race asks of its server once: keep inventories over deaths, the team of racers with
+   friendly fire off (team-commands; an existing team answers an error, which is no matter)."
   [{:keys [host rcon-port rcon-pass]}]
-  (try (rcon/with-rcon host rcon-port rcon-pass #(rcon/command! % "gamerule keep_inventory true"))
+  (try (rcon/with-rcon host
+                       rcon-port
+                       rcon-pass
+                       (fn [rc]
+                         (rcon/command! rc "gamerule keep_inventory true")
+                         (doseq [c team-commands] (rcon/command! rc c))))
        (catch Exception e (cli/log "gamerule failed:" e))))
 
 (def pad-offsets
@@ -508,6 +531,50 @@
                                         brick-blocks))
                                 (brick-probes pad))))))
 
+(def ground-ring
+  "The cells [dx dz] round a pad, four blocks off, that must stand on ground too: the way out of
+   its doorway is not a ledge. Eight points."
+  (for [dx [-4 0 4] dz [-4 0 4] :when (not= [0 0] [dx dz])] [dx dz]))
+
+(defn ground-test
+  "The RCON test that passes when the Nether's cell [x y z] is ground, a block of the nether's
+   own stone (netherrack, basalt, blackstone): not lava, not air."
+  [[x y z]]
+  (str "execute in minecraft:the_nether if block " x " " y " " z " #minecraft:base_stone_nether"))
+
+(defn air-test
+  "The RCON test that passes when the Nether's cell [x y z] holds block (minecraft:air or
+   minecraft:cave_air)."
+  [[x y z] block]
+  (str "execute in minecraft:the_nether if block " x " " y " " z " " block))
+
+(def ground-top 100)
+(def ground-bottom 40)               ; the lava sea is at y 31; a pad is cut well over it
+
+(defn ground-y
+  "The height of the first ground under the roof for a pad at [x z], from ground-top down to
+   ground-bottom: ground under the cell, air in it and the two over it, and ground under every
+   cell of ground-ring at the same height (a ledge is not ground), or nil. Race 9d15bd6, lane 7:
+   Clj_r04 and Clj_r08 stepped off a pad built at the fixed y 72 into a cavern and fell 37 blocks into
+   the lava sea (\"tried to swim in lava\" at y 31): no arrival by portal ever leaves a platform
+   with nothing round it."
+  [rc [x z _]]
+  (with-loaded
+   rc
+   [(- x 24) (- z 24) (+ x 24) (+ z 24)]
+   (fn []
+     (let [ok? #(fixture/passed? (rcon/command! rc %))
+           air? (fn [c]
+                  (or (ok? (air-test c "minecraft:air")) (ok? (air-test c "minecraft:cave_air"))))]
+       (loop [y ground-top]
+         (cond (< y ground-bottom) nil
+               (and (ok? (ground-test [x (dec y) z]))
+                    (every? air? [[x y z] [x (inc y) z] [x (+ y 2) z]])
+                    (every? (fn [[dx dz]] (ok? (ground-test [(+ x dx) (dec y) (+ z dz)])))
+                            ground-ring))
+               y
+               :else (recur (dec y))))))))
+
 (defn pad-unsafe
   "Why the pad is no landing, :bricks (inside the fortress's body) or :mobs (a danger-mob near), or
    nil. Race 41224855928 and 41229255270: the first deaths of the bots at the fortress came 14 to
@@ -521,14 +588,21 @@
   (atom {}))
 
 (defn choose-pad!
-  "Choose racer k's pad at the fortress [fx fz] (choose-pad over pad-candidates, minus exclude), build
-   it (build-pad!), remember it (pads-chosen) and log it with its distance to the fortress."
+  "Choose racer k's pad at the fortress [fx fz]: in the order of pad-candidates (minus the [x z]
+   of exclude), the first with ground (ground-y: its height is the pad's) that pad-unsafe finds
+   safe; else the first candidate as before. Build it (build-pad!), remember it (pads-chosen) and
+   log it with its distance to the fortress."
   [rc [fx fz :as fortress] k exclude]
-  (let [pad (choose-pad (fn [p]
-                          (let [why (pad-unsafe rc p)]
-                            (when why (cli/log "pad" k p "unsafe:" why))
-                            why))
-                        (remove (set exclude) (pad-candidates fortress k)))]
+  (let [skip (set (map (juxt first second) exclude))
+        candidates (remove #(skip [(first %) (second %)]) (pad-candidates fortress k))
+        pad (or (loop [[c & more] candidates]
+                  (when c
+                    (let [y (ground-y rc c)
+                          g (when y [(first c) (second c) y])
+                          why (if g (pad-unsafe rc g) :no-ground)]
+                      (when why (cli/log "pad" k c "unsafe:" why))
+                      (if why (recur more) g))))
+                (first candidates))]
     (build-pad! rc pad)
     (swap! pads-chosen assoc k pad)
     (cli/log "pad" k
@@ -614,6 +688,7 @@
                  _ (when online (deliver centre [(long (first online)) (long (nth online 2))]))
                  at (when online
                       (rcon/command! rc (str "gamemode survival " name))
+                      (rcon/command! rc (team-join-command name))
                       (cond (fortress? from)
                             (let [k (slot-index i bots)]
                               (land-fortress!
