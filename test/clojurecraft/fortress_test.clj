@@ -1513,3 +1513,19 @@
                        {:trail/target [-1 0 0] :trail/cells [] :trail/dead #{[9 9 9]}}}
                       (range 10))]
         (is (<= (count (:trail/others (:fortress/trail w))) fortress/dead-targets))))))
+
+(deftest the-retreats-of-a-target-are-kept-across-its-tunnels
+  ;; blaze-race-z14 job 5 (run 41256755663): 352 tunnels to [2144 72 1760], each one move
+  ;; ([-1 -1 0] from [2157 63 1748], then [1 1 0] back) and :blocked, :retreats 1 every time, the
+  ;; count living in the intent
+  (let [a [2144 72 1760]
+        trail (assoc (fortress/trail-of {} a) :trail/retreats 1)]
+    (is (= 1 (fortress/carried-retreats 0 trail)) "a new tunnel starts from the trail's count")
+    (is (= 2 (fortress/carried-retreats 2 trail)) "its own, when more")
+    (is (= 0 (fortress/carried-retreats 0 (fortress/trail-of {} a)))
+        "a trail new for the target has none")
+    (is (= 0
+           (fortress/carried-retreats 0 (fortress/trail-of {:fortress/trail trail} [2175 56 1733])))
+        "another target's trail starts clean")
+    (is (> (inc (fortress/carried-retreats 0 trail)) fortress/retreats-allowed)
+        "the second tunnel's retreat is over the allowance: blocked at once, not a step")))
