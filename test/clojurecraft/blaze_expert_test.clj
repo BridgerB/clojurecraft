@@ -84,6 +84,45 @@
       (is (:expert/stop act))
       (is (= :no-pocket (:expert/why act)))
       (is (not (:expert/done act)))))
+  (testing "two idle blazes open on the nearest, and the open window hits that one"
+    (is (= :unseal
+           (:intent/kind (expert/choose (sit {:holding :stone_pickaxe
+                                              :blazes [(blaze {}) (blaze {:eid 2 :dist 8.0})]})))))
+    (let [act (expert/choose (sit {:sealed? false
+                                   :blazes [(blaze {:eid 4 :dist 2.6 :box 2.4})
+                                            (blaze {:eid 9 :dist 3.0 :box 2.8})]}))]
+      (is (= :fight (:intent/kind act)))
+      (is (= 4 (:intent/target act)))))
+  (testing "three blazes that would see keep the window shut"
+    (is (= {:expert/why :wait}
+           (expert/choose (sit {:holding :stone_pickaxe
+                                :blazes [(blaze {}) (blaze {:eid 2 :dist 7.0})
+                                         (blaze {:eid 3 :dist 7.5})]})))))
+  (testing "a hit reseals an open window"
+    (is (= :seal
+           (:intent/kind (expert/choose (sit {:sealed? false
+                                              :struck? true
+                                              :blazes [(blaze {:dist 2.6 :box 2.4})]}))))))
+  (testing "a volley that starts charging out of the band reseals"
+    (is (= :seal
+           (:intent/kind (expert/choose
+                          (sit {:sealed? false
+                                :blazes [(blaze {:dist 6.6 :shot-step 1 :shot-at 5000})]}))))))
+  (testing "an early charge already in the band is still a hit"
+    (let [act (expert/choose (sit {:sealed? false
+                                   :blazes [(blaze
+                                             {:dist 2.6 :box 2.4 :shot-step 1 :shot-at 5000})]}))]
+      (is (= :fight (:intent/kind act)))
+      (is (:intent/hold? act))))
+  (testing "a blaze outside the band is peeked"
+    (let [act (expert/choose
+               (sit {:holding :stone_pickaxe :blazes [(blaze {:dist 12.0})] :peek-cell [1 2 3]}))]
+      (is (= :unseal (:intent/kind act)))
+      (is (= :peek (:expert/why act)))))
+  (testing "an open window with nobody that would see steps out to the opening"
+    (is (= {:intent/kind :walk :intent/target [8 64 4] :intent/for :peek :expert/why :peek}
+           (expert/choose
+            (sit {:sealed? false :blazes [(blaze {:see? false :dist 8.0})] :peek-cell [8 64 4]})))))
   (testing "an unseal whose blaze has stopped closing is aborted before the block opens"
     ;; ten ticks in, the blaze has not closed: it would still be at 6.6 when the block broke
     (is (= :seal

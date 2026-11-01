@@ -10,13 +10,13 @@
    wall holds; one that can see hovers and shoots. The sword band (farther than a
    blaze's reach, near enough to hit) is about a block wide, and a cobble seal opens only when
    the dig sends FINISH, settle plus the finish margin, about a second after the decision. So
-   the window is opened only when the blaze's closing, at full speed and then at the speed it
-   has actually closed, lands it in that band as the block breaks, and the dig is dropped before
-   FINISH when the landing leaves the band. One blaze may have the line. A volley already past
-   its charge is never given the line back: it would fire at once. Once the window is open the
-   fight holds through one hit, down to stop-health, and the seal goes back up on fire, a
-   fireball, or a shot about to leave. Rods are taken from the window. The run leaves only at
-   seven rods and full health. No act succeeds by dying."
+   the window is opened between volleys when at most two blazes would see, on the nearest
+   whose landing is in that band, and the dig is dropped before FINISH when the landing leaves
+   the band. The seal goes back up on a hit, on fire, or when a volley starts charging in view
+   and nothing stands in the band. With nobody there to strike, it peeks: the window opens, or
+   the bot steps into the opening, so one blaze is drawn to it. A volley already past its charge
+   is never given the line back. Rods are taken from the window. The run leaves only at seven
+   rods and full health. No act succeeds by dying."
   (:require [clojure.java.io :as io]
             [clojure.math :as math]
             [clojure.string :as str]
@@ -63,6 +63,7 @@
 (def ^:private stand-above 4) ; levels over it
 (def ^:private stand-attempts 6) ; stands tried before the expert stops alive
 (def ^:private stand-searches 6) ; path plans for the nearest stands: a walk is preferred to a tunnel
+(def ^:private window-cap 2) ; blazes that may have a line when the window opens
 
 (def ^:private armour-pieces
   "Worn before any fight, in the order they are put on."
@@ -111,21 +112,25 @@
 
 (defn- seers "The blazes a window opened now would give a line to." [s] (filterv :see? (:blazes s)))
 
-(defn- one-seer
-  "The one blaze that would see, or nil when none or more than one would."
+(defn- between-volleys?
+  "Is blaze b between volleys? Step 0 has not started a charge. Step 1 is the charge."
+  [b]
+  (zero? (:shot-step b 0)))
+
+(defn- window-open?
+  "May the window be used: one or two blazes would see, and each is between volleys."
   [s]
-  (let [ss (seers s)] (when (= 1 (count ss)) (first ss))))
+  (let [ss (seers s)] (and (<= 1 (count ss) window-cap) (every? between-volleys? ss))))
 
 (defn- soon-shot?
   "Is blaze b's next fire within margin ms, or already due?"
   [b now margin]
   (let [w (shot-wait b now)] (or (>= (:shot-step b 0) 2) (and w (<= w margin)))))
 
-(defn- others-soon?
-  "Is some blaze other than the one seer about to fire within other-margin?"
-  [s now]
-  (let [id (:eid (one-seer s))]
-    (boolean (some (fn [b] (and (not= (:eid b) id) (soon-shot? b now other-margin))) (:blazes s)))))
+(defn- strike-of
+  "The nearest blaze in bs, already nearest-first, for which ok? holds."
+  [bs ok?]
+  (first (filter ok? bs)))
 
 (defn- any-hot? "Is any blaze hot? now." [s now] (boolean (some #(hot? % now) (:blazes s))))
 
@@ -152,25 +157,47 @@
 
 (defn- in-band? "Does feet-distance d land in the sword band?" [d] (<= band-lo d band-hi))
 
+(defn- lands?
+  "Is blaze b in the sword band now, or will its closing land it there when the seal breaks?"
+  [s b]
+  (or (in-band? (:dist b)) (in-band? (arrival s (:dist b)))))
+
 (defn- sortie-target
-  "The blaze a sealed window may be opened on: the one seer, idle, whose landing at the
-   break is inside the sword band."
+  "The blaze a sealed window may be opened on: the nearest of at most two that would see,
+   each between volleys, whose landing at the break is inside the sword band."
   [s]
-  (when (:sealed? s)
-    (when-let [b (one-seer s)]
-      (when (and (idle-ok? b (:now s 0)) (not (:melee? b)) (in-band? (arrival s (:dist b)))) b))))
+  (when (and (:sealed? s) (window-open? s))
+    (strike-of (seers s) #(and (not (:melee? %)) (lands? s %)))))
 
 (defn- fight-target
-  "The blaze an open window may be hit: the one seer, idle, standing in the band now, the
-   sword's reach covering its box."
+  "The blaze an open window may be hit: the nearest of at most two that would see, idle,
+   standing in the band now, the sword's reach covering its box."
   [s]
-  (when-not (:sealed? s)
-    (when-let [b (one-seer s)]
-      (when (and (idle-ok? b (:now s 0))
-                 (not (:melee? b))
-                 (in-band? (:dist b))
-                 (<= (:box b 100.0) band-hi))
-        b))))
+  (when (and (not (:sealed? s)) (<= (count (seers s)) window-cap))
+    (strike-of (seers s)
+               #(and (idle-ok? % (:now s 0))
+                     (not (:melee? %))
+                     (in-band? (:dist %))
+                     (<= (:box % 100.0) band-hi)))))
+
+(defn- others-soon?
+  "Is some blaze other than the one being struck already in a volley and about to fire
+   within other-margin? A blaze still between volleys is not one: the window is opened
+   on up to two of those."
+  [s now]
+  (let [id (:eid (or (fight-target s) (sortie-target s)))]
+    (boolean
+     (and id
+          (some (fn [b]
+                  (and (not= (:eid b) id) (pos? (:shot-step b 0)) (soon-shot? b now other-margin)))
+                (:blazes s))))))
+
+(defn- charging-out-of-band?
+  "Has a blaze that would see started a volley while none of them stands in the sword band?
+   The charge begins the tick the line returns (BlazeAttackGoal's attackStep), and a sword
+   that cannot reach it should not wait the charge out."
+  [s]
+  (and (some #(pos? (:shot-step % 0)) (seers s)) (not-any? #(in-band? (:dist %)) (seers s))))
 
 (defn- live-fight?
   "Is there an open fight worth staying in: a fight-target and health still over stop-health?"
@@ -178,13 +205,18 @@
   (and (fight-target s) (>= (:health s 0) stop-health)))
 
 (defn- danger?
-  "Must the window be shut or the bot stand still: burning, a fireball, a hot blaze, another
-   blaze about to shoot, health under stop-health, or health under full with no fight open?"
+  "Must the window be shut or the bot stand still: a hit, burning, a fireball, a volley
+   charging into a shot, a charge that started with nothing in the band, more blazes than
+   the window may show, another blaze about to shoot, health under stop-health, or health
+   under full with no fight open?"
   [s]
   (let [now (:now s 0)]
     (or (:on-fire? s)
+        (:struck? s)
         (:fireballs? s)
         (any-hot? s now)
+        (charging-out-of-band? s)
+        (and (not (:sealed? s)) (> (count (seers s)) window-cap))
         (others-soon? s now)
         (< (:health s 0) stop-health)
         (and (not (live-fight? s)) (< (:health s 0) full-health)))))
@@ -281,10 +313,36 @@
     {:intent/kind :equip :intent/item :stone_pickaxe :expert/why :arm-pick}))
 
 (defn- abort?
-  "Is an unseal in progress whose blaze no longer lands in the band? The dig is dropped for
-   a seal before FINISH, so the block stays solid."
+  "Is a sortie's unseal in progress whose blaze no longer lands in the band? The dig is
+   dropped for a seal before FINISH, so the block stays solid. A peek is not a sortie."
   [s]
   (and (:unseal-at s) (:sealed? s) (pos? (:unseal-dist s 0)) (nil? (sortie-target s))))
+
+(defn- peek?
+  "Lure one blaze to the window. Nobody is in the band to strike, at most two would see,
+   and some blaze is still between volleys. Sealed, the window opens. Open, with nothing
+   that would see, the bot steps into the opening. A blaze that sees and then loses the
+   line closes for five ticks (BlazeAttackGoal's lastSeen), which is the draw."
+  [s]
+  (and (= :hold (:phase s))
+       (nil? (sortie-target s))
+       (nil? (fight-target s))
+       (<= (count (seers s)) window-cap)
+       (some #(and (between-volleys? %) (not (:melee? %))) (:blazes s))
+       (or (and (:sealed? s) (or (seq (seers s)) (:peek-cell s)))
+           (and (not (:sealed? s)) (:peek-cell s) (empty? (seers s))))))
+
+(defn- peek-act
+  "Open the seal, or step to the opening once it is open. The pick has to be in hand
+   for the dig to start."
+  [s]
+  (cond (:sealed? s)
+        (if (= :stone_pickaxe (:holding s))
+          {:intent/kind :unseal :expert/why :peek}
+          {:intent/kind :equip :intent/item :stone_pickaxe :expert/why :arm-pick})
+        (:peek-cell s)
+        {:intent/kind :walk :intent/target (:peek-cell s) :intent/for :peek :expert/why :peek}
+        :else {:expert/why :wait}))
 
 (defn- rod-act
   "Take a rod from the window when no blaze would see through it."
@@ -317,6 +375,7 @@
             (fight-target s) (fight-act s (fight-target s))
             (abort? s) (seal-act :abort)
             (sortie-target s) (sortie-act s)
+            (peek? s) (peek-act s)
             (rod-act s) (rod-act s)
             (and (= :hold (:phase s)) (not (:sealed? s)) (:can-seal? s)) (seal-act :close))
       {:expert/why :wait}))
@@ -388,7 +447,7 @@
   [world spawner]
   (cond (missing-armour world) :wear
         (not (:expert/armed? world)) :arm
-        (in-expert-pocket? world) :hold
+        (or (in-expert-pocket? world) (:expert/peeking? world)) :hold
         ;; a site is chosen at the stand. The stand is in the ring, or on the spawner when
         ;; the ring had no floor, which is inside wake-min and would otherwise stay :approach.
         (and (:expert/site world) (or (near-spawner? world spawner) (at-stand? world))) :pocket
@@ -475,10 +534,12 @@
   [world cell spawner]
   (combat/clear? world (stand-eye cell) (update (physics/centre spawner) 1 + 1.0)))
 
-(defn- stand-band
-  "Standable cells in the ring around the spawner, nearest the feet first, with a clear
-   line to it. Cells already tried are left out."
-  [world spawner]
+(defn- ring-cells
+  "Standable cells in the ring around the spawner, nearest the feet first. Cells already
+   tried are left out. With sight?, only a cell whose line to the block over the spawner
+   is clear. A walled spawner has a floor in the ring and no such line until the tunnel
+   digs one, and the stand is that floor."
+  [world spawner sight?]
   (let [[sx sy sz] spawner
         at (path/cells world)
         feet (intent/feet world)
@@ -491,7 +552,7 @@
                :when (and (<= stand-near d stand-far)
                           (not (contains? tried c))
                           (path/standable? at c)
-                          (sees-spawner? world c spawner))]
+                          (or (not sight?) (sees-spawner? world c spawner)))]
            c)
          (sort-by #(physics/distance (physics/centre feet) (physics/centre %)))
          vec)))
@@ -508,15 +569,22 @@
    :intent/bridge? true})
 
 (defn- pick-stand
-  "A stand in the ring: the nearest of the nearest few that the path planner can reach, else
-   the nearest, to be tunnelled to. With none in the ring, the spawner itself."
+  "A stand in the ring: the nearest of the nearest few with a clear line that the path
+   planner can reach, else the nearest of those, to be tunnelled to. With no clear line,
+   the nearest standable cell in the ring. The spawner itself only when the ring has no
+   stand and it has not already failed. No :cell when nothing is left to try."
   [world spawner]
-  (let [band (stand-band world spawner)
+  (let [band (ring-cells world spawner true)
+        floor (ring-cells world spawner false)
+        tried (:expert/tried world #{})
         walk (some (fn [c] (when (intent/routable? world {:intent/kind :walk :intent/target c}) c))
-                   (take stand-searches band))]
-    (cond walk {:cell walk :how :walk :reach 0.5}
-          (first band) {:cell (first band) :how :tunnel :reach 0.5}
-          :else {:cell spawner :how :tunnel :reach 2.0})))
+                   (take stand-searches band))
+        picked (cond walk {:cell walk :how :walk :reach 0.5}
+                     (first band) {:cell (first band) :how :tunnel :reach 0.5}
+                     (first floor) {:cell (first floor) :how :tunnel :reach 0.5}
+                     (not (contains? tried spawner)) {:cell spawner :how :tunnel :reach 2.0}
+                     :else nil)]
+    (assoc (or picked {}) :band (count band) :floor (count floor))))
 
 (defn- back-cell
   "The cell through the pocket's back wall, opposite the window."
@@ -655,7 +723,11 @@
      :collect-at (when drop (mapv #(long (math/floor %)) drop))
      :approach idx
      :approaches stand-attempts
-     :spawner spawner}))
+     :spawner spawner
+     :peek-cell (when-let [site (:pocket/site world)]
+                  (when-let [[dx dz] (opening-dir world site)]
+                    (when (or (not (zero? dx)) (not (zero? dz)))
+                      (pocket/plus (:pocket/cell site) [dx 0 dz]))))}))
 
 ;; ---------------------------------------------------------------- driving the intents
 
@@ -699,8 +771,16 @@
     world))
 
 (defn- give-up-stand
-  "This stand has no pocket, or the way to it failed: remember the cell and try the next."
-  [world cell]
+  "This stand has no pocket, or the way to it failed: remember the cell and try the next.
+   reason is the intent's :intent/reason, or :no-site, :pocket, :no-stand."
+  [world cell reason]
+  (say "EXPERT-GIVEUP"
+       (pr-str {:set (:expert/set world)
+                :seed (:expert/seed world)
+                :cell cell
+                :reason reason
+                :approach (:expert/approach world 0)
+                :pos (:player/pos world)}))
   (cond-> (-> world
               (dissoc :expert/stand :expert/stand-how :expert/stand-try :expert/stand-reach)
               (update :expert/approach (fnil inc 0)))
@@ -714,7 +794,7 @@
            (intent/failed? prev)
            (or (= :tunnel-to (:intent/kind prev))
                (and (= :walk (:intent/kind prev)) (= :fight (:intent/for prev)))))
-    (give-up-stand world (:intent/target prev))
+    (give-up-stand world (:intent/target prev) (:intent/reason prev))
     world))
 
 (defn- note-pocket
@@ -723,7 +803,7 @@
   (if (and (= :pocket (:intent/kind prev))
            (or (intent/done? prev) (intent/failed? prev))
            (not (in-expert-pocket? world)))
-    (give-up-stand (dissoc world :expert/site) (:expert/stand world))
+    (give-up-stand (dissoc world :expert/site) (:expert/stand world) :pocket)
     world))
 
 (defn- note-unseal
@@ -733,7 +813,7 @@
   (if (and (= :unseal (:intent/kind want))
            (= :unseal (:expert/why want))
            (not= :unseal (get-in world [:plan/intent :intent/kind])))
-    (assoc world :expert/unseal-at (:now sit) :expert/unseal-dist (:dist (one-seer sit) 0))
+    (assoc world :expert/unseal-at (:now sit) :expert/unseal-dist (:dist (sortie-target sit) 0))
     world))
 
 (defn- seek
@@ -750,12 +830,13 @@
             (assoc world :expert/site site :expert/searched idx)
             (-> world
                 (assoc :expert/searched idx)
-                (give-up-stand (:expert/stand world))))
+                (give-up-stand (:expert/stand world) :no-site)))
           :else world)))
 
 (defn- ensure-stand
-  "Choose the stand once for this attempt. A routable cell is walked; anything else in the
-   ring, or the spawner when the ring is empty, is tunnelled to."
+  "Choose the stand once for this attempt. A routable cell with a clear line is walked;
+   anything else in that line, or a standable cell when the line is empty, is tunnelled to.
+   The spawner is the last try. Nothing left stops the approach."
   [world]
   (let [idx (:expert/approach world 0)
         sp (:expert/spawner world)]
@@ -766,12 +847,24 @@
               (= idx (:expert/stand-try world)))
           world
           :else
-          (let [{:keys [cell how reach]} (pick-stand world sp)]
-            (assoc world
-                   :expert/stand cell
-                   :expert/stand-how how
-                   :expert/stand-reach reach
-                   :expert/stand-try idx)))))
+          (let [{:keys [cell how reach band floor]} (pick-stand world sp)]
+            (say "EXPERT-STAND"
+                 (pr-str {:set (:expert/set world)
+                          :seed (:expert/seed world)
+                          :cell cell
+                          :how how
+                          :reach reach
+                          :band band
+                          :floor floor
+                          :approach idx
+                          :pos (:player/pos world)}))
+            (if cell
+              (assoc world
+                     :expert/stand cell
+                     :expert/stand-how how
+                     :expert/stand-reach reach
+                     :expert/stand-try idx)
+              (assoc world :expert/approach stand-attempts :expert/stand-try idx))))))
 
 (defn- drive
   "One tick of the expert: choose, and run that intent, keeping it while it is the same act."
@@ -792,6 +885,9 @@
                   seek)
         sit (situation world sim)
         want (choose sit)
+        world (if (= :peek (:expert/why want))
+                (assoc world :expert/peeking? true)
+                (dissoc world :expert/peeking?))
         i (:plan/intent world)]
     (cond (:expert/done want)
           (-> (drop-intent world)
