@@ -2,7 +2,8 @@
   "Mobs in the server model (issue #260): the rules (mob.clj) and the model spawning, walking,
    hitting, shooting, blasting and dying by them, from fixtures (:mobs given) as every combat
    stage's sim tests start, and the whole bot against them."
-  (:require [clojure.test :refer [deftest is testing use-fixtures]]
+  (:require [clojure.math :as math]
+            [clojure.test :refer [deftest is testing use-fixtures]]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.dimension :as dimension]
             [clojurecraft.entity :as entity]
@@ -622,3 +623,75 @@
     (is (= 14.0 (:sim/health hit)) "six at once")
     (is (some #{28} (map :source-type (said hit :damage-event))) "a mob attack")
     (is (<= (:sim/health again) 9.0) "a second hit twenty ticks on, the shot too")))
+
+(deftest a-blaze-volley-is-a-charge-three-fireballs-and-a-rest
+  ;; real: 3 fireballs 0.30 s (6 ticks) apart; volleys 8.9 s (178 ticks) apart at the fastest
+  (let [v (:volley (mob/kinds :blaze))
+        steps (rest (iterate (fn [[step]] (mob/volley-next v step)) [0]))]
+    (is (= [[1 60 true false] [2 6 true true] [3 6 true true] [4 6 true true] [0 100 false false]]
+           (take 5 steps)))
+    (is (= 178 (reduce + (map second (take 5 steps)))))))
+
+(defn fireball-ticks
+  "The ticks (1 on) at which the model has a new small fireball for the client, over n ticks."
+  [sim n]
+  (loop [sim sim
+         i 1
+         seen 0
+         at []]
+    (if (> i n)
+      at
+      (let [sim (ticks sim 1)
+            now (count (filter #(= sim/fireball-type (:type %)) (said sim :add-entity)))]
+        (recur sim (inc i) now (into at (repeat (- now seen) i)))))))
+
+(deftest a-blaze-with-a-line-charges-then-fires-three-fireballs-six-ticks-apart
+  (let [sim (arena {} {} :normal night [{:type :blaze :pos [9.5 65.0 0.5]}])
+        at (fireball-ticks sim 260)]
+    (is (= 4 (count at)) "three, then one more once the rest is over")
+    (is (= [6 6] (map - (rest (take 3 at)) (take 2 at))) "six ticks apart")
+    (is (<= 60 (first at) 63) "after a charge of 60")
+    (is (<= 237 (nth at 3) 241) "the next volley 178 ticks on")))
+
+(deftest a-blaze-without-a-line-does-not-charge
+  (is (empty? (fireball-ticks (arena wall {} :normal night [{:type :blaze :pos [9.5 65.0 0.5]}])
+                              100))))
+
+(deftest a-fireball-flies-0-55-a-tick-hits-the-player-s-box-and-stops-at-a-wall
+  (let [path (fn [sim from]
+               (sim/fireball-path sim from (mob/aim from [0.5 64.9 0.5] 0.5 0.5 0.5 0.5)))
+        open (arena {} {} :normal night [])
+        walled (arena wall {} :normal night [])]
+    (is (= :hit (first (path open [1.2 65.2 0.5]))) "inside the box's reach this tick")
+    (is (= :fly (first (path open [9.5 65.4 0.5]))) "nine blocks off is sixteen ticks")
+    (is (< 8.9 (first (second (path open [9.5 65.4 0.5]))) 9.0) "0.55 nearer in a tick")
+    (is (= :wall (first (path walled [5.2 65.4 0.5]))) "the wall's cell at x 4 stops it")))
+
+(deftest a-fireball-reaching-the-player-hurts-through-the-armour-and-sets-fire
+  (let [dir (mob/aim [4.5 65.4 0.5] [0.5 64.9 0.5] 0.5 0.5 0.5 0.5)
+        sim (-> (arena {} {} :normal night [])
+                (assoc-in [:sim/fireballs 90]
+                          {:pos [4.5 65.4 0.5] :dir dir :owner 91 :born 0 :kind :blaze})
+                (ticks 12))]
+    (is (= 15.0 (:sim/health sim)) "five, none armoured")
+    (is (some? (:sim/fire sim)) "alight")
+    (is (empty? (:sim/fireballs sim)) "spent")
+    (is (some #{14} (map :source-type (said sim :damage-event))) "a fireball")
+    (is (some #(= [90] (:ids %)) (said sim :remove-entities)))))
+
+(deftest a-blaze-s-aim-misses-as-often-as-the-formula-says
+  ;; triangular error of half-width 1.1485 * sqrt(distance) on x and z: at 10 blocks about one
+  ;; fireball in five passes within the box's half width and the fireball's radius (0.45) of the middle (the recordings: 24 of 212
+  ;; within 30 blocks hit, with the bot dodging)
+  (let [rolls (range 0.05 1.0 0.1)
+        from [10.5 65.4 0.5]
+        near (for [r1 rolls
+                   r2 rolls
+                   r3 rolls
+                   r4 rolls
+                   :let [[dx dy dz] (mob/aim from [0.5 64.9 0.5] r1 r2 r3 r4)
+                         t (/ 10.0 (- dx))
+                         miss (math/sqrt (+ (* t t dz dz)
+                                            (let [dh (- (+ 65.4 (* t dy)) 64.9)] (* dh dh))))]]
+               (< miss 0.45))]
+    (is (< 0.15 (/ (count (filter true? near)) (count near)) 0.35))))

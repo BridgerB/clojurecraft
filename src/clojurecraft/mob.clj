@@ -110,8 +110,8 @@
            :shoot 5.0
            :projectile :fireball
            :ignites 5000
-           :every 60
-           :range 16.0
+           :volley {:charge 60 :shots 3 :between 6 :rest 100}
+           :range 48.0
            :keep 16.0
            :loot [[:blaze_rod 0 1]]}
    :ghast {:health 10.0
@@ -610,6 +610,46 @@
   (- (long (math/floor (* pack-walk r1))) (long (math/floor (* pack-walk r2)))))
 
 ;; ---------------------------------------------------------------- spawners
+
+(def fireball
+  "A blaze's small fireball as the server flies it, from race f8b28e3's recordings (45, 1241 blazes)
+   and dodge.clj's reading of blaze-race-l: it leaves at :start-height over the blaze's feet, flies
+   straight at :speed blocks a tick (|vel| in its packet is the direction times 0.1), aimed at the
+   target's middle with a triangular error of half-width :error-scale times the square root of the
+   distance on x and z (BlazeAttackGoal: triangle(0, 2.297 * 0.5 * sqrt(distance))), hits within
+   :radius of the player's box for :damage, sets it alight, and is gone after :life ticks or on the
+   first solid cell."
+  {:speed 0.55 :vel-scale 0.1 :start-height 1.4 :error-scale 1.1485 :radius 0.15 :life 80})
+
+(defn volley-next
+  "[step' wait charged? fire?] after one step of a blaze's volley (BlazeAttackGoal's attackStep) from
+   step, for the kind's :volley {:charge :shots :between :rest} in ticks: step 1 charges (wait
+   :charge), steps 2 to 1 + shots each fire a fireball (wait :between), the next step rests (wait
+   :rest) and starts over at 0. A cycle is charge + shots x between + rest ticks, 178 for the real
+   blaze: its fastest recorded gap between volleys was 8.9 s."
+  [{:keys [charge shots between rest]} step]
+  (let [step' (inc step)]
+    (cond (= 1 step') [1 charge true false]
+          (<= step' (inc shots)) [step' between true true]
+          :else [0 rest false false])))
+
+(defn aim
+  "The unit direction of a small fireball from point from at target, a triangular error added to x
+   and z: r1 - r2 and r3 - r4 are rolls in [0, 1) twice over (each difference triangular on -1 to 1),
+   scaled by the half-width fireball's :error-scale times the square root of the distance."
+  [from target r1 r2 r3 r4]
+  (let [d (physics/distance from target)
+        h (* (:error-scale fireball) (math/sqrt d))
+        [fx fy fz] from
+        [tx ty tz] target
+        v [(- (+ tx (* h (- r1 r2))) fx) (- ty fy) (- (+ tz (* h (- r3 r4))) fz)]
+        n (math/sqrt (double (reduce + (map * v v))))]
+    (if (pos? n) (mapv #(/ % n) v) [0.0 0.0 0.0])))
+
+(defn hits-box?
+  "Is point p inside the box of a player with feet at feet (0.6 wide, 1.8 high), grown by r?"
+  [[x y z] [fx fy fz] r]
+  (and (<= (abs (- x fx)) (+ 0.3 r)) (<= (- fy r) y (+ fy 1.8 r)) (<= (abs (- z fz)) (+ 0.3 r))))
 
 (def damage-source
   "The damage-event source-type ids the server sends for what hurts the player, by what hurt:

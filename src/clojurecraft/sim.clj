@@ -2459,13 +2459,14 @@
    cause, generic for one not there) and the mob that dealt it (eid, its id + 1 as the cause, as the
    server numbers it), nil for none. The bot reads the strike from it (:player/hurt-at,
    combat/striker)."
-  [sim cause eid]
-  (send sim
-        {:packet/name :damage-event
-         :entity-id (player-eid-of sim)
-         :source-type (get mob/damage-source cause 18)
-         :source-cause (if eid (inc eid) 0)
-         :source-direct (or eid 0)}))
+  ([sim cause eid] (tell-damage sim cause eid eid))
+  ([sim cause eid direct]
+   (send sim
+         {:packet/name :damage-event
+          :entity-id (player-eid-of sim)
+          :source-type (get mob/damage-source cause 18)
+          :source-cause (if eid (inc eid) 0)
+          :source-direct (or direct 0)})))
 
 (defn tell-flags
   "The model with the player's shared flags byte told to the client (set-entity-data): bits, the
@@ -2520,6 +2521,63 @@
               (hurt (armoured sim (mob/scaled (:melee k) (:sim/difficulty sim))) true type)
               (tell-damage :mob_attack eid)))))
 
+(def fireball-type (get blocks/entity-types :small_fireball)) ; add-entity's type for a blaze's fireball
+
+(defn spawn-fireball
+  "The model with a small fireball leaving blaze eid for the player's middle (mob/aim: four rolls of
+   the mobs' stream for the error), told to the client as the server does (add-entity with the
+   direction times 0.1 and its blaze as data, then its motion)."
+  [sim eid]
+  (let [{:keys [type pos]} (get-in sim [:sim/mobs eid])
+        [x y z] pos
+        from [x (+ y (:start-height mob/fireball)) z]
+        [px py pz] (:sim/player-pos sim)
+        [sim r1] (mob-roll sim)
+        [sim r2] (mob-roll sim)
+        [sim r3] (mob-roll sim)
+        [sim r4] (mob-roll sim)
+        dir (mob/aim from [px (+ py 0.9) pz] r1 r2 r3 r4)
+        fid (:sim/next-eid sim)]
+    (-> sim
+        (assoc :sim/next-eid (inc fid))
+        (assoc-in [:sim/fireballs fid]
+                  {:pos from :dir dir :owner eid :born (:sim/now sim) :kind type})
+        (send {:packet/name :add-entity
+               :entity-id fid
+               :uuid nil
+               :type fireball-type
+               :x (first from)
+               :y (second from)
+               :z (last from)
+               :vel (mapv #(* % (:vel-scale mob/fireball)) dir)
+               :data eid}))))
+
+(defn volley
+  "Blaze eid's turn to shoot, as BlazeAttackGoal runs it: with the player farther than its reach,
+   within its range and a clear line from its head to the player's eye, and its timer due, one step
+   of its volley (mob/volley-next): the charge flag raised for the charge, a fireball at each of the
+   shots after it, the flag lowered and the rest. Off the line nothing moves on; the timer waits."
+  [sim eid]
+  (let [{:keys [type pos shot-step shot-at]} (get-in sim [:sim/mobs eid])
+        k (mob/kinds type)
+        player (:sim/player-pos sim)
+        eye (physics/eye player)
+        now (:sim/now sim)]
+    (cond (not (and (>= now (or shot-at 0))
+                    (not (mob/in-reach? type pos player))
+                    (<= (physics/distance (mob/head type pos) eye) (:range k))
+                    (mob/sight? (solid-fn sim) (mob/head type pos) eye)))
+          sim
+          :else
+          (let [[step wait charged? fire?] (mob/volley-next (:volley k) (or shot-step 0))]
+            (cond-> (-> sim
+                        (assoc-in [:sim/mobs eid :shot-step] step)
+                        (assoc-in [:sim/mobs eid :shot-at] (+ now (* wait physics/tick-ms)))
+                        (send {:packet/name :set-entity-data
+                               :entity-id eid
+                               :metadata {entity/blaze-flags-index (if charged? 1 0)}}))
+              fire? (spawn-fireball eid))))))
+
 (defn shoot
   "A shooter (a skeleton's arrow, a blaze's fireball) within its :range of the player, with a
    clear line from its head to the player's eye, hits every :every ticks for its damage scaled by
@@ -2529,7 +2587,8 @@
         k (mob/kinds type)
         eye (physics/eye (:sim/player-pos sim))
         now (:sim/now sim)]
-    (cond (not (and (:shoot k)
+    (cond (:volley k) (volley sim eid)
+          (not (and (:shoot k)
                     (>= now (or attack-at 0))
                     (<= (physics/distance (mob/head type pos) eye) (:range k))
                     (mob/sight? (solid-fn sim) (mob/head type pos) eye)))
@@ -2860,6 +2919,52 @@
                                             (not (contains? (:sim/populated sim) [x z])))]
                              [x z]))))))
 
+(defn fireball-path
+  "What one tick does to a small fireball at pos flying along dir (mob/fireball :speed a tick, in
+   three samples): [:hit], [:wall last-free-pos] on the first solid cell, or [:fly pos'] to where it
+   ends the tick. A sample inside the living player's box (grown by the fireball's radius) is a hit."
+  [sim pos dir]
+  (let [{:keys [speed radius]} mob/fireball
+        player (:sim/player-pos sim)
+        alive? (pos? (:sim/health sim))
+        solid? (solid-fn sim)]
+    (reduce (fn [[_ last] i]
+              (let [p (mapv + pos (map #(* % speed (/ i 3.0)) dir))]
+                (cond (and alive? player (mob/hits-box? p player radius)) (reduced [:hit p])
+                      (solid? (mob/cell-of p)) (reduced [:wall last])
+                      :else [:fly p])))
+            [:fly pos]
+            [1 2 3])))
+
+(defn tick-fireballs
+  "One game tick of every small fireball in flight (fireball-path), each move told (tell-move): one
+   that hits the player hurts it by its blaze's shot damage through the armour, sets it alight for
+   the blaze's :ignites and tells the damage; one that meets a block or is older than its life is
+   gone, told to the client."
+  [sim]
+  (reduce (fn [sim [fid {:keys [pos dir owner born kind]}]]
+            (let [[what at] (fireball-path sim pos dir)
+                  k (mob/kinds kind)
+                  old? (>= (- (:sim/now sim) born) (* (:life mob/fireball) physics/tick-ms))
+                  gone (fn [sim]
+                         (-> sim
+                             (update :sim/fireballs dissoc fid)
+                             (send {:packet/name :remove-entities :ids [fid]})))]
+              (cond (= :hit what)
+                    (->
+                      sim
+                      gone
+                      (hurt (armoured sim (mob/scaled (:shoot k) (:sim/difficulty sim))) true kind)
+                      (tell-damage :fireball owner fid)
+                      (ignite-player (:ignites k)))
+                    (or (= :wall what) old?) (gone sim)
+                    :else
+                    (-> sim
+                        (tell-move fid pos at)
+                        (assoc-in [:sim/fireballs fid :pos] at)))))
+          sim
+          (sort-by key (:sim/fireballs sim))))
+
 (defn tick-mobs
   "One game tick of the mobs: the day moves on (:sim/day-time), chunks coming near get their
    animals (populate), a hostile is tried for (try-spawn), the Nether's warped forests spawn
@@ -3077,6 +3182,7 @@
       through-end-portal
       tick-eyes
       tick-mobs
+      tick-fireballs
       keep-alive
       pick-up
       sync-health))
