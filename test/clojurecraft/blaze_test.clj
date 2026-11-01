@@ -1869,6 +1869,29 @@
     (is (false? (blaze/sortie-over? (assoc base :world/entities (select-keys crowd [50 51 52]))))
         "three is the limit, not over")))
 
+(deftest eight-within-eight-end-the-sortie-and-the-fight-is-not-chosen
+  ;; blaze-race-z16 job 6: unsealed at 05:51:23, hp 20, fire false, 0 blazes within 16 and no
+  ;; fire within 2. At 05:51:41, 8 blazes within 8, the nearest 3.8 (outside melee, inside
+  ;; at-hand), and :fight alternated with :dodge. Dead at 05:51:50 among 5 within 3.5. Exactly
+  ;; eight did not end the sortie, so the peek kept the volley from being a refuge.
+  (let [blz (into {}
+                  (map (fn [i] [(+ 50 i)
+                                (entity :blaze [5.5 64.5 (+ 12.1 (* 0.4 i))] :entity/health 20.0)]))
+                  (range 8))
+        w (-> (standing blz)
+              (assoc :world/chunks {[0 0] (world/column pocket-walls)}
+                     :player/pos [5.5 64.0 8.5]
+                     :sortie/since 90000
+                     :time/now 100000
+                     :player/health 20.0))]
+    (is (= 8 (count (blaze/nearby-blazes w 8.0))))
+    (is (empty? (blaze/nearby-blazes w combat/melee-reach))
+        "none in melee: a smaller crowd would still be the lure")
+    (is (some? (blaze/at-hand-blaze w)) "one at hand, which the fight clause would take")
+    (is (true? (blaze/sortie-over? w)) "eight within 8, none pressing: the room")
+    (is (false? (blaze/peeking? w)))
+    (is (= :pocket (:intent/kind (next-intent w))) "back to the pocket, not the fight")))
+
 (deftest ^:eftest/synchronized the-camp-clause-never-ends-in-nil-when-no-way-to-the-spawner-is-left
   ;; blaze-race-z4 landing 5: :tunnel-to done on its last stand, to-spawner nil, the clause's value nil,
   ;; {:plan/wait :nothing-to-do} for 400 ticks and the run ended with time left
@@ -2153,6 +2176,25 @@
     (is (blaze/burning-here? w))
     (is (some? (blaze/at-hand-blaze w)) "a blaze at hand, which would otherwise be the fight")
     (is (= (blaze/leave-fire w) (next-intent w)) "the step off the fire, not the fight")))
+
+(deftest the-fire-a-blaze-stands-in-is-punched-before-the-swing
+  ;; blaze-race-z15 job 6 life 1: 14 real kills, 7 rod entities, 0 picked up. Rods spawned at
+  ;; [2344 58 2283] to [2344 58 2284] and were removed in 0.1 s, 26 slots free. A collect the
+  ;; same second was already too late: the rod burns where the blaze stands.
+  (let [fire (blocks/default-state :fire)
+        near (entity :blaze [10.5 64.5 8.5] :entity/health 20.0)
+        w (assoc (standing {7 near})
+                 :world/chunks {[0 0] (world/column {[10 64 8] fire})}
+                 :time/now 100000)
+        dig {:intent/kind :dig :intent/target [10 64 8] :intent/for :fire-out}]
+    (is (= [10 64 8] (blaze/blaze-fire w)) "the cell the blaze stands in")
+    (is (nil? (blaze/commit-fight w)) "no fight committed into that fire")
+    (is (= dig (next-intent w)) "punched before the swing")
+    (is (not (plan/interrupts? w row dig)) "the dig is not cut for the blaze at hand")
+    (is (true? (boolean (plan/interrupts? w row {:intent/kind :fight :intent/target 7})))
+        "a running fight is cut so the fire is punched")
+    (is (= :fight (:intent/kind (next-intent (assoc w :world/chunks {[0 0] (world/column {})}))))
+        "the fire gone: the blaze is fought")))
 
 (deftest fire-beside-the-pocket-is-punched-out-before-the-seal
   ;; blaze-race-z15 jobs 1 to 4: every hold ended at hp 20 with fire false, then the bot stepped

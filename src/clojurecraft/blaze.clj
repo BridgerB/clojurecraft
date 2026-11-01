@@ -1249,6 +1249,20 @@
         (pocket/in? world) (reach-blaze world)
         :else (or (meleeing-blaze world) (at-hand-blaze world))))
 
+(defn blaze-fire
+  "The cell of fire the blaze to be fought (fightable-blaze) stands in, when that cell is within
+   intent/reach of the eye, or nil. A rod spawns where the blaze is, and a rod in fire is removed
+   in a tenth of a second, before a collect can land. blaze-race-z15 job 6 life 1: seven rods at
+   [2344 58 2283] to [2344 58 2284], each gone in 0.1 s, 26 slots free, none picked up."
+  [world]
+  (when-let [[_ e] (fightable-blaze world)]
+    (let [c (hunt/cell (:entity/pos e))]
+      (when (and (contains? fire-blocks
+                            (some-> (terrain/block-at world c)
+                                    blocks/name-of))
+                 (<= (physics/distance (game/eye world) (physics/centre c)) intent/reach))
+        c))))
+
 (defn pocket-ok?
   "The predicate of a pocket cell for the spawner at cell sp (nil: any cell): outside the volume
    its blazes spawn in (in-spawn-volume?), within its wake (awake-from?), and, when see? (the
@@ -1756,7 +1770,7 @@
 (def sortie-fights 2) ; fights ended on a sortie after which it is over
 (def sortie-ms 90000) ; ms a sortie may last
 (def sortie-crowd 3) ; blazes within at-reach (8) of the bot beyond which a sortie is over once they press it (struck within press-ms): the room is on it
-(def sortie-swarm 8) ; blazes within at-reach (8) beyond which a sortie is over whether they press it or not (z4 landing 2 died among 13 to 14)
+(def sortie-swarm 8) ; blazes within at-reach (8) at which a sortie is over whether they press it or not (z4 landing 2 died among 13 to 14; z16 job 6 died among exactly 8)
 (def sortie-start-health 19.0) ; health a sortie is begun at
 (def sortie-rest-ms 45000) ; ms in the pocket with no fight before another sortie
 
@@ -1775,12 +1789,13 @@
 (defn sortie-over?
   "Is the sortie (:sortie/since, noted by steer when the bot left its pocket for the spawner's zone)
    over: sortie-fights fights ended since, or sortie-ms spent, or the health under sortie-line, or
-   more than sortie-crowd blazes within 8 that press it (struck within press-ms), or more than
-   sortie-swarm within 8 hit or not (the room is on the bot: blaze-race-z4 landing 2 died among 13
-   to 14; blazes in sight that do not shoot are the lure, the bot stays at the mouth)? Burning does
-   not end it: a fireball hits about 4 percent of the time while the bot keeps moving, and standing
-   still is how the burn stacks (blaze-race-z15, on_fire 40 to 58 percent of the health lost). Then
-   the bot goes back to the pocket behind it, heals and goes again. Blaze-race-z2 landing 2 killed 4
+   more than sortie-crowd blazes within 8 that press it (struck within press-ms), or sortie-swarm
+   within 8 hit or not (the room is on the bot: blaze-race-z4 landing 2 died among 13 to 14, and
+   blaze-race-z16 job 6 among exactly 8; blazes in sight that do not shoot are the lure, the bot
+   stays at the mouth)? Burning does not end it: a fireball hits about 4 percent of the time while
+   the bot keeps moving, and standing still is how the burn stacks (blaze-race-z15, on_fire 40 to
+   58 percent of the health lost). Then the bot goes back to the pocket behind it, heals and goes
+   again. Blaze-race-z2 landing 2 killed 4
    blazes in 3.4 minutes in the room at [2346 57 2288] and stayed there until dead; landing 1 stood
    at the tunnel's end among 6 and 7 blazes and flipped dodge, pocket and walk until dead."
   [world]
@@ -1790,7 +1805,7 @@
                       (> (- (:time/now world 0) since) sortie-ms)
                       (< (:player/health world 20.0) sortie-line)
                       (let [n (count (nearby-blazes world 8.0))]
-                        (or (> n sortie-swarm)
+                        (or (>= n sortie-swarm)
                             (and (> n sortie-crowd)
                                  (<= (- (:time/now world 0) (:player/struck-at world -1000000))
                                      press-ms)))))))))
@@ -1940,6 +1955,9 @@
              (or (not (pocket/in? world)) (not (melee-crowd? world)))
              (not (outnumbered? world))
              (not (burning-here? world))
+             ;; the fire the drop would land in is punched first (blaze-fire): a swing into it
+             ;; burns the rod in a tenth of a second (z15 job 6)
+             (nil? (blaze-fire world))
              ;; a rod within a step is picked up before the next swing (near-rod, blaze-race-m race 4)
              (nil? (near-rod world)))
     (when-let [[eid] (if (pocket/in? world)
@@ -1964,34 +1982,41 @@
   ;; from 20 health to 13.8, since nothing else ends a running intent; never interrupt cover or healing when hurt (#577);
   ;; and one hurt and watched (under-fire?) by blazes further off, whatever the intent but the answer to it
   [world _ i]
-  (and (not (committed-fight? world i))
-       (or ;; a fire block lit in the feet's cell or the head's while an intent runs (a pick-up of a rod
-           ;; lying in it, a hold): the row's @out is asked only when none runs. Blaze-race-z8 job 3
-           ;; stood 19 s at [2349.2 58.1 2289.3] in a fire with in_fire hits every 2 s on a :collect-drops
-        (and (burning-here? world)
-             (not= :fire-out (:intent/for i))
-             (not= :dig (:intent/kind i))
-             (some? (leave-fire world)))
-        (and (not (contains? no-dodge-kinds (:intent/kind i)))
-             (not (rod-grab? world i))
-             (some? (dodge-intent world)))
-        (and (= :tunnel-to (:intent/kind i)) (some? (prepare-intent world (nearest-spawner world))))
-        (and (:intent/until i) (> (:time/now world 0) (:intent/until i)))
-        (and (= :pocket-hold (:intent/kind i)) (= :seal (:intent/kind (hold-intent world))))
-        (and (= :tunnel-to (:intent/kind i)) (some? (long-shot-cover world)))
-        (and (not (contains? refuge-kinds (:intent/kind i)))
-             (not= :fight (:intent/kind i))
-             (not (rod-grab? world i))
-             (sortie-over? world))
-        (and (not (contains? refuge-kinds (:intent/kind i)))
-             (not (and (rod-grab? world i) (grab-over-refuge? world)))
-             (some? (refuge-now world (nearest-spawner world))))
-        (and (not (hurt? world))
-             (not= :fight (:intent/kind i))
-             (not (and (= :cover (:intent/for i)) (crowded? world)))
-             (not (and (= :collect-drops (:intent/kind i)) (some? (near-rod world))))
-             (some? (fightable-blaze world)))
-        (under-fire? world i))))
+  (or ;; the blaze to be fought moved into fire: the swing stops and the fire is punched, or the
+      ;; rod burns where it spawns (z15 job 6, gone in 0.1 s). A committed fight is not otherwise cut.
+   (and (= :fight (:intent/kind i)) (some? (blaze-fire world)))
+   (and
+    (not (committed-fight? world i))
+    (or ;; a fire block lit in the feet's cell or the head's while an intent runs (a pick-up of a rod
+        ;; lying in it, a hold): the row's @out is asked only when none runs. Blaze-race-z8 job 3
+        ;; stood 19 s at [2349.2 58.1 2289.3] in a fire with in_fire hits every 2 s on a :collect-drops
+     (and (burning-here? world)
+          (not= :fire-out (:intent/for i))
+          (not= :dig (:intent/kind i))
+          (some? (leave-fire world)))
+     (and (not (contains? no-dodge-kinds (:intent/kind i)))
+          (not (rod-grab? world i))
+          ;; the dig of the fire under the blaze is one click; a dodge must not eat it
+          (not (and (= :dig (:intent/kind i)) (= :fire-out (:intent/for i))))
+          (some? (dodge-intent world)))
+     (and (= :tunnel-to (:intent/kind i)) (some? (prepare-intent world (nearest-spawner world))))
+     (and (:intent/until i) (> (:time/now world 0) (:intent/until i)))
+     (and (= :pocket-hold (:intent/kind i)) (= :seal (:intent/kind (hold-intent world))))
+     (and (= :tunnel-to (:intent/kind i)) (some? (long-shot-cover world)))
+     (and (not (contains? refuge-kinds (:intent/kind i)))
+          (not= :fight (:intent/kind i))
+          (not (rod-grab? world i))
+          (sortie-over? world))
+     (and (not (contains? refuge-kinds (:intent/kind i)))
+          (not (and (rod-grab? world i) (grab-over-refuge? world)))
+          (some? (refuge-now world (nearest-spawner world))))
+     (and (not (hurt? world))
+          (not= :fight (:intent/kind i))
+          (not (and (= :cover (:intent/for i)) (crowded? world)))
+          (not (and (= :collect-drops (:intent/kind i)) (some? (near-rod world))))
+          (not (and (= :dig (:intent/kind i)) (= :fire-out (:intent/for i))))
+          (some? (fightable-blaze world)))
+     (under-fire? world i)))))
 
 (defn passive?
   "Is the bot healthy and idle at the fortress: hp at passive-health or more, not burning, no blaze
@@ -2058,6 +2083,9 @@
         out (delay (or (when (burning-here? world) (leave-fire world))
                        (when-let [c (and (pocket/in? world) (fire-beside world))]
                          {:intent/kind :dig :intent/target c :intent/for :fire-out})))
+        ;; the fire the next swing's blaze stands in, before the swing: the rod spawns there
+        drop-fire (delay (when-let [c (blaze-fire world)]
+                           {:intent/kind :dig :intent/target c :intent/for :fire-out}))
         fire (delay (when (and sp (at-spawner? world sp)) (put-out world sp)))
         table-along (delay (when (or (nil? sp) (not (at-spawner? world sp)))
                              (or
@@ -2068,6 +2096,7 @@
     (cond
       (not= dimension/nether (dimension/of world)) {:plan/wait :other-dimension}
       @out @out
+      @drop-fire @drop-fire
       @dodging @dodging
       @commit @commit
       @held @held
@@ -2078,7 +2107,11 @@
       @retreat @retreat
       ;; two in melee under the yield line is a fight that ends the tick it starts and is chosen
       ;; again (z15 job 4): not another :fight
-      (and (not (hurt? world)) heid (not (crowded? world)) (yield-fight? world))
+      (and (not (hurt? world))
+           heid
+           (not (crowded? world))
+           (yield-fight? world)
+           (nil? (blaze-fire world)))
       {:intent/kind :fight :intent/target heid :intent/to-the-end? true :intent/yield? true}
       @wary @wary
       @away @away
