@@ -3176,14 +3176,10 @@
                :entity/health 20.0}
         spawner-pos [889 60 -206]
         bot-pos [890.5 60.0 -203.9]
-        stone (blocks/default-state :stone)
-        corridor-wall (into {} (for [y (range 60 64) z (range -202 -195)] [[895 y z] stone]))
-        floor (into {} (for [x (range 885 910) z (range -210 -190)] [[x 59 z] stone]))
         exit-cell [902 63 -198]
         w (-> (standing {9 blaze})
               (assoc :player/dimension "minecraft:the_nether" :player/pos bot-pos)
               (memory/observe spawner-pos blaze/spawner)
-              (assoc :world/chunks {[55 -13] (world/column (merge floor corridor-wall))})
               (assoc :fortress/trail {:trail/target spawner-pos :trail/cells []})
               (assoc :plan/trail
                      [[976 48 -176] [958 49 -190] [926 63 -190] exit-cell [897 61 -204]
