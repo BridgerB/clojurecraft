@@ -47,6 +47,11 @@
 (def aimed-within 20.0)               ; degrees of yaw the eyes may be off the target and still attack
 (def max-swings 25)                   ; attacks in reach on one target before it is a ghost
 (def retreat-health 10)               ; health under which a fight breaks off
+(def melee-reach 3.5)                 ; blocks within which a blaze strikes in melee
+(def melee-rate 3.2)                  ; health a blaze in melee takes a second (z14 job 6: two blazes, 20 to 2.9 in 4 s)
+(def burn-rate 1.0)                   ; health a second a burning bot loses
+(def retreat-seconds 4.0)             ; seconds of health a fight keeps in hand before it yields
+(def yield-cap 14.0)                  ; health a yield line never passes: two blazes in melee are retreat-seconds of 6.4, 25.6, over full health, so the fight ended the tick it began (blaze-race-z15 job 4)
 (def retreat-distance 6.0)            ; blocks a broken-off fight puts between the bot and the target
 (def approach-timeout-ms 20000)       ; an approach that never reaches the target fails :unreachable
 (def stall-ticks 20)                  ; ticks an approach straight at the target may go without coming 0.1 nearer before it takes a route
@@ -465,6 +470,29 @@
   [world]
   (and (= dimension/end (:player/dimension world)) (entity/in-breath? world)))
 
+(defn incoming-rate
+  "Health a second the bot is losing now: melee-rate for each blaze within melee-reach, burn-rate when
+   it burns."
+  [world]
+  (let [pos (:player/pos world)]
+    (+ (* melee-rate
+          (count (filter (fn [e]
+                           (and (= :blaze (entity/kind e))
+                                (not (entity/dead? e))
+                                (<= (physics/distance pos (:entity/pos e)) melee-reach)))
+                         (vals (:world/entities world)))))
+       (if (:player/on-fire? world) burn-rate 0.0))))
+
+(defn yield-line
+  "The health under which a fight that yields ends: retreat-health, or retreat-seconds of the damage
+   coming in now (incoming-rate) when that is more, and never over yield-cap. The retreat starts
+   with seconds in hand, not at a fixed health that two blazes in melee spend in two seconds
+   (blaze-race-z14 job 6: back-off at 11.8, dead 2 s later). Uncapped, two in melee are 25.6, over
+   any health, so the fight ended the tick it began and was chosen again (blaze-race-z15 job 4:
+   :fight 540 for 31 s, 609 reissues, 0 swings). 14 leaves a full-health fight one fireball."
+  [world]
+  (min yield-cap (max retreat-health (* retreat-seconds (incoming-rate world)))))
+
 (defmethod intent/run :fight
   ;; {:intent/kind :fight :intent/target eid}: done when the target is gone (a kill); below
   ;; retreat-health it breaks off and walks away (done once away: a fight left is not a failure).
@@ -487,7 +515,7 @@
         world (assoc world :plan/intent i)]
     (cond (or (entity/gone? world (:intent/target i))
               (breathed-on? world)
-              (and (:intent/yield? i) (< (:player/health world 20.0) retreat-health)))
+              (and (:intent/yield? i) (< (:player/health world 20.0) (yield-line world))))
           (-> world
               (assoc :player/controls {})
               intent/done)
