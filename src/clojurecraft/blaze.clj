@@ -1469,6 +1469,8 @@
             (and (pressed? world) (hide world)) (hide world)
             need? (or (meal world) {:intent/kind :pocket-hold :intent/heal-to (hold-to world)})))))
 
+(declare peeking?)
+
 (defn refuge-needed?
   "Is a pocket wanted now: the bot burns or caught fire twice within reignite-ms (reignited?), is
    under low-health with a blaze about (swarm), a volley of blazes watches it (outnumbered?), or it
@@ -1479,7 +1481,7 @@
   (boolean (or (:player/on-fire? world)
                (reignited? world)
                (and (< (:player/health world 20.0) low-health) (seq (swarm world)))
-               (outnumbered? world)
+               (and (outnumbered? world) (not (peeking? world)))
                (and (seq (watchers world)) (hurt? world)))))
 
 (defn here-intent
@@ -1643,9 +1645,11 @@
 
 (def sortie-zone 16.0) ; blocks from the spawner within which a bot out of its pocket is on a sortie
 (def sortie-line 14.0) ; health under which a sortie is over: back to the pocket to heal
+(def peek-after-pocket-ms 120000) ; ms after a pocket entered within which a tunnel out of it is a peek
 (def sortie-fights 2) ; fights ended on a sortie after which it is over
 (def sortie-ms 90000) ; ms a sortie may last
-(def sortie-crowd 3) ; blazes within at-reach (8) of the bot beyond which a sortie is over: the room is on it
+(def sortie-crowd 3) ; blazes within at-reach (8) of the bot beyond which a sortie is over once they press it (struck within press-ms): the room is on it
+(def sortie-swarm 8) ; blazes within at-reach (8) at which a sortie is over whether they press it or not (z4 landing 2 died among 13 to 14; z16 job 6 died among exactly 8)
 (def sortie-start-health 19.0) ; health a sortie is begun at
 (def sortie-rest-ms 45000) ; ms in the pocket with no fight before another sortie
 
@@ -1664,8 +1668,9 @@
 (defn sortie-over?
   "Is the sortie (:sortie/since, noted by steer when the bot left its pocket for the spawner's zone)
    over: sortie-fights fights ended since, or sortie-ms spent, or the health under sortie-line, or
-   burning, or more than sortie-crowd blazes within 8 (the room is on the bot: blaze-race-z4
-   landing 2 died among 13 to 14)? Then
+   burning, or more than sortie-crowd blazes within 8 that press it (struck within press-ms), or
+   sortie-swarm or more within 8 hit or not (the room is on the bot: blaze-race-z4 landing 2 died
+   among 13 to 14; blazes in sight that do not shoot are the lure, the bot stays at the mouth)? Then
    the bot goes back to the pocket behind it, heals and goes again. Blaze-race-z2 landing 2 killed 4
    blazes in 3.4 minutes in the room at [2346 57 2288] and stayed there until dead; landing 1 stood
    at the tunnel's end among 6 and 7 blazes and flipped dodge, pocket and walk until dead."
@@ -1676,7 +1681,29 @@
                       (> (- (:time/now world 0) since) sortie-ms)
                       (< (:player/health world 20.0) sortie-line)
                       (:player/on-fire? world)
-                      (> (count (nearby-blazes world 8.0)) sortie-crowd))))))
+                      (let [n (count (nearby-blazes world 8.0))]
+                        (or (>= n sortie-swarm)
+                            (and (> n sortie-crowd)
+                                 (<= (- (:time/now world 0) (:player/struck-at world -1000000))
+                                     press-ms)))))))))
+
+(defn peeking?
+  "Is the bot on a sortie that is not over (sortie-over?), or a tunnel out of its pocket begun
+   within peek-after-pocket-ms of a pocket entered, at hp sortie-line or more? Then a volley of
+   blazes watching it (outnumbered?) is what it came for, not a refuge: the first seconds in their
+   sight draw one or two to the mouth and the hits are struck, and the sortie's own end (burning,
+   hp under 14, two fights, 90 s, a crowd within 8) is the retreat. Blaze-race-z12 job 4: 69 minutes,
+   0 real kills: :camp 60 s, :camp failed :no-blaze, :tunnel-to, :pocket 0.7 s later, :camp, with 3
+   to 9 blazes 4.4 to 6.6 blocks from the pocket and none attacking it."
+  [world]
+  (let [i (:plan/intent world)
+        entered (:intention/at (memory/last-done world :pocket))]
+    (boolean (and (>= (:player/health world 20.0) sortie-line)
+                  (not (sortie-over? world))
+                  (or (some? (:sortie/since world))
+                      (and (= :tunnel-to (:intent/kind i))
+                           entered
+                           (< (- (:time/now world 0) entered) peek-after-pocket-ms)))))))
 
 (defn sortie-due?
   "Is it time for a sortie: in the pocket, healed to sortie-start-health, not burning, and no fight
@@ -1872,7 +1899,8 @@
         [_ lying] (when (collectable? world) (rod-lying world))
         heal (delay (when (hurt? world) (healing world)))
         wary (delay (when (and (not in-pocket?) (wary? world)) (warily world)))
-        away (delay (when (and (not in-pocket?) (outnumbered? world)) (hide world)))
+        away (delay (when (and (not in-pocket?) (outnumbered? world) (not (peeking? world)))
+                      (hide world)))
         held (delay (hold-intent world))
         commit (delay (commit-fight world))
         shot-cover (delay (long-shot-cover world))

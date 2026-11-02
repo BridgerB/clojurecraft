@@ -1857,9 +1857,43 @@
         base (assoc (standing {}) :time/now 10000 :sortie/since 10000)]
     (is (false? (blaze/sortie-over? base)))
     (is (true? (blaze/sortie-over? (assoc base :player/on-fire? true))) "burning")
-    (is (true? (blaze/sortie-over? (assoc base :world/entities crowd))) "five within 8")
+    (is (false? (blaze/sortie-over? (assoc base :world/entities crowd)))
+        "five within 8 and none pressing: the lure, the bot stays at the mouth")
+    (is (true? (blaze/sortie-over? (assoc base :world/entities crowd :player/struck-at 9000)))
+        "five within 8 and hit: the room is on it")
+    (is (true? (blaze/sortie-over? (assoc base
+                                          :world/entities
+                                          (into crowd
+                                                (map (fn [i] [(+ 70 i)
+                                                              (entity :blaze [(+ 8.5 i) 65.0 9.5]
+                                                                      :entity/health 20.0)]))
+                                                (range 5)))))
+        "ten within 8 even unhit")
     (is (false? (blaze/sortie-over? (assoc base :world/entities (select-keys crowd [50 51 52]))))
         "three is the limit, not over")))
+
+(deftest eight-within-eight-end-the-sortie-and-the-fight-is-not-chosen
+  ;; blaze-race-z16 job 6: unsealed at 05:51:23, hp 20, fire false, 0 blazes within 16 and no
+  ;; fire within 2. At 05:51:41, 8 blazes within 8, the nearest 3.8 (outside melee, inside
+  ;; at-hand), and :fight alternated with :dodge. Dead at 05:51:50 among 5 within 3.5. Exactly
+  ;; eight did not end the sortie, so the peek kept the volley from being a refuge.
+  (let [blz (into {}
+                  (map (fn [i] [(+ 50 i)
+                                (entity :blaze [5.5 64.5 (+ 12.1 (* 0.4 i))] :entity/health 20.0)]))
+                  (range 8))
+        w (-> (standing blz)
+              (assoc :world/chunks {[0 0] (world/column pocket-walls)}
+                     :player/pos [5.5 64.0 8.5]
+                     :sortie/since 90000
+                     :time/now 100000
+                     :player/health 20.0))]
+    (is (= 8 (count (blaze/nearby-blazes w 8.0))))
+    (is (empty? (blaze/nearby-blazes w 3.5))
+        "none in melee: a smaller crowd would still be the lure")
+    (is (some? (blaze/at-hand-blaze w)) "one at hand, which the fight clause would take")
+    (is (true? (blaze/sortie-over? w)) "eight within 8, none pressing: the room")
+    (is (false? (blaze/peeking? w)))
+    (is (= :pocket (:intent/kind (next-intent w))) "back to the pocket, not the fight")))
 
 (deftest ^:eftest/synchronized the-camp-clause-never-ends-in-nil-when-no-way-to-the-spawner-is-left
   ;; blaze-race-z4 landing 5: :tunnel-to done on its last stand, to-spawner nil, the clause's value nil,
@@ -2341,3 +2375,26 @@
     (is (nil? (blaze/hold-intent shut)) "nothing to hold for, nothing to open (no placed cell)")
     (is (not= :pocket (:intent/kind (next-intent shut))))
     (is (not= :unseal (:intent/kind (next-intent shut))))))
+
+(deftest a-volley-in-sight-on-a-sortie-is-not-a-refuge
+  ;; blaze-race-z12 job 4: 69 min, 0 real kills; the sortie stepped out of the pocket, 3 to 9 blazes watched it,
+  ;; outnumbered? made the refuge win, back to camp 0.7 s later, 31 minutes
+  (let [volley (into {}
+                     (map (fn [i] [(+ 50 i)
+                                   (entity :blaze [14.5 66.0 (+ 6.0 i)] :entity/health 20.0)])
+                          (range 4)))
+        w (assoc (standing volley) :player/health 19.0 :time/now 100000)
+        sortie (assoc w :sortie/since 98000)]
+    (is (true? (blaze/outnumbered? w)) "four watch")
+    (is (true? (blaze/refuge-needed? w)) "off a sortie: the refuge")
+    (is (false? (blaze/refuge-needed? sortie)) "on a sortie at 19 hp: not a refuge")
+    (is (true? (blaze/refuge-needed? (assoc sortie :player/health 13.0)))
+        "under 14 the sortie is over: the refuge")
+    (is (true? (blaze/refuge-needed? (assoc sortie :player/on-fire? true)))
+        "alight: over, the refuge")
+    (testing "a tunnel out of a pocket just entered is a peek before steer notes the sortie"
+      (let [out (-> w
+                    (assoc :plan/intent {:intent/kind :tunnel-to :intent/target [15 64 15]})
+                    (memory/remember-intention {:intent/id 91 :intent/kind :pocket} :done))]
+        (is (true? (blaze/peeking? out)))
+        (is (false? (blaze/peeking? (dissoc out :plan/intent))) "no tunnel running: not a peek")))))
