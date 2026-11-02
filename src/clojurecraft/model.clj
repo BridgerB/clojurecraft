@@ -479,6 +479,9 @@
    [:intent/seal-behind?
     "a :tunnel-to that seals the cell behind it every few steps: leaving the fortress after blaze rods"
     ":tunnel-to"]
+   [:intent/no-down?
+    "a :tunnel-to that forbids downward steps (dy < 0): leaving the fortress without digging through floors into lava"
+    ":tunnel-to"]
    [:intent/search
     "the fortress search leg an exploring :tunnel-to works for (fortress/exploring): the executor keeps it as :fortress/search"
     "a :tunnel-to with no brick on record to go to"]

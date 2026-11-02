@@ -403,7 +403,7 @@
    paced them for four hours."
   [world feet move dry-only?]
   (let [floor (plus (plus feet move) [0 -1 0])]
-    (and (pos? (long (second move)))
+    (and (when-let [y (and move (second move))] (pos? (long y)))
          (build/holds? world [:solid (plus feet [0 -1 0])])
          (contains? #{:air :cave_air :void_air} (blocks/name-of (terrain/block-at world floor)))
          (= floor (build/foundation world floor))
@@ -418,10 +418,13 @@
    step down when it is below? A level step does not. The way back up a stair already stood in is
    still progress, so it is not counted as a retreat (issue #526)."
   [feet move target]
-  (let [dy (long (second move))
-        ddy (- (long (second target)) (long (second feet)))]
-    (and (not (zero? dy))
-         (not (zero? ddy))
+  (let [dy (when move (second move))
+        ddy (when (and target feet (second target) (second feet))
+              (- (long (second target)) (long (second feet))))]
+    (and dy
+         ddy
+         (not (zero? (long dy)))
+         (not (zero? (long ddy)))
          (= (long (math/signum (double dy))) (long (math/signum (double ddy)))))))
 
 (defn next-move
@@ -438,9 +441,12 @@
    toward it over the cave's air, and walked its own stairs 32 steps a tunnel for 23 minutes to
    the timeout."
   ([world feet target climb dry-only? visited]
-   (next-move world feet target climb dry-only? visited false))
+   (next-move world feet target climb dry-only? visited false false))
   ([world feet target climb dry-only? visited bridge-ok?]
-   (let [ways (moves feet target climb)
+   (next-move world feet target climb dry-only? visited bridge-ok? false))
+  ([world feet target climb dry-only? visited bridge-ok? no-down?]
+   (let [ways (cond->> (moves feet target climb)
+                no-down? (filter (fn [m] (when-let [y (and m (second m))] (>= y 0)))))
          fresh (remove #(contains? visited (plus feet %)) ways)
          allowed? #(and (safe? world feet %) (or (not dry-only?) (dry? world feet %)))
          ;; a fresh step onto a floor one block thick over a drop only with the cell under it
@@ -465,9 +471,10 @@
                                     (build/holds? world [:solid %]))
                               (neighbours floor))
                         (or (not dry-only?) (dry? world feet move)))))
-         up? (> (- (long (second target)) (long (second feet))) (long climb))
+         up? (when (and target feet (second target) (second feet) climb)
+               (> (- (long (second target)) (long (second feet))) (long climb)))
          climb? #(climb-out? world feet % dry-only?)
-         down? #(neg? (long (second %)))]
+         down? (fn [m] (when-let [y (and m (second m))] (neg? (long y))))]
      (or (first (filter #(and (first-way? %) (or (not up?) (not (down? %)))) fresh))
          ;; no reroute with a thick floor, or a block to fill under a thin one: the step as before
          ;; (sim R1/37 seed 2 held soul sand only, and was blocked at y 31 for the refusal)
@@ -590,13 +597,15 @@
    way out of a cell no fresh step leaves: sim snapshots R3-5-2 and R4-11-1 (issue #502) went
    into pockets whose every fresh step was refused, retreated once, paced and failed :blocked
    with the branch that went on a few cells back never tried."
-  [world feet trail dry-only?]
-  (when-let [to (peek (:trail/cells trail))]
-    (let [move (mapv - to feet)]
-      (when (and (some #{move} (for [[dx dz] aside dy [-1 0 1]] [dx dy dz]))
-                 (safe? world feet move)
-                 (or (not dry-only?) (dry? world feet move)))
-        move))))
+  ([world feet trail dry-only?] (step-back world feet trail dry-only? false))
+  ([world feet trail dry-only? no-down?]
+   (when-let [to (peek (:trail/cells trail))]
+     (let [move (mapv - to feet)]
+       (when (and (some #{move} (for [[dx dz] aside dy (if no-down? [0 1] [-1 0 1])] [dx dy dz]))
+                  (or (not no-down?) (when-let [y (and move (second move))] (>= y 0)))
+                  (safe? world feet move)
+                  (or (not dry-only?) (dry? world feet move)))
+         move)))))
 
 (defn leave-cell
   "The trail once a step is chosen from feet: when the step goes back (back? true) its last cell
@@ -747,7 +756,8 @@
   ;; down first past :intent/climb blocks off (climb-past when absent); with :intent/dry? only
   ;; steps that open no cell by water (dry?: the overworld's, issue #265)
   [world
-   {:intent/keys [target steps taken move from climb tunnel-visited child search retreats airborne]
+   {:intent/keys [target steps taken move from climb tunnel-visited child search retreats airborne
+                  no-down?]
     dry-only? :intent/dry?
     r :intent/reach
     :or {taken 0
@@ -756,7 +766,8 @@
          climb climb-past
          tunnel-visited #{}
          retreats 0
-         airborne 0}
+         airborne 0
+         no-down? false}
     :as i} event]
   (let [world (cond-> world search (assoc :fortress/search search)) ; the spiral's leg, kept for the planner's next look
         feet (intent/feet world)
@@ -788,9 +799,11 @@
                                climb
                                (boolean dry-only?)
                                seen
-                               (boolean (:intent/bridge? i))))
+                               (boolean (:intent/bridge? i))
+                               (boolean no-down?)))
             fresh? (fresh-move? feet ahead target seen (:trail/dead trail))
-            undo (when-not (or back fresh?) (step-back world feet trail (boolean dry-only?)))
+            undo (when-not (or back fresh?)
+                   (step-back world feet trail (boolean dry-only?) (boolean no-down?)))
             m (or back undo ahead)
             retreated
             (if (and ahead (not fresh?) (not undo)) (inc (carried-retreats retreats trail)) 0)
@@ -812,7 +825,8 @@
                   (assoc :fortress/trail kept))))
       :else
       (let [seal-behind? (and (:intent/seal-behind? i)
-                              (or (neg? (second move)) (zero? (mod taken 3))))
+                              (or (when-let [y (and move (second move))] (neg? y))
+                                  (zero? (mod taken 3))))
             to (plus from move)
             next (build/next-op world
                                 (into (into (into (underlay-ops world from move)
