@@ -1677,13 +1677,15 @@
            (filter #(unseen-from? world ss %))
            first))))
 
+(declare cover-from)
+
 (defn leave-sight
   "The intent that gets the bot out of the shooters' sight, or nil: with a shooter in view
    (combat/seen?) and no enderman tracked within seek-radius, a routable walk to the newest
    fortress trail cell out of sight (out-of-sight-cell), else to the nearest cell round the feet out
-   of sight (near-cover-cell) when outside every blaze room, else, at under danger-health, a
-   back-off from the nearest shooter in view: never a dig or a pillar in its sight, which is where
-   the rod bots' hp went from 20 to 3.3 in 37 s (probe 41251668076). Pure."
+   of sight (near-cover-cell) when outside every blaze room, else cover-from, else, at under
+   danger-health, a back-off from the nearest shooter in view: never a dig or a pillar in its
+   sight, which is where the rod bots' hp went from 20 to 3.3 in 37 s (probe 41251668076). Pure."
   [world]
   (let [shot (into {} (filter (fn [[_ e]] (combat/seen? world e))) (shooters world))]
     (when (and (seq shot) (empty? (endermen world seek-radius)))
@@ -1694,17 +1696,18 @@
             in-blaze-room? (in-room? (room-boxes world) (intent/feet world))]
         (or (walk (out-of-sight-cell world))
             (when-not in-blaze-room? (walk (near-cover-cell world)))
+            (when-not in-blaze-room? (cover-from world))
             (when (< (:player/health world 20.0) danger-health)
               (let [[eid _] (entity/nearest shot (:player/pos world))]
                 {:intent/kind :back-off :intent/target eid :intent/for :pearls})))))))
 
 (defn shot-at?
-  "Is a ghast within its :range (mob/kinds) with a clear line from the eye (combat/seen?)? Never
-   fought (it hovers out of the sword's reach); only covered from. Gym plan run 40839050567 job 6
-   (issue #263, pearls-12): five fireballs in 67 s of digging a staircase down in the open, then
-   burned to death."
+  "Is a blaze or a ghast within its :range (mob/kinds) with a clear line from the eye (combat/seen?)?
+   Never fought (they hover out of the sword's reach); only covered from. Gym plan run 40839050567
+   job 6 (issue #263, pearls-12): five fireballs in 67 s of digging a staircase down in the open,
+   then burned to death."
   [world]
-  (boolean (some (fn [[_ e]] (and (= :ghast (entity/kind e)) (combat/seen? world e)))
+  (boolean (some (fn [[_ e]] (and (contains? ranged-kinds (entity/kind e)) (combat/seen? world e)))
                  (swarm world))))
 
 (def shot-hold-ms 10000)                ; ms after a ghast was last in sight that no walk goes elsewhere
@@ -1813,21 +1816,24 @@
             [0 1]))))
 
 (defn cover-from
-  "The intent that covers the bot from the swarm: from a ghast in sight (shot-at?, never fought,
+  "The intent that covers the bot from the swarm: from a shooter in sight (shot-at?, never fought,
    never out-ranged) a walk to a cell beside the feet out of its sight (hide-cell; :intent/for
    :cover, so the walk ends only centred in the cell: for :pearls it ended at once one cell
    short and was planned again every 50 ms, gym plan run 40905321229 job 6), else a block of
    the filler held on the line from the eye to it (line-cell), else, on open ground where no cell
    on the line has anything to lay against, a block at the feet's level and one over it on its side
-   (wall-toward: the line to a ghast a little above is at the head's height), else a dig into the solid side away
-   from it (dig-away) to stand in; from the others what combat/cover gives for the nearest (meal, a
-   block between, a pillar, a nook dug under the feet). Nil when it only waits (cover's :plan/wait
-   ends the plan) or nothing can be done."
+   (wall-toward: the line to a shooter a little above is at the head's height), else a dig into the
+   solid side away from it (dig-away) to stand in; from the others what combat/cover gives for the
+   nearest (meal, a block between, a pillar, a nook dug under the feet). Nil when it only waits
+   (cover's :plan/wait ends the plan) or nothing can be done."
   [world]
   (if (shot-at? world)
-    (when-let [[_ e] (entity/nearest
-                      (into {} (filter (fn [[_ e]] (= :ghast (entity/kind e)))) (swarm world))
-                      (:player/pos world))]
+    (when-let [[_ e] (entity/nearest (into {}
+                                           (filter (fn [[_ e]]
+                                                     (and (contains? ranged-kinds (entity/kind e))
+                                                          (combat/seen? world e))))
+                                           (swarm world))
+                                     (:player/pos world))]
       (let [item (stairs/filler world 1)
             hide (hide-cell world e)
             line (when item (line-cell world e))]
@@ -2339,6 +2345,7 @@
                        :else tid)]
     (cond
       (and (not in?) (leave-sight world)) (leave-sight world)
+      (and meal (empty? (filter #(combat/seen? world (val %)) (shooters world)))) meal
       (and (not in?) (room-exit world)) (room-exit world)
       (and (shot-at? world) (not in?) (cover-from world)) (cover-from world)
       (and home
@@ -2453,23 +2460,29 @@
       look)))
 
 (defn uncovered-log
-  "The world with one log line naming the nearest ghast in sight, its position and the bot's, when a
-   ghast is shooting (shot-at?) and cover-from finds no cover, every hundred ticks at most (five
+  "The world with one log line naming the nearest shooter in sight, its position and the bot's, when a
+   shooter is shooting (shot-at?) and cover-from finds no cover, every hundred ticks at most (five
    seconds): the open-ground case of issue #263 shows in the audit and can be counted before a
    walk to cover is built. The world as it was otherwise."
   [world]
   (if (and (zero? (mod (:time/tick world 0) 100)) (shot-at? world) (nil? (cover-from world)))
-    (let [[eid e] (entity/nearest
-                   (into {} (filter (fn [[_ e]] (= :ghast (entity/kind e)))) (swarm world))
-                   (:player/pos world))]
-      (game/say world
-                (str "ghast "
-                     eid
-                     " at "
-                     (cell (:entity/pos e))
-                     " shoots the bot at "
-                     (intent/feet world)
-                     ": no cover")))
+    (let [[eid e] (entity/nearest (into {}
+                                        (filter (fn [[_ e]]
+                                                  (and (contains? ranged-kinds (entity/kind e))
+                                                       (combat/seen? world e))))
+                                        (swarm world))
+                                  (:player/pos world))]
+      (if (and eid e)
+        (game/say world
+                  (str (name (entity/kind e))
+                       " "
+                       eid
+                       " at "
+                       (cell (:entity/pos e))
+                       " shoots the bot at "
+                       (intent/feet world)
+                       ": no cover"))
+        world))
     world))
 
 (defn track-gain
@@ -2655,10 +2668,7 @@
   ;; from those (swarmed?) and the :defend row does not fight them in the open
   [world _]
   (cond-> (into (combat/answers :pearls)
-                (if (pearls-stage? world)
-                  (comp (filter (comp heavy? val)) (map (comp entity/kind val)) (remove shunned))
-                  (filter (constantly false)))
-                (entity/hostiles world))
+                (if (pearls-stage? world) (remove shunned heavy-kinds) #{}))
     (shelter world)
     (into (comp (map (comp entity/kind val)) (remove shunned)) (entity/hostiles world))))
 
@@ -2668,14 +2678,16 @@
   ;; (plan runs 41096292443 and 41103285823) were hit once, 0.05 s later the :defend row began a
   ;; fight to the end where they stood, two to four blocks from the burrow's end, and four hits
   ;; at 5.74 killed each in 3 to 5 s, the walk home cut and the hunt unable to cut the fight
-  ;; (answers-to-hand)
+  ;; (answers-to-hand). Struck by a heavy hostile (blaze, ghast, wither skeleton, piglin) during
+  ;; pearls stage, the hunt claims it so the :defend row does not fight it with a sword in the open.
   [world _ e]
-  (and (= :enderman (entity/kind e))
-       (some? (shelter world))
-       (or (= (shelter world) (intent/feet world))
-           (intent/routable?
-            world
-            {:intent/kind :walk :intent/target (shelter world) :intent/for :shelter}))))
+  (or (and (= :enderman (entity/kind e))
+           (some? (shelter world))
+           (or (= (shelter world) (intent/feet world))
+               (intent/routable?
+                world
+                {:intent/kind :walk :intent/target (shelter world) :intent/for :shelter})))
+      (and (pearls-stage? world) (contains? heavy-kinds (entity/kind e)))))
 
 
 (def sword-acts
