@@ -3354,3 +3354,57 @@
             (plan/plan-tick with-explore {:event/kind :tick :event/now (:time/now w)} plan/goals)]
         (is (not= :explore (get-in stepped [:plan/intent :intent/for])) "no explore walk started")
         (is (not= [40 61 8] (get-in stepped [:plan/intent :intent/target])))))))
+
+(deftest corridor-blazes-are-claimed-from-defend-and-covered-from-not-charged-with-a-sword
+  ;; Real race 8b3f2e1, Clj_r38 (run 41352110693 lane 5) and Clj_r13 (run 41354774759 lane 7):
+  ;; struck by a blaze fireball in fortress corridors on the way out of blaze-rods, :player/attacker
+  ;; was set, claims-attacker? :pearls returned false, and the priority-0 :defend row took over,
+  ;; commanding an open melee fight with an iron sword against a flying blaze until incinerated.
+  ;; In Clj_r14 (run 41352762409 lane 6), shot-at? was false for blazes and cover-from was not called,
+  ;; while Clj_r44 never ate to heal before tunneling out.
+  (let [blaze-id 42
+        blaze {:entity/type (blocks/entity-types :blaze)
+               :entity/pos [8.5 64.0 14.5]
+               :entity/seen-at 0
+               :entity/health 20.0}
+        nether-brick (blocks/default-state :nether_bricks)
+        floor (into {} (for [x (range 0 16) z (range 0 16)] [[x 63 z] nether-brick]))
+        corridor-walls (into {}
+                             (concat (for [y [64 65] z (range 0 16)] [[6 y z] nether-brick])
+                                     (for [y [64 65] z (range 0 16)] [[10 y z] nether-brick])))
+        blocks (merge floor corridor-walls)
+        base (-> (standing {blaze-id blaze} blocks)
+                 (assoc :player/dimension "minecraft:the_nether"
+                        :player/pos [8.5 64.0 8.5]
+                        :player/health 14.0
+                        :player/food 16
+                        :plan/status :active
+                        :plan/goals #{:ender-pearls}
+                        :plan/reached #{:blaze-rods}
+                        :plan/active [row]
+                        :player/attacker blaze-id)
+                 (update :player/inventory assoc
+                         1 (item :cooked_beef 12)
+                         2 (item :cobblestone 64)
+                         3 (item :iron_pickaxe 1)))]
+    (testing
+      "struck by a blaze fireball, pearls claims the attacker so defend does not fight in the open"
+      (is (combat/claims-attacker? base :pearls blaze))
+      (is (empty? (combat/threats base)) "blaze is answered by pearls, not defend")
+      (let [i (plan/next-intent base row plan/goals)]
+        (is (not= :fight (:intent/kind i)) "never commands an open melee fight against the blaze")))
+    (testing "blaze in sight is recognized by shot-at? and covered from"
+      (is (pearls/shot-at? base) "blaze is recognized as a ranged shooter")
+      (let [c (pearls/cover-from base)]
+        (is (some? c) "cover is found in the corridor")
+        (is (contains? #{:place :dig :walk} (:intent/kind c))
+            "places a wall, digs, or walks to cover")))
+    (testing "an injured bot out of shooter line of sight eats before venturing out"
+      (let [wall-off (into {} (for [x (range 7 10) y [64 65]] [[x y 11] nether-brick]))
+            safe-world (-> base
+                           (assoc :world/chunks {[0 0] (world/column (merge blocks wall-off))})
+                           (dissoc :player/attacker))
+            i (plan/next-intent safe-world row plan/goals)]
+        (is (empty? (filter #(combat/seen? safe-world (val %)) (pearls/shooters safe-world)))
+            "shooters are blocked by the wall")
+        (is (= :eat (:intent/kind i)) "eats meal to restore health before corridor travel")))))
