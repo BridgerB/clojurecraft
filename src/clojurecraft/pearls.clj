@@ -2155,6 +2155,7 @@
     {:intent/kind :tunnel-to
      :intent/target target
      :intent/reach 1.5
+     :intent/climb 0
      :intent/steps fortress/steps-per-tunnel
      :intent/seal-behind? true
      :intent/for :pearls}))
@@ -2517,9 +2518,15 @@
                        :else tid)]
     (cond
       (and meal (empty? (filter #(combat/seen? world (val %)) (shooters world)))) meal
+      (and (fortress-escaping? world)
+           (can-tunnel-out? world)
+           (shot-at? world)
+           (not in?)
+           (cover-from world))
+      (cover-from world)
+      (and (fortress-escaping? world) (can-tunnel-out? world)) (fortress-tunnel-out world)
       (and (not in?) (leave-sight world)) (leave-sight world)
       (and (shot-at? world) (not in?) (cover-from world)) (cover-from world)
-      (and (fortress-escaping? world) (can-tunnel-out? world)) (fortress-tunnel-out world)
       (and (not in?) (room-exit world)) (room-exit world)
       (and home
            (not in?)

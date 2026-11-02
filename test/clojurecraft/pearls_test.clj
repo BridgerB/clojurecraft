@@ -3549,5 +3549,43 @@
                            (assoc :world/entities {} :player/health 20.0 :player/food 20))
             i (plan/next-intent safe-world row plan/goals)]
         (is (= :tunnel-to (:intent/kind i)) "chooses tunnel-to once safe from shooters")
+        (is (= 0 (:intent/climb i))
+            "climb is 0 so descent reaches under-y and surfaces to surface-y")
         (is (true? (:intent/seal-behind? i)) "seals behind as it tunnels")))))
+
+(deftest the-fortress-tunnel-out-carries-zero-climb-so-descent-does-not-stall-short-of-under-y
+  ;; Sim snapshots 41437547127-R1-6-1, 41437392940-R1-33-1, 41437541208-R1-21-1 (issue #644):
+  ;; rod bots in ender-pearls dug down from y=70 to y=38 with under-y=35. Because :tunnel-to
+  ;; lacked :intent/climb 0, climb defaulted to climb-past=3. When ddy was -3, moves refused
+  ;; downward moves ((< -3 -3) false) and only stepped level. With target [fx 35 fz], ddx=0
+  ;; and ddz=0, the bot paced between two cells at y=38 forever until unstick failed :no-path.
+  ;; With :intent/climb 0, dy=-1 is generated all the way to under-y, and once at under-y,
+  ;; Phase 2 tunnels horizontally toward the exit.
+  (let [spawner-pos [-176 70 219]
+        bot-pos [-163.5 38.0 221.5]
+        nether-brick (blocks/default-state :nether_bricks)
+        floor (into {} (for [x (range -180 -160) z (range 210 230)] [[x 69 z] nether-brick]))
+        w (-> (standing {} floor)
+              (assoc :player/dimension "minecraft:the_nether" :player/pos bot-pos)
+              (memory/observe spawner-pos blaze/spawner)
+              (assoc-in [:player/inventory 1] (item :iron_pickaxe 1))
+              (assoc :plan/status :active
+                     :plan/goals #{:ender-pearls}
+                     :plan/reached #{:blaze-rods}
+                     :plan/active [row]))
+        target (pearls/fortress-tunnel-target w)
+        under-y (second target)
+        i (pearls/fortress-tunnel-out w)
+        moves (fortress/moves (intent/feet w) target (:intent/climb i))]
+    (is (<= under-y 35) "under-y is at or below 35")
+    (is (= 0 (:intent/climb i)) "intent specifies climb 0")
+    (is (neg? (second (first moves)))
+        "moves toward under-y step down immediately even when vertical gap is <= 3")
+    (let [at-under-world (assoc w :player/pos [-163.5 (double under-y) 221.5])
+          next-target (pearls/fortress-tunnel-target at-under-world)]
+      (is (pearls/near-fortress? at-under-world) "still near fortress at under-y")
+      (is (= under-y (second next-target)) "Phase 2 stays at under-y")
+      (is (not= (first (intent/feet at-under-world)) (first next-target))
+          "Phase 2 targets exit-x away from current column, not pacing in place"))))
+
 
