@@ -2099,11 +2099,12 @@
   [world [cx cy cz]]
   (let [feet (intent/feet world)
         offsets (for [d [1 2 3 4] [dx dz] [[-1 0] [1 0] [0 -1] [0 1]]] [(* d dx) (* d dz)])]
-    (->> offsets
-         (map (fn [[dx dz]] [(+ cx dx) cy (+ cz dz)]))
-         (filter #(side-boreable? world % cy))
-         (sort-by #(physics/distance feet %))
-         first)))
+    (when (and cx cy cz)
+      (->> offsets
+           (map (fn [[dx dz]] [(+ cx dx) cy (+ cz dz)]))
+           (filter #(side-boreable? world % cy))
+           (sort-by #(physics/distance feet %))
+           first))))
 
 (defn nearest-trail-index
   "The index in trail of the cell closest to feet, or nil."
@@ -2187,7 +2188,7 @@
           ;; Fallback horizontal tunnel away from fortress at current y level
           near? [exit-x fy exit-z]
           ;; Surface once beyond 48 blocks from fortress
-          (< fy surface-y) [exit-x surface-y exit-z]
+          (< (long fy) (long surface-y)) [exit-x surface-y exit-z]
           ;; Surfaced and clear of fortress
           :else nil)))))
 

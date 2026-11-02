@@ -403,7 +403,7 @@
    paced them for four hours."
   [world feet move dry-only?]
   (let [floor (plus (plus feet move) [0 -1 0])]
-    (and (pos? (long (second move)))
+    (and (when-let [y (and move (second move))] (pos? (long y)))
          (build/holds? world [:solid (plus feet [0 -1 0])])
          (contains? #{:air :cave_air :void_air} (blocks/name-of (terrain/block-at world floor)))
          (= floor (build/foundation world floor))
@@ -418,10 +418,13 @@
    step down when it is below? A level step does not. The way back up a stair already stood in is
    still progress, so it is not counted as a retreat (issue #526)."
   [feet move target]
-  (let [dy (long (second move))
-        ddy (- (long (second target)) (long (second feet)))]
-    (and (not (zero? dy))
-         (not (zero? ddy))
+  (let [dy (when move (second move))
+        ddy (when (and target feet (second target) (second feet))
+              (- (long (second target)) (long (second feet))))]
+    (and dy
+         ddy
+         (not (zero? (long dy)))
+         (not (zero? (long ddy)))
          (= (long (math/signum (double dy))) (long (math/signum (double ddy)))))))
 
 (defn next-move
@@ -442,7 +445,8 @@
   ([world feet target climb dry-only? visited bridge-ok?]
    (next-move world feet target climb dry-only? visited bridge-ok? false))
   ([world feet target climb dry-only? visited bridge-ok? no-down?]
-   (let [ways (cond->> (moves feet target climb) no-down? (filter #(>= (second %) 0)))
+   (let [ways (cond->> (moves feet target climb)
+                no-down? (filter (fn [m] (when-let [y (and m (second m))] (>= y 0)))))
          fresh (remove #(contains? visited (plus feet %)) ways)
          allowed? #(and (safe? world feet %) (or (not dry-only?) (dry? world feet %)))
          ;; a fresh step onto a floor one block thick over a drop only with the cell under it
@@ -467,9 +471,10 @@
                                     (build/holds? world [:solid %]))
                               (neighbours floor))
                         (or (not dry-only?) (dry? world feet move)))))
-         up? (> (- (long (second target)) (long (second feet))) (long climb))
+         up? (when (and target feet (second target) (second feet) climb)
+               (> (- (long (second target)) (long (second feet))) (long climb)))
          climb? #(climb-out? world feet % dry-only?)
-         down? #(neg? (long (second %)))]
+         down? (fn [m] (when-let [y (and m (second m))] (neg? (long y))))]
      (or (first (filter #(and (first-way? %) (or (not up?) (not (down? %)))) fresh))
          ;; no reroute with a thick floor, or a block to fill under a thin one: the step as before
          ;; (sim R1/37 seed 2 held soul sand only, and was blocked at y 31 for the refusal)
@@ -597,7 +602,7 @@
    (when-let [to (peek (:trail/cells trail))]
      (let [move (mapv - to feet)]
        (when (and (some #{move} (for [[dx dz] aside dy (if no-down? [0 1] [-1 0 1])] [dx dy dz]))
-                  (or (not no-down?) (>= (second move) 0))
+                  (or (not no-down?) (when-let [y (and move (second move))] (>= y 0)))
                   (safe? world feet move)
                   (or (not dry-only?) (dry? world feet move)))
          move)))))
@@ -820,7 +825,8 @@
                   (assoc :fortress/trail kept))))
       :else
       (let [seal-behind? (and (:intent/seal-behind? i)
-                              (or (neg? (second move)) (zero? (mod taken 3))))
+                              (or (when-let [y (and move (second move))] (neg? y))
+                                  (zero? (mod taken 3))))
             to (plus from move)
             next (build/next-op world
                                 (into (into (into (underlay-ops world from move)
