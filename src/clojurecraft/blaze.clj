@@ -1646,7 +1646,7 @@
 (def sortie-fights 2) ; fights ended on a sortie after which it is over
 (def sortie-ms 90000) ; ms a sortie may last
 (def sortie-crowd 3) ; blazes within at-reach (8) of the bot beyond which a sortie is over once they press it (struck within press-ms): the room is on it
-(def sortie-swarm 8) ; blazes within at-reach (8) beyond which a sortie is over whether they press it or not (z4 landing 2 died among 13 to 14)
+(def sortie-swarm 8) ; blazes within at-reach (8) at which a sortie is over whether they press it or not (z4 landing 2 died among 13 to 14; z16 job 6 died among exactly 8)
 (def sortie-start-health 19.0) ; health a sortie is begun at
 (def sortie-rest-ms 45000) ; ms in the pocket with no fight before another sortie
 
@@ -1666,7 +1666,7 @@
   "Is the sortie (:sortie/since, noted by steer when the bot left its pocket for the spawner's zone)
    over: sortie-fights fights ended since, or sortie-ms spent, or the health under sortie-line, or
    burning, or more than sortie-crowd blazes within 8 that press it (struck within press-ms), or
-   more than sortie-swarm within 8 hit or not (the room is on the bot: blaze-race-z4 landing 2 died
+   sortie-swarm or more within 8 hit or not (the room is on the bot: blaze-race-z4 landing 2 died
    among 13 to 14; blazes in sight that do not shoot are the lure, the bot stays at the mouth)? Then
    the bot goes back to the pocket behind it, heals and goes again. Blaze-race-z2 landing 2 killed 4
    blazes in 3.4 minutes in the room at [2346 57 2288] and stayed there until dead; landing 1 stood
@@ -1679,7 +1679,7 @@
                       (< (:player/health world 20.0) sortie-line)
                       (:player/on-fire? world)
                       (let [n (count (nearby-blazes world 8.0))]
-                        (or (> n sortie-swarm)
+                        (or (>= n sortie-swarm)
                             (and (> n sortie-crowd)
                                  (<= (- (:time/now world 0) (:player/struck-at world -1000000))
                                      press-ms)))))))))
