@@ -3364,7 +3364,7 @@
   ;; while Clj_r44 never ate to heal before tunneling out.
   (let [blaze-id 42
         blaze {:entity/type (blocks/entity-types :blaze)
-               :entity/pos [8.5 64.0 16.5]
+               :entity/pos [8.5 64.0 14.5]
                :entity/seen-at 0
                :entity/health 20.0}
         nether-brick (blocks/default-state :nether_bricks)
@@ -3385,7 +3385,7 @@
                         :player/attacker blaze-id)
                  (update :player/inventory assoc
                          1 (item :cooked_beef 12)
-                         2 (item :nether_bricks 64)
+                         2 (item :cobblestone 64)
                          3 (item :iron_pickaxe 1)))]
     (testing
       "struck by a blaze fireball, pearls claims the attacker so defend does not fight in the open"
@@ -3400,7 +3400,7 @@
         (is (contains? #{:place :dig :walk} (:intent/kind c))
             "places a wall, digs, or walks to cover")))
     (testing "an injured bot out of shooter line of sight eats before venturing out"
-      (let [wall-off (into {} (for [x (range 7 10) y [64 65]] [[x y 12] nether-brick]))
+      (let [wall-off (into {} (for [x (range 7 10) y [64 65]] [[x y 11] nether-brick]))
             safe-world (-> base
                            (assoc :world/chunks {[0 0] (world/column (merge blocks wall-off))})
                            (dissoc :player/attacker))
