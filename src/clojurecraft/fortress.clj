@@ -811,7 +811,8 @@
                                        :intent/tunnel-visited (conj tunnel-visited feet))
                   (assoc :fortress/trail kept))))
       :else
-      (let [seal-behind? (and (:intent/seal-behind? i) (zero? (mod taken 3)))
+      (let [seal-behind? (and (:intent/seal-behind? i)
+                              (or (neg? (second move)) (zero? (mod taken 3))))
             to (plus from move)
             next (build/next-op world
                                 (into (into (into (underlay-ops world from move)
