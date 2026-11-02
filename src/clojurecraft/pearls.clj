@@ -2065,7 +2065,8 @@
   "Is cell [x y z] enclosed: solid overhead ([x (+ y 2) z]) and solid on both lateral sides
    (either (dec x) and (inc x), or (dec z) and (inc z), at standing or head level)?"
   [world [x y z]]
-  (let [roof? (solid-at? world [x (+ y 2) z])
+  (let [roof? (boolean (some-> (terrain/block-at world [x (+ y 2) z])
+                               blocks/solid?))
         x-walls? (and (blaze/walled? world [(dec x) y z]) (blaze/walled? world [(inc x) y z]))
         z-walls? (and (blaze/walled? world [x y (dec z)]) (blaze/walled? world [x y (inc z)]))]
     (boolean (and roof? (or x-walls? z-walls?)))))
@@ -2079,9 +2080,15 @@
         floor [x (dec cy) z]
         roof [x (+ cy 2) z]]
     (and (= y cy)
-         (solid-at? world floor)
-         (solid-at? world roof)
-         (or (solid-at? world cand) (solid-at? world [x (inc cy) z]) (enclosed? world cand))
+         (boolean (some-> (terrain/block-at world floor)
+                          blocks/solid?))
+         (boolean (some-> (terrain/block-at world roof)
+                          blocks/solid?))
+         (or (boolean (some-> (terrain/block-at world cand)
+                              blocks/solid?))
+             (boolean (some-> (terrain/block-at world [x (inc cy) z])
+                              blocks/solid?))
+             (enclosed? world cand))
          (not (stairs/over-fluid? world floor))
          (not= :lava (terrain/fluid-kind world cand))
          (not= :lava

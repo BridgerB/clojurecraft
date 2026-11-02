@@ -3652,7 +3652,8 @@
   ;; retraces the enclosed trail cells heading toward the exit at the same y.
   (let [spawner-pos [8 70 3]
         bot-pos [8.5 67.0 8.5]
-        trail-cands [[8 67 4] [8 67 6] [8 67 8] [8 67 11] [8 67 14]]
+        ;; :plan/trail is oldest-first (from fortress entrance at z=14 to spawner at z=4)
+        trail-cands [[8 67 14] [8 67 11] [8 67 8] [8 67 6] [8 67 4]]
         netherrack (blocks/default-state :netherrack)
         floor (into {} (for [x (range 0 16) z (range 0 16)] [[x 66 z] netherrack]))
         roof (into {} (for [z (range 0 16)] [[8 69 z] netherrack]))
@@ -3683,15 +3684,15 @@
   ;; Where the trail crosses an open fortress corridor (3 blocks wide, open overhead),
   ;; the bot does not walk the open corridor; instead it bores a parallel 1x2 tunnel
   ;; through the solid netherrack or brick wall beside it at the exact same y.
-  (let [spawner-pos [8 60 2]
-        bot-pos [8.5 60.0 6.5]
-        corridor-cell [8 60 10]
+  (let [spawner-pos [8 64 2]
+        bot-pos [8.5 64.0 4.5]
+        corridor-cell [8 64 10]
         nether-brick (blocks/default-state :nether_bricks)
         netherrack (blocks/default-state :netherrack)
-        ;; corridor floor at y=59, 3 blocks wide (x = 7, 8, 9)
-        corridor-floor (into {} (for [x [7 8 9] z (range 0 16)] [[x 59 z] nether-brick]))
+        ;; corridor floor at y=63, 3 blocks wide (x = 7, 8, 9)
+        corridor-floor (into {} (for [x [7 8 9] z (range 0 16)] [[x 63 z] nether-brick]))
         ;; solid wall flanking the corridor at x = 6 (x-2 from corridor center 8)
-        wall-blocks (into {} (for [y [59 60 61 62] z (range 0 16)] [[6 y z] netherrack]))
+        wall-blocks (into {} (for [y [63 64 65 66] z (range 0 16)] [[6 y z] netherrack]))
         all-blocks (merge corridor-floor wall-blocks)
         w (-> (standing {} all-blocks)
               (assoc :player/dimension "minecraft:the_nether" :player/pos bot-pos)
@@ -3702,15 +3703,16 @@
                      :plan/reached #{:blaze-rods}
                      :plan/active [row])
               (assoc :fortress/trail {:trail/target spawner-pos :trail/cells []})
-              (assoc :plan/trail [[8 60 6] corridor-cell [8 60 14]]))
+              ;; :plan/trail is oldest-first (from entrance at z=14 through corridor to bot at z=4)
+              (assoc :plan/trail [[8 64 14] corridor-cell [8 64 4]]))
         target (pearls/fortress-tunnel-target w)
         i (plan/next-intent w row plan/goals)]
     (is (not (pearls/enclosed? w corridor-cell))
         "corridor cell is not enclosed (open sides and roof)")
     (is (= :tunnel-to (:intent/kind i)) "chooses tunnel-to")
     (is (not= corridor-cell target) "does not target the open corridor cell")
-    (is (= [6 60 10] target) "targets side bore in solid wall flanking the corridor at x=6")
-    (is (= 60 (second target)) "side bore is at the exact same y level (60), no dy < 0")
+    (is (= [6 64 10] target) "targets side bore in solid wall flanking the corridor at x=6")
+    (is (= 64 (second target)) "side bore is at the exact same y level (64), no dy < 0")
     (is (true? (:intent/no-down? i)) "tunnel carries no-down?")))
 
 (deftest fortress-exit-never-steps-or-digs-down
