@@ -2055,14 +2055,12 @@
   [world]
   (let [feet (intent/feet world)
         sp (blaze/nearest-spawner world)
-        ref-y (cond sp (second sp)
-                    (seq (fortress/bricks world))
-                    (let [nearby (filter #(<= (physics/horizontal-distance feet %) 32.0)
-                                         (fortress/bricks world))]
-                      (if (seq nearby)
-                        (math/round (/ (double (reduce + (map second nearby)))
-                                       (double (count nearby))))
-                        (second feet)))
+        nearby (filter #(<= (physics/horizontal-distance feet %) 32.0) (fortress/bricks world))
+        ref-y (cond (seq nearby)
+                    (min (reduce min (map second nearby))
+                         (cond sp (second sp)
+                               :else (second feet)))
+                    sp (second sp)
                     :else (second feet))]
     (max 35 (- ref-y 5))))
 
@@ -2519,14 +2517,10 @@
                        :else tid)]
     (cond
       (and meal (empty? (filter #(combat/seen? world (val %)) (shooters world)))) meal
-      (and (fortress-escaping? world) (can-tunnel-out? world)) (fortress-tunnel-out world)
-      (and (fortress-escaping? world) (not (can-tunnel-out? world)))
-      (or (and (not in?) (leave-sight world))
-          (and (not in?) (room-exit world))
-          (and (shot-at? world) (not in?) (cover-from world)))
       (and (not in?) (leave-sight world)) (leave-sight world)
-      (and (not in?) (room-exit world)) (room-exit world)
       (and (shot-at? world) (not in?) (cover-from world)) (cover-from world)
+      (and (fortress-escaping? world) (can-tunnel-out? world)) (fortress-tunnel-out world)
+      (and (not in?) (room-exit world)) (room-exit world)
       (and home
            (not in?)
            (or ce near? hurt? tid aid swarmed? (angry-within? world hold-radius))
