@@ -2049,24 +2049,6 @@
   (let [feet (intent/feet world)]
     (boolean (and (pickaxe? world) (not (surrounded-by-lava? world feet))))))
 
-(defn fortress-under-y
-  "The y level below the fortress floor in solid netherrack (a few blocks under the brick),
-   at least y 35 to stay safely above the lava sea."
-  [world]
-  (let [feet (intent/feet world)
-        sp (blaze/nearest-spawner world)
-        nearby (filter (fn [b]
-                         (and (<= (physics/horizontal-distance feet b) 16.0)
-                              (<= (abs (- (second b) (second feet))) 6.0)))
-                       (fortress/bricks world))
-        ref-y (cond (seq nearby)
-                    (min (reduce min (map second nearby))
-                         (cond sp (second sp)
-                               :else (second feet)))
-                    sp (second sp)
-                    :else (second feet))]
-    (max 35 (- ref-y 5))))
-
 (defn fortress-surface-y
   "The surface y to climb to once clear of the fortress: the forest height if known,
    else the spawner or starting height."
@@ -2078,6 +2060,76 @@
               second)
       (second (intent/feet world))
       64))
+
+(defn enclosed?
+  "Is cell [x y z] enclosed: solid overhead ([x (+ y 2) z]) and solid on both lateral sides
+   (either (dec x) and (inc x), or (dec z) and (inc z), at standing or head level)?"
+  [world [x y z]]
+  (let [roof? (solid-at? world [x (+ y 2) z])
+        x-walls? (and (blaze/walled? world [(dec x) y z]) (blaze/walled? world [(inc x) y z]))
+        z-walls? (and (blaze/walled? world [x y (dec z)]) (blaze/walled? world [x y (inc z)]))]
+    (boolean (and roof? (or x-walls? z-walls?)))))
+
+(defn side-boreable?
+  "Is candidate cell cand beside an open corridor suitable to bore a 1x2 tunnel through
+   at the same y: solid floor below, solid ceiling above, solid wall (or already bored enclosed cell)
+   at feet/eye levels, and no lava?"
+  [world cand cy]
+  (let [[x y z] cand
+        floor [x (dec cy) z]
+        roof [x (+ cy 2) z]]
+    (and (= y cy)
+         (solid-at? world floor)
+         (solid-at? world roof)
+         (or (solid-at? world cand) (solid-at? world [x (inc cy) z]) (enclosed? world cand))
+         (not (stairs/over-fluid? world floor))
+         (not= :lava (terrain/fluid-kind world cand))
+         (not= :lava
+               (some-> (terrain/block-at world cand)
+                       blocks/name-of))
+         (not-any? #(or (= :lava (terrain/fluid-kind world %))
+                        (= :lava
+                           (some-> (terrain/block-at world %)
+                                   blocks/name-of)))
+                   (fortress/neighbours cand)))))
+
+(defn side-bore-cell
+  "The cell in the solid netherrack or brick wall beside open corridor cell c at the same y,
+   or nil when no solid wall is found."
+  [world [cx cy cz]]
+  (let [feet (intent/feet world)
+        offsets (for [d [1 2 3 4] [dx dz] [[-1 0] [1 0] [0 -1] [0 1]]] [(* d dx) (* d dz)])]
+    (->> offsets
+         (map (fn [[dx dz]] [(+ cx dx) cy (+ cz dz)]))
+         (filter #(side-boreable? world % cy))
+         (sort-by #(physics/distance feet %))
+         first)))
+
+(defn nearest-trail-index
+  "The index in trail of the cell closest to feet, or nil."
+  [feet trail]
+  (when (seq trail)
+    (let [indexed (map-indexed vector trail)]
+      (first (apply min-key (fn [[_ c]] (physics/distance feet c)) indexed)))))
+
+(defn fortress-retrace-target
+  "The next target cell along the inbound trail heading toward the exit, or nil:
+   retraces enclosed cells directly, or bores a parallel 1x2 tunnel through solid
+   netherrack/brick wall beside an open corridor cell at the same y. Never steps down (dy >= 0)."
+  [world]
+  (let [feet (intent/feet world)
+        [_ fy _] feet
+        trail (distinct (trail-cells world))]
+    (when (seq trail)
+      (let [idx (nearest-trail-index feet trail)
+            remaining (when idx (drop (inc idx) trail))
+            target-c (or (some #(when (>= (physics/distance feet %) 2.0) %) remaining)
+                         (first remaining))]
+        (when target-c
+          (let [[cx cy cz] target-c
+                target-y (max (long fy) (long cy))]
+            (cond (enclosed? world target-c) [cx target-y cz]
+                  :else (or (side-bore-cell world [cx target-y cz]) [cx target-y cz]))))))))
 
 (defn fortress-exit-dir
   "The horizontal unit direction [dx dz] away from the fortress:
@@ -2118,27 +2170,25 @@
 
 (defn fortress-tunnel-target
   "The [x y z] target for the sealed fortress tunnel-out.
-   Phase 1: dig down into solid netherrack below fortress floor (under-y).
-   Phase 2: tunnel horizontally away while within fortress-escape-reach of spawners/bricks.
-   Phase 3: surface to surface-y once > fortress-escape-reach from fortress."
+   Retraces the inbound path through enclosed cells, boring parallel to open corridors
+   at the same y. Once beyond 48 blocks from the fortress, surfaces to surface-y."
   [world]
   (let [pts (fortress-points world)]
     (when (seq pts)
       (let [feet (intent/feet world)
             [fx fy fz] feet
-            under-y (fortress-under-y world)
-            dir (fortress-exit-dir world)
-            [exit-x exit-z] (fortress-exit-horizontal world [fx fz] dir)
+            near? (near-fortress? world)
             surface-y (fortress-surface-y world)
-            near? (near-fortress? world)]
+            exit-dir (fortress-exit-dir world)
+            [exit-x exit-z] (fortress-exit-horizontal world [fx fz] exit-dir)]
         (cond
-          ;; Phase 1: dig down into solid netherrack below fortress floor
-          (> fy under-y) [fx under-y fz]
-          ;; Phase 2: tunnel horizontally away while within 48 blocks of fortress
-          near? [exit-x under-y exit-z]
-          ;; Phase 3: surface only once beyond 48 blocks
+          ;; Retrace inbound trail or side-bore parallel to open corridor at same y
+          (and near? (fortress-retrace-target world)) (fortress-retrace-target world)
+          ;; Fallback horizontal tunnel away from fortress at current y level
+          near? [exit-x fy exit-z]
+          ;; Surface once beyond 48 blocks from fortress
           (< fy surface-y) [exit-x surface-y exit-z]
-          ;; Surfaced and clear
+          ;; Surfaced and clear of fortress
           :else nil)))))
 
 (defn fortress-escaping?
@@ -2150,15 +2200,16 @@
                 (fortress-tunnel-target world))))
 
 (defn fortress-tunnel-out
-  "The :tunnel-to that leaves the fortress via a sealed tunnel below the floor,
-   heading away from the fortress toward the travel target or warped forest,
-   sealing the cell behind every few steps."
+  "The :tunnel-to that leaves the fortress via a sealed tunnel,
+   retracing the inbound path through enclosed cells, boring parallel to open corridors
+   at the same y, never stepping down through a floor, and surfacing beyond 48 blocks."
   [world]
   (when-let [target (fortress-tunnel-target world)]
     {:intent/kind :tunnel-to
      :intent/target target
      :intent/reach 1.5
      :intent/climb 0
+     :intent/no-down? true
      :intent/steps fortress/steps-per-tunnel
      :intent/seal-behind? true
      :intent/for :pearls}))

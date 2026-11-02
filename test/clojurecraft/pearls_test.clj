@@ -3433,8 +3433,9 @@
     (is (pearls/can-tunnel-out? w) "pickaxe held and not surrounded by lava: can tunnel out")
     (is (= :tunnel-to (:intent/kind i)) "chooses tunnel-to")
     (is (true? (:intent/seal-behind? i)) "tunnel seals the cell behind it every few steps")
-    (is (< (second (:intent/target i)) (second bot-pos))
-        "targets below the fortress floor into solid netherrack, not the corridor exit cell")
+    (is
+     (>= (second (:intent/target i)) (second bot-pos))
+     "targets at or above current floor into solid wall/tunnel, never digging down through floor")
     (is (not= exit-cell (:intent/target i))
         "does not choose the corridor exit cell along the trail")))
 
@@ -3471,24 +3472,23 @@
   ;; tunnel horizontally away from fortress and surface only when more than 48 blocks
   ;; from every known spawner and fortress brick
   (let [spawner-pos [100 64 100]
-        under-y 59
         surface-y 64
         make-world (fn [bot-pos]
                      (-> (standing {})
                          (assoc :player/dimension "minecraft:the_nether" :player/pos bot-pos)
                          (assoc-in [:player/inventory 1] (item :iron_pickaxe 1))
                          (memory/observe spawner-pos blaze/spawner)))]
-    (testing "at the spawner: Phase 1 digs down to under-y"
+    (testing "at the spawner: tunnels horizontally away at same y, does not dig down"
       (let [w (make-world [100.5 64.0 100.5])
             target (pearls/fortress-tunnel-target w)]
-        (is (= [100 under-y 100] target) "targets below fortress floor")))
-    (testing "20 blocks away at under-y: Phase 2 tunnels horizontally at under-y, does not surface"
-      (let [w (make-world [120.5 (double under-y) 100.5])
+        (is (= 64 (second target)) "stays at same y level 64, not digging down into floor")))
+    (testing "20 blocks away at y=64: tunnels horizontally, does not surface"
+      (let [w (make-world [120.5 64.0 100.5])
             target (pearls/fortress-tunnel-target w)]
         (is (pearls/near-fortress? w) "20 blocks is within 48 blocks")
-        (is (= under-y (second target)) "stays at under-y below fortress floor; does not surface")))
-    (testing "50 blocks away at under-y: Phase 3 surfaces to surface-y"
-      (let [w (make-world [150.5 (double under-y) 100.5])
+        (is (= 64 (second target)) "stays at y 64; does not surface")))
+    (testing "50 blocks away at y=64: surfaces to surface-y"
+      (let [w (make-world [150.5 64.0 100.5])
             target (pearls/fortress-tunnel-target w)]
         (is (not (pearls/near-fortress? w)) "50 blocks is beyond 48 blocks")
         (is (= surface-y (second target)) "surfaces to surface-y once beyond 48 blocks")))))
@@ -3559,8 +3559,7 @@
   ;; lacked :intent/climb 0, climb defaulted to climb-past=3. When ddy was -3, moves refused
   ;; downward moves ((< -3 -3) false) and only stepped level. With target [fx 35 fz], ddx=0
   ;; and ddz=0, the bot paced between two cells at y=38 forever until unstick failed :no-path.
-  ;; With :intent/climb 0, dy=-1 is generated all the way to under-y, and once at under-y,
-  ;; Phase 2 tunnels horizontally toward the exit.
+  ;; With :intent/climb 0 and horizontal escape at current y, Phase 2 tunnels horizontally toward the exit.
   (let [spawner-pos [-176 70 219]
         brick-pos [-164 40 221]
         bot-pos [-163.5 38.0 221.5]
@@ -3575,28 +3574,25 @@
                      :plan/reached #{:blaze-rods}
                      :plan/active [row]))
         target (pearls/fortress-tunnel-target w)
-        under-y (second target)
+        exit-y (second target)
         i (pearls/fortress-tunnel-out w)
         moves (fortress/moves (intent/feet w) target (:intent/climb i))]
-    (is (<= under-y 35) "under-y is at or below 35")
+    (is (= 38 exit-y) "exit target stays at current y level 38, not digging down")
     (is (= 0 (:intent/climb i)) "intent specifies climb 0")
-    (is (neg? (second (first moves)))
-        "moves toward under-y step down immediately even when vertical gap is <= 3")
-    (let [at-under-world (assoc w :player/pos [-163.5 (double under-y) 221.5])
-          next-target (pearls/fortress-tunnel-target at-under-world)]
-      (is (pearls/near-fortress? at-under-world) "still near fortress at under-y")
-      (is (= under-y (second next-target)) "Phase 2 stays at under-y")
-      (is (not= (first (intent/feet at-under-world)) (first next-target))
+    (is (>= (second (first moves)) 0) "moves toward exit do not step down")
+    (is (true? (:intent/no-down? i)) "carries no-down?")
+    (let [at-target-world (assoc w :player/pos [-163.5 (double exit-y) 221.5])
+          next-target (pearls/fortress-tunnel-target at-target-world)]
+      (is (pearls/near-fortress? at-target-world) "still near fortress")
+      (is (= exit-y (second next-target)) "Phase 2 stays at same y level")
+      (is (not= (first (intent/feet at-target-world)) (first next-target))
           "Phase 2 targets exit-x away from current column, not pacing in place"))))
 
 (deftest a-rod-bot-at-spawner-descends-only-a-few-blocks-below-local-floor-and-seals-overhead
-  ;; On 3cf50ad, fortress-under-y calculated depth against all nearby bricks including support
-  ;; pillars 40 blocks below at the lava sea, commanding bots at the spawner (y=70) to dig 35
-  ;; vertical blocks down to y=35 through an unroofed trench while refusing meal when blazes
-  ;; were in sight, dying to fireballs (real 14/14, sim 9/12).
-  ;; Under-y is now computed from local floor bricks within 6 blocks of feet (descending ~5
-  ;; blocks under the local floor), downward descent steps seal overhead, and meal is allowed
-  ;; when safe from active fire.
+  ;; Vertical Phase 1 descent into unroofed floors dropped bots into lava sea (#715) or stalled
+  ;; under blaze fire (#712-#714). The fortress tunnel-out now retraces the inbound trail or
+  ;; tunnels horizontally away at the current y level, never digging down through the floor.
+  ;; Eating meal is allowed when safe from active fire, and cover is taken when shot at.
   (let [spawner-pos [8 70 8]
         local-floor-pos [8 69 8]
         distant-pillar-pos [8 32 8]
@@ -3627,11 +3623,9 @@
                      :plan/goals #{:ender-pearls}
                      :plan/reached #{:blaze-rods}
                      :plan/active [row]))
-        under-y (pearls/fortress-under-y w)
         target (pearls/fortress-tunnel-target w)]
-    ;; 1. Under-y targets local floor - 5 (64), NOT pillar level at lava sea (35)
-    (is (= 64 under-y) "under-y is 64 (local floor 69 minus 5), not 35")
-    (is (= [8 64 8] target) "Phase 1 targets [fx 64 fz]")
+    ;; 1. Target stays at current feet height 70, not digging down into floor
+    (is (= 70 (second target)) "target stays at current feet y 70, not digging down into floor")
     ;; 2. When not actively shot at, injured escaping bot eats meal to recover health
     (let [meal-i (plan/next-intent w row plan/goals)]
       (is (= :eat (:intent/kind meal-i)) "eats meal to recover health before tunneling"))
@@ -3639,9 +3633,10 @@
     (let [healthy-w (assoc w :player/health 20.0 :player/food 20)
           tunnel-i (plan/next-intent healthy-w row plan/goals)]
       (is (= :tunnel-to (:intent/kind tunnel-i)) "chooses tunnel-to once healthy")
-      (is (= target (:intent/target tunnel-i)) "targets under-y 64")
+      (is (= target (:intent/target tunnel-i)) "targets exit at same y 70")
       (is (= 0 (:intent/climb tunnel-i)) "carries climb 0")
-      (is (true? (:intent/seal-behind? tunnel-i)) "requests seal-behind"))
+      (is (true? (:intent/seal-behind? tunnel-i)) "requests seal-behind")
+      (is (true? (:intent/no-down? tunnel-i)) "requests no-down? to protect floor"))
     ;; 4. When shot at, covers first
     (let [shot-w (-> w
                      (assoc-in [:world/entities blaze-id] blaze)
@@ -3649,6 +3644,104 @@
           cover-i (plan/next-intent shot-w row plan/goals)]
       (is (not= :tunnel-to (:intent/kind cover-i)) "does not tunnel while shot at")
       (is (contains? #{:place :walk :dig} (:intent/kind cover-i)) "covers from shooter"))))
+
+(deftest a-rod-bot-retraces-inbound-dug-tunnel
+  ;; From logged state:
+  ;; A rod bot at the spawner with an inbound trail dug through solid netherrack
+  ;; retraces the enclosed trail cells heading toward the exit at the same y.
+  (let [spawner-pos [658 70 747]
+        bot-pos [650.5 67.0 751.5]
+        trail-cands [[650 67 751] [652 67 751] [655 67 751] [658 67 751] [675 67 765] [704 67 768]]
+        netherrack (blocks/default-state :netherrack)
+        ;; build a 1x2 enclosed tunnel around the trail cells
+        tunnel-blocks (into {}
+                            (for [[x y z] trail-cands
+                                  block-pos [[x (dec y) z] ; floor
+                                             [x (+ y 2) z] ; roof
+                                             [(dec x) y z] ; lateral wall x-1
+                                             [(inc x) y z] ; lateral wall x+1
+                                             [(dec x) (inc y) z] [(inc x) (inc y) z]]]
+                              [block-pos netherrack]))
+        w (-> (standing {} tunnel-blocks)
+              (assoc :player/dimension "minecraft:the_nether" :player/pos bot-pos)
+              (assoc-in [:player/inventory 1] (item :iron_pickaxe 1))
+              (memory/observe spawner-pos blaze/spawner)
+              (assoc :plan/status :active
+                     :plan/goals #{:ender-pearls}
+                     :plan/reached #{:blaze-rods}
+                     :plan/active [row])
+              (assoc :fortress/trail {:trail/target spawner-pos :trail/cells []})
+              (assoc :plan/trail trail-cands))
+        target (pearls/fortress-tunnel-target w)
+        i (plan/next-intent w row plan/goals)]
+    (is (pearls/enclosed? w [655 67 751]) "dug tunnel cells are enclosed (solid roof and walls)")
+    (is (= :tunnel-to (:intent/kind i)) "chooses tunnel-to to exit")
+    (is (= [655 67 751] target) "retraces enclosed inbound trail cell")
+    (is (= (long (second bot-pos)) (second target))
+        "retrace stays at same y (67), never digging down")
+    (is (true? (:intent/no-down? i)) "carries no-down? to forbid downward floor digging")))
+
+(deftest a-trail-crossing-corridor-bores-parallel-wall-at-same-y
+  ;; Where the trail crosses an open fortress corridor (3 blocks wide, open overhead),
+  ;; the bot does not walk the open corridor; instead it bores a parallel 1x2 tunnel
+  ;; through the solid netherrack or brick wall beside it at the exact same y.
+  (let [spawner-pos [889 60 -206]
+        bot-pos [890.5 60.0 -203.9]
+        corridor-cell [890 60 -200]
+        nether-brick (blocks/default-state :nether_bricks)
+        netherrack (blocks/default-state :netherrack)
+        ;; corridor floor at y=59, 3 blocks wide (x = 889, 890, 891)
+        corridor-floor (into {} (for [x [889 890 891] z (range -206 -195)] [[x 59 z] nether-brick]))
+        ;; solid wall flanking the corridor at x = 888 (x-2 from corridor center 890)
+        wall-blocks (into {} (for [y [59 60 61 62] z (range -206 -195)] [[888 y z] netherrack]))
+        all-blocks (merge corridor-floor wall-blocks)
+        w (-> (standing {} all-blocks)
+              (assoc :player/dimension "minecraft:the_nether" :player/pos bot-pos)
+              (assoc-in [:player/inventory 1] (item :iron_pickaxe 1))
+              (memory/observe spawner-pos blaze/spawner)
+              (assoc :plan/status :active
+                     :plan/goals #{:ender-pearls}
+                     :plan/reached #{:blaze-rods}
+                     :plan/active [row])
+              (assoc :fortress/trail {:trail/target spawner-pos :trail/cells []})
+              (assoc :plan/trail [[890 60 -204] corridor-cell [890 60 -196]]))
+        target (pearls/fortress-tunnel-target w)
+        i (plan/next-intent w row plan/goals)]
+    (is (not (pearls/enclosed? w corridor-cell))
+        "corridor cell is not enclosed (open sides and roof)")
+    (is (= :tunnel-to (:intent/kind i)) "chooses tunnel-to")
+    (is (not= corridor-cell target) "does not target the open corridor cell")
+    (is (= [888 60 -200] target) "targets side bore in solid wall flanking the corridor at x=888")
+    (is (= 60 (second target)) "side bore is at the exact same y level (60), no dy < 0")
+    (is (true? (:intent/no-down? i)) "tunnel carries no-down?")))
+
+(deftest fortress-exit-never-steps-or-digs-down
+  ;; On #715, downward tunnel moves through a 1-block fortress floor dropped bots into
+  ;; the lava sea 40 blocks below (death-lava x4). During fortress escape, no step
+  ;; may ever have dy < 0: moves must be level or upward (dy >= 0).
+  (let [feet [100 64 100]
+        spawner-pos [100 64 100]
+        nether-brick (blocks/default-state :nether_bricks)
+        floor-blocks (into {} (for [x (range 95 105) z (range 95 105)] [[x 63 z] nether-brick]))
+        w (-> (standing {} floor-blocks)
+              (assoc :player/dimension "minecraft:the_nether" :player/pos [100.5 64.0 100.5])
+              (assoc-in [:player/inventory 1] (item :iron_pickaxe 1))
+              (memory/observe spawner-pos blaze/spawner)
+              (assoc :plan/status :active
+                     :plan/goals #{:ender-pearls}
+                     :plan/reached #{:blaze-rods}
+                     :plan/active [row]))
+        i (pearls/fortress-tunnel-out w)
+        target (:intent/target i)
+        moves (fortress/moves feet target (:intent/climb i))
+        step (fortress/next-move w feet target (:intent/climb i) false #{} false true)]
+    (is (true? (:intent/no-down? i)) "intent specifies no-down?")
+    (is (>= (second target) 64) "target is at or above feet y, never below")
+    (is (some? step) "a safe horizontal step is found")
+    (is (>= (second step) 0) "selected step has dy >= 0, never digging down through floor")
+    (testing "all moves considered with no-down? have dy >= 0"
+      (let [filtered-moves (filter #(>= (second %) 0) moves)]
+        (is (not-any? #(neg? (second %)) filtered-moves))))))
 
 
 

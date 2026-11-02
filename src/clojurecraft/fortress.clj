@@ -438,9 +438,11 @@
    toward it over the cave's air, and walked its own stairs 32 steps a tunnel for 23 minutes to
    the timeout."
   ([world feet target climb dry-only? visited]
-   (next-move world feet target climb dry-only? visited false))
+   (next-move world feet target climb dry-only? visited false false))
   ([world feet target climb dry-only? visited bridge-ok?]
-   (let [ways (moves feet target climb)
+   (next-move world feet target climb dry-only? visited bridge-ok? false))
+  ([world feet target climb dry-only? visited bridge-ok? no-down?]
+   (let [ways (cond->> (moves feet target climb) no-down? (filter #(>= (second %) 0)))
          fresh (remove #(contains? visited (plus feet %)) ways)
          allowed? #(and (safe? world feet %) (or (not dry-only?) (dry? world feet %)))
          ;; a fresh step onto a floor one block thick over a drop only with the cell under it
@@ -590,13 +592,15 @@
    way out of a cell no fresh step leaves: sim snapshots R3-5-2 and R4-11-1 (issue #502) went
    into pockets whose every fresh step was refused, retreated once, paced and failed :blocked
    with the branch that went on a few cells back never tried."
-  [world feet trail dry-only?]
-  (when-let [to (peek (:trail/cells trail))]
-    (let [move (mapv - to feet)]
-      (when (and (some #{move} (for [[dx dz] aside dy [-1 0 1]] [dx dy dz]))
-                 (safe? world feet move)
-                 (or (not dry-only?) (dry? world feet move)))
-        move))))
+  ([world feet trail dry-only?] (step-back world feet trail dry-only? false))
+  ([world feet trail dry-only? no-down?]
+   (when-let [to (peek (:trail/cells trail))]
+     (let [move (mapv - to feet)]
+       (when (and (some #{move} (for [[dx dz] aside dy (if no-down? [0 1] [-1 0 1])] [dx dy dz]))
+                  (or (not no-down?) (>= (second move) 0))
+                  (safe? world feet move)
+                  (or (not dry-only?) (dry? world feet move)))
+         move)))))
 
 (defn leave-cell
   "The trail once a step is chosen from feet: when the step goes back (back? true) its last cell
@@ -747,7 +751,8 @@
   ;; down first past :intent/climb blocks off (climb-past when absent); with :intent/dry? only
   ;; steps that open no cell by water (dry?: the overworld's, issue #265)
   [world
-   {:intent/keys [target steps taken move from climb tunnel-visited child search retreats airborne]
+   {:intent/keys [target steps taken move from climb tunnel-visited child search retreats airborne
+                  no-down?]
     dry-only? :intent/dry?
     r :intent/reach
     :or {taken 0
@@ -756,7 +761,8 @@
          climb climb-past
          tunnel-visited #{}
          retreats 0
-         airborne 0}
+         airborne 0
+         no-down? false}
     :as i} event]
   (let [world (cond-> world search (assoc :fortress/search search)) ; the spiral's leg, kept for the planner's next look
         feet (intent/feet world)
@@ -788,9 +794,11 @@
                                climb
                                (boolean dry-only?)
                                seen
-                               (boolean (:intent/bridge? i))))
+                               (boolean (:intent/bridge? i))
+                               (boolean no-down?)))
             fresh? (fresh-move? feet ahead target seen (:trail/dead trail))
-            undo (when-not (or back fresh?) (step-back world feet trail (boolean dry-only?)))
+            undo (when-not (or back fresh?)
+                   (step-back world feet trail (boolean dry-only?) (boolean no-down?)))
             m (or back undo ahead)
             retreated
             (if (and ahead (not fresh?) (not undo)) (inc (carried-retreats retreats trail)) 0)
