@@ -1426,6 +1426,14 @@
 
 (declare near-rod)
 
+(declare nearby-blazes)
+
+(defn melee-crowd?
+  "Are two or more blazes within melee reach (combat/melee-reach)? Two in melee hit faster
+   than a sword kills one: the fight is lost, not committed to."
+  [world]
+  (>= (count (nearby-blazes world combat/melee-reach)) 2))
+
 (defn hold-intent
   "What a bot in its pocket does, or nil: SEALED, while it burns or is under hold-to, eat when the
    food is under what heals (meal) else a :pocket-hold, until the fire is out, the health is up and the
@@ -1480,6 +1488,7 @@
                (reignited? world)
                (and (< (:player/health world 20.0) low-health) (seq (swarm world)))
                (outnumbered? world)
+               (melee-crowd? world)
                (and (seq (watchers world)) (hurt? world)))))
 
 (defn here-intent
@@ -1783,6 +1792,9 @@
              ;; the sortie's cap: more than sortie-crowd blazes within 8, or a volley watching, is the room on
              ;; the bot, not a fight to commit to the end (the spawner-room deaths of z4 and z5)
              (<= (count (nearby-blazes world 8.0)) sortie-crowd)
+             ;; two blazes in melee cost about melee-rate each a second and a sword takes 2.4 s a blaze:
+             ;; that fight is lost (z14 job 6); the sealed pocket is the answer
+             (not (melee-crowd? world))
              (not (outnumbered? world))
              (not (burning-here? world))
              ;; a rod within a step is picked up before the next swing (near-rod, blaze-race-m race 4)

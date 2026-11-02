@@ -47,6 +47,7 @@
 (def aimed-within 20.0)               ; degrees of yaw the eyes may be off the target and still attack
 (def max-swings 25)                   ; attacks in reach on one target before it is a ghost
 (def retreat-health 10)               ; health under which a fight breaks off
+(def melee-reach 3.5)                 ; blocks within which a blaze strikes in melee
 (def retreat-distance 6.0)            ; blocks a broken-off fight puts between the bot and the target
 (def approach-timeout-ms 20000)       ; an approach that never reaches the target fails :unreachable
 (def stall-ticks 20)                  ; ticks an approach straight at the target may go without coming 0.1 nearer before it takes a route
