@@ -1426,6 +1426,47 @@
 
 (declare near-rod)
 
+(declare nearby-blazes)
+
+(def crowd-wait-ms 60000) ; ms a sealed bot waits for blazes to thin out before it opens the pocket
+(def exit-crowd 2)        ; blazes within at-reach (8) of a sealed pocket that keep it shut
+
+(defn exit-dir
+  "The horizontal [dx dz] from the pocket cell toward the cells placed to seal it, or nil when
+   nothing is placed or the placed cells cancel. The side the opening is on."
+  [site]
+  (let [[cx _ cz] (:pocket/cell site)]
+    (when (and cx (seq (:pocket/placed site)))
+      (let [dx (reduce + (map (fn [[x]] (- x cx)) (:pocket/placed site)))
+            dz (reduce + (map (fn [[_ _ z]] (- z cz)) (:pocket/placed site)))]
+        (when-not (and (zero? dx) (zero? dz)) [dx dz])))))
+
+(defn crowd-on-exit?
+  "Is a blaze within 8 on the seal's side (exit-dir): its position relative to the pocket cell's
+   centre has a positive dot with that direction? Opening then steps into the crowd."
+  [world]
+  (when-let [[dx dz] (exit-dir (:pocket/site world))]
+    (let [[cx _ cz] (:pocket/cell (:pocket/site world))]
+      (boolean (some (fn [[_ e]]
+                       (let [[x _ z] (:entity/pos e)]
+                         (pos? (+ (* (- x (+ cx 0.5)) dx) (* (- z (+ cz 0.5)) dz)))))
+                     (nearby-blazes world 8.0))))))
+
+(defn crowd-waiting?
+  "Does a sealed bot keep the pocket shut: exit-crowd or more blazes within 8, noted by plan/steer
+   (:pocket/crowd-since)? The wait ends only once it has lasted crowd-wait-ms AND the health is
+   full-health AND the crowd is not standing on the seal's side (crowd-on-exit?). blaze-race-z14
+   died 4 to 20 s after an :unseal at hp 20; blaze-race-z15 jobs 1 to 4 ended every hold at hp 20
+   and stepped out into the blazes."
+  [world]
+  (let [since (:pocket/crowd-since world)
+        crowd? (and since (>= (count (nearby-blazes world 8.0)) exit-crowd))
+        open? (and since
+                   (>= (- (:time/now world 0) since) crowd-wait-ms)
+                   (>= (:player/health world 20.0) full-health)
+                   (not (crowd-on-exit? world)))]
+    (boolean (and crowd? (not open?)))))
+
 (defn hold-intent
   "What a bot in its pocket does, or nil: SEALED, while it burns or is under hold-to, eat when the
    food is under what heals (meal) else a :pocket-hold, until the fire is out, the health is up and the
@@ -1446,17 +1487,18 @@
                     (and (heals? world) (< (:player/health world 20.0) (hold-to world))))
           struck? (<= (- (:time/now world 0) (:player/struck-at world -1000000)) press-ms)]
       (cond (pocket/sealed? world site)
-            (if (and (or need? struck?)
-                     (not (and (near-rod world) (not (:player/on-fire? world)) (not struck?))))
+            (if (or (and (or need? struck?)
+                         (not (and (near-rod world) (not (:player/on-fire? world)) (not struck?))))
+                    (crowd-waiting? world))
               (or (meal world) {:intent/kind :pocket-hold :intent/heal-to (hold-to world)})
               ;; sealed, cannot heal, under low-health: opened, the next blaze in reach seals it again
               ;; (the flip of blaze-race-p job 4), so it stays shut and the row goes on without a hold
               ;; and nothing to open when no cell was placed (a cell shut on every side): no :unseal that
               ;; is done at once and chosen again
               (when (and (seq (:pocket/placed site))
-                         (or (heals? world) (>= (:player/health world 20.0) low-health)))
+                         (or (heals? world) (>= (:player/health world 20.0) unseal-health)))
                 {:intent/kind :unseal}))
-            (and (reach-blaze world) (>= (:player/health world 20.0) low-health)) nil
+            (and (reach-blaze world) (>= (:player/health world 20.0) unseal-health)) nil
             (and (or (pressed? world) (reach-blaze world)) (pocket/can-seal? world site))
             {:intent/kind :seal}
             (reach-blaze world)
@@ -1733,7 +1775,10 @@
         world (if (rod-grab? world (:plan/intent world))
                 (update world :rod-grab/since #(or % (:time/now world 0)))
                 (dissoc world :rod-grab/since))
-        world (hurt-mark world)]
+        world (hurt-mark world)
+        world (if (and (pocket/in? world) (>= (count (nearby-blazes world 8.0)) exit-crowd))
+                (update world :pocket/crowd-since #(or % (:time/now world 0)))
+                (dissoc world :pocket/crowd-since))]
     (cond (leaky-pocket? world)
           ;; a pocket the hits come through is no refuge: forgotten, its cell remembered as failed
           (-> world
@@ -2110,6 +2155,7 @@
                 first? (game/say (pocket-line world "start")))]
     (cond (or (and (not (:player/on-fire? world))
                    (>= (:player/health world 20.0) (or heal-to engage-health))
+                   (not (crowd-waiting? world))
                    (or (not (sealed? world))
                        (> (- now (:player/struck-at world -1000000)) press-ms)))
               (and (some? (reach-blaze world))
