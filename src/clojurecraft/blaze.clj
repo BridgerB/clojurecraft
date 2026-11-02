@@ -134,6 +134,25 @@
          (sort-by (fn [[_ e]] (physics/distance pos (:entity/pos e))))
          (some (fn [[_ e :as ee]] (when (reachable? world e) ee))))))
 
+(defn meleeing-blaze
+  "[eid entity] of the blaze in melee (combat/melee-reach) to fight, or nil: the one that last
+   struck (combat/striker) while the strike is fresh, even when it is not reachable? (a nearer
+   one that can be walked to is the wrong sword), else the nearest within melee reach that is
+   reachable?. Blaze-race-z14 job 6: :fight 556 swung 0 times in 4 s while blazes 640 and 587 hit."
+  [world]
+  (let [pos (:player/pos world)
+        [id e :as hit] (combat/striker world)
+        in-melee? (fn [ent]
+                    (and (= :blaze (entity/kind ent))
+                         (not (entity/dead? ent))
+                         (<= (physics/distance pos (:entity/pos ent)) combat/melee-reach)))]
+    (if (and e (in-melee? e) (not (contains? (:plan/blacklist world #{}) id)))
+      hit
+      (->> (blazes world)
+           (filter (fn [[_ ent]] (in-melee? ent)))
+           (sort-by (fn [[_ ent]] (physics/distance pos (:entity/pos ent))))
+           (some (fn [[_ ent :as ee]] (when (reachable? world ent) ee)))))))
+
 (defn fetch-walk
   "The walk onto the cell drop e lies in: the feet there are in the pickup box of a drop in a pit
    under the floor (:intent/for :rod ends standing in the cell)."
@@ -1201,11 +1220,12 @@
 (defn fightable-blaze
   "[eid entity] of the blaze fought before anything else: in the pocket (pocket/in?) the nearest
    within reach (reach-blaze), none when the opening is sealed (a blaze at the block is no target:
-   the seal is opened first), elsewhere the one at hand (at-hand-blaze)."
+   the seal is opened first), elsewhere the one meleeing the bot (meleeing-blaze) or, with none,
+   the one at hand (at-hand-blaze)."
   [world]
   (cond (sealed? world) nil
         (pocket/in? world) (reach-blaze world)
-        :else (at-hand-blaze world)))
+        :else (or (meleeing-blaze world) (at-hand-blaze world))))
 
 (defn pocket-ok?
   "The predicate of a pocket cell for the spawner at cell sp (nil: any cell): outside the volume
@@ -1772,7 +1792,8 @@
                   (or (nil? since) (< (- (:time/now world 0) since) rod-grab-ms))))))
 
 (defn commit-fight
-  "A :fight on the blaze at hand (at-hand-blaze) while the health is at low-health (12) or more,
+  "A :fight on the blaze meleeing the bot (meleeing-blaze), else the one at hand (at-hand-blaze),
+   while the health is at low-health (12) or more,
    the line under which a pocket seals a blaze out and the retreat is one, or nil: committed for its whole duration, to the end (:intent/to-the-end?), yielding under
    retreat-health (:intent/yield?) so the retreat that follows is one. Blaze-race-z8 job 6 (landing 6):
    two blazes at 0.7 to 3.1 blocks and hp 20 to 3.6 in 9 s, one attack sent, because :fight, :place
@@ -1787,7 +1808,9 @@
              (not (burning-here? world))
              ;; a rod within a step is picked up before the next swing (near-rod, blaze-race-m race 4)
              (nil? (near-rod world)))
-    (when-let [[eid] (at-hand-blaze world)]
+    (when-let [[eid] (if (pocket/in? world)
+                       (at-hand-blaze world)
+                       (or (meleeing-blaze world) (at-hand-blaze world)))]
       {:intent/kind :fight :intent/target eid :intent/to-the-end? true :intent/yield? true})))
 
 (defn committed-fight?
