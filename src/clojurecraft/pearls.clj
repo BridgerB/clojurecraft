@@ -2031,16 +2031,16 @@
                    pts))))
 
 (defn surrounded-by-lava?
-  "Is the bot surrounded by lava or unsafe fluid on every side: every adjacent horizontal
-   cell or downward step is lava or cannot be stepped safely?"
+  "Is the bot surrounded by lava on every side: every lateral heading from feet has lava
+   at body or floor level, leaving no dry direction to tunnel into?"
   [world feet]
   (let [lava? (fn [c] (contains? blocks/lava-states (terrain/block-at world c)))
-        adj-moves (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]] dy [0 -1]] [dx dy dz])]
-    (every?
-     (fn [m]
-       (let [to (fortress/plus feet m)]
-         (or (lava? to) (lava? (fortress/plus to [0 1 0])) (not (fortress/safe? world feet m)))))
-     adj-moves)))
+        horizontal-dirs [[1 0] [-1 0] [0 1] [0 -1]]]
+    (every? (fn [[dx dz]]
+              (or (lava? (fortress/plus feet [dx 0 dz]))
+                  (lava? (fortress/plus feet [dx 1 dz]))
+                  (lava? (fortress/plus feet [dx -1 dz]))))
+            horizontal-dirs)))
 
 (defn can-tunnel-out?
   "Can the bot tunnel out of the fortress: holds a serviceable pickaxe and is not
@@ -2086,13 +2086,14 @@
   (let [feet (intent/feet world)
         [fx _ fz] feet
         target (or (nearest-forest world) (when-let [e (explore world)] (:intent/target e)))
-        [tx tz] (if target
-                  [(first target) (last target)]
-                  (if-let [sp (or (blaze/nearest-spawner world) (fortress/nearest-brick world))]
-                    (let [dx (- fx (first sp))
-                          dz (- fz (last sp))]
-                      (if (and (zero? dx) (zero? dz)) [1 0] [(+ fx dx) (+ fz dz)]))
-                    [(inc fx) fz]))
+        sp (when-not target (or (blaze/nearest-spawner world) (fortress/nearest-brick world)))
+        [tx tz] (cond target [(first target) (last target)]
+                      sp
+                      (let [dx (- fx (first sp))
+                            dz (- fz (last sp))]
+                        (cond (and (zero? dx) (zero? dz)) [1 0]
+                              :else [(+ fx dx) (+ fz dz)]))
+                      :else [(inc fx) fz])
         ddx (double (- tx fx))
         ddz (double (- tz fz))
         d (math/sqrt (+ (* ddx ddx) (* ddz ddz)))]
