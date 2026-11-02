@@ -2065,7 +2065,7 @@
                                :else (second feet)))
                     sp (second sp)
                     :else (second feet))]
-    (max 35 (- ref-y 4))))
+    (max 35 (- ref-y 5))))
 
 (defn fortress-surface-y
   "The surface y to climb to once clear of the fortress: the forest height if known,

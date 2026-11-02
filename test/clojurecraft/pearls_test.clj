@@ -3594,15 +3594,25 @@
   ;; pillars 40 blocks below at the lava sea, commanding bots at the spawner (y=70) to dig 35
   ;; vertical blocks down to y=35 through an unroofed trench while refusing meal when blazes
   ;; were in sight, dying to fireballs (real 14/14, sim 9/12).
-  ;; Under-y is now computed from local floor bricks within 6 blocks of feet (descending ~4-5
+  ;; Under-y is now computed from local floor bricks within 6 blocks of feet (descending ~5
   ;; blocks under the local floor), downward descent steps seal overhead, and meal is allowed
-  ;; when covered.
-  (let [spawner-pos [-176 70 219]
-        local-floor-pos [-176 69 219]
-        distant-pillar-pos [-170 32 219]
-        bot-pos [-175.5 70.0 219.5]
+  ;; when safe from active fire.
+  (let [spawner-pos [8 70 8]
+        local-floor-pos [8 69 8]
+        distant-pillar-pos [8 32 8]
+        bot-pos [8.5 70.0 8.5]
+        blaze-id 99
+        blaze {:entity/type (blocks/entity-types :blaze)
+               :entity/pos [8.5 74.0 14.5]
+               :entity/seen-at 0
+               :entity/health 20.0}
         nether-brick (blocks/default-state :nether_bricks)
-        w (-> (standing {})
+        floor (into {} (for [x (range 0 16) z (range 0 16)] [[x 69 z] nether-brick]))
+        corridor-walls (into {}
+                             (concat (for [y [70 71] z (range 0 16)] [[6 y z] nether-brick])
+                                     (for [y [70 71] z (range 0 16)] [[10 y z] nether-brick])))
+        blocks (merge floor corridor-walls)
+        w (-> (standing {} blocks)
               (assoc :player/dimension "minecraft:the_nether"
                      :player/pos bot-pos
                      :player/health 12.0
@@ -3619,9 +3629,9 @@
                      :plan/active [row]))
         under-y (pearls/fortress-under-y w)
         target (pearls/fortress-tunnel-target w)]
-    ;; 1. Under-y targets local floor - 4 (65), NOT pillar level at lava sea (35)
-    (is (= 65 under-y) "under-y is 65 (local floor 69 minus 4), not 35")
-    (is (= [-176 65 219] target) "Phase 1 targets [fx 65 fz]")
+    ;; 1. Under-y targets local floor - 5 (64), NOT pillar level at lava sea (35)
+    (is (= 64 under-y) "under-y is 64 (local floor 69 minus 5), not 35")
+    (is (= [8 64 8] target) "Phase 1 targets [fx 64 fz]")
     ;; 2. When not actively shot at, injured escaping bot eats meal to recover health
     (let [meal-i (plan/next-intent w row plan/goals)]
       (is (= :eat (:intent/kind meal-i)) "eats meal to recover health before tunneling"))
@@ -3629,18 +3639,13 @@
     (let [healthy-w (assoc w :player/health 20.0 :player/food 20)
           tunnel-i (plan/next-intent healthy-w row plan/goals)]
       (is (= :tunnel-to (:intent/kind tunnel-i)) "chooses tunnel-to once healthy")
-      (is (= target (:intent/target tunnel-i)) "targets under-y 65")
+      (is (= target (:intent/target tunnel-i)) "targets under-y 64")
       (is (= 0 (:intent/climb tunnel-i)) "carries climb 0")
       (is (true? (:intent/seal-behind? tunnel-i)) "requests seal-behind"))
     ;; 4. When shot at, covers first
-    (let [blaze-id 99
-          blaze {:entity/type (blocks/entity-types :blaze)
-                 :entity/pos [-176.5 74.0 225.5]
-                 :entity/seen-at 0
-                 :entity/health 20.0}
-          shot-w (-> w
+    (let [shot-w (-> w
                      (assoc-in [:world/entities blaze-id] blaze)
-                     (assoc :player/attacker blaze-id :pearls/shot-at-ms 100))
+                     (assoc :player/attacker blaze-id :pearls/shot-at-ms 150 :time/now 200))
           cover-i (plan/next-intent shot-w row plan/goals)]
       (is (not= :tunnel-to (:intent/kind cover-i)) "does not tunnel while shot at")
       (is (contains? #{:place :walk :dig} (:intent/kind cover-i)) "covers from shooter"))))
