@@ -3408,3 +3408,87 @@
         (is (empty? (filter #(combat/seen? safe-world (val %)) (pearls/shooters safe-world)))
             "shooters are blocked by the wall")
         (is (= :eat (:intent/kind i)) "eats meal to restore health before corridor travel")))))
+
+(deftest a-rod-bot-at-the-spawner-leaves-by-sealed-tunnel-out-and-never-walks-corridors
+  ;; after rods milestone, rod bots walk out along fortress corridors and blazes kill them
+  ;; (real race 8b3f2e1 runs 41352762409, 41352110693, 41354774759): with a pickaxe held,
+  ;; the bot leaves by a sealed tunnel-out below the floor, never walking the corridor
+  (let [blaze {:entity/type (blocks/entity-types :blaze)
+               :entity/pos [892.5 60.0 -204.5]
+               :entity/seen-at 0
+               :entity/health 20.0}
+        spawner-pos [889 60 -206]
+        bot-pos [890.5 60.0 -203.9]
+        exit-cell [902 63 -198]
+        w (-> (standing {9 blaze})
+              (assoc :player/dimension "minecraft:the_nether" :player/pos bot-pos)
+              (assoc-in [:player/inventory 1] (item :iron_pickaxe 1))
+              (memory/observe spawner-pos blaze/spawner)
+              (assoc :fortress/trail {:trail/target spawner-pos :trail/cells []})
+              (assoc :plan/trail
+                     [[976 48 -176] [958 49 -190] [926 63 -190] exit-cell [897 61 -204]
+                      [890 60 -204]]))
+        i (plan/next-intent w row plan/goals)]
+    (is (pearls/near-fortress? w) "bot is near the spawner / fortress")
+    (is (pearls/can-tunnel-out? w) "pickaxe held and not surrounded by lava: can tunnel out")
+    (is (= :tunnel-to (:intent/kind i)) "chooses tunnel-to")
+    (is (true? (:intent/seal-behind? i)) "tunnel seals the cell behind it every few steps")
+    (is (< (second (:intent/target i)) (second bot-pos))
+        "targets below the fortress floor into solid netherrack, not the corridor exit cell")
+    (is (not= exit-cell (:intent/target i))
+        "does not choose the corridor exit cell along the trail")))
+
+(deftest the-tunnel-out-refuses-lava-and-routes-around-or-falls-back
+  ;; tunnel-to refuses any step into lava or beside lava (safe?): when surrounded by lava
+  ;; on all sides, can-tunnel-out? is false and corridor walking is the fallback
+  (let [spawner-pos [100 64 100]
+        bot-pos [100.5 64.0 100.5]
+        feet [100 64 100]
+        lava-state (blocks/default-state :lava)
+        w-clear (-> (standing {})
+                    (assoc :player/dimension "minecraft:the_nether" :player/pos bot-pos)
+                    (assoc-in [:player/inventory 1] (item :iron_pickaxe 1))
+                    (memory/observe spawner-pos blaze/spawner))
+        w-lava-below (assoc-in w-clear [:world/blocks [100 63 100]] lava-state)
+        lava-blocks (into {}
+                          (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
+                                dy [0 -1]]
+                            [(mapv + feet [dx dy dz]) lava-state]))
+        w-trapped (-> w-clear
+                      (update :world/blocks merge lava-blocks)
+                      (assoc :fortress/trail
+                             {:trail/target spawner-pos :trail/cells [[90 64 100]]}))]
+    (testing "safe? refuses step down when cell below has lava"
+      (is (not (fortress/safe? w-lava-below feet [0 -1 0])) "downward step into lava is refused"))
+    (testing "surrounded by lava falls back to corridor walking"
+      (is (pearls/surrounded-by-lava? w-trapped feet) "surrounded by lava on all sides")
+      (is (not (pearls/can-tunnel-out? w-trapped)) "cannot tunnel out when surrounded by lava")
+      (let [i (plan/next-intent w-trapped row plan/goals)]
+        (is (not (true? (:intent/seal-behind? i)))
+            "does not attempt sealed tunnel-out when surrounded by lava")))))
+
+(deftest the-tunnel-out-surfaces-only-beyond-48-blocks
+  ;; tunnel horizontally away from fortress and surface only when more than 48 blocks
+  ;; from every known spawner and fortress brick
+  (let [spawner-pos [100 64 100]
+        under-y 59
+        surface-y 64
+        make-world (fn [bot-pos]
+                     (-> (standing {})
+                         (assoc :player/dimension "minecraft:the_nether" :player/pos bot-pos)
+                         (assoc-in [:player/inventory 1] (item :iron_pickaxe 1))
+                         (memory/observe spawner-pos blaze/spawner)))]
+    (testing "at the spawner: Phase 1 digs down to under-y"
+      (let [w (make-world [100.5 64.0 100.5])
+            target (pearls/fortress-tunnel-target w)]
+        (is (= [100 under-y 100] target) "targets below fortress floor")))
+    (testing "20 blocks away at under-y: Phase 2 tunnels horizontally at under-y, does not surface"
+      (let [w (make-world [120.5 (double under-y) 100.5])
+            target (pearls/fortress-tunnel-target w)]
+        (is (pearls/near-fortress? w) "20 blocks is within 48 blocks")
+        (is (= under-y (second target)) "stays at under-y below fortress floor; does not surface")))
+    (testing "50 blocks away at under-y: Phase 3 surfaces to surface-y"
+      (let [w (make-world [150.5 (double under-y) 100.5])
+            target (pearls/fortress-tunnel-target w)]
+        (is (not (pearls/near-fortress? w)) "50 blocks is beyond 48 blocks")
+        (is (= surface-y (second target)) "surfaces to surface-y once beyond 48 blocks")))))
