@@ -3,11 +3,12 @@ title: Fortress tunnel
 description: How the bot reaches a nether fortress (issue #11) - bricks as passive sightings in the Nether, a tunnel one step at a time where each step is a small plan of ops, and the rule that no step opens a cell beside lava.
 type: reference
 tags: [bot, plan, nether, fortress]
-aliases: [fortress.clj, :tunnel-to, :fortress, step-plan, safe?, at-fortress?, bridge?, climb-out?]
+aliases: [fortress.clj, :tunnel-to, :fortress, step-plan, safe?, at-fortress?, bridge?, climb-out?, seal-behind-ops]
 status: verified
-lastUpdated: 2026-10-21
+lastUpdated: 2026-11-02
 verifiedAgainst: HEAD
 sourceRefs:
+  - src/clojurecraft/fortress.clj#defn seal-behind-ops
   - src/clojurecraft/fortress.clj#defn step-plan
   - src/clojurecraft/fortress.clj#defmethod build/holds? :landed-centred
   - test/clojurecraft/fortress_test.clj#a-tunnel-step-lands-in-the-middle-before-counting-it
@@ -94,7 +95,7 @@ The `:fortress` target (`goals.edn`, `:goal/dimension "minecraft:the_nether"`) i
 `bricks` asks `memory/positions-now` for `brick-states`, the indexed current sightings remembered by the facts' identity, before filtering the height; it never scans all sightings with `memory/latest`. Issue #328's snapshot, once streamed chunks restored its dug room ([[server-model]]), could tunnel but exhausted the judge's four-minute budget in that full scan on every tick. The indexed query preserves the dimension and recency rules without repeating the whole-memory query.
 
 ## A step is a plan of ops
-`step-plan feet move` is a vector of [[build-plan]] ops, a pure function of where the step starts and its `[dx dy dz]`: place a floor under the cell stepped into (it may be lava: a placement replaces it), dig the cells the body passes through (`opens`: the two it ends in, plus the head's cell on a step down or the cell over the head on a step up), and land near the middle of the new cell (`[:landed-centred to]`, the plan's goal). `build/next-op` and `build/work-op` work it exactly as a `:build` works the portal, so the dig, place and walk children are the ones the portal uses. The `:tunnel-to` intent chooses a move when a step starts (`:intent/move`, `:intent/from`), works the step until the bot stands in it, stops its controls, counts it, and stops at the target or after 32 steps, so the planner can choose again from what the new chunks showed.
+`step-plan feet move` is a vector of [[build-plan]] ops, a pure function of where the step starts and its `[dx dy dz]`: place a floor under the cell stepped into (it may be lava: a placement replaces it), dig the cells the body passes through (`opens`: the two it ends in, plus the head's cell on a step down or the cell over the head on a step up), and land near the middle of the new cell (`[:landed-centred to]`, the plan's goal). When `:intent/seal-behind?` is true (leaving a fortress after blaze rods), `seal-behind-ops` closes the cell behind from `to` every few steps with carried filler against a solid foundation. `build/next-op` and `build/work-op` work it exactly as a `:build` works the portal, so the dig, place and walk children are the ones the portal uses. The `:tunnel-to` intent chooses a move when a step starts (`:intent/move`, `:intent/from`), works the step until the bot stands in it, stops its controls, counts it, and stops at the target or after 32 steps, so the planner can choose again from what the new chunks showed.
 
 Issue #339's real snapshot (`real-7-s1-Clj_r10`) ran past a descending step's repaired floor and fell into lava with no footing. A feet-cell match alone ended steps before centring or landing, leaving forward controls pressed; the walk also kept accelerating over a descending waypoint while waiting to fall to its height. The [[walk-intent]] stops horizontal input over that waypoint, and the tunnel waits for both centring and ground contact. In-flight steps re-read the same goal, replacing the older `[:feet to]` op rather than preserving its premature completion.
 

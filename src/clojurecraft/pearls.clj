@@ -2011,6 +2011,171 @@
                     (first (sort-by total corners))))
               target))))
 
+(def fortress-escape-reach
+  "Blocks from every known spawner and fortress brick beyond which the bot is clear
+   of the fortress structure and safe to surface."
+  48.0)
+
+(defn fortress-points
+  "The positions of known spawners and fortress bricks in the bot's dimension."
+  [world]
+  (concat (memory/positions-now world [blaze/spawner]) (fortress/bricks world)))
+
+(defn near-fortress?
+  "Is the bot within fortress-escape-reach of any known spawner or fortress brick?"
+  [world]
+  (let [feet (intent/feet world)
+        pts (fortress-points world)]
+    (boolean (some #(or (<= (physics/distance feet %) fortress-escape-reach)
+                        (<= (physics/horizontal-distance feet %) fortress-escape-reach))
+                   pts))))
+
+(defn surrounded-by-lava?
+  "Is the bot surrounded by lava on every side: every lateral heading from feet has lava
+   at body or floor level, leaving no dry direction to tunnel into?"
+  [world feet]
+  (let [lava? (fn [c] (contains? blocks/lava-states (terrain/block-at world c)))
+        horizontal-dirs [[1 0] [-1 0] [0 1] [0 -1]]]
+    (every? (fn [[dx dz]]
+              (or (lava? (fortress/plus feet [dx 0 dz]))
+                  (lava? (fortress/plus feet [dx 1 dz]))
+                  (lava? (fortress/plus feet [dx -1 dz]))))
+            horizontal-dirs)))
+
+(defn can-tunnel-out?
+  "Can the bot tunnel out of the fortress: holds a serviceable pickaxe and is not
+   surrounded by lava on every side?"
+  [world]
+  (let [feet (intent/feet world)]
+    (boolean (and (pickaxe? world) (not (surrounded-by-lava? world feet))))))
+
+(defn fortress-under-y
+  "The y level below the fortress floor in solid netherrack (a few blocks under the brick),
+   at least y 35 to stay safely above the lava sea."
+  [world]
+  (let [feet (intent/feet world)
+        sp (blaze/nearest-spawner world)
+        ref-y (cond sp (second sp)
+                    (seq (fortress/bricks world))
+                    (let [nearby (filter #(<= (physics/horizontal-distance feet %) 32.0)
+                                         (fortress/bricks world))]
+                      (if (seq nearby)
+                        (math/round (/ (double (reduce + (map second nearby)))
+                                       (double (count nearby))))
+                        (second feet)))
+                    :else (second feet))]
+    (max 35 (- ref-y 5))))
+
+(defn fortress-surface-y
+  "The surface y to climb to once clear of the fortress: the forest height if known,
+   else the spawner or starting height."
+  [world]
+  (or (some-> (nearest-forest world)
+              second
+              inc)
+      (some-> (blaze/nearest-spawner world)
+              second)
+      (second (intent/feet world))
+      64))
+
+(defn fortress-exit-dir
+  "The horizontal unit direction [dx dz] away from the fortress:
+   toward nearest-forest if known, else toward explore target,
+   else away from the nearest spawner or brick."
+  [world]
+  (let [feet (intent/feet world)
+        [fx _ fz] feet
+        target (or (nearest-forest world) (when-let [e (explore world)] (:intent/target e)))
+        sp (when-not target (or (blaze/nearest-spawner world) (fortress/nearest-brick world)))
+        [tx tz] (cond target [(first target) (last target)]
+                      sp
+                      (let [dx (- fx (first sp))
+                            dz (- fz (last sp))]
+                        (cond (and (zero? dx) (zero? dz)) [1 0]
+                              :else [(+ fx dx) (+ fz dz)]))
+                      :else [(inc fx) fz])
+        ddx (double (- tx fx))
+        ddz (double (- tz fz))
+        d (math/sqrt (+ (* ddx ddx) (* ddz ddz)))]
+    (if (> d 0.001) [(/ ddx d) (/ ddz d)] [1.0 0.0])))
+
+(defn fortress-exit-horizontal
+  "A 2D point [exit-x exit-z] along dir that is > fortress-escape-reach from every
+   known spawner and fortress brick."
+  [world [fx fz] [dir-x dir-z]]
+  (let [pts (fortress-points world)]
+    (loop [dist 52.0]
+      (let [candidate [(math/round (+ (double fx) (* (double dist) (double dir-x))))
+                       (math/round (+ (double fz) (* (double dist) (double dir-z))))]]
+        (if (or (>= dist 120.0)
+                (every? #(> (physics/horizontal-distance [(first candidate) 0 (second candidate)]
+                                                         [(first %) 0 (last %)])
+                            fortress-escape-reach)
+                        pts))
+          candidate
+          (recur (+ dist 8.0)))))))
+
+(defn fortress-tunnel-target
+  "The [x y z] target for the sealed fortress tunnel-out.
+   Phase 1: dig down into solid netherrack below fortress floor (under-y).
+   Phase 2: tunnel horizontally away while within fortress-escape-reach of spawners/bricks.
+   Phase 3: surface to surface-y once > fortress-escape-reach from fortress."
+  [world]
+  (let [pts (fortress-points world)]
+    (when (seq pts)
+      (let [feet (intent/feet world)
+            [fx fy fz] feet
+            under-y (fortress-under-y world)
+            dir (fortress-exit-dir world)
+            [exit-x exit-z] (fortress-exit-horizontal world [fx fz] dir)
+            surface-y (fortress-surface-y world)
+            near? (near-fortress? world)]
+        (cond
+          ;; Phase 1: dig down into solid netherrack below fortress floor
+          (> fy under-y) [fx under-y fz]
+          ;; Phase 2: tunnel horizontally away while within 48 blocks of fortress
+          near? [exit-x under-y exit-z]
+          ;; Phase 3: surface only once beyond 48 blocks
+          (< fy surface-y) [exit-x surface-y exit-z]
+          ;; Surfaced and clear
+          :else nil)))))
+
+(defn fortress-escaping?
+  "Is the bot leaving the fortress via sealed tunnel-out: inside/near the fortress,
+   or still surfacing underground while escaping?"
+  [world]
+  (boolean (and (= dimension/nether (dimension/of world))
+                (seq (fortress-points world))
+                (fortress-tunnel-target world))))
+
+(defn fortress-tunnel-out
+  "The :tunnel-to that leaves the fortress via a sealed tunnel below the floor,
+   heading away from the fortress toward the travel target or warped forest,
+   sealing the cell behind every few steps."
+  [world]
+  (when-let [target (fortress-tunnel-target world)]
+    {:intent/kind :tunnel-to
+     :intent/target target
+     :intent/reach 1.5
+     :intent/steps fortress/steps-per-tunnel
+     :intent/seal-behind? true
+     :intent/for :pearls}))
+
+(defn fortress-exit-log
+  "The world with one log line when the fortress exit choice is made or changed."
+  [world]
+  (if (fortress-escaping? world)
+    (let [can? (can-tunnel-out? world)
+          logged (:pearls/exit-logged world)]
+      (if (= logged can?)
+        world
+        (-> world
+            (assoc :pearls/exit-logged can?)
+            (game/say (if can?
+                        "pearls: leaving fortress via sealed tunnel-out"
+                        "pearls: fallback corridor exit (no tunnel possible)")))))
+    (dissoc world :pearls/exit-logged)))
+
 (defn room-exit
   "The :tunnel-to along the fortress trail to its newest cell outside every blaze room, or nil:
    while the feet are inside one (room-boxes) and no enderman is tracked within seek-radius. The
@@ -2041,11 +2206,20 @@
    wandering round a fortress at x 4250-4440, no pearl, no code that went to a forest."
   [world]
   (when (and (= dimension/nether (dimension/of world)) (not (in-forest? world)))
-    (if-let [pos (nearest-forest world)]
-      {:intent/kind :walk
-       :intent/target (room-waypoint world (update pos 1 inc))
-       :intent/for :pearls}
-      (explore world))))
+    (cond (and (fortress-escaping? world) (can-tunnel-out? world)) (fortress-tunnel-out world)
+          (and (fortress-escaping? world) (not (can-tunnel-out? world)))
+          (if-let [pos (nearest-forest world)]
+            {:intent/kind :walk
+             :intent/target (room-waypoint world (update pos 1 inc))
+             :intent/for :pearls}
+            (explore world))
+          :else
+          (if-let [pos (nearest-forest world)]
+            {:intent/kind :walk
+             :intent/target
+             (if (near-fortress? world) (room-waypoint world (update pos 1 inc)) (update pos 1 inc))
+             :intent/for :pearls}
+            (explore world)))))
 
 (defn travel-caged?
   "Is the bot in the Nether, in no warped forest, with no enderman tracked, and no walk to or toward
@@ -2344,8 +2518,13 @@
                        (and (or angry? in-reach?) (not (unfightable? world eid e))) eid
                        :else tid)]
     (cond
-      (and (not in?) (leave-sight world)) (leave-sight world)
       (and meal (empty? (filter #(combat/seen? world (val %)) (shooters world)))) meal
+      (and (fortress-escaping? world) (can-tunnel-out? world)) (fortress-tunnel-out world)
+      (and (fortress-escaping? world) (not (can-tunnel-out? world)))
+      (or (and (not in?) (leave-sight world))
+          (and (not in?) (room-exit world))
+          (and (shot-at? world) (not in?) (cover-from world)))
+      (and (not in?) (leave-sight world)) (leave-sight world)
       (and (not in?) (room-exit world)) (room-exit world)
       (and (shot-at? world) (not in?) (cover-from world)) (cover-from world)
       (and home
@@ -2551,7 +2730,8 @@
                  (when (:control/yaw controls) [(:control/yaw controls) (or ppitch 0.0)])
                  (when pyaw [pyaw (or ppitch 0.0)]))
         home (:pearls/shelter world)
-        world (cond-> (relocation (track-gain (track-angry (uncovered-log world))))
+        world (cond-> (relocation (track-gain (track-angry (uncovered-log (fortress-exit-log
+                                                                           world)))))
                 (shot-at? world) (assoc :pearls/shot-at-ms (:time/now world 0)))]
     (cond (or (nil? look)
               (= :provoke (:intent/kind (:plan/intent world)))

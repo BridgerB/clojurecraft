@@ -311,6 +311,9 @@
    [:pearls/shot-at-ms
     "ms a ghast was last in sight with a clear line to the bot (pearls/shot-at?), kept by the :pearls steer: the walks that go elsewhere (travel, wander, cage-break) wait shot-hold-ms after it, so that a walk to cover and a walk away do not alternate"
     "every tick a pearl hunt runs (plan/steer), while a ghast is in sight"]
+   [:pearls/exit-logged
+    "whether the fortress exit choice was logged: boolean (can-tunnel-out?) while escaping, dropped once clear"
+    "pearls/fortress-exit-log"]
    [:pearls/mouth "where the pearl hunt's burrow began, on the surface its stairs go down from"
     "after the hunt dug one"]
    [:stronghold/throws
@@ -473,6 +476,9 @@
    [:intent/dry?
     "a :tunnel-to that takes only steps opening no cell by water (fortress/dry?): the overworld's way toward the stronghold and down to its portal room (issue #265)"
     "a :tunnel-to to a stronghold's frame"]
+   [:intent/seal-behind?
+    "a :tunnel-to that seals the cell behind it every few steps: leaving the fortress after blaze rods"
+    ":tunnel-to"]
    [:intent/search
     "the fortress search leg an exploring :tunnel-to works for (fortress/exploring): the executor keeps it as :fortress/search"
     "a :tunnel-to with no brick on record to go to"]

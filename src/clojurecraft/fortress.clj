@@ -108,6 +108,15 @@
   [c]
   (map #(plus c %) (vals physics/face-offsets)))
 
+(defn seal-behind-ops
+  "The build op that seals the cell behind (at from + [0 1 0]) from to,
+   when seal-behind? is true, filler is carried, and a solid foundation exists."
+  [world from to seal-behind?]
+  (let [seal-cell (plus from [0 1 0])]
+    (if (and seal-behind? world (stairs/building-filler world 1) (build/foundation world seal-cell))
+      [(build/place-op seal-cell to nil :seal-behind)]
+      [])))
+
 (defn lava-beside
   "The lava cells beside the cells the step from feet by move opens, other than the cells it
    opens, the floor (filled first) and the body's own: what safe? refuses a step for, and what
@@ -802,10 +811,13 @@
                                        :intent/tunnel-visited (conj tunnel-visited feet))
                   (assoc :fortress/trail kept))))
       :else
-      (let [next (build/next-op world
-                                (into (into (underlay-ops world from move)
-                                            (seal-ops world from move))
-                                      (step-plan from move)))
+      (let [seal-behind? (and (:intent/seal-behind? i) (zero? (mod taken 3)))
+            to (plus from move)
+            next (build/next-op world
+                                (into (into (into (underlay-ops world from move)
+                                                  (seal-ops world from move))
+                                            (step-plan from move))
+                                      (seal-behind-ops world from to seal-behind?)))
             next (cond-> next
                    (= :place (:build/op next))
                    (assoc :build/item (or (stairs/building-filler world 1) :cobblestone)))]
