@@ -1404,7 +1404,14 @@
                     (<= (- (:time/now world 0) (:player/struck-at world -1000000)) press-ms)))))
 
 (def full-health 20.0) ; the health a hold in the pocket stays until when a rest can heal
-(def low-health 12.0)  ; under it the bot goes to its pocket to heal, whoever is in sight
+(def fight-margin 2.0) ; hp over combat/yield-line a fight needs to start, so it does not yield on tick 1
+
+(defn low-health
+  "The health under which the bot goes to its pocket to heal, whoever is in sight: at least 12.0,
+   or combat/yield-line plus fight-margin (2 hp) when incoming damage raises the yield line.
+   The start gate and the yield line agree, so a fight started never yields on tick 1."
+  [world]
+  (max 12.0 (+ (combat/yield-line world) fight-margin)))
 (def reignite-ms 30000) ; a second ignition within this of the first sends it too
 
 (def unseal-health 12.0) ; the health a hold stays until when a rest cannot heal: low-health, the line under which a blaze in reach is sealed out. 13 held blaze-race-x job 4 at 12.2 for four minutes with its food gone, in the spawner room, until a fireball and the burn finished it
@@ -1454,9 +1461,9 @@
               ;; and nothing to open when no cell was placed (a cell shut on every side): no :unseal that
               ;; is done at once and chosen again
               (when (and (seq (:pocket/placed site))
-                         (or (heals? world) (>= (:player/health world 20.0) low-health)))
+                         (or (heals? world) (>= (:player/health world 20.0) (low-health world))))
                 {:intent/kind :unseal}))
-            (and (reach-blaze world) (>= (:player/health world 20.0) low-health)) nil
+            (and (reach-blaze world) (>= (:player/health world 20.0) (low-health world))) nil
             (and (or (pressed? world) (reach-blaze world)) (pocket/can-seal? world site))
             {:intent/kind :seal}
             (reach-blaze world)
@@ -1478,7 +1485,7 @@
   [world]
   (boolean (or (:player/on-fire? world)
                (reignited? world)
-               (and (< (:player/health world 20.0) low-health) (seq (swarm world)))
+               (and (< (:player/health world 20.0) (low-health world)) (seq (swarm world)))
                (outnumbered? world)
                (and (seq (watchers world)) (hurt? world)))))
 
@@ -1509,7 +1516,7 @@
    burning after; the lines are known the tick a fireball spawns."
   [world]
   (when (and (not (sealed? world))
-             (>= (:player/health world 20.0) low-health)
+             (>= (:player/health world 20.0) (low-health world))
              (not (:player/on-fire? world)))
     (dodge/intent-for world)))
 
@@ -1771,18 +1778,27 @@
                 (let [since (:rod-grab/since world)]
                   (or (nil? since) (< (- (:time/now world 0) since) rod-grab-ms))))))
 
+(defn yield-fight?
+  "May a yielding fight be chosen or committed: the health is at or above (low-health world), at least
+   combat/yield-line plus fight-margin (2 hp). Under that line a fight ends the tick it starts
+   and the row chooses it again (blaze-race-z15 job 4: 609 reissues; blaze-race-z17 job 4: 52
+   reissues at 12.1 under 12.8)."
+  [world]
+  (>= (:player/health world 20.0) (low-health world)))
+
 (defn commit-fight
-  "A :fight on the blaze at hand (at-hand-blaze) while the health is at low-health (12) or more,
+  "A :fight on the blaze at hand (at-hand-blaze) while the health is at (low-health world) or more,
    the line under which a pocket seals a blaze out and the retreat is one, or nil: committed for its whole duration, to the end (:intent/to-the-end?), yielding under
    retreat-health (:intent/yield?) so the retreat that follows is one. Blaze-race-z8 job 6 (landing 6):
    two blazes at 0.7 to 3.1 blocks and hp 20 to 3.6 in 9 s, one attack sent, because :fight, :place
    x4, :dodge, :pocket, :pillar, :dig and :seal took turns every 0.1 to 0.3 s: with a blaze in melee
    range no row held."
   [world]
-  (when (and (>= (:player/health world 20.0) low-health)
+  (when (and (>= (:player/health world 20.0) (low-health world))
              ;; the sortie's cap: more than sortie-crowd blazes within 8, or a volley watching, is the room on
              ;; the bot, not a fight to commit to the end (the spawner-room deaths of z4 and z5)
              (<= (count (nearby-blazes world 8.0)) sortie-crowd)
+             (yield-fight? world)
              (not (outnumbered? world))
              (not (burning-here? world))
              ;; a rod within a step is picked up before the next swing (near-rod, blaze-race-m race 4)
@@ -1830,6 +1846,7 @@
              (not (and (rod-grab? world i) (grab-over-refuge? world)))
              (some? (refuge-now world (nearest-spawner world))))
         (and (not (hurt? world))
+             (yield-fight? world)
              (not= :fight (:intent/kind i))
              (not (and (= :cover (:intent/for i)) (crowded? world)))
              (not (and (= :collect-drops (:intent/kind i)) (some? (near-rod world))))
@@ -1916,7 +1933,9 @@
       @heal @heal
       @grab @grab
       @retreat @retreat
-      (and (not (hurt? world)) heid (not (crowded? world)))
+      ;; two in melee under the yield line is a fight that ends the tick it starts and is chosen
+      ;; again (z15 job 4): not another :fight
+      (and (not (hurt? world)) heid (not (crowded? world)) (yield-fight? world))
       {:intent/kind :fight :intent/target heid :intent/to-the-end? true :intent/yield? true}
       @wary @wary
       @away @away
@@ -1927,7 +1946,8 @@
       {:intent/kind :collect-drops
        :intent/item :blaze_rod
        :intent/target (hunt/cell (:entity/pos lying))}
-      (and (not (hurt? world)) beid) {:intent/kind :fight :intent/target beid :intent/yield? true}
+      (and (not (hurt? world)) beid (yield-fight? world))
+      {:intent/kind :fight :intent/target beid :intent/yield? true}
       @passive @passive
       @waiting @waiting
       @stock @stock
@@ -2113,7 +2133,7 @@
                    (or (not (sealed? world))
                        (> (- now (:player/struck-at world -1000000)) press-ms)))
               (and (some? (reach-blaze world))
-                   (>= (:player/health world 20.0) low-health)
+                   (>= (:player/health world 20.0) (low-health world))
                    (not (sealed? world)))
               (not (pocket/in? world))
               (burning-here? world)
