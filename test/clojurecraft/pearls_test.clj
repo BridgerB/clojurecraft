@@ -3536,10 +3536,17 @@
         (is (not= :tunnel-to (:intent/kind i)) "does not start digging while under active fire")
         (is (contains? #{:place :dig :walk} (:intent/kind i))
             "places cover or moves out of sight")))
+    (testing "safe from active fire but hurt, the rod bot heals before tunneling out"
+      (let [hurt-world (-> base
+                           (dissoc :pearls/shot-at-ms :player/attacker)
+                           (assoc :world/entities {}))
+            i (plan/next-intent hurt-world row plan/goals)]
+        (is (= :eat (:intent/kind i)) "heals when safe from shooters")
+        (is (= :cooked_beef (:intent/item i)))))
     (testing "once safe from active fire, the rod bot proceeds with sealed tunnel-out"
       (let [safe-world (-> base
                            (dissoc :pearls/shot-at-ms :player/attacker)
-                           (assoc :player/entities {}))
+                           (assoc :world/entities {} :player/health 20.0 :player/food 20))
             i (plan/next-intent safe-world row plan/goals)]
         (is (= :tunnel-to (:intent/kind i)) "chooses tunnel-to once safe from shooters")
         (is (true? (:intent/seal-behind? i)) "seals behind as it tunnels")))))
