@@ -2055,14 +2055,17 @@
   [world]
   (let [feet (intent/feet world)
         sp (blaze/nearest-spawner world)
-        nearby (filter #(<= (physics/horizontal-distance feet %) 32.0) (fortress/bricks world))
+        nearby (filter (fn [b]
+                         (and (<= (physics/horizontal-distance feet b) 16.0)
+                              (<= (abs (- (second b) (second feet))) 6.0)))
+                       (fortress/bricks world))
         ref-y (cond (seq nearby)
                     (min (reduce min (map second nearby))
                          (cond sp (second sp)
                                :else (second feet)))
                     sp (second sp)
                     :else (second feet))]
-    (max 35 (- ref-y 5))))
+    (max 35 (- ref-y 4))))
 
 (defn fortress-surface-y
   "The surface y to climb to once clear of the fortress: the forest height if known,
@@ -2517,12 +2520,11 @@
                        (and (or angry? in-reach?) (not (unfightable? world eid e))) eid
                        :else tid)]
     (cond
-      (and meal (empty? (filter #(combat/seen? world (val %)) (shooters world)))) meal
-      (and (fortress-escaping? world)
-           (can-tunnel-out? world)
-           (shot-at? world)
-           (not in?)
-           (cover-from world))
+      (and meal
+           (or (empty? (filter #(combat/seen? world (val %)) (shooters world)))
+               (and (fortress-escaping? world) (not (shot-at? world)))))
+      meal
+      (and (fortress-escaping? world) (can-tunnel-out? world) (shot-at? world) (cover-from world))
       (cover-from world)
       (and (fortress-escaping? world) (can-tunnel-out? world)) (fortress-tunnel-out world)
       (and (not in?) (leave-sight world)) (leave-sight world)
