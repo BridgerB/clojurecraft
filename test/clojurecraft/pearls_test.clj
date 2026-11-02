@@ -3492,3 +3492,55 @@
             target (pearls/fortress-tunnel-target w)]
         (is (not (pearls/near-fortress? w)) "50 blocks is beyond 48 blocks")
         (is (= surface-y (second target)) "surfaces to surface-y once beyond 48 blocks")))))
+
+(deftest a-rod-bot-under-blaze-fire-covers-and-heals-before-tunneling-out
+  ;; On commit 4b8c10f, rod bots in ender-pearls attempted to dig :tunnel-to right in the open line
+  ;; of fire of blazes, without covering (cover-from) or healing (meal). 100% of real rod bots (37/37)
+  ;; and sim rod bots (36/36) died to blazes and fire at the fortress spawner.
+  ;; When shot at by blazes, the bot must cover from incoming fire before attempting to tunnel.
+  (let [blaze-id 42
+        blaze {:entity/type (blocks/entity-types :blaze)
+               :entity/pos [8.5 64.0 14.5]
+               :entity/seen-at 0
+               :entity/health 20.0}
+        spawner-pos [8 64 2]
+        nether-brick (blocks/default-state :nether_bricks)
+        floor (into {} (for [x (range 0 16) z (range 0 16)] [[x 63 z] nether-brick]))
+        corridor-walls (into {}
+                             (concat (for [y [64 65] z (range 0 16)] [[6 y z] nether-brick])
+                                     (for [y [64 65] z (range 0 16)] [[10 y z] nether-brick])))
+        blocks (merge floor corridor-walls)
+        base (-> (standing {blaze-id blaze} blocks)
+                 (assoc :player/dimension "minecraft:the_nether"
+                        :player/pos [8.5 64.0 8.5]
+                        :player/health 12.0
+                        :player/food 14
+                        :time/now 200
+                        :pearls/shot-at-ms 150
+                        :plan/status :active
+                        :plan/goals #{:ender-pearls}
+                        :plan/reached #{:blaze-rods}
+                        :plan/active [row]
+                        :player/attacker blaze-id)
+                 (memory/observe spawner-pos blaze/spawner)
+                 (update :player/inventory assoc
+                         1 (item :cooked_beef 12)
+                         2 (item :cobblestone 64)
+                         3 (item :iron_pickaxe 1)))]
+    (testing
+      "actively shot at by a blaze, the rod bot covers from the shooter, not tunneling in the line of fire"
+      (is (pearls/near-fortress? base) "near the fortress")
+      (is (pearls/can-tunnel-out? base) "holds pickaxe and not surrounded by lava")
+      (is (pearls/shot-at? base) "blaze is recognized as actively shooting")
+      (let [i (plan/next-intent base row plan/goals)]
+        (is (not= :tunnel-to (:intent/kind i)) "does not start digging while under active fire")
+        (is (contains? #{:place :dig :walk} (:intent/kind i))
+            "places cover or moves out of sight")))
+    (testing "once safe from active fire, the rod bot proceeds with sealed tunnel-out"
+      (let [safe-world (-> base
+                           (dissoc :pearls/shot-at-ms :player/attacker)
+                           (assoc :player/entities {}))
+            i (plan/next-intent safe-world row plan/goals)]
+        (is (= :tunnel-to (:intent/kind i)) "chooses tunnel-to once safe from shooters")
+        (is (true? (:intent/seal-behind? i)) "seals behind as it tunnels")))))
+
