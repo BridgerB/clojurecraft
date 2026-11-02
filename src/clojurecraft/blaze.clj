@@ -1831,6 +1831,7 @@
              (some? (refuge-now world (nearest-spawner world))))
         (and (not (hurt? world))
              (not= :fight (:intent/kind i))
+             (not (contains? refuge-kinds (:intent/kind i)))
              (not (and (= :cover (:intent/for i)) (crowded? world)))
              (not (and (= :collect-drops (:intent/kind i)) (some? (near-rod world))))
              (some? (fightable-blaze world)))
