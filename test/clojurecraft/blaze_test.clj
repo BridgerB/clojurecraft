@@ -1872,6 +1872,29 @@
     (is (false? (blaze/sortie-over? (assoc base :world/entities (select-keys crowd [50 51 52]))))
         "three is the limit, not over")))
 
+(deftest eight-within-eight-end-the-sortie-and-the-fight-is-not-chosen
+  ;; blaze-race-z16 job 6: unsealed at 05:51:23, hp 20, fire false, 0 blazes within 16 and no
+  ;; fire within 2. At 05:51:41, 8 blazes within 8, the nearest 3.8 (outside melee, inside
+  ;; at-hand), and :fight alternated with :dodge. Dead at 05:51:50 among 5 within 3.5. Exactly
+  ;; eight did not end the sortie, so the peek kept the volley from being a refuge.
+  (let [blz (into {}
+                  (map (fn [i] [(+ 50 i)
+                                (entity :blaze [5.5 64.5 (+ 12.1 (* 0.4 i))] :entity/health 20.0)]))
+                  (range 8))
+        w (-> (standing blz)
+              (assoc :world/chunks {[0 0] (world/column pocket-walls)}
+                     :player/pos [5.5 64.0 8.5]
+                     :sortie/since 90000
+                     :time/now 100000
+                     :player/health 20.0))]
+    (is (= 8 (count (blaze/nearby-blazes w 8.0))))
+    (is (empty? (blaze/nearby-blazes w 3.5))
+        "none in melee: a smaller crowd would still be the lure")
+    (is (some? (blaze/at-hand-blaze w)) "one at hand, which the fight clause would take")
+    (is (true? (blaze/sortie-over? w)) "eight within 8, none pressing: the room")
+    (is (false? (blaze/peeking? w)))
+    (is (= :pocket (:intent/kind (next-intent w))) "back to the pocket, not the fight")))
+
 (deftest ^:eftest/synchronized the-camp-clause-never-ends-in-nil-when-no-way-to-the-spawner-is-left
   ;; blaze-race-z4 landing 5: :tunnel-to done on its last stand, to-spawner nil, the clause's value nil,
   ;; {:plan/wait :nothing-to-do} for 400 ticks and the run ended with time left
