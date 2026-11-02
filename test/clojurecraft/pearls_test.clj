@@ -3562,12 +3562,13 @@
   ;; With :intent/climb 0, dy=-1 is generated all the way to under-y, and once at under-y,
   ;; Phase 2 tunnels horizontally toward the exit.
   (let [spawner-pos [-176 70 219]
+        brick-pos [-164 40 221]
         bot-pos [-163.5 38.0 221.5]
         nether-brick (blocks/default-state :nether_bricks)
-        floor (into {} (for [x (range -180 -160) z (range 210 230)] [[x 69 z] nether-brick]))
-        w (-> (standing {} floor)
+        w (-> (standing {})
               (assoc :player/dimension "minecraft:the_nether" :player/pos bot-pos)
               (memory/observe spawner-pos blaze/spawner)
+              (memory/observe brick-pos nether-brick)
               (assoc-in [:player/inventory 1] (item :iron_pickaxe 1))
               (assoc :plan/status :active
                      :plan/goals #{:ender-pearls}
