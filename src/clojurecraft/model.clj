@@ -316,6 +316,9 @@
     "pearls/fortress-exit-log"]
    [:pearls/mouth "where the pearl hunt's burrow began, on the surface its stairs go down from"
     "after the hunt dug one"]
+   [:pearls/refuge-done
+    "true once the bot, after the rods, was sealed in its blaze pocket at full health and the fortress exit was handed to the pocket bore (pearls/sealed-full?, noted by the :pearls steer): the blaze refuge no longer pulls it back"
+    "every tick a pearl hunt runs (plan/steer), once it holds"]
    [:stronghold/throws
     "every eye of ender thrown and followed, oldest first: {:throw/from :throw/dir :throw/at}; two from places apart cross at the stronghold (stronghold/triangulate, issue #265)"
     "after the first throw"]

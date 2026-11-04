@@ -3828,7 +3828,24 @@
         (is (= :tunnel-to (:intent/kind i)))
         (is (true? (:intent/seal-behind? i)))
         (is (true? (:intent/no-down? i)))
-        (is (= 64 (second (:intent/target i))))))))
+        (is (= 64 (second (:intent/target i))))))
+    (testing "sealed at full health is the hand-over, and the refuge stays off after it"
+      (is (pearls/sealed-full? sealed-w))
+      (is (nil? (pearls/blaze-refuge sealed-w)))
+      (is (nil? (pearls/blaze-refuge
+                 (assoc sealed-w :pearls/refuge-done true :player/health 8.0)))))
+    (testing "hurt out of the pocket after the rods, the blaze refuge, not the hunt, answers"
+      ;; the logged death: out of the pocket grabbing the seventh rod, hurt and watched,
+      ;; the goal flipped to :ender-pearls and the hunt walked on at the spawner
+      (let [hurt (-> sealed-w
+                     (assoc :player/pos [11.5 64.0 8.5] :player/health 8.0 :player/food 14)
+                     (assoc-in [:pocket/site :pocket/placed] []))
+            refuge (pearls/blaze-refuge hurt)
+            i (plan/next-intent hurt row plan/goals)]
+        (is (some? refuge) "the blaze row's refuge is in charge")
+        (is (contains? #{:pocket :seal :eat :pocket-hold} (:intent/kind refuge)) (pr-str refuge))
+        (is (= (:intent/kind refuge) (:intent/kind i)) "the hunt does not walk on exposed")
+        (is (not= :tunnel-to (:intent/kind i)))))))
 
 (deftest fortress-exit-never-steps-or-digs-down
   ;; On #715, downward tunnel moves through a 1-block fortress floor dropped bots into

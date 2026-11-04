@@ -13,6 +13,7 @@
             [clojurecraft.packet :as packet]
             [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
+            [clojurecraft.recipe :as recipe]
             [clojurecraft.terrain :as terrain]))
 
 (set! *warn-on-reflection* true)
@@ -634,9 +635,33 @@
           :else (assoc-intent world :intent/confirm-left (dec confirm-left)))))
 
 (defmethod run :dig
-  [world {:intent/keys [stage since] :or {stage :settle}} _]
-  (let [world (assoc-intent world :intent/stage stage :intent/since (or since (:time/now world)))]
-    (dig-stage world (:plan/intent world))))
+  ;; before the dig itself, a child :equip puts the tool in hand when the best one is only in
+  ;; the main inventory (stowed-breaker): the dig chooses from the hotbar only (choose-tool),
+  ;; so a stone pickaxe stowed there left a nether-brick dig at 10000 ms by hand against
+  ;; 750 ms held (brain: the-nine-second-dig-is-a-hand-dig-on-nether-brick). Executors that
+  ;; start digs through build/tool-first or stairs/dig-next already equip; a bare :dig did not.
+  [world {:intent/keys [stage since child target]} event]
+  (cond (and child (= :equip (:intent/kind child)) (done? child))
+        (let [world (dissoc-intent world :intent/child)]
+          (run (assoc-intent world :intent/stage :settle :intent/since (:time/now world))
+               (:plan/intent world)
+               event))
+        (and child (failed? child)) (fail world (:intent/reason child))
+        child (run-child world event)
+        :else
+        (let [[_ item :as stowed] (some->> (terrain/block-at world target)
+                                           (stowed-breaker world))]
+          (if stowed
+            (run-child (assoc-intent world
+                                     :intent/child
+                                     {:intent/kind :equip
+                                      :intent/item (recipe/item-name item)
+                                      :intent/status :active})
+                       event)
+            (let [world (assoc-intent world
+                                      :intent/stage (or stage :settle)
+                                      :intent/since (or since (:time/now world)))]
+              (dig-stage world (:plan/intent world)))))))
 
 ;; ---------------------------------------------------------------- collect
 
