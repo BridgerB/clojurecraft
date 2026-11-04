@@ -3743,5 +3743,33 @@
       (let [filtered-moves (filter #(>= (second %) 0) moves)]
         (is (not-any? #(neg? (second %)) filtered-moves))))))
 
+(deftest a-rod-bot-retrace-never-targets-its-own-feet-or-an-adjacent-bore-cell
+  ;; Logged state, race run 41781768766 lane 8 s1 Clj_r79 (commit 2ac6b12): after the rods
+  ;; milestone (981 s) the bot stood at [886.5 53 -179.4], feet [886 53 -180], and the planner
+  ;; started :tunnel-to [886 53 -180] -- its own feet -- 24,234 times, dug 3 cells and never
+  ;; got 2 blocks from the spawner pocket until the lane cut it (:timeout, churn 18228).
+  ;; A tunnel to a cell inside its reach (1.5) ends :done without a step and is chosen again.
+  ;; The same geometry in miniature: feet [8 53 8], the trail's next corridor cell
+  ;; [10 53 9], whose nearest bore cell [9 53 9] is 1.4 from the feet.
+  (let [netherrack (blocks/default-state :netherrack)
+        floor (into {} (for [x (range 4 16) z (range 4 14)] [[x 52 z] netherrack]))
+        roof (into {} (for [x (range 4 16) z (range 4 14)] [[x 55 z] netherrack]))
+        walls (into {} (for [x (range 9 10) z [8 10] y [53 54]] [[x y z] netherrack]))
+        w (-> (standing {} (merge floor roof walls))
+              (assoc :player/dimension "minecraft:the_nether" :player/pos [8.5 53.0 8.5])
+              (assoc-in [:player/inventory 1] (item :iron_pickaxe 1))
+              (assoc :fortress/trail {:trail/target [8 53 9] :trail/cells [[8 53 8]]})
+              (assoc :plan/trail [[13 53 8] [10 53 9] [8 53 7]]))
+        target (pearls/fortress-retrace-target w)]
+    (is (some? target) "a retrace target 2 or more away exists")
+    (is (not= [8 53 8] target) "never the bot's own feet cell")
+    (is (not= [9 53 9] target) "never the adjacent bore cell inside the tunnel's reach")
+    (is (>= (physics/distance [8 53 8] target) 2.0)
+        "the tunnel must step to reach its target, so it cannot end :done in place")
+    (testing "with only an adjacent trail cell left, no retrace target"
+      (let [w2 (assoc w :plan/trail [[8 53 7]])]
+        (is (nil? (pearls/fortress-retrace-target w2))
+            "the far fallback in fortress-tunnel-target takes over instead")))))
+
 
 
