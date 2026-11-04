@@ -2948,6 +2948,12 @@
                  (when (:control/yaw controls) [(:control/yaw controls) (or ppitch 0.0)])
                  (when pyaw [pyaw (or ppitch 0.0)]))
         home (:pearls/shelter world)
+        ;; after the rods, the blaze row's steer goes on with the hunt's: it forgets a
+        ;; pocket the hits come through (leaky-pocket?) and notes the hurt in it, which
+        ;; stopped at the goal flip when only this steer ran
+        world (if (pearls-stage? world)
+                (plan/steer world (first (filter #(= :blaze-rods (:goal/id %)) plan/goals)))
+                world)
         world (cond-> (relocation (track-gain (track-angry (uncovered-log (fortress-exit-log
                                                                            world)))))
                 (shot-at? world) (assoc :pearls/shot-at-ms (:time/now world 0))
@@ -3031,7 +3037,7 @@
   ;; arrived with the bot 11 blocks from the end, and four hits killed it on the stairs
   [world goal i]
   (or (and (blaze-refuge world)
-           (not (contains? blaze/refuge-kinds (:intent/kind i)))
+           (not (contains? #{:eat :fight} (:intent/kind i)))
            (not (same-choice? i (blaze-refuge world))))
       (held-idle? world i)
       (and (= :relocate (:intent/for i)) (nil? (:pearls/relocate world)))
