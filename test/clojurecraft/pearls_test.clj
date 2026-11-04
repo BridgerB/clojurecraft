@@ -3760,7 +3760,7 @@
   (let [netherrack (blocks/default-state :netherrack)
         rock (into {} (for [x (range 0 16) y [75 76 77 78 79] z (range 0 16)] [[x y z] netherrack]))
         ;; carve the corridor the ahead cell would open into: the column north of it
-        carved (reduce dissoc rock (for [y [75 76 77 78 79]] [[9 y 9]]))
+        carved (into rock (for [y [75 76 77 78 79]] [[9 y 9] (blocks/default-state :air)]))
         w (-> (standing {} carved)
               (assoc :player/dimension "minecraft:the_nether" :player/pos [10.5 77.0 8.5])
               (assoc-in [:player/inventory 1] (item :iron_pickaxe 1))
