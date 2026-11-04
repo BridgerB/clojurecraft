@@ -2365,6 +2365,11 @@
       (if (pocket/in? world)
         (or (blaze/commit-fight world)
             (blaze/hold-intent world)
+            ;; hold-intent is nil with a blaze in reach: the row strikes it (its fight
+            ;; branch), never holds in the open pocket while it hits (R3/10 seed 1,
+            ;; probe 41914679195: pocket-hold at hp 13.8 to 0 with a blaze on the bot)
+            (when-let [[eid] (and (blaze/reach-blaze world) (blaze/fightable-blaze world))]
+              {:intent/kind :fight :intent/target eid :intent/to-the-end? true :intent/yield? true})
             ;; hold-intent is nil with a blaze in reach to be fought or nothing to heal:
             ;; seal only with none in reach, never against one at hand
             (when (and (nil? (blaze/reach-blaze world))
