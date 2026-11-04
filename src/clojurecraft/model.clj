@@ -411,10 +411,11 @@
     "inside :plan/instant"]
    [:instant/at "ms the last no-progress instant end in :plan/instant ended at"
     "inside :plan/instant"]
-   [:intent/began-feet "feet cell when the planner started the intent (plan/start-intent)"
-    "while one runs"]
-   [:intent/began-tick "tick when the planner started the intent (plan/start-intent)"
-    "while one runs"] [:plan/reason "why the plan failed" "after it failed"]
+   [:plan/began
+    "{:began/feet :began/tick} where and at what tick the running intent began (plan/start-intent): what the instant-churn guard measures a no-progress end against"
+    "while one runs"] [:began/feet "feet cell the running intent began in" "inside :plan/began"]
+   [:began/tick "tick the running intent began at" "inside :plan/began"]
+   [:plan/reason "why the plan failed" "after it failed"]
    [:plan/waiting "why the planner is waiting" "after the first wait"]
    [:plan/waiting-since "ms the current wait began" "while waiting"]
    [:plan/waiting-ticks "planner ticks the current wait has lasted; past plan/wait-ticks it fails"

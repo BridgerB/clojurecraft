@@ -423,18 +423,19 @@
                  (:bot/effects world))))
 
 (defn instant-end?
-  "Did intent i end in the first tick it ran with no progress: it began stamped by start-intent
-   (:intent/began-feet, :intent/began-tick), ended at most a tick later, the feet are the cell
-   it began in, and it sent no action packet (acted?)? One-action kinds (one-action-kinds) are
-   never instant ends: ending at once is their doing something."
+  "Did intent i end in the first tick it ran with no progress: it began where :plan/began (set
+   by start-intent) says, ended at most a tick later, the feet are the cell it began in, and
+   it sent no action packet (acted?)? One-action kinds (one-action-kinds) are never instant
+   ends: ending at once is their doing something."
   [world i]
-  (boolean (and (:intent/began-feet i)
-                (:intent/began-tick i)
-                (:player/pos world)
-                (not (contains? one-action-kinds (:intent/kind i)))
-                (<= (- (:time/tick world 0) (:intent/began-tick i)) 1)
-                (= (:intent/began-feet i) (intent/feet world))
-                (not (acted? world)))))
+  (let [began (:plan/began world)]
+    (boolean (and (:began/feet began)
+                  (:began/tick began)
+                  (:player/pos world)
+                  (not (contains? one-action-kinds (:intent/kind i)))
+                  (<= (- (:time/tick world 0) (:began/tick began)) 1)
+                  (= (:began/feet began) (intent/feet world))
+                  (not (acted? world))))))
 
 (defn instant-count
   "How many no-progress instant ends of intent i's choice (identity-of) in a row, i's end
@@ -627,7 +628,7 @@
   (let [n (when (instant-end? world i) (instant-count world i))]
     (cond (and n (>= n instant-limit))
           (-> world
-              (dissoc :plan/instant)
+              (dissoc :plan/instant :plan/began)
               (game/say (str "instant-churn " (:intent/kind i) " " (:intent/target i) " x" n))
               (fail-intent (assoc i :intent/status :failed :intent/reason :instant-churn)))
           :else
@@ -642,7 +643,7 @@
                       (assoc :plan/instant
                              (assoc (identity-of i) :instant/n n :instant/at (:time/now world 0))))
               (cond-> (not n) (dissoc :plan/instant))
-              (dissoc :plan/intent)))))
+              (dissoc :plan/intent :plan/began)))))
 
 (def placing-kinds #{:place :redig})  ; intents whose target is a cell they chose to put a block in, not a place they failed to reach
 (def boxing-kinds #{:stairs-down :stairs-up :tunnel}) ; intents that die :boxed standing in a pocket, or under an overhang no stair up is cut through, which :plan/boxed-at remembers
@@ -903,19 +904,18 @@
         i (assoc i
                  :intent/plan (dissoc i :intent/status :intent/id :intent/plan)
                  :intent/status :active
-                 :intent/id n
-                 :intent/began-tick (:time/tick world 0))
-        i (cond-> i feet (assoc :intent/began-feet feet))]
-    (-> world
-        (assoc :plan/intents n :plan/intent i)
-        (cond-> (and feet (not= feet (peek trail)))
-                (assoc :plan/trail (vec (take-last 128 (conj trail feet)))))
-        (memory/remember-intention i :started)
-        (note-churn i)
-        (cond-> (:intent/dead-end i) (update :plan/boxed-at (fnil conj #{}) (:intent/dead-end i)))
-        (dissoc :plan/waiting :plan/waiting-since :plan/waiting-ticks :plan/failed)
-        (game/say (str "intent " (:intent/kind i)
-                       " " (or (:intent/target i) (:intent/recipe i)))))))
+                 :intent/id n)]
+    (->
+      world
+      (assoc :plan/intents n :plan/intent i)
+      (assoc :plan/began (cond-> {:began/tick (:time/tick world 0)} feet (assoc :began/feet feet)))
+      (cond-> (and feet (not= feet (peek trail)))
+              (assoc :plan/trail (vec (take-last 128 (conj trail feet)))))
+      (memory/remember-intention i :started)
+      (note-churn i)
+      (cond-> (:intent/dead-end i) (update :plan/boxed-at (fnil conj #{}) (:intent/dead-end i)))
+      (dissoc :plan/waiting :plan/waiting-since :plan/waiting-ticks :plan/failed)
+      (game/say (str "intent " (:intent/kind i) " " (or (:intent/target i) (:intent/recipe i)))))))
 
 (defn identical-retry?
   "Is next an identical repeat of the intent that just failed from feet: same kind, target, height or recipe?"
