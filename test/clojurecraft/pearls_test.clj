@@ -3732,25 +3732,25 @@
   ;; :tunnel-to [-741 77 116] and [-737 77 116] 45 times each, wearing the stone pickaxe
   ;; from 131 to 1 durability. The bore heading is derived from the spawner and the
   ;; inbound trail's start only, so it is the same at both cells of the old flip and
-  ;; every bore target lies ahead along it at the same y. Geometry scaled to positive
-  ;; coordinates: spawner [45 76 31], trail start [5 77 31] west of it, flip cells at
-  ;; [39 77 16] and [38 77 16] in solid netherrack.
+  ;; every bore target lies ahead along it at the same y. Geometry scaled into one
+  ;; loaded chunk: spawner [12 76 10], trail start [2 77 10] west of it, flip cells at
+  ;; [10 77 8] and [9 77 8] in solid netherrack.
   (let [netherrack (blocks/default-state :netherrack)
-        rock (into {} (for [x (range 0 61) y [75 76 77 78 79] z (range 0 41)] [[x y z] netherrack]))
+        rock (into {} (for [x (range 0 16) y [75 76 77 78 79] z (range 0 16)] [[x y z] netherrack]))
         base (-> (standing {} rock)
                  (assoc :player/dimension "minecraft:the_nether")
                  (assoc-in [:player/inventory 1] (item :iron_pickaxe 1))
-                 (memory/observe [45 76 31] blaze/spawner)
-                 (assoc :plan/trail [[5 77 31] [20 77 24] [39 77 16]]))
-        w-east (assoc base :player/pos [39.5 77.0 16.5])
-        w-west (assoc base :player/pos [38.5 77.0 16.5])
+                 (memory/observe [12 76 10] blaze/spawner)
+                 (assoc :plan/trail [[2 77 10] [6 77 9] [10 77 8]]))
+        w-east (assoc base :player/pos [10.5 77.0 8.5])
+        w-west (assoc base :player/pos [9.5 77.0 8.5])
         t-east (pearls/fortress-tunnel-target w-east)
         t-west (pearls/fortress-tunnel-target w-west)]
     (is (= [-1 0] (pearls/pocket-bore-heading w-east)) "heading west, toward the trail's start")
     (is (= (pearls/pocket-bore-heading w-east) (pearls/pocket-bore-heading w-west))
         "the same heading at both cells of the old two-point flip")
-    (is (= [35 77 16] t-east) "bore target ahead along the heading at the same y")
-    (is (= [34 77 16] t-west) "the next bore target further along, never back east")
+    (is (= [6 77 8] t-east) "bore target ahead along the heading at the same y")
+    (is (= [5 77 8] t-west) "the next bore target further along, never back east")
     (is (not= t-east (intent/feet w-west)) "never a target the other flip cell already stands in")))
 
 (deftest a-bore-step-that-would-open-into-a-corridor-side-steps-at-the-same-y
@@ -3758,18 +3758,18 @@
   ;; heading borders open air (a corridor), the target side-steps along a perpendicular
   ;; heading whose next step is enclosed, at the same y, never down.
   (let [netherrack (blocks/default-state :netherrack)
-        rock (into {} (for [x (range 0 61) y [75 76 77 78 79] z (range 0 41)] [[x y z] netherrack]))
+        rock (into {} (for [x (range 0 16) y [75 76 77 78 79] z (range 0 16)] [[x y z] netherrack]))
         ;; carve the corridor the ahead cell would open into: the column north of it
-        carved (reduce dissoc rock (for [y [75 76 77 78 79]] [[38 y 17]]))
+        carved (reduce dissoc rock (for [y [75 76 77 78 79]] [[9 y 9]]))
         w (-> (standing {} carved)
-              (assoc :player/dimension "minecraft:the_nether" :player/pos [39.5 77.0 16.5])
+              (assoc :player/dimension "minecraft:the_nether" :player/pos [10.5 77.0 8.5])
               (assoc-in [:player/inventory 1] (item :iron_pickaxe 1))
-              (memory/observe [45 76 31] blaze/spawner)
-              (assoc :plan/trail [[5 77 31] [39 77 16]]))]
-    (is (not (pearls/pocket-bore-enclosed? w [39 77 16] [-1 0]))
+              (memory/observe [12 76 10] blaze/spawner)
+              (assoc :plan/trail [[2 77 10] [10 77 8]]))]
+    (is (not (pearls/pocket-bore-enclosed? w [10 77 8] [-1 0]))
         "the step west would open into the carved corridor")
-    (is (pearls/pocket-bore-enclosed? w [39 77 16] [0 -1]) "the step south stays in solid rock")
-    (is (= [39 77 12] (pearls/pocket-bore-target w)) "side-step target south at the same y")
+    (is (pearls/pocket-bore-enclosed? w [10 77 8] [0 -1]) "the step south stays in solid rock")
+    (is (= [10 77 4] (pearls/pocket-bore-target w)) "side-step target south at the same y")
     (is (= 77 (second (pearls/pocket-bore-target w))) "never a target below the feet")))
 
 (deftest a-rod-bot-seals-and-heals-in-its-pocket-before-boring-out
