@@ -2102,7 +2102,12 @@
 
 (defn side-bore-cell
   "The cell in the solid netherrack or brick wall beside open corridor cell c at the same y,
-   or nil when no solid wall is found."
+   or nil when no solid wall is found. Never a cell within 2 blocks of the feet: the bot's own
+   bored tunnel cell beside the corridor is enclosed and boreable, and a tunnel to it (or to an
+   adjacent cell, inside :intent/reach 1.5) ends :done at once without a step, so the planner
+   chose it again every tick (race run 41781768766 lane 8 s1 Clj_r79: 24,234 :tunnel-to starts
+   on its own feet cell [886 53 -180] after the rods, 3 cells dug, never 2 blocks from the
+   spawner pocket until the lane cut it)."
   [world [cx cy cz]]
   (let [feet (intent/feet world)
         offsets (for [d [1 2 3 4] [dx dz] [[-1 0] [1 0] [0 -1] [0 1]]] [(* d dx) (* d dz)])]
@@ -2110,6 +2115,7 @@
       (->> offsets
            (map (fn [[dx dz]] [(+ cx dx) cy (+ cz dz)]))
            (filter #(side-boreable? world % cy))
+           (filter #(>= (physics/distance feet %) 2.0))
            (sort-by #(physics/distance feet %))
            first))))
 
@@ -2131,8 +2137,9 @@
     (when (seq trail)
       (let [idx (nearest-trail-index feet trail)
             remaining (when idx (drop (inc idx) trail))
-            target-c (or (some #(when (>= (physics/distance feet %) 2.0) %) remaining)
-                         (first remaining))]
+            ;; only a cell 2 or more away: one nearer is inside the tunnel's reach (1.5) and
+            ;; ends it :done without a step, and the same cell is chosen again (Clj_r79 above)
+            target-c (some #(when (>= (physics/distance feet %) 2.0) %) remaining)]
         (when target-c
           (let [[cx cy cz] target-c
                 target-y (max (long fy) (long cy))]
