@@ -2378,8 +2378,7 @@
           (or (blaze/commit-fight world)
               (blaze/refuge-now world sp)
               (blaze/pocket-go world sp false)
-              (blaze/here-intent world)
-              (blaze/meal world)))))))
+              (blaze/here-intent world)))))))
 
 (defn fortress-exit-log
   "The world with one log line when the fortress exit choice is made or changed."

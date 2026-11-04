@@ -3840,11 +3840,9 @@
       (let [hurt (-> sealed-w
                      (assoc :player/pos [11.5 64.0 8.5] :player/health 8.0 :player/food 14)
                      (assoc-in [:pocket/site :pocket/placed] []))
-            refuge (pearls/blaze-refuge hurt)
             i (plan/next-intent hurt row plan/goals)]
-        (is (some? refuge) "the blaze row's refuge is in charge")
-        (is (contains? #{:pocket :seal :eat :pocket-hold} (:intent/kind refuge)) (pr-str refuge))
-        (is (= (:intent/kind refuge) (:intent/kind i)) "the hunt does not walk on exposed")
+        (is (contains? #{:pocket :seal :eat :pocket-hold} (:intent/kind i))
+            (str "the blaze refuge or its meal, not the hunt: " (pr-str i)))
         (is (not= :tunnel-to (:intent/kind i)))))))
 
 (deftest fortress-exit-never-steps-or-digs-down
