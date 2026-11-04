@@ -2183,17 +2183,26 @@
    fixed heading (pocket-bore-heading) at the feet's own y when the next step bores through solid
    rock (pocket-bore-enclosed?); when that step would open into air or a corridor, a side-step
    target bore-reach along a perpendicular heading whose next step is enclosed, at the same
-   y; nil when neither is enclosed. Never a target below the feet."
+   y; when neither is enclosed, the reverse heading as a last resort, so a pocket beside a
+   fortress room whose heading and side steps all border the room's air still bores through
+   the rock behind it instead of holding forever (probe 41914633411 R1/32 seed 1: sealed
+   at full health, then :tunnel-to [-43 69 220] from [-40 69 220] with the feet unmoved
+   from t 570 s to 810 s until blazes killed it where it stood). A target the instant-churn
+   guard (#719) has blacklisted (:plan/blacklist, fail-intent on :instant-churn/:blocked)
+   is passed over for the next enclosed heading, so the guard never rules out the bore's
+   own steps. Nil when no heading is enclosed and unblacklisted. Never below the feet."
   [world]
   (let [feet (intent/feet world)
-        [_ fy _] feet]
+        [_ fy _] feet
+        bl (:plan/blacklist world #{})]
     (when-let [[dx dz] (pocket-bore-heading world)]
       (let [along (fn [[hx hz]] [(+ (first feet) (* bore-reach hx)) fy
-                                 (+ (last feet) (* bore-reach hz))])]
-        (cond (pocket-bore-enclosed? world feet [dx dz]) (along [dx dz])
-              (pocket-bore-enclosed? world feet [(- dz) dx]) (along [(- dz) dx])
-              (pocket-bore-enclosed? world feet [dz (- dx)]) (along [dz (- dx)])
-              :else nil)))))
+                                 (+ (last feet) (* bore-reach hz))])
+            headings [[dx dz] [(- dz) dx] [dz (- dx)] [(- dx) (- dz)]]]
+        (some (fn [h]
+                (let [t (along h)]
+                  (when (and (pocket-bore-enclosed? world feet h) (not (contains? bl t))) t)))
+              headings)))))
 
 (defn fortress-retrace-target
   "The next target cell along the inbound trail heading toward the exit, or nil:
@@ -2207,8 +2216,12 @@
       (let [idx (nearest-trail-index feet trail)
             remaining (when idx (drop (inc idx) trail))
             ;; only a cell 2 or more away: one nearer is inside the tunnel's reach (1.5) and
-            ;; ends it :done without a step, and the same cell is chosen again (Clj_r79 above)
-            target-c (some #(when (>= (physics/distance feet %) 2.0) %) remaining)]
+            ;; ends it :done without a step, and the same cell is chosen again (Clj_r79 above);
+            ;; a blacklisted cell (#719's guard, fail-intent) is passed over the same way
+            target-c (some #(when (and (>= (physics/distance feet %) 2.0)
+                                       (not (contains? (:plan/blacklist world #{}) %)))
+                              %)
+                           remaining)]
         (when target-c
           (let [[cx cy cz] target-c
                 target-y (max (long fy) (long cy))]
@@ -2320,7 +2333,19 @@
           in? (pocket/in? world)
           sealed? (and in? (pocket/sealed? world site))
           hp (:player/health world 20.0)]
-      (cond (and in? (not sealed?) (pocket/can-seal? world site)) {:intent/kind :seal}
+      (cond (and in?
+                 (not sealed?)
+                 (>= hp blaze/low-health)
+                 (blaze/reach-blaze world)
+                 (blaze/fightable-blaze world))
+            ;; a blaze in reach of the open pocket is struck, never held under
+            ;; (probe 41914679195 R3/10 seed 1: :pocket-hold at hp 13.8 to 0 with
+            ;; a blaze on the bot, its seal never laid)
+            {:intent/kind :fight
+             :intent/target (first (blaze/fightable-blaze world))
+             :intent/to-the-end? true
+             :intent/yield? true}
+            (and in? (not sealed?) (pocket/can-seal? world site)) {:intent/kind :seal}
             (and in? (< hp 20.0))
             (or (blaze/meal world) {:intent/kind :pocket-hold :intent/heal-to 20.0})
             (and (not in?) (< hp 20.0))
