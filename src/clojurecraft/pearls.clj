@@ -2689,9 +2689,9 @@
            (or (empty? (filter #(combat/seen? world (val %)) (shooters world)))
                (and (fortress-escaping? world) (not (shot-at? world)))))
       meal
+      (pocket-bore world) (pocket-bore world)
       (and (fortress-escaping? world) (can-tunnel-out? world) (shot-at? world) (cover-from world))
       (cover-from world)
-      (pocket-bore world) (pocket-bore world)
       (and (fortress-escaping? world) (can-tunnel-out? world)) (fortress-tunnel-out world)
       (and (not in?) (leave-sight world)) (leave-sight world)
       (and (shot-at? world) (not in?) (cover-from world)) (cover-from world)
