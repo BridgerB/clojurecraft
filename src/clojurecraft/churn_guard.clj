@@ -25,14 +25,10 @@
 (set! *warn-on-reflection* true)
 
 (def instantaneous-kinds
-  "The intent kinds that may end in the first tick they run, because they are one action that
-   is over when it is made: placing one block (:place), moving an item to the hand (:equip),
-   using or pouring an item on a target (:use-on, :pour), eating (:eat), dropping (:toss),
-   putting armour on (:wear), throwing an eye of ender (:throw-eye), one craft click (:craft)
-   and opening a container (:open-container). Every other kind (a walk, a fight, a perch, a
-   hold, a back-off, a dig, a stair) takes time, so one that is over in its first tick was
-   chosen in a state its own end check already calls done: CHURN."
-  #{:place :equip :use-on :pour :eat :toss :wear :throw-eye :craft :open-container})
+  "The intent kinds that may end in the first tick they run (plan/one-action-kinds, the one
+   list): every other kind takes time, so one over in its first tick was chosen in a state its
+   own end check already calls done: CHURN."
+  plan/one-action-kinds)
 
 (def sample-every-ms "Simulated ms between two points a snapshot's play is checked at." 10000)
 (def max-ms
