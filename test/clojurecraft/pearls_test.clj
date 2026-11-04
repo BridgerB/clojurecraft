@@ -3715,6 +3715,121 @@
     (is (= 64 (second target)) "side bore is at the exact same y level (64), no dy < 0")
     (is (true? (:intent/no-down? i)) "tunnel carries no-down?")))
 
+(deftest the-nine-second-dig-is-a-hand-dig-on-nether-brick
+  ;; Logged state, run 41852247420 s1 Clj_r36: `tunnel stage [:dig :open] 9157ms` while
+  ;; boring at the spawner, hp 20 to 8, death-blaze 4 blocks from the rods. Nether brick
+  ;; (hardness 2.0) takes a stone pickaxe (speed 4) 750 ms; by hand (speed 1, no harvest)
+  ;; it takes 10000 ms. The 9 s stage is a hand dig: the pickaxe was not the held tool for
+  ;; that dig (not in the hotbar the dig chooses from, intent/choose-tool), not a hard
+  ;; block and not the stage timing, which adds only settle and confirm ticks.
+  (let [brick (blocks/default-state :nether_bricks)
+        pick (recipe/item-id :stone_pickaxe)]
+    (is (= 750 (intent/dig-time brick pick {})) "stone pickaxe on nether brick: far under 1 s")
+    (is (>= (intent/dig-time brick nil {}) 9000) "by hand on nether brick: the 9 s stage")))
+
+(deftest a-bore-heading-is-fixed-across-the-cells-clj-r32-flipped-between
+  ;; Logged state, run 41852247420 s2 Clj_r32: after the rods the retrace alternated
+  ;; :tunnel-to [-741 77 116] and [-737 77 116] 45 times each, wearing the stone pickaxe
+  ;; from 131 to 1 durability. The bore heading is derived from the spawner and the
+  ;; inbound trail's start only, so it is the same at both cells of the old flip and
+  ;; every bore target lies ahead along it at the same y. Geometry scaled into one
+  ;; loaded chunk: spawner [12 76 10], trail start [2 77 10] west of it, flip cells at
+  ;; [10 77 8] and [9 77 8] in solid netherrack.
+  (let [netherrack (blocks/default-state :netherrack)
+        rock (into {} (for [x (range 0 16) y [75 76 77 78 79] z (range 0 16)] [[x y z] netherrack]))
+        base (-> (standing {} rock)
+                 (assoc :player/dimension "minecraft:the_nether")
+                 (assoc-in [:player/inventory 1] (item :iron_pickaxe 1))
+                 (memory/observe [12 76 10] blaze/spawner)
+                 (assoc :plan/trail [[2 77 10] [6 77 9] [10 77 8]]))
+        w-east (assoc base :player/pos [10.5 77.0 8.5])
+        w-west (assoc base :player/pos [9.5 77.0 8.5])
+        t-east (pearls/fortress-tunnel-target w-east)
+        t-west (pearls/fortress-tunnel-target w-west)]
+    (is (= [-1 0] (pearls/pocket-bore-heading w-east)) "heading west, toward the trail's start")
+    (is (= (pearls/pocket-bore-heading w-east) (pearls/pocket-bore-heading w-west))
+        "the same heading at both cells of the old two-point flip")
+    (is (= [6 77 8] t-east) "bore target ahead along the heading at the same y")
+    (is (= [5 77 8] t-west) "the next bore target further along, never back east")
+    (is (not= t-east (intent/feet w-west)) "never a target the other flip cell already stands in")))
+
+(deftest a-bore-step-that-would-open-into-a-corridor-side-steps-at-the-same-y
+  ;; The bore digs only cells whose neighbours are solid: where the cell ahead along the
+  ;; heading borders open air (a corridor), the target side-steps along a perpendicular
+  ;; heading whose next step is enclosed, at the same y, never down.
+  (let [netherrack (blocks/default-state :netherrack)
+        rock (into {} (for [x (range 0 16) y [75 76 77 78 79] z (range 0 16)] [[x y z] netherrack]))
+        ;; carve the corridor the ahead cell would open into: the column north of it
+        carved (into rock (for [y [75 76 77 78 79]] [[9 y 9] (blocks/default-state :air)]))
+        w (-> (standing {} carved)
+              (assoc :player/dimension "minecraft:the_nether" :player/pos [10.5 77.0 8.5])
+              (assoc-in [:player/inventory 1] (item :iron_pickaxe 1))
+              (memory/observe [12 76 10] blaze/spawner)
+              (assoc :plan/trail [[2 77 10] [10 77 8]]))]
+    (is (not (pearls/pocket-bore-enclosed? w [10 77 8] [-1 0]))
+        "the step west would open into the carved corridor")
+    (is (pearls/pocket-bore-enclosed? w [10 77 8] [0 -1]) "the step south stays in solid rock")
+    (is (= [10 77 4] (pearls/pocket-bore-target w)) "side-step target south at the same y")
+    (is (= 77 (second (pearls/pocket-bore-target w))) "never a target below the feet")))
+
+(deftest a-rod-bot-seals-and-heals-in-its-pocket-before-boring-out
+  ;; Logged states: Clj_r36 (run 41852247420 s1) dug in the blazes' sight from hp 20 to 8
+  ;; and died 4 blocks from the rods; Clj_r12 and Clj_r13 (s2) died seconds after
+  ;; `place failed: :rejected` left them without cover. The exit now starts from the
+  ;; sealed pocket: seal the blaze pocket, heal to full in it, then bore out; a rejected
+  ;; seal leaves the bot eating or holding in the pocket, never boring out exposed.
+  (let [netherrack (blocks/default-state :netherrack)
+        floor (into {} (for [x (range 0 17) z (range 0 17)] [[x 63 z] netherrack]))
+        roof (into {} (for [x (range 0 17) z (range 0 17)] [[x 66 z] netherrack]))
+        walls (into {}
+                    (concat (for [y [64 65] z (range 0 17)] [[7 y z] netherrack])
+                            (for [y [64 65] z (range 0 17)] [[9 y z] netherrack])
+                            (for [y [64 65]] [[8 y 7] netherrack])))
+        seal-blocks (into {} (for [y [64 65]] [[8 y 9] netherrack]))
+        make-w (fn [blocks site]
+                 (-> (standing {} blocks)
+                     (assoc :player/dimension "minecraft:the_nether"
+                            :player/pos [8.5 64.0 8.5]
+                            :plan/status :active
+                            :plan/goals #{:ender-pearls}
+                            :plan/reached #{:blaze-rods}
+                            :plan/active [row]
+                            :pocket/site site)
+                     (memory/observe [8 70 3] blaze/spawner)
+                     (update :player/inventory assoc
+                             1 (item :cooked_beef 12)
+                             2 (item :cobblestone 64)
+                             3 (item :iron_pickaxe 1))))
+        open-w (make-w (merge floor roof walls)
+                       {:pocket/cell [8 64 8] :pocket/stand nil :pocket/dig [] :pocket/placed []})
+        sealed-w (make-w (merge floor roof walls seal-blocks)
+                         {:pocket/cell [8 64 8]
+                          :pocket/stand nil
+                          :pocket/dig []
+                          :pocket/placed [[8 64 9] [8 65 9]]})]
+    (testing "in its open pocket, the rod bot seals it before boring"
+      (is (= :seal (:intent/kind (pearls/pocket-bore open-w)))))
+    (testing "sealed and hurt (Clj_r36 at hp 8), it heals in the pocket, never tunnels"
+      (let [hurt (assoc sealed-w :player/health 8.0 :player/food 14)
+            i (plan/next-intent hurt row plan/goals)]
+        (is (contains? #{:eat :pocket-hold} (:intent/kind i)))
+        (is (not= :tunnel-to (:intent/kind i)))))
+    (testing "a rejected seal (Clj_r12) leaves it healing in the pocket, not boring exposed"
+      (let [rejected
+            (-> open-w
+                (assoc :player/health 8.0 :player/food 14 :pocket/seal-failed-at 0 :time/now 200)
+                (assoc-in [:pocket/site :pocket/unsealable?] true))
+            bore (pearls/pocket-bore rejected)]
+        (is (contains? #{:eat :pocket-hold} (:intent/kind bore)))
+        (is (not= :tunnel-to (:intent/kind bore)))))
+    (testing "sealed at full health, it bores out sealed-behind at the same y"
+      (let [full (assoc sealed-w :player/health 20.0 :player/food 20)
+            i (plan/next-intent full row plan/goals)]
+        (is (= :tunnel-to (:intent/kind i)))
+        (is (true? (:intent/seal-behind? i)))
+        (is (true? (:intent/no-down? i)))
+        (is (= 64 (second (:intent/target i))))))))
+
 (deftest fortress-exit-never-steps-or-digs-down
   ;; On #715, downward tunnel moves through a 1-block fortress floor dropped bots into
   ;; the lava sea 40 blocks below (death-lava x4). During fortress escape, no step
