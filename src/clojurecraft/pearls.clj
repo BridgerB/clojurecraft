@@ -46,6 +46,7 @@
             [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
+            [clojurecraft.pocket :as pocket]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.stairs :as stairs]
             [clojurecraft.stone :as stone]
@@ -2126,6 +2127,74 @@
     (let [indexed (map-indexed vector trail)]
       (first (apply min-key (fn [[_ c]] (physics/distance feet c)) indexed)))))
 
+(defn pocket-bore-heading
+  "The fixed cardinal exit heading [dx dz] for the pocket bore, or nil with no spawner known:
+   from the spawner toward the start of the inbound trail (the oldest :plan/trail cell, where
+   the bot entered the fortress ground), else toward the nearest known forest, else away from
+   the spawner toward the explore target. Derived only from facts that do not move as the bot
+   steps (the spawner, the trail's start, the forest), never from the feet, so the heading is
+   the same at every cell of the bore and cannot flip between two targets: run 41852247420
+   s2 Clj_r32 alternated :tunnel-to [-741 77 116] and [-737 77 116] 45 times each after the
+   rods, wearing its stone pickaxe from 131 to 1 durability without leaving the pocket."
+  [world]
+  (when-let [sp (blaze/nearest-spawner world)]
+    (let [[sx _ sz] sp
+          start (first (:plan/trail world []))
+          forest (nearest-forest world)
+          [tx tz] (cond (and start (not= [sx sz] [(first start) (last start)]))
+                        [(first start) (last start)]
+                        forest [(first forest) (last forest)]
+                        :else
+                        (let [e (explore world)
+                              t (:intent/target e)]
+                          (if t [(first t) (last t)] [(inc sx) sz])))
+          dx (- (long tx) (long sx))
+          dz (- (long tz) (long sz))]
+      (cond (and (zero? dx) (zero? dz)) [1 0]
+            (>= (abs dx) (abs dz)) [(long (math/signum (double dx))) 0]
+            :else [0 (long (math/signum (double dz)))]))))
+
+(defn pocket-bore-enclosed?
+  "Is stepping from feet into the next cell by heading [dx dz] a bore through solid rock:
+   the two cells the body would open and every lateral neighbour of both (except the cell
+   the bot stands in) is a loaded solid, the floor under and the roof over them solid, and
+   no neighbour is lava? A step that would open into air, a corridor or a room is not."
+  [world feet [dx dz]]
+  (let [to [(+ (first feet) dx) (second feet) (+ (last feet) dz)]
+        cells [to (update to 1 inc)]
+        others (fn [c]
+                 (remove #{feet (update feet 1 inc)}
+                         (mapcat (fn [[ox oy oz]] [(update c 0 + ox) (update c 1 + oy)
+                                                   (update c 2 + oz)])
+                          [[1 0 0] [-1 0 0] [0 0 1] [0 0 -1]])))]
+    (boolean (and (every? #(pocket/solid-at? world %) cells)
+                  (pocket/solid-at? world (update to 1 dec))
+                  (pocket/solid-at? world (update to 1 + 2))
+                  (every? #(pocket/solid-at? world %) (mapcat others cells))
+                  (not-any? #(= :lava
+                                (some-> (terrain/block-at world %)
+                                        blocks/name-of))
+                            (concat cells (mapcat others cells)))))))
+
+(def bore-reach 4) ; blocks ahead along the heading a bore targets: past the tunnel's reach (1.5), one step at a time replanned
+
+(defn pocket-bore-target
+  "The [x y z] target of the pocket bore from the feet, or nil: bore-reach ahead along the
+   fixed heading (pocket-bore-heading) at the feet's own y when the next step bores through solid
+   rock (pocket-bore-enclosed?); when that step would open into air or a corridor, a side-step
+   target bore-reach along a perpendicular heading whose next step is enclosed, at the same
+   y; nil when neither is enclosed. Never a target below the feet."
+  [world]
+  (let [feet (intent/feet world)
+        [_ fy _] feet]
+    (when-let [[dx dz] (pocket-bore-heading world)]
+      (let [along (fn [[hx hz]] [(+ (first feet) (* bore-reach hx)) fy
+                                 (+ (last feet) (* bore-reach hz))])]
+        (cond (pocket-bore-enclosed? world feet [dx dz]) (along [dx dz])
+              (pocket-bore-enclosed? world feet [(- dz) dx]) (along [(- dz) dx])
+              (pocket-bore-enclosed? world feet [dz (- dx)]) (along [dz (- dx)])
+              :else nil)))))
+
 (defn fortress-retrace-target
   "The next target cell along the inbound trail heading toward the exit, or nil:
    retraces enclosed cells directly, or bores a parallel 1x2 tunnel through solid
@@ -2184,9 +2253,10 @@
           (recur (+ dist 8.0)))))))
 
 (defn fortress-tunnel-target
-  "The [x y z] target for the sealed fortress tunnel-out.
-   Retraces the inbound path through enclosed cells, boring parallel to open corridors
-   at the same y. Once beyond 48 blocks from the fortress, surfaces to surface-y."
+  "The [x y z] target for the sealed fortress tunnel-out: the pocket bore along the fixed
+   heading (pocket-bore-target) through solid rock at the same y, else a retrace of the inbound
+   path through enclosed cells, boring parallel to open corridors at the same y. Once
+   beyond 48 blocks from the fortress, surfaces to surface-y."
   [world]
   (let [pts (fortress-points world)]
     (when (seq pts)
@@ -2194,11 +2264,15 @@
             [fx fy fz] feet
             near? (near-fortress? world)
             surface-y (fortress-surface-y world)
-            exit-dir (fortress-exit-dir world)
+            exit-dir (if-let [h (pocket-bore-heading world)]
+                       [(double (first h)) (double (second h))]
+                       (fortress-exit-dir world))
             [exit-x exit-z] (fortress-exit-horizontal world [fx fz] exit-dir)]
         (cond
-          ;; Retrace inbound trail or side-bore parallel to open corridor at same y
-          (and near? (fortress-retrace-target world)) (fortress-retrace-target world)
+          ;; Bore from the pocket along the fixed heading through solid rock, else
+          ;; retrace the inbound trail or side-bore parallel to an open corridor
+          (and near? (or (pocket-bore-target world) (fortress-retrace-target world)))
+          (or (pocket-bore-target world) (fortress-retrace-target world))
           ;; Fallback horizontal tunnel away from fortress at current y level
           near? [exit-x fy exit-z]
           ;; Surface once beyond 48 blocks from fortress
@@ -2228,6 +2302,31 @@
      :intent/steps fortress/steps-per-tunnel
      :intent/seal-behind? true
      :intent/for :pearls}))
+
+(defn pocket-bore
+  "The sealed-pocket phase of the fortress exit, or nil when the bore itself should go on:
+   in the blaze pocket (pocket/in?, the stage-17 refuge the rods were fought from), seal it
+   when it can be sealed (:seal), and while sealed and under full health eat (blaze/meal)
+   or hold (:pocket-hold) until full; hurt outside a pocket after a hit while boring, get
+   into the blaze row's refuge (blaze/pocket-go, else blaze/here-intent sealed in place)
+   before going on. A seal the server rejected (:rejected, run 41852247420 s2 Clj_r12 and
+   Clj_r13: `place failed: :rejected` and death-blaze seconds later) leaves the pocket
+   open and unsealed: then a hurt bot eats or holds in it instead of boring out exposed.
+   Sealed at full health, or in no pocket at full health, nil: fortress-tunnel-out bores
+   from where the bot stands along the fixed heading (pocket-bore-heading)."
+  [world]
+  (when (and (fortress-escaping? world) (can-tunnel-out? world))
+    (let [site (:pocket/site world)
+          in? (pocket/in? world)
+          sealed? (and in? (pocket/sealed? world site))
+          hp (:player/health world 20.0)]
+      (cond (and in? (not sealed?) (pocket/can-seal? world site)) {:intent/kind :seal}
+            (and in? (< hp 20.0))
+            (or (blaze/meal world) {:intent/kind :pocket-hold :intent/heal-to 20.0})
+            (and (not in?) (< hp 20.0))
+            (or (blaze/pocket-go world (blaze/nearest-spawner world) false)
+                (blaze/here-intent world))
+            :else nil))))
 
 (defn fortress-exit-log
   "The world with one log line when the fortress exit choice is made or changed."
@@ -2592,6 +2691,7 @@
       meal
       (and (fortress-escaping? world) (can-tunnel-out? world) (shot-at? world) (cover-from world))
       (cover-from world)
+      (pocket-bore world) (pocket-bore world)
       (and (fortress-escaping? world) (can-tunnel-out? world)) (fortress-tunnel-out world)
       (and (not in?) (leave-sight world)) (leave-sight world)
       (and (shot-at? world) (not in?) (cover-from world)) (cover-from world)
