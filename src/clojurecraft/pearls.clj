@@ -2363,8 +2363,13 @@
                      32.0)))
     (let [sp (blaze/nearest-spawner world)]
       (if (pocket/in? world)
-        (or (blaze/hold-intent world)
-            (when (pocket/can-seal? world (:pocket/site world)) {:intent/kind :seal})
+        (or (blaze/commit-fight world)
+            (blaze/hold-intent world)
+            ;; hold-intent is nil with a blaze in reach to be fought or nothing to heal:
+            ;; seal only with none in reach, never against one at hand
+            (when (and (nil? (blaze/reach-blaze world))
+                       (pocket/can-seal? world (:pocket/site world)))
+              {:intent/kind :seal})
             (blaze/meal world)
             {:intent/kind :pocket-hold :intent/heal-to 20.0})
         ;; out of the pocket at full health and unwatched, the bore goes on from where
