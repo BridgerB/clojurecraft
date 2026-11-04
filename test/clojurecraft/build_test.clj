@@ -412,6 +412,20 @@
     (is (= {:item/water_bucket 1 :item/bucket 1} (:goal/provides kit)))))
 
 
+(deftest a-bare-dig-puts-the-stowed-pickaxe-in-hand-first
+  ;; Clj_r36 (run 41852247420): a nether-brick dig at the spawner took 9157 ms, the hand's
+  ;; time, with a stone pickaxe held only in the main inventory: a bare :dig chose its tool
+  ;; from the hotbar alone. The dig now equips the stowed tool before it starts.
+  (let [brick (blocks/default-state :nether_bricks)
+        w (-> (standing-at (open-ground {[3 63 8] brick}) [2.5 63.0 8.5])
+              (assoc :player/inventory {35 {:item (recipe/item-id :stone_pickaxe) :count 1}}
+                     :plan/intent
+                     {:intent/kind :dig :intent/target [3 63 8] :intent/status :active}))
+        after (intent/run w (:plan/intent w) {:event/kind :tick :event/now 1000})]
+    (is (= :equip (:intent/kind (:intent/child (:plan/intent after))))
+        "the stowed pickaxe is equipped before the dig")
+    (is (= :stone_pickaxe (:intent/item (:intent/child (:plan/intent after)))))))
+
 (deftest a-lone-lava-source-is-no-site
   ;; sim race 38664661309 (issue #142): sites beside a lone source cast one cell and failed
   ;; :no-station with nine to go; a site needs a source for every cell its stands can reach

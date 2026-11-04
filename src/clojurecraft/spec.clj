@@ -198,6 +198,7 @@
 (s/def :relocate/near (s/coll-of int? :kind set?))
 (s/def :pearls/relocate (s/keys :req-un [:relocate/from :relocate/at :relocate/near]))
 (s/def :pearls/mouth ::block-pos)
+(s/def :pearls/refuge-done boolean?)
 (s/def :throw/from ::vec3)
 (s/def :throw/dir (s/tuple double? double?))
 (s/def :throw/at int?)

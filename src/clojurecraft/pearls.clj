@@ -2328,6 +2328,63 @@
                 (blaze/here-intent world))
             :else nil))))
 
+(declare pearls-stage?)
+
+(defn sealed-full?
+  "Is the bot sealed in its blaze pocket at full health, not burning: the moment the blaze
+   row's refuge hands the fortress exit over to the pocket bore?"
+  [world]
+  (boolean (and (pocket/in? world)
+                (pocket/sealed? world (:pocket/site world))
+                (>= (:player/health world 20.0) 20.0)
+                (not (:player/on-fire? world)))))
+
+(defn blaze-refuge
+  "The blaze row's survival intent after the rods, or nil once it has handed over: while the
+   pearl stage is in play in the Nether near the spawner and the bot has not yet been sealed
+   in its pocket at full health (:pearls/refuge-done, noted by steer at sealed-full?), the
+   blaze row stays in charge — a committed fight at hand (blaze/commit-fight, never under
+   danger health), the refuge (blaze/refuge-now), the way to the pocket (blaze/pocket-go) or
+   a pocket sealed where it stands (blaze/here-intent); in the pocket, its hold (blaze/hold-intent:
+   seal, meal, hold), sealing first when it can. The pearl hunt has none of this, and took over
+   the tick the seventh rod was held, out of the pocket grabbing a rod, hurt and watched:
+   14 sim rod bots on main and the pocket-bore branch died at the spawner within a minute,
+   1.4 to 2.8 blocks from the rod. Reused, not copied: no blaze logic lives here."
+  [world]
+  (when (and (pearls-stage? world)
+             (= dimension/nether (dimension/of world))
+             (not (:pearls/refuge-done world))
+             (not (sealed-full? world))
+             (blaze/nearest-spawner world)
+             (or (pocket/in? world)
+                 (fortress-escaping? world)
+                 (<= (physics/distance (:player/pos world)
+                                       (physics/centre (blaze/nearest-spawner world)))
+                     32.0)))
+    (let [sp (blaze/nearest-spawner world)]
+      (if (pocket/in? world)
+        (or (blaze/commit-fight world)
+            (blaze/hold-intent world)
+            ;; hold-intent is nil with a blaze in reach: the row strikes it (its fight
+            ;; branch), never holds in the open pocket while it hits (R3/10 seed 1,
+            ;; probe 41914679195: pocket-hold at hp 13.8 to 0 with a blaze on the bot)
+            (when-let [[eid] (and (blaze/reach-blaze world) (blaze/fightable-blaze world))]
+              {:intent/kind :fight :intent/target eid :intent/to-the-end? true :intent/yield? true})
+            ;; hold-intent is nil with a blaze in reach to be fought or nothing to heal:
+            ;; seal only with none in reach, never against one at hand
+            (when (and (nil? (blaze/reach-blaze world))
+                       (pocket/can-seal? world (:pocket/site world)))
+              {:intent/kind :seal})
+            (blaze/meal world)
+            {:intent/kind :pocket-hold :intent/heal-to 20.0})
+        ;; out of the pocket at full health and unwatched, the bore goes on from where
+        ;; the bot stands (pocket-bore); hurt, burning or watched, the refuge comes first
+        (when (or (< (:player/health world 20.0) 20.0) (blaze/refuge-needed? world))
+          (or (blaze/commit-fight world)
+              (blaze/refuge-now world sp)
+              (blaze/pocket-go world sp false)
+              (blaze/here-intent world)))))))
+
 (defn fortress-exit-log
   "The world with one log line when the fortress exit choice is made or changed."
   [world]
@@ -2685,6 +2742,7 @@
                        (and (or angry? in-reach?) (not (unfightable? world eid e))) eid
                        :else tid)]
     (cond
+      (blaze-refuge world) (blaze-refuge world)
       (and meal
            (or (empty? (filter #(combat/seen? world (val %)) (shooters world)))
                (and (fortress-escaping? world) (not (shot-at? world)))))
@@ -2899,9 +2957,16 @@
                  (when (:control/yaw controls) [(:control/yaw controls) (or ppitch 0.0)])
                  (when pyaw [pyaw (or ppitch 0.0)]))
         home (:pearls/shelter world)
+        ;; after the rods, the blaze row's steer goes on with the hunt's: it forgets a
+        ;; pocket the hits come through (leaky-pocket?) and notes the hurt in it, which
+        ;; stopped at the goal flip when only this steer ran
+        world (if (pearls-stage? world)
+                (plan/steer world (first (filter #(= :blaze-rods (:goal/id %)) plan/goals)))
+                world)
         world (cond-> (relocation (track-gain (track-angry (uncovered-log (fortress-exit-log
                                                                            world)))))
-                (shot-at? world) (assoc :pearls/shot-at-ms (:time/now world 0)))]
+                (shot-at? world) (assoc :pearls/shot-at-ms (:time/now world 0))
+                (sealed-full? world) (assoc :pearls/refuge-done true))]
     (cond (or (nil? look)
               (= :provoke (:intent/kind (:plan/intent world)))
               (and home (= home (intent/feet world))))
@@ -2980,7 +3045,10 @@
   ;; 12 blocks up its stairs for 8 s after the hunt's own choice was the way home, the angry one
   ;; arrived with the bot 11 blocks from the end, and four hits killed it on the stairs
   [world goal i]
-  (or (held-idle? world i)
+  (or (and (blaze-refuge world)
+           (not (contains? #{:eat :fight} (:intent/kind i)))
+           (not (same-choice? i (blaze-refuge world))))
+      (held-idle? world i)
       (and (= :relocate (:intent/for i)) (nil? (:pearls/relocate world)))
       (and (not (contains? answers-to-hand (:intent/kind i)))
            (not (:intent/wall? i))
