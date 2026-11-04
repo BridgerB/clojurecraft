@@ -394,6 +394,61 @@
       (and (pos? n) (zero? (mod n churn-log-every)))
       (game/say (str "churn " (:intent/kind i) " " (:intent/target i) " x" n)))))
 
+(def instant-limit
+  "No-progress instant ends of one choice in a row after which it counts as failed. Real churn
+   repeats every tick (the retrace of issue #717: 24,234 starts on one cell), so three in a row
+   is already a loop; a legitimate repeat never ends in its first tick with nothing done (a
+   fight swings, a meal takes its ticks, a dig along a line moves to the next target)."
+  3)
+(def instant-window-ms
+  "Ms between two no-progress instant ends of one choice for them to count as in a row."
+  5000)
+(def one-action-kinds
+  "The intent kinds that may end in the first tick they run, because they are one action that is
+   over when it is made: placing one block, moving an item to the hand, using or pouring an item
+   on a target, eating, dropping, putting armour on, throwing an eye of ender, one craft click
+   and opening a container. Every other kind takes time, so one over in its first tick was
+   chosen in a state its own end check already calls done."
+  #{:place :equip :use-on :pour :eat :toss :wear :throw-eye :craft :open-container})
+(def action-packets
+  "Packet names that are the bot doing something with its hands in a tick: a swing (a fight's
+   attack, a dig's stroke), an attack, a dig action, or an item used on a block (a placement)."
+  #{:swing :attack :player-action :use-item-on})
+
+(defn acted?
+  "Did the bot swing, attack, dig or use an item in this tick: an action packet among the
+   effects the tick asked for (:bot/effects, cleared by the loop after the tick)?"
+  [world]
+  (boolean (some #(contains? action-packets (get-in % [:effect/packet :packet/name]))
+                 (:bot/effects world))))
+
+(defn instant-end?
+  "Did intent i end in the first tick it ran with no progress: it began stamped by start-intent
+   (:intent/began-feet, :intent/began-tick), ended at most a tick later, the feet are the cell
+   it began in, and it sent no action packet (acted?)? One-action kinds (one-action-kinds) are
+   never instant ends: ending at once is their doing something."
+  [world i]
+  (boolean (and (:intent/began-feet i)
+                (:intent/began-tick i)
+                (:player/pos world)
+                (not (contains? one-action-kinds (:intent/kind i)))
+                (<= (- (:time/tick world 0) (:intent/began-tick i)) 1)
+                (= (:intent/began-feet i) (intent/feet world))
+                (not (acted? world)))))
+
+(defn instant-count
+  "How many no-progress instant ends of intent i's choice (identity-of) in a row, i's end
+   included: one more than :plan/instant counted when i is that choice and its last instant end
+   was within instant-window-ms, else 1."
+  [world i]
+  (let [p (:plan/instant world)
+        same? (and p
+                   (= (:intent/kind p) (:intent/kind i))
+                   (= (:intent/target p) (:intent/target i))
+                   (= (:intent/for p) (:intent/for i)))
+        fresh? (and same? (<= (- (:time/now world 0) (:instant/at p)) instant-window-ms))]
+    (if fresh? (inc (:instant/n p)) 1)))
+
 (defn progress?
   "Does finishing intent i move the run on: not of a kind or for a purpose in non-progress?"
   [i]
@@ -551,6 +606,8 @@
           (cond-> cell (assoc :plan/regroup cell))
           (game/say (str "recover " (:plan/recoveries world 0) " regroup " (pr-str cell)))))))
 
+(declare fail-intent)
+
 (defn finish-intent
   "An intent that succeeds ends any failure streak: attempts and unwalkable walks count
    consecutive failures, so a long goal is not killed by three unrelated hiccups an hour apart.
@@ -561,15 +618,31 @@
    first logs near the landing, took them, and two minutes later, its stone pickaxe made at y 60,
    declined the short climb back to those trees for the spare's sticks; it went down without
    them, climbed out again from y 14 at seven minutes, made its ingots at 22 minutes instead of 9,
-   and timed out at the water bucket."
+   and timed out at the water bucket. The one exception is the instant-churn guard: an intent
+   that ends in its first tick with no progress (instant-end?), instant-limit of them in a row
+   within instant-window-ms, counts as failed instead (:instant-churn, by fail-intent, so the
+   choice enters :plan/failures and the row must choose something else), and one
+   `instant-churn <kind> <target> xN` line is logged."
   [world i]
-  (-> world
-      (memory/remember-intention i :done)
-      (mark-ended i)
-      (assoc :plan/last i :plan/attempts 0 :plan/unwalkable 0)
-      (cond-> (progress? i) (assoc :plan/done-at (:time/now world 0)))
-      (cond-> (and (= :collect (:intent/kind i)) (= :log (:intent/for i))) (dissoc :plan/surfaced))
-      (dissoc :plan/intent)))
+  (let [n (when (instant-end? world i) (instant-count world i))]
+    (cond (and n (>= n instant-limit))
+          (-> world
+              (dissoc :plan/instant)
+              (game/say (str "instant-churn " (:intent/kind i) " " (:intent/target i) " x" n))
+              (fail-intent (assoc i :intent/status :failed :intent/reason :instant-churn)))
+          :else
+          (-> world
+              (memory/remember-intention i :done)
+              (mark-ended i)
+              (assoc :plan/last i :plan/attempts 0 :plan/unwalkable 0)
+              (cond-> (progress? i) (assoc :plan/done-at (:time/now world 0)))
+              (cond-> (and (= :collect (:intent/kind i)) (= :log (:intent/for i)))
+                      (dissoc :plan/surfaced))
+              (cond-> n
+                      (assoc :plan/instant
+                             (assoc (identity-of i) :instant/n n :instant/at (:time/now world 0))))
+              (cond-> (not n) (dissoc :plan/instant))
+              (dissoc :plan/intent)))))
 
 (def placing-kinds #{:place :redig})  ; intents whose target is a cell they chose to put a block in, not a place they failed to reach
 (def boxing-kinds #{:stairs-down :stairs-up :tunnel}) ; intents that die :boxed standing in a pocket, or under an overhang no stair up is cut through, which :plan/boxed-at remembers
@@ -830,7 +903,9 @@
         i (assoc i
                  :intent/plan (dissoc i :intent/status :intent/id :intent/plan)
                  :intent/status :active
-                 :intent/id n)]
+                 :intent/id n
+                 :intent/began-tick (:time/tick world 0))
+        i (cond-> i feet (assoc :intent/began-feet feet))]
     (-> world
         (assoc :plan/intents n :plan/intent i)
         (cond-> (and feet (not= feet (peek trail)))
