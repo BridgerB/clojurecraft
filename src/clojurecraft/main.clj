@@ -42,6 +42,7 @@
             [clojurecraft.observe]
             [clojurecraft.pearls]
             [clojurecraft.physics :as physics]
+            [clojurecraft.picks]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.record :as record]

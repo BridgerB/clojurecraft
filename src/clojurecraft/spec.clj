@@ -28,6 +28,7 @@
             [clojurecraft.path :as path]
             [clojurecraft.pearls :as pearls]
             [clojurecraft.physics :as physics]
+            [clojurecraft.picks]
             [clojurecraft.place :as place]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]

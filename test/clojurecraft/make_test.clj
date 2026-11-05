@@ -137,12 +137,12 @@
                               :fed? :dressed? :armoured? :health-seen? :safe? :cleared?
                               :provisioned? :armed? :geared? :regeared? :cooked? :rods-held?
                               :thrown? :frames-seen? :in-portal-room? :portal-lit? :in-end?
-                              :crystals-gone? :dragon-dead? :healed?}
+                              :crystals-gone? :dragon-dead? :healed? :spare-picks-stocked?}
                             (:goal/done? %))
                 (remove :goal/provides plan/targets)))
     (is (= #{:needs :escape :wade :build :return-nether :fortress :eat :wear :armour :watch :defend
              :attack :hunt :sword :gear :regear :cook :pearls :blaze-rods :eyes :throw :stronghold
-             :portal-room :end-portal :enter-end :crystals :dragon :heal}
+             :portal-room :end-portal :enter-end :crystals :dragon :heal :spare-picks}
            (set (keys (dissoc (methods plan/next-intent) :default)))))))
 
 (def kit (first (filter #(= :kit (:goal/id %)) plan/goals)))

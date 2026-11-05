@@ -38,6 +38,7 @@
             [clojurecraft.memory :as memory]
             [clojurecraft.mob :as mob]
             [clojurecraft.physics :as physics]
+            [clojurecraft.picks]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.scene :as scene]
