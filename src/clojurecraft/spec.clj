@@ -200,6 +200,13 @@
 (s/def :pearls/relocate (s/keys :req-un [:relocate/from :relocate/at :relocate/near]))
 (s/def :pearls/mouth ::block-pos)
 (s/def :pearls/refuge-done boolean?)
+(s/def :pearls/refuge-since int?)
+(s/def :chase/eid int?)
+(s/def :chase/fails nat-int?)
+(s/def :chase/since int?)
+(s/def :chase/counted int?)
+(s/def :pearls/chase
+  (s/keys :req-un [:chase/eid :chase/fails :chase/since] :opt-un [:chase/counted]))
 (s/def :throw/from ::vec3)
 (s/def :throw/dir (s/tuple double? double?))
 (s/def :throw/at int?)

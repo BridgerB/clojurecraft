@@ -64,6 +64,10 @@
   (edn/read-string (slurp (io/resource "clojurecraft/hunt.edn"))))
 
 (def hunt-radius 32.0)                ; blocks from the feet an enderman is hunted within
+(def sighting-radius 128.0)           ; blocks from the feet a tracked enderman sighting is gone toward: the server shows them that far, and every first sighting of the 2026-11-05 rod bots was 54 to 105 blocks off, past hunt-radius, so none ever became a hunt
+(def chase-max-fails 3)               ; failed goes toward one sighting after which it is given up (blacklisted) and the hunt goes on
+(def chase-giveup-ms 300000)          ; ms a sighting chase may go on at most before it is given up, however it is failing
+(def refuge-leave-ms 180000)          ; ms the blaze refuge may hold a full-health rod bot after the rods before the sealed exit goes anyway, watcher or not: #723's protection is the first minutes at the spawner, not the whole run at a spawner that never stops spawning
 (def seek-radius (:seek-radius thresholds)) ; blocks from the feet an enderman is walked toward, none nearer
 (def lookout-ms 5000)                 ; ms a :lookout stands turning before the plan looks again
 (def lookout-turn 0.09)               ; degrees of yaw a :lookout turns a ms: a full turn in four seconds
@@ -2364,6 +2368,36 @@
                 (>= (:player/health world 20.0) 20.0)
                 (not (:player/on-fire? world)))))
 
+(defn refuge-expired?
+  "Has the blaze refuge held this rod bot at full health for refuge-leave-ms or more since it
+   first kept it (:pearls/refuge-since, track-refuge)? Then the sealed exit goes anyway, even
+   with a blaze watching: the spawner refills watchers every spawn cycle, so the watcher gate
+   alone held sim rod bots at the pocket fighting and collecting for the whole horizon (22 of
+   52 sim timeouts on 0ace52e, TRACE :fight 21480, :collect-drops 21696). Full health only:
+   a hurt bot is never sent out, and never under danger health."
+  [world]
+  (boolean (and (:pearls/refuge-since world)
+                (>= (:player/health world 20.0) 20.0)
+                (>= (- (:time/now world 0) (:pearls/refuge-since world)) refuge-leave-ms))))
+
+(defn track-refuge
+  "The world with :pearls/refuge-since noted the first tick the refuge is in charge after the
+   rods, and :pearls/refuge-done set once it has expired (refuge-expired?), so the exit stays
+   handed over. Called from the :pearls steer every tick."
+  [world]
+  (cond (or (:pearls/refuge-done world) (not (pearls-stage? world))) world
+        (refuge-expired? world) (assoc world :pearls/refuge-done true)
+        (and (nil? (:pearls/refuge-since world))
+             (= dimension/nether (dimension/of world))
+             (blaze/nearest-spawner world)
+             (or (pocket/in? world)
+                 (fortress-escaping? world)
+                 (<= (physics/distance (:player/pos world)
+                                       (physics/centre (blaze/nearest-spawner world)))
+                     32.0)))
+        (assoc world :pearls/refuge-since (:time/now world 0))
+        :else world))
+
 (defn blaze-refuge
   "The blaze row's survival intent after the rods, or nil once it has handed over: while the
    pearl stage is in play in the Nether near the spawner and the bot has not yet been sealed
@@ -2379,6 +2413,7 @@
   (when (and (pearls-stage? world)
              (= dimension/nether (dimension/of world))
              (not (:pearls/refuge-done world))
+             (not (refuge-expired? world))
              (not (sealed-full? world))
              (blaze/nearest-spawner world)
              (or (pocket/in? world)
@@ -2592,6 +2627,135 @@
                 (or (dig-out world) (tunnel-out world) (climb-out world) (uncage world))
                 (or (climb-out world) (dig-out world) (uncage world))))]
     (cond-> w (= :walk (:intent/kind w)) (assoc :intent/for :relocate))))
+
+(defn distant-gave-up?
+  "Has sighting eid been given up: chase-max-fails failed goes toward it, or a chase of
+   chase-giveup-ms, recorded in :pearls/chase (track-distant)? A given-up sighting is
+   blacklisted by track-distant, so endermen leaves it out and the chase never churns."
+  [world eid]
+  (let [c (:pearls/chase world)]
+    (boolean (and c
+                  (= eid (:eid c))
+                  (or (>= (:fails c 0) chase-max-fails)
+                      (>= (- (:time/now world 0) (:since c 0)) chase-giveup-ms))))))
+
+(defn distant-sighting
+  "[eid entity] of the nearest tracked enderman beyond hunt-radius and within
+   sighting-radius, not given up on (distant-gave-up?), or nil. These are the sightings the
+   hunt never acted on: on 0ace52e every first sighting of 23 real rod bots was 54 to 105
+   blocks off, past hunt-radius 32, so endermen filtered it out before quarry or any fight
+   row could see it, and stare/provoke stayed 0 of 141."
+  [world]
+  (let [pos (:player/pos world)]
+    (->> (endermen world sighting-radius)
+         (filter (fn [[eid e]]
+                   (and (> (physics/distance pos (:entity/pos e)) hunt-radius)
+                        (not (distant-gave-up? world eid)))))
+         (sort-by (fn [[_ e]] (physics/distance pos (:entity/pos e))))
+         first)))
+
+(defn distant-stand
+  "A standable cell near enderman e from which the hunt can take over, or nil: within
+   hunt-radius of it (so the enderman is hunted once the bot stands there) and at least
+   stare-from away, a few blocks above or below its own level at most, not a cell a walk
+   failed toward (:plan/blacklist) or already arrived at, nearest the feet first and
+   vantage-tries at most, the first a route reaches (intent/routable?). Not the
+   enderman's own cell: a sighting 20 to 60 blocks above or below on another fortress or
+   terrain level is met from ground near it on its level, and the route, the stairs
+   (descend, ascend) and the tunnel close the rest once the bot is near on the plane."
+  [world e]
+  (let [feet (intent/feet world)
+        eye (game/eye world)
+        bl (:plan/blacklist world #{})
+        spent (memory/arrived world)
+        [ex ey ez] (cell (:entity/pos e))]
+    (->> (for [dx (range -16 17) dz (range -16 17) dy (range -3 4)] [(+ ex dx) (+ ey dy) (+ ez dz)])
+         (filter (fn [c]
+                   (let [d (physics/distance (physics/centre c) (:entity/pos e))]
+                     (and (<= stare-from d hunt-radius)
+                          (not (contains? bl c))
+                          (not (contains? spent c))
+                          (> (physics/distance eye (physics/centre c)) intent/reach)
+                          (standable? world c)))))
+         (sort-by #(physics/distance feet %))
+         (take vantage-tries)
+         (some (fn [c]
+                 (when (intent/routable? world
+                                         {:intent/kind :walk :intent/target c :intent/for :chase})
+                   c))))))
+
+(defn go-toward-sighting
+  "The go toward the nearest distant sighting (sighting), or nil: only out of the fortress
+   (not fortress-escaping?), with no burrow held (shelter), safe (health over danger-health,
+   no blaze watching (blaze/watchers)), and never under danger health. A walk to a reachable
+   stand near it (distant-stand); with none reachable, a walk as far as the route goes
+   toward it (toward); with no route gaining either, a sealed level tunnel toward its
+   ground (a :tunnel-to at the feet's height, no-down, seal-behind, as the fortress exit
+   bores) when a pickaxe is held, it stands on this level (level?) and farther than
+   bore-length on the plane. The hunt asks it only after its own rows (the burrow, the
+   stairs toward one above or below, the relocation, the dig-out) have had their say, and
+   the pearl stage asks it directly as its fallback (pearl-fallback).
+   Tagged :intent/for :chase with :intent/chase-eid, so track-distant counts its failures
+   and gives the sighting up after chase-max-fails of them."
+  [world]
+  (when (and (not (fortress-escaping? world))
+             (nil? (shelter world))
+             (>= (:player/health world 20.0) danger-health)
+             (empty? (blaze/watchers world)))
+    (when-let [[eid e] (distant-sighting world)]
+      (let [feet (intent/feet world)
+            tag (fn [i] (assoc i :intent/for :chase :intent/chase-eid eid))]
+        (or (when-let [c (distant-stand world e)] (tag {:intent/kind :walk :intent/target c}))
+            (when-let [i (toward world {eid e})] (tag i))
+            (when (and (pickaxe? world)
+                       (level? world e)
+                       (> (path/octile feet (cell (:entity/pos e))) bore-length))
+              (tag {:intent/kind :tunnel-to
+                    :intent/target [(first (cell (:entity/pos e))) (second feet)
+                                    (nth (cell (:entity/pos e)) 2)]
+                    :intent/reach 1.5
+                    :intent/climb 0
+                    :intent/no-down? true
+                    :intent/seal-behind? true})))))))
+
+(defn track-distant
+  "The world with :pearls/chase kept for the running sighting chase: a new chase intent for
+   another enderman starts it, a failed chase intent (:plan/failed, for :chase, not yet
+   counted) adds a failure, and a given-up sighting (distant-gave-up?) joins :plan/blacklist
+   so it is never chased again. Called from the :pearls steer every tick."
+  [world]
+  (let [i (:plan/intent world)
+        f (:plan/failed world)
+        c (:pearls/chase world)
+        eid (when (and i (= :chase (:intent/for i))) (:intent/chase-eid i))
+        world (cond (and eid (not= eid (:eid c)))
+                    (assoc world :pearls/chase {:eid eid :fails 0 :since (:time/now world 0)})
+                    (and f
+                         (= :chase (:intent/for f))
+                         (:intent/chase-eid f)
+                         (not= (:intent/id f) (:counted c))
+                         (= (:intent/chase-eid f) (:eid c)))
+                    (assoc world
+                           :pearls/chase
+                           (assoc c :fails (inc (:fails c 0)) :counted (:intent/id f)))
+                    :else world)
+        c2 (:pearls/chase world)]
+    (if (and c2 (distant-gave-up? world (:eid c2)))
+      (-> world
+          (update :plan/blacklist (fnil conj #{}) (:eid c2))
+          (dissoc :pearls/chase))
+      world)))
+
+(defn pearl-fallback
+  "The pearl stage's fallback when every hunt row is nil, so a safe bot never idles into
+   :nothing-to-do (42 of 141 real rod bots on 0ace52e): the go toward the nearest
+   remembered sighting (chase), else the forest search or exit the bot already has
+   (travel, explore), else a lookout. Never a planner wait with nothing pending."
+  [world]
+  (or (go-toward-sighting world)
+      (travel world)
+      (explore world)
+      {:intent/kind :lookout :intent/for :pearls}))
 
 (defn hunt
   "The hunt's next step with no kill to pick up, in order: out of the burrow (shelter) with one
@@ -2888,6 +3052,7 @@
                 (when-not overworld-death? (dig-out world))
                 (when (stuck? world) (uncage world))))
           (when (wandering? world) (wander world))
+          (go-toward-sighting world)
           {:intent/kind :lookout :intent/for :pearls}))))
 
 (defn look-off
@@ -3000,8 +3165,10 @@
         world (if (pearls-stage? world)
                 (plan/steer world (first (filter #(= :blaze-rods (:goal/id %)) plan/goals)))
                 world)
-        world (cond-> (relocation (track-gain (track-angry (uncovered-log (fortress-exit-log
-                                                                           world)))))
+        world (cond-> (track-distant (track-refuge (relocation (track-gain (track-angry
+                                                                            (uncovered-log
+                                                                             (fortress-exit-log
+                                                                              world)))))))
                 (shot-at? world) (assoc :pearls/shot-at-ms (:time/now world 0))
                 (sealed-full? world) (assoc :pearls/refuge-done true))]
     (cond (or (nil? look)
@@ -3349,4 +3516,4 @@
           (and seek-wood (worn-out? world) (nil? (shelter world)) (not (menaced? world))) seek-wood
           (and (worn-out? world) (nil? (shelter world)) (not (menaced? world)))
           {:plan/wait :no-pickaxe}
-          :else (hunt world))))
+          :else (or (hunt world) (pearl-fallback world)))))
