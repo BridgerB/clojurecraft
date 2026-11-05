@@ -2403,8 +2403,14 @@
             (blaze/meal world)
             {:intent/kind :pocket-hold :intent/heal-to 20.0})
         ;; out of the pocket at full health and unwatched, the bore goes on from where
-        ;; the bot stands (pocket-bore); hurt, burning or watched, the refuge comes first
-        (when (or (< (:player/health world 20.0) 20.0) (blaze/refuge-needed? world))
+        ;; the bot stands (pocket-bore); hurt, burning or watched, the refuge comes first.
+        ;; Watched alone counts, at full health too: the rod-7 bots of the 2026-11-04
+        ;; races arrived at the seventh rod at 15 to 20 health with blazes in sight and
+        ;; the hunt bored out in their sight, was shot, and only then was sent back,
+        ;; the pocket-go and the bore cutting each other until the blazes finished it
+        (when (or (< (:player/health world 20.0) 20.0)
+                  (blaze/refuge-needed? world)
+                  (seq (blaze/watchers world)))
           (or (blaze/commit-fight world)
               (blaze/refuge-now world sp)
               (blaze/pocket-go world sp false)

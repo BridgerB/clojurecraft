@@ -223,8 +223,11 @@
    a rim over a gap (:footing, issue #105: a walk that ended near it ended on the rim) and a drop
    lying in a pit under the floor (:rod, issue #500: only the feet in its cell are in the pickup
    box) and the cell out of a fire (:fire-out, blaze-race-k race 1: a walk to a cell two off, in
-   reach of the eye, ended in its first tick standing in the fire, ×190 in 9.5 s, 30 in_fire hits)."
-  #{:build :shelter :cover :fight :retreat :over-stone :footing :rod :fire-out})
+   reach of the eye, ended in its first tick standing in the fire, ×190 in 9.5 s, 30 in_fire hits)
+   and the blaze nook (:nook, issue #262: blaze/at-nook? counts only the exact cell, so a walk
+   that ended within reach beside it was chosen again every tick and failed :instant-churn;
+   Clj_r98, Clj_r56 and Clj_r62 of the 2026-11-04 races carry that failure at the spawner)."
+  #{:build :shelter :cover :fight :retreat :over-stone :footing :rod :fire-out :nook})
 
 (defn walk-goal
   "Where a walk's route may end: for a block mined from beside (:intent/pickup?), any cell
