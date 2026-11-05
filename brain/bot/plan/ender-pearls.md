@@ -8,6 +8,13 @@ status: verified
 lastUpdated: 2026-11-02
 verifiedAgainst: HEAD
 sourceRefs:
+  - src/clojurecraft/picks.clj#defn serviceable-pick?
+  - src/clojurecraft/picks.clj#defn serviceable-count
+  - src/clojurecraft/picks.clj#defn pending?
+  - "resources/clojurecraft/goals.edn#{:goal/id :spare-picks"
+  - test/clojurecraft/picks_test.clj#a-rod-bot-sealed-in-fortress-makes-spare-pickaxes-to-hold-three
+  - test/clojurecraft/picks_test.clj#drops-one-junk-stack-when-sealed-with-36-slots-full
+  - test/clojurecraft/picks_test.clj#a-sim-pass-makes-the-pickaxes
   - src/clojurecraft/pearls.clj#defn fortress-tunnel-out
   - src/clojurecraft/pearls.clj#defn fortress-tunnel-target
   - src/clojurecraft/pearls.clj#defn fortress-retrace-target
@@ -304,6 +311,8 @@ The model's enderman (`mob/kinds`) is neutral until stared at (`sim/provoke`, fr
 - On 50a9063 (#715), vertical descent through fortress floors breached 1-block thin floors suspended over the y=32 lava ocean, dropping bots into the lava sea (sim R1-3-2 at [2471 33 2189], R4-1-2 at [2493 32 2167]). Furthermore, measuring 36 rod bots across runs since #704 revealed that inbound trails are mostly open (16/36 bots 0.0% dug cells, overall average only 28.4% dug cells vs 71.6% open corridors and bridges), explaining why walking raw inbound trails failed (#685, #704). The exit now removes vertical descent to under-y as the default, retracing the inbound trail only through enclosed cells (solid overhead and walled on both sides). Where the trail crosses open corridor or bridge, `fortress-tunnel-target` bores a parallel 1x2 tunnel through adjacent netherrack or brick beside it at the same y level (`side-bore-cell`), and `fortress-tunnel-out` enforces `:intent/no-down? true` (`dy >= 0`), guaranteeing bots never dig down through floors into the lava sea below.
 
 First minute after the rods (issue #263): the goal flips from `:blaze-rods` to `:ender-pearls` the tick the seventh rod is held, usually out of the pocket grabbing a rod, hurt and watched, and the hunt has none of the blaze row's refuge, seal, fight or yield logic — rod bots died at the spawner within a minute, 1.4 to 2.8 blocks from the rod. `pearls/blaze-refuge` now keeps the blaze row in charge (reused, not copied: `blaze/commit-fight`, `blaze/refuge-now`, `blaze/pocket-go`, `blaze/here-intent`, `blaze/hold-intent`) until the bot is sealed in its pocket at full health (`pearls/sealed-full?`, noted as `:pearls/refuge-done` by the `:pearls` steer), and only then does the pocket bore take over; a bare `:dig` also equips a pickaxe held only in the main inventory first (`intent/run :dig`, a child `:equip` of `intent/stowed-breaker`), so no dig runs by hand while a pickaxe is held.
+
+Spare pickaxes before leaving the fortress (issue #263): before a rod bot leaves the fortress, while sealed and safe in its pocket after the blaze rods, it makes spare stone pickaxes so it holds three, using its carried crafting table, sticks and cobblestone (`clojurecraft.picks`, `:spare-picks` always row at priority 18, `picks/pending?`). The race bot starts with only one stone pickaxe (131 digs); boring to the warped forest wore it out completely (real race bot Clj_r22, run 41936905595), leaving the bot digging netherrack bare-handed at 6250 ms a block with no pickaxe for burrows. The row places the carried table, crafts stone pickaxes to three, takes the placed table along into inventory, and drops one junk stack when sealed if all 36 slots are full (`picks/room-needed?`) so a pearl drop has room to be picked up. During the hunt, whenever the bot is safe and down to one pickaxe with materials, it remakes pickaxes to three again. It never runs while a blaze is in sight or under danger health, stepping aside so defence, refuge and meals take precedence.
 
 ## See also
 - [[survival]] - the fight, the armour and the sword this hunt uses.

@@ -380,6 +380,16 @@
   :goal/dimension "minecraft:the_nether"
   :goal/done? :rods-held?
   :goal/plan :blaze-rods}
+ {:goal/id :spare-picks
+  :goal/priority 18
+  :goal/target? true
+  :goal/always? true
+  :goal/until "spare-picks"
+  :goal/dimension "minecraft:the_nether"
+  :goal/doc
+  "three stone pickaxes held before leaving the fortress after the blaze rods (issue #263): made from carried cobblestone, sticks and table when sealed and safe; made again whenever safe and down to one pickaxe with the materials, and drops one junk stack when sealed so a pearl drop has room; an always row at the blaze rods' priority"
+  :goal/done? :spare-picks-stocked?
+  :goal/plan :spare-picks}
  {:goal/id :ender-pearls
   :goal/priority 19
   :goal/target? true
