@@ -2524,7 +2524,8 @@
             {:intent/kind :pocket-hold :intent/heal-to 20.0})
         :else
         (or (when (and sp (can-break-spawner? world sp))
-              (cond (spawner-in-dig-reach? world sp) (spawner-break-intent world sp)
+              (cond (and (spawner-in-dig-reach? world sp) (spawner-line-clear? world sp))
+                    (spawner-break-intent world sp)
                     (spawner-short-route world sp)
                     {:intent/kind :walk :intent/target sp :intent/for :break-spawner}))
             ;; out of the pocket at full health and unwatched, the bore goes on from where

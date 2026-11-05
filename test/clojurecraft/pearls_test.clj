@@ -4039,8 +4039,8 @@
                         :intent/still 0}
         generic-intent
         {:intent/kind :dig :intent/stage :settle :intent/target sp :intent/since 0 :intent/still 0}
-        after-spawner (intent/dig-stage w spawner-intent)
-        after-generic (intent/dig-stage w generic-intent)]
+        after-spawner (intent/dig-stage (assoc w :plan/intent spawner-intent) spawner-intent)
+        after-generic (intent/dig-stage (assoc w :plan/intent generic-intent) generic-intent)]
     (is (= :digging (get-in after-spawner [:plan/intent :intent/stage]))
         "break-spawner starts digging after settle-ms without waiting 2000ms")
     (is (= :settle (get-in after-generic [:plan/intent :intent/stage]))
@@ -4155,33 +4155,47 @@
   ;; Before the bot leaves its pocket at full health, if the spawner is in dig reach
   ;; with a clear line of sight, it breaks it first. If blocked by a wall or out of reach,
   ;; it leaves without breaking.
-  (let [sp [8 65 10]
+  (let [netherrack (blocks/default-state :netherrack)
         spawner-block (blocks/default-state :spawner)
-        pocket-cell [8 64 8]
-        base-w (-> (standing {} {[8 65 10] spawner-block})
-                   (assoc :player/dimension "minecraft:the_nether"
-                          :player/pos [8.5 64.0 8.5]
-                          :player/health 20.0
-                          :pocket/site {:pocket/cell pocket-cell}
-                          :plan/status :active
-                          :plan/goals #{:ender-pearls}
-                          :plan/reached #{:blaze-rods}
-                          :plan/active [row])
-                   (assoc-in [:player/inventory 1] (item :iron_pickaxe 1))
-                   (assoc-in [:player/inventory 2] (item :blaze_rod 7))
-                   (memory/observe sp blaze/spawner))]
+        floor (into {} (for [x (range 7 10) z (range 7 11)] [[x 63 z] netherrack]))
+        roof (into {} (for [x (range 7 10) z (range 7 11)] [[x 66 z] netherrack]))
+        pocket-walls (into {}
+                           (concat (for [y [64 65] z (range 7 10)] [[7 y z] netherrack])
+                                   (for [y [64 65] z (range 7 10)] [[9 y z] netherrack])
+                                   (for [y [64 65]] [[8 y 7] netherrack])))
+        make-w (fn [blocks sp]
+                 (-> (standing {} (merge floor roof pocket-walls blocks))
+                     (assoc :player/dimension "minecraft:the_nether"
+                            :player/pos [8.5 64.0 8.5]
+                            :player/health 20.0
+                            :player/food 20
+                            :pocket/site
+                            {:pocket/cell [8 64 8]
+                             :pocket/stand nil
+                             :pocket/dig []
+                             :pocket/placed [[8 64 9] [8 65 9]]}
+                            :plan/status :active
+                            :plan/goals #{:ender-pearls}
+                            :plan/reached #{:blaze-rods}
+                            :plan/active [row])
+                     (assoc-in [:player/inventory 1] (item :iron_pickaxe 1))
+                     (assoc-in [:player/inventory 2] (item :blaze_rod 7))
+                     (memory/observe sp blaze/spawner)))]
     (testing "sealed at full health with clear line of sight: breaks spawner first"
-      (let [w base-w]
+      ;; Spawner is right at [8 65 9] (the pocket wall/seal itself), in reach with clear line of sight
+      (let [sp [8 65 9]
+            w (make-w {[8 64 9] netherrack [8 65 9] spawner-block} sp)]
+        (is (pearls/sealed-full? w))
         (is (pearls/pocket-can-break-spawner? w sp))
         (let [i (pearls/blaze-refuge w)]
           (is (= :dig (:intent/kind i)))
           (is (= sp (:intent/target i)))
           (is (= :break-spawner (:intent/for i))))))
     (testing "sealed at full health with wall blocking line of sight: leaves without breaking"
-      ;; Put a solid stone block at [8 65 9] directly between eye [8.5 65.62 8.5] and sp [8 65 10]
-      (let [walled-w (assoc-in base-w
-                      [:world/chunks [0 0]]
-                      (world/column {[8 65 9] stone [8 65 10] spawner-block}))]
+      ;; Spawner is at [8 65 10], with solid wall at [8 65 9] blocking line of sight
+      (let [sp [8 65 10]
+            walled-w (make-w {[8 64 9] netherrack [8 65 9] netherrack [8 65 10] spawner-block} sp)]
+        (is (pearls/sealed-full? walled-w))
         (is (not (pearls/spawner-line-clear? walled-w sp)) "wall blocks line of sight")
         (is (not (pearls/pocket-can-break-spawner? walled-w sp)))
         ;; blaze-refuge returns nil when sealed-full and cannot break spawner
@@ -4192,7 +4206,7 @@
   ;; intent/dig-stage :confirm emits spawner-broken and sets :pearls/spawner-broken-logged.
   (let [sp [8 65 10]
         spawner-block (blocks/default-state :spawner)
-        w (-> (standing {} {sp spawner-block})
+        w (-> (standing {} {sp blocks/air})
               (assoc :stats/last-ack 5))
         intent {:intent/stage :confirm
                 :intent/target sp
