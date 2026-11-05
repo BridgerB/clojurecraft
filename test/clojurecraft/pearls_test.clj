@@ -3772,6 +3772,39 @@
     (is (= [10 77 4] (pearls/pocket-bore-target w)) "side-step target south at the same y")
     (is (= 77 (second (pearls/pocket-bore-target w))) "never a target below the feet")))
 
+(deftest a-bore-with-no-enclosed-step-ahead-or-beside-bores-back-through-rock
+  ;; Logged state, probe 41914633411 R1/32 seed 1: sealed at full health, then the
+  ;; feet stayed at [-40 69 220] from t 570 s to 810 s on :tunnel-to [-43 69 220]
+  ;; until blazes killed the bot. A pocket beside a fortress room has air beside
+  ;; its heading and both side steps; the step back through solid rock is legal.
+  (let [netherrack (blocks/default-state :netherrack)
+        rock (into {} (for [x (range 0 16) y [75 76 77 78 79] z (range 0 16)] [[x y z] netherrack]))
+        air (blocks/default-state :air)
+        carved (into rock [[[11 77 7] air] [[11 78 7] air] [[10 77 10] air] [[10 77 6] air]])
+        w (-> (standing {} carved)
+              (assoc :player/dimension "minecraft:the_nether" :player/pos [10.5 77.0 8.5])
+              (assoc-in [:player/inventory 1] (item :iron_pickaxe 1))
+              (memory/observe [12 76 10] blaze/spawner)
+              (assoc :plan/trail [[14 77 8] [10 77 8]]))]
+    (is (= [1 0] (pearls/pocket-bore-heading w)) "heading east, toward the trail start")
+    (is (not (pearls/pocket-bore-enclosed? w [10 77 8] [1 0])) "ahead borders the room")
+    (is (= [6 77 8] (pearls/pocket-bore-target w)) "bores back west through rock, not a hold")
+    (is (= 77 (second (pearls/pocket-bore-target w))) "never a target below the feet")))
+
+(deftest a-blacklisted-bore-target-is-passed-over-for-the-next-enclosed-heading
+  ;; #719's guard blacklists a :tunnel-to target on :instant-churn/:blocked; the
+  ;; bore must not be ruled out by its own blacklisted step (probe 41914633411).
+  (let [netherrack (blocks/default-state :netherrack)
+        rock (into {} (for [x (range 0 16) y [75 76 77 78 79] z (range 0 16)] [[x y z] netherrack]))
+        w (-> (standing {} rock)
+              (assoc :player/dimension "minecraft:the_nether" :player/pos [10.5 77.0 8.5])
+              (assoc-in [:player/inventory 1] (item :iron_pickaxe 1))
+              (memory/observe [12 76 10] blaze/spawner)
+              (assoc :plan/trail [[2 77 10] [10 77 8]])
+              (assoc :plan/blacklist #{[6 77 8]}))]
+    (is (= [10 77 4] (pearls/pocket-bore-target w))
+        "the west target blacklisted, the enclosed south side-step is chosen")))
+
 (deftest a-rod-bot-seals-and-heals-in-its-pocket-before-boring-out
   ;; Logged states: Clj_r36 (run 41852247420 s1) dug in the blazes' sight from hp 20 to 8
   ;; and died 4 blocks from the rods; Clj_r12 and Clj_r13 (s2) died seconds after
@@ -3844,6 +3877,40 @@
         (is (contains? #{:pocket :seal :eat :pocket-hold} (:intent/kind i))
             (str "the blaze refuge or its meal, not the hunt: " (pr-str i)))
         (is (not= :tunnel-to (:intent/kind i)))))))
+
+(deftest a-bore-in-its-open-pocket-strikes-a-blaze-in-reach-instead-of-holding
+  ;; Logged state, probe 41914679195 R3/10 seed 1: after the rods the bot held
+  ;; :pocket-hold at hp 13.8 down to 0 with a blaze on it, its seal never laid.
+  ;; In the open pocket a blaze within the sword's reach is struck first.
+  (let [netherrack (blocks/default-state :netherrack)
+        floor (into {} (for [x (range 0 17) z (range 0 17)] [[x 63 z] netherrack]))
+        roof (into {} (for [x (range 0 17) z (range 0 17)] [[x 66 z] netherrack]))
+        walls (into {}
+                    (concat (for [y [64 65] z (range 0 17)] [[7 y z] netherrack])
+                            (for [y [64 65] z (range 0 17)] [[9 y z] netherrack])
+                            (for [y [64 65]] [[8 y 7] netherrack])))
+        blaze {:entity/type (blocks/entity-types :blaze)
+               :entity/pos [8.5 64.0 10.5]
+               :entity/seen-at 0
+               :entity/health 20.0}
+        w (-> (standing {99 blaze} (merge floor roof walls))
+              (assoc :player/dimension "minecraft:the_nether"
+                     :player/pos [8.5 64.0 8.5]
+                     :player/health 14.0
+                     :plan/status :active
+                     :plan/goals #{:ender-pearls}
+                     :plan/reached #{:blaze-rods}
+                     :plan/active [row]
+                     :pocket/site
+                     {:pocket/cell [8 64 8] :pocket/stand nil :pocket/dig [] :pocket/placed []})
+              (memory/observe [8 70 3] blaze/spawner)
+              (update :player/inventory assoc
+                      1 (item :cooked_beef 12)
+                      2 (item :cobblestone 64)
+                      3 (item :iron_pickaxe 1)))
+        bore (pearls/pocket-bore w)]
+    (is (= :fight (:intent/kind bore)) "strikes the blaze in reach, never holds under it")
+    (is (= 99 (:intent/target bore)))))
 
 (deftest fortress-exit-never-steps-or-digs-down
   ;; On #715, downward tunnel moves through a 1-block fortress floor dropped bots into
