@@ -2691,7 +2691,10 @@
    stand near it (distant-stand); with none reachable, a walk as far as the route goes
    toward it (toward); with no route gaining either, a sealed level tunnel toward its
    ground (a :tunnel-to at the feet's height, no-down, seal-behind, as the fortress exit
-   bores) when a pickaxe is held and it stands farther than bore-length on the plane.
+   bores) when a pickaxe is held, it stands on this level (level?) and farther than
+   bore-length on the plane. The hunt asks it only after its own rows (the burrow, the
+   stairs toward one above or below, the relocation, the dig-out) have had their say, and
+   the pearl stage asks it directly as its fallback (pearl-fallback).
    Tagged :intent/for :chase with :intent/chase-eid, so track-distant counts its failures
    and gives the sighting up after chase-max-fails of them."
   [world]
@@ -2704,7 +2707,9 @@
             tag (fn [i] (assoc i :intent/for :chase :intent/chase-eid eid))]
         (or (when-let [c (distant-stand world e)] (tag {:intent/kind :walk :intent/target c}))
             (when-let [i (toward world {eid e})] (tag i))
-            (when (and (pickaxe? world) (> (path/octile feet (cell (:entity/pos e))) bore-length))
+            (when (and (pickaxe? world)
+                       (level? world e)
+                       (> (path/octile feet (cell (:entity/pos e))) bore-length))
               (tag {:intent/kind :tunnel-to
                     :intent/target [(first (cell (:entity/pos e))) (second feet)
                                     (nth (cell (:entity/pos e)) 2)]
@@ -2896,7 +2901,6 @@
         mouth (:pearls/mouth world)
         way-home {:intent/kind :walk :intent/target home :intent/for :shelter}
         mouth-walk (delay (shelter-walk world mouth))
-        chase-walk (delay (when (and (not hurt?) (not swarmed?)) (go-toward-sighting world)))
         travel-walk (delay (when (and (not hurt?)
                                       (not swarmed?)
                                       (not (recently-shot? world))
@@ -2991,7 +2995,6 @@
       (and in? aid (not (lured-out? world)) (lure? world) @mouth-walk) @mouth-walk
       (and in? (or aid (angry-within? world hold-radius)))
       {:intent/kind :lookout :intent/for :pearls}
-      @chase-walk @chase-walk
       @travel-walk @travel-walk
       @relocate-now @relocate-now
       @wander-walk @wander-walk
