@@ -319,6 +319,12 @@
    [:pearls/refuge-done
     "true once the bot, after the rods, was sealed in its blaze pocket at full health and the fortress exit was handed to the pocket bore (pearls/sealed-full?, noted by the :pearls steer): the blaze refuge no longer pulls it back"
     "every tick a pearl hunt runs (plan/steer), once it holds"]
+   [:pearls/refuge-since
+    "ms the blaze refuge first kept the pearl hunt after the rods (pearls/track-refuge, in plan/steer): after refuge-leave-ms at full health the refuge hands the exit over even with a blaze watching, so a spawner that never stops spawning cannot hold the bot for the run"
+    "every tick a pearl hunt runs (plan/steer), while the refuge is in charge"]
+   [:pearls/chase
+    "{:eid id :fails n :since ms :counted intent id} of the distant enderman sighting the hunt is going toward (pearls/go-toward-sighting, kept by pearls/track-distant in plan/steer): after chase-max-fails failed goes or chase-giveup-ms it is given up and blacklisted, so the chase never churns"
+    "while a sighting chase goes on (plan/steer)"]
    [:stronghold/throws
     "every eye of ender thrown and followed, oldest first: {:throw/from :throw/dir :throw/at}; two from places apart cross at the stronghold (stronghold/triangulate, issue #265)"
     "after the first throw"]

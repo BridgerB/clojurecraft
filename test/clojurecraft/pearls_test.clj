@@ -4008,5 +4008,104 @@
         (is (nil? (pearls/fortress-retrace-target w2))
             "the far fallback in fortress-tunnel-target takes over instead")))))
 
+(defn distant-world
+  "A bot on a loaded stone floor with chunks east loaded, an enderman at pos, logged-state
+   style: the 2026-11-05 rod bots' first sightings were 54 to 105 blocks off."
+  [pos]
+  (let [w (standing {7 (enderman pos)})]
+    (reduce (fn [w cx] (assoc-in w [:world/chunks [cx 0]] (world/column {}))) w (range 1 6))))
+
+(deftest a-distant-sighting-is-gone-toward-until-in-hunt-range
+  ;; race-read 1105b Q1: 23 of 141 real rod bots saw an enderman, every first sighting
+  ;; 53.9 to 104.8 blocks off, past hunt-radius 32, so endermen filtered it out and
+  ;; stare/provoke stayed 0. A safe bot out of the fortress goes toward the sighting.
+  (let [w (distant-world [64.5 64.0 8.5])
+        i (pearls/go-toward-sighting w)]
+    (is (= 7 (first (pearls/distant-sighting w))) "56 blocks off is a sighting, past hunt-radius")
+    (is (= :walk (:intent/kind i)))
+    (is (= :chase (:intent/for i)))
+    (is (= 7 (:intent/chase-eid i)))
+    (is (not= [64 64 8] (:intent/target i)) "to a stand near it, never its own cell")
+    (is (<= (physics/distance (physics/centre (:intent/target i)) [64.5 64.0 8.5])
+            pearls/hunt-radius)
+        "the stand leaves it within hunt range")
+    (testing "on another level, 40 blocks above: a go at the bot's level, not its cell"
+      (let [high (distant-world [40.5 104.0 8.5])
+            hi (pearls/go-toward-sighting high)]
+        (is (some? hi))
+        (is (contains? #{:walk :tunnel-to} (:intent/kind hi)))
+        (is (not= [40 104 8] (:intent/target hi)))
+        (when (= :walk (:intent/kind hi))
+          (is (= 64 (second (:intent/target hi)))
+              "the walk stays on ground the bot can stand on"))))
+    (testing "never under danger health, and never with a blaze watching"
+      (is (nil? (pearls/go-toward-sighting (assoc w :player/health 8.0))))
+      (let [watched (assoc w
+                           :world/entities
+                           {7 (enderman [64.5 64.0 8.5])
+                            9 {:entity/type (blocks/entity-types :blaze)
+                               :entity/pos [12.5 65.0 8.5]
+                               :entity/seen-at 0
+                               :entity/health 20.0}})]
+        (is (nil? (pearls/go-toward-sighting watched)))))
+    (testing "given up after bounded failures, and blacklisted so it never churns"
+      (let [gave (assoc w :pearls/chase {:eid 7 :fails pearls/chase-max-fails :since 0})]
+        (is (pearls/distant-gave-up? gave 7))
+        (is (nil? (pearls/distant-sighting gave)))
+        (is (nil? (pearls/go-toward-sighting gave)))
+        (let [tracked (pearls/track-distant gave)]
+          (is (contains? (:plan/blacklist tracked) 7))
+          (is (nil? (:pearls/chase tracked))))))))
+
+(deftest the-pearl-fallback-never-waits-with-nothing-pending
+  ;; race-read 1105b Q3: 42 of 141 real rod bots ended [:ender-pearls :nothing-to-do]
+  ;; with time and health left, because every hunt row was nil and there was no fallback.
+  (let [distant (distant-world [64.5 64.0 8.5])]
+    (is (= (pearls/go-toward-sighting distant) (pearls/pearl-fallback distant))
+        "the fallback first goes toward the remembered sighting")
+    (let [empty (standing {})
+          f (pearls/pearl-fallback empty)]
+      (is (some? f) "with no sighting, the forest search or a lookout, never nil")
+      (is (contains? #{:walk :lookout} (:intent/kind f)))
+      (is (nil? (:plan/wait f)) "never a wait with nothing pending"))
+    (is (some? (plan/next-intent (standing {}) row plan/goals))
+        "the pearl stage always has a next intent")))
+
+(deftest the-refuge-hands-the-exit-over-after-minutes-at-full-health
+  ;; race-read 1105b Q2: 22 of 52 sim rod bots timed out at the spawner pocket, fighting
+  ;; and collecting for hours (TRACE :fight 21480, :collect-drops 21696), because #723's
+  ;; watcher gate keeps the refuge in charge while a blaze watches and the spawner never
+  ;; stops making them. The first minutes stay protected; the hold is bounded.
+  (let [blaze-e {:entity/type (blocks/entity-types :blaze)
+                 :entity/pos [13.5 65.0 8.5]
+                 :entity/seen-at 0
+                 :entity/health 20.0}
+        w (-> (standing {9 blaze-e})
+              (assoc :player/dimension "minecraft:the_nether"
+                     :player/pos [11.5 64.0 8.5]
+                     :player/health 20.0
+                     :plan/goals #{:ender-pearls}
+                     :plan/reached #{:blaze-rods}
+                     :time/now 0)
+              (memory/observe [8 70 3] blaze/spawner))]
+    (testing "the first minutes after rod 7: the refuge still answers, watched"
+      (let [early (assoc w :pearls/refuge-since 0 :time/now (dec pearls/refuge-leave-ms))]
+        (is (not (pearls/refuge-expired? early)))
+        (is (some? (pearls/blaze-refuge early)))))
+    (testing "after refuge-leave-ms at full health, even watched, it leaves"
+      (let [late (assoc w :pearls/refuge-since 0 :time/now pearls/refuge-leave-ms)]
+        (is (pearls/refuge-expired? late))
+        (is (nil? (pearls/blaze-refuge late)) "no refuge intent: the sealed exit takes over")
+        (is (true? (:pearls/refuge-done (pearls/track-refuge late)))
+            "and the hand-over sticks in the steer")))
+    (testing "never at danger health: a hurt bot is not sent out"
+      (let [hurt (assoc w
+                        :player/health 8.0
+                        :pearls/refuge-since 0
+                        :time/now (* 10 pearls/refuge-leave-ms))]
+        (is (not (pearls/refuge-expired? hurt)))))
+    (testing "the steer notes when the refuge first kept the bot"
+      (is (= 0 (:pearls/refuge-since (pearls/track-refuge (assoc w :time/now 0))))))))
+
 
 
