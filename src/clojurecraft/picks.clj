@@ -88,11 +88,22 @@
   (boolean (and (zero? (long (get (make/counts world) :crafting_table 0)))
                 (make/near world :crafting_table))))
 
+(defn table-room?
+  "Is there room in the bag for the table to come back: a slot free, or a junk stack to throw
+   (window/reserve-slot)? With neither, a table drop is never picked up: on 0ace52e 41 of 42
+   :nothing-to-do rod bots ended in `:collect-drops :for :take-table` failing :not-picked-up
+   every tick, 36 of 36 slots used, until the run's end."
+  [world]
+  (boolean (or (pos? (long (window/free-count world))) (some? (window/reserve-slot world 1)))))
+
 (defn table-needed?
-  "Is the crafting table placed near, dropped, or being collected, not yet held in the bag?"
+  "Is the crafting table placed near, dropped, or being collected, not yet held in the bag, with
+   room for it to come back (table-room?)? Without room the table is left: the row never waits on
+   a pickup that cannot happen."
   [world]
   (boolean
    (and (zero? (long (get (make/counts world) :crafting_table 0)))
+        (table-room? world)
         (or (make/near world :crafting_table)
             (= :take-table (:intent/for (:plan/intent world)))
             (= :take-table (:intent/for (:plan/last world)))
@@ -150,6 +161,10 @@
     (or
      ;; 1. Toss 1 junk stack if sealed and all 36 slots are used (room for pearl)
      (when (room-needed? world) (window/reserve-toss world 1))
+     ;; 1b. The table is to come back and no slot is free: throw a junk stack first, so the
+     ;; pickup can happen (a full bag left it lying and the collect failing every tick)
+     (when (and (table-needed? world) (zero? (long (window/free-count world))))
+       (window/reserve-toss world 1))
      ;; 2. In-flight table pickup
      (intent/chain-next (:plan/last world) :take-table make/table-drops {})
      ;; 3. Craft pickaxes up to target-picks (3)

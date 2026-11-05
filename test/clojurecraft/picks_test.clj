@@ -139,6 +139,36 @@
           (is (not= (recipe/item-id :cooked_beef) (:item (get full-inv toss-slot))))
           (is (not= (recipe/item-id :stone_pickaxe) (:item (get full-inv toss-slot)))))))))
 
+(deftest throws-junk-so-the-table-comes-back-to-a-full-bag
+  ;; 0ace52e lane 42024297742 s1 Clj_r22: 36 of 36 slots used after the pickaxes were made, the
+  ;; table lying at its feet, :collect-drops :for :take-table failing :not-picked-up every tick
+  ;; until :nothing-to-do (41 of 42 such endings on that commit)
+  (let [table-id (blocks/default-state :crafting_table)
+        full-inv (into {}
+                       (map vector
+                            (range 36)
+                            (concat [(item :blaze_rod 7) (item :stone_pickaxe 1)
+                                     (item :stone_pickaxe 1) (item :stone_pickaxe 1) (item :stick 8)
+                                     (item :cooked_beef 16) (item :iron_sword 1)]
+                                    (repeat 28 (item :netherrack 64))
+                                    [(item :diorite 64)])))
+        placed (-> (sealed-pocket-world [])
+                   (assoc :player/inventory full-inv)
+                   (assoc-in [:world/chunks [0 0]]
+                             (world/column (assoc pocket-walls [9 64 8] table-id)))
+                   (memory/observe [9 64 8] table-id))
+        row (first (filter #(= :spare-picks (:goal/id %)) plan/goals))]
+    (is (zero? (window/free-count placed)) "36 of 36 slots full")
+    (is (picks/table-needed? placed))
+    (is (= :toss (:intent/kind (plan/next-intent placed row plan/goals)))
+        "a junk stack is thrown before the table is dug, so it can be picked up")
+    (testing "with nothing to throw the table is left, never collected for ever"
+      (let [no-junk (assoc placed
+                           :player/inventory
+                           (into {} (map vector (range 36) (repeat 36 (item :blaze_rod 1)))))]
+        (is (not (picks/table-room? no-junk)))
+        (is (not (picks/table-needed? no-junk)))))))
+
 (deftest a-sim-pass-makes-the-pickaxes
   ;; Verify that in a safe room with carried materials, a sim pass places the table,
   ;; crafts stone pickaxes up to 3, and takes the table along.
