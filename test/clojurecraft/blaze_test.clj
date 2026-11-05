@@ -1238,6 +1238,16 @@
     (is (not (intent/done? (:plan/intent run)))
         "not done in its first tick: the feet are in the fire")))
 
+(deftest the-walk-to-the-nook-ends-standing-in-its-cell-not-near-it
+  ;; Clj_r98, Clj_r56 and Clj_r62 (2026-11-04 races, lanes 41936905595 and
+  ;; 41936902382): the :walk :for :nook ended within reach beside the nook cell,
+  ;; at-nook? still false, so the walk was chosen again until the instant-churn
+  ;; guard failed it (:instant-churn in each bot's :plan/failures)
+  (is (contains? intent/standing-walks :nook))
+  (is (= {:goal/kind :block :goal/pos [6 64 8]}
+         (intent/walk-goal {:intent/kind :walk :intent/target [6 64 8] :intent/for :nook}))
+      "the nook walk's route ends in the cell itself, as at-nook? demands"))
+
 (deftest a-bot-sealed-in-with-a-fire-at-its-feet-punches-it-out
   ;; blaze-race-k race 1 sealed itself in and stood 15 s in the fire lit in its cell: no clear
   ;; cell to walk to, so nothing; the fire is dug out

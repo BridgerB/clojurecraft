@@ -8,9 +8,11 @@
    and safe in its pocket before leaving the fortress, and again during the pearl hunt whenever
    safe and down to one pickaxe. Done by :spare-picks-stocked?, planned by :spare-picks through
    the needs planner into the craft and taking the table along."
-  (:require [clojurecraft.blaze :as blaze]
+  (:require [clojure.math :as math]
+            [clojurecraft.blaze :as blaze]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.dimension :as dimension]
+            [clojurecraft.drops :as drops]
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
             [clojurecraft.make :as make]
@@ -86,6 +88,16 @@
   (boolean (and (zero? (long (get (make/counts world) :crafting_table 0)))
                 (make/near world :crafting_table))))
 
+(defn table-needed?
+  "Is the crafting table placed near, dropped, or being collected, not yet held in the bag?"
+  [world]
+  (boolean
+   (and (zero? (long (get (make/counts world) :crafting_table 0)))
+        (or (make/near world :crafting_table)
+            (= :take-table (:intent/for (:plan/intent world)))
+            (= :take-table (:intent/for (:plan/last world)))
+            (seq (drops/lying world (recipe/item-id :crafting_table) (intent/feet world) 8.0))))))
+
 (defn room-needed?
   "Does the sealed bot in the fortress have no free slot for an ender pearl drop and holding junk to toss?"
   [world]
@@ -121,7 +133,7 @@
                 (or (:plan/chain? world) (contains? (:plan/goals world) :spare-picks))
                 (rod-bot? world)
                 (safe? world)
-                (or (placed-table? world)
+                (or (table-needed? world)
                     (room-needed? world)
                     (and (materials? world)
                          (let [k (serviceable-count world)
@@ -146,4 +158,10 @@
                     (assoc goal :goal/provides {:item/stone_pickaxe 1})
                     (filterv #(not= :stone-pickaxe (:goal/id %)) table)))
      ;; 4. Take the placed table along once crafted
-     (when (placed-table? world) (make/take-table-along world)))))
+     (when (placed-table? world) (make/take-table-along world))
+     ;; 5. Collect dropped table if lying near
+     (when-let [[_ e] (drops/nearest world :crafting_table (intent/feet world))]
+       {:intent/kind :collect-drops
+        :intent/item :crafting_table
+        :intent/target (mapv #(long (math/floor (double %))) (:entity/pos e))
+        :intent/for :take-table}))))
