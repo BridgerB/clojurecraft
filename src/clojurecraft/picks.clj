@@ -143,6 +143,6 @@
      (when (and (< (serviceable-count world) target-picks) (materials? world))
        (make/decide (for-decide world)
                     (assoc goal :goal/provides {:item/stone_pickaxe 1})
-                    (remove #(= :stone-pickaxe (:goal/id %)) table)))
+                    (filterv #(not= :stone-pickaxe (:goal/id %)) table)))
      ;; 4. Take the placed table along once crafted
      (when (placed-table? world) (make/take-table-along world)))))

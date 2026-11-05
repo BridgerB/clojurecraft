@@ -79,7 +79,7 @@
     (testing "blaze in sight: steps aside"
       (let [blaze-ent {:entity/type (blocks/entity-types :blaze)
                        :entity/kind :blaze
-                       :entity/pos [12.0 64.0 8.0]
+                       :entity/pos [8.5 64.0 8.5]
                        :entity/health 20.0}
             watching (assoc w :world/entities {42 blaze-ent})]
         (is (picks/blaze-in-sight? watching))
