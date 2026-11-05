@@ -3876,7 +3876,47 @@
             i (plan/next-intent hurt row plan/goals)]
         (is (contains? #{:pocket :seal :eat :pocket-hold} (:intent/kind i))
             (str "the blaze refuge or its meal, not the hunt: " (pr-str i)))
-        (is (not= :tunnel-to (:intent/kind i)))))))
+        (is (not= :tunnel-to (:intent/kind i)))))
+    (testing "at full health out of the pocket after the rods, watched, the refuge still answers"
+      ;; the 2026-11-04 races (lanes 41936905595, 41936902382, commit 6d16500): 20 of 21
+      ;; rod bots held 15 to 20 health at the seventh rod, in sight of blazes at the
+      ;; spawner; the hunt bored out in their sight, was shot down, and only then was
+      ;; sent back to the pocket, the two cutting each other until the blazes killed it
+      ;; (Clj_r14: 150 walks and 23 tunnels in the 180 s after the rod, death-blaze)
+      (let [watched (-> sealed-w
+                        (assoc :player/pos [11.5 64.0 8.5] :player/health 20.0 :player/food 20)
+                        (assoc-in [:pocket/site :pocket/placed] [])
+                        (assoc :world/entities
+                               {7 {:entity/type (blocks/entity-types :blaze)
+                                   :entity/pos [13.5 65.0 8.5]
+                                   :entity/seen-at 0
+                                   :entity/health 20.0}}))
+            i (plan/next-intent watched row plan/goals)]
+        (is (some? (pearls/blaze-refuge watched))
+            "a blaze watching at full health is still the refuge's business")
+        (is (contains? #{:pocket :seal :eat :pocket-hold :fight} (:intent/kind i))
+            (str "the blaze refuge, not the hunt's bore: " (pr-str i)))
+        (is (not= :tunnel-to (:intent/kind i)))))
+    (testing "watched with no pocket site held, the refuge still answers, never nil"
+      ;; probe 41986025500 R1/12 seed 1: at the rod the pocket-go and here-intent
+      ;; both came back nil, the refuge with them, and the hunt's wall-toward
+      ;; stood in five watchers' sight from 14.4 health to 1.6 in two seconds
+      (let [no-site (-> sealed-w
+                        (assoc :player/pos [11.5 64.0 8.5]
+                               :player/health 14.0
+                               :player/food 20
+                               :pocket/site nil)
+                        (assoc :world/entities
+                               {7 {:entity/type (blocks/entity-types :blaze)
+                                   :entity/pos [13.5 65.0 8.5]
+                                   :entity/seen-at 0
+                                   :entity/health 20.0}}))
+            i (plan/next-intent no-site row plan/goals)]
+        (is (some? (pearls/blaze-refuge no-site))
+            (str "the refuge, pocket, seal-in-place or cover: "
+                 (pr-str (pearls/blaze-refuge no-site))))
+        (is (contains? #{:pocket :seal :eat :pocket-hold :fight :walk} (:intent/kind i))
+            (str "a refuge answer, not the hunt's wall or bore: " (pr-str i)))))))
 
 (deftest a-bore-in-its-open-pocket-strikes-a-blaze-in-reach-instead-of-holding
   ;; Logged state, probe 41914679195 R3/10 seed 1: after the rods the bot held

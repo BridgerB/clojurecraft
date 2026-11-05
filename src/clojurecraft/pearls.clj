@@ -2403,12 +2403,24 @@
             (blaze/meal world)
             {:intent/kind :pocket-hold :intent/heal-to 20.0})
         ;; out of the pocket at full health and unwatched, the bore goes on from where
-        ;; the bot stands (pocket-bore); hurt, burning or watched, the refuge comes first
-        (when (or (< (:player/health world 20.0) 20.0) (blaze/refuge-needed? world))
+        ;; the bot stands (pocket-bore); hurt, burning or watched, the refuge comes first.
+        ;; Watched alone counts, at full health too: the rod-7 bots of the 2026-11-04
+        ;; races arrived at the seventh rod at 15 to 20 health with blazes in sight and
+        ;; the hunt bored out in their sight, was shot, and only then was sent back,
+        ;; the pocket-go and the bore cutting each other until the blazes finished it
+        (when (or (< (:player/health world 20.0) 20.0)
+                  (blaze/refuge-needed? world)
+                  (seq (blaze/watchers world)))
           (or (blaze/commit-fight world)
               (blaze/refuge-now world sp)
               (blaze/pocket-go world sp false)
-              (blaze/here-intent world)))))))
+              (blaze/here-intent world)
+              ;; no pocket to go to and none to seal where it stands: the cover
+              ;; walk out of every watcher's sight, never the hunt's bore in the
+              ;; open (probe 41986025500 R1/12 seed 1: at the rod, hp 14.4, five
+              ;; watchers, the refuge's chain came back nil and the hunt laid a
+              ;; wall where it stood, 14.4 to 1.6 in two seconds, death-blaze)
+              (blaze/hide world)))))))
 
 (defn fortress-exit-log
   "The world with one log line when the fortress exit choice is made or changed."
