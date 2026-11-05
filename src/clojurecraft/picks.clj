@@ -93,23 +93,25 @@
                 (zero? (long (inventory/item-count world (recipe/item-id :ender_pearl))))
                 (some? (window/reserve-slot world 1)))))
 
-(defn drop-worn-picks
-  "A world whose worn pickaxes keep their slots but have their :item dissoc'd, so make/counts
-   does not count a worn pickaxe as providing a fresh one."
+(defn drop-picks
+  "A world whose pickaxes keep their slots but have their :item dissoc'd, so make/counts
+   does not see any held pickaxe and crafts a fresh one from raw materials."
   [world]
   (update world
           :player/inventory
           (fn [inv]
             (into {}
-                  (map
-                   (fn [[p item]]
-                     [p (if (and item (not (serviceable-pick? item))) (dissoc item :item) item)]))
+                  (map (fn [[p item]] [p
+                                       (if (and item
+                                                (= :pickaxe (:kind (blocks/tool (:item item)))))
+                                         (dissoc item :item)
+                                         item)]))
                   inv))))
 
 (defn for-decide
-  "The world on which pickaxe craft needs are decided: worn pickaxes hidden and grid visible."
+  "The world on which pickaxe craft needs are decided: pickaxes hidden and grid visible."
   [world]
-  (drop-worn-picks (sword/with-laid world)))
+  (drop-picks (sword/with-laid world)))
 
 (defn pending?
   "Is the spare-picks row active: spare pickaxes wanted, table to pick up, or room needed when sealed?"
@@ -140,7 +142,7 @@
      ;; 3. Craft pickaxes up to target-picks (3)
      (when (and (< (serviceable-count world) target-picks) (materials? world))
        (make/decide (for-decide world)
-                    (assoc goal :goal/provides {:tag/pickaxes target-picks})
-                    table))
+                    (assoc goal :goal/provides {:item/stone_pickaxe 1})
+                    (remove #(= :stone-pickaxe (:goal/id %)) table)))
      ;; 4. Take the placed table along once crafted
      (when (placed-table? world) (make/take-table-along world)))))

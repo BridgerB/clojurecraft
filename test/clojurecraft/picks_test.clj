@@ -9,6 +9,7 @@
             [clojurecraft.game :as game]
             [clojurecraft.main :as main]
             [clojurecraft.make :as make]
+            [clojurecraft.memory :as memory]
             [clojurecraft.picks :as picks]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
@@ -17,6 +18,13 @@
             [clojurecraft.world :as world]))
 
 (use-fixtures :once fx/instrumented)
+
+(def stone (blocks/default-state :stone))
+(defn- solid [& cells] (into {} (map (fn [c] [c stone])) cells))
+
+(def pocket-walls
+  "A cell at [8 64 8] surrounded by solid blocks, roofed, and sealed with placed blocks."
+  (solid [9 64 8] [9 65 8] [7 64 8] [7 65 8] [8 64 9] [8 65 9] [8 64 7] [8 65 7] [8 66 8] [8 63 8]))
 
 (defn- item [k n] {:item (recipe/item-id k) :count n})
 
@@ -38,12 +46,12 @@
    and cobblestone."
   [inv]
   (let [feet [8 64 8]
-        site {:pocket/cell feet :pocket/placed [[8 66 8] [9 64 8]]}]
-    (-> (standing-nether inv)
-        (assoc :pocket/site site
-               :plan/chain? true
-               :world/blocks {[8 66 8] 1 [9 64 8] 1} ; solid seal blocks
-               :world/entities {}))))
+        site {:pocket/cell feet :pocket/stand nil :pocket/dig [] :pocket/placed [[7 64 8] [7 65 8]]}
+        brick-id (blocks/default-state :nether_bricks)]
+    (->
+      (standing-nether inv)
+      (assoc :pocket/site site :plan/chain? true :world/chunks {[0 0] (world/column pocket-walls)})
+      (memory/observe [8 60 8] brick-id))))
 
 (def rod-kit
   [(item :blaze_rod 7) (item :stone_pickaxe 1) (item :crafting_table 1) (item :stick 12)
@@ -102,8 +110,8 @@
         w (-> (sealed-pocket-world [(item :blaze_rod 7) (item :stone_pickaxe 1)
                                     (item :stone_pickaxe 1) (item :stone_pickaxe 1) (item :stick 8)
                                     (item :cobblestone 58)])
-              (assoc :world/blocks {[9 64 8] table-id})
-              (assoc-in [:memory/blocks [9 64 8]] {:sight/state table-id :sight/at 0}))
+              (assoc-in [:world/chunks [0 0]] (world/column (assoc pocket-walls [9 64 8] table-id)))
+              (memory/observe [9 64 8] table-id))
         row (first (filter #(= :spare-picks (:goal/id %)) plan/goals))]
     (is (= 3 (picks/serviceable-count w)))
     (is (picks/placed-table? w))
@@ -135,24 +143,32 @@
   ;; Verify that in a sealed room with carried materials, a sim pass places the table,
   ;; crafts stone pickaxes up to 3, and takes the table along.
   (let [floor-id (blocks/default-state :netherrack)
-        room (into {} (for [x (range 6 11) z (range 6 11)] [[x 63 z] floor-id]))
+        brick-id (blocks/default-state :nether_bricks)
+        ;; A 5x5 room with perimeter walls, floor at 63, roof at 66, clear 3x3 inside (7..9, 7..9)
+        room (into {}
+                   (concat (for [x (range 6 11) z (range 6 11)] [[x 63 z] floor-id])
+                           (for [x (range 6 11) z (range 6 11)] [[x 66 z] floor-id])
+                           (for [x [6 10] z (range 6 11) y [64 65]] [[x y z] floor-id])
+                           (for [z [6 10] x (range 7 10) y [64 65]] [[x y z] floor-id])))
         inv {[:hotbar 0] (item :stone_pickaxe 1)
              [:hotbar 1] (item :crafting_table 1)
              [:hotbar 2] (item :stick 12)
              [:hotbar 3] (item :cobblestone 64)
              [:hotbar 4] (item :blaze_rod 7)
-             [:hotbar 5] (item :cooked_beef 16)}
-        site {:pocket/cell [8 64 8] :pocket/placed [[8 66 8]]}
+             [:hotbar 5] (item :cooked_beef 16)
+             [:hotbar 6] (item :iron_sword 1)}
+        site {:pocket/cell [8 64 8] :pocket/stand nil :pocket/dig [] :pocket/placed [[8 66 8]]}
         [w sim] (sim/run main/step
                          (-> (game/init fx/opts)
-                             (assoc :player/dimension dimension/nether :pocket/site site))
+                             (assoc :player/dimension dimension/nether :pocket/site site)
+                             (memory/observe [8 60 8] brick-id))
                          (sim/init {:column (world/column-bytes room)
                                     :dimension dimension/nether
                                     :spawn [8.5 64.0 8.5]
                                     :inventory inv})
                          #(or (plan/done? %) (plan/failed? %))
                          120000
-                         {:event/kind :go :go/goals [:spare-picks] :go/chain? true})]
+                         {:event/kind :go :go/goals [:spare-picks]})]
     (is (plan/done? w) (pr-str (plan/summary w)))
     (is (>= (picks/serviceable-count w) 3) "holds three stone pickaxes")
     (is (pos? (long (get (make/counts w) :crafting_table 0))) "crafting table taken along in bag")
