@@ -528,10 +528,11 @@
   (fn [_world i] (:intent/stage i)))
 
 (defmethod dig-stage :settle
-  [world {:intent/keys [target since still exposes-ok? drop-ok?] :or {still 0}}]
+  [world {:intent/keys [target since still exposes-ok? drop-ok? for] :or {still 0}}]
   (let [now (:time/now world)
         eye (game/eye world)
-        at-target (terrain/block-at world target)]
+        at-target (terrain/block-at world target)
+        deadline (if (= :break-spawner for) settle-ms settle-deadline)]
     (cond (and at-target (open? at-target)) (fail world :target-gone)
           (> (physics/distance eye (physics/centre target)) (+ reach 0.5))
           (fail world :out-of-reach)
@@ -539,7 +540,7 @@
           (or (contains? never-dug (blocks/name-of at-target))
               (and (not exposes-ok?) (exposes-fluid? world target)))
           (fail world :unsafe)
-          (or (and (>= still 3) (> (- now since) settle-ms)) (> (- now since) settle-deadline))
+          (or (and (>= still 3) (> (- now since) settle-ms)) (> (- now since) deadline))
           (let [seq (inc (:bot/sequence world))
                 face (face-toward eye target)
                 [slot tool] (breaking-tool world at-target drop-ok?)

@@ -202,6 +202,7 @@
 (s/def :pearls/refuge-done boolean?)
 (s/def :pearls/spawner-broken (s/nilable ::block-pos))
 (s/def :pearls/spawner-broken-logged boolean?)
+(s/def :pearls/spawner-digging (s/nilable ::block-pos))
 (s/def :throw/from ::vec3)
 (s/def :throw/dir (s/tuple double? double?))
 (s/def :throw/at int?)

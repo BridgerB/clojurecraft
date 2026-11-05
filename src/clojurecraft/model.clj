@@ -323,7 +323,9 @@
     "cell [x y z] of the fortress spawner broken by the bot once it held seven rods"
     "pearls/blaze-refuge"]
    [:pearls/spawner-broken-logged "boolean indicating spawner-broken was logged on stdout"
-    "pearls/spawner-broken-log"]
+    "intent/dig-stage :confirm"]
+   [:pearls/spawner-digging "cell [x y z] of the spawner actively being dug by the bot"
+    "pearls/track-spawner-dig"]
    [:stronghold/throws
     "every eye of ender thrown and followed, oldest first: {:throw/from :throw/dir :throw/at}; two from places apart cross at the stronghold (stronghold/triangulate, issue #265)"
     "after the first throw"]

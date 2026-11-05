@@ -7,6 +7,7 @@
             [clojurecraft.blaze :as blaze]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.combat :as combat]
+            [clojurecraft.dig :as dig]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.fortress :as fortress]
             [clojurecraft.game :as game]
@@ -4008,8 +4009,45 @@
         (is (nil? (pearls/fortress-retrace-target w2))
             "the far fallback in fortress-tunnel-target takes over instead")))))
 
+(deftest spawner-dig-time-vanilla
+  ;; Vanilla dig time with stone pickaxe on spawner (hardness 5.0, speed 4.0):
+  ;; damage = 4.0 / 5.0 / 30 = 0.02667 per tick -> 38 ticks = 1900 ms.
+  (let [spawner-id (blocks/default-state :spawner)
+        stone-pick-id (recipe/item-id :stone_pickaxe)]
+    (is (= 5.0 (blocks/hardness spawner-id)))
+    (is (= :pickaxe (blocks/tool-of spawner-id)))
+    (is (true? (dig/harvest? spawner-id stone-pick-id)))
+    (is (= 1900 (dig/ms spawner-id stone-pick-id {})))))
+
+(deftest spawner-settle-deadline
+  ;; For :break-spawner, dig-stage :settle starts after settle-ms (150ms) even when not still.
+  ;; For a generic dig, :settle waits for settle-deadline (2000ms).
+  (let [sp [8 65 10]
+        spawner-block (blocks/default-state :spawner)
+        stone-pick-id (recipe/item-id :stone_pickaxe)
+        w (-> (standing {} {sp spawner-block})
+              (assoc :time/now 200
+                     :player/pos [8.5 64.0 8.5]
+                     :player/vel [0.5 0.0 0.5] ; moving, not still
+                     :player/on-ground? true
+                     :player/inventory {0 {:item stone-pick-id :count 1}}))
+        spawner-intent {:intent/kind :dig
+                        :intent/stage :settle
+                        :intent/target sp
+                        :intent/for :break-spawner
+                        :intent/since 0
+                        :intent/still 0}
+        generic-intent
+        {:intent/kind :dig :intent/stage :settle :intent/target sp :intent/since 0 :intent/still 0}
+        after-spawner (intent/dig-stage w spawner-intent)
+        after-generic (intent/dig-stage w generic-intent)]
+    (is (= :digging (get-in after-spawner [:plan/intent :intent/stage]))
+        "break-spawner starts digging after settle-ms without waiting 2000ms")
+    (is (= :settle (get-in after-generic [:plan/intent :intent/stage]))
+        "generic dig still settles until 2000ms deadline")))
+
 (deftest rod-bot-breaks-spawner-in-dig-reach
-  ;; Once seven rods are held, a rod bot with health >= low-health (12.0)
+  ;; Once seven rods are held, a rod bot with health >= low-health (15.0)
   ;; and a pickaxe digs the spawner ahead of the refuge when within dig reach.
   (let [sp [8 65 10]
         spawner-block (blocks/default-state :spawner)
@@ -4032,69 +4070,20 @@
       (is (true? (:intent/drop-ok? i)))
       (is (= :break-spawner (:intent/for i))))))
 
-(deftest rod-bot-walks-to-spawner-short-walk
-  ;; When the spawner is not in dig reach but a short walk away (<= 6 cells),
-  ;; a rod bot walks to the spawner to break it.
-  (let [sp [8 64 13]
-        spawner-block (blocks/default-state :spawner)
-        floor (into {} (for [z (range 8 15)] [[8 63 z] stone]))
-        w (-> (standing {} (merge floor {sp spawner-block}))
-              (assoc :player/dimension "minecraft:the_nether"
-                     :player/pos [8.5 64.0 8.5]
-                     :player/health 18.0
-                     :plan/status :active
-                     :plan/goals #{:ender-pearls}
-                     :plan/reached #{:blaze-rods}
-                     :plan/active [row])
-              (assoc-in [:player/inventory 1] (item :stone_pickaxe 1))
-              (assoc-in [:player/inventory 2] (item :blaze_rod 7))
-              (memory/observe sp blaze/spawner))]
-    (is (pearls/can-break-spawner? w sp))
-    (is (not (pearls/spawner-in-dig-reach? w sp)))
-    (let [i (pearls/blaze-refuge w)]
-      (is (= :walk (:intent/kind i)))
-      (is (= sp (:intent/target i)))
-      (is (= :break-spawner (:intent/for i))))))
-
-(deftest low-health-refuge-first-then-breaks-from-pocket-when-in-reach
-  ;; Under blaze/low-health, the refuge goes first (never dig).
-  ;; From the pocket, if the spawner is in dig reach and health is healed, it breaks it.
-  ;; Under danger health, never a fight or a dig.
-  (let [sp [8 64 9]
-        spawner-block (blocks/default-state :spawner)
-        w (-> (standing {} {sp spawner-block})
-              (assoc :player/dimension "minecraft:the_nether"
-                     :player/pos [8.5 64.0 8.5]
-                     :player/health 8.0
-                     :plan/status :active
-                     :plan/goals #{:ender-pearls}
-                     :plan/reached #{:blaze-rods}
-                     :plan/active [row])
-              (assoc-in [:player/inventory 1] (item :iron_pickaxe 1))
-              (assoc-in [:player/inventory 2] (item :blaze_rod 7))
-              (memory/observe sp blaze/spawner))]
-    (is (not (pearls/can-break-spawner? w sp)) "under low-health, cannot break spawner")
-    (let [outside-intent (pearls/blaze-refuge w)]
-      (is (not= :dig (:intent/kind outside-intent))
-          "outside pocket under low health, never digs spawner"))
-    (testing "inside pocket under danger health, never digs or fights"
-      (let [pocket-w (assoc w :pocket/site {:pocket/cell [8 64 8]} :player/health 8.0)
-            pi (pearls/blaze-refuge pocket-w)]
-        (is (not= :dig (:intent/kind pi)))
-        (is (not= :fight (:intent/kind pi)))))
-    (testing "inside pocket with health restored and spawner in reach, breaks spawner"
-      (let [pocket-w (assoc w :pocket/site {:pocket/cell [8 64 8]} :player/health 16.0)
-            pi (pearls/blaze-refuge pocket-w)]
-        (is (= :dig (:intent/kind pi)))
-        (is (= sp (:intent/target pi)))
-        (is (= :break-spawner (:intent/for pi)))))))
-
-(deftest spawner-break-tries-limited-to-prevent-churn
-  ;; Breaking the spawner allows up to 3 attempts (break-spawner-tries).
-  ;; Once 3 failed digs are recorded, can-break-spawner? is false.
+(deftest spawner-refuses-to-start-under-volley
+  ;; Don't start the dig under a volley: only with fewer than blaze/volley watchers.
   (let [sp [8 65 10]
         spawner-block (blocks/default-state :spawner)
-        w (-> (standing {} {sp spawner-block})
+        make-blaze (fn [_eid pos]
+                     {:entity/type (blocks/entity-types :blaze)
+                      :entity/pos pos
+                      :entity/seen-at 0
+                      :entity/health 20.0})
+        ;; 3 blazes watching player at [8.5 64.0 8.5]
+        blazes {101 (make-blaze 101 [8.5 66.0 12.0])
+                102 (make-blaze 102 [10.5 66.0 8.5])
+                103 (make-blaze 103 [6.5 66.0 8.5])}
+        w (-> (standing blazes {[8 65 10] spawner-block})
               (assoc :player/dimension "minecraft:the_nether"
                      :player/pos [8.5 64.0 8.5]
                      :player/health 20.0
@@ -4104,24 +4093,118 @@
                      :plan/active [row])
               (assoc-in [:player/inventory 1] (item :iron_pickaxe 1))
               (assoc-in [:player/inventory 2] (item :blaze_rod 7))
-              (memory/observe sp blaze/spawner)
-              (memory/remember-intention {:intent/id 1 :intent/kind :dig :intent/target sp} :failed)
-              (memory/remember-intention {:intent/id 2 :intent/kind :dig :intent/target sp} :failed)
-              (memory/remember-intention {:intent/id 3 :intent/kind :dig :intent/target sp}
-                                         :failed))]
-    (is (>= (pearls/spawner-break-tries w sp) 3))
-    (is (not (pearls/can-break-spawner? w sp)))))
+              (memory/observe sp blaze/spawner))]
+    (is (>= (count (blaze/watchers w)) blaze/volley))
+    (is (not (pearls/can-break-spawner? w sp)) "under volley watchers, can-break-spawner? is false")
+    (let [i (pearls/blaze-refuge w)]
+      (is (not= :break-spawner (:intent/for i))
+          "under volley, refuge goes first, never breaks spawner"))))
 
-(deftest spawner-broken-logged-once
-  ;; Logging spawner-broken emits the message once and marks it logged.
-  (let [w (-> (standing {})
-              (assoc :pearls/spawner-broken [8 65 10]))
-        w1 (pearls/spawner-broken-log w)
-        logs (fn [world]
-               (keep #(when (= :log (:effect/kind %)) (:effect/message %)) (:bot/effects world)))]
-    (is (true? (:pearls/spawner-broken-logged w1)))
-    (is (= "spawner-broken [8 65 10]" (last (logs w1))))
-    (let [w2 (pearls/spawner-broken-log w1)] (is (= 1 (count (logs w2))) "logged only once"))))
+(deftest spawner-dig-continues-between-low-and-danger-health
+  ;; Once started, finish it unless health falls under danger-health (8.0).
+  ;; If health drops to 13.0 (under low-health 15.0), the active dig continues!
+  (let [sp [8 65 10]
+        spawner-block (blocks/default-state :spawner)
+        active-dig
+        {:intent/kind :dig :intent/target sp :intent/for :break-spawner :intent/drop-ok? true}
+        w (-> (standing {} {[8 65 10] spawner-block})
+              (assoc :player/dimension "minecraft:the_nether"
+                     :player/pos [8.5 64.0 8.5]
+                     :player/health 13.0 ; below low-health (15.0), above danger-health (8.0)
+                     :plan/intent active-dig
+                     :plan/status :active
+                     :plan/goals #{:ender-pearls}
+                     :plan/reached #{:blaze-rods}
+                     :plan/active [row])
+              (assoc-in [:player/inventory 1] (item :iron_pickaxe 1))
+              (assoc-in [:player/inventory 2] (item :blaze_rod 7))
+              (memory/observe sp blaze/spawner))]
+    (is (pearls/breaking-spawner? w))
+    (let [i (pearls/blaze-refuge w)]
+      (is (= active-dig i) "active dig continues between low-health and danger-health"))))
+
+(deftest spawner-dig-aborts-and-logs-under-danger-health
+  ;; If health drops below danger-health (e.g. 7.0), the dig aborts and logs spawner-break-aborted.
+  (let [sp [8 65 10]
+        spawner-block (blocks/default-state :spawner)
+        active-dig
+        {:intent/kind :dig :intent/target sp :intent/for :break-spawner :intent/drop-ok? true}
+        w (-> (standing {} {[8 65 10] spawner-block})
+              (assoc :player/dimension "minecraft:the_nether"
+                     :player/pos [8.5 64.0 8.5]
+                     :player/health 7.0 ; below danger-health (8.0)
+                     :plan/intent active-dig
+                     :plan/status :active
+                     :plan/goals #{:ender-pearls}
+                     :plan/reached #{:blaze-rods}
+                     :plan/active [row])
+              (assoc-in [:player/inventory 1] (item :iron_pickaxe 1))
+              (assoc-in [:player/inventory 2] (item :blaze_rod 7))
+              (memory/observe sp blaze/spawner))]
+    (let [i (pearls/blaze-refuge w)]
+      (is (not= active-dig i) "dig aborts when health drops below danger-health"))
+    ;; When tracked in steer, abort is logged
+    (let [digging-w
+          (assoc w :pearls/spawner-digging sp :plan/intent {:intent/kind :walk :intent/for :cover})
+          steered-w (pearls/track-spawner-dig digging-w)
+          logs (keep #(when (= :log (:effect/kind %)) (:effect/message %))
+                     (:bot/effects steered-w))]
+      (is (= "spawner-break-aborted [8 65 10]" (last logs))))))
+
+(deftest safest-moment-pocket-exit-at-full-health
+  ;; Before the bot leaves its pocket at full health, if the spawner is in dig reach
+  ;; with a clear line of sight, it breaks it first. If blocked by a wall or out of reach,
+  ;; it leaves without breaking.
+  (let [sp [8 65 10]
+        spawner-block (blocks/default-state :spawner)
+        pocket-cell [8 64 8]
+        base-w (-> (standing {} {[8 65 10] spawner-block})
+                   (assoc :player/dimension "minecraft:the_nether"
+                          :player/pos [8.5 64.0 8.5]
+                          :player/health 20.0
+                          :pocket/site {:pocket/cell pocket-cell}
+                          :plan/status :active
+                          :plan/goals #{:ender-pearls}
+                          :plan/reached #{:blaze-rods}
+                          :plan/active [row])
+                   (assoc-in [:player/inventory 1] (item :iron_pickaxe 1))
+                   (assoc-in [:player/inventory 2] (item :blaze_rod 7))
+                   (memory/observe sp blaze/spawner))]
+    (testing "sealed at full health with clear line of sight: breaks spawner first"
+      (let [w base-w]
+        (is (pearls/pocket-can-break-spawner? w sp))
+        (let [i (pearls/blaze-refuge w)]
+          (is (= :dig (:intent/kind i)))
+          (is (= sp (:intent/target i)))
+          (is (= :break-spawner (:intent/for i))))))
+    (testing "sealed at full health with wall blocking line of sight: leaves without breaking"
+      ;; Put a solid stone block at [8 65 9] directly between eye [8.5 65.62 8.5] and sp [8 65 10]
+      (let [walled-w (assoc-in base-w
+                      [:world/chunks [0 0]]
+                      (world/column {[8 65 9] stone [8 65 10] spawner-block}))]
+        (is (not (pearls/spawner-line-clear? walled-w sp)) "wall blocks line of sight")
+        (is (not (pearls/pocket-can-break-spawner? walled-w sp)))
+        ;; blaze-refuge returns nil when sealed-full and cannot break spawner
+        (is (nil? (pearls/blaze-refuge walled-w))
+            "leaves without breaking; does not dig through walls")))))
+
+(deftest spawner-broken-logged-by-intent-confirm
+  ;; intent/dig-stage :confirm emits spawner-broken and sets :pearls/spawner-broken-logged.
+  (let [sp [8 65 10]
+        spawner-block (blocks/default-state :spawner)
+        w (-> (standing {} {sp spawner-block})
+              (assoc :stats/last-ack 5))
+        intent {:intent/stage :confirm
+                :intent/target sp
+                :intent/state spawner-block
+                :intent/sequence 5
+                :intent/confirm-left 0
+                :intent/for :break-spawner}
+        w' (intent/dig-stage w intent)
+        logs (keep #(when (= :log (:effect/kind %)) (:effect/message %)) (:bot/effects w'))]
+    (is (= sp (:pearls/spawner-broken w')))
+    (is (true? (:pearls/spawner-broken-logged w')))
+    (is (= "spawner-broken [8 65 10]" (last logs)))))
 
 
 

@@ -756,9 +756,11 @@
                                     (- (double (nth sp 2)) (double (second fortress))))
                         256.0))]
     (when-not (bot-near-spawner? live name sp)
-      (cli/log "restoring broken spawner at" sp "for fortress" fortress)
-      (rcon/command! rc (restore-spawner-command sp))
-      (swap! broken-spawners dissoc sp))))
+      (let [cmd (restore-spawner-command sp)
+            reply (rcon/command! rc cmd)]
+        (cli/log "restore spawner at" sp "reply:" reply)
+        (when (and reply (re-find #"(?i)changed the block" reply))
+          (swap! broken-spawners dissoc sp))))))
 
 (defn land-fortress!
   "Land the bot named name (racer i) at the fortress of its landing: the pad (pad-of the fortress the
@@ -773,10 +775,10 @@
          (if (seq @fortress-pool) (fortress-for @fortress-pool i) (locate-fortress! rc landing))
          pad (or (get @pads-chosen i) (choose-pad! rc fortress i nil))
          pad (if (mobs-near? rc pad) (choose-pad! rc fortress i [pad]) pad)]
-     (when (seq @broken-spawners) (restore-fortress-spawners! rc fortress name live))
      (build-pad! rc pad)
      (cli/log "tp:" (rcon/command! rc (tp-command name pad)))
      (when (gym/wait-in! rc name dimension/nether)
+       (when (seq @broken-spawners) (restore-fortress-spawners! rc fortress name live))
        (rcon/command! rc (str "clear " name))
        (doseq [item kit] (rcon/command! rc (str "give " name " " item)))
        (Thread/sleep (long fixture/settle-ms))
