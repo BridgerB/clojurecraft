@@ -3896,7 +3896,27 @@
             "a blaze watching at full health is still the refuge's business")
         (is (contains? #{:pocket :seal :eat :pocket-hold :fight} (:intent/kind i))
             (str "the blaze refuge, not the hunt's bore: " (pr-str i)))
-        (is (not= :tunnel-to (:intent/kind i)))))))
+        (is (not= :tunnel-to (:intent/kind i)))))
+    (testing "watched with no pocket site held, the refuge still answers, never nil"
+      ;; probe 41986025500 R1/12 seed 1: at the rod the pocket-go and here-intent
+      ;; both came back nil, the refuge with them, and the hunt's wall-toward
+      ;; stood in five watchers' sight from 14.4 health to 1.6 in two seconds
+      (let [no-site (-> sealed-w
+                        (assoc :player/pos [11.5 64.0 8.5]
+                               :player/health 14.0
+                               :player/food 20
+                               :pocket/site nil)
+                        (assoc :world/entities
+                               {7 {:entity/type (blocks/entity-types :blaze)
+                                   :entity/pos [13.5 65.0 8.5]
+                                   :entity/seen-at 0
+                                   :entity/health 20.0}}))
+            i (plan/next-intent no-site row plan/goals)]
+        (is (some? (pearls/blaze-refuge no-site))
+            (str "the refuge, pocket, seal-in-place or cover: "
+                 (pr-str (pearls/blaze-refuge no-site))))
+        (is (contains? #{:pocket :seal :eat :pocket-hold :fight :walk} (:intent/kind i))
+            (str "a refuge answer, not the hunt's wall or bore: " (pr-str i)))))))
 
 (deftest a-bore-in-its-open-pocket-strikes-a-blaze-in-reach-instead-of-holding
   ;; Logged state, probe 41914679195 R3/10 seed 1: after the rods the bot held

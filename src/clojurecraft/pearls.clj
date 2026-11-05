@@ -2414,7 +2414,13 @@
           (or (blaze/commit-fight world)
               (blaze/refuge-now world sp)
               (blaze/pocket-go world sp false)
-              (blaze/here-intent world)))))))
+              (blaze/here-intent world)
+              ;; no pocket to go to and none to seal where it stands: the cover
+              ;; walk out of every watcher's sight, never the hunt's bore in the
+              ;; open (probe 41986025500 R1/12 seed 1: at the rod, hp 14.4, five
+              ;; watchers, the refuge's chain came back nil and the hunt laid a
+              ;; wall where it stood, 14.4 to 1.6 in two seconds, death-blaze)
+              (blaze/hide world)))))))
 
 (defn fortress-exit-log
   "The world with one log line when the fortress exit choice is made or changed."
