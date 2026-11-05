@@ -748,12 +748,26 @@
         i (range n-worlds)]
     [i s]))
 
+(defn parse-runs-arg
+  "Parse --runs argument as either an existing file path or an inline EDN string."
+  [arg]
+  (when arg (let [content (if (.exists (io/file arg)) (slurp arg) arg)] (edn/read-string content))))
+
+(defn normalize-world-file
+  "Resolve a world specifier (symbol, string or File) to a File under cache/sim-worlds when needed."
+  [f]
+  (let [s (str f)]
+    (cond (.exists (io/file s)) (io/file s)
+          (re-matches #"R\d+/\d+" s) (io/file (str "cache/sim-worlds/" s ".edn.gz"))
+          (re-matches #"R\d+/\d+\.edn\.gz" s) (io/file (str "cache/sim-worlds/" s))
+          :else (io/file s))))
+
 (defn given-jobs
   "The runs a list names, [[world-file seed] ...], as jobs [world-index seed] over files (the
    distinct world files of the list, in its order)."
   [given files]
   (let [index (into {} (map-indexed (fn [i f] [(str f) i])) files)]
-    (mapv (fn [[f s]] [(index (str f)) s]) given)))
+    (mapv (fn [[f s]] [(index (str (normalize-world-file f))) s]) given)))
 
 ;;;; I/O: the world files, the threads, the lines ;;;;
 
@@ -898,12 +912,11 @@
         from (or (get o :from) (:simrace/from config))
         kit (or (:simrace/kit config) fortress-kit-default)
         given (some-> (get o :runs)
-                      slurp
-                      edn/read-string)
+                      parse-runs-arg)
         until (or until default-until)
         max-ms (* 60000 (Long/parseLong (or minutes (str default-max-minutes))))
         first-seed (Long/parseLong (or seed "1"))
-        files (cond given (mapv io/file (distinct (map first given)))
+        files (cond given (mapv normalize-world-file (distinct (map first given)))
                     world [(io/file world)]
                     :else
                     (shard (into [] (mapcat world-files) (str/split worlds #","))

@@ -2020,7 +2020,9 @@
 (defn fortress-points
   "The positions of known spawners and fortress bricks in the bot's dimension."
   [world]
-  (concat (memory/positions-now world [blaze/spawner]) (fortress/bricks world)))
+  (concat (memory/positions-now world [blaze/spawner])
+          (when-let [b (:pearls/spawner-broken world)] [b])
+          (fortress/bricks world)))
 
 (defn near-fortress?
   "Is the bot within fortress-escape-reach of any known spawner or fortress brick?"
@@ -2057,7 +2059,7 @@
   (or (some-> (nearest-forest world)
               second
               inc)
-      (some-> (blaze/nearest-spawner world)
+      (some-> (or (blaze/nearest-spawner world) (:pearls/spawner-broken world))
               second)
       (second (intent/feet world))
       64))
@@ -2137,7 +2139,7 @@
    s2 Clj_r32 alternated :tunnel-to [-741 77 116] and [-737 77 116] 45 times each after the
    rods, wearing its stone pickaxe from 131 to 1 durability without leaving the pocket."
   [world]
-  (when-let [sp (blaze/nearest-spawner world)]
+  (when-let [sp (or (blaze/nearest-spawner world) (:pearls/spawner-broken world))]
     (let [[sx _ sz] sp
           start (first (:plan/trail world []))
           forest (nearest-forest world)
@@ -2236,7 +2238,10 @@
   (let [feet (intent/feet world)
         [fx _ fz] feet
         target (or (nearest-forest world) (when-let [e (explore world)] (:intent/target e)))
-        sp (when-not target (or (blaze/nearest-spawner world) (fortress/nearest-brick world)))
+        sp (when-not target
+             (or (blaze/nearest-spawner world)
+                 (:pearls/spawner-broken world)
+                 (fortress/nearest-brick world)))
         [tx tz] (cond target [(first target) (last target)]
                       sp
                       (let [dx (- fx (first sp))
@@ -2349,7 +2354,9 @@
             (and in? (< hp 20.0))
             (or (blaze/meal world) {:intent/kind :pocket-hold :intent/heal-to 20.0})
             (and (not in?) (< hp 20.0))
-            (or (blaze/pocket-go world (blaze/nearest-spawner world) false)
+            (or (blaze/pocket-go world
+                                 (or (blaze/nearest-spawner world) (:pearls/spawner-broken world))
+                                 false)
                 (blaze/here-intent world))
             :else nil))))
 
@@ -2364,36 +2371,112 @@
                 (>= (:player/health world 20.0) 20.0)
                 (not (:player/on-fire? world)))))
 
+(def break-spawner-reach (+ intent/reach 0.5)) ; reach to dig a spawner (4.5)
+(def break-spawner-walk-reach 8.0)             ; max straight distance to check for a short approach route
+(def break-spawner-walk-cells 6)               ; max waypoints in a short walk to spawner
+(def break-spawner-tries 3)                    ; attempts before giving up on breaking spawner
+
+(defn pickaxe-held?
+  "Does the player have any pickaxe in the hotbar or main inventory?"
+  [world]
+  (boolean (some (fn [[_ {:keys [item]}]] (= :pickaxe (:kind (blocks/tool item))))
+                 (:player/inventory world))))
+
+(defn spawner-break-tries
+  "How many times has digging the spawner failed?"
+  [world sp]
+  (memory/failed-count-since world :dig sp 0))
+
+(defn can-break-spawner?
+  "Can the bot attempt to break spawner sp now: a rod bot holding seven or more blaze rods,
+   with a pickaxe held or bagged, health at or above blaze/low-health, spawner not blacklisted
+   or already broken, and tries remaining?"
+  [world sp]
+  (boolean (and sp
+                (nil? (:pearls/spawner-broken world))
+                (>= (blaze/rods world) blaze/rods-wanted)
+                (>= (:player/health world 20.0) blaze/low-health)
+                (>= (:player/health world 20.0) danger-health)
+                (pickaxe-held? world)
+                (not (contains? (:plan/blacklist world #{}) sp))
+                (< (spawner-break-tries world sp) break-spawner-tries)
+                (let [id (terrain/block-at world sp)]
+                  (or (nil? id) (= :spawner (blocks/name-of id)))))))
+
+(defn spawner-in-dig-reach?
+  "Is spawner sp within dig reach of the bot's eye?"
+  [world sp]
+  (boolean (and sp
+                (<= (physics/distance (game/eye world) (physics/centre sp)) break-spawner-reach))))
+
+(defn spawner-short-route
+  "A route of at most break-spawner-walk-cells cells to walk to spawner sp, or nil: only when within
+   reach distance and a real route (:found) exists."
+  [world sp]
+  (when (and sp
+             (<= (physics/distance (:player/pos world) (physics/centre sp))
+                 break-spawner-walk-reach))
+    (let [{:path/keys [status waypoints]} (path/plan world
+                                                     (path/feet-cell (:player/pos world))
+                                                     (intent/goal-of {:intent/kind :walk
+                                                                      :intent/target sp}))]
+      (when (and (= :found status) (seq waypoints) (<= (count waypoints) break-spawner-walk-cells))
+        waypoints))))
+
+(defn spawner-break-intent
+  "The :dig intent to break spawner sp."
+  [_world sp]
+  {:intent/kind :dig :intent/target sp :intent/drop-ok? true :intent/for :break-spawner})
+
+(defn spawner-broken-log
+  "The world with one log line when a spawner is broken by the bot."
+  [world]
+  (if-let [sp (:pearls/spawner-broken world)]
+    (if (:pearls/spawner-broken-logged world)
+      world
+      (-> world
+          (assoc :pearls/spawner-broken-logged true)
+          (game/say (str "spawner-broken " sp))))
+    world))
+
 (defn blaze-refuge
   "The blaze row's survival intent after the rods, or nil once it has handed over: while the
    pearl stage is in play in the Nether near the spawner and the bot has not yet been sealed
    in its pocket at full health (:pearls/refuge-done, noted by steer at sealed-full?), the
-   blaze row stays in charge — a committed fight at hand (blaze/commit-fight, never under
+   blaze row stays in charge — breaking the spawner ahead of the refuge when a rod bot has
+   a pickaxe and health, else a committed fight at hand (blaze/commit-fight, never under
    danger health), the refuge (blaze/refuge-now), the way to the pocket (blaze/pocket-go) or
-   a pocket sealed where it stands (blaze/here-intent); in the pocket, its hold (blaze/hold-intent:
-   seal, meal, hold), sealing first when it can. The pearl hunt has none of this, and took over
-   the tick the seventh rod was held, out of the pocket grabbing a rod, hurt and watched:
-   14 sim rod bots on main and the pocket-bore branch died at the spawner within a minute,
-   1.4 to 2.8 blocks from the rod. Reused, not copied: no blaze logic lives here."
+   a pocket sealed where it stands (blaze/here-intent); in the pocket, breaking the spawner if in
+   reach, else its hold (blaze/hold-intent: seal, meal, hold), sealing first when it can. The
+   pearl hunt has none of this, and took over the tick the seventh rod was held, out of the pocket
+   grabbing a rod, hurt and watched: 14 sim rod bots on main and the pocket-bore branch died at
+   the spawner within a minute, 1.4 to 2.8 blocks from the rod. Reused, not copied: no blaze
+   logic lives here."
   [world]
   (when (and (pearls-stage? world)
              (= dimension/nether (dimension/of world))
              (not (:pearls/refuge-done world))
              (not (sealed-full? world))
-             (blaze/nearest-spawner world)
+             (or (blaze/nearest-spawner world) (:pearls/spawner-broken world))
              (or (pocket/in? world)
                  (fortress-escaping? world)
                  (<= (physics/distance (:player/pos world)
-                                       (physics/centre (blaze/nearest-spawner world)))
+                                       (physics/centre (or (blaze/nearest-spawner world)
+                                                           (:pearls/spawner-broken world))))
                      32.0)))
-    (let [sp (blaze/nearest-spawner world)]
+    (let [sp (blaze/nearest-spawner world)
+          refuge-sp (or sp (:pearls/spawner-broken world))]
       (if (pocket/in? world)
         (or (blaze/commit-fight world)
+            (when (and sp (can-break-spawner? world sp) (spawner-in-dig-reach? world sp))
+              (spawner-break-intent world sp))
             (blaze/hold-intent world)
             ;; hold-intent is nil with a blaze in reach: the row strikes it (its fight
             ;; branch), never holds in the open pocket while it hits (R3/10 seed 1,
             ;; probe 41914679195: pocket-hold at hp 13.8 to 0 with a blaze on the bot)
-            (when-let [[eid] (and (blaze/reach-blaze world) (blaze/fightable-blaze world))]
+            (when-let [[eid] (and (>= (:player/health world 20.0) danger-health)
+                                  (blaze/reach-blaze world)
+                                  (blaze/fightable-blaze world))]
               {:intent/kind :fight :intent/target eid :intent/to-the-end? true :intent/yield? true})
             ;; hold-intent is nil with a blaze in reach to be fought or nothing to heal:
             ;; seal only with none in reach, never against one at hand
@@ -2402,25 +2485,29 @@
               {:intent/kind :seal})
             (blaze/meal world)
             {:intent/kind :pocket-hold :intent/heal-to 20.0})
-        ;; out of the pocket at full health and unwatched, the bore goes on from where
-        ;; the bot stands (pocket-bore); hurt, burning or watched, the refuge comes first.
-        ;; Watched alone counts, at full health too: the rod-7 bots of the 2026-11-04
-        ;; races arrived at the seventh rod at 15 to 20 health with blazes in sight and
-        ;; the hunt bored out in their sight, was shot, and only then was sent back,
-        ;; the pocket-go and the bore cutting each other until the blazes finished it
-        (when (or (< (:player/health world 20.0) 20.0)
-                  (blaze/refuge-needed? world)
-                  (seq (blaze/watchers world)))
-          (or (blaze/commit-fight world)
-              (blaze/refuge-now world sp)
-              (blaze/pocket-go world sp false)
-              (blaze/here-intent world)
-              ;; no pocket to go to and none to seal where it stands: the cover
-              ;; walk out of every watcher's sight, never the hunt's bore in the
-              ;; open (probe 41986025500 R1/12 seed 1: at the rod, hp 14.4, five
-              ;; watchers, the refuge's chain came back nil and the hunt laid a
-              ;; wall where it stood, 14.4 to 1.6 in two seconds, death-blaze)
-              (blaze/hide world)))))))
+        (or (when (and sp (can-break-spawner? world sp))
+              (cond (spawner-in-dig-reach? world sp) (spawner-break-intent world sp)
+                    (spawner-short-route world sp)
+                    {:intent/kind :walk :intent/target sp :intent/for :break-spawner}))
+            ;; out of the pocket at full health and unwatched, the bore goes on from where
+            ;; the bot stands (pocket-bore); hurt, burning or watched, the refuge comes first.
+            ;; Watched alone counts, at full health too: the rod-7 bots of the 2026-11-04
+            ;; races arrived at the seventh rod at 15 to 20 health with blazes in sight and
+            ;; the hunt bored out in their sight, was shot, and only then was sent back,
+            ;; the pocket-go and the bore cutting each other until the blazes finished it
+            (when (or (< (:player/health world 20.0) 20.0)
+                      (blaze/refuge-needed? world)
+                      (seq (blaze/watchers world)))
+              (or (blaze/commit-fight world)
+                  (blaze/refuge-now world refuge-sp)
+                  (blaze/pocket-go world refuge-sp false)
+                  (blaze/here-intent world)
+                  ;; no pocket to go to and none to seal where it stands: the cover
+                  ;; walk out of every watcher's sight, never the hunt's bore in the
+                  ;; open (probe 41986025500 R1/12 seed 1: at the rod, hp 14.4, five
+                  ;; watchers, the refuge's chain came back nil and the hunt laid a
+                  ;; wall where it stood, 14.4 to 1.6 in two seconds, death-blaze)
+                  (blaze/hide world))))))))
 
 (defn fortress-exit-log
   "The world with one log line when the fortress exit choice is made or changed."
@@ -3000,8 +3087,9 @@
         world (if (pearls-stage? world)
                 (plan/steer world (first (filter #(= :blaze-rods (:goal/id %)) plan/goals)))
                 world)
-        world (cond-> (relocation (track-gain (track-angry (uncovered-log (fortress-exit-log
-                                                                           world)))))
+        world (cond-> (spawner-broken-log (relocation (track-gain (track-angry (uncovered-log
+                                                                                (fortress-exit-log
+                                                                                 world))))))
                 (shot-at? world) (assoc :pearls/shot-at-ms (:time/now world 0))
                 (sealed-full? world) (assoc :pearls/refuge-done true))]
     (cond (or (nil? look)

@@ -222,7 +222,10 @@
   [world]
   (let [bl (:plan/blacklist world #{})
         eye (game/eye world)
-        candidates (remove #(or (and (bl %) (nil? (stand world %))) (given-up? world %))
+        candidates (remove #(or (and (bl %) (nil? (stand world %)))
+                                (given-up? world %)
+                                (let [id (terrain/block-at world %)]
+                                  (and id (not= :spawner (blocks/name-of id)))))
                            (memory/positions-now world [spawner]))
         nearest (memory/nearest-of eye spawner-radius candidates)
         kept (tunnelled-spawner world candidates)]
@@ -2049,16 +2052,19 @@
         seen (or seen here)
         since (or since now)
         health (or health (:player/health world 20.0))
+        at-spawner (when spawner (terrain/block-at world spawner))
+        gone? (boolean (and at-spawner (not= :spawner (blocks/name-of at-spawner))))
         world
         (-> world
             (assoc :player/controls {})
             (intent/assoc-intent :intent/since since :intent/blazes seen :intent/health health))]
-    (cond (or (seq (remove seen here)) (rod-lying world) (< (:player/health world 20.0) health))
-          (intent/done world)
-          (> (- now since) camp-ms)
-          (intent/fail (cond-> world spawner (update :plan/blacklist (fnil conj #{}) spawner))
-                       :no-blaze)
-          :else world)))
+    (cond
+      (or gone? (seq (remove seen here)) (rod-lying world) (< (:player/health world 20.0) health))
+      (intent/done world)
+      (> (- now since) camp-ms)
+      (intent/fail (cond-> world spawner (update :plan/blacklist (fnil conj #{}) spawner))
+                   :no-blaze)
+      :else world)))
 
 ;; ---------------------------------------------------------------- the :rest intent
 

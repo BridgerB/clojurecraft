@@ -628,13 +628,20 @@
   ;; the breaks later still; the ack alone had the stairs believe their cells open, walk into
   ;; rock the server still had there, and be put back by it ten times a second until the step
   ;; timed out, :stair-not-taken three times
-  [world {:intent/keys [target state sequence confirm-left]}]
+  [world {:intent/keys [target state sequence confirm-left for]}]
   (let [at-target (terrain/block-at world target)
-        acked (>= (:stats/last-ack world -1) sequence)]
-    (cond (and at-target (not= at-target state)) (done world) ; the server's block update: open, or what fell into it
+        acked (>= (:stats/last-ack world -1) sequence)
+        record-break (fn [w]
+                       (if (and (= :break-spawner for) (not= (:pearls/spawner-broken w) target))
+                         (-> w
+                             (assoc :pearls/spawner-broken target
+                                    :pearls/spawner-broken-logged true)
+                             (game/say (str "spawner-broken " target)))
+                         w))]
+    (cond (and at-target (not= at-target state)) (record-break (done world)) ; the server's block update: open, or what fell into it
           (and (zero? confirm-left) acked) (fail world :rejected)
           ;; no word either way in confirm-ticks: trust the overlay
-          (zero? confirm-left) (done (terrain/predict world target blocks/air)) ; a guess, unconfirmed until the server speaks
+          (zero? confirm-left) (record-break (done (terrain/predict world target blocks/air))) ; a guess, unconfirmed until the server speaks
           :else (assoc-intent world :intent/confirm-left (dec confirm-left)))))
 
 (defmethod run :dig

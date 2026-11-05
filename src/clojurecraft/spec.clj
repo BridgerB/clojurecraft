@@ -200,6 +200,8 @@
 (s/def :pearls/relocate (s/keys :req-un [:relocate/from :relocate/at :relocate/near]))
 (s/def :pearls/mouth ::block-pos)
 (s/def :pearls/refuge-done boolean?)
+(s/def :pearls/spawner-broken (s/nilable ::block-pos))
+(s/def :pearls/spawner-broken-logged boolean?)
 (s/def :throw/from ::vec3)
 (s/def :throw/dir (s/tuple double? double?))
 (s/def :throw/at int?)

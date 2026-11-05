@@ -11,6 +11,7 @@
             [clojurecraft.blocks :as blocks]
             [clojurecraft.build :as build]
             [clojurecraft.chunk :as chunk]
+            [clojurecraft.dig :as dig]
             [clojurecraft.dimension :as dimension]
             [clojurecraft.entity :as entity]
             [clojurecraft.eyes]
@@ -3605,3 +3606,35 @@
     (is (not (contains? alive :sim/overworld)) "nothing set aside once it is back")
     (is (some #(= :level-chunk-with-light (:packet/name %)) (:sim/out alive))
         "the client is sent the overworld's chunks")))
+
+(deftest broken-spawner-stops-spawning-and-dig-time-matches-table
+  ;; In the sim model, a broken spawner stops spawning blazes, is removed from
+  ;; :sim/spawners and spawner-cells, and the model's dig time matches dig/ms.
+  (let [sp [8 65 8]
+        sp-block mob/spawner-block
+        stone-pick (recipe/item-id :stone_pickaxe)
+        col (world/column-bytes {sp sp-block} dimension/nether)
+        s (-> (sim/init
+               {:column col :spawn [8.5 64.0 8.5] :difficulty :normal :dimension dimension/nether})
+              (assoc :sim/phase :play
+                     :sim/player-pos [8.5 64.0 8.5]
+                     :sim/inv {0 {:item stone-pick :count 1}}
+                     :sim/held-slot 0))]
+    (is (= sp-block (sim/block-at s sp)))
+    (is (contains? (sim/spawner-cells s) sp))
+    (let [s-ticked (sim/tick-spawners s)]
+      (is (contains? (:sim/spawners s-ticked) sp) "awake spawner registered in :sim/spawners")
+      (let [broken (sim/break-block s-ticked sp sp-block stone-pick 0)]
+        (is (= 0 (sim/block-at broken sp)) "broken spawner is air")
+        (is (nil? (get-in broken [:sim/spawners sp])) "broken spawner removed from :sim/spawners")
+        (is (not (contains? (sim/spawner-cells broken) sp)) "spawner-cells excludes broken spawner")
+        (let [after-tick (sim/tick-spawners broken)]
+          (is (nil? (get-in after-tick [:sim/spawners sp]))
+              "tick-spawners does not re-add broken spawner")
+          (is (empty? (filter #(= (:kind mob/spawner) (:type (val %))) (:sim/mobs after-tick)))
+              "no blazes spawned from broken spawner"))))
+    (testing "dig time in sim matches dig/ms with break-threshold"
+      (let [expected-full (dig/ms sp-block stone-pick {})
+            expected-break (* sim/break-threshold expected-full)]
+        (is (= expected-full (sim/full-ms s sp-block stone-pick)))
+        (is (= expected-break (sim/break-ms s sp-block stone-pick)))))))

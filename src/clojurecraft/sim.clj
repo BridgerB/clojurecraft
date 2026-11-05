@@ -616,6 +616,7 @@
         sim (-> sim
                 (update :sim/placed dissoc pos) ; a placed block, broken, is gone too
                 (update :sim/broken conj pos)
+                (update :sim/spawners dissoc pos)
                 (send {:packet/name :block-update :pos pos :state blocks/air})
                 (update :sim/inv wear slot)
                 (add-exhaustion (hunger/exhaustion :mine))
@@ -2937,7 +2938,9 @@
                          :let [c (column-of sim [x z])]
                          :when c]
                      [[x z] c]))]
-    (set (for [[x y z] (chunk/find-blocks near #(= % mob/spawner-block))] [x y z]))))
+    (set (for [[x y z] (chunk/find-blocks near #(= % mob/spawner-block))
+               :when (= mob/spawner-block (block-at sim [x y z]))]
+           [x y z]))))
 
 (defn spawner-nearby
   "How many living blazes stand where the spawner at cell sp counts them (mob/spawner-crowded?)."

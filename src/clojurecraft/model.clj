@@ -319,6 +319,11 @@
    [:pearls/refuge-done
     "true once the bot, after the rods, was sealed in its blaze pocket at full health and the fortress exit was handed to the pocket bore (pearls/sealed-full?, noted by the :pearls steer): the blaze refuge no longer pulls it back"
     "every tick a pearl hunt runs (plan/steer), once it holds"]
+   [:pearls/spawner-broken
+    "cell [x y z] of the fortress spawner broken by the bot once it held seven rods"
+    "pearls/blaze-refuge"]
+   [:pearls/spawner-broken-logged "boolean indicating spawner-broken was logged on stdout"
+    "pearls/spawner-broken-log"]
    [:stronghold/throws
     "every eye of ender thrown and followed, oldest first: {:throw/from :throw/dir :throw/at}; two from places apart cross at the stronghold (stronghold/triangulate, issue #265)"
     "after the first throw"]

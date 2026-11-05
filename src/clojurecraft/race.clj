@@ -712,6 +712,54 @@
               (cli/log "prepared" n "pads in" (quot (- (System/currentTimeMillis) t0) 1000) "s"))))
          (catch Exception e (cli/log "prepare failed:" e)))))
 
+(def broken-spawners
+  "Spawners broken during the race, mapped {pos {:broken-at ms :fortress [fx fz]}}."
+  (atom {}))
+
+(defn restore-spawner-command
+  "The RCON command to set a natural blaze spawner at [x y z] in the Nether."
+  [[x y z]]
+  (str "execute in "
+       dimension/nether
+       " run setblock "
+       x
+       " "
+       y
+       " "
+       z
+       " minecraft:spawner{SpawnData:{entity:{id:\"minecraft:blaze\"}}}"))
+
+(defn- spawner-distance
+  [[x1 y1 z1] [x2 y2 z2]]
+  (let [dx (- (double x1) (double x2))
+        dy (- (double y1) (double y2))
+        dz (- (double z1) (double z2))]
+    (math/sqrt (+ (* dx dx) (* dy dy) (* dz dz)))))
+
+(defn bot-near-spawner?
+  "Is any running bot other than landing-bot within 32 blocks of spawner pos?"
+  [live landing-bot [sx sy sz]]
+  (let [sc [(+ (double sx) 0.5) (+ (double sy) 0.5) (+ (double sz) 0.5)]]
+    (boolean (and live
+                  (some (fn [[n w*]]
+                          (when (not= n landing-bot)
+                            (when-let [p (:player/pos @w*)] (<= (spawner-distance p sc) 32.0))))
+                        @live)))))
+
+(defn restore-fortress-spawners!
+  "Restore any broken spawners at or near fortress that no other bot is currently near."
+  [rc fortress name live]
+  (doseq [[sp info] @broken-spawners
+          :let [f (:fortress info)]
+          :when (or (= fortress f)
+                    (<= (math/hypot (- (double (first sp)) (double (first fortress)))
+                                    (- (double (nth sp 2)) (double (second fortress))))
+                        256.0))]
+    (when-not (bot-near-spawner? live name sp)
+      (cli/log "restoring broken spawner at" sp "for fortress" fortress)
+      (rcon/command! rc (restore-spawner-command sp))
+      (swap! broken-spawners dissoc sp))))
+
 (defn land-fortress!
   "Land the bot named name (racer i) at the fortress of its landing: the pad (pad-of the fortress the
    server locates, built by prepare! or here when it is new, build-pad!), the bot teleported onto
@@ -719,18 +767,20 @@
    (\"minecraft:iron_sword 1\" ...: what a race bot carries to the fortress, ci/race.edn's
    :race/kit). Returns where it stands ([x y z], standing-on the pad), or nil when the dimension
    never came; a landing that cannot locate a fortress throws."
-  [rc name landing i kit]
-  (let [fortress
-        (if (seq @fortress-pool) (fortress-for @fortress-pool i) (locate-fortress! rc landing))
-        pad (or (get @pads-chosen i) (choose-pad! rc fortress i nil))
-        pad (if (mobs-near? rc pad) (choose-pad! rc fortress i [pad]) pad)]
-    (build-pad! rc pad)
-    (cli/log "tp:" (rcon/command! rc (tp-command name pad)))
-    (when (gym/wait-in! rc name dimension/nether)
-      (rcon/command! rc (str "clear " name))
-      (doseq [item kit] (rcon/command! rc (str "give " name " " item)))
-      (Thread/sleep (long fixture/settle-ms))
-      (standing-on pad))))
+  ([rc name landing i kit] (land-fortress! rc name landing i kit nil))
+  ([rc name landing i kit live]
+   (let [fortress
+         (if (seq @fortress-pool) (fortress-for @fortress-pool i) (locate-fortress! rc landing))
+         pad (or (get @pads-chosen i) (choose-pad! rc fortress i nil))
+         pad (if (mobs-near? rc pad) (choose-pad! rc fortress i [pad]) pad)]
+     (when (seq @broken-spawners) (restore-fortress-spawners! rc fortress name live))
+     (build-pad! rc pad)
+     (cli/log "tp:" (rcon/command! rc (tp-command name pad)))
+     (when (gym/wait-in! rc name dimension/nether)
+       (rcon/command! rc (str "clear " name))
+       (doseq [item kit] (rcon/command! rc (str "give " name " " item)))
+       (Thread/sleep (long fixture/settle-ms))
+       (standing-on pad)))))
 
 (defn slot-index
   "The index racer i (from 0) lands with at the fortress: i mod slots, so a bot that replaces one
@@ -758,8 +808,8 @@
    cell claimed for it round the race's centre, which the first bot online decides), pin its spawn
    there, and put its :go (every step up to until, milestones on, :go/at where it landed) on its
    queue. A bot whose landing fails starts where it stands."
-  [{:keys [host rcon-port rcon-pass until landings landing-offset from kit bots]} ch centre name
-   queue i]
+  [{:keys [host rcon-port rcon-pass until landings landing-offset from kit bots live]} ch centre
+   name queue i]
   (async/thread
    (try (rcon/with-rcon
          host
@@ -778,7 +828,8 @@
                                name
                                (if landings (landing-of landings (or landing-offset 0) k) @centre)
                                k
-                               kit))
+                               kit
+                               live))
                             landings
                             (fixture/land-at! rc name (landing-of landings (or landing-offset 0) i))
                             :else (land! rc ch name @centre i)))]
@@ -921,7 +972,7 @@
         world* (atom (game/init {:host (:host server) :port (:port server) :name name}))]
     (swap! live assoc name world*)
     ((:watch watcher) name world*)
-    (land-bot! server ch centre name queue (dec n))
+    (land-bot! (assoc server :live live) ch centre name queue (dec n))
     (try (let [truth (promise)
                {r :result}
                (main/run-bot!
@@ -952,7 +1003,13 @@
              (println "RESULT" name (pr-str (marked r))) ; filed at the stage it crashed in (issue #152)
              (flush)
              {:name name :result r}))
-         (finally ((:unwatch watcher) world*) (swap! live dissoc name)))))
+         (finally
+          (when-let [sp (:pearls/spawner-broken @world*)]
+            (let [k (slot-index (dec n) (:bots server))
+                  f (when (seq @fortress-pool) (fortress-for @fortress-pool k))]
+              (swap! broken-spawners assoc sp {:broken-at (System/currentTimeMillis) :fortress f})))
+          ((:unwatch watcher) world*)
+          (swap! live dissoc name)))))
 
 (defn accepts?
   "Does the server take a connection on its game port now (within 2 s)?"
