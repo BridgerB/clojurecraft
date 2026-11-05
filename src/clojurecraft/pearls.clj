@@ -2431,13 +2431,13 @@
 (defn spawner-broken-log
   "The world with one log line when a spawner is broken by the bot."
   [world]
-  (if-let [sp (:pearls/spawner-broken world)]
-    (if (:pearls/spawner-broken-logged world)
-      world
-      (-> world
-          (assoc :pearls/spawner-broken-logged true)
-          (game/say (str "spawner-broken " sp))))
-    world))
+  (let [sp (:pearls/spawner-broken world)
+        logged? (:pearls/spawner-broken-logged world)]
+    (cond (and sp (not logged?))
+          (-> world
+              (assoc :pearls/spawner-broken-logged true)
+              (game/say (str "spawner-broken " sp)))
+          :else world)))
 
 (defn blaze-refuge
   "The blaze row's survival intent after the rods, or nil once it has handed over: while the

@@ -4116,11 +4116,12 @@
   ;; Logging spawner-broken emits the message once and marks it logged.
   (let [w (-> (standing {})
               (assoc :pearls/spawner-broken [8 65 10]))
-        w1 (pearls/spawner-broken-log w)]
+        w1 (pearls/spawner-broken-log w)
+        logs (fn [world]
+               (keep #(when (= :log (:effect/kind %)) (:effect/message %)) (:bot/effects world)))]
     (is (true? (:pearls/spawner-broken-logged w1)))
-    (is (= "spawner-broken [8 65 10]" (last (:bot/say w1 []))))
-    (let [w2 (pearls/spawner-broken-log w1)]
-      (is (= 1 (count (:bot/say w2 []))) "logged only once"))))
+    (is (= "spawner-broken [8 65 10]" (last (logs w1))))
+    (let [w2 (pearls/spawner-broken-log w1)] (is (= 1 (count (logs w2))) "logged only once"))))
 
 
 
