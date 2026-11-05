@@ -64,7 +64,8 @@
 (defn sealed-in-fortress?
   "Is the bot sealed in its pocket inside or near the fortress?"
   [world]
-  (boolean (and (pocket/in? world) (pocket/sealed? world (:pocket/site world)))))
+  (boolean (or (and (pocket/in? world) (pocket/sealed? world (:pocket/site world)))
+               (:pearls/refuge-done world))))
 
 (defn safe?
   "Is the bot in a safe state to make pickaxes: health at or above danger health, not on fire,

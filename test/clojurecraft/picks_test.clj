@@ -140,10 +140,9 @@
           (is (not= (recipe/item-id :stone_pickaxe) (:item (get full-inv toss-slot)))))))))
 
 (deftest a-sim-pass-makes-the-pickaxes
-  ;; Verify that in a sealed room with carried materials, a sim pass places the table,
+  ;; Verify that in a safe room with carried materials, a sim pass places the table,
   ;; crafts stone pickaxes up to 3, and takes the table along.
   (let [floor-id (blocks/default-state :netherrack)
-        brick-id (blocks/default-state :nether_bricks)
         ;; A 5x5 room with perimeter walls, floor at 63, roof at 66, clear 3x3 inside (7..9, 7..9)
         room (into {}
                    (concat (for [x (range 6 11) z (range 6 11)] [[x 63 z] floor-id])
@@ -157,11 +156,8 @@
              [:hotbar 4] (item :blaze_rod 7)
              [:hotbar 5] (item :cooked_beef 16)
              [:hotbar 6] (item :iron_sword 1)}
-        site {:pocket/cell [8 64 8] :pocket/stand nil :pocket/dig [] :pocket/placed [[8 66 8]]}
         [w sim] (sim/run main/step
-                         (-> (game/init fx/opts)
-                             (assoc :player/dimension dimension/nether :pocket/site site)
-                             (memory/observe [8 60 8] brick-id))
+                         (assoc (game/init fx/opts) :player/dimension dimension/nether)
                          (sim/init {:column (world/column-bytes room)
                                     :dimension dimension/nether
                                     :spawn [8.5 64.0 8.5]
