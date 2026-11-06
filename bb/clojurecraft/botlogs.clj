@@ -105,9 +105,12 @@
    event of the loop over senses/freeze-ms), which only a replay of the recording under a
    profiler can name (bb probe, dev profile)? A lane's recordings upload only when it ends, five
    hours on: the freezes of the pearl stage's travel on f9c021c (157 frozen seconds under
-   :tunnel-to :for :pearls, up to 9 s, one :stairs-down 30 s) waited on that."
+   :tunnel-to :for :pearls, up to 9 s, one :stairs-down 30 s) waited on that. Or idle (waiting
+   with nothing to do), which the digest cannot explain either: real-18 bots on 6b5d6fa ended
+   :nothing-to-do 17 s after their tunnel out, the planner answering nothing, and only a replay
+   names the branch."
   [sf]
-  (contains? (senses-classes sf) :freeze))
+  (boolean (some #{:freeze :idle} (senses-classes sf))))
 
 (defn pack-recording!
   "Write recording rec to out as zstd (a plain .edn compressed, a .zst copied); true when written."
