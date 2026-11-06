@@ -169,6 +169,21 @@
         (is (not (picks/table-room? no-junk)))
         (is (not (picks/table-needed? no-junk)))))))
 
+(deftest a-pending-row-with-nothing-to-start-is-done
+  ;; the planner chooses this row ahead of the hunt while it is pending; a nil next intent then
+  ;; waits until :nothing-to-do (a3cbcc5: 10 of 29 real rod bots ended so). A table pickup last,
+  ;; no table placed and none lying: pending, nothing to start, so the row is done
+  (let [w (-> (sealed-pocket-world [(item :blaze_rod 7) (item :stone_pickaxe 1)
+                                    (item :stone_pickaxe 1) (item :stone_pickaxe 1) (item :stick 8)
+                                    (item :cobblestone 58)])
+              (assoc :plan/last
+                     {:intent/kind :collect-drops :intent/for :take-table :intent/target [9 64 8]}))
+        row (first (filter #(= :spare-picks (:goal/id %)) plan/goals))]
+    (is (picks/pending? w) "the table pickup keeps it pending")
+    (is (nil? (picks/row-intent w row plan/goals)) "with nothing it can start")
+    (is (plan/done-by w row) "so the row is done and the hunt is chosen")
+    (is (nil? (plan/next-intent w row plan/goals)))))
+
 (deftest a-sim-pass-makes-the-pickaxes
   ;; Verify that in a safe room with carried materials, a sim pass places the table,
   ;; crafts stone pickaxes up to 3, and takes the table along.
