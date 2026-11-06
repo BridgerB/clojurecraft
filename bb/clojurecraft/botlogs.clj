@@ -92,6 +92,31 @@
         classes (for [[r f] files :when (not (:ok r)) c (:senses/class (head f))] (name c))]
     {:coverage [(count files) (count runs)] :senses (frequencies classes)}))
 
+(defn senses-classes
+  "The classes a senses file's first line holds (senses/write!), a set of keywords; #{} when
+   there is no file or it cannot be read."
+  [sf]
+  (or (try (with-open [r (io/reader sf)] (:senses/class (edn/read-string (first (line-seq r)))))
+           (catch Exception _ nil))
+      #{}))
+
+(defn keep-recording?
+  "Is a run's recording worth shipping whole beside its digest: its senses show a freeze (an
+   event of the loop over senses/freeze-ms), which only a replay of the recording under a
+   profiler can name (bb probe, dev profile)? A lane's recordings upload only when it ends, five
+   hours on: the freezes of the pearl stage's travel on f9c021c (157 frozen seconds under
+   :tunnel-to :for :pearls, up to 9 s, one :stairs-down 30 s) waited on that."
+  [sf]
+  (contains? (senses-classes sf) :freeze))
+
+(defn pack-recording!
+  "Write recording rec to out as zstd (a plain .edn compressed, a .zst copied); true when written."
+  [rec out]
+  (if (str/ends-with? rec ".zst")
+    (do (fs/copy rec out {:replace-existing true}) true)
+    (zero? (:exit
+            (p/shell {:continue true :out :string :err :string} "zstd" "-q" "-f" "-o" out rec)))))
+
 (defn recording
   "The recording of a real run under data-dir: <run/dir>/<bot>.edn while the lane plays (the
    recordings are packed to .edn.zst only at the job's end), or .edn.zst after; nil when absent.
@@ -136,6 +161,8 @@
                              (str (:run/dir r "s") "-" (:run/bot r))
                              (str/replace (fs/file-name sf) #"\.senses\.edn$" ""))]]
           (when rec (digest-file! rec (str (fs/path logs (str stem ".log")))))
+          (when (and rec sf (keep-recording? sf))
+            (pack-recording! rec (str (fs/path logs (str stem ".edn.zst")))))
           (when sf (fs/copy sf (fs/path logs (str stem ".senses.edn")) {:replace-existing true})))
         (when (fs/exists? lines-dir) (fs/copy-tree lines-dir (fs/path logs "lines")))
         (let [name (asset run runner batch)

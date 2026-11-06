@@ -58,3 +58,13 @@
     (is (= f (botlogs/senses-file "data/simrace" {:run/senses-file f})))
     (is (= {:coverage [1 1] :senses {"idle" 1}}
            (botlogs/senses-summary "data/simrace" [{:run/senses-file f :ok false}])))))
+
+(deftest a-frozen-run-ships-its-recording
+  (let [dir (str (fs/create-temp-dir))
+        frozen (str (fs/path dir "a.senses.edn"))
+        quiet (str (fs/path dir "b.senses.edn"))]
+    (spit frozen "#:senses{:class #{:freeze :open} :lines 1}\n{:t 1}\n")
+    (spit quiet "#:senses{:class #{:open} :lines 1}\n{:t 1}\n")
+    (is (botlogs/keep-recording? frozen))
+    (is (not (botlogs/keep-recording? quiet)))
+    (is (= #{} (botlogs/senses-classes (str (fs/path dir "none.senses.edn")))))))
