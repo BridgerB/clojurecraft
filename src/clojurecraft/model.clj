@@ -230,6 +230,8 @@
     "a fact in :world/facts"] [:intention/kind "the intent's kind" "a fact in :world/facts"]
    [:intention/at "ms it happened" "a fact in :world/facts"]
    [:intention/target "the intent's target" "a fact, when the intent had one"]
+   [:intention/why "the branch that chose the intent (:intent/why)"
+    "a fact, when the intent had one"]
    [:intention/recipe "the intent's recipe" "a fact, when the intent had one"]
    [:intention/reason "why it failed or was abandoned (:goal-met, :preempted, :interrupted)"
     "a :failed or :abandoned fact"]

@@ -909,13 +909,19 @@
         nook (nook-cell world)
         [_ fy _] (intent/feet world)]
     (cond (>= (horizontal world e) back-off-to)
-          (if food {:intent/kind :eat :intent/item food} {:plan/wait :resting})
-          (and food (not near?)) {:intent/kind :eat :intent/item food}
-          (and wall filler) {:intent/kind :place :intent/item filler :intent/cell wall}
-          pillar {:intent/kind :pillar :intent/item pillar :intent/top (+ fy pillar-height)}
-          food {:intent/kind :eat :intent/item food}
-          nook {:intent/kind :dig :intent/target nook}
-          :else {:plan/wait :cornered})))
+          (intent/why :cover/horizontal-world-e-back-off-to
+                      (if food {:intent/kind :eat :intent/item food} {:plan/wait :resting}))
+          (and food (not near?))
+          (intent/why :cover/and-food-not-near? {:intent/kind :eat :intent/item food})
+          (and wall filler)
+          (intent/why :cover/and-wall-filler
+                      {:intent/kind :place :intent/item filler :intent/cell wall})
+          pillar
+          (intent/why :cover/pillar
+                      {:intent/kind :pillar :intent/item pillar :intent/top (+ fy pillar-height)})
+          food (intent/why :cover/food {:intent/kind :eat :intent/item food})
+          nook (intent/why :cover/nook {:intent/kind :dig :intent/target nook})
+          :else (intent/why :cover/else {:plan/wait :cornered}))))
 
 (defn teleport-cover
   "The cover against e when it is one of teleporters, which no back-off gets away from, and a
@@ -959,23 +965,28 @@
   (when-let [[eid e] (defend-target world (threats world))]
     (let [hurt? (< (:player/health world 20.0) (danger-line world))
           shelter (when hurt? (teleport-cover world e))]
-      (cond
-        (and (not= :creeper (entity/kind e)) hurt? (back-off-pointless? world e)) (cover world e)
-        shelter shelter
-        (or (pack-neutral? e)
-            (= :creeper (entity/kind e))
-            hurt?
-            (and (contains? avoided (entity/kind e))
-                 (not (contains? (:plan/cornered world #{}) eid))
-                 (or (< (:player/health world 20.0) avoided-health)
-                     (< 1
-                        (count (filter #(contains? avoided (entity/kind %))
-                                       (vals (threats world))))))))
-        {:intent/kind :back-off :intent/target eid}
-        (= :silverfish (entity/kind e)) {:intent/kind :fight :intent/target eid :intent/hold? true}
-        (or (contains? entity/neutral (entity/kind e)) (contains? (:plan/cornered world #{}) eid))
-        {:intent/kind :fight :intent/target eid :intent/to-the-end? true}
-        :else {:intent/kind :fight :intent/target eid}))))
+      (cond (and (not= :creeper (entity/kind e)) hurt? (back-off-pointless? world e))
+            (intent/why :defend/and-not-creeper-entity-kind-e-hurt?-back-off-poi (cover world e))
+            shelter (intent/why :defend/shelter shelter)
+            (or (pack-neutral? e)
+                (= :creeper (entity/kind e))
+                hurt?
+                (and (contains? avoided (entity/kind e))
+                     (not (contains? (:plan/cornered world #{}) eid))
+                     (or (< (:player/health world 20.0) avoided-health)
+                         (< 1
+                            (count (filter #(contains? avoided (entity/kind %))
+                                           (vals (threats world))))))))
+            (intent/why :defend/or-pack-neutral?-e-creeper-entity-kind-e-hurt?-a
+                        {:intent/kind :back-off :intent/target eid})
+            (= :silverfish (entity/kind e))
+            (intent/why :defend/silverfish-entity-kind-e
+                        {:intent/kind :fight :intent/target eid :intent/hold? true})
+            (or (contains? entity/neutral (entity/kind e))
+                (contains? (:plan/cornered world #{}) eid))
+            (intent/why :defend/or-contains?-entity-neutral-entity-kind-e-contai
+                        {:intent/kind :fight :intent/target eid :intent/to-the-end? true})
+            :else (intent/why :defend/else {:intent/kind :fight :intent/target eid})))))
 
 (defn quarry
   "{eid entity} of the hostiles the gym's :attack row kills: within attack-radius, not
