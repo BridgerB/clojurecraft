@@ -38,6 +38,7 @@
             [babashka.process :as p]
             [clojure.edn :as edn]
             [clojure.string :as str]
+            [clojurecraft.botlogs :as botlogs]
             [clojurecraft.failures :as failures]
             [clojurecraft.page :as page]
             [clojurecraft.win :as win]))
@@ -467,6 +468,7 @@
             (when-let [summary (and said-text (System/getenv "GITHUB_STEP_SUMMARY"))]
               (spit summary (str said-text "\n\n") :append true))
             (report! job n dir runs (:churn/counts after))
+            (when real? (botlogs/upload! job n dir (fs/path dir (:artifact job)) runs))
             (spit (str (fs/file data-dir state-file)) (pr-str after))))))
 
 (defn -main

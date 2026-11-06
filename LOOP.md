@@ -71,6 +71,7 @@ Asleep at the wheel means a tick that ends with nothing changed: "lanes still ru
 ## 4. Evidence: the bot's own logs, read by you
 
 - **Batches:** `node T/batches.ts <sha7>` gives runs, stage reached, pearls and issue signatures per commit and kind (gh-pages data/batches/<UTC date>.ndjson; each row's `failures` holds per-stage reasons).
+- **Bot logs within 20 minutes:** every real batch uploads one archive of the digested log of each bot that ended in it (tick time, every log line, health changes, hits on the bot) and the batch's race.log lines, to the release `botlogs-<UTC day>-<hour>` as `<run>-r<runner>-b<batch>.tar.gz` (`bb/clojurecraft/botlogs.clj`). Get it with `gh release download botlogs-<day>-<hour> --repo BridgerB/clojurecraft -p '<run>-*' -D /tmp/botlogs/<run>`. Read these every tick; never wait for a lane to end.
 - **Lane artifacts:** a lane uploads when it ends or is cancelled. Get one with `gh run download <id> --repo BridgerB/clojurecraft -D /tmp/lanes/<id>`.
   - `race.log`: RESULT lines (reason, held items, the last intent in `:plan :ended`) and MILESTONE lines.
   - `Clj_rNN.edn.zst`: every event and effect (`zstd -dc`; log lines are `:effect/kind :log`).

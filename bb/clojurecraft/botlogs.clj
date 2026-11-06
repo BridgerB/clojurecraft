@@ -1,0 +1,121 @@
+(ns clojurecraft.botlogs
+  "Every ended real bot's log, readable within one batch (LOOP.md section 4): a lane uploads its
+   recordings only when it ends, five and a half hours on, so a batch's deaths and endings were
+   counts until then. Each batch now digests the recording of every run that ended in it into a
+   text log (the tick time, then each log line the bot said, each health change and each hit it
+   took) and uploads one archive a batch to the release botlogs-<UTC day>-<hour>, asset
+   <run>-r<runner>-b<batch>.tar.gz, beside the race.log lines of those runs.
+
+   A recording is EDN lines, an event then the record of what it produced: #:event{:kind :tick
+   :now ms ...}, #:event{:kind :packet :packet {...}}, #:record{:effects [...]}. The digest keeps
+   the time of the last tick and writes a line for every :log effect, every :set-health packet and
+   every :damage-event aimed at the bot's own entity."
+  (:require [babashka.fs :as fs]
+            [babashka.process :as p]
+            [clojure.java.io :as io]
+            [clojure.string :as str]))
+
+(set! *warn-on-reflection* true)
+
+(def release-prefix "botlogs-")
+
+(defn tag
+  "The release a batch reported at now (an ISO instant) uploads its digests to:
+   botlogs-<UTC day>-<hour>, so no release nears GitHub's 1000 assets."
+  [now]
+  (str release-prefix (subs now 0 10) "-" (subs now 11 13)))
+
+(defn asset
+  "The archive name of a batch: <run>-r<runner>-b<batch>.tar.gz, unique to one lane's batch."
+  [run runner batch]
+  (str run "-r" runner "-b" batch ".tar.gz"))
+
+(defn field
+  "The value after key k in an EDN line s, as text up to the next comma or closing brace, or nil."
+  [s k]
+  (some-> (re-find (re-pattern (str (java.util.regex.Pattern/quote k) " ([^,}]+)")) s)
+          second
+          str/trim))
+
+(defn messages
+  "The :log messages of a #:record line, in order."
+  [s]
+  (map second (re-seq #":kind :log, :message \"((?:[^\"\\\\]|\\\\.)*)\"" s)))
+
+(defn digest-line
+  "[state out] after one recording line: state {:now ms :self eid} keeps the last tick's time and
+   the bot's entity id (from :login); out gains a text line for each log message, health change
+   and hit on the bot itself."
+  [[state out] s]
+  (let [now (:now state)
+        stamp (fn [txt] (str (or now "-") " " txt))]
+    (cond (str/includes? s ":kind :tick") [(assoc state :now (field s ":now")) out]
+          (str/includes? s ":packet/name :login,") [(assoc state :self (field s ":entity-id")) out]
+          (str/includes? s ":packet/name :set-health")
+          [state (conj out (stamp (str "hp " (field s ":health") " food " (field s ":food"))))]
+          (and (str/includes? s ":packet/name :damage-event")
+               (= (:self state) (field s ":entity-id")))
+          [state
+           (conj out
+                 (stamp (str "hit source-type " (field s ":source-type")
+                             " by " (field s ":source-cause"))))]
+          (str/includes? s ":kind :log") [state (into out (map stamp) (messages s))]
+          :else [state out])))
+
+(defn digest
+  "The text lines of a recording's lines (digest-line over each, in order)."
+  [lines]
+  (second (reduce digest-line [{} []] lines)))
+
+;;;; I/O: the recordings, the archive, the release ;;;;
+
+(defn recording
+  "The recording of a real run under data-dir: <run/dir>/<bot>.edn.zst, or nil when absent."
+  [data-dir r]
+  (let [f (fs/path data-dir (or (:run/dir r) "") (str (:run/bot r) ".edn.zst"))]
+    (when (fs/exists? f) (str f))))
+
+(defn digest-file!
+  "Write the digest of recording rec to out, decompressed with zstd as a stream; true when written."
+  [rec out]
+  (let [proc (p/process {:err :string} "zstd" "-dc" rec)]
+    (with-open [rdr (io/reader (:out proc))]
+      (spit out (str (str/join "\n" (digest (line-seq rdr))) "\n")))
+    (zero? (:exit @proc))))
+
+(defn upload!
+  "Digest every real run of a batch that has a recording under data-dir into dir, archive them with
+   the batch's race.log lines (lines-dir), and upload the archive to the hour's release (made, a
+   prerelease, by the hour's first batch to need it). Returns the asset name, or nil when there was
+   nothing to digest or the upload failed; never throws, a batch's report goes on without it."
+  [{:keys [data-dir run sha runner]} batch dir lines-dir runs]
+  (try
+    (let [logs (fs/path dir "botlogs")
+          recs (keep (fn [r] (when-let [rec (recording data-dir r)] [r rec])) runs)]
+      (when (seq recs)
+        (fs/create-dirs logs)
+        (doseq [[r rec] recs]
+          (digest-file! rec (str (fs/path logs (str (:run/dir r "s") "-" (:run/bot r) ".log")))))
+        (when (fs/exists? lines-dir) (fs/copy-tree lines-dir (fs/path logs "lines")))
+        (let [name (asset run runner batch)
+              archive (str (fs/path dir name))
+              t (tag (str (java.time.Instant/now)))]
+          (p/shell {:dir (str logs)} "tar" "-czf" archive ".")
+          (p/shell
+           {:continue true :out :string :err :string}
+           "gh" "release"
+           "create" t
+           "--repo" (System/getenv "GITHUB_REPOSITORY")
+           "--prerelease" "--latest=false"
+           "--target" sha
+           "--title" t
+           "--notes"
+           "Each ended real bot's log, one archive a lane's batch (bb/clojurecraft/botlogs.clj).")
+          (when (zero? (:exit (p/shell {:continue true}
+                                       "gh" "release"
+                                       "upload" t
+                                       "--repo" (System/getenv "GITHUB_REPOSITORY")
+                                       "--clobber" archive)))
+            (println "botlogs:" (count recs) "bot logs in" t name)
+            name))))
+    (catch Exception e (println "botlogs: failed:" (ex-message e)) nil)))
