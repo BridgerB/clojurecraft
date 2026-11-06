@@ -3544,4 +3544,9 @@
           (and seek-wood (worn-out? world) (nil? (shelter world)) (not (menaced? world))) seek-wood
           (and (worn-out? world) (nil? (shelter world)) (not (menaced? world)))
           {:plan/wait :no-pickaxe}
+          ;; slots kept free for the drops (window/free-reserve), as the blaze row keeps them: a
+          ;; pearl is picked up on contact only with a slot free. Sim R1-2-1 on the stage-18 rods
+          ;; start (replay probe 42225282730) held 3 pearls with 0 slots free from 4145 s on, and
+          ;; every pickup after failed :not-picked-up; the race kit fills all 36
+          (and (not (menaced? world)) (window/reserve-toss world)) (window/reserve-toss world)
           :else (or (hunt world) (pearl-fallback world)))))
