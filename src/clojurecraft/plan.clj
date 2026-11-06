@@ -149,6 +149,7 @@
    :for #{:regroup :retreat :cover :explore}})
 (def max-unwalkable 12)               ; consecutive walks that failed :no-path before the plan fails
 (def wait-ticks 400)                  ; a goal that has nothing to do for this many planner ticks has failed: 20 s at 20 ticks a second
+(def wait-ms 20000)                   ; and for this long on the bot's clock: a loop behind its schedule fires its missed ticks back to back
 
 (defmulti done-by
   "Is the goal satisfied in this world? A registry keyed by the row's :goal/done? (a predicate
@@ -966,12 +967,17 @@
    9 ticks in 21 s (race 38680745815 runner 5, issue #57's Clj_r05 and Clj_r10), and the wall
    clock ran the wait out before tick-counted logic — the water trap's 20 ticks, the hunt's
    next routable hop — had the ticks to act. The bot stood in a lake and on a peak waiting
-   :no-log and failed while its recovery was a tick or two away."
+   :no-log and failed while its recovery was a tick or two away. And it is not over until wait-ms
+   has passed on the bot's clock (:time/now) too: a loop behind its schedule (main/run-loop!)
+   fires its missed ticks back to back, and 400 of them went by in 2 s (f9c021c race lane 2, s1
+   Clj_r04: waiting from 1793954058929, failed :nothing-to-do by 1793954060935, between two legs
+   of its tunnel out of the fortress, at 20 hp with seven rods)."
   [world reason]
   (let [since (or (:plan/waiting-since world) (:time/now world))
-        ticks (inc (:plan/waiting-ticks world 0))]
-    (cond (and (> ticks wait-ticks) (= :retrying reason) (not (stalled? world))) (recover world)
-          (> ticks wait-ticks) (assoc world :plan/status :failed :plan/reason reason)
+        ticks (inc (:plan/waiting-ticks world 0))
+        over? (and (> ticks wait-ticks) (>= (- (:time/now world 0) (or since 0)) wait-ms))]
+    (cond (and over? (= :retrying reason) (not (stalled? world))) (recover world)
+          over? (assoc world :plan/status :failed :plan/reason reason)
           :else
           (assoc world :plan/waiting-since since :plan/waiting-ticks ticks :plan/waiting reason))))
 
