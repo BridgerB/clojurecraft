@@ -425,6 +425,7 @@
    (let [opts {:host "sim" :port 0 :name "Clj_sim"}
          fortress (:capture/fortress w)
          backoff (atom 0)
+         log? (some? (System/getenv "SIMRACE_LOG")) ; LOG <ms> <message>: the bot's own log lines, as a real bot's stderr
          sensed (atom [])
          next-sense (atom 0)
          slowest (atom 0)
@@ -433,6 +434,10 @@
                           n0 (System/nanoTime)
                           after (step before event)
                           _ (swap! slowest max (quot (- (System/nanoTime) n0) 1000000))
+                          _ (when log?
+                              (doseq [e (:bot/effects after)
+                                      :when (= :log (:effect/kind e))]
+                                (println "LOG" (:time/now after 0) (:effect/message e))))
                           _ (when (>= (:time/now after 0) @next-sense)
                               (reset! next-sense (+ (:time/now after 0) senses/every-ms))
                               (when-let [l (senses/of after (first (reset-vals! slowest 0)))]
