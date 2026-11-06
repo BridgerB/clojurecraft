@@ -798,6 +798,30 @@
                             (<= (abs (- (physics/y-of q) (physics/y-of p))) danger-rise))))
                    (endermen (dissoc world :plan/blacklist) stare-range)))))
 
+(defn perched?
+  "Do the feet stand on a lone column two or more blocks high, open air on all four sides of the
+   feet's cell and of the two cells under it: a pillar the bot raised (combat/cover against a
+   teleporter) and never came down? From one no walk has a route and no level tunnel a floor.
+   Real-18 Clj_r11 (3af52ae lane 2 b2, probe 42268355364) stood on such a pillar at y 98 for
+   its last fifteen minutes, every walk :no-path and every :chase tunnel :blocked, until the run
+   ended :blocked."
+  [world]
+  (let [[x y z] (intent/feet world)
+        open? (fn [c] (= :clear (path/classify world c)))
+        sides (fn [[cx cy cz]]
+                (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]]] [(+ cx dx) cy (+ cz dz)]))]
+    (boolean (and (= :solid (path/classify world [x (dec y) z]))
+                  (= :solid (path/classify world [x (- y 2) z]))
+                  (every? open? (mapcat sides [[x y z] [x (dec y) z] [x (- y 2) z]]))))))
+
+(defn come-down
+  "The dig of the block under the feet while perched?, else nil: the bot drops a block a dig
+   (no fall damage) until it stands on ground again."
+  [world]
+  (when (perched? world)
+    (let [[x y z] (intent/feet world)]
+      {:intent/kind :dig :intent/target [x (dec y) z] :intent/drop-ok? true :intent/for :pearls})))
+
 (defn shelter
   "The hunt's burrow (:pearls/shelter) while it is within shelter-reach of the feet, still a
    shelter? by the terrain and not given up after a minute with nothing to do from it (stale?),
@@ -2969,6 +2993,8 @@
                        :else tid)]
     (cond
       (blaze-refuge world) (blaze-refuge world)
+      ;; off a pillar first: nothing else starts from one (perched?)
+      (and (not hurt?) (come-down world)) (come-down world)
       (and meal
            (or (empty? (filter #(combat/seen? world (val %)) (shooters world)))
                (and (fortress-escaping? world) (not (shot-at? world)))))
