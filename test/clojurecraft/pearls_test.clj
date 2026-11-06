@@ -4167,7 +4167,8 @@
               (assoc :player/dimension "minecraft:the_nether" :player/health 15.9)
               (assoc-in [:player/inventory 1] (item :iron_pickaxe 1))
               (assoc-in [:player/inventory 2] (item :cooked_beef 16)))]
-    (is (= {:intent/kind :fight :intent/target 7 :intent/for :pearls} (pearls/hunt w))
+    (is (= {:intent/kind :fight :intent/target 7 :intent/yield? true :intent/for :pearls}
+           (pearls/hunt w))
         "one armoured hit taken: fought back")
     (is (not= :fight (:intent/kind (pearls/hunt (assoc w :player/health 9.0))))
         "under danger-health: never fought")))

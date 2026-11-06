@@ -2971,8 +2971,11 @@
       ;; an angry one at hand that has struck is fought back first, above the refuge, the meal,
       ;; the seal and the tunnel out, never under danger-health: sim R1-2-1 on the stage-18 rods
       ;; start (replay probe 42228352926) ran :seal and :eat under 2145's hits from 15.9 to 0 in
-      ;; four seconds without one swing
-      (and sid (not hurt?)) {:intent/kind :fight :intent/target sid :intent/for :pearls}
+      ;; four seconds without one swing. A burrow to go home to is gone home to instead (the
+      ;; walk home below, churn-a pearls-12 run 3). Yielding: under retreat-health the fight ends
+      ;; and the hurt branches cover (combat/teleport-cover), never a walk away it outruns
+      (and sid (not hurt?) (not (and home (not in?))))
+      {:intent/kind :fight :intent/target sid :intent/yield? true :intent/for :pearls}
       (blaze-refuge world) (blaze-refuge world)
       (and meal
            (or (empty? (filter #(combat/seen? world (val %)) (shooters world)))
@@ -2996,6 +2999,10 @@
           {:intent/kind :lookout :intent/for :pearls})
       (and hurt? in?) (or meal {:intent/kind :lookout :intent/for :pearls})
       (and cornered? hurt? (not in?) (or meal (wall-off world e))) (or meal (wall-off world e))
+      ;; an enderman teleports after any back-off: a block between, a pillar, a meal or a nook
+      ;; first (combat/teleport-cover), the back-off only with nothing to make one from (sim
+      ;; R1-2-1, probe 42238451323: the fight's walk away from 2145 under 10 health, dead)
+      (and near? hurt? (not in?) (combat/teleport-cover world e)) (combat/teleport-cover world e)
       (and near? hurt? (not in?)) {:intent/kind :back-off :intent/target eid :intent/for :pearls}
       (and hurt? (not in?) tid (combat/back-off-pointless? world te) (cover-from world))
       (cover-from world)
