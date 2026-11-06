@@ -216,7 +216,11 @@
             (pack-recording! rec (str (fs/path logs (str stem ".edn.zst")))))
           (when sf (fs/copy sf (fs/path logs (str stem ".senses.edn")) {:replace-existing true}))
           (when-let [ef (events-file data-dir r)]
-            (fs/copy ef (fs/path logs (str stem ".events.edn")) {:replace-existing true})))
+            (fs/copy ef (fs/path logs (str stem ".events.edn")) {:replace-existing true}))
+          ;; the server's word on what stood round the bot where it ended (race/near-truth!)
+          (let [st (fs/path data-dir (or (:run/dir r) "") (str (:run/bot r) ".server.txt"))]
+            (when (fs/exists? st)
+              (fs/copy st (fs/path logs (str stem ".server.txt")) {:replace-existing true}))))
         (when (fs/exists? lines-dir) (fs/copy-tree lines-dir (fs/path logs "lines")))
         (let [name (asset run runner batch)
               archive (str (fs/absolutize (fs/path dir name))) ; tar runs in the logs dir: a relative path would name a file under it

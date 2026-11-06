@@ -438,3 +438,12 @@
   ;; race f8b28e3, lane 2: 525 candidates answered :no-ground and 15 of 16 pads fell back to y 72
   (is (= 3 race/ground-drop) "a floor three lower is a slope, a deeper drop is a ledge")
   (is (< race/ground-drop 8)))
+
+(deftest the-server-is-asked-what-stood-round-an-ending
+  ;; the observability plan, part E: the ground truth beside what the bot saw
+  (let [[near self] (race/near-commands "Clj_r10" [1559 66 64] "minecraft:the_nether")]
+    (is (= (str
+            "execute in minecraft:the_nether positioned 1559 66 64 as @e[distance=..32,type=!item,"
+            "type=!experience_orb,type=!player,sort=nearest,limit=12] run data get entity @s")
+           near))
+    (is (= "data get entity Clj_r10" self))))
