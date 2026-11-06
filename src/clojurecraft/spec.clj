@@ -168,6 +168,7 @@
 (s/def :world/blocks (s/map-of ::block-pos int?))
 (s/def :world/unconfirmed (s/map-of ::block-pos int?))
 (s/def :world/facts #(instance? datascript.db.DB %))
+(s/def :world/sights (s/map-of string? (s/map-of ::block-pos int?)))
 (s/def :block/state int?)
 (s/def :block/seen-at int?)
 (s/def :world/entities (s/map-of int? (s/keys :req [:entity/type :entity/pos])))

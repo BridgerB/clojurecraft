@@ -53,6 +53,12 @@
 
 (defn empty-facts "A store with nothing seen yet." [] (d/empty-db schema))
 
+(defn empty-facts?
+  "Does db hold no sighting yet? A world whose facts start empty keeps the sights index from its
+   first sighting on; one saved with sightings and no index (older code) is asked by its facts."
+  [db]
+  (empty? (d/datoms db :aevt :sight/pos)))
+
 (def crafting-table (first (keep (fn [[n _ lo]] (when (= n :crafting_table) lo)) blocks/table)))
 
 (defn crafting-table? "Is this state a crafting table?" [id] (= id crafting-table))
@@ -150,66 +156,84 @@
                 :let [ent (d/entity db e)]]
             [pos {:block/state (:sight/state ent) :block/seen-at (:sight/at ent)}]))))
 
-(defn positions-by-query
-  "[facts states dimension] → the positions-now of those facts, as the Datalog query it was
-   first written as: every sighting of one of states in the dimension with no later sighting at
-   its place of a state outside them. The definition positions-in answers by index; a test holds
-   the two equal."
-  [facts states dim]
-  (d/q '[:find [?pos ...] :in $ % [?s ...] ?all ?dim :where [?e :sight/state ?s]
-         [?e :sight/pos ?pos] (in-dimension ?e ?dim)
-         (not-join
-          [?e ?pos ?all ?dim]
-          [?later :sight/pos ?pos]
-          [(> ?later ?e)]
-          (in-dimension ?later ?dim)
-          [?later :sight/state ?t]
-          [(contains? ?all ?t) ?kept]
-          [(false? ?kept)])]
-       facts
-       in-dimension
-       states
-       (set states)
-       dim))
-
 (def positions-in
-  "[facts states dimension] → the positions-now of those facts (positions-by-query's answer):
-   the places one of states was seen in the dimension whose latest sighting there is one of
-   them, read from the indexes (:avet on :sight/state, then on :sight/pos for each place), not by
-   a not-join over every sighting. Remembered by the facts' identity (memo/by), but in a fight the
-   facts change nearly every tick, so each miss must be cheap: the query took 100 to 240 ms a
-   tick at the seventh rod (probe 42165757215, 0ace52e Clj_r57's window, 160 of 226 samples under
-   positions-now), which a loaded race runner stretched to freezes of 1.4 to 3 s while the bot
-   burned (54 of 65 blaze deaths after rod seven froze over 1.5 s)."
+  "[facts states dimension] → the positions-now of those facts: a Datalog query over every
+   sighting, remembered by the facts' identity (memo/by): facts change only when a sighting is
+   added, and the planner asked this every tick (a race's profile: a fifth of all its CPU)."
+  (memo/by
+   [:identical :equal :equal]
+   64
+   (fn [facts states dim]
+     (d/q '[:find [?pos ...] :in $ % [?s ...] ?all ?dim :where [?e :sight/state ?s]
+            [?e :sight/pos ?pos] (in-dimension ?e ?dim)
+            (not-join
+             [?e ?pos ?all ?dim]
+             [?later :sight/pos ?pos]
+             [(> ?later ?e)]
+             (in-dimension ?later ?dim)
+             [?later :sight/state ?t]
+             [(contains? ?all ?t) ?kept]
+             [(false? ?kept)])]
+          facts
+          in-dimension
+          states
+          (set states)
+          dim))))
+
+(def positions-of
+  "[sights states dimension] → the positions-now of a sights index (:world/sights): the places in
+   the dimension whose latest state is one of states. Remembered by the index's identity (memo/by):
+   it changes only when a sighting is appended."
   (memo/by [:identical :equal :equal]
            64
-           (fn [facts states dim]
-             (let [kept (set states)
-                   places (into #{}
-                                (comp (mapcat #(d/datoms facts :avet :sight/state %))
-                                      (map #(d/entity facts (:e %)))
-                                      (filter #(= dim (sight-dimension %)))
-                                      (map :sight/pos))
-                                kept)]
-               (filterv #(contains? kept (:sight/state (latest-entity facts dim %))) places)))))
+           (fn [sights states dim]
+             (let [kept (set states)]
+               (into [] (keep (fn [[pos id]] (when (contains? kept id) pos))) (get sights dim))))))
 
 (defn positions-now
   "Positions where one of states was seen and nothing seen there since is outside states: the
-   essay's \"the nearest log I have ever seen that I have not confirmed gone\", as one Datalog
-   query over the facts (no later fact at the place with a state outside the set), remembered by
-   the facts (positions-in)."
+   essay's \"the nearest log I have ever seen that I have not confirmed gone\". Read from the
+   sights index (:world/sights, positions-of), the current view kept as each sighting is appended:
+   the query over every sighting (positions-in) took 100 to 240 ms a tick at the seventh rod (probe
+   42165757215), frozen to seconds on a loaded race runner while the bot burned. A world saved
+   before the index (no :world/sights) is asked by the query, as it was."
   [world states]
-  (positions-in (:world/facts world) states (dimension/of world)))
+  (if-let [sights (:world/sights world)]
+    (positions-of sights states (dimension/of world))
+    (positions-in (:world/facts world) states (dimension/of world))))
+
+(defn indexed
+  "sights (:world/sights) with each sighting fact of facts written in: its position's latest state
+   in its dimension."
+  [sights facts]
+  (reduce (fn [s f]
+            (if-let [pos (:sight/pos f)]
+              (assoc-in s [(:sight/dimension f dimension/overworld) pos] (:sight/state f))
+              s))
+          (or sights {})
+          facts))
+
+(defn appended
+  "The world with facts tx appended to :world/facts, and their sightings to :world/sights when the
+   world keeps the index: it has one, or its facts held no sighting yet. A world saved with
+   sightings and no index stays without one, so it is never half an index."
+  [world tx]
+  (let [index? (or (contains? world :world/sights) (empty-facts? (:world/facts world)))]
+    (cond-> (update world :world/facts d/db-with tx) index? (update :world/sights indexed tx))))
 
 ;; ---------------------------------------------------------------- writing
 
 (defn observation
   "The fact to append for seeing id at pos in dimension dim, or nil when it adds nothing (same as
-   the last there)."
-  [db dim pos id now]
-  (let [last (latest-entity db dim pos)]
-    (when (and (not= id (:sight/state last)) (or last (watched? dim id)))
-      {:sight/pos pos :sight/state id :sight/at now :sight/dimension dim})))
+   the last there). The last there is read from the sights index when the world has one (a
+   lookup; a fortress column holds thousands of watched cells), else from the facts."
+  ([db dim pos id now] (observation db nil dim pos id now))
+  ([db sights dim pos id now]
+   (let [[seen? last-id] (if sights
+                           (let [m (get sights dim)] [(contains? m pos) (get m pos)])
+                           (let [e (latest-entity db dim pos)] [(some? e) (:sight/state e)]))]
+     (when (and (not= id last-id) (or seen? (watched? dim id)))
+       {:sight/pos pos :sight/state id :sight/at now :sight/dimension dim}))))
 
 (def forest-min 12) ; blocks of warped nylium that make a chunk part of a warped forest
 
@@ -292,16 +316,18 @@
    already on record within it."
   [world key column]
   (let [db (:world/facts world)
+        sights (when (or (contains? world :world/sights) (empty-facts? db))
+                 (:world/sights world {}))
         now (:time/now world)
         dim (dimension/of world)
         forest (forest-fact key column now dim)
-        tx (concat (keep (fn [[x y z id]] (observation db dim [x y z] id now))
+        tx (concat (keep (fn [[x y z id]] (observation db sights dim [x y z] id now))
                          (thin-bricks (chunk/find-blocks {key column} #(watched? dim %))))
                    (when (and forest
                               (not= (:forest/count forest)
                                     (:forest/count (latest-forest db dim key))))
                      [forest]))]
-    (cond-> world (seq tx) (assoc :world/facts (d/db-with db tx)))))
+    (cond-> world (seq tx) (appended (vec tx)))))
 
 (def source-states "The states of a water or a lava source." #{blocks/water-base blocks/lava-base})
 
@@ -364,9 +390,11 @@
 (defn observe
   "A single block changed: append the fact if it is watched or the position is on record."
   [world pos id]
-  (let [db (:world/facts world)]
-    (if-let [fact (observation db (dimension/of world) pos id (:time/now world))]
-      (assoc world :world/facts (d/db-with db [fact]))
+  (let [db (:world/facts world)
+        sights (when (or (contains? world :world/sights) (empty-facts? db))
+                 (:world/sights world {}))]
+    (if-let [fact (observation db sights (dimension/of world) pos id (:time/now world))]
+      (appended world [fact])
       world)))
 
 (defn intention
