@@ -2389,17 +2389,22 @@
             ;; a blaze in reach of the open pocket is struck, never held under
             ;; (probe 41914679195 R3/10 seed 1: :pocket-hold at hp 13.8 to 0 with
             ;; a blaze on the bot, its seal never laid)
-            {:intent/kind :fight
-             :intent/target (first (blaze/fightable-blaze world))
-             :intent/to-the-end? true
-             :intent/yield? true}
-            (and in? (not sealed?) (pocket/can-seal? world site)) {:intent/kind :seal}
+            (intent/why :pocket-bore/and-in?-not-sealed?-hp-blaze-low-health-blaze-re
+                        {:intent/kind :fight
+                         :intent/target (first (blaze/fightable-blaze world))
+                         :intent/to-the-end? true
+                         :intent/yield? true})
+            (and in? (not sealed?) (pocket/can-seal? world site))
+            (intent/why :pocket-bore/and-in?-not-sealed?-pocket-can-seal?-world-site
+                        {:intent/kind :seal})
             (and in? (< hp 20.0))
-            (or (blaze/meal world) {:intent/kind :pocket-hold :intent/heal-to 20.0})
+            (intent/why :pocket-bore/and-in?-hp-20-0
+                        (or (blaze/meal world) {:intent/kind :pocket-hold :intent/heal-to 20.0}))
             (and (not in?) (< hp 20.0))
-            (or (blaze/pocket-go world (blaze/nearest-spawner world) false)
-                (blaze/here-intent world))
-            :else nil))))
+            (intent/why :pocket-bore/and-not-in?-hp-20-0
+                        (or (blaze/pocket-go world (blaze/nearest-spawner world) false)
+                            (blaze/here-intent world)))
+            :else (intent/why :pocket-bore/else nil)))))
 
 (declare pearls-stage?)
 
@@ -2992,47 +2997,68 @@
                        (and (or angry? in-reach?) (not (unfightable? world eid e))) eid
                        :else tid)]
     (cond
-      (blaze-refuge world) (blaze-refuge world)
+      (blaze-refuge world) (intent/why :hunt/blaze-refuge-world (blaze-refuge world))
       ;; off a pillar first: nothing else starts from one (perched?)
-      (and (not hurt?) (come-down world)) (come-down world)
+      (and (not hurt?) (come-down world))
+      (intent/why :hunt/and-not-hurt?-come-down-world (come-down world))
       (and meal
            (or (empty? (filter #(combat/seen? world (val %)) (shooters world)))
                (and (fortress-escaping? world) (not (shot-at? world)))))
-      meal
-      (pocket-bore world) (pocket-bore world)
+      (intent/why :hunt/and-meal-or-empty?-filter-combat-seen?-world-val meal)
+      (pocket-bore world) (intent/why :hunt/pocket-bore-world (pocket-bore world))
       (and (fortress-escaping? world) (can-tunnel-out? world) (shot-at? world) (cover-from world))
-      (cover-from world)
-      (and (fortress-escaping? world) (can-tunnel-out? world)) (fortress-tunnel-out world)
-      (and (not in?) (leave-sight world)) (leave-sight world)
-      (and (shot-at? world) (not in?) (cover-from world)) (cover-from world)
-      (and (not in?) (room-exit world)) (room-exit world)
+      (intent/why :hunt/and-fortress-escaping?-world-can-tunnel-out?-wor (cover-from world))
+      (and (fortress-escaping? world) (can-tunnel-out? world))
+      (intent/why :hunt/and-fortress-escaping?-world-can-tunnel-out?-wor-2
+                  (fortress-tunnel-out world))
+      (and (not in?) (leave-sight world))
+      (intent/why :hunt/and-not-in?-leave-sight-world (leave-sight world))
+      (and (shot-at? world) (not in?) (cover-from world))
+      (intent/why :hunt/and-shot-at?-world-not-in?-cover-from-world (cover-from world))
+      (and (not in?) (room-exit world))
+      (intent/why :hunt/and-not-in?-room-exit-world (room-exit world))
       (and home
            (not in?)
            (or ce near? hurt? tid aid swarmed? (angry-within? world hold-radius))
            (intent/routable? world way-home))
-      way-home
-      (and swarmed? (not in?) (nil? home) (cover-from world)) (cover-from world)
+      (intent/why :hunt/and-home-not-in?-or-ce-near?-hurt?-tid-aid-swarm way-home)
+      (and swarmed? (not in?) (nil? home) (cover-from world))
+      (intent/why :hunt/and-swarmed?-not-in?-nil?-home-cover-from-world (cover-from world))
       (and swarmed? in?)
-      (or (when mouth (wall-toward world (physics/centre mouth) [0 1]))
-          {:intent/kind :lookout :intent/for :pearls})
-      (and hurt? in?) (or meal {:intent/kind :lookout :intent/for :pearls})
-      (and cornered? hurt? (not in?) (or meal (wall-off world e))) (or meal (wall-off world e))
-      (and near? hurt? (not in?)) {:intent/kind :back-off :intent/target eid :intent/for :pearls}
+      (intent/why :hunt/and-swarmed?-in?
+                  (or (when mouth (wall-toward world (physics/centre mouth) [0 1]))
+                      {:intent/kind :lookout :intent/for :pearls}))
+      (and hurt? in?)
+      (intent/why :hunt/and-hurt?-in? (or meal {:intent/kind :lookout :intent/for :pearls}))
+      (and cornered? hurt? (not in?) (or meal (wall-off world e)))
+      (intent/why :hunt/and-cornered?-hurt?-not-in?-or-meal-wall-off-wor
+                  (or meal (wall-off world e)))
+      (and near? hurt? (not in?))
+      (intent/why :hunt/and-near?-hurt?-not-in?
+                  {:intent/kind :back-off :intent/target eid :intent/for :pearls})
       (and hurt? (not in?) tid (combat/back-off-pointless? world te) (cover-from world))
-      (cover-from world)
-      (and hurt? (not in?) tid) {:intent/kind :back-off :intent/target tid :intent/for :pearls}
-      (and hurt? (not in?)) (or meal {:intent/kind :lookout :intent/for :pearls})
+      (intent/why :hunt/and-hurt?-not-in?-tid-combat-back-off-pointless? (cover-from world))
+      (and hurt? (not in?) tid)
+      (intent/why :hunt/and-hurt?-not-in?-tid
+                  {:intent/kind :back-off :intent/target tid :intent/for :pearls})
+      (and hurt? (not in?))
+      (intent/why :hunt/and-hurt?-not-in? (or meal {:intent/kind :lookout :intent/for :pearls}))
       (and in? fight-id)
-      {:intent/kind :fight
-       :intent/target fight-id
-       :intent/hold? true
-       :intent/yield? true
-       :intent/for :pearls}
-      (and sid (not hurt?) (not in?)) {:intent/kind :fight :intent/target sid :intent/for :pearls}
+      (intent/why :hunt/and-in?-fight-id
+                  {:intent/kind :fight
+                   :intent/target fight-id
+                   :intent/hold? true
+                   :intent/yield? true
+                   :intent/for :pearls})
+      (and sid (not hurt?) (not in?))
+      (intent/why :hunt/and-sid-not-hurt?-not-in?
+                  {:intent/kind :fight :intent/target sid :intent/for :pearls})
       (and tid (not hurt?) (not in?) (nil? home) (not swarmed?) (weak? te))
-      {:intent/kind :fight :intent/target tid :intent/for :pearls}
+      (intent/why :hunt/and-tid-not-hurt?-not-in?-nil?-home-not-swarmed?
+                  {:intent/kind :fight :intent/target tid :intent/for :pearls})
       (and at-end? bid (blocked-out? world))
-      (or (cut-out world) {:intent/kind :lookout :intent/for :pearls})
+      (intent/why :hunt/and-at-end?-bid-blocked-out?-world
+                  (or (cut-out world) {:intent/kind :lookout :intent/for :pearls}))
       (and near?
            (not in?)
            (not (unfightable? world eid e))
@@ -3040,74 +3066,93 @@
                (and (not (pickaxe? world))
                     (not (worn-out? world))
                     (not (contains? (:plan/blacklist world #{}) eid)))))
-      {:intent/kind :fight :intent/target eid :intent/for :pearls}
-      meal meal
-      (or hurt? (and in? bid)) {:intent/kind :lookout :intent/for :pearls}
-      (and in? aid (not (lured-out? world)) (lure? world) @mouth-walk) @mouth-walk
+      (intent/why :hunt/and-near?-not-in?-not-unfightable?-world-eid-e-o
+                  {:intent/kind :fight :intent/target eid :intent/for :pearls})
+      meal (intent/why :hunt/meal meal)
+      (or hurt? (and in? bid))
+      (intent/why :hunt/or-hurt?-and-in?-bid {:intent/kind :lookout :intent/for :pearls})
+      (and in? aid (not (lured-out? world)) (lure? world) @mouth-walk)
+      (intent/why :hunt/and-in?-aid-not-lured-out?-world-lure?-world-mou @mouth-walk)
       (and in? (or aid (angry-within? world hold-radius)))
-      {:intent/kind :lookout :intent/for :pearls}
-      @travel-walk @travel-walk
-      @relocate-now @relocate-now
-      @wander-walk @wander-walk
-      @cage-break @cage-break
-      (and csite @csite-walk) @csite-walk
-      digs? {:intent/kind :burrow :intent/dir dir :intent/for :pearls}
-      (and site @site-walk) @site-walk
-      (and in? qid rested?) {:intent/kind :provoke :intent/target qid :intent/for :pearls}
-      (and in? qid) {:intent/kind :lookout :intent/for :pearls}
+      (intent/why :hunt/and-in?-or-aid-angry-within?-world-hold-radius
+                  {:intent/kind :lookout :intent/for :pearls})
+      @travel-walk (intent/why :hunt/travel-walk @travel-walk)
+      @relocate-now (intent/why :hunt/relocate-now @relocate-now)
+      @wander-walk (intent/why :hunt/wander-walk @wander-walk)
+      @cage-break (intent/why :hunt/cage-break @cage-break)
+      (and csite @csite-walk) (intent/why :hunt/and-csite-csite-walk @csite-walk)
+      digs? (intent/why :hunt/digs? {:intent/kind :burrow :intent/dir dir :intent/for :pearls})
+      (and site @site-walk) (intent/why :hunt/and-site-site-walk @site-walk)
+      (and in? qid rested?)
+      (intent/why :hunt/and-in?-qid-rested?
+                  {:intent/kind :provoke :intent/target qid :intent/for :pearls})
+      (and in? qid) (intent/why :hunt/and-in?-qid {:intent/kind :lookout :intent/for :pearls})
       (and in? (crowded? world))
-      (or (vantage world far) {:intent/kind :lookout :intent/for :pearls})
-      (and in? mouth (not swarmed?) (unseal world mouth)) (unseal world mouth)
+      (intent/why :hunt/and-in?-crowded?-world
+                  (or (vantage world far) {:intent/kind :lookout :intent/for :pearls}))
+      (and in? mouth (not swarmed?) (unseal world mouth))
+      (intent/why :hunt/and-in?-mouth-not-swarmed?-unseal-world-mouth (unseal world mouth))
       (and in? mouth (nil? ce) (empty? (swarm world (physics/centre mouth))) @mouth-walk)
-      @mouth-walk
+      (intent/why :hunt/and-in?-mouth-nil?-ce-empty?-swarm-world-physics @mouth-walk)
       (and qid
            rested?
            (or (and (not (pickaxe? world)) (not (worn-out? world)))
                (= mouth (intent/feet world))
                (and home (<= (physics/distance pos (physics/centre home)) provoke-home-reach))))
-      {:intent/kind :provoke :intent/target qid :intent/for :pearls}
-      (and qid home rested? @mouth-walk) @mouth-walk
-      (and qid home (intent/routable? world way-home)) way-home
+      (intent/why :hunt/and-qid-rested?-or-and-not-pickaxe?-world-not-wo
+                  {:intent/kind :provoke :intent/target qid :intent/for :pearls})
+      (and qid home rested? @mouth-walk)
+      (intent/why :hunt/and-qid-home-rested?-mouth-walk @mouth-walk)
+      (and qid home (intent/routable? world way-home))
+      (intent/why :hunt/and-qid-home-intent-routable?-world-way-home way-home)
       (and (not hurt?) ce (not (unfightable? world ceid ce)) (pickaxe? world))
-      {:intent/kind :fight
-       :intent/target ceid
-       :intent/hold? true
-       :intent/yield? true
-       :intent/for :pearls}
+      (intent/why :hunt/and-not-hurt?-ce-not-unfightable?-world-ceid-ce
+                  {:intent/kind :fight
+                   :intent/target ceid
+                   :intent/hold? true
+                   :intent/yield? true
+                   :intent/for :pearls})
       (and (not hurt?) ce (not (unfightable? world ceid ce)))
-      {:intent/kind :fight :intent/target ceid :intent/for :pearls}
+      (intent/why :hunt/and-not-hurt?-ce-not-unfightable?-world-ceid-ce-2
+                  {:intent/kind :fight :intent/target ceid :intent/for :pearls})
       home
-      (or (vantage world far)
-          (when (wandering? world) (wander world))
-          @cage-break
-          {:intent/kind :lookout :intent/for :pearls})
+      (intent/why :hunt/home
+                  (or (vantage world far)
+                      (when (wandering? world) (wander world))
+                      @cage-break
+                      {:intent/kind :lookout :intent/for :pearls}))
       ;; no walk out to a new site, a route or a sighting while an angry one is at hand, however
       ;; the hunt has given it up: it strikes the bot in the open (angry-tracked?)
-      (angry-tracked? world hold-radius) {:intent/kind :lookout :intent/for :pearls}
+      (angry-tracked? world hold-radius)
+      (intent/why :hunt/angry-tracked?-world-hold-radius
+                  {:intent/kind :lookout :intent/for :pearls})
       :else
-      (or (if (pickaxe? world)
-            (some (fn [[_ e]]
-                    (when-let [c (stare-site world e)]
-                      {:intent/kind :walk :intent/target c :intent/for :shelter}))
-                  (->> far
-                       (remove (fn [[eid e]] (and (lured-out? world) (unfightable? world eid e))))
-                       (sort-by (fn [[_ e]] (physics/distance (:player/pos world) (:entity/pos e))))
-                       (take candidates)))
-            (when-not (worn-out? world)
-              (when-let [[_ e] (routable world far)]
-                {:intent/kind :walk :intent/target (cell (:entity/pos e)) :intent/for :pearls})))
-          (when-not overworld-death? (descend world (endermen world descend-radius)))
-          (ascend world (endermen world descend-radius))
-          (toward world far)
-          (when-not overworld-death? (bore world (endermen world descend-radius)))
-          (when (= :lookout (:intent/kind (:plan/last world)))
-            (or (roam world)
-                (when (stuck? world) (climb-out world))
-                (when-not overworld-death? (dig-out world))
-                (when (stuck? world) (uncage world))))
-          (when (wandering? world) (wander world))
-          (go-toward-sighting world)
-          {:intent/kind :lookout :intent/for :pearls}))))
+      (intent/why
+       :hunt/else
+       (or (if (pickaxe? world)
+             (some (fn [[_ e]]
+                     (when-let [c (stare-site world e)]
+                       {:intent/kind :walk :intent/target c :intent/for :shelter}))
+                   (->> far
+                        (remove (fn [[eid e]] (and (lured-out? world) (unfightable? world eid e))))
+                        (sort-by (fn [[_ e]]
+                                   (physics/distance (:player/pos world) (:entity/pos e))))
+                        (take candidates)))
+             (when-not (worn-out? world)
+               (when-let [[_ e] (routable world far)]
+                 {:intent/kind :walk :intent/target (cell (:entity/pos e)) :intent/for :pearls})))
+           (when-not overworld-death? (descend world (endermen world descend-radius)))
+           (ascend world (endermen world descend-radius))
+           (toward world far)
+           (when-not overworld-death? (bore world (endermen world descend-radius)))
+           (when (= :lookout (:intent/kind (:plan/last world)))
+             (or (roam world)
+                 (when (stuck? world) (climb-out world))
+                 (when-not overworld-death? (dig-out world))
+                 (when (stuck? world) (uncage world))))
+           (when (wandering? world) (wander world))
+           (go-toward-sighting world)
+           {:intent/kind :lookout :intent/for :pearls})))))
 
 (defn look-off
   "The look [yaw pitch], unless from the eye it stares at a calm enderman (not entity/creepy?;
@@ -3554,25 +3599,33 @@
         ;; again after each. A sword merely broken where the bot hunts still waits.
         respawned? (and (pos? (:stats/deaths world 0)) (= dimension/overworld (dimension/of world)))
         seek-wood (when respawned? (or (roam world) {:intent/kind :lookout :intent/for :pearls}))]
-    (cond fire {:intent/kind :dig :intent/target fire}
+    (cond fire (intent/why :pearls/fire {:intent/kind :dig :intent/target fire})
           d
-          {:intent/kind :collect-drops
-           :intent/item pearl
-           :intent/target (cell (:entity/pos d))
-           :intent/for :pearls}
-          (and k (body? world k)) {:plan/wait :drop}
-          (< (:player/health world 20.0) danger-health) (hunt world)
-          replacing replacing
-          (and seek-wood (nil? (combat/sword world))) seek-wood
-          (nil? (combat/sword world)) {:plan/wait :no-sword}
-          remaking remaking
-          (reserve-gather world) (reserve-gather world)
-          (and seek-wood (worn-out? world) (nil? (shelter world)) (not (menaced? world))) seek-wood
+          (intent/why :pearls/d
+                      {:intent/kind :collect-drops
+                       :intent/item pearl
+                       :intent/target (cell (:entity/pos d))
+                       :intent/for :pearls})
+          (and k (body? world k)) (intent/why :pearls/and-k-body?-world-k {:plan/wait :drop})
+          (< (:player/health world 20.0) danger-health)
+          (intent/why :pearls/player-health-world-20-0-danger-health (hunt world))
+          replacing (intent/why :pearls/replacing replacing)
+          (and seek-wood (nil? (combat/sword world)))
+          (intent/why :pearls/and-seek-wood-nil?-combat-sword-world seek-wood)
+          (nil? (combat/sword world))
+          (intent/why :pearls/nil?-combat-sword-world {:plan/wait :no-sword})
+          remaking (intent/why :pearls/remaking remaking)
+          (reserve-gather world) (intent/why :pearls/reserve-gather-world (reserve-gather world))
+          (and seek-wood (worn-out? world) (nil? (shelter world)) (not (menaced? world)))
+          (intent/why :pearls/and-seek-wood-worn-out?-world-nil?-shelter-world seek-wood)
           (and (worn-out? world) (nil? (shelter world)) (not (menaced? world)))
-          {:plan/wait :no-pickaxe}
+          (intent/why :pearls/and-worn-out?-world-nil?-shelter-world-not-menac
+                      {:plan/wait :no-pickaxe})
           ;; slots kept free for the drops (window/free-reserve), as the blaze row keeps them: a
           ;; pearl is picked up on contact only with a slot free. Sim R1-2-1 on the stage-18 rods
           ;; start (replay probe 42225282730) held 3 pearls with 0 slots free from 4145 s on, and
           ;; every pickup after failed :not-picked-up; the race kit fills all 36
-          (and (not (menaced? world)) (window/reserve-toss world)) (window/reserve-toss world)
-          :else (or (hunt world) (pearl-fallback world)))))
+          (and (not (menaced? world)) (window/reserve-toss world))
+          (intent/why :pearls/and-not-menaced?-world-window-reserve-toss-world
+                      (window/reserve-toss world))
+          :else (intent/why :pearls/else (or (hunt world) (pearl-fallback world))))))

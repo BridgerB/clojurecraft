@@ -76,7 +76,8 @@
                    :player/health 13.3
                    :player/hits [{:at t :type :mob_attack :hp 17.3 :by 42615 :by-kind :blaze}]
                    :plan/intent
-                   {:intent/kind :fight :intent/target 42615 :intent/id 7 :intent/why :struck-back})
+                   (with-meta {:intent/kind :fight :intent/target 42615 :intent/id 7}
+                              {:intent/why :struck-back}))
             (assoc-in [:world/entities 42615 :entity/hurt-at] t)
             (assoc-in [:world/entities 9] {:entity/type blaze-type :entity/pos [10.5 64.0 8.5]})
             (assoc :bot/effects

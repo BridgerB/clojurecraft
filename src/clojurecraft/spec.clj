@@ -699,6 +699,7 @@
 (s/def :intention/target ::target)
 (s/def :intention/recipe keyword?)
 (s/def :intention/reason some?)
+(s/def :intention/why keyword?)
 (s/def :intention/ended-at ::block-pos)
 (s/def :answer/kind #{:ack :pickup :death})
 (s/def :answer/at int?)
