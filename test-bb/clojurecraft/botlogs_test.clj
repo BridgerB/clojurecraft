@@ -50,3 +50,11 @@
     (let [out (str (fs/path dir "out.log"))]
       (is (botlogs/digest-file! (botlogs/recording dir r) out))
       (is (= "\n" (slurp out)) "a tick alone says nothing"))))
+
+(deftest a-sim-run-names-its-senses-file
+  (let [dir (str (fs/create-temp-dir))
+        f (str (fs/path dir "R1-44-1.senses.edn"))]
+    (spit f "{:senses/class #{:idle} :senses/lines 1}\n{:t 1}\n")
+    (is (= f (botlogs/senses-file "data/simrace" {:run/senses-file f})))
+    (is (= {:coverage [1 1] :senses {"idle" 1}}
+           (botlogs/senses-summary "data/simrace" [{:run/senses-file f :ok false}])))))

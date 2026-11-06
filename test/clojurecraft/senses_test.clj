@@ -59,3 +59,8 @@
   (is (= #{:idle :open} (senses/classes [{:t 1 :tick-ms 5 :waiting :nothing-to-do}])))
   (is (= #{} (senses/classes [{:t 1 :tick-ms 5 :pocket {:in? true :sealed? true}}]))
       "sealed and quiet: nothing to name"))
+
+(deftest lines-keep-the-last-five-minutes
+  (let [ls (reduce senses/kept [] (map (fn [t] {:t t}) (range (+ senses/keep-lines 5))))]
+    (is (= senses/keep-lines (count ls)))
+    (is (= 5 (:t (first ls))) "the oldest five dropped")))

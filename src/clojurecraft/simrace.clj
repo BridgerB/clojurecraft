@@ -42,6 +42,7 @@
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.scene :as scene]
+            [clojurecraft.senses :as senses]
             [clojurecraft.sim :as sim]
             [clojurecraft.sword :as sword]
             [datascript.core :as d]))
@@ -424,9 +425,18 @@
    (let [opts {:host "sim" :port 0 :name "Clj_sim"}
          fortress (:capture/fortress w)
          backoff (atom 0)
+         sensed (atom [])
+         next-sense (atom 0)
+         slowest (atom 0)
          counting (fn [before event]
                     (let [t0 (:time/now before 0)
+                          n0 (System/nanoTime)
                           after (step before event)
+                          _ (swap! slowest max (quot (- (System/nanoTime) n0) 1000000))
+                          _ (when (>= (:time/now after 0) @next-sense)
+                              (reset! next-sense (+ (:time/now after 0) senses/every-ms))
+                              (when-let [l (senses/of after (first (reset-vals! slowest 0)))]
+                                (swap! sensed senses/kept l)))
                           world-set (:capture/set w)]
                       (when-let [note (trace-note before after world-set seed)]
                         (println "TRACE" (pr-str note)))
@@ -474,6 +484,7 @@
               crashed (assoc :reason :crashed :error (str crashed)))
             :run/world (select-keys w [:capture/set :capture/landing])
             :run/seed seed
+            :run/senses @sensed
             :run/ms (:time/now world)
             :run/violations (:sim/violations sim)
             :run/respawns (:sim/respawns sim 0)
@@ -562,17 +573,18 @@
                            (update :sim/overworld dissoc :sim/columns :sim/decoded))}
     (:capture/nether-file w) (assoc :snapshot/nether-file (:capture/nether-file w))))
 
+(defn world-seed-name
+  "A run's name: <set>-<n>-<seed>, n the world file's number in its set."
+  [w seed]
+  (str (:capture/set w)
+       "-" (first (str/split (.getName (io/file (str (:capture/file w)))) #"\."))
+       "-" seed))
+
 (defn snapshot-name
   "The file a run's snapshot goes to under dir: <set>-<n>-<seed>.edn.gz, n the world file's
    number in its set."
   [dir w seed]
-  (str (io/file dir
-                (str (:capture/set w)
-                     "-"
-                     (first (str/split (.getName (io/file (str (:capture/file w)))) #"\."))
-                     "-"
-                     seed
-                     ".edn.gz"))))
+  (str (io/file dir (str (world-seed-name w seed) ".edn.gz"))))
 
 (defn stranded?
   "Is a snapshot's player in the overworld holding none of its columns after a death: a respawn
@@ -804,8 +816,17 @@
                      (snapshot-name (io/file (.getParent (io/file (str out))) "snapshots") w seed)]
                  (capture/write-world! p (snapshot w seed until commit sig m))
                  p))
-        r (cond-> (dissoc r :run/end :run/last :run/moments)
-            path (assoc :run/snapshot path :run/moment (:moment m)))]
+        sensed (:run/senses r)
+        senses-path (when (seq sensed)
+                      (let [f (io/file (.getParent (io/file (str out)))
+                                       "senses"
+                                       (str (world-seed-name w seed) ".senses.edn"))]
+                        (io/make-parents f)
+                        (senses/write! (str f) sensed)
+                        (str f)))
+        r (cond-> (dissoc r :run/end :run/last :run/moments :run/senses)
+            path (assoc :run/snapshot path :run/moment (:moment m))
+            senses-path (assoc :run/senses-file senses-path))]
     (locking out
       (let [reached (get-in r [:plan :plan/reached-after])]
         (println "GATE"
