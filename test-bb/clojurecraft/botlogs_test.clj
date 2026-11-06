@@ -67,4 +67,6 @@
     (spit quiet "#:senses{:class #{:open} :lines 1}\n{:t 1}\n")
     (is (botlogs/keep-recording? frozen))
     (is (not (botlogs/keep-recording? quiet)))
+    (spit quiet "#:senses{:class #{:idle :open} :lines 1}\n{:t 1}\n")
+    (is (botlogs/keep-recording? quiet) "an idle run ships its recording too")
     (is (= #{} (botlogs/senses-classes (str (fs/path dir "none.senses.edn")))))))
