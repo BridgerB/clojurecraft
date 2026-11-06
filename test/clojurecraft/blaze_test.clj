@@ -2408,3 +2408,10 @@
                     (memory/remember-intention {:intent/id 91 :intent/kind :pocket} :done))]
         (is (true? (blaze/peeking? out)))
         (is (false? (blaze/peeking? (dissoc out :plan/intent))) "no tunnel running: not a peek")))))
+
+(deftest no-meal-is-begun-under-hits
+  ;; 900395b: 3 of 12 real-18 deaths ended in an :eat under a hoglin's or an enderman's hits; the
+  ;; :eat row already waited out eat/under-attack?, the meal the hunt and the pocket ask did not
+  (let [w (assoc (standing {1 (item :cooked_beef 16)} {}) :player/food 10 :time/tick 1000)]
+    (is (= :eat (:intent/kind (blaze/meal w))) "hungry and quiet: a meal")
+    (is (nil? (blaze/meal (assoc w :player/hurt-at 990))) "hit half a second ago: none")))
