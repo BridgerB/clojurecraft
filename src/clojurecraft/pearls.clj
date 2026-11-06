@@ -2931,7 +2931,6 @@
                                       (empty? (endermen world seek-radius)))
                              (travel world)))
         relocate-now (delay (when (and (:pearls/relocate world)
-                                       (not tracked?)
                                        (not hurt?)
                                        (not swarmed?)
                                        (not (recently-shot? world))
