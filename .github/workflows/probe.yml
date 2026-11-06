@@ -36,7 +36,7 @@ permissions:
 jobs:
   probe:
     runs-on: ubuntu-26.04
-    timeout-minutes: 60
+    timeout-minutes: 180                # a paired sim over a set, or a fold of a long recording
     steps:
       - uses: actions/checkout@v7
       - name: R1's captured worlds

@@ -1,0 +1,61 @@
+(ns clojurecraft.why
+  "Why a bot did what it did at one moment of its recording (the observability plan, part F): the
+   recording folded with this commit's code up to at-ms (the bot's clock), then the moment there
+   (senses/moment: the whole mind) and the planner's answers: the row chosen (plan/choose), its
+   next intent, and for the pearl stage each branch the hunt reads. A probe script: it runs on a
+   runner (bb probe why), never the Mac.
+
+     clojure -M:dev -m clojurecraft.why <recording .edn[.zst|.gz]> <at-ms>
+
+   The fold is exact only at the commit that made the recording (record/header names it); a
+   later commit's planner answers what it would do now, which is what a fix is judged by."
+  (:require [clojure.pprint :as pp]
+            [clojurecraft.game :as game]
+            [clojurecraft.main :as main]
+            [clojurecraft.pearls :as pearls]
+            [clojurecraft.plan :as plan]
+            [clojurecraft.record :as record]
+            [clojurecraft.senses :as senses]
+            [clojurecraft.window :as window]))
+
+(defn at
+  "The world of the recording at path folded up to at-ms (the first event past it stops the fold)."
+  [path at-ms]
+  (record/reduce-entries (fn [w e]
+                           (cond (not (:event/kind e)) w
+                                 (> (:time/now w 0) at-ms) (reduced w)
+                                 :else (assoc (main/step w e) :bot/effects [])))
+                         (game/init {:host "replay" :port 0 :name "Clj_why"})
+                         path))
+
+(defn answers
+  "What the planner answers in world w, as a map of name to value, each guarded: a throw is shown,
+   never fatal. The chosen row and its next intent always; the pearl stage's branches too."
+  [w]
+  (let [safe (fn [f] (try (f) (catch Exception e (str "THROWS " (ex-message e)))))
+        row (plan/choose w plan/goals)]
+    (into (sorted-map)
+          (for [[k f] {:choose #(:goal/id row)
+                       :choose-next #(plan/next-intent w row plan/goals)
+                       :menaced? #(pearls/menaced? w)
+                       :shelter #(pearls/shelter w)
+                       :hunt #(pearls/hunt w)
+                       :pearl-fallback #(pearls/pearl-fallback w)
+                       :pocket-bore #(pearls/pocket-bore w)
+                       :blaze-refuge #(pearls/blaze-refuge w)
+                       :fortress-escaping? #(pearls/fortress-escaping? w)
+                       :angry-tracked? #(pearls/angry-tracked? w pearls/hold-radius)
+                       :perched? #(pearls/perched? w)
+                       :reserve-toss #(window/reserve-toss w)}]
+            [k (safe f)]))))
+
+(defn -main
+  "Print the moment and the planner's answers at at-ms of the recording at path."
+  [path at-ms]
+  (let [w (at path (parse-long at-ms))]
+    (println "HEADER" (pr-str (record/header path)))
+    (println "MOMENT")
+    (pp/pprint (senses/moment w))
+    (println "ANSWERS")
+    (pp/pprint (answers w))
+    (shutdown-agents)))
