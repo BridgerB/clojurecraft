@@ -131,7 +131,7 @@
                      {:replace-existing true})))
         (when (fs/exists? lines-dir) (fs/copy-tree lines-dir (fs/path logs "lines")))
         (let [name (asset run runner batch)
-              archive (str (fs/path dir name))
+              archive (str (fs/absolutize (fs/path dir name))) ; tar runs in the logs dir: a relative path would name a file under it
               t (tag (str (java.time.Instant/now)))]
           (p/shell {:dir (str logs)} "tar" "-czf" archive ".")
           (p/shell
