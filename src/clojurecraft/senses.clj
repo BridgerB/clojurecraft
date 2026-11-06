@@ -13,13 +13,16 @@
    days for want of this."
   (:require [clojure.core.async :as async]
             [clojure.math :as math]
+            [clojure.string :as str]
             [clojurecraft.blaze :as blaze]
             [clojurecraft.combat :as combat]
             [clojurecraft.entity :as entity]
             [clojurecraft.inventory :as inventory]
+            [clojurecraft.memory :as memory]
             [clojurecraft.physics :as physics]
             [clojurecraft.pocket :as pocket]
             [clojurecraft.recipe :as recipe]
+            [clojurecraft.scene :as scene]
             [clojurecraft.window :as window]))
 
 (set! *warn-on-reflection* true)
@@ -254,6 +257,59 @@
                     (sent-events after)
                     (entity-events before after))))))
 
+;; ---------------------------------------------------------------- the moment: the whole mind at an ending
+
+(def moment-intentions 40)             ; the newest intention facts a moment keeps (the story before it)
+(def ring-every-lines 60)              ; lines between two moments of the ring: one a minute
+(def ring-keep 5)                      ; moments the ring keeps: the last five minutes
+
+(defn intent-chain
+  "The running intent and its children, outermost first, each with its small values (kind, stage,
+   target, purpose, why, status, reason): what the bot was doing, all the way down."
+  [i]
+  (->> (iterate :intent/child i)
+       (take-while some?)
+       (mapv #(select-keys %
+                           [:intent/kind :intent/stage :intent/target :intent/for :intent/why
+                            :intent/status :intent/reason :intent/goal :intent/id]))))
+
+(def plan-keys
+  "The plan's attributes a moment keeps whole."
+  [:plan/status :plan/goals :plan/waiting :plan/failed :plan/ended :plan/last :plan/attempts
+   :plan/churn :plan/trap :plan/reached :plan/since])
+
+(def stage-namespaces
+  "The namespaces of the stages' own attributes a moment keeps whole: the hunt's, the pocket's, the
+   fortress's."
+  #{"pearls" "pocket" "fortress" "blaze"})
+
+(defn moment
+  "The bot's whole mind at one world, for a reader of how a run ended (the observability plan,
+   part D): its facts and the blocks round its feet (scene/facts, scene/slice), the intent chain,
+   the plan's attributes, the stages' own, every entity within ledger-radius with all it is known
+   by (kind and distance added), its hits, effects and armour, and the newest moment-intentions
+   intention facts (memory/intentions: what it set out to do, with reasons). A pure function of the
+   world; nil before the bot has a position."
+  [world]
+  (when-let [pos (:player/pos world)]
+    {:t (:time/now world)
+     :facts (scene/facts world)
+     :slice (scene/slice world)
+     :intents (intent-chain (:plan/intent world))
+     :plan (select-keys world plan-keys)
+     :stage
+     (into (sorted-map) (filter (fn [[k _]] (contains? stage-namespaces (namespace k)))) world)
+     :entities (into (sorted-map)
+                     (map (fn [[eid e]] [eid
+                                         (assoc e
+                                                :kind (entity/kind e)
+                                                :d (r1 (physics/distance pos (:entity/pos e))))]))
+                     (near-entities world))
+     :hits (:player/hits world [])
+     :effects (:player/effects world {})
+     :armor (:player/armor world)
+     :intentions (vec (take-last moment-intentions (memory/intentions world)))}))
+
 ;;;; I/O: the observer and its file ;;;;
 
 (def ledger-buffer 8192)               ; changes in flight to the ledger's thread before one is dropped (and counted)
@@ -295,10 +351,14 @@
   "Watch world* and keep its last keep-lines lines (of), one every every-ms of world time,
    computed on a thread of its own from a sliding buffer (a busy thread skips a sample, never
    the loop). slowest is an atom the loop puts each event's ms in (main/apply-event!'s on-ms);
-   a line takes its max and resets it. Returns {:lines (fn [] lines) :close (fn [])}."
+   a line takes its max and resets it. Every ring-every-lines lines it keeps a moment too, the last
+   ring-keep of them (the ring: the minutes before an ending, for a stall that never fails).
+   Returns {:lines (fn [] lines) :ring (fn [] moments) :close (fn [])}."
   [world* slowest]
   (let [ch (async/chan (async/sliding-buffer 1))
         lines (atom [])
+        ring (atom [])
+        n (atom 0)
         next-t (atom 0)
         done (async/thread (loop []
                              (when-let [w (async/<!! ch)]
@@ -307,7 +367,10 @@
                                    (swap! lines #(let [v (conj % l)]
                                                    (if (> (count v) keep-lines)
                                                      (subvec v (- (count v) keep-lines))
-                                                     v)))))
+                                                     v)))
+                                   (when (zero? (mod (swap! n inc) ring-every-lines))
+                                     (when-let [m (moment w)]
+                                       (swap! ring #(vec (take-last ring-keep (conj % m))))))))
                                (recur))))]
     (add-watch world*
                ::senses
@@ -315,7 +378,15 @@
                  (let [t (:time/now new 0)]
                    (when (>= t @next-t) (reset! next-t (+ t every-ms)) (async/offer! ch new)))))
     {:lines (fn [] @lines)
+     :ring (fn [] @ring)
      :close (fn [] (remove-watch world* ::senses) (async/close! ch) (async/<!! done))}))
+
+(defn write-moments!
+  "Write the moment of world (moment: the run's ending) to path and the ring's moments, oldest
+   first, to ring-path, each an EDN value a line."
+  [path world ring-path ring]
+  (spit path (prn-str (moment world)))
+  (spit ring-path (str/join (map prn-str ring))))
 
 (defn write!
   "Write lines to path, one EDN map a line, with their class as the first line."
