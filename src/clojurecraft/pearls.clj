@@ -2134,8 +2134,9 @@
 (defn pocket-bore-heading
   "The fixed cardinal exit heading [dx dz] for the pocket bore, or nil with no spawner known:
    from the spawner toward the start of the inbound trail (the oldest :plan/trail cell, where
-   the bot entered the fortress ground), else toward the nearest known forest, else away from
-   the spawner toward the explore target. Derived only from facts that do not move as the bot
+   the bot entered the fortress ground), else toward the nearest known forest, else east of
+   the spawner (never explore's target: its eight route searches ran in every call and froze
+   real rod bots, and it moves with the feet). Derived only from facts that do not move as the bot
    steps (the spawner, the trail's start, the forest), never from the feet, so the heading is
    the same at every cell of the bore and cannot flip between two targets: run 41852247420
    s2 Clj_r32 alternated :tunnel-to [-741 77 116] and [-737 77 116] 45 times each after the
@@ -2148,10 +2149,7 @@
           [tx tz] (cond (and start (not= [sx sz] [(first start) (last start)]))
                         [(first start) (last start)]
                         forest [(first forest) (last forest)]
-                        :else
-                        (let [e (explore world)
-                              t (:intent/target e)]
-                          (if t [(first t) (last t)] [(inc sx) sz])))
+                        :else [(inc sx) sz])
           dx (- (long tx) (long sx))
           dz (- (long tz) (long sz))]
       (cond (and (zero? dx) (zero? dz)) [1 0]
