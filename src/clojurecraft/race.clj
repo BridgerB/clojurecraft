@@ -964,7 +964,8 @@
    what it sensed and decided, and the loop's slowest event) are written beside its recording as
    <name>.senses.edn the moment before its RESULT, so a batch that counts the RESULT has them,
    and its ledger beside them (senses/ledger!: every change, its hits, swings, intents and the
-   entities round it) as <name>.events.edn.
+   entities round it) as <name>.events.edn, its mind at the end (senses/moment) as
+   <name>.moment.edn and the minutes before (the ring) as <name>.ring.edn.
    Returns {:name :result :truth}."
   [{:keys [server ch centre serials live watcher prefix record-dir commit deadline]}]
   (let [n (swap! serials inc)
@@ -980,6 +981,10 @@
                         (try
                           (senses/write! senses-file ((:lines senses)))
                           (senses/write-events! events-file ((:events ledger)) ((:dropped ledger)))
+                          (senses/write-moments! (str (io/file record-dir (str name ".moment.edn")))
+                                                 @world*
+                                                 (str (io/file record-dir (str name ".ring.edn")))
+                                                 ((:ring senses)))
                           (catch Exception e (cli/log name "senses not written:" e))))]
     (swap! live assoc name world*)
     ((:watch watcher) name world*)
