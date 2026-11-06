@@ -232,14 +232,25 @@
     (assoc w :capture/fortress (assoc start :inventory (kit->inventory kit)))
     w))
 
+(def starts
+  "The sim race's starts at a fortress, by :simrace/from name, as the real race's (race/starts):
+   the first target a run plays (:checkpoint/goal) and what it carries beyond the kit (:checkpoint/kit, {item
+   count}). \"rods\" is stage 18's checkpoint (LOOP.md section 1): seven rods in hand, so every run
+   plays the pearl hunt; no sim run had reached a warped forest from the blaze rods (0 of 52). The
+   kit fills the 36 slots in name order (kit->inventory), so the rods take a slot and the kit's
+   last-named stack is the one left out."
+  {"fortress" {:checkpoint/goal :blaze-rods :checkpoint/kit {}}
+   "rods" {:checkpoint/goal :ender-pearls :checkpoint/kit {:blaze_rod 7}}})
+
 (defn fortress-goals
-  "The goal ids a run that starts at a fortress plays to until: the chain's own, the stages from the
-   blaze rods up (their priority at least the blaze row's), nothing before: a bot at a fortress
-   has gone through them, and a failure before the rods is not the run's to file."
-  [until]
-  (let [row (fn [id] (first (filter #(= id (:goal/id %)) plan/goals)))
-        from (:goal/priority (row :blaze-rods))]
-    (filterv #(>= (:goal/priority (row %) 0) from) (plan/through until))))
+  "The goal ids a run that starts at a fortress plays to until: the chain's own, the stages from
+   goal up (their priority at least goal's row's; the blaze rods by default), nothing before: a bot
+   there has gone through them, and a failure before goal is not the run's to file."
+  ([until] (fortress-goals until :blaze-rods))
+  ([until goal]
+   (let [row (fn [id] (first (filter #(= id (:goal/id %)) plan/goals)))
+         from (:goal/priority (row goal))]
+     (filterv #(>= (:goal/priority (row %) 0) from) (plan/through until)))))
 
 (defn spawn-of
   "Where a run starts: at its fortress when it has one (with-fortress), else on the landing ([x z y],
@@ -252,7 +263,9 @@
    rods when the run starts at a fortress, fortress-goals) and the start (:go/at)."
   [w until]
   {:event/kind :go
-   :go/goals (if (:capture/fortress w) (fortress-goals until) (plan/through until))
+   :go/goals (if-let [f (:capture/fortress w)]
+               (fortress-goals until (:checkpoint/goal f :blaze-rods))
+               (plan/through until))
    :go/chain? true
    :go/at (spawn-of w)})
 
@@ -921,9 +934,15 @@
                          nether (nether-of path)]
                      (cond-> w
                        nether (with-nether nether path)
-                       (and nether (= "fortress" from)) (with-fortress kit))))
+                       (and nether (starts from))
+                       (-> (with-fortress (merge-with + kit (:checkpoint/kit (starts from))))
+                           (as-> w'
+                             (cond-> w'
+                               (:capture/fortress w')
+                               (assoc-in [:capture/fortress :checkpoint/goal]
+                                (:checkpoint/goal (starts from)))))))))
                  files)
-        ws (if (= "fortress" from)
+        ws (if (starts from)
              (let [with (filterv :capture/fortress ws)]
                (cli/log "from fortress:"
                         (count with)

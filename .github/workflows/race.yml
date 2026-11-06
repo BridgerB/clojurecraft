@@ -53,6 +53,8 @@ jobs:
       bots: ${{ steps.read.outputs.bots }}
       server-heap: ${{ steps.read.outputs.server-heap }}
       bot-heap: ${{ steps.read.outputs.bot-heap }}
+      from: ${{ steps.read.outputs.from }}
+      kind: ${{ steps.read.outputs.kind }}
     steps:
       - uses: actions/checkout@v7
       - name: Read ci/race.edn
@@ -66,7 +68,10 @@ jobs:
                    (println (str "sets=" (cheshire.core/generate-string (:race/landing-sets r))))
                    (println (str "bots=" (:race/bots r)))
                    (println (str "server-heap=" (:race/server-heap-mb r)))
-                   (println (str "bot-heap=" (:race/bot-heap-mb r))))' >> "$GITHUB_OUTPUT"
+                   (println (str "bot-heap=" (:race/bot-heap-mb r)))
+                   (let [c (:race/checkpoint r) lane (parse-long "${{ inputs.lane }}") on? (contains? (set (:lanes c)) lane)]
+                     (println (str "from=" (if on? (:from c) "")))
+                     (println (str "kind=" (if on? (:kind c) "real")))))' >> "$GITHUB_OUTPUT"
           cat "$GITHUB_OUTPUT"
 
   race:
@@ -151,7 +156,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}   # the churn's reports: issues, the page, releases
           RUNNER_N: ${{ matrix.runner }}
-          FROM: ${{ inputs.from }}        # '' keeps ci/race.edn's :race/from
+          FROM: ${{ inputs.from || needs.plan.outputs.from }}  # a checkpoint lane's start (ci/race.edn :race/checkpoint), else '' keeps :race/from
+          KIND: ${{ needs.plan.outputs.kind }}  # real, or the checkpoint's own page kind (real-18)
         run: |
           races=""
           for k in $(seq 1 "$SERVERS"); do mkdir -p "data/race/s$k"; touch "data/race/s$k/race.log"; done
@@ -173,7 +179,7 @@ jobs:
           done
           code_at=$(git show -s --format=%cI "$GITHUB_SHA")
           report() {
-            bb churn batch real data/race "race-$GITHUB_SHA-$RUNNER_N" "$GITHUB_RUN_ID" "$GITHUB_SHA" "$code_at" "$RUNNER_N" \
+            bb churn batch "$KIND" data/race "race-$GITHUB_SHA-$RUNNER_N" "$GITHUB_RUN_ID" "$GITHUB_SHA" "$code_at" "$RUNNER_N" \
               || echo "churn: the batch's report failed; its lines wait for the next"
           }
           playing() { for p in $races; do kill -0 "$p" 2>/dev/null && return 0; done; return 1; }
@@ -245,8 +251,9 @@ jobs:
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
+          KIND: ${{ needs.plan.outputs.kind }}
         run: |
-          bb churn batch real data/race "race-$GITHUB_SHA-${{ matrix.runner }}" "$GITHUB_RUN_ID" "$GITHUB_SHA" \
+          bb churn batch "$KIND" data/race "race-$GITHUB_SHA-${{ matrix.runner }}" "$GITHUB_RUN_ID" "$GITHUB_SHA" \
             "$(git show -s --format=%cI "$GITHUB_SHA")" "${{ matrix.runner }}" 120 || echo "churn: the last report failed"
       - name: Summary
         if: always()
