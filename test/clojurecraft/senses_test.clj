@@ -64,3 +64,32 @@
   (let [ls (reduce senses/kept [] (map (fn [t] {:t t}) (range (+ senses/keep-lines 5))))]
     (is (= senses/keep-lines (count ls)))
     (is (= 5 (:t (first ls))) "the oldest five dropped")))
+
+(deftest the-ledger-notes-every-change-of-a-fight
+  ;; the observability plan, part C: Clj_r10 (900395b lane 2) was hit nine times by a hoglin over 40
+  ;; s while it held still in a pocket and never swung; the ledger says each of those as it happens
+  (let [before (nether)
+        t (+ 50 (:time/now before))
+        after
+        (-> before
+            (assoc :time/now t
+                   :player/health 13.3
+                   :player/hits [{:at t :type :mob_attack :hp 17.3 :by 42615 :by-kind :blaze}]
+                   :plan/intent
+                   {:intent/kind :fight :intent/target 42615 :intent/id 7 :intent/why :struck-back})
+            (assoc-in [:world/entities 42615 :entity/hurt-at] t)
+            (assoc-in [:world/entities 9] {:entity/type blaze-type :entity/pos [10.5 64.0 8.5]})
+            (assoc :bot/effects
+                   [{:effect/kind :send :effect/packet {:packet/name :attack :entity-id 42615}}]))
+        es (senses/events before after)
+        by (group-by :ev es)]
+    (is (every? #(= t (:t %)) es))
+    (is (= :fight (:kind (first (:intent by)))))
+    (is (= :struck-back (:why (first (:intent by)))))
+    (is (= {:ev :hit :at t :type :mob_attack :hp 17.3 :by 42615 :by-kind :blaze :t t}
+           (first (:hit by))))
+    (is (= 13.3 (:hp (first (:hp by)))))
+    (is (= 42615 (:eid (first (:swing by)))) "the bot's own swing")
+    (is (= 42615 (:eid (first (:hurt by)))) "and it landed")
+    (is (= 9 (:eid (first (:appear by)))) "a second blaze came near")
+    (is (empty? (senses/events before before)) "nothing changed: nothing noted")))

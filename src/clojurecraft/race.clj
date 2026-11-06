@@ -962,7 +962,9 @@
    or the job's end (deadline): no cap of its own. Its RESULT line is printed as it ends, marked
    cut (failure/cut) when the job's end stopped it. Its senses (senses/senses!: a line a second of
    what it sensed and decided, and the loop's slowest event) are written beside its recording as
-   <name>.senses.edn the moment before its RESULT, so a batch that counts the RESULT has them.
+   <name>.senses.edn the moment before its RESULT, so a batch that counts the RESULT has them,
+   and its ledger beside them (senses/ledger!: every change, its hits, swings, intents and the
+   entities round it) as <name>.events.edn.
    Returns {:name :result :truth}."
   [{:keys [server ch centre serials live watcher prefix record-dir commit deadline]}]
   (let [n (swap! serials inc)
@@ -972,9 +974,13 @@
         slowest (atom 0)
         senses (senses/senses! world* slowest)
         senses-file (str (io/file record-dir (str name ".senses.edn")))
+        ledger (senses/ledger! world*)
+        events-file (str (io/file record-dir (str name ".events.edn")))
         write-senses! (fn []
-                        (try (senses/write! senses-file ((:lines senses)))
-                             (catch Exception e (cli/log name "senses not written:" e))))]
+                        (try
+                          (senses/write! senses-file ((:lines senses)))
+                          (senses/write-events! events-file ((:events ledger)) ((:dropped ledger)))
+                          (catch Exception e (cli/log name "senses not written:" e))))]
     (swap! live assoc name world*)
     ((:watch watcher) name world*)
     (land-bot! server ch centre name queue (dec n))
@@ -1011,7 +1017,10 @@
              (println "RESULT" name (pr-str (marked r))) ; filed at the stage it crashed in (issue #152)
              (flush)
              {:name name :result r}))
-         (finally ((:unwatch watcher) world*) ((:close senses)) (swap! live dissoc name)))))
+         (finally ((:unwatch watcher) world*)
+                  ((:close senses))
+                  ((:close ledger))
+                  (swap! live dissoc name)))))
 
 (defn accepts?
   "Does the server take a connection on its game port now (within 2 s)?"

@@ -467,6 +467,7 @@
          log? (some? (System/getenv "SIMRACE_LOG")) ; LOG <ms> <message>: the bot's own log lines, as a real bot's stderr
          ticks (ticks-window (System/getenv "SIMRACE_TICKS")) ; TICK lines for every tick in [from to] sim ms
          sensed (atom [])
+         ledger (atom []) ; every change (senses/events), as a real bot's ledger keeps it
          next-sense (atom 0)
          slowest (atom 0)
          counting (fn [before event]
@@ -481,6 +482,12 @@
                           _ (when-let [[from to] ticks]
                               (when (<= (long from) (long (:time/now after 0)) (long to))
                                 (println "TICK" (pr-str (tick-note after)))))
+                          _ (when-let [es (seq (senses/events before after))]
+                              (swap! ledger (fn [v]
+                                              (let [v (into v es)]
+                                                (if (> (count v) senses/ledger-keep)
+                                                  (subvec v (- (count v) senses/ledger-keep))
+                                                  v)))))
                           _ (when (>= (:time/now after 0) @next-sense)
                               (reset! next-sense (+ (:time/now after 0) senses/every-ms))
                               (when-let [l (senses/of after (first (reset-vals! slowest 0)))]
@@ -533,6 +540,7 @@
             :run/world (select-keys w [:capture/set :capture/landing])
             :run/seed seed
             :run/senses @sensed
+            :run/events @ledger
             :run/ms (:time/now world)
             :run/violations (:sim/violations sim)
             :run/respawns (:sim/respawns sim 0)
@@ -872,9 +880,17 @@
                         (io/make-parents f)
                         (senses/write! (str f) sensed)
                         (str f)))
-        r (cond-> (dissoc r :run/end :run/last :run/moments :run/senses)
+        events-path (when (seq (:run/events r))
+                      (let [f (io/file (.getParent (io/file (str out)))
+                                       "senses"
+                                       (str (world-seed-name w seed) ".events.edn"))]
+                        (io/make-parents f)
+                        (senses/write-events! (str f) (:run/events r) 0)
+                        (str f)))
+        r (cond-> (dissoc r :run/end :run/last :run/moments :run/senses :run/events)
             path (assoc :run/snapshot path :run/moment (:moment m))
-            senses-path (assoc :run/senses-file senses-path))]
+            senses-path (assoc :run/senses-file senses-path)
+            events-path (assoc :run/events-file events-path))]
     (locking out
       (let [reached (get-in r [:plan :plan/reached-after])]
         (println "GATE"
