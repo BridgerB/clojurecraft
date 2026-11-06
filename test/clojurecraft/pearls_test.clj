@@ -4109,3 +4109,16 @@
 
 
 
+
+(deftest the-fortress-exit-never-searches-routes
+  ;; explore's eight route searches ran in every fortress-exit-dir, several a tick through
+  ;; fortress-escaping?, and froze real rod bots 2 to 19 s a tick (Clj_r08, lane 42202999306
+  ;; b1, profile probe 42210270571): the exit is away from the spawner with no search
+  (let [w (-> (standing {})
+              (assoc :player/dimension "minecraft:the_nether" :player/pos [120.5 59.0 100.5])
+              (assoc-in [:player/inventory 1] (item :iron_pickaxe 1))
+              (memory/observe [100 64 100] blaze/spawner))]
+    (with-redefs [pearls/explore (fn [_] (throw (ex-info "searched" {})))
+                  pearls/far-ends (fn [& _] (throw (ex-info "searched" {})))]
+      (is (= [1.0 0.0] (pearls/fortress-exit-dir w)) "away from the spawner, east")
+      (is (pearls/fortress-escaping? w)))))

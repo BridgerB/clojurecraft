@@ -2233,13 +2233,15 @@
                   :else (or (side-bore-cell world [cx target-y cz]) [cx target-y cz]))))))))
 
 (defn fortress-exit-dir
-  "The horizontal unit direction [dx dz] away from the fortress:
-   toward nearest-forest if known, else toward explore target,
-   else away from the nearest spawner or brick."
+  "The horizontal unit direction [dx dz] away from the fortress: toward nearest-forest if known,
+   else away from the nearest spawner or brick. Never explore's: its eight route searches
+   (far-ends) ran in every call, several a tick through fortress-escaping?, and froze real rod
+   bots 2 to 19 s a tick (Clj_r08, lane 42202999306 b1, profile probe 42210270571: 2057 of 2613
+   samples); a bored tunnel goes through rock, so a walk's route end says nothing of its way."
   [world]
   (let [feet (intent/feet world)
         [fx _ fz] feet
-        target (or (nearest-forest world) (when-let [e (explore world)] (:intent/target e)))
+        target (nearest-forest world)
         sp (when-not target (or (blaze/nearest-spawner world) (fortress/nearest-brick world)))
         [tx tz] (cond target [(first target) (last target)]
                       sp
@@ -2281,19 +2283,21 @@
             [fx fy fz] feet
             near? (near-fortress? world)
             surface-y (fortress-surface-y world)
-            exit-dir (if-let [h (pocket-bore-heading world)]
-                       [(double (first h)) (double (second h))]
-                       (fortress-exit-dir world))
-            [exit-x exit-z] (fortress-exit-horizontal world [fx fz] exit-dir)]
+            ;; the exit only when a fallback needs it: the bore and the retrace answer first
+            exit (delay (fortress-exit-horizontal world
+                                                  [fx fz]
+                                                  (if-let [h (pocket-bore-heading world)]
+                                                    [(double (first h)) (double (second h))]
+                                                    (fortress-exit-dir world))))
+            bore (when near? (or (pocket-bore-target world) (fortress-retrace-target world)))]
         (cond
           ;; Bore from the pocket along the fixed heading through solid rock, else
           ;; retrace the inbound trail or side-bore parallel to an open corridor
-          (and near? (or (pocket-bore-target world) (fortress-retrace-target world)))
-          (or (pocket-bore-target world) (fortress-retrace-target world))
+          bore bore
           ;; Fallback horizontal tunnel away from fortress at current y level
-          near? [exit-x fy exit-z]
+          near? [(first @exit) fy (second @exit)]
           ;; Surface once beyond 48 blocks from fortress
-          (< (long fy) (long surface-y)) [exit-x surface-y exit-z]
+          (< (long fy) (long surface-y)) [(first @exit) surface-y (second @exit)]
           ;; Surfaced and clear of fortress
           :else nil)))))
 
