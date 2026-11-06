@@ -239,3 +239,23 @@
     (is (pos? (long (get (make/counts w) :crafting_table 0))) "crafting table taken along in bag")
     (is (= 7 (:blaze_rod (recipe/counts (:player/inventory w)))) "rods must not drop")
     (is (empty? (:sim/violations sim)))))
+
+(deftest the-row-is-done-whenever-it-has-nothing-to-start
+  ;; real-18 bots at landing [975 48 -176] (Clj_r07 on 3af52ae, probe 42264041854): the planner
+  ;; chose this row, pending, with no intent to start, and the plan failed :nothing-to-do 20 s on.
+  ;; Done and no-intent are one fact now, in every world
+  (let [ended {:intent/kind :collect-drops :intent/for :take-table :intent/target [9 64 8]}
+        stocked (-> (sealed-pocket-world [(item :blaze_rod 7) (item :stone_pickaxe 1)
+                                          (item :stone_pickaxe 1) (item :stone_pickaxe 1)
+                                          (item :stick 8) (item :cobblestone 58)])
+                    (assoc :world/entities {} :time/now 100000 :plan/last ended))
+        row (first (filter #(= :spare-picks (:goal/id %)) plan/goals))
+        worlds
+        [(sealed-pocket-world rod-kit) (assoc stocked :plan/ended (assoc ended :ended/at 99000))
+         (assoc stocked :plan/ended (assoc ended :ended/at 90000)) (standing-nether rod-kit)]]
+    (doseq [w worlds]
+      (is (= (boolean (plan/done-by w row)) (nil? (plan/next-intent w row plan/goals)))))
+    (is (not (plan/done-by (sealed-pocket-world rod-kit) row))
+        "sealed with the kit: it makes picks")
+    (is (plan/done-by (assoc stocked :plan/ended (assoc ended :ended/at 99000)) row)
+        "a pickup just ended with nothing lying and nothing to start: done, the hunt goes on")))
