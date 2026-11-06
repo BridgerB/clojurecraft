@@ -13,9 +13,11 @@
             [clojurecraft.blocks :as blocks]
             [clojurecraft.dimension :as dimension]
             [clojurecraft.drops :as drops]
+            [clojurecraft.entity :as entity]
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
             [clojurecraft.make :as make]
+            [clojurecraft.memory :as memory]
             [clojurecraft.pearls :as pearls]
             [clojurecraft.plan :as plan]
             [clojurecraft.pocket :as pocket]
@@ -112,18 +114,41 @@
     (boolean (and (= :take-table (:intent/for e))
                   (<= (- (long (:time/now world 0)) (long (:ended/at e 0))) take-table-gap-ms)))))
 
+(def take-table-tries
+  "Failed pickups of one table drop after which it is left where it lies: a drop the bot cannot
+   take (in a hole under the feet, in a wall) failed :not-picked-up 100 times in sim-18 runs
+   R2-6-1 and R3-6-1 (simrace lane 4, f9c021c), the row held ahead of the hunt the whole run."
+  3)
+
+(defn drop-cell
+  "The cell a drop lies in."
+  [e]
+  (mapv #(long (math/floor (double %))) (:entity/pos e)))
+
+(defn given-up-drop?
+  "Has the bot failed take-table-tries pickups of the drop e at its cell (memory/failed-count-since
+   on :collect-drops)? Then it is left."
+  [world e]
+  (>= (long (memory/failed-count-since world :collect-drops (drop-cell e) 0)) take-table-tries))
+
+(defn table-drops-near
+  "{eid entity} of the table drops lying within 8 blocks of the bot that it has not given up on."
+  [world]
+  (into {}
+        (remove (fn [[_ e]] (given-up-drop? world e)))
+        (drops/lying world (recipe/item-id :crafting_table) (:player/pos world) 8.0)))
+
 (defn table-needed?
   "Is the crafting table placed near, dropped, or being collected, not yet held in the bag, with
    room for it to come back (table-room?)? Without room the table is left: the row never waits on
    a pickup that cannot happen."
   [world]
-  (boolean
-   (and (zero? (long (get (make/counts world) :crafting_table 0)))
-        (table-room? world)
-        (or (make/near world :crafting_table)
-            (= :take-table (:intent/for (:plan/intent world)))
-            (take-table-just-ended? world)
-            (seq (drops/lying world (recipe/item-id :crafting_table) (:player/pos world) 8.0))))))
+  (boolean (and (zero? (long (get (make/counts world) :crafting_table 0)))
+                (table-room? world)
+                (or (make/near world :crafting_table)
+                    (= :take-table (:intent/for (:plan/intent world)))
+                    (take-table-just-ended? world)
+                    (seq (table-drops-near world))))))
 
 (defn room-needed?
   "Does the sealed bot in the fortress have no free slot for an ender pearl drop and holding junk to toss?"
@@ -191,8 +216,8 @@
      ;; 4. Take the placed table along once crafted
      (when (placed-table? world) (make/take-table-along world))
      ;; 5. Collect dropped table if lying near
-     (when-let [[_ e] (drops/nearest world :crafting_table (intent/feet world))]
+     (when-let [[_ e] (entity/nearest (table-drops-near world) (:player/pos world))]
        {:intent/kind :collect-drops
         :intent/item :crafting_table
-        :intent/target (mapv #(long (math/floor (double %))) (:entity/pos e))
+        :intent/target (drop-cell e)
         :intent/for :take-table}))))

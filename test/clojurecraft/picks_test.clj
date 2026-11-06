@@ -185,6 +185,29 @@
         (is (not (picks/table-needed? old)))
         (is (plan/done-by old row))))))
 
+(deftest a-table-drop-that-will-not-come-is-left-after-three-pickups
+  ;; sim-18 R2-6-1 and R3-6-1 (simrace lane 4, f9c021c): :collect-drops :for :take-table failed
+  ;; :not-picked-up 100 times, the row ahead of the hunt the whole run
+  (let [drop-pos [9.5 63.0 8.5]
+        failed (fn [w n]
+                 (reduce (fn [w i]
+                           (memory/remember-intention (assoc w :time/now (+ 1000 i))
+                                                      {:intent/id i
+                                                       :intent/kind :collect-drops
+                                                       :intent/target [9 63 8]
+                                                       :intent/for :take-table}
+                                                      :failed))
+                         w
+                         (range n)))
+        w (-> (sealed-pocket-world [(item :blaze_rod 7) (item :stone_pickaxe 1)
+                                    (item :stone_pickaxe 1) (item :stone_pickaxe 1) (item :stick 8)
+                                    (item :cobblestone 58)])
+              (assoc
+               :world/entities
+               {77 {:entity/type blocks/item-entity-type :entity/pos drop-pos :entity/seen-at 0}}))]
+    (is (picks/table-needed? (failed w 2)) "two failed pickups: still worth a try")
+    (is (not (picks/table-needed? (failed w 3))) "three: the table is left where it lies")))
+
 (deftest a-sim-pass-makes-the-pickaxes
   ;; Verify that in a safe room with carried materials, a sim pass places the table,
   ;; crafts stone pickaxes up to 3, and takes the table along.
