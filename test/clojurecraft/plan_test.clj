@@ -1445,10 +1445,18 @@
   ;; the water trap's 20 ticks and the hunt's next routable hop were still owed theirs
   (let [w (memory/forgotten (world-state [0.5 64.0 0.5]))
         [w0 _] (run w [go])
-        at (fn [n] (first (run w0 (repeat n {:event/kind :tick :event/now 1000 :event/rand 0.5}))))]
+        at (fn [n]
+             (first (run w0
+                         (for [k (range n)]
+                           {:event/kind :tick :event/now (+ 1000 (* 50 k)) :event/rand 0.5}))))
+        burst (fn [n]
+                (first (run w0 (repeat n {:event/kind :tick :event/now 1000 :event/rand 0.5}))))]
     (is (= :active (:plan/status (at plan/wait-ticks))) "the wait-tick-th tick still waits")
     (is (plan/failed? (at (inc plan/wait-ticks))) "one tick past it, the plan fails")
-    (is (= :no-log (:plan/reason (at (inc plan/wait-ticks)))))))
+    (is (= :no-log (:plan/reason (at (inc plan/wait-ticks)))))
+    (testing "missed ticks fired back to back are not 20 s of waiting"
+      ;; f9c021c race lane 2, s1 Clj_r04: 400 ticks in 2 s, :nothing-to-do between two tunnel legs
+      (is (= :active (:plan/status (burst 1000)))))))
 
 (deftest a-hunt-that-knows-its-trees-walks-back-toward-the-landing
   ;; race 38680745815 runner 5 (issue #57) bot Clj_r10: its first hunt hop left the landing
@@ -1781,6 +1789,7 @@
              (plan/wait (assoc (place-failed 0)
                                :plan/status :active
                                :time/now ms
+                               :plan/waiting-since (- ms plan/wait-ms)
                                :plan/waiting-ticks plan/wait-ticks)
                         reason))]
     (is (= :active (:plan/status (at 200000 :retrying))))
