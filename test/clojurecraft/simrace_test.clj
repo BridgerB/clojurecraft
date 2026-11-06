@@ -431,6 +431,20 @@
            (:go/goals (simrace/go-of (dissoc w :capture/fortress) "pearls-12")))
         "no fortress: the whole chain, as before")))
 
+(deftest a-rods-start-plays-only-the-pearls
+  ;; LOOP.md section 1: stage 18's checkpoint in the sim, seven rods in hand at the fortress start;
+  ;; no sim run had reached a warped forest from the blaze rods (0 of 52)
+  (is (= [:ender-pearls] (simrace/fortress-goals "pearls-12" :ender-pearls)))
+  (is (= {:checkpoint/goal :ender-pearls :checkpoint/kit {:blaze_rod 7}} (simrace/starts "rods")))
+  (let [w (-> (simrace/with-fortress
+               (assoc two-columns :capture/nether {:decoded nether-decoded :columns {}})
+               (merge-with + {:iron_sword 1} (:checkpoint/kit (simrace/starts "rods"))))
+              (assoc-in [:capture/fortress :checkpoint/goal] :ender-pearls))]
+    (is (= [:ender-pearls] (:go/goals (simrace/go-of w "pearls-12"))) "the pearls alone")
+    (is (some #(= (recipe/item-id :blaze_rod) (:item %))
+              (vals (get-in w [:capture/fortress :inventory])))
+        "the rods are in the bag")))
+
 (deftest a-fortress-run-ends-at-its-first-death-filed-by-its-class
   ;; sim race lanes of 9d15bd6: the model respawned the bot at the start for ever (861 and 1722
   ;; deaths in a run), so nothing was measured; the real race ends such a run at the first death

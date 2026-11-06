@@ -213,6 +213,18 @@
     (is (race/fortress? "fortress"))
     (is (not (race/fortress? "spawn")))))
 
+(deftest a-race-from-the-rods-checkpoint-plays-only-the-pearls
+  ;; LOOP.md section 1: stage 18's checkpoint, the race kit and seven rods at the same pad, so the
+  ;; pearl hunt is played by every bot, not only the 5 to 7% that win the blaze rods first
+  (is (= [:ender-pearls] (race/from-goals "rods" "pearls-12")) "the pearls alone")
+  (is (= [:ender-pearls] (race/from-goals :rods "pearls-12")))
+  (is (race/fortress? "rods") "landed at the fortress pad, as the fortress start")
+  (is (= ["minecraft:blaze_rod 7" "minecraft:stone_pickaxe 1"]
+         (race/start-kit ["minecraft:stone_pickaxe 1"] "rods"))
+      "the seven rods first, then the race kit: the kit fills every slot")
+  (is (= ["minecraft:stone_pickaxe 1"] (race/start-kit ["minecraft:stone_pickaxe 1"] "fortress")))
+  (is (= ["minecraft:stone_pickaxe 1"] (race/start-kit ["minecraft:stone_pickaxe 1"] nil))))
+
 (deftest a-failure-of-a-fortress-race-is-filed-at-its-own-stages
   ;; a run that played only blaze-rods and ender-pearls: nothing reached, it failed at the blaze
   ;; rods, never at the wood the chain begins with

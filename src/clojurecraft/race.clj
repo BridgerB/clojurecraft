@@ -283,20 +283,43 @@
           nil
           (take claim-tries (drop offset (claims/spiral)))))
 
-(defn fortress?
-  "Does :race/from name the fortress start?"
-  [from]
-  (contains? #{"fortress" :fortress} from))
+(def starts
+  "The race's starts at a fortress, by :race/from name: the first target a bot starting there plays
+   (:checkpoint/goal) and what it carries beyond :race/kit (:checkpoint/kit, give commands' item counts).
+   \"fortress\" plays the blaze rods (issue #262) with the race kit: the stages before it are the
+   road to the fortress. \"rods\" is stage 18's checkpoint (LOOP.md section 1): the race kit and
+   the seven rods stage 17 yields, at the same pad, so the pearl hunt (issue #263) is played by
+   every bot that starts there, not only the 5 to 7% that win the blaze rods first (0ace52e: 184
+   of 2518 real bots)."
+  {"fortress" {:checkpoint/goal :blaze-rods :checkpoint/kit []}
+   "rods" {:checkpoint/goal :ender-pearls :checkpoint/kit ["minecraft:blaze_rod 7"]}})
 
-(def fortress-from :blaze-rods)       ; the first target a race that starts at the fortress plays (issue #262): the stages before it are the road to the fortress
+(defn start-of
+  "The start (starts) :race/from names, a string or a keyword, or nil for a start from spawn."
+  [from]
+  (when from (starts (name from))))
+
+(defn fortress?
+  "Does :race/from name a start at the fortress (starts)?"
+  [from]
+  (some? (start-of from)))
+
+(defn start-kit
+  "What a bot starting at from is given, in order: the start's own items (start-of) first, then the
+   race kit. The race kit fills all 36 slots, and give drops what has no slot at the feet, so the
+   start's items go in first and the kit's last stack is what is left out, never the rods."
+  [kit from]
+  (into (vec (:checkpoint/kit (start-of from))) kit))
 
 (defn from-goals
   "The targets a race to until plays when it starts at (:race/from) from: the whole chain to until
-   from spawn (nil or :spawn), else the chain from the fortress's stage (fortress-from) on, so the
+   from spawn (nil or :spawn), else the chain from its start's first stage (starts :checkpoint/goal) on, so the
    run is only stages 17 and 18 (blaze rods, ender pearls) and its failures are filed at those."
   [from until]
   (let [chain (plan/through until)]
-    (if (fortress? from) (vec (drop-while #(not= fortress-from %) chain)) chain)))
+    (if-let [goal (:checkpoint/goal (start-of from))]
+      (vec (drop-while #(not= goal %) chain))
+      chain)))
 
 (defn landing-of
   "The [x z] racer i (from 0) lands on in a landing set ([[x z y] ...]), offset into it: the
@@ -1046,7 +1069,7 @@
                         :from (or (get o :from) (:race/from config))
                         :bots bots
                         :server-log (str "work/world-" (or which 1) "/logs/latest.log")
-                        :kit (:race/kit config)}
+                        :kit (start-kit (:race/kit config) (or (get o :from) (:race/from config)))}
                  landings-file
                  (assoc :landings (landings/read-landings landings-file)
                         :landing-offset (parse-long (or landing-offset "0"))))

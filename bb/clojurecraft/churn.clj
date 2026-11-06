@@ -4,7 +4,9 @@
 
      bb churn batch <kind> <data-dir> <artifact> <run> <sha> <code-at> <runner>
 
-   kind is real or sim; data-dir the runner's record directory (data/race, data/simrace), whose
+   kind is real or sim, or a checkpoint's kind (real-18, sim-18: bots started at stage 18's
+   checkpoint, LOOP.md section 1), which reports as real or sim but is its own kind on the page, so
+   a stage's rate there counts only the bots that played it from the chain; data-dir the runner's record directory (data/race, data/simrace), whose
    race.log or runs.edn files grow a line a run; artifact the name the job uploads that directory
    under at its end (race-<sha>-<runner>, simrace-<sha>-<runner>), which a reproduction names. A
    batch is the whole lines each file gained since the last batch: they are copied under
@@ -89,6 +91,14 @@
       (update :churn/offsets #(merge-with + % (update-vals lines count)))
       (update :churn/batch inc)
       (update :churn/counts counted runs)))
+
+(defn base-kind
+  "The kind a batch's kind name reports as (real or sim), and the page's own kind for it: \"real-18\"
+   is {:kind :real :page-kind :real-18}, \"real\" is {:kind :real :page-kind :real}."
+  [kind-name]
+  (let [k (keyword kind-name)
+        base (keyword (first (str/split (name k) #"-")))]
+    {:kind base :page-kind k}))
 
 (defn title
   "A batch's title in the issues and the page."
@@ -403,13 +413,13 @@
 
 (defn report!
   "Report a batch's runs: the issues, the job summary's wall, the page's batch, a win."
-  [{:keys [kind run sha code-at runner data-dir]} n dir runs counts]
+  [{:keys [kind page-kind run sha code-at runner data-dir]} n dir runs counts]
   (let [head (title kind run runner n sha)
         milestones (page/chain (page/goals) (page/race-end))
         round (page/round runs
                           (page/marks-under dir)
                           milestones
-                          (merge {:kind kind
+                          (merge {:kind (or page-kind kind)
                                   :run run
                                   :commit sha
                                   :at (page/instant code-at)
@@ -466,7 +476,8 @@
   [& [cmd kind data-dir artifact run sha code-at runner budget-s]]
   (case cmd
     "batch"
-    (batch! {:kind (keyword kind)
+    (batch! {:kind (:kind (base-kind kind))
+             :page-kind (:page-kind (base-kind kind))
              :data-dir data-dir
              :artifact artifact
              :run (parse-long run)
@@ -479,5 +490,5 @@
                          budget-ms)})
     (do
       (println
-       "usage: bb churn batch <real|sim> <data-dir> <artifact> <run> <sha> <code-at> <runner> [budget-s]")
+       "usage: bb churn batch <real|sim|real-18|sim-18> <data-dir> <artifact> <run> <sha> <code-at> <runner> [budget-s]")
       (System/exit 2))))
