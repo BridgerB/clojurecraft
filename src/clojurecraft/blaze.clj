@@ -323,9 +323,13 @@
 
 (defn meal
   "An :eat of the food held (rotten flesh when it is all there is, eat/scrap-held) when the food is under hunger/heal-level (health comes back only from
-   there, and fast while the meal's saturation lasts), or nil."
+   there, and fast while the meal's saturation lasts), or nil; nil too while hit a moment ago
+   (eat/under-attack?), as the :eat row is: a meal stands the bot still 1.6 s under the next
+   hits. On 900395b 3 of 12 real-18 deaths (two hoglins, an enderman) ended in an :eat, and sim
+   R1-2-1 (probe 42228352926) ate under 2145's hits from 7.8 to 0."
   [world]
-  (when-let [food (and (< (:player/food world hunger/heal-level) hunger/heal-level)
+  (when-let [food (and (not (eat/under-attack? world))
+                       (< (:player/food world hunger/heal-level) hunger/heal-level)
                        (or (eat/food-held world) (eat/scrap-held world)))]
     {:intent/kind :eat :intent/item food}))
 
