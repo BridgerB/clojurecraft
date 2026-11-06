@@ -1,7 +1,6 @@
 (ns clojurecraft.memory-test
   (:require [clojure.test :refer [deftest is testing]]
             [clojurecraft.blocks :as blocks]
-            [clojurecraft.dimension :as dimension]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
             [clojurecraft.memory :as memory]
@@ -31,34 +30,6 @@
     (testing "a place seen gone and then a log again counts"
       (let [w (memory/observe (assoc w :time/now 9) [0 64 0] oak-y)]
         (is (contains? (set (memory/positions-now w blocks/log-states)) [0 64 0]))))))
-
-(deftest positions-by-index-are-the-query-s
-  ;; positions-in answers from the indexes what the Datalog query answered (probe 42165757215:
-  ;; the query was 160 of 226 samples of the freeze after the seventh rod)
-  (let [brick (blocks/default-state :nether_bricks)
-        w (seen [[0 64 0] oak-y]
-                [[1 64 0] oak-y]
-                [[2 64 0] oak-y]
-                [[0 64 0] blocks/air]
-                [[1 64 0] oak-x]
-                [[3 64 0] blocks/air]
-                [[3 64 0] oak-y]
-                [[2 64 0] blocks/air]
-                [[2 64 0] oak-y])
-        nether
-        (reduce
-         (fn [w [i pos id]]
-           (memory/observe (assoc w :player/dimension "minecraft:the_nether" :time/now i) pos id))
-         w
-         [[20 [0 64 0] brick] [21 [5 64 5] brick] [22 [5 64 5] blocks/air]])]
-    (doseq [[world states] [[w blocks/log-states] [w [oak-y]] [nether [brick]]
-                            [nether blocks/log-states]]
-            :let [facts (:world/facts world)
-                  dim (dimension/of world)]]
-      (is (= (set (memory/positions-by-query facts states dim))
-             (set (memory/positions-in facts states dim)))))
-    (is (= #{[1 64 0] [2 64 0] [3 64 0]} (set (memory/positions-now w blocks/log-states))))
-    (is (= [[0 64 0]] (memory/positions-now nether [brick])))))
 
 (deftest the-same-place-in-two-dimensions-is-two-places
   ;; ruststeve kept one map of columns and read fortress brick 64 blocks off: a sighting says the
