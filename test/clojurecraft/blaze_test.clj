@@ -1388,7 +1388,7 @@
                                    row
                                    tunnel)))))
     (testing "far from the spawner: not yet"
-      (is (not (plan/interrupts? (assoc w :world/facts (memory/empty-facts)) row tunnel))))))
+      (is (not (plan/interrupts? (memory/forgotten w) row tunnel))))))
 
 (deftest a-fireball-in-flight-is-dodged-whatever-the-bot-was-doing
   ;; blaze-race-l race 2 at +210.4 s (fireball 542, hit 450 ms after its spawn): the planner steps
@@ -1621,7 +1621,7 @@
     (testing "food at 18: the rest heals, so it is the rest"
       (is (= {:intent/kind :rest} (next-intent (assoc w :player/food 18)))))
     (testing "no portal on record: a rest that cannot heal is never chosen (probe 40634461444)"
-      (is (not= :rest (:intent/kind (next-intent (assoc w :world/facts (memory/empty-facts)))))))))
+      (is (not= :rest (:intent/kind (next-intent (memory/forgotten w))))))))
 
 (deftest a-spawner-whose-walk-failed-is-tunnelled-to-not-given-up
   ;; race lane 4 s1 r15: `:walk [544 57 203]` failed :no-path at the fortress, the blacklist took the

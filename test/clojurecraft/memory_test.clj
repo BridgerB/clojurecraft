@@ -1,6 +1,7 @@
 (ns clojurecraft.memory-test
   (:require [clojure.test :refer [deftest is testing]]
             [clojurecraft.blocks :as blocks]
+            [clojurecraft.dimension :as dimension]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
             [clojurecraft.memory :as memory]
@@ -30,6 +31,40 @@
     (testing "a place seen gone and then a log again counts"
       (let [w (memory/observe (assoc w :time/now 9) [0 64 0] oak-y)]
         (is (contains? (set (memory/positions-now w blocks/log-states)) [0 64 0]))))))
+
+(deftest the-sights-index-answers-as-the-query-over-the-facts
+  ;; probe 42165757215: the query over every sighting was 160 of 226 samples of the freeze after
+  ;; the seventh rod; positions-now reads the index kept beside the facts, with the same answer
+  (let [brick (blocks/default-state :nether_bricks)
+        w (seen [[0 64 0] oak-y]
+                [[1 64 0] oak-y]
+                [[2 64 0] oak-y]
+                [[0 64 0] blocks/air]
+                [[1 64 0] oak-x]
+                [[3 64 0] blocks/air]
+                [[3 64 0] oak-y]
+                [[2 64 0] blocks/air]
+                [[2 64 0] oak-y])
+        nether
+        (reduce
+         (fn [w [i pos id]]
+           (memory/observe (assoc w :player/dimension "minecraft:the_nether" :time/now i) pos id))
+         w
+         [[20 [0 64 0] brick] [21 [5 64 5] brick] [22 [5 64 5] blocks/air]])]
+    (is (map? (:world/sights nether)) "kept from the first sighting")
+    (doseq [[world states] [[w blocks/log-states] [w [oak-y]] [nether [brick]]
+                            [nether blocks/log-states]]]
+      (is (= (set (memory/positions-in (:world/facts world) states (dimension/of world)))
+             (set (memory/positions-now world states)))))
+    (is (= #{[1 64 0] [2 64 0] [3 64 0]} (set (memory/positions-now w blocks/log-states))))
+    (is (= [[0 64 0]] (memory/positions-now nether [brick])))
+    (testing
+      "a world saved with sightings and no index is asked by its facts, and gets no half index"
+      (let [old (dissoc nether :world/sights)
+            older (memory/observe (assoc old :time/now 30) [6 64 6] brick)]
+        (is (= [[0 64 0]] (memory/positions-now old [brick])))
+        (is (not (contains? older :world/sights)))
+        (is (= #{[0 64 0] [6 64 6]} (set (memory/positions-now older [brick]))))))))
 
 (deftest the-same-place-in-two-dimensions-is-two-places
   ;; ruststeve kept one map of columns and read fortress brick 64 blocks off: a sighting says the

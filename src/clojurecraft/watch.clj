@@ -14,7 +14,8 @@
   "Attributes not worth a telemetry line: they change every tick by construction (time), are
    large values with their own record (chunks, facts, the block overlay), or are drained by the
    loop (effects)."
-  #{:time/now :time/tick :bot/effects :world/chunks :world/facts :world/blocks :net/sent-tick})
+  #{:time/now :time/tick :bot/effects :world/chunks :world/facts :world/sights :world/blocks
+    :net/sent-tick})
 
 (def buffer-size 1024)                 ; diffs in flight before the watcher starts dropping
 
