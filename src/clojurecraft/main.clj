@@ -145,19 +145,24 @@
     :log (cli/log message)))
 
 (defn apply-event!
-  "The epochal write: swap the world, then perform and clear what it asked for."
-  [world* event out tap]
-  (when tap ((:write tap) event))
-  (swap! world* step event)
-  (let [effects (:bot/effects @world*)]
-    (when tap ((:effects tap) effects))
-    (swap! world* assoc :bot/effects [])
-    (doseq [e effects] (perform! e out))))
+  "The epochal write: swap the world, then perform and clear what it asked for. on-ms, when given,
+   is told how many ms the swap took: the loop's clock, read here in the I/O layer, never in a
+   reducer (senses/senses! keeps the slowest, so a frozen bot shows beside what it was doing)."
+  ([world* event out tap] (apply-event! world* event out tap nil))
+  ([world* event out tap on-ms]
+   (when tap ((:write tap) event))
+   (let [t0 (System/nanoTime)]
+     (swap! world* step event)
+     (when on-ms (on-ms (quot (- (System/nanoTime) t0) 1000000))))
+   (let [effects (:bot/effects @world*)]
+     (when tap ((:effects tap) effects))
+     (swap! world* assoc :bot/effects [])
+     (doseq [e effects] (perform! e out)))))
 
 (defn run-loop!
   "Drive the reducer over socket packets, game ticks (physics/tick-ms) and external events until (stop? world)
    or the socket closes. Returns the final world."
-  [{:keys [in out]} events world* stop? tap]
+  [{:keys [in out on-ms]} events world* stop? tap]
   (loop [next-tick (+ (now) physics/tick-ms)]
     (let [[v ch] (async/alts!! [in events (async/timeout (max 0 (- next-tick (now))))])
           event (cond (= ch in)
@@ -166,7 +171,7 @@
                         {:event/kind :packet :event/packet v})
                       (= ch events) v
                       :else {:event/kind :tick :event/now (now) :event/rand (rand)})]
-      (apply-event! world* event out tap)
+      (apply-event! world* event out tap on-ms)
       (let [w @world*]
         (if (or (stop? w) (:bot/closed w) (:bot/disconnected w))
           w
@@ -200,7 +205,7 @@
    stands as soon as it is loaded. Returns {:result r :world final}. Nothing is shared with
    another bot: a race runs many of these, each its own atom and loop."
   [{:keys [host port name until timeout-ms hold-ms record commit chain events on-result world*
-           end-on-death?]
+           end-on-death? on-ms]
     :or {host "127.0.0.1" until "wood" timeout-ms 120000 hold-ms 0 on-result (fn [_])}}]
   (let [opts {:host host :port port :name name}
         deadline (+ (now) timeout-ms)
@@ -226,7 +231,7 @@
                   {:event/kind :start :start/host host :start/port port :start/name name}
                   (:out c)
                   tap)
-    (try (let [final (run-loop! c queue world* stop? tap)
+    (try (let [final (run-loop! (assoc c :on-ms on-ms) queue world* stop? tap)
                ok (ok? final until)
                r (death-ended (result final until ok) final end-on-death?)]
            (when tap ((:result tap) r) ((:close tap))) ; the recording is the run: it ends at RESULT

@@ -414,7 +414,7 @@
 
 (defn report!
   "Report a batch's runs: the issues, the job summary's wall, the page's batch, a win."
-  [{:keys [kind page-kind run sha code-at runner data-dir]} n dir runs counts]
+  [{:keys [kind page-kind run sha code-at runner data-dir senses]} n dir runs counts]
   (let [head (title kind run runner n sha)
         milestones (page/chain (page/goals) (page/race-end))
         round (page/round runs
@@ -427,6 +427,7 @@
                                   :runner runner
                                   :batch n
                                   :issues (page/issue-numbers runs)}
+                                 senses
                                  (page/run-times run)))]
     (println "churn:" head ":" (count runs) "runs")
     (failures/report-runs! runs head code-at counts)
@@ -467,7 +468,12 @@
             (when said-text (println "churn:" (evidence-text reproduced runs tag)))
             (when-let [summary (and said-text (System/getenv "GITHUB_STEP_SUMMARY"))]
               (spit summary (str said-text "\n\n") :append true))
-            (report! job n dir runs (:churn/counts after))
+            (report! (cond-> job
+                       real? (assoc :senses (botlogs/senses-summary (:data-dir job) runs)))
+                     n
+                     dir
+                     runs
+                     (:churn/counts after))
             (when real? (botlogs/upload! job n dir (fs/path dir (:artifact job)) runs))
             (spit (str (fs/file data-dir state-file)) (pr-str after))))))
 

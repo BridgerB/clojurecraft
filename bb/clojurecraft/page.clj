@@ -154,10 +154,11 @@
 
 (defn round
   "The round as a value (see the namespace): runs and marks are what the report job downloaded,
-   the rest is the run's own facts. A run that never got into play (failures/unplayed?: its
+   the rest is the run's own facts (with :senses and :coverage from a real batch's senses files, botlogs/senses-summary). A run that never got into play (failures/unplayed?: its
    server refused it or was gone) is no run of the bot's: it is kept out of every count and
    counted alone as :round/unplayed."
-  [all marks milestones {:keys [kind run commit at started ended issues runner batch]}]
+  [all marks milestones
+   {:keys [kind run commit at started ended issues runner batch senses coverage]}]
   (let [runs (remove failures/unplayed? all)
         {:keys [deaths died]} (deaths runs)]
     (cond-> {:round/run run
@@ -178,6 +179,7 @@
       batch (assoc :round/batch batch)
       (seq marks) (assoc :round/first-at (first-at marks))
       (seq issues) (assoc :round/issues issues)
+      coverage (assoc :round/coverage coverage :round/senses (or senses {}))
       (leader runs marks milestones) (assoc :round/leader (leader runs marks milestones)))))
 
 (defn wall
@@ -239,7 +241,8 @@
       (:round/unplayed r) (assoc :unplayed (:round/unplayed r))
       (seq issues) (assoc :issues issues)
       (:round/first-at r) (assoc :first (:round/first-at r))
-      (:round/leader r) (assoc :leader (:round/leader r)))))
+      (:round/leader r) (assoc :leader (:round/leader r))
+      (:round/coverage r) (assoc :coverage (:round/coverage r) :senses (:round/senses r {})))))
 
 (defn day-of
   "The UTC day a batch belongs to, yyyy-mm-dd: its run's start's, else its commit's, else its

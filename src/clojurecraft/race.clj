@@ -46,7 +46,8 @@
             [clojurecraft.landings :as landings]
             [clojurecraft.main :as main]
             [clojurecraft.plan :as plan]
-            [clojurecraft.rcon :as rcon]))
+            [clojurecraft.rcon :as rcon]
+            [clojurecraft.senses :as senses]))
 
 (set! *warn-on-reflection* true)
 
@@ -936,12 +937,21 @@
    its own atom and queue, on the board (live) and watched for milestones while it plays, landed on
    landing serial - 1 of the set (land-bot!), and played until its goal, its plan failing, a crash
    or the job's end (deadline): no cap of its own. Its RESULT line is printed as it ends, marked
-   cut (failure/cut) when the job's end stopped it. Returns {:name :result :truth}."
+   cut (failure/cut) when the job's end stopped it. Its senses (senses/senses!: a line a second of
+   what it sensed and decided, and the loop's slowest event) are written beside its recording as
+   <name>.senses.edn the moment before its RESULT, so a batch that counts the RESULT has them.
+   Returns {:name :result :truth}."
   [{:keys [server ch centre serials live watcher prefix record-dir commit deadline]}]
   (let [n (swap! serials inc)
         name (bot-name prefix n)
         queue (async/chan events-buffer)
-        world* (atom (game/init {:host (:host server) :port (:port server) :name name}))]
+        world* (atom (game/init {:host (:host server) :port (:port server) :name name}))
+        slowest (atom 0)
+        senses (senses/senses! world* slowest)
+        senses-file (str (io/file record-dir (str name ".senses.edn")))
+        write-senses! (fn []
+                        (try (senses/write! senses-file ((:lines senses)))
+                             (catch Exception e (cli/log name "senses not written:" e))))]
     (swap! live assoc name world*)
     ((:watch watcher) name world*)
     (land-bot! server ch centre name queue (dec n))
@@ -959,14 +969,17 @@
                  :commit commit
                  :events queue
                  :world* world*
+                 :on-ms (fn [ms] (swap! slowest max ms))
                  :on-result
                  (fn [r]
+                   (write-senses!)
                    (deliver truth (truth! server name))
                    (println "RESULT" name (pr-str (marked (with-death-message server name r)))) ; what bb failures groups by
                    (flush))})]
            {:name name :result r :truth @truth})
          (catch Exception e
            (cli/log name "failed:" e)
+           (write-senses!)
            (let [r {:ok false
                     :reason :crashed
                     :error (ex-message e)
@@ -975,7 +988,7 @@
              (println "RESULT" name (pr-str (marked r))) ; filed at the stage it crashed in (issue #152)
              (flush)
              {:name name :result r}))
-         (finally ((:unwatch watcher) world*) (swap! live dissoc name)))))
+         (finally ((:unwatch watcher) world*) ((:close senses)) (swap! live dissoc name)))))
 
 (defn accepts?
   "Does the server take a connection on its game port now (within 2 s)?"
