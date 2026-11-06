@@ -53,6 +53,14 @@
 
 (defn empty-facts "A store with nothing seen yet." [] (d/empty-db schema))
 
+(defn forgotten
+  "world with nothing on record: empty facts and no sights index (the index is the facts current
+   view, so the two are emptied together)."
+  [world]
+  (-> world
+      (assoc :world/facts (empty-facts))
+      (dissoc :world/sights)))
+
 (defn empty-facts?
   "Does db hold no sighting yet? A world whose facts start empty keeps the sights index from its
    first sighting on; one saved with sightings and no index (older code) is asked by its facts."
