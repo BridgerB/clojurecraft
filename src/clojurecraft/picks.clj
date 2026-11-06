@@ -96,6 +96,22 @@
   [world]
   (boolean (or (pos? (long (window/free-count world))) (some? (window/reserve-slot world 1)))))
 
+(def take-table-gap-ms
+  "ms after a table pickup intent ends that the table still counts as on its way back: the dig is
+   done and the drop not yet seen, or the pickup not yet acked. Past it, with no table placed or
+   lying, the pickup is over, never pending for ever."
+  3000)
+
+(defn take-table-just-ended?
+  "Did an intent for the table pickup (:intent/for :take-table) end within take-table-gap-ms
+   (:plan/ended, stamped by plan/mark-ended)? Without the bound a pickup that ended once held the
+   row pending with nothing to start, and the planner, choosing this row ahead of the hunt, waited
+   until :nothing-to-do: on a3cbcc5 (#727) 10 of 29 real rod bots still ended :nothing-to-do."
+  [world]
+  (let [e (:plan/ended world)]
+    (boolean (and (= :take-table (:intent/for e))
+                  (<= (- (long (:time/now world 0)) (long (:ended/at e 0))) take-table-gap-ms)))))
+
 (defn table-needed?
   "Is the crafting table placed near, dropped, or being collected, not yet held in the bag, with
    room for it to come back (table-room?)? Without room the table is left: the row never waits on
@@ -106,8 +122,8 @@
         (table-room? world)
         (or (make/near world :crafting_table)
             (= :take-table (:intent/for (:plan/intent world)))
-            (= :take-table (:intent/for (:plan/last world)))
-            (seq (drops/lying world (recipe/item-id :crafting_table) (intent/feet world) 8.0))))))
+            (take-table-just-ended? world)
+            (seq (drops/lying world (recipe/item-id :crafting_table) (:player/pos world) 8.0))))))
 
 (defn room-needed?
   "Does the sealed bot in the fortress have no free slot for an ender pearl drop and holding junk to toss?"
