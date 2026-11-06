@@ -111,6 +111,12 @@
       (assoc :pocket {:in? (pocket/in? world) :sealed? (pocket/sealed? world (:pocket/site world))})
       (:pearls/refuge-done world) (assoc :refuge-done true))))
 
+(defn kept
+  "lines with line l added, the last keep-lines of them."
+  [lines l]
+  (let [v (conj (vec lines) l)]
+    (if (> (count v) keep-lines) (subvec v (- (count v) keep-lines)) v)))
+
 (defn window-of
   "The lines of the last window-ms of lines (in time order)."
   [lines]

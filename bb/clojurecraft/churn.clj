@@ -468,13 +468,12 @@
             (when said-text (println "churn:" (evidence-text reproduced runs tag)))
             (when-let [summary (and said-text (System/getenv "GITHUB_STEP_SUMMARY"))]
               (spit summary (str said-text "\n\n") :append true))
-            (report! (cond-> job
-                       real? (assoc :senses (botlogs/senses-summary (:data-dir job) runs)))
+            (report! (assoc job :senses (botlogs/senses-summary (:data-dir job) runs))
                      n
                      dir
                      runs
                      (:churn/counts after))
-            (when real? (botlogs/upload! job n dir (fs/path dir (:artifact job)) runs))
+            (botlogs/upload! job n dir (fs/path dir (:artifact job)) runs)
             (spit (str (fs/file data-dir state-file)) (pr-str after))))))
 
 (defn -main

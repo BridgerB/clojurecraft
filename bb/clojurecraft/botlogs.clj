@@ -71,10 +71,13 @@
 ;;;; I/O: the recordings, the archive, the release ;;;;
 
 (defn senses-file
-  "The senses of a real run under data-dir (race/play-one!: <run/dir>/<bot>.senses.edn), or nil
-   when absent."
+  "The senses of a run, or nil when absent: a sim run's names its file (:run/senses-file,
+   simrace/race-one!), a real run's sits beside its recording under data-dir
+   (race/play-one!: <run/dir>/<bot>.senses.edn)."
   [data-dir r]
-  (let [f (fs/path data-dir (or (:run/dir r) "") (str (:run/bot r) ".senses.edn"))]
+  (let [f (if-let [p (:run/senses-file r)]
+            (fs/path p)
+            (fs/path data-dir (or (:run/dir r) "") (str (:run/bot r) ".senses.edn")))]
     (when (fs/exists? f) (str f))))
 
 (defn senses-summary
@@ -113,22 +116,27 @@
       true)))
 
 (defn upload!
-  "Digest every real run of a batch that has a recording under data-dir into dir, archive them with
-   the batch's race.log lines (lines-dir), and upload the archive to the hour's release (made, a
-   prerelease, by the hour's first batch to need it). Returns the asset name, or nil when there was
-   nothing to digest or the upload failed; never throws, a batch's report goes on without it."
+  "Digest every run of a batch that has a recording under data-dir (a real one) into dir, beside
+   every run's senses file (real and sim), archive them with the batch's lines (lines-dir), and
+   upload the archive to the hour's release (made, a prerelease, by the hour's first batch to need
+   it). Returns the asset name, or nil when there was nothing to pack or the upload failed; never
+   throws, a batch's report goes on without it."
   [{:keys [data-dir run sha runner]} batch dir lines-dir runs]
   (try
     (let [logs (fs/path dir "botlogs")
-          recs (keep (fn [r] (when-let [rec (recording data-dir r)] [r rec])) runs)]
+          recs (keep (fn [r]
+                       (let [rec (recording data-dir r)
+                             sf (senses-file data-dir r)]
+                         (when (or rec sf) [r rec sf])))
+                     runs)]
       (when (seq recs)
         (fs/create-dirs logs)
-        (doseq [[r rec] recs]
-          (digest-file! rec (str (fs/path logs (str (:run/dir r "s") "-" (:run/bot r) ".log"))))
-          (when-let [sf (senses-file data-dir r)]
-            (fs/copy sf
-                     (fs/path logs (str (:run/dir r "s") "-" (:run/bot r) ".senses.edn"))
-                     {:replace-existing true})))
+        (doseq [[r rec sf] recs
+                :let [stem (if (:run/bot r)
+                             (str (:run/dir r "s") "-" (:run/bot r))
+                             (str/replace (fs/file-name sf) #"\.senses\.edn$" ""))]]
+          (when rec (digest-file! rec (str (fs/path logs (str stem ".log")))))
+          (when sf (fs/copy sf (fs/path logs (str stem ".senses.edn")) {:replace-existing true})))
         (when (fs/exists? lines-dir) (fs/copy-tree lines-dir (fs/path logs "lines")))
         (let [name (asset run runner batch)
               archive (str (fs/path dir name))
