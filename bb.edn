@@ -13,6 +13,7 @@
   {:doc "The Babashka tooling's tests (test-bb/): the evidence, the results' writers and the site"
    :extra-paths ["test-bb"]
    :requires ([clojure.test :as ct]
+              [clojurecraft.botlogs-test]
               [clojurecraft.brief-test]
               [clojurecraft.copilot-test]
               [clojurecraft.evidence-test]
@@ -20,7 +21,8 @@
               [clojurecraft.page-test]
               [clojurecraft.site-test]
               [clojurecraft.verify-test])
-   :task (let [{:keys [fail error]} (ct/run-tests 'clojurecraft.brief-test
+   :task (let [{:keys [fail error]} (ct/run-tests 'clojurecraft.botlogs-test
+                                                  'clojurecraft.brief-test
                                                   'clojurecraft.copilot-test
                                                   'clojurecraft.evidence-test
                                                   'clojurecraft.fleet-test
