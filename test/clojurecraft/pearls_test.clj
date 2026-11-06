@@ -4122,3 +4122,20 @@
                   pearls/far-ends (fn [& _] (throw (ex-info "searched" {})))]
       (is (= [1.0 0.0] (pearls/fortress-exit-dir w)) "away from the spawner, east")
       (is (pearls/fortress-escaping? w)))))
+
+(deftest an-angry-one-given-up-on-still-keeps-the-bot-from-walking-out
+  ;; sim R1-2-1 on the stage-18 rods start (lane 42212990209, replay probe 42217021861): its
+  ;; first pearl held, enderman 955 fought four times from the burrow with no hit landed, given
+  ;; up on, angry ten blocks off; the hunt walked 34 blocks out to a new stare site and 955
+  ;; struck it from 15.9 to 0 in four seconds
+  (let [angry (assoc (enderman [8.5 64.0 18.5]) :entity/creepy? true)
+        calm (enderman [8.5 64.0 40.5])
+        w (-> (standing {7 angry 8 calm})
+              (assoc-in [:player/inventory 1] (item :iron_pickaxe 1))
+              (assoc :plan/blacklist #{7}))]
+    (is (pearls/angry-tracked? w pearls/hold-radius) "blacklisted, it is still tracked angry")
+    (is (not (pearls/angry-tracked? (assoc-in w [:world/entities 7 :entity/creepy?] false)
+                                    pearls/hold-radius))
+        "a calm one is not")
+    (is (= {:intent/kind :lookout :intent/for :pearls} (pearls/hunt w))
+        "a lookout where it stands, no walk out")))

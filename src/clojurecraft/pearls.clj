@@ -780,6 +780,24 @@
                             (<= (abs (- (physics/y-of q) (physics/y-of p))) danger-rise))))
                    (endermen bl stare-range)))))
 
+(defn angry-tracked?
+  "Does any angry enderman (entity/creepy?) stand within radius of the feet and danger-rise of
+   their height, whatever the hunt thinks of it: blacklisted, fought out, lured out or given up
+   (angry-within? leaves the lured-out unfightable ones out, as no reason to stay). One of those
+   still strikes the bot the moment it walks out in the open: sim R1-2-1 on the stage-18 rods
+   start (lane 42212990209, replay probe 42217021861) held its first pearl, fought enderman 955
+   four times from its burrow without a hit landed (40 of 40 health), and with 955 angry ten
+   blocks off walked out 34 blocks to a new stare site; 955 struck it from 15.9 to 0 in four
+   seconds."
+  [world radius]
+  (let [p (:player/pos world)]
+    (boolean (some (fn [[_ e]]
+                     (let [q (:entity/pos e)]
+                       (and (entity/creepy? e)
+                            (<= (physics/distance p q) radius)
+                            (<= (abs (- (physics/y-of q) (physics/y-of p))) danger-rise))))
+                   (endermen (dissoc world :plan/blacklist) stare-range)))))
+
 (defn shelter
   "The hunt's burrow (:pearls/shelter) while it is within shelter-reach of the feet, still a
    shelter? by the terrain and not given up after a minute with nothing to do from it (stale?),
@@ -3032,6 +3050,9 @@
           (when (wandering? world) (wander world))
           @cage-break
           {:intent/kind :lookout :intent/for :pearls})
+      ;; no walk out to a new site, a route or a sighting while an angry one is at hand, however
+      ;; the hunt has given it up: it strikes the bot in the open (angry-tracked?)
+      (angry-tracked? world hold-radius) {:intent/kind :lookout :intent/for :pearls}
       :else
       (or (if (pickaxe? world)
             (some (fn [[_ e]]
