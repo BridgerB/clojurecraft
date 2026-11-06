@@ -70,6 +70,24 @@ Asleep at the wheel means a tick that ends with nothing changed: "lanes still ru
 
 ## 4. Evidence: the bot's own logs, read by you
 
+**Full observability is the rule (Bridger, Nov 6: "otherwise you are a ship in the night").** Every run that ends, real or sim, leaves in its batch (release `botlogs-<UTC day>-<hour>`, asset `<run>-r<runner>-b<batch>.tar.gz`):
+
+| File | What it holds | Made by |
+|---|---|---|
+| `<stem>.case.txt` / `.case.edn` | how it ended: the killer, the last minute's first hit (what, by whom, the hp, what it was doing and why), what it did at the end, hits by attacker, swings sent and landed, the replay command, the last minute's timeline | `botlogs/case-of` |
+| `cases.edn` | the batch's table: every case and its signature `[ending killer doing why]` | `botlogs/upload!` |
+| `<stem>.events.edn` | the ledger: every change, timestamped (intents with why, hits named, hp, armour, effects, swings, digs, places, entities near coming, going, hurt, swinging, angry); its head line counts drops (must be 0) | `senses/ledger!` |
+| `<stem>.senses.edn` | one line a second, the last 300 | `senses/senses!` |
+| `<stem>.moment.edn` / `.ring.edn` | the whole mind at the end, and a moment a minute for the last five | `senses/moment` |
+| `<stem>.server.txt` (real) | the server's word: every entity within 32 blocks of the ending, whole, and the bot's own | `race/near-truth!` |
+| `<stem>.edn.zst` | the full recording of every failed run | `botlogs/keep-recording?` |
+| `<stem>.log` | the digest: log lines, hp, hits named (`hit mob_attack by hoglin#1724`) | `botlogs/digest` |
+
+**The reading routine, every tick, in order:**
+1. `node T/cases.ts <sha7> [n] [signature]`: coverage (cases over runs; under 1.0 is a blind spot, fixed before any bot change), the signatures ranked, the top one's case texts.
+2. Read three case texts of the top signature. The `why` names the planner branch that chose each intent (`intent/why`, e.g. `:hunt/and-near?-hurt?-not-in?`).
+3. Only when a case cannot answer: `bb probe why <tag> <asset> <stem> <ms>` (the replay command in the case) folds the recording on a runner and prints the moment and every branch's answer. No probe branch needed.
+
 - **Batches:** `node T/batches.ts <sha7>` gives runs, stage reached, pearls and issue signatures per commit and kind (gh-pages data/batches/<UTC date>.ndjson; each row's `failures` holds per-stage reasons).
 - **Bot logs within 20 minutes:** every real batch uploads one archive of the digested log of each bot that ended in it (tick time, every log line, health changes, hits on the bot) and the batch's race.log lines, to the release `botlogs-<UTC day>-<hour>` as `<run>-r<runner>-b<batch>.tar.gz` (`bb/clojurecraft/botlogs.clj`). Get it with `gh release download botlogs-<day>-<hour> --repo BridgerB/clojurecraft -p '<run>-*' -D /tmp/botlogs/<run>`. Read these every tick; never wait for a lane to end.
 - **Lane artifacts:** a lane uploads when it ends or is cancelled. Get one with `gh run download <id> --repo BridgerB/clojurecraft -D /tmp/lanes/<id>`.
@@ -87,7 +105,7 @@ Asleep at the wheel means a tick that ends with nothing changed: "lanes still ru
   - A worker's or a report's cause is a hypothesis until you have read one bot's log lines yourself. On Nov 5 a worker blamed the hunt for `nothing-to-do`; 41 of 42 were the #724 table pickup.
   - Count before you fix.
   - Write each finding into T/ledger.md with run id, bot, timestamp and the lines.
-- **No compute on the Mac:** no tests, sims, replays, judges, gyms, probes or builds. Node scripts over downloaded files, `nix develop -c bb fmt` and `nix develop -c bb check` are fine. Anything that needs code run goes to `bb probe run <label> '<command>' [worlds]` (60-minute job cap: one world a probe, `--max-minutes 30`).
+- **No compute on the Mac:** no tests, sims, replays, judges, gyms, probes or builds. Node scripts over downloaded files, `nix develop -c bb fmt` and `nix develop -c bb check` are fine. Anything that needs code run goes to `bb probe run <label> '<command>' [worlds]` (180-minute job cap).
 
 ## 5. What is known (keep current)
 
