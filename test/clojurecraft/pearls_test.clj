@@ -4157,3 +4157,16 @@
         "a calm one is not")
     (is (= {:intent/kind :lookout :intent/for :pearls} (pearls/hunt w))
         "a lookout where it stands, no walk out")))
+
+(deftest a-bot-on-its-own-pillar-digs-back-down-first
+  ;; real-18 Clj_r11 (3af52ae lane 2 b2, probe 42268355364): on a lone pillar at y 98 for its last
+  ;; fifteen minutes, every walk :no-path and every chase tunnel :blocked, the run ended :blocked
+  (let [cobble (blocks/default-state :cobblestone)
+        w (-> (standing {} {[8 64 8] cobble [8 65 8] cobble})
+              (assoc :player/dimension "minecraft:the_nether" :player/pos [8.5 66.0 8.5])
+              (assoc-in [:player/inventory 1] (item :iron_pickaxe 1)))]
+    (is (pearls/perched? w))
+    (is (= {:intent/kind :dig :intent/target [8 65 8] :intent/drop-ok? true :intent/for :pearls}
+           (pearls/hunt w))
+        "the block under the feet dug first")
+    (is (not (pearls/perched? (standing {}))) "on the ground: not perched")))
