@@ -45,6 +45,7 @@
             [clojurecraft.senses :as senses]
             [clojurecraft.sim :as sim]
             [clojurecraft.sword :as sword]
+            [clojurecraft.terrain :as terrain]
             [datascript.core :as d]))
 
 (set! *warn-on-reflection* true)
@@ -336,6 +337,44 @@
 
 (def overworld-sample-ms "Sim ms between the :sample TRACE lines in the overworld." 300000)
 
+(defn lava-round
+  "The lava cells the bot's world knows within two blocks of feet [x y z] (one under, two over),
+   sorted: what a tick line shows beside the body."
+  [world [x y z]]
+  (sort (for [dx (range -2 3)
+              dy (range -1 3)
+              dz (range -2 3)
+              :let [c [(+ (long x) dx) (+ (long y) dy) (+ (long z) dz)]]
+              :when (contains? blocks/lava-states (terrain/block-at world c))]
+          c)))
+
+(defn tick-note
+  "The TICK line for world after a tick: when, the exact position, on the ground or not, the
+   controls held, the intent (kind, target, move, from, stage key) and its child (kind, target,
+   the next waypoint), and the lava round the feet (lava-round). Printed for every tick of the
+   window SIMRACE_TICKS names, so one sim run shows the tick a body crossed into lava. Not part
+   of the run's result, and never read by the bot."
+  [world]
+  (let [i (:plan/intent world)
+        c (:intent/child i)
+        pos (:player/pos world)]
+    {:t (:time/now world)
+     :pos pos
+     :ground (:player/on-ground? world)
+     :controls (:player/controls world)
+     :intent (select-keys i
+                          [:intent/kind :intent/target :intent/move :intent/from :intent/stage-key])
+     :child (when c
+              (assoc (select-keys c [:intent/kind :intent/target :intent/status :intent/reason])
+                     :next
+                     (first (:intent/waypoints c))))
+     :lava (when pos (lava-round world (mapv #(long (math/floor (double %))) pos)))}))
+
+(defn ticks-window
+  "The [from to] sim ms SIMRACE_TICKS names (\"5000-6200\"), or nil when it is unset or unread."
+  [s]
+  (when-let [[_ a b] (and s (re-matches #"(\d+)-(\d+)" s))] [(parse-long a) (parse-long b)]))
+
 (defn trace-note
   "The TRACE line for the tick that took world before to after, or nil: a :portal-home intent
    starting or ending, a blaze :fight starting or ending, a change of dimension, a goal newly in
@@ -426,6 +465,7 @@
          fortress (:capture/fortress w)
          backoff (atom 0)
          log? (some? (System/getenv "SIMRACE_LOG")) ; LOG <ms> <message>: the bot's own log lines, as a real bot's stderr
+         ticks (ticks-window (System/getenv "SIMRACE_TICKS")) ; TICK lines for every tick in [from to] sim ms
          sensed (atom [])
          next-sense (atom 0)
          slowest (atom 0)
@@ -438,6 +478,9 @@
                               (doseq [e (:bot/effects after)
                                       :when (= :log (:effect/kind e))]
                                 (println "LOG" (:time/now after 0) (:effect/message e))))
+                          _ (when-let [[from to] ticks]
+                              (when (<= (long from) (long (:time/now after 0)) (long to))
+                                (println "TICK" (pr-str (tick-note after)))))
                           _ (when (>= (:time/now after 0) @next-sense)
                               (reset! next-sense (+ (:time/now after 0) senses/every-ms))
                               (when-let [l (senses/of after (first (reset-vals! slowest 0)))]

@@ -1667,12 +1667,22 @@
         intent/done
         (game/say say))))
 
+(defn let-go
+  "World with the movement keys released (forward and jump), the look and yaw kept: what a child
+   that ends or is dropped leaves held. A walk landed centred still holding forward walked the body
+   on through the next op, off its floor into lava (sim R1-28-1); the look stays, as the next
+   use-on aims from it."
+  [world]
+  (cond-> world
+    (:player/controls world) (update :player/controls dissoc :control/forward? :control/jump?)))
+
 (defn work-op
   "One tick of the running intent i working op next through a child (op-child): a new op drops
-   the child of the old one (the world moved on), except an active climb finishes before its
+   the child of the old one (the world moved on), and when the old op is done the movement keys it
+   held (let-go; an op that changed undone, an eye stand moving with the body, keeps them), except an active climb finishes before its
    headroom is repaired. A child that failed fails i (a dig that found
    its cell open, found-open?, makes way for the next as one done would), one that is done
-   makes way for the next. A lava scoop whose sight line filled (scoop-blocked?) is dropped so
+   makes way for the next, its movement keys let go. A lava scoop whose sight line filled (scoop-blocked?) is dropped so
    the refill opens it again; a refill dig of the feet's support is dropped to choose another
    station. Shared by every intent that works a plan of ops. A dig of rock with no
    pickaxe held fails :no-pickaxe (stairs/tool-missing) rather than dig it by hand when one can be
@@ -1686,7 +1696,13 @@
     (if (and (= :stairs-up (:intent/kind child))
              (not (or (intent/done? child) (intent/failed? child))))
       (intent/run-child world event)
-      (intent/dissoc-intent (intent/assoc-intent world :intent/op next) :intent/child))
+      ;; an op done lets go of the movement keys its child held (the look stays for the next aim): a walk
+      ;; whose stand landed centred
+      ;; still held forward, and the seal behind it walked the body on past the cell, off its floor
+      ;; into lava (sim R1-28-1 on the stage-18 rods start, tick lines 5350 to 5750 ms)
+      (intent/dissoc-intent
+       (intent/assoc-intent (cond-> world (and op (satisfied? world op)) let-go) :intent/op next)
+       :intent/child))
     (and (= :build (:intent/kind i)) (swim-looped? i))
     (-> world
         (assoc :player/controls {})
@@ -1695,7 +1711,8 @@
         (game/say (str "build: swimming out never leaves the water, a new site, not "
                        (:intent/origin i))))
     (and child (intent/done? child))
-    (cond-> (intent/dissoc-intent world :intent/child :intent/rejections :intent/body-refusals)
+    (cond->
+      (intent/dissoc-intent (let-go world) :intent/child :intent/rejections :intent/body-refusals)
       (= :swim-out (:intent/kind child)) swum)
     (and child (refused-for-the-body? world child) (not (place/body-refusals-spent? i)))
     ;; the server refused a block into the bot's own body: the stand was wrong, not the op; the sixth
