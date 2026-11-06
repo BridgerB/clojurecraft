@@ -194,9 +194,9 @@
                                table-placed?
                                (and (pearls/near-fortress? world) (< k target-picks)))))))))
 
-(defmethod plan/done-by :spare-picks-stocked? [world _] (not (pending? world)))
-
-(defmethod plan/next-intent :spare-picks
+(defn spare-intent
+  "The spare-picks row's next intent, or nil: nil when not pending?, and nil when pending? but
+   none of its steps can start now (no toss, no pickup, no craft, no table to take)."
   [world goal table]
   (when (pending? world)
     (or
@@ -221,3 +221,15 @@
         :intent/item :crafting_table
         :intent/target (drop-cell e)
         :intent/for :take-table}))))
+
+(defmethod plan/done-by :spare-picks-stocked?
+  ;; done whenever no step of the row can start (spare-intent nil), not only when not pending?:
+  ;; pending with nothing to start held the planner on this row, ahead of the hunt, until the plan
+  ;; failed :nothing-to-do. Real-18 bots at landing [975 48 -176] (Clj_r08 on 6b5d6fa, Clj_r07 on
+  ;; 3af52ae, probe 42264041854: choose :spare-picks, its next intent nil, the pearls row's a
+  ;; tunnel to the surface) ended so 20 s after their first tunnel; #727, #728 and #739 each closed
+  ;; one such case
+  [world row]
+  (nil? (spare-intent world row plan/goals)))
+
+(defmethod plan/next-intent :spare-picks [world goal table] (spare-intent world goal table))
