@@ -2,6 +2,7 @@
   "The sim race: a run over a world of many columns crosses from one to the next as the game's
    do, a run is the same run every time, and failures group by what they were doing and why."
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
+            [clojurecraft.blocks :as blocks]
             [clojurecraft.capture :as capture]
             [clojurecraft.chunk :as chunk]
             [clojurecraft.dimension :as dimension]
@@ -478,3 +479,26 @@
         "the same salt, the same start")
     (is (= 0 (simrace/world-number {})) "no file, no number")
     (is (= 41 (simrace/world-number {:capture/file "cache/sim-worlds/R1/41.edn.gz"})))))
+
+(deftest a-forest-start-stands-on-the-nearest-warped-nylium
+  ;; stage 18 split as stage 17 was: the hunt measured alone, landed in the set's warped forest
+  (let [nylium (blocks/default-state :warped_nylium)
+        with-forest (assoc nether-decoded
+                           [1 1]
+                           (chunk/decode (world/column-bytes {[4 63 4] nylium} dimension/nether)))
+        start (simrace/fortress-start with-forest [64 64 70])]
+    (is (= {:spawn [20.5 64.0 20.5]} (simrace/forest-start with-forest (mapv long (:spawn start)))))
+    (is (nil? (simrace/forest-start nether-decoded (mapv long (:spawn start))))
+        "no nylium: no forest start")
+    (let [w (simrace/with-fortress
+             (assoc two-columns :capture/nether {:decoded with-forest :columns {}})
+             {:iron_sword 1}
+             :forest)]
+      (is (= [20.5 64.0 20.5] (simrace/spawn-of w)))
+      (is (= [8 70 8] (get-in w [:capture/fortress :spawner])) "the fortress is still known"))
+    (is (nil? (:capture/fortress
+               (simrace/with-fortress
+                (assoc two-columns :capture/nether {:decoded nether-decoded :columns {}})
+                {:iron_sword 1}
+                :forest)))
+        "a Nether with no forest: the world is out of a forest race")))

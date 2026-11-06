@@ -210,6 +210,22 @@
          (when cell
            {:spawn (let [[x y z] cell] [(+ x 0.5) (double y) (+ z 0.5)]) :spawner [sx sy sz]}))))))
 
+(defn forest-start
+  "Where a run starts in its set's warped forest: the cell over warped nylium nearest spawn ([x y
+   z], a fortress start's) that the feet can stand in (standable-cell?), {:spawn [x y z]} at its
+   centre, or nil when the captured Nether shows no nylium with room over it. Stage 18 split as
+   stage 17 was (LOOP.md section 1): the hunt measured alone, the travel from the fortress
+   apart (gym probe 39779112668 landed in each set's forest: six pearls in eight minutes in R4)."
+  [decoded [sx sy sz]]
+  (let [nylium (blocks/default-state :warped_nylium)
+        d (fn [[x y z]] (+ (abs (- x sx)) (abs (- y sy)) (abs (- z sz))))
+        cell (->> (chunk/find-blocks decoded #(= % nylium))
+                  (map (fn [[x y z]] [x (inc y) z]))
+                  (filter #(standable-cell? decoded %))
+                  (sort-by d)
+                  first)]
+    (when cell (let [[x y z] cell] {:spawn [(+ x 0.5) (double y) (+ z 0.5)]}))))
+
 (defn world-number
   "The number of world w in its set (cache/sim-worlds/R1/7.edn.gz is 7), 0 for a world with no
    file or a name that is no number."
@@ -226,13 +242,20 @@
   "World w with a start at a fortress of its set's Nether (:capture/fortress {:spawn :spawner
    :inventory}) when it has a captured Nether (:capture/nether) with one (fortress-start, salted by
    the world's number in its set: the worlds of a set start at different spawners and sides) and
-   kit, a map of items; otherwise w as it is, which a from-fortress race then leaves out."
-  [w kit]
-  (if-let [start (some-> (:capture/nether w)
-                         :decoded
-                         (fortress-start (:capture/landing w) (world-number w)))]
-    (assoc w :capture/fortress (assoc start :inventory (kit->inventory kit)))
-    w))
+   kit, a map of items; otherwise w as it is, which a from-fortress race then leaves out. With at
+   :forest the spawn moves to the warped forest nearest that start (forest-start), and a world whose
+   Nether shows none is left as it is, out of the race."
+  ([w kit] (with-fortress w kit nil))
+  ([w kit at]
+   (let [nether (:capture/nether w)
+         start (some-> nether
+                       :decoded
+                       (fortress-start (:capture/landing w) (world-number w)))
+         start (if (and start (= :forest at))
+                 (some->> (forest-start (:decoded nether) (mapv long (:spawn start)))
+                          (merge start))
+                 start)]
+     (if start (assoc w :capture/fortress (assoc start :inventory (kit->inventory kit))) w))))
 
 (def starts
   "The sim race's starts at a fortress, by :simrace/from name, as the real race's (race/starts):
@@ -242,7 +265,8 @@
    kit fills the 36 slots in name order (kit->inventory), so the rods take a slot and the kit's
    last-named stack is the one left out."
   {"fortress" {:checkpoint/goal :blaze-rods :checkpoint/kit {}}
-   "rods" {:checkpoint/goal :ender-pearls :checkpoint/kit {:blaze_rod 7}}})
+   "rods" {:checkpoint/goal :ender-pearls :checkpoint/kit {:blaze_rod 7}}
+   "forest" {:checkpoint/goal :ender-pearls :checkpoint/kit {:blaze_rod 7} :checkpoint/at :forest}})
 
 (defn fortress-goals
   "The goal ids a run that starts at a fortress plays to until: the chain's own, the stages from
@@ -1004,7 +1028,8 @@
                      (cond-> w
                        nether (with-nether nether path)
                        (and nether (starts from))
-                       (-> (with-fortress (merge-with + kit (:checkpoint/kit (starts from))))
+                       (-> (with-fortress (merge-with + kit (:checkpoint/kit (starts from)))
+                                          (:checkpoint/at (starts from)))
                            (as-> w'
                              (cond-> w'
                                (:capture/fortress w')
