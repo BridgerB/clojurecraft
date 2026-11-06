@@ -150,29 +150,48 @@
                 :let [ent (d/entity db e)]]
             [pos {:block/state (:sight/state ent) :block/seen-at (:sight/at ent)}]))))
 
+(defn positions-by-query
+  "[facts states dimension] → the positions-now of those facts, as the Datalog query it was
+   first written as: every sighting of one of states in the dimension with no later sighting at
+   its place of a state outside them. The definition positions-in answers by index; a test holds
+   the two equal."
+  [facts states dim]
+  (d/q '[:find [?pos ...] :in $ % [?s ...] ?all ?dim :where [?e :sight/state ?s]
+         [?e :sight/pos ?pos] (in-dimension ?e ?dim)
+         (not-join
+          [?e ?pos ?all ?dim]
+          [?later :sight/pos ?pos]
+          [(> ?later ?e)]
+          (in-dimension ?later ?dim)
+          [?later :sight/state ?t]
+          [(contains? ?all ?t) ?kept]
+          [(false? ?kept)])]
+       facts
+       in-dimension
+       states
+       (set states)
+       dim))
+
 (def positions-in
-  "[facts states dimension] → the positions-now of those facts: a Datalog query over every
-   sighting, remembered by the facts' identity (memo/by): facts change only when a sighting is
-   added, and the planner asked this every tick (a race's profile: a fifth of all its CPU)."
-  (memo/by
-   [:identical :equal :equal]
-   64
-   (fn [facts states dim]
-     (d/q '[:find [?pos ...] :in $ % [?s ...] ?all ?dim :where [?e :sight/state ?s]
-            [?e :sight/pos ?pos] (in-dimension ?e ?dim)
-            (not-join
-             [?e ?pos ?all ?dim]
-             [?later :sight/pos ?pos]
-             [(> ?later ?e)]
-             (in-dimension ?later ?dim)
-             [?later :sight/state ?t]
-             [(contains? ?all ?t) ?kept]
-             [(false? ?kept)])]
-          facts
-          in-dimension
-          states
-          (set states)
-          dim))))
+  "[facts states dimension] → the positions-now of those facts (positions-by-query's answer):
+   the places one of states was seen in the dimension whose latest sighting there is one of
+   them, read from the indexes (:avet on :sight/state, then on :sight/pos for each place), not by
+   a not-join over every sighting. Remembered by the facts' identity (memo/by), but in a fight the
+   facts change nearly every tick, so each miss must be cheap: the query took 100 to 240 ms a
+   tick at the seventh rod (probe 42165757215, 0ace52e Clj_r57's window, 160 of 226 samples under
+   positions-now), which a loaded race runner stretched to freezes of 1.4 to 3 s while the bot
+   burned (54 of 65 blaze deaths after rod seven froze over 1.5 s)."
+  (memo/by [:identical :equal :equal]
+           64
+           (fn [facts states dim]
+             (let [kept (set states)
+                   places (into #{}
+                                (comp (mapcat #(d/datoms facts :avet :sight/state %))
+                                      (map #(d/entity facts (:e %)))
+                                      (filter #(= dim (sight-dimension %)))
+                                      (map :sight/pos))
+                                kept)]
+               (filterv #(contains? kept (:sight/state (latest-entity facts dim %))) places)))))
 
 (defn positions-now
   "Positions where one of states was seen and nothing seen there since is outside states: the
