@@ -1812,6 +1812,7 @@
                             (assoc i :intent/child (assoc walk :intent/status :done))
                             stand
                             {:event/kind :tick})]
-    (is (= {} (:player/controls changed)) "a new op: the walk's forward is let go")
+    (is (= {:control/yaw -90.0} (:player/controls changed))
+        "a new op: the walk's forward is let go, its yaw kept")
     (is (nil? (get-in changed [:plan/intent :intent/child])))
-    (is (= {} (:player/controls done)) "a child done: its keys are let go")))
+    (is (= {:control/yaw -90.0} (:player/controls done)) "a child done: its forward is let go")))
