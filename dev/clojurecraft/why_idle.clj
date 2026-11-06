@@ -4,7 +4,9 @@
    A probe script: it runs on a runner, never the Mac.
 
      clojure -M:dev -m clojurecraft.why-idle <recording> <at-ms>"
-  (:require [clojurecraft.blaze :as blaze]
+  (:require [clojure.string :as str]
+            [clojurecraft.blaze :as blaze]
+            [clojurecraft.blocks :as blocks]
             [clojurecraft.fortress :as fortress]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
@@ -13,6 +15,7 @@
             [clojurecraft.plan :as plan]
             [clojurecraft.pocket :as pocket]
             [clojurecraft.record :as record]
+            [clojurecraft.terrain :as terrain]
             [clojurecraft.window :as window]))
 
 (defn probe
@@ -56,7 +59,21 @@
                   :bricks-n #(count (fortress/bricks w))
                   :choose #(:goal/id (plan/choose w plan/goals))
                   :choose-next #(plan/next-intent w (plan/choose w plan/goals) plan/goals)
-                  :goals #(:plan/goals w)}]
+                  :goals #(:plan/goals w)
+                  :around
+                  #(let [[x y z] (intent/feet w)]
+                     (into (sorted-map)
+                           (for [dy (range -4 3)]
+                             [dy
+                              (vec (for [dz (range -3 4)]
+                                     (str/join
+                                      (for [dx (range -3 4)]
+                                        (let [id (terrain/block-at w [(+ x dx) (+ y dy) (+ z dz)])
+                                              n (name (blocks/name-of id))]
+                                          (cond (nil? id) "?"
+                                                (#{"air" "cave_air" "void_air"} n) "."
+                                                (= "lava" n) "L"
+                                                :else "#"))))))])))}]
        [k (safe f)]))))
 
 (defn -main
