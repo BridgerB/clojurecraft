@@ -90,18 +90,27 @@
     {:coverage [(count files) (count runs)] :senses (frequencies classes)}))
 
 (defn recording
-  "The recording of a real run under data-dir: <run/dir>/<bot>.edn.zst, or nil when absent."
+  "The recording of a real run under data-dir: <run/dir>/<bot>.edn while the lane plays (the
+   recordings are packed to .edn.zst only at the job's end), or .edn.zst after; nil when absent.
+   Lane 8 of adec45c uploaded nothing from a batch of 8 ended runs while it read only .zst."
   [data-dir r]
-  (let [f (fs/path data-dir (or (:run/dir r) "") (str (:run/bot r) ".edn.zst"))]
-    (when (fs/exists? f) (str f))))
+  (some (fn [ext]
+          (let [f (fs/path data-dir (or (:run/dir r) "") (str (:run/bot r) ext))]
+            (when (fs/exists? f) (str f))))
+        [".edn" ".edn.zst"]))
 
 (defn digest-file!
-  "Write the digest of recording rec to out, decompressed with zstd as a stream; true when written."
+  "Write the digest of recording rec to out: a plain .edn read as it is, a .zst decompressed with
+   zstd as a stream; true when written."
   [rec out]
-  (let [proc (p/process {:err :string} "zstd" "-dc" rec)]
-    (with-open [rdr (io/reader (:out proc))]
-      (spit out (str (str/join "\n" (digest (line-seq rdr))) "\n")))
-    (zero? (:exit @proc))))
+  (if (str/ends-with? rec ".zst")
+    (let [proc (p/process {:err :string} "zstd" "-dc" rec)]
+      (with-open [rdr (io/reader (:out proc))]
+        (spit out (str (str/join "\n" (digest (line-seq rdr))) "\n")))
+      (zero? (:exit @proc)))
+    (with-open [rdr (io/reader rec)]
+      (spit out (str (str/join "\n" (digest (line-seq rdr))) "\n"))
+      true)))
 
 (defn upload!
   "Digest every real run of a batch that has a recording under data-dir into dir, archive them with
