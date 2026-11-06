@@ -255,6 +255,18 @@
               :when (seq tries)]
           [(keyword (file-stem p)) tries])))
 
+(defn damage-types
+  "{name-kw id} for every damage type in the inner jar's data/minecraft/damage_type/*.json, by name,
+   which is the order the server syncs that registry in (as dimensions): a damage-event's
+   :source-type is the id, so a hit reads mob_attack, in_fire, lava or fall by name."
+  [entries]
+  (->> (for [[p _] entries
+             :when (str/starts-with? p "data/minecraft/damage_type/")]
+         (keyword (file-stem p)))
+       sort
+       (map-indexed (fn [i k] [k i]))
+       (into (sorted-map))))
+
 (defn dimensions
   "[{:dimension/name ...}] for every dimension type in the inner jar's
    data/minecraft/dimension_type/*.json, by name, which is the registry order the server sends
@@ -359,7 +371,7 @@
                  (or
                   (= n "version.json")
                   (re-matches
-                   #"data/minecraft/(recipe/[^/]+|loot_table/blocks/[^/]+|dimension_type/[^/]+|tags/(item|block)/.+)\.json"
+                   #"data/minecraft/(recipe/[^/]+|loot_table/blocks/[^/]+|dimension_type/[^/]+|damage_type/[^/]+|tags/(item|block)/.+)\.json"
                    n))
                  (assoc acc n (String. (.readAllBytes z) "UTF-8"))
                  acc)))
@@ -403,6 +415,7 @@
         (write-rows (io/file out "smelting.edn") jar-hdr (smelting entries tags))
         (write-map (io/file out "drops.edn") jar-hdr (drops entries))
         (write-rows (io/file out "dimensions.edn") jar-hdr (dimensions entries))
+        (write-map (io/file out "damage-types.edn") jar-hdr (damage-types entries))
         (println "wrote"
                  (str out "/{version,item-tags,recipes,harvest,smelting,drops,dimensions}.edn"))))
     (when probe-json
@@ -420,6 +433,9 @@
     (write-map (io/file out "items.edn") hdr (registry reports "minecraft:item"))
     (write-map (io/file out "entity-types.edn") hdr (registry reports "minecraft:entity_type"))
     (write-map (io/file out "menus.edn") hdr (registry reports "minecraft:menu"))
+    (write-map (io/file out "attributes.edn") hdr (registry reports "minecraft:attribute"))
+    (write-map (io/file out "mob-effects.edn") hdr (registry reports "minecraft:mob_effect"))
+    (write-map (io/file out "sounds.edn") hdr (registry reports "minecraft:sound_event"))
     (write-map (io/file out "components.edn")
                hdr
                (registry reports "minecraft:data_component_type"))

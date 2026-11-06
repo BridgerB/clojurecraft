@@ -28,6 +28,7 @@
             [clojurecraft.memory :as memory]
             [clojurecraft.packet :as p]
             [clojurecraft.physics :as physics]
+            [clojurecraft.registry :as registry]
             [clojurecraft.terrain :as terrain]))
 
 (set! *warn-on-reflection* true)
@@ -323,16 +324,34 @@
       (:saturation p) (assoc :player/saturation (:saturation p))
       (and (<= (:health p) 0) (not (:player/dead? w))) die)))
 
+(def hits-kept 20)                    ; the last hits on the bot :player/hits keeps
+
+(defn hit-of
+  "The hit a damage-event on the bot is, as :player/hits keeps it: when (ms), its damage type by
+   name (registry/damage-type: :mob_attack, :lava, :in_fire, :fall ...), the attacker's entity id
+   and kind when there is one, and the health before it (the set-health after says the rest)."
+  [w type attacker]
+  (cond-> {:at (:time/now w 0) :type (registry/damage-type type) :hp (:player/health w)}
+    attacker (assoc :by attacker)
+    (and attacker (get-in w [:world/entities attacker]))
+    (assoc :by-kind (entity/kind (get-in w [:world/entities attacker])))))
+
 (defmethod on-packet [:play :damage-event]
-  [w {:keys [entity-id source-cause source-direct]}]
+  [w {:keys [entity-id source-type source-cause source-direct]}]
   (if (= entity-id (or (:player/entity-id w) (:player/eid w)))
     (let [attacker (if (pos? (long (or source-direct 0)))
                      (dec (long source-direct))
                      (when (pos? (long (or source-cause 0))) (dec (long source-cause))))]
       ;; :player/hurt-at is in ticks (the dragon's rules read it); :player/struck-at is the same
       ;; moment in ms (:time/now), which combat/striker ages against struck-ms (gym blaze-wall-b,
-      ;; plan 40624888909: zombified piglin 126 arrived as 127, 144 as 145)
-      (cond-> (assoc w :player/hurt-at (:time/tick w 0) :player/struck-at (:time/now w 0))
+      ;; plan 40624888909: zombified piglin 126 arrived as 127, 144 as 145). :player/hits keeps
+      ;; each hit named (hit-of): the damage type was decoded and dropped before
+      (cond-> (-> w
+                  (assoc :player/hurt-at (:time/tick w 0) :player/struck-at (:time/now w 0))
+                  (update :player/hits
+                          (fn [hs]
+                            (vec (take-last hits-kept
+                                            (conj (or hs []) (hit-of w source-type attacker)))))))
         attacker (assoc :player/attacker attacker)))
     w))
 

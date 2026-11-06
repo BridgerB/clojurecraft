@@ -126,7 +126,20 @@
     "after the first living-flags set-entity-data of its own entity"]
    [:player/struck-at
     "ms (:time/now) of the last damage-event on the bot, beside :player/hurt-at in ticks: combat/striker ages the strike against struck-ms. A zombified piglin that hit is angry, and a hit angers its pack"
-    "after a damage-event on the bot"] [:control/forward? "walk forward" "inside :player/controls"]
+    "after a damage-event on the bot"]
+   [:player/hits
+    "the last game/hits-kept hits on the bot, oldest first, each {:at ms :type damage-type name :hp health before} with :by and :by-kind when a mob dealt it (game/hit-of)"
+    "after the first damage-event on the bot"]
+   [:player/armor "the bot's armour points, the server's word (update-attributes, hear.clj)"
+    "after the server sends its attributes"]
+   [:player/max-health "the bot's max health, the server's word (update-attributes, hear.clj)"
+    "after the server sends its attributes"]
+   [:player/effects
+    "{effect-name {:amplifier n :until ms}} of the effects on the bot (update-mob-effect, remove-mob-effect, hear.clj)"
+    "after the first effect on the bot"]
+   [:player/in-combat? "inside the server's fight bracket (player-combat-enter, -end, hear.clj)"
+    "after the first player-combat-enter"]
+   [:control/forward? "walk forward" "inside :player/controls"]
    [:control/jump? "jump when allowed" "inside :player/controls"]
    [:control/yaw "heading to walk on" "inside :player/controls"]
    [:control/look "[yaw pitch] to face" "inside :player/controls"]
@@ -177,6 +190,12 @@
    [:entity/died-at
     "ms the server said the entity died (entity-event status 3); the body is removed after"
     "inside :world/entities, after a death"]
+   [:entity/hurt-at
+    "ms the server last showed the entity hurt (hurt-animation, hear.clj): a swing that landed"
+    "inside :world/entities, after its first hurt flash"]
+   [:entity/swung-at
+    "ms the server last showed the entity swing its main hand (animate, hear.clj): a strike coming"
+    "inside :world/entities, after its first swing"]
    [:entity/item
     "the item id a dropped item entity holds, from its metadata (index 8, its stack): a blaze rod told from cobblestone (issue #262)"
     "inside :world/entities, a dropped item, once its metadata said"]

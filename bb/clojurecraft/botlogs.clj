@@ -43,23 +43,61 @@
   [s]
   (map second (re-seq #":kind :log, :message \"((?:[^\"\\]|\\.)*)\"" s)))
 
+(defn table
+  "{id name} of the generated {name id} table resources/clojurecraft/<n>.edn under the checkout
+   root (the churn runs there), or {} when it cannot be read."
+  [n]
+  (or (try (into {}
+                 (map (fn [[k v]] [v (name k)]))
+                 (edn/read-string (slurp (str "resources/clojurecraft/" n ".edn"))))
+           (catch Exception _ nil))
+      {}))
+
+(def damage-names
+  "{id name} of the damage types (registry.clj's table)"
+  (delay (table "damage-types")))
+(def entity-names "{id name} of the entity types" (delay (table "entity-types")))
+
+(defn hit-text
+  "A hit on the bot as the digest says it: the damage type by name and the attacker, its kind and
+   entity id (a damage-event's source ids are the entity id plus one, 0 for none), e.g. \"hit
+   mob_attack by hoglin#1724\". types is {eid entity-type-id} of the entities added so far."
+  [types s]
+  (let [n (fn [k]
+            (some-> (field s k)
+                    parse-long))
+        t (n ":source-type")
+        by (let [d (n ":source-direct")
+                 c (n ":source-cause")]
+             (cond (and d (pos? d)) (dec d)
+                   (and c (pos? c)) (dec c)))
+        kind (some->> (get types by)
+                      (get @entity-names))]
+    (str "hit "
+         (get @damage-names t (str "source-type " t))
+         (when by (str " by " (or kind "?") "#" by)))))
+
 (defn digest-line
   "[state out] after one recording line: state {:now ms :self eid} keeps the last tick's time and
-   the bot's entity id (from :login); out gains a text line for each log message, health change
+   the bot's entity id (from :login) and :types, {eid type} of every entity added; out gains a text line for each log message, health change
    and hit on the bot itself."
   [[state out] s]
   (let [now (:now state)
         stamp (fn [txt] (str (or now "-") " " txt))]
     (cond (str/includes? s ":kind :tick") [(assoc state :now (field s ":now")) out]
           (str/includes? s ":packet/name :login,") [(assoc state :self (field s ":entity-id")) out]
+          (str/includes? s ":packet/name :add-entity")
+          [(assoc-in state
+            [:types
+             (some-> (field s ":entity-id")
+                     parse-long)]
+            (some-> (field s ":type")
+                    parse-long)) out]
           (str/includes? s ":packet/name :set-health")
           [state (conj out (stamp (str "hp " (field s ":health") " food " (field s ":food"))))]
           (and (str/includes? s ":packet/name :damage-event")
                (= (:self state) (field s ":entity-id")))
-          [state
-           (conj out
-                 (stamp (str "hit source-type " (field s ":source-type")
-                             " by " (field s ":source-cause"))))]
+          [state (conj out (stamp (hit-text (:types state) s)))]
           (str/includes? s ":kind :log") [state (into out (map stamp) (messages s))]
           :else [state out])))
 
