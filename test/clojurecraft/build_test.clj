@@ -1801,7 +1801,9 @@
   ;; holding forward, the seal behind it was worked with forward held, and the body walked on past
   ;; the cell off its floor into lava (tick lines 5350 to 5750 ms)
   (let [walk {:intent/kind :walk :intent/target [9 63 7] :intent/status :active}
-        stand {:build/op :stand-in :build/stand [9 63 7] :build/step :enter}
+        stand
+        {:build/op :stand-in :build/stand [9 63 7] :build/step :enter :build/done [:solid [9 62 7]]}
+        moving (assoc stand :build/done [:solid [9 64 7]])
         seal (build/place-op [8 64 7] [9 63 7] nil :seal-behind)
         i (assoc hill-intent :intent/op stand :intent/child walk)
         w (assoc (standing-at (open-ground {}) [9.4 63.0 7.5])
@@ -1815,4 +1817,10 @@
     (is (= {:control/yaw -90.0} (:player/controls changed))
         "a new op: the walk's forward is let go, its yaw kept")
     (is (nil? (get-in changed [:plan/intent :intent/child])))
-    (is (= {:control/yaw -90.0} (:player/controls done)) "a child done: its forward is let go")))
+    (is (= {:control/yaw -90.0} (:player/controls done)) "a child done: its forward is let go")
+    (is (= (:player/controls w)
+           (:player/controls (build/work-op (assoc w :plan/intent (assoc i :intent/op moving))
+                                            (assoc i :intent/op moving)
+                                            seal
+                                            {:event/kind :tick})))
+        "an op changed undone (an eye stand moving with the body) keeps the walk's keys")))

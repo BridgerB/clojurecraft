@@ -1678,7 +1678,8 @@
 
 (defn work-op
   "One tick of the running intent i working op next through a child (op-child): a new op drops
-   the child of the old one (the world moved on) and the movement keys it held (let-go), except an active climb finishes before its
+   the child of the old one (the world moved on), and when the old op is done the movement keys it
+   held (let-go; an op that changed undone, an eye stand moving with the body, keeps them), except an active climb finishes before its
    headroom is repaired. A child that failed fails i (a dig that found
    its cell open, found-open?, makes way for the next as one done would), one that is done
    makes way for the next, its movement keys let go. A lava scoop whose sight line filled (scoop-blocked?) is dropped so
@@ -1695,10 +1696,13 @@
     (if (and (= :stairs-up (:intent/kind child))
              (not (or (intent/done? child) (intent/failed? child))))
       (intent/run-child world event)
-      ;; the old child is dropped with the movement keys it held (its look stays for the next aim): a walk done as its stand landed centred
+      ;; an op done lets go of the movement keys its child held (the look stays for the next aim): a walk
+      ;; whose stand landed centred
       ;; still held forward, and the seal behind it walked the body on past the cell, off its floor
       ;; into lava (sim R1-28-1 on the stage-18 rods start, tick lines 5350 to 5750 ms)
-      (intent/dissoc-intent (intent/assoc-intent (let-go world) :intent/op next) :intent/child))
+      (intent/dissoc-intent
+       (intent/assoc-intent (cond-> world (and op (satisfied? world op)) let-go) :intent/op next)
+       :intent/child))
     (and (= :build (:intent/kind i)) (swim-looped? i))
     (-> world
         (assoc :player/controls {})
