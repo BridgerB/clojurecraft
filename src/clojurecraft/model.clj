@@ -152,6 +152,9 @@
     "{entity-id {:entity/type :entity/pos :entity/seen-at ...}}: every entity the server added and has not removed (items only before issue #258: a widening, an item is still one)"
     "always"]
    [:world/facts "memory: DataScript value of append-only observations, never retracted" "always"]
+   [:world/sights
+    "the latest state seen at each position on record, by dimension, {dim {pos id}}: the current view of :world/facts' sightings, kept beside them as each is appended (memory/observe, memory/remember-column), so positions-now and observation are lookups, not a query over every sighting (probe 42165757215: that query was 160 of 226 samples of the freeze after the seventh rod)"
+    "once a sighting was appended; absent in a world saved before it, which then asks the facts"]
    [:world/dragon-dead?
     "the server said the ender dragon died: its death event (entity-event status 3), its removal near the bot with no boss bar shown (entity/dragon-gone?), or the credits (game-event win_game) (issue #267)"
     "once the dragon died"]
