@@ -1,6 +1,7 @@
 (ns clojurecraft.botlogs-test
   "The bot-log digest: a recording's lines to the text a lead reads within one batch."
   (:require [babashka.fs :as fs]
+            [clojure.string :as str]
             [clojure.test :refer [deftest is]]
             [clojurecraft.botlogs :as botlogs]))
 
@@ -36,3 +37,16 @@
               {:run/bot "Clj_r58" :run/dir "s1" :ok false}]]
     (is (= {:coverage [1 2] :senses {"freeze" 1 "burning" 1}} (botlogs/senses-summary dir runs))
         "one of two runs has its senses: a blind spot of one")))
+
+(deftest a-recording-is-found-while-the-lane-plays-and-after
+  ;; recordings are packed to .edn.zst only at the job's end: lane 8 of adec45c uploaded nothing
+  ;; from its first batch while botlogs looked only for .zst
+  (let [dir (str (fs/create-temp-dir))
+        r {:run/bot "Clj_r01" :run/dir "s1"}]
+    (fs/create-dirs (fs/path dir "s1"))
+    (is (nil? (botlogs/recording dir r)))
+    (spit (str (fs/path dir "s1" "Clj_r01.edn")) "#:event{:kind :tick, :now 5, :rand 0.1}\n")
+    (is (str/ends-with? (botlogs/recording dir r) "Clj_r01.edn"))
+    (let [out (str (fs/path dir "out.log"))]
+      (is (botlogs/digest-file! (botlogs/recording dir r) out))
+      (is (= "\n" (slurp out)) "a tick alone says nothing"))))
