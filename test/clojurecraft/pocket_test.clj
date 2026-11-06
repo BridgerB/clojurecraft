@@ -272,6 +272,25 @@
     (is (false? (pocket/sealed? w site)) "not sealed")
     (is (not (pocket/can-seal? held site)) "and no :seal to re-issue")))
 
+(deftest a-seal-with-nothing-it-can-lay-and-no-roof-fails-and-is-not-tried-again
+  ;; f9c021c race lane 8, s1 Clj_r02: 296 :seal under :ender-pearls, each done in its first tick,
+  ;; the pocket never sealed, until :nothing-to-do
+  (let [c [8 64 8]
+        sides [[7 64 8] [9 64 8] [8 64 7] [8 64 9] [7 65 8] [9 65 8] [8 65 7] [8 65 9]]
+        w (-> (world-of (apply solid sides))
+              (assoc-in [:player/inventory 9] {:item (recipe/item-id :cobblestone) :count 62})
+              (assoc-in [:player/inventory 10] {:item (recipe/item-id :iron_pickaxe) :count 1})
+              (assoc :pocket/site
+                     {:pocket/cell c :pocket/stand nil :pocket/dig [] :pocket/placed sides}
+                     :time/now 5000))
+        seal {:intent/kind :seal :intent/status :active :intent/id 1}
+        ran (intent/run (assoc w :plan/intent seal) seal {:event/kind :tick :event/now 5000})]
+    (is (false? (pocket/sealed? w (:pocket/site w))) "the roof over open air cannot be laid")
+    (is (intent/done? (:plan/intent ran)) "ended, the site noted unsealable")
+    (is (nil? (:pocket/seal-failed-at ran)) "no hold on other sites' seals")
+    (is (true? (get-in ran [:pocket/site :pocket/unsealable?])))
+    (is (not (pocket/can-seal? ran (:pocket/site ran))) "so it is not chosen again")))
+
 (deftest a-cell-shut-on-every-side-with-nothing-placed-is-sealed
   ;; blaze-race-z11 job 3 (flip_trace2): the held here-site [2345 60 2287] = the feet, :placed [], wanted [],
   ;; `sealed?` false for ever on (seq placed), so the row still wanted a refuge and chose :pocket every

@@ -460,6 +460,20 @@
                                              1
                                              (double (second (:pocket/cell site))))
                                       0))))
+          ;; standing in the cell, every cell it can lay is solid, and the pocket is not sealed:
+          ;; a wanted cell cannot be laid (unlayable?, the roof over open air). Done here
+          ;; would be chosen again at once: f9c021c race lane 8, s1 Clj_r02, 296 :seal under
+          ;; :ender-pearls, each ended in its first tick and failed :instant-churn, then
+          ;; :nothing-to-do. The site is noted unsealable, so can-seal? says no and the bot goes on;
+          ;; no :pocket/seal-failed-at, which would hold every other site's seal back too
+          (and site
+               (= (:pocket/cell site) (intent/feet world))
+               (every? #(solid-at? world %) cells)
+               (not (sealed? world site)))
+          (-> world
+              (assoc :player/controls {})
+              (assoc-in [:pocket/site :pocket/unsealable?] true)
+              intent/done)
           (not (and site (seq cells) (= (:pocket/cell site) (intent/feet world))))
           (-> world
               (assoc :player/controls {})
