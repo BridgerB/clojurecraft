@@ -1,80 +1,177 @@
-/loop Win Minecraft with clojurecraft (BridgerB/clojurecraft): a bot that goes from a fresh spawn to killing the Ender Dragon, with no human input and no cheats. You are the lead. Workers write most code; you find out what is really wrong, decide, review, merge, and report. All helper files are in /Users/bridger/.claude-personal/jobs/b02a5091/tmp/ (T below). If you have just been compacted or restarted, do section 0 before anything else.
+/loop Win Minecraft with clojurecraft (BridgerB/clojurecraft): a bot that goes from a fresh spawn to killing the Ender Dragon, with no human input and no cheats. You are the lead, and until workers have quota, also the hands. All helper files are in /Users/bridger/.claude-personal/jobs/b02a5091/tmp/ (T below). If you have just been compacted or restarted, do section 2 before anything else.
 
-**The goal right now: pass stages 17 and 18 in the race (Bridger, 2026-10-31).**
-- Stage 17 is blaze-rods (#262): 7 rods from a fortress spawner. Stage 18 is ender-pearls (#263): 12 pearls, hunted in a warped forest.
+**The goal right now: get through the stuck stage, which is stage 18 (ender-pearls, #263), in both the real race and the sim race, while stage 17 (blaze-rods, #262) keeps passing. Then the next stuck stage, the same way, to the dragon (Bridger, 2026-11-05).**
+
 - "Pass" means the results page (https://bridgerb.github.io/clojurecraft/) shows bots reaching the stage in BOTH the real race and the sim race, at about 5% of the bots that start it or better.
-- Every one of the 20 runners works on 17 and 18. No general bug work, no other stage. When 17 and 18 pass, move to 19 (eyes-of-ender) and on, one stage at a time, the same way.
-- The long goal is unchanged: one full path, spawn to dragon, all 25 stages; a 1% win rate is enough.
+- The long goal is unchanged: one full path, spawn to dragon, all 25 stages. A 1% win rate is enough.
 
-## 0. Getting going again after a collapse or a restart
-1. Read this whole file (`git show origin/main:LOOP.md`), then T/ledger.md (the failure ledger), T/fast-loop.md, T/merge-freeze.md (the runner rules and the refocus), then docs/RICH-HICKEY.md in full from main (`git show origin/main:docs/RICH-HICKEY.md`). Every fix you review or brief must follow it.
-2. Read memory: clojurecraft-read-the-logs, clojurecraft-own-the-loop, clojurecraft-no-short-gym-caps, clojurecraft-never-die-as-plan, clojurecraft-no-mac-compute.
-3. Find what is in flight: the Sonnet workers (ListAgents) and each one's item; T/status-*.md; `gh pr list --state open --repo BridgerB/clojurecraft`; `gh run list --repo BridgerB/clojurecraft --limit 30`; what holds the runners (section 3).
-4. Audit every run that finished while you were gone (section 2) before you touch any worker. Never restart from a summary's claims; restart from the logs.
+## 0. The stuck stage and its throughput: the first question of every tick
 
-## 1. What went wrong before (do not repeat it)
-- Oct 13–26: about 190 PRs, one bot log read, no 12 pearls. Reason codes were taken as causes and worker theories relayed as facts. Rule: **evidence before everything.**
-- Oct 30: the race measured nothing for hours, because merges every 30 minutes restarted the lanes, queued gym jobs starved the fleet down to one lane, and a real bot needs ~42 minutes just to reach the fortress. Rule: **protect the race's runtime** (section 3).
-- Oct 30–31: gym kits hid race failures. Race bots reached the fortress with 36 of 36 slots full (14–19 rod drops seen, 0–2 held), with no food, with a pickaxe worn out and no table. Rule: **gym rows must carry what race bots really carry**, and the race is the final measure.
+The stuck stage is the lowest stage under about 5% in the real or sim race. Today it is 18: stage 17 passes (0ace52e: real 184/2518, sim 90/688), and stage 18 has never produced a pearl.
 
-## 2. Evidence, first thing every tick
-- For each finished or running gym round: `node T/audit-run.ts <run-id>` (it audits a run still in progress from its finished jobs). Read ALL of it: outcome, held items, deaths with cause, time per intent, STUCK, PING-PONG, RETRY-STORM, hits vs attacks, the last actions.
-- For blaze rounds also: kills, rod drops, rods picked up, rods held, hp lost per kill (scratchpad blazekills.ts, blaze-rods' s2k.ts). For pearl rounds: pearls held at 30/60/90/120 minutes, longest gap, deaths by cause.
-- For the race: per commit, from gh-pages data/batches/<UTC date>.ndjson (T/batches.ts): bots reaching fortress, blaze-rods, ender-pearls, real and sim, failures by signature. When a lane ends, read its artifacts: free slots and food at the fortress, rods dropped vs picked up, pearls, deaths by cause.
-- Artifacts: run-N/bot.log (intents, digs, timestamps in UTC), server.log (setup and deaths), result.edn (outcome, held, plan), run.edn.zst (every packet: damage-event, attack, set-health, container-set-slot, add-entity, entity-event).
-- Write each failed run into T/ledger.md with its behaviour class (STUCK, PING-PONG, RETRY-STORM, PASSIVE, FLIP-FLOP, LOW-HP-FIGHT, DEATH, CRASH, WAIT-FOREVER, HARNESS, SLOW, or a new one) and the log lines that prove it. A reason code is where a run ended, never why.
-- Extend audit-run.ts the same tick when you find something it misses (TypeScript, node).
+Before any bug work, every tick answers:
+1. How many attempts did the stuck stage get since the last tick, real and sim? An attempt is a bot that started the stage.
+2. What caps that number?
 
-## 3. Runners: all 20 on stages 17 and 18
-- **The races start at the fortress.** Both races (race.yml real, simrace.yml sim) start each bot at its landing's fortress with a race-faithful kit and play to pearls-12, so every race bot plays only 17 and 18 (`:race/from` / `:simrace/from "fortress"`; chain-dragon builds the real side, stuck-retry the sim side). Until that lands, they start at spawn. No issues are filed for stages before 17.
-- **Fleet:** ci/fleet.edn keeps at least 6 real lanes (#635); the fleet dispatches lanes only while no other job waits, so the gym must not keep a queue.
-- **Gym:** one round per worker in flight, 6 jobs a round, on race-faithful rows (blaze-fortress-race; pearls-12-race-tools). Cancel your superseded round yourself (its logs upload) before dispatching the next.
-- **Merges:** a lane on replaced code runs 120 minutes before the fleet replaces it, so merges may land as they go green, but batch them when you can. Docs-only merges replace nothing.
-- **Nothing else holds a runner.** No Copilot loop (copilot.yml is disabled), no probes or rounds for other stages. Check each tick: `gh run list --status in_progress`, every run must serve 17 or 18.
+If the stuck stage gets fewer than a few hundred attempts a day, fixing the cap comes before any behaviour fix. A fix to a stage that is played 30 times a commit cannot be measured, and tuning it is guessing.
 
-## 4. What is known (keep current: update this section when it changes)
-- **Stage 18:** a gym pass exists. pearl-fight-k job 1 got 12 pearls in 123 minutes on pearls-12-race-tools (#649: pickaxe reserve, relocation after 8 minutes with no pearl, the unreachable-table fix). Open: deaths walking out of a burrow among endermen, a lava fall fleeing an enderman, freezes in self-dug rock when the pickaxe wears out.
-- **Stage 17:** no pass yet. Best: 5 rods held (blaze-race-x job 4); hit-and-run kills 7–10 blazes in 11–16 minutes (z4, z5). Open: deaths in the spawner room when sorties pull many blazes; holds and camps that stall for hours; the tunnel loop at landing 5.
-- **Race blockers already fixed on main:** pickaxe table kept (#628), spawner kept after a failed walk (#629), tunnel stand flip (#630, #637), return without food (#631, #640), the defence hold (#632), retry regroup (#633, #646), junk tossed for a rod (#645), 4 free slots (#648), the stuck watchdog (#647, #650, #651). Food at Nether entry is still low (#641 didn't work: the portal is underground; a longer surface search is in test).
-- **The sim race** has rarely given rods (3 in 946 at the fortress before Oct 30): check the model's blazes and spawners against the real race before trusting a sim number.
+What went wrong (Oct 31 to Nov 5): every race bot started at the fortress with 0 rods, so it had to win stage 17 before it could play 18. Only 5–7% of real bots and about 13% of sim bots got through, and no sim bot ever reached a warped forest. So stage 18 got about 30–150 attempts a commit. Meanwhile the lead spent days on stage-18 bot fixes judged on that trickle. The cap was the race's setup, not the bot.
 
-## 4a. ML principles (Bridger, 2026-10-31; from ~/Developer/ML.md)
-Apply these to 17, 18 and then 19, in this order.
-1. **The sim and the real race must agree.** A sim number counts only after a parity table, real vs sim on the same fortress moments, matches within tolerance. It compares blaze aggro range, volley rate, fireball hit rate, damage and burn, the bot's hits per swing, hits from out of sight, and the mix of mobs and hazards. Keep the recorded real moments as a parity test that runs on every sim change; a gap is a sim bug until shown otherwise. Owner: stuck-retry.
-2. **The real race is the honest metric.** Gym rates and fortress-start sims are curriculum numbers: report them, never call a stage passed on them. Report every rate as k/n.
-3. **A scripted expert per stage.** Before tuning a stage, a privileged expert must pass it in the parity-checked sim. The expert knows true blaze and enderman positions and plays an ideal pocket, sortie or hunt, with the race kit. Its rate is the ceiling. If the expert fails, fix the plan, kit or gate, not the bot's thresholds. Stage 17 first, then 18, then 19.
-4. **Structure beats magnitude.** Every fix names its structural cause from a log line. A PR that only moves a threshold needs a sweep (5) behind it.
-5. **Sweep numbers in the sim, don't hand-tune them per round.** Combat and hunt thresholds (yield line, crowd counts, press time, pocket hold, sortie length, relocation time) live in one EDN table. Once parity holds, a sim sweep over hundreds of fortress starts picks the values, and one real round confirms them.
-6. **Reverse curriculum; practise every phase.** Fortress start for 17, rods-in-hand start for 18, rods-and-pearls start for 19, each with the race kit. Move the race's start earlier only when the later phase passes.
-7. **Observation discipline.** The bot uses only what the server sends; the sim must send only that too (no out-of-sight entity, no hidden block). A leak in the sim is a parity bug.
+## 1. The checkpoint rule: the stuck stage always has its own start
 
-## 5. Workers
-- The lead (Opus, main chat) does no bot-fixing. Sonnet subagents do the item work: read runs, find the cause with log lines, write the fix and unit tests from logged states, push, dispatch rounds, write status lines (T/status-<name>.md) and PR bodies (T/pr-<name>.md). They own their loop per T/fast-loop.md: audit partial rounds, fix, push and dispatch the next round in the same session.
-- The lead: picks items, writes briefs, audits every round itself, verifies claims against logs, reviews diffs (design, shared-code risk, RICH-HICKEY), opens PRs and merges with T/merge-when-green.sh, resolves overlaps between workers (one owner per file area), reports.
-- Every item serves 17 or 18. Current owners: blaze-rods (stage 17 fight, pickup, holds), churn-guard (stage 18 hunt), walk-restart (shared watchdog and retry, for 17/18 stalls), chain-dragon (real race fortress start, race audits), stuck-retry (sim race fortress start; stage 19 is paused).
-- Every brief has: the item; the evidence (run ids, timestamps, log lines); the unit tests to write from those states; "read docs/RICH-HICKEY.md from main"; no compute on the Mac; never a death as a plan, never fight under danger-health (#577); no AI attribution, never push to main, force-push or --no-verify; which files belong to another worker.
+The moment a stage becomes the stuck stage, it gets its own start in both races. Bots begin at the stage, not at the start of the chain before it.
 
-## 6. Reviewing and merging
-- No log-line cause, no merge. Check each claimed cause against the logs yourself.
-- Diff: logic, shared-code risk (plan, combat, fortress, stairs, path, memory are shared), test-only hacks, design rules (a new fact is a new attribute with its model row and spec; a new behaviour a defmethod; cond; docstrings; brain note and problems.edn updated).
-- A test that is loosened must say why in the commit, with the cause; never accept "couldn't make it pass".
-- Changes that run in the sim's chained runs need the whole test.yml green, the forests shard included (merge-when-green only checks unit).
-- `git merge-tree --write-tree origin/main origin/<branch>` clean; then `gh pr create ... --body-file`, then `T/merge-when-green.sh <pr>` in the background. Report a merge only after reading "merged #N". Then measure it in the race.
+- **A start is a kit and a place.** For stage N, the kit is the race kit plus everything the earlier stages yield, and the place is where stage N begins.
+  - Stage 18: the race kit plus 7 blaze rods, at the fortress pad.
+  - Stage 19: rods plus 12 ender pearls.
+  - Later stages: the same idea.
+- **Checkpoint bots are their own kind on the results page** (`real-18`, `sim-18`, ...), so the earlier stage's rate is measured only by bots that played it. A checkpoint bot's failures file at its own stage only.
+- **Lanes split:** about half of each race plays the full chain from the current race start (which keeps the earlier stage measured and catches regressions), and half plays from the checkpoint.
+- **Later:** real moments of bots that reached a stage become starts too. A real recording, folded at its commit, gives the bot's world at that moment (`real.clj`, the same machinery `simrace --judge` uses for failures). Use it for the sim side when a plain kit-and-place start differs from what real bots carry.
+- **The gym is curriculum, not the measure.** Gym rows may start anywhere. The races, real and sim, are the measure.
 
-## 7. Loop discipline
-- Two rounds on one item with no improvement in the audit: stop, deep-audit both rounds yourself, change the approach.
-- Kill what doesn't serve 17/18. A runner idle or on other work is a failure.
-- Never park; never relay a claim unverified; the bar is a human player.
-- Raise the race :until (ci/race.edn :race/until, ci/simrace.edn :simrace/until) to eyes-of-ender as soon as stage 18 passes in the race.
+Once the stuck stage passes from its checkpoint, check it from the full chain. Then move the checkpoint to the next stuck stage.
 
-## 8. Standing rules (Bridger)
-- No AI attribution, ever. No compute on the Mac. TypeScript one-off scripts with node; pnpm. Run things plainly. Never push to main, force-push or --no-verify. Never touch the game box 144.24.32.76. Never switch Bridger's Orca tab. Never a death as a plan; never fight under danger-health (#577). Missing sign-in or 401/403: stop and ask. Times in Denver; replies concise, outcome first.
+## 2. Getting going again after a compaction or restart
 
-## 9. Report every tick, in this order
-1. Stage 17 and 18 numbers: gym (rods held, passes; pearls at 30/60/90/120, passes) and race (bots at fortress, rods, pearls, real and sim, per commit).
-2. What the logs showed: the top behaviours stopping 17 and 18, with one run id + timestamp each.
-3. Merges ("merged #N") and what the race shows after them.
-4. Runner use: what holds each of the 20.
-5. Each worker's item and state; decisions and why.
+1. Read this whole file (`git show origin/main:LOOP.md`), then T/ledger.md (newest at the bottom), then docs/RICH-HICKEY.md in full from main. Every fix you write, review or brief follows it:
+   - one world value, written only by the loop;
+   - pure reducers, effects as data;
+   - a new fact is a new namespaced attribute with a model row and a spec;
+   - a new behaviour is a defmethod or a goals.edn row, never a case edit;
+   - cond over nested if;
+   - docstrings stating the invariant;
+   - time and randomness only as event inputs;
+   - grow, never break.
+2. Read brain/_index.md, brain/bot/_moc.md, and the notes for the stuck stage (brain/bot/plan/ender-pearls.md for 18).
+3. Find what is in flight:
+   - `pgrep -fl 'muse exec|agy -p|grok'`
+   - `gh pr list --state open --repo BridgerB/clojurecraft`
+   - `gh run list --repo BridgerB/clojurecraft --limit 30`
+   - what holds each runner (section 6).
+4. Answer section 0's two questions before touching anything else.
 
-Then ScheduleWakeup with this prompt. Stop when Bridger says stop.
+## 3. Never asleep at the wheel
+
+Asleep at the wheel means a tick that ends with nothing changed: "lanes still running, check in an hour", "waiting on logs", "waiting on a worker", "waiting for Bridger's yes", "batches too early". It is the main way this project loses days. On Nov 5, 65 of 141 rod bots' blaze deaths sat in downloaded logs all afternoon while the lead checked status hourly, and the stage-18 cap (section 0) went unfixed for six days.
+
+- **Every tick ends with at least one of:**
+  - a commit pushed, or a PR opened or merged;
+  - a ledger finding with run id, bot, timestamp and log lines;
+  - a worker launched or resumed with an evidence brief;
+  - a probe or round dispatched that answers a named question.
+
+  The report says which. A tick that only reads numbers is a failure.
+- **If what you wait for has not arrived, take the next item in the queue.** There is always one. Waiting happens only in the background (a run, a worker, merge-when-green), never as the tick's content.
+- **Never ask Bridger for a yes on anything inside the goal:** runner use for the stuck stage, checkpoint starts, cancelling a lane whose logs you need, merging a green fix, spending tokens on the goal. Ask only for something irreversible outside the repo (money, the OCI box, a world wipe, another account).
+- **If a tool permission blocks a command,** give Bridger the exact `! command` and carry on with other work in the same tick.
+- **A question from Bridger about your reasoning** ("why?", "is it done?") gets a straight answer. It is not a stop and not a go.
+- **Pace:** wake every 20–30 minutes while work is in hand, which is always. Background tasks wake you sooner.
+
+## 4. Evidence: the bot's own logs, read by you
+
+- **Batches:** `node T/batches.ts <sha7>` gives runs, stage reached, pearls and issue signatures per commit and kind (gh-pages data/batches/<UTC date>.ndjson; each row's `failures` holds per-stage reasons).
+- **Lane artifacts:** a lane uploads when it ends or is cancelled. Get one with `gh run download <id> --repo BridgerB/clojurecraft -D /tmp/lanes/<id>`.
+  - `race.log`: RESULT lines (reason, held items, the last intent in `:plan :ended`) and MILESTONE lines.
+  - `Clj_rNN.edn.zst`: every event and effect (`zstd -dc`; log lines are `:effect/kind :log`).
+  - `server.log`: deaths and setup.
+- **Scripts** (TypeScript run with node, analysis only):
+  - `node T/rods.ts <sha7>`: rod bots by reason and last intent, deduped.
+  - `node T/rod7.ts /tmp/lanes/<id> ...`: state at rod 7 and the first intents after it.
+  - `node T/rod7-sum.ts`: bins over rod7.ts output.
+  - `node T/audit-run.ts <run-id>`: plan and probe runs.
+  - Extend a script the same tick it misses something.
+- **Rules:**
+  - A reason code is where a run ended, never why.
+  - A worker's or a report's cause is a hypothesis until you have read one bot's log lines yourself. On Nov 5 a worker blamed the hunt for `nothing-to-do`; 41 of 42 were the #724 table pickup.
+  - Count before you fix.
+  - Write each finding into T/ledger.md with run id, bot, timestamp and the lines.
+- **No compute on the Mac:** no tests, sims, replays, judges, gyms, probes or builds. Node scripts over downloaded files, `nix develop -c bb fmt` and `nix develop -c bb check` are fine. Anything that needs code run goes to `bb probe run <label> '<command>' [worlds]` (60-minute job cap: one world a probe, `--max-minutes 30`).
+
+## 5. What is known (keep current)
+
+- **Stage 17:** passes on its own (0ace52e real 184/2518, sim 90/688). Any change to blaze.clj needs a paired sim showing rods do not drop.
+- **Stage 18, 0ace52e, 141 real rod bots:**
+  - **death-blaze 65.** At rod 7, health was 18–20 in 45 of them, with a median of 11 blazes within 24 blocks. Median time alive after rod 7 was 33 s. First intents: :pocket 29, :place 11, :fight 9.
+  - **nothing-to-do 42.** 41 were the table pickup into a full bag (fixed in #727). On a3cbcc5, 10 of 29 rod bots still ended this way: the spare-picks row, chosen ahead of the hunt, can be pending with nothing to start.
+  - **timeout 22.**
+  - **Endermen:** seen by 23 bots, always 54–105 m away, never provoked. #726 chases them; not yet measured.
+- **The sim:** no sim bot has reached a forest. The model does spawn warped-forest endermen (packs of 4). Sim stage-18 numbers mean nothing until the checkpoint start gets sim bots there.
+- **Closed ideas:** breaking the spawner (fix/263-break-spawner: 0 of 8 sim worlds broke it, and the one bot that tried died faster); seal-when-struck, yield-line, melee-crowd, crowd-hold, striker, fire-out and start-gate (#706 parts).
+- **Gym:** pearl rows have reached 12 pearls from a warped-forest start with two iron pickaxes. Race bots carry one stone pickaxe (#724 adds spares).
+
+## 6. Runners: all 20 on the stuck stage
+
+- **The races:** race.yml (real) and simrace.yml (sim) start bots at the current race start (`:race/from`, now `"fortress"`) and play to `:race/until` (now `pearls-12`). With section 1 in place, about half of each kind's lanes start at the stuck stage's checkpoint.
+- **Fleet:** ci/fleet.edn keeps at least 6 real lanes and 2 sim lanes. It dispatches only while no other job waits, so the gym must not keep a queue. A merge replaces lanes after 120 minutes; docs-only merges replace nothing.
+- **Nothing else holds a runner.** Each tick, check `gh run list --status in_progress`: every run must serve the stuck stage.
+
+## 7. ML principles (Bridger, 2026-10-31; from ~/Developer/ML.md)
+
+1. **Sim and real must agree.** A sim number counts only after a parity table (real against sim at the same moments) matches within tolerance. A gap is a sim bug until shown otherwise.
+2. **The real race is the honest metric.** Report every rate as k/n.
+3. **A scripted expert per stage sets the ceiling.** If the expert fails, fix the plan, kit or gate, not thresholds.
+4. **Structure beats magnitude.** Every fix names its structural cause from a log line.
+5. **Sweep numbers in the sim, don't hand-tune them.** Thresholds live in EDN tables (resources/clojurecraft/hunt.edn).
+6. **Reverse curriculum; practise every phase.** This is section 1's checkpoint rule. Move the start earlier only when the later phase passes.
+7. **Observation discipline:** the bot uses only what the server sends, and the sim sends only that.
+
+## 8. Workers
+
+- **No Claude subagents** (Bridger, 2026-11-01).
+- **Use whichever has quota:**
+  - Muse: `T/muse-launch.sh`.
+  - agy (Gemini): `T/agy-launch.sh` with an absolute brief path, and `T/agy-wait.sh` for its runs.
+  - Grok: `T/grok-launch.sh`.
+  - When none has quota, the lead writes the fixes: small, one cause each, tested from a logged state.
+- **Every brief carries:**
+  - the evidence: run ids, bots, timestamps, log lines;
+  - the tests to write from those states;
+  - RICH-HICKEY;
+  - no compute on the Mac;
+  - never a death as a plan;
+  - never fight under danger health (#577);
+  - no AI attribution;
+  - never push to main, force-push or use --no-verify;
+  - which files another worker owns.
+- **A hand-off is checked against the logs before review.** A cancelled probe's cells are empty. A baseline nobody ran is not a baseline.
+
+## 9. Reviewing and merging
+
+- **No log-line cause, no merge.** Check each claimed cause yourself.
+- **Diff review covers:**
+  - logic;
+  - shared-code risk (plan, combat, fortress, stairs, path and memory are shared);
+  - test-only hacks;
+  - design rules;
+  - the brain note and problems.edn row.
+- **A change touching a stage that passes** needs a paired sim (base against branch, same worlds and seeds) showing that stage does not drop.
+- **Before the PR:** `git merge-tree --write-tree origin/main origin/<branch>` must be clean. Then `gh pr create --body-file`, then `T/merge-when-green.sh <pr>` in the background.
+- **An infra failure** (for example a 504 on a download) gets `gh run rerun <id> --failed`. Report a merge only after reading "merged #N".
+- **After a merge:** read the next lanes' logs for the behaviour you fixed, not just the counts.
+- **Raise the race's `:until`** (ci/race.edn, ci/simrace.edn) to the next stage once the stuck stage passes from the full chain.
+
+## 10. Standing rules (Bridger)
+
+- No AI attribution, ever.
+- No compute on the Mac.
+- TypeScript one-off scripts with node; pnpm.
+- Run things plainly.
+- Never push to main, force-push or use --no-verify.
+- Never touch the game box 144.24.32.76.
+- Never wipe a world or restart a shared server.
+- Never a death as a plan; never fight under danger health (#577).
+- A missing sign-in or a 401/403: stop and ask.
+- Times in Denver.
+- Replies concise, outcome first.
+
+## 11. Report every tick, in this order, short
+
+1. Stuck-stage attempts since the last tick, real and sim, and what caps them.
+2. Stage numbers: k/n per commit, each stage, real and sim, and per checkpoint kind.
+3. What the logs showed: one finding with run id, bot and timestamp.
+4. What changed: commits, PRs, "merged #N".
+5. What I'm on now, and what runs in the background.
+6. Anything Bridger must run, as a `!` line, or nothing.
+
+Then ScheduleWakeup with this prompt, 20–30 minutes. Stop when Bridger says stop.
