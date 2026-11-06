@@ -12,6 +12,7 @@
    every :damage-event aimed at the bot's own entity."
   (:require [babashka.fs :as fs]
             [babashka.process :as p]
+            [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.string :as str]))
 
@@ -69,6 +70,25 @@
 
 ;;;; I/O: the recordings, the archive, the release ;;;;
 
+(defn senses-file
+  "The senses of a real run under data-dir (race/play-one!: <run/dir>/<bot>.senses.edn), or nil
+   when absent."
+  [data-dir r]
+  (let [f (fs/path data-dir (or (:run/dir r) "") (str (:run/bot r) ".senses.edn"))]
+    (when (fs/exists? f) (str f))))
+
+(defn senses-summary
+  "What a batch's senses say, for its row on the page: :coverage, the runs with a senses file over
+   the runs, and :senses, {class n} counted over the runs that failed (each file's first line holds
+   its classes, senses/classes). Coverage under one is a blind spot: LOOP.md says fix it first."
+  [data-dir runs]
+  (let [files (keep #(when-let [f (senses-file data-dir %)] [% f]) runs)
+        head (fn [f]
+               (try (with-open [r (io/reader f)] (edn/read-string (first (line-seq r))))
+                    (catch Exception _ nil)))
+        classes (for [[r f] files :when (not (:ok r)) c (:senses/class (head f))] (name c))]
+    {:coverage [(count files) (count runs)] :senses (frequencies classes)}))
+
 (defn recording
   "The recording of a real run under data-dir: <run/dir>/<bot>.edn.zst, or nil when absent."
   [data-dir r]
@@ -95,7 +115,11 @@
       (when (seq recs)
         (fs/create-dirs logs)
         (doseq [[r rec] recs]
-          (digest-file! rec (str (fs/path logs (str (:run/dir r "s") "-" (:run/bot r) ".log")))))
+          (digest-file! rec (str (fs/path logs (str (:run/dir r "s") "-" (:run/bot r) ".log"))))
+          (when-let [sf (senses-file data-dir r)]
+            (fs/copy sf
+                     (fs/path logs (str (:run/dir r "s") "-" (:run/bot r) ".senses.edn"))
+                     {:replace-existing true})))
         (when (fs/exists? lines-dir) (fs/copy-tree lines-dir (fs/path logs "lines")))
         (let [name (asset run runner batch)
               archive (str (fs/path dir name))
