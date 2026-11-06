@@ -69,4 +69,7 @@
     (is (not (botlogs/keep-recording? quiet)))
     (spit quiet "#:senses{:class #{:idle :open} :lines 1}\n{:t 1}\n")
     (is (botlogs/keep-recording? quiet) "an idle run ships its recording too")
+    (spit quiet "#:senses{:class #{:open} :lines 1}\n{:t 1}\n")
+    (is (botlogs/keep-recording? quiet {:ok false :reason :death}) "a failed run ships it")
+    (is (not (botlogs/keep-recording? quiet {:ok true})) "a won run does not")
     (is (= #{} (botlogs/senses-classes (str (fs/path dir "none.senses.edn")))))))

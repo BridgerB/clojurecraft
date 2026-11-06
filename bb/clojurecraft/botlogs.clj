@@ -108,9 +108,10 @@
    :tunnel-to :for :pearls, up to 9 s, one :stairs-down 30 s) waited on that. Or idle (waiting
    with nothing to do), which the digest cannot explain either: real-18 bots on 6b5d6fa ended
    :nothing-to-do 17 s after their tunnel out, the planner answering nothing, and only a replay
-   names the branch."
-  [sf]
-  (boolean (some #{:freeze :idle} (senses-classes sf))))
+   names the branch. With the run r, every run that failed ships it too (deaths above all): a death
+   is replayed, never guessed from the one-second lines (the observability plan, section F)."
+  ([sf] (keep-recording? sf nil))
+  ([sf r] (boolean (or (some #{:freeze :idle} (senses-classes sf)) (and r (not (:ok r)))))))
 
 (defn pack-recording!
   "Write recording rec to out as zstd (a plain .edn compressed, a .zst copied); true when written."
@@ -164,7 +165,7 @@
                              (str (:run/dir r "s") "-" (:run/bot r))
                              (str/replace (fs/file-name sf) #"\.senses\.edn$" ""))]]
           (when rec (digest-file! rec (str (fs/path logs (str stem ".log")))))
-          (when (and rec sf (keep-recording? sf))
+          (when (and rec (or (and sf (keep-recording? sf r)) (and r (not (:ok r)))))
             (pack-recording! rec (str (fs/path logs (str stem ".edn.zst")))))
           (when sf (fs/copy sf (fs/path logs (str stem ".senses.edn")) {:replace-existing true})))
         (when (fs/exists? lines-dir) (fs/copy-tree lines-dir (fs/path logs "lines")))
