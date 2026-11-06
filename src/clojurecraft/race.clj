@@ -575,6 +575,24 @@
          (finally
           (rcon/command! rc (gym/in-dimension dimension/nether (str "forceload remove " where)))))))
 
+(def lava-clear-radius 10) ; blocks round a pad on the plane cleared of lava: a Nether lava flow runs 8 (4 in the overworld), so 10 keeps a flow from beyond the cleared ring off the pad
+
+(defn lava-clear-command
+  "The RCON fill that turns every lava block round the pad [x z y] into netherrack: lava-clear-radius
+   on the plane, from a block under the pad's floor to its roof. The pad is a box with a doorway
+   (gym/fortress-pad-open), built once and landed on by every bot of its slot, and a pad beside a
+   lava sea let the lava in: on f9c021c every lava death of race lane 2 (the stage-18 rods start,
+   landing set R2), 7 of 7, came 4 to 10 s after the teleport, hit by lava before the bot's :go
+   (bot-log archive 42187565555-r2-b1, s1 Clj_r17: lava at 1793954066679, :go at
+   1793954069831, dead at 1793954076879)."
+  [[x z y]]
+  (gym/in-dimension dimension/nether
+                    (str "fill "
+                         (str/join " "
+                                   [(- x lava-clear-radius) (dec y) (- z lava-clear-radius)
+                                    (+ x lava-clear-radius) (+ y 3) (+ z lava-clear-radius)])
+                         " minecraft:netherrack replace minecraft:lava")))
+
 (defn build-pad!
   "Build the pad [x z y] (gym/fortress-pad-open) in the Nether with no bot: the square round it
    forceloaded and waited for, the commands, the forceload released. The first build of a Nether
@@ -588,6 +606,7 @@
       (rcon/command! rc (gym/in-dimension dimension/nether (str "forceload add " where)))
       (try (when-not (gym/wait-loaded-in! rc dimension/nether [(- x 2) (- z 2) (+ x 2) (+ z 2)])
              (throw (ex-info "the pad's chunks never loaded" {:pad pad})))
+           (rcon/command! rc (lava-clear-command pad))
            (doseq [c gym/fortress-pad-open]
              (rcon/command! rc (gym/in-dimension dimension/nether (gym/fill-in c "" pad))))
            (swap! pads-built conj pad)
@@ -738,8 +757,8 @@
 
 (defn land-fortress!
   "Land the bot named name (racer i) at the fortress of its landing: the pad (pad-of the fortress the
-   server locates, built by prepare! or here when it is new, build-pad!), the bot teleported onto
-   it; wait for the server to say it stands in the Nether, clear its inventory and give it kit
+   server locates, built by prepare! or here when it is new, build-pad!), its lava cleared again
+   (lava-clear-command: lava flows back between landings), the bot teleported onto it; wait for the server to say it stands in the Nether, clear its inventory and give it kit
    (\"minecraft:iron_sword 1\" ...: what a race bot carries to the fortress, ci/race.edn's
    :race/kit). Returns where it stands ([x y z], standing-on the pad), or nil when the dimension
    never came; a landing that cannot locate a fortress throws."
@@ -749,6 +768,10 @@
         pad (or (get @pads-chosen i) (choose-pad! rc fortress i nil))
         pad (if (mobs-near? rc pad) (choose-pad! rc fortress i [pad]) pad)]
     (build-pad! rc pad)
+    (with-loaded rc
+                 [(- (first pad) lava-clear-radius) (- (second pad) lava-clear-radius)
+                  (+ (first pad) lava-clear-radius) (+ (second pad) lava-clear-radius)]
+                 #(cli/log "pad lava:" (rcon/command! rc (lava-clear-command pad))))
     (cli/log "tp:" (rcon/command! rc (tp-command name pad)))
     (when (gym/wait-in! rc name dimension/nether)
       (rcon/command! rc (str "clear " name))

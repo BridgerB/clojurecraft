@@ -213,6 +213,12 @@
     (is (race/fortress? "fortress"))
     (is (not (race/fortress? "spawn")))))
 
+(deftest a-pad-is-cleared-of-lava-round-it
+  ;; f9c021c race lane 2: 7 of 7 lava deaths 4 to 10 s after the teleport, lava in the pad
+  (is (= (str "execute in minecraft:the_nether run fill 1030 51 422 1050 55 442"
+              " minecraft:netherrack replace minecraft:lava")
+         (race/lava-clear-command [1040 432 52]))))
+
 (deftest a-race-from-the-rods-checkpoint-plays-only-the-pearls
   ;; LOOP.md section 1: stage 18's checkpoint, the race kit and seven rods at the same pad, so the
   ;; pearl hunt is played by every bot, not only the 5 to 7% that win the blaze rods first
