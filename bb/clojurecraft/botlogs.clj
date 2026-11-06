@@ -40,7 +40,7 @@
 (defn messages
   "The :log messages of a #:record line, in order."
   [s]
-  (map second (re-seq #":kind :log, :message \"((?:[^\"\\\\]|\\\\.)*)\"" s)))
+  (map second (re-seq #":kind :log, :message \"((?:[^\"\\]|\\.)*)\"" s)))
 
 (defn digest-line
   "[state out] after one recording line: state {:now ms :self eid} keeps the last tick's time and
