@@ -1789,6 +1789,7 @@
              (plan/wait (assoc (place-failed 0)
                                :plan/status :active
                                :time/now ms
+                               :plan/waiting-since (- ms plan/wait-ms)
                                :plan/waiting-ticks plan/wait-ticks)
                         reason))]
     (is (= :active (:plan/status (at 200000 :retrying))))
