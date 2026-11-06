@@ -1510,7 +1510,7 @@
 (def loiter-radius 8)                  ; blocks on the plane (path/octile) within which twelve walks' ends are one place
 (def wander-reach 64)                  ; blocks a wander looks for ground to walk to, on each of the headings
 (def hold-patience-ms 12000)             ; ms a held fight waits with its target past strike-range before the hunt plans again (combat/hold-timeout-ms is a minute)
-(def struck-health 14.0)                ; health under which an enderman at hand has landed a hit (7 on Normal off 20): fought back, fought out or not
+(def struck-health 18.0)                ; health under which an enderman at hand has landed a hit: 7 on Normal off 20, about 4 through the kit's iron armour (sim R1-2-1, 20 to 15.9): fought back, fought out or not
 
 (defn struck-by
   "[eid e] of the nearest angry enderman (entity/creepy?) within the sword's reach (combat/in-reach?)
@@ -2968,6 +2968,11 @@
                        (and (or angry? in-reach?) (not (unfightable? world eid e))) eid
                        :else tid)]
     (cond
+      ;; an angry one at hand that has struck is fought back first, above the refuge, the meal,
+      ;; the seal and the tunnel out, never under danger-health: sim R1-2-1 on the stage-18 rods
+      ;; start (replay probe 42228352926) ran :seal and :eat under 2145's hits from 15.9 to 0 in
+      ;; four seconds without one swing
+      (and sid (not hurt?)) {:intent/kind :fight :intent/target sid :intent/for :pearls}
       (blaze-refuge world) (blaze-refuge world)
       (and meal
            (or (empty? (filter #(combat/seen? world (val %)) (shooters world)))

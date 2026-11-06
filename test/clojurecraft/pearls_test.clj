@@ -4157,3 +4157,17 @@
         "a calm one is not")
     (is (= {:intent/kind :lookout :intent/for :pearls} (pearls/hunt w))
         "a lookout where it stands, no walk out")))
+
+(deftest a-striking-enderman-is-fought-back-before-a-seal-or-a-meal
+  ;; sim R1-2-1 on the stage-18 rods start (replay probe 42228352926): enderman 2145 at 1.1 blocks
+  ;; struck the bot from 20 to 15.9 (one hit through iron armour) and the bot ran :seal and :eat
+  ;; under its hits to 0 without one swing
+  (let [angry (assoc (enderman [9.5 64.0 9.5]) :entity/creepy? true)
+        w (-> (standing {7 angry})
+              (assoc :player/dimension "minecraft:the_nether" :player/health 15.9)
+              (assoc-in [:player/inventory 1] (item :iron_pickaxe 1))
+              (assoc-in [:player/inventory 2] (item :cooked_beef 16)))]
+    (is (= {:intent/kind :fight :intent/target 7 :intent/for :pearls} (pearls/hunt w))
+        "one armoured hit taken: fought back")
+    (is (not= :fight (:intent/kind (pearls/hunt (assoc w :player/health 9.0))))
+        "under danger-health: never fought")))
