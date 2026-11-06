@@ -53,7 +53,10 @@
                                  w
                                  (first (filter (fn [r] (= :ender-pearls (:goal/id r))) plan/goals))
                                  plan/goals)
-                  :bricks-n #(count (fortress/bricks w))}]
+                  :bricks-n #(count (fortress/bricks w))
+                  :choose #(:goal/id (plan/choose w plan/goals))
+                  :choose-next #(plan/next-intent w (plan/choose w plan/goals) plan/goals)
+                  :goals #(:plan/goals w)}]
        [k (safe f)]))))
 
 (defn -main
