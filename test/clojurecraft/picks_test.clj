@@ -169,20 +169,21 @@
         (is (not (picks/table-room? no-junk)))
         (is (not (picks/table-needed? no-junk)))))))
 
-(deftest a-pending-row-with-nothing-to-start-is-done
-  ;; the planner chooses this row ahead of the hunt while it is pending; a nil next intent then
-  ;; waits until :nothing-to-do (a3cbcc5: 10 of 29 real rod bots ended so). A table pickup last,
-  ;; no table placed and none lying: pending, nothing to start, so the row is done
-  (let [w (-> (sealed-pocket-world [(item :blaze_rod 7) (item :stone_pickaxe 1)
+(deftest a-table-pickup-that-ended-is-not-pending-for-ever
+  ;; the planner chooses this row ahead of the hunt while it is pending; a pickup that ended with
+  ;; no table placed or lying held it pending with nothing to start, until :nothing-to-do
+  (let [ended {:intent/kind :collect-drops :intent/for :take-table :intent/target [9 64 8]}
+        w (-> (sealed-pocket-world [(item :blaze_rod 7) (item :stone_pickaxe 1)
                                     (item :stone_pickaxe 1) (item :stone_pickaxe 1) (item :stick 8)
                                     (item :cobblestone 58)])
-              (assoc :plan/last
-                     {:intent/kind :collect-drops :intent/for :take-table :intent/target [9 64 8]}))
+              (assoc :world/entities {} :time/now 100000 :plan/last ended))
         row (first (filter #(= :spare-picks (:goal/id %)) plan/goals))]
-    (is (picks/pending? w) "the table pickup keeps it pending")
-    (is (nil? (picks/row-intent w row plan/goals)) "with nothing it can start")
-    (is (plan/done-by w row) "so the row is done and the hunt is chosen")
-    (is (nil? (plan/next-intent w row plan/goals)))))
+    (testing "just ended: the drop may still be on its way"
+      (is (picks/table-needed? (assoc w :plan/ended (assoc ended :ended/at 99000)))))
+    (testing "ended long ago, no table placed or lying: the row is done and the hunt is chosen"
+      (let [old (assoc w :plan/ended (assoc ended :ended/at 90000))]
+        (is (not (picks/table-needed? old)))
+        (is (plan/done-by old row))))))
 
 (deftest a-sim-pass-makes-the-pickaxes
   ;; Verify that in a safe room with carried materials, a sim pass places the table,

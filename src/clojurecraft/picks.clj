@@ -96,6 +96,22 @@
   [world]
   (boolean (or (pos? (long (window/free-count world))) (some? (window/reserve-slot world 1)))))
 
+(def take-table-gap-ms
+  "ms after a table pickup intent ends that the table still counts as on its way back: the dig is
+   done and the drop not yet seen, or the pickup not yet acked. Past it, with no table placed or
+   lying, the pickup is over, never pending for ever."
+  3000)
+
+(defn take-table-just-ended?
+  "Did an intent for the table pickup (:intent/for :take-table) end within take-table-gap-ms
+   (:plan/ended, stamped by plan/mark-ended)? Without the bound a pickup that ended once held the
+   row pending with nothing to start, and the planner, choosing this row ahead of the hunt, waited
+   until :nothing-to-do: on a3cbcc5 (#727) 10 of 29 real rod bots still ended :nothing-to-do."
+  [world]
+  (let [e (:plan/ended world)]
+    (boolean (and (= :take-table (:intent/for e))
+                  (<= (- (long (:time/now world 0)) (long (:ended/at e 0))) take-table-gap-ms)))))
+
 (defn table-needed?
   "Is the crafting table placed near, dropped, or being collected, not yet held in the bag, with
    room for it to come back (table-room?)? Without room the table is left: the row never waits on
@@ -106,7 +122,7 @@
         (table-room? world)
         (or (make/near world :crafting_table)
             (= :take-table (:intent/for (:plan/intent world)))
-            (= :take-table (:intent/for (:plan/last world)))
+            (take-table-just-ended? world)
             (seq (drops/lying world (recipe/item-id :crafting_table) (intent/feet world) 8.0))))))
 
 (defn room-needed?
@@ -153,45 +169,30 @@
                                table-placed?
                                (and (pearls/near-fortress? world) (< k target-picks)))))))))
 
-(defn row-intent
-  "The spare-picks row's next intent for a pending world (pending?), or nil when there is none
-   it can start: the toss for room, the table pickup in flight, the craft, taking the placed
-   table along, or collecting a dropped one."
-  [world goal table]
-  (or
-   ;; 1. Toss 1 junk stack if sealed and all 36 slots are used (room for pearl)
-   (when (room-needed? world) (window/reserve-toss world 1))
-   ;; 1b. The table is to come back and no slot is free: throw a junk stack first, so the
-   ;; pickup can happen (a full bag left it lying and the collect failing every tick)
-   (when (and (table-needed? world) (zero? (long (window/free-count world))))
-     (window/reserve-toss world 1))
-   ;; 2. In-flight table pickup
-   (intent/chain-next (:plan/last world) :take-table make/table-drops {})
-   ;; 3. Craft pickaxes up to target-picks (3)
-   (when (and (< (serviceable-count world) target-picks) (materials? world))
-     (make/decide (for-decide world)
-                  (assoc goal :goal/provides {:item/stone_pickaxe 1})
-                  (filterv #(not= :stone-pickaxe (:goal/id %)) table)))
-   ;; 4. Take the placed table along once crafted
-   (when (placed-table? world) (make/take-table-along world))
-   ;; 5. Collect dropped table if lying near
-   (when-let [[_ e] (drops/nearest world :crafting_table (intent/feet world))]
-     {:intent/kind :collect-drops
-      :intent/item :crafting_table
-      :intent/target (mapv #(long (math/floor (double %))) (:entity/pos e))
-      :intent/for :take-table})))
-
-(defn stocked?
-  "Is the spare-picks row done: nothing pending (pending?), or pending with nothing it can start
-   (row-intent nil)? A row that is chosen and starts nothing ends the run: the planner waits on it until
-   :nothing-to-do, and on a3cbcc5 10 of 29 real rod bots still ended so with this row ahead of the
-   hunt. One world that does it: a table pickup last (:plan/last :for :take-table) with no table
-   placed and none lying near, so table-needed? holds and row-intent is nil every tick."
-  [world goal]
-  (not (and (pending? world) (row-intent world goal plan/goals))))
-
-(defmethod plan/done-by :spare-picks-stocked? [world goal] (stocked? world goal))
+(defmethod plan/done-by :spare-picks-stocked? [world _] (not (pending? world)))
 
 (defmethod plan/next-intent :spare-picks
   [world goal table]
-  (when (pending? world) (row-intent world goal table)))
+  (when (pending? world)
+    (or
+     ;; 1. Toss 1 junk stack if sealed and all 36 slots are used (room for pearl)
+     (when (room-needed? world) (window/reserve-toss world 1))
+     ;; 1b. The table is to come back and no slot is free: throw a junk stack first, so the
+     ;; pickup can happen (a full bag left it lying and the collect failing every tick)
+     (when (and (table-needed? world) (zero? (long (window/free-count world))))
+       (window/reserve-toss world 1))
+     ;; 2. In-flight table pickup
+     (intent/chain-next (:plan/last world) :take-table make/table-drops {})
+     ;; 3. Craft pickaxes up to target-picks (3)
+     (when (and (< (serviceable-count world) target-picks) (materials? world))
+       (make/decide (for-decide world)
+                    (assoc goal :goal/provides {:item/stone_pickaxe 1})
+                    (filterv #(not= :stone-pickaxe (:goal/id %)) table)))
+     ;; 4. Take the placed table along once crafted
+     (when (placed-table? world) (make/take-table-along world))
+     ;; 5. Collect dropped table if lying near
+     (when-let [[_ e] (drops/nearest world :crafting_table (intent/feet world))]
+       {:intent/kind :collect-drops
+        :intent/item :crafting_table
+        :intent/target (mapv #(long (math/floor (double %))) (:entity/pos e))
+        :intent/for :take-table}))))
