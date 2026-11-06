@@ -1795,3 +1795,23 @@
     (is (false? (build/surface-climb? w 63)) "at the height already")
     (is (false? (build/surface-climb? (assoc w :player/on-ground? false) 64)) "not on the ground")
     (is (not= :stairs-up (:intent/kind (child w))))))
+
+(deftest a-new-op-lets-go-of-the-old-childs-keys
+  ;; sim R1-28-1 on the stage-18 rods start: the step's walk landed centred in its cell still
+  ;; holding forward, the seal behind it was worked with forward held, and the body walked on past
+  ;; the cell off its floor into lava (tick lines 5350 to 5750 ms)
+  (let [walk {:intent/kind :walk :intent/target [9 63 7] :intent/status :active}
+        stand {:build/op :stand-in :build/stand [9 63 7] :build/step :enter}
+        seal (build/place-op [8 64 7] [9 63 7] nil :seal-behind)
+        i (assoc hill-intent :intent/op stand :intent/child walk)
+        w (assoc (standing-at (open-ground {}) [9.4 63.0 7.5])
+                 :plan/intent i
+                 :player/controls {:control/forward? true :control/yaw -90.0})
+        changed (build/work-op w i seal {:event/kind :tick})
+        done (build/work-op w
+                            (assoc i :intent/child (assoc walk :intent/status :done))
+                            stand
+                            {:event/kind :tick})]
+    (is (= {} (:player/controls changed)) "a new op: the walk's forward is let go")
+    (is (nil? (get-in changed [:plan/intent :intent/child])))
+    (is (= {} (:player/controls done)) "a child done: its keys are let go")))
