@@ -4122,3 +4122,21 @@
                   pearls/far-ends (fn [& _] (throw (ex-info "searched" {})))]
       (is (= [1.0 0.0] (pearls/fortress-exit-dir w)) "away from the spawner, east")
       (is (pearls/fortress-escaping? w)))))
+
+(deftest a-full-bag-makes-room-for-the-pearls-first
+  ;; sim R1-2-1 on the stage-18 rods start (replay probe 42225282730): 3 pearls held and no slot
+  ;; free from 4145 s on, every pickup after failing :not-picked-up; the race kit fills all 36
+  (let [full (into {} (for [p (range 1 36)] [p (item :sand 64)]))
+        w (-> (standing {})
+              (assoc :player/dimension "minecraft:the_nether")
+              (update :player/inventory merge full)
+              (assoc-in [:player/inventory 1] (item :iron_pickaxe 1)))]
+    (is (= {:intent/kind :toss :intent/free 4} (plan/next-intent w row plan/goals))
+        "sand thrown out until four slots are free")
+    (is (not= :toss
+              (:intent/kind
+               (plan/next-intent
+                (assoc w :player/inventory {0 (item :iron_sword 1) 1 (item :iron_pickaxe 1)})
+                row
+                plan/goals)))
+        "with room, the hunt")))
