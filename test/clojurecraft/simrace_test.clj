@@ -55,7 +55,13 @@
     (is (empty? (:run/violations r)))))
 
 (deftest a-run-is-the-same-run-every-time
-  (is (= (simrace/run two-columns 7 "wood" 120000) (simrace/run two-columns 7 "wood" 120000))))
+  ;; every part of a run is the same run again but the senses' tick-ms: the wall time a reducer
+  ;; step took, a measurement of the machine (senses/of), not of the run
+  (let [unclocked (fn [r] (update r :run/senses (fn [ls] (mapv #(dissoc % :tick-ms) ls))))
+        a (simrace/run two-columns 7 "wood" 120000)
+        b (simrace/run two-columns 7 "wood" 120000)]
+    (is (seq (:run/senses a)) "a line a second of model time")
+    (is (= (unclocked a) (unclocked b)))))
 
 (deftest a-failure-is-signed-by-its-target-and-its-reason
   ;; one bug met in two intents (the pickaxe gone while mining or tunnelling) is one signature
