@@ -142,7 +142,154 @@
       (some #(= :lava (:trap %)) w) (conj :lava)
       (pos? (:watchers last-line 0)) (conj :watched))))
 
+;; ---------------------------------------------------------------- the ledger: every change, not a sample
+
+(def ledger-radius 32.0)               ; blocks from the feet an entity's swing, hurt flash, anger or coming and going is noted within
+
+(defn near-entities
+  "{eid entity} of world's entities within ledger-radius of the feet that are not items."
+  [world]
+  (let [pos (:player/pos world)]
+    (into {}
+          (filter (fn [[_ e]]
+                    (and pos
+                         (not (entity/item? e))
+                         (<= (physics/distance pos (:entity/pos e)) ledger-radius))))
+          (:world/entities world))))
+
+(defn entity-events
+  "What changed among the entities near the bot between before and after: one came or went
+   (:appear, :gone, with its kind and distance), flashed hurt (:hurt: a swing that landed when it
+   is the bot's target), swung (:mob-swing) or turned angry (:angry)."
+  [before after]
+  (let [b (near-entities before)
+        a (near-entities after)
+        pos (:player/pos after)
+        view (fn [eid e]
+               {:eid eid
+                :kind (entity/kind e)
+                :d (r1 (when pos (physics/distance pos (:entity/pos e))))})]
+    (concat (for [[eid e] a :when (not (contains? b eid))] (assoc (view eid e) :ev :appear))
+            (for [[eid e] b :when (not (contains? a eid))] (assoc (view eid e) :ev :gone))
+            (for [[eid e] a
+                  :let [o (get b eid)]
+                  :when o
+                  [k ev] [[:entity/hurt-at :hurt] [:entity/swung-at :mob-swing]]
+                  :when (and (get e k) (not= (get e k) (get o k)))]
+              (assoc (view eid e) :ev ev :hp (r1 (:entity/health e))))
+            (for [[eid e] a
+                  :let [o (get b eid)]
+                  :when (and o (:entity/creepy? e) (not (:entity/creepy? o)))]
+              (assoc (view eid e) :ev :angry)))))
+
+(defn intent-events
+  "What changed in the plan between before and after: a new intent (:intent, with its kind,
+   target, purpose, why and goal), a new failure (:failed, with its reason), a new wait (:wait),
+   a trap entered or left (:trap)."
+  [before after]
+  (let [ib (:plan/intent before)
+        ia (:plan/intent after)
+        fb (:plan/failed before)
+        fa (:plan/failed after)]
+    (cond-> []
+      (and ia (not= (:intent/id ia) (:intent/id ib)))
+      (conj (assoc (intent-view ia) :ev :intent :why (:intent/why ia)))
+      (and fa (not= fa fb)) (conj (assoc (intent-view fa) :ev :failed :reason (:intent/reason fa)))
+      (not= (:plan/waiting before) (:plan/waiting after))
+      (conj {:ev :wait :wait (:plan/waiting after)})
+      (not= (:plan/trap before) (:plan/trap after)) (conj {:ev :trap :trap (:plan/trap after)}))))
+
+(defn body-events
+  "What changed in the bot's own body and gear between before and after: a hit taken (:hit, the
+   newest of :player/hits: type, attacker and kind, health before), health or food (:hp), armour
+   (:armor), effects (:effects), the fight bracket (:combat), the dimension (:dim), a death and a
+   respawn."
+  [before after]
+  (let [hb (:player/hits before)
+        ha (:player/hits after)]
+    (cond-> []
+      (and (seq ha) (not= (peek ha) (peek hb))) (conj (assoc (peek ha) :ev :hit))
+      (or (not= (:player/health before) (:player/health after))
+          (not= (:player/food before) (:player/food after)))
+      (conj {:ev :hp :hp (r1 (:player/health after)) :food (:player/food after)})
+      (not= (:player/armor before) (:player/armor after))
+      (conj {:ev :armor :armor (:player/armor after)})
+      (not= (:player/effects before) (:player/effects after))
+      (conj {:ev :effects :effects (vec (keys (:player/effects after)))})
+      (not= (:player/in-combat? before) (:player/in-combat? after))
+      (conj {:ev :combat :in? (boolean (:player/in-combat? after))})
+      (not= (:player/dimension before) (:player/dimension after))
+      (conj {:ev :dim :dim (:player/dimension after)})
+      (and (:player/dead? after) (not (:player/dead? before))) (conj {:ev :death})
+      (and (:player/dead? before) (not (:player/dead? after))) (conj {:ev :respawn}))))
+
+(defn sent-events
+  "What the bot sent that a reader of a fight or a build wants: an attack (:swing, its target and
+   whether it is the running intent's), a block dug or placed (:dig, :place)."
+  [after]
+  (for [{:effect/keys [kind packet]} (:bot/effects after)
+        :when (= :send kind)
+        :let [n (:packet/name packet)]
+        :when (#{:attack :player-action :use-item-on} n)]
+    (case n
+      :attack
+      (let [eid (:entity-id packet)
+            e (get-in after [:world/entities eid])]
+        {:ev :swing :eid eid :kind (when e (entity/kind e)) :hp (r1 (:entity/health e))})
+      :player-action {:ev :dig :status (:status packet) :pos (:pos packet)}
+      :use-item-on {:ev :place :pos (:pos packet)})))
+
+(defn events
+  "Every change between two successive worlds a reader of a run wants, in order, each a map with
+   :ev and :t (after's time): the plan's (intent-events), the body's (body-events), what the bot
+   sent (sent-events) and the entities near it (entity-events). A pure function of the two values:
+   the ledger observer folds it over every write of the atom, so nothing is sampled away (the
+   observability plan, part C: the digest, done in-process, named and the same in the sim)."
+  [before after]
+  (let [t (:time/now after)]
+    (when (:player/pos after)
+      (mapv #(assoc % :t t)
+            (concat (intent-events before after)
+                    (body-events before after)
+                    (sent-events after)
+                    (entity-events before after))))))
+
 ;;;; I/O: the observer and its file ;;;;
+
+(def ledger-buffer 8192)               ; changes in flight to the ledger's thread before one is dropped (and counted)
+(def ledger-keep 20000)                ; events a ledger keeps, the newest: a long run's whole fight and more
+
+(defn ledger!
+  "Watch world* and keep every change (events of each write and the one before it), on a thread
+   of its own from a bounded buffer: a full buffer drops the change and counts it (the loop never
+   waits), so a ledger says how complete it is. Returns {:events (fn []) :dropped (fn [])
+   :close (fn [])}."
+  [world*]
+  (let [ch (async/chan ledger-buffer)
+        kept (atom [])
+        dropped (atom 0)
+        done (async/thread (loop []
+                             (when-let [[b a] (async/<!! ch)]
+                               (when-let [es (seq (events b a))]
+                                 (swap! kept (fn [v]
+                                               (let [v (into v es)]
+                                                 (if (> (count v) ledger-keep)
+                                                   (subvec v (- (count v) ledger-keep))
+                                                   v)))))
+                               (recur))))]
+    (add-watch world*
+               ::ledger
+               (fn [_ _ old new] (when-not (async/offer! ch [old new]) (swap! dropped inc))))
+    {:events (fn [] @kept)
+     :dropped (fn [] @dropped)
+     :close (fn [] (remove-watch world* ::ledger) (async/close! ch) (async/<!! done))}))
+
+(defn write-events!
+  "Write a ledger's events to path, one EDN map a line, after a head line with their count and
+   the changes dropped."
+  [path es dropped]
+  (spit path
+        (apply str (prn-str {:ledger/events (count es) :ledger/dropped dropped}) (map prn-str es))))
 
 (defn senses!
   "Watch world* and keep its last keep-lines lines (of), one every every-ms of world time,

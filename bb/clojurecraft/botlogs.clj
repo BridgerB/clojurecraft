@@ -118,6 +118,15 @@
             (fs/path data-dir (or (:run/dir r) "") (str (:run/bot r) ".senses.edn")))]
     (when (fs/exists? f) (str f))))
 
+(defn events-file
+  "The ledger of a run (senses/ledger!, every change), or nil when absent: a sim run's names its file
+   (:run/events-file), a real run's sits beside its senses (<run/dir>/<bot>.events.edn)."
+  [data-dir r]
+  (let [f (if-let [p (:run/events-file r)]
+            (fs/path p)
+            (fs/path data-dir (or (:run/dir r) "") (str (:run/bot r) ".events.edn")))]
+    (when (fs/exists? f) (str f))))
+
 (defn senses-summary
   "What a batch's senses say, for its row on the page: :coverage, the runs with a senses file over
    the runs, and :senses, {class n} counted over the runs that failed (each file's first line holds
@@ -204,7 +213,9 @@
           (when rec (digest-file! rec (str (fs/path logs (str stem ".log")))))
           (when (and rec sf (keep-recording? sf))
             (pack-recording! rec (str (fs/path logs (str stem ".edn.zst")))))
-          (when sf (fs/copy sf (fs/path logs (str stem ".senses.edn")) {:replace-existing true})))
+          (when sf (fs/copy sf (fs/path logs (str stem ".senses.edn")) {:replace-existing true}))
+          (when-let [ef (events-file data-dir r)]
+            (fs/copy ef (fs/path logs (str stem ".events.edn")) {:replace-existing true})))
         (when (fs/exists? lines-dir) (fs/copy-tree lines-dir (fs/path logs "lines")))
         (let [name (asset run runner batch)
               archive (str (fs/absolutize (fs/path dir name))) ; tar runs in the logs dir: a relative path would name a file under it
