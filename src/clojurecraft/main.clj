@@ -36,6 +36,7 @@
             [clojurecraft.fortress]
             [clojurecraft.game :as game]
             [clojurecraft.gear]
+            [clojurecraft.hear]
             [clojurecraft.hunt]
             [clojurecraft.make]
             [clojurecraft.memory :as memory]

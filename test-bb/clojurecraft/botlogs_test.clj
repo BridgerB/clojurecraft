@@ -11,6 +11,7 @@
    "#:event{:kind :tick, :now 1793881408918, :rand 0.81}"
    "#:record{:effects [#:effect{:kind :log, :message \"intent :collect-drops [-616 82 158]\"}]}"
    "#:event{:kind :packet, :packet {:entity-id 3583, :source-type 21, :source-cause 0, :source-direct 0, :packet/name :damage-event}}"
+   "#:event{:kind :packet, :packet {:entity-id 900, :type 55, :x 1.0, :y 2.0, :z 3.0, :packet/name :add-entity}}"
    "#:event{:kind :packet, :packet {:entity-id 12200, :source-type 5, :source-cause 901, :source-direct 902, :packet/name :damage-event}}"
    "#:event{:kind :tick, :now 1793881408969, :rand 0.74}"
    "#:event{:kind :packet, :packet {:health 14.5, :food 18, :saturation 5.0, :packet/name :set-health}}"
@@ -18,11 +19,23 @@
 
 (deftest a-recording-digests-to-timed-logs-health-and-hits-on-the-bot
   (is (= ["1793881408918 intent :collect-drops [-616 82 158]"
-          "1793881408918 hit source-type 5 by 901" "1793881408969 hp 14.5 food 18"
+          (str "1793881408918 "
+               (botlogs/hit-text {900 55}
+                                 "{:source-type 5, :source-cause 901, :source-direct 902}"))
+          "1793881408969 hp 14.5 food 18"
           "1793881408969 intent :collect-drops failed: :not-picked-up (attempt 0 of 3)"
           "1793881408969 say \\\"hi\\\""]
          (botlogs/digest lines))
       "a hit on another entity (3583) is left out"))
+
+(deftest a-hit-is-named-by-type-and-attacker
+  (let [t (botlogs/hit-text {900 55} "{:source-type 5, :source-cause 901, :source-direct 901}")]
+    (is (str/includes? t " by "))
+    (is (str/ends-with? t "#900") "the source id less one is the entity")
+    (is (not (str/includes? (botlogs/hit-text {}
+                                              "{:source-type 5, :source-cause 0, :source-direct 0}")
+                            " by "))
+        "lava or a fall has no attacker")))
 
 (deftest a-batch-archive-and-its-release-are-named-per-lane-and-hour
   (is (= "42024297742-r7-b3.tar.gz" (botlogs/asset 42024297742 7 3)))

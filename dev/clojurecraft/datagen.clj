@@ -371,7 +371,7 @@
                  (or
                   (= n "version.json")
                   (re-matches
-                   #"data/minecraft/(recipe/[^/]+|loot_table/blocks/[^/]+|dimension_type/[^/]+|tags/(item|block)/.+)\.json"
+                   #"data/minecraft/(recipe/[^/]+|loot_table/blocks/[^/]+|dimension_type/[^/]+|damage_type/[^/]+|tags/(item|block)/.+)\.json"
                    n))
                  (assoc acc n (String. (.readAllBytes z) "UTF-8"))
                  acc)))

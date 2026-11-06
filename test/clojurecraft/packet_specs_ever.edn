@@ -100,4 +100,17 @@
                                 [:dy :f64] [:dz :f64] [:yaw :f32] [:pitch :f32] [:flags :u32]
                                 [:on-ground :bool]]
  [:play :s2c :entity-event] [[:entity-id :i32] [:status :i8]]
- [:play :s2c :set-entity-data] [[:entity-id :varint] [:metadata :metadata]]}
+ [:play :s2c :set-entity-data] [[:entity-id :varint] [:metadata :metadata]]
+ [:play :s2c :hurt-animation] [[:entity-id :varint] [:yaw :f32]]
+ [:play :s2c :animate] [[:entity-id :varint] [:action :u8]]
+ [:play :s2c :player-combat-enter] []
+ [:play :s2c :player-combat-end] [[:duration :varint]]
+ [:play :s2c :update-mob-effect] [[:entity-id :varint] [:effect :varint] [:amplifier :varint]
+                                  [:duration :varint] [:flags :u8]]
+ [:play :s2c :remove-mob-effect] [[:entity-id :varint] [:effect :varint]]
+ [:play :s2c :update-attributes]
+ [[:entity-id :varint]
+  [:attributes
+   [:vec
+    [[:id :varint] [:base :f64]
+     [:modifiers [:vec [[:mod-id :string] [:amount :f64] [:operation :varint]]]]]]]]}

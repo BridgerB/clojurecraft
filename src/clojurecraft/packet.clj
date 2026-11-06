@@ -152,6 +152,25 @@
    ;; name, an NBT component) is an unmodelled tail, but the health update's float (operation 2)
    ;; comes first and is read (ClientboundBossEventPacket, issue #267)
    [:play :s2c :boss-event] [[:uuid :uuid] [:action :varint] [:health [:if :action 2 :f32]]]
+   ;; what the bot hears of a fight beyond the damage-event (the observability plan, part A):
+   ;; an entity's hurt flash (ClientboundHurtAnimationPacket: id, yaw), an entity's arm swing
+   ;; (ClientboundAnimatePacket: id, action; 0 the main hand), the server's fight bracket
+   ;; (ClientboundPlayerCombatEnter/EndPacket), an effect on an entity (UpdateMobEffect: id, the
+   ;; effect's registry id, amplifier, ticks, flags; RemoveMobEffect: id, effect) and an entity's
+   ;; attributes (UpdateAttributes: id, then each attribute's registry id, base, and modifiers)
+   [:play :s2c :hurt-animation] [[:entity-id :varint] [:yaw :f32]]
+   [:play :s2c :animate] [[:entity-id :varint] [:action :u8]]
+   [:play :s2c :player-combat-enter] []
+   [:play :s2c :player-combat-end] [[:duration :varint]]
+   [:play :s2c :update-mob-effect] [[:entity-id :varint] [:effect :varint] [:amplifier :varint]
+                                    [:duration :varint] [:flags :u8]]
+   [:play :s2c :remove-mob-effect] [[:entity-id :varint] [:effect :varint]]
+   [:play :s2c :update-attributes]
+   [[:entity-id :varint]
+    [:attributes
+     [:vec
+      [[:id :varint] [:base :f64]
+       [:modifiers [:vec [[:mod-id :string] [:amount :f64] [:operation :varint]]]]]]]]
    ;; play, client → server
    [:play :c2s :keep-alive] [[:id :i64]]
    [:play :c2s :pong] [[:id :i32]]
