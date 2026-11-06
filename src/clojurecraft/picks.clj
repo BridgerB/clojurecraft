@@ -123,7 +123,7 @@
         (or (make/near world :crafting_table)
             (= :take-table (:intent/for (:plan/intent world)))
             (take-table-just-ended? world)
-            (seq (drops/lying world (recipe/item-id :crafting_table) (intent/feet world) 8.0))))))
+            (seq (drops/lying world (recipe/item-id :crafting_table) (:player/pos world) 8.0))))))
 
 (defn room-needed?
   "Does the sealed bot in the fortress have no free slot for an ender pearl drop and holding junk to toss?"
