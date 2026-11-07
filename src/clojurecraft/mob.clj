@@ -788,8 +788,8 @@
    as seen in race f8b28e3's recordings (26.1.2): a small fireball 14, a mob's melee 28, burning 31,
    standing in fire 21, a fall 10, an arrow 0. Lava is 24, read from the registry order of an
    earlier version and the lava hits in those recordings (the registry itself is still undecoded).
-   A cause not here is generic (18), which is what a wither's tick is told as."
-  {:fireball 14 :mob_attack 28 :on_fire 31 :in_fire 21 :lava 24 :fall 10 :arrow 0})
+   A cause not here is generic (18); a wither tick is :wither (48, registry.clj's table)."
+  {:fireball 14 :mob_attack 28 :on_fire 31 :in_fire 21 :lava 24 :fall 10 :arrow 0 :wither 48})
 
 (def spawner-block
   "The state id of a spawner block: a fortress's makes blazes (every spawner the model's Nether

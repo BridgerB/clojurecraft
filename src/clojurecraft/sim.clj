@@ -2257,6 +2257,9 @@
                          :last-hit amount)
               (cond-> by-player? (anger eid))
               (send (health-data eid left))
+              ;; the hurt flash the server shows every client (hurt-animation): the bot tells a
+              ;; swing that landed by it (hear.clj, :entity/hurt-at)
+              (send {:packet/name :hurt-animation :entity-id eid :yaw 0.0})
               (cond-> (<= left 0.0) (die-mob eid by-player?))))))
 
 (defn wear-weapon
@@ -2494,8 +2497,9 @@
 (defn tell-damage
   "The model with a damage-event for the player queued: the hurt's source type (mob/damage-source of
    cause, generic for one not there) and the mob that dealt it (eid, its id + 1 as the cause, as the
-   server numbers it), nil for none. The bot reads the strike from it (:player/hurt-at,
-   combat/striker)."
+   server numbers it; direct the same, a projectile's own id + 1), nil for none. The bot reads the
+   strike from it (:player/hurt-at, combat/striker; game/hit-of names the attacker by the direct id,
+   which was sent bare before and named the entity before the attacker)."
   ([sim cause eid] (tell-damage sim cause eid eid))
   ([sim cause eid direct]
    (send sim
@@ -2503,7 +2507,7 @@
           :entity-id (player-eid-of sim)
           :source-type (get mob/damage-source cause 18)
           :source-cause (if eid (inc eid) 0)
-          :source-direct (or direct 0)})))
+          :source-direct (if direct (inc direct) 0)})))
 
 (defn tell-flags
   "The model with the player's shared flags byte told to the client (set-entity-data): bits, the
