@@ -115,6 +115,7 @@
     (is (= 14.0 (:armor m)))
     (is (= :fireball (:type (first (:hits m)))))
     (is (seq (:slice m)) "the blocks round the feet")
+    (is (vector? (:threats m)) "the eids it ranked as threats, for blind to set against the truth")
     (is (nil? (senses/moment (dissoc w :player/pos))))))
 
 (deftest the-ledger-notes-a-new-planner-choice

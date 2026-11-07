@@ -338,26 +338,64 @@
 (def overworld-sample-ms "Sim ms between the :sample TRACE lines in the overworld." 300000)
 
 (def truth-radius 32.0)                ; blocks round the player the model's mobs are told within (truth)
+(def truth-every-ms 5000)              ; simulated ms between the samples of the truth ring (truth-tap)
+(def truth-ring-keep 120)              ; samples the ring keeps, the newest: ten simulated minutes
+
+(defn dealt-by
+  "What each mob dealt the player in the player's current life, {eid damage}, from the model's hit
+   log (sim/hurt): the model's own account of who hurt it, over the hits with an attacker."
+  [sim]
+  (let [life (:sim/respawns sim 0)]
+    (reduce (fn [acc {:keys [by dealt] l :life}]
+              (cond-> acc (and by (= l life)) (update by (fnil + 0.0) dealt)))
+            {}
+            (:sim/hit-log sim))))
 
 (defn truth
-  "What the model knew round the player when a run ended, beside the bot's moment (the
-   observability plan, part E): its own mobs within truth-radius, nearest first, each with every
-   fact the model keeps (type, position, health, anger, its next attack, dead or not), the
-   player's position and health by the model's word, and the model's causes of death. What the
-   bot never tracked or never saw stands out against its moment."
+  "What the model knew round the player at a moment, beside the bot's moment (the observability
+   plan, part E): its own mobs within truth-radius, nearest first, each with every fact the model
+   keeps (type, position, health, anger, its next attack, dead or not), whether it has the player
+   as its target (:targets? sim/targets?) and what it dealt the player this life (:dealt), the
+   player's position and health by the model's word, the model's causes of death, and its own
+   cause for each blow (:hits, sim/hit-log: when, cause, the attacker's eid, what it dealt). What
+   the bot never tracked or never saw stands out against its moment. Only the mobs near the
+   player are read."
   [sim]
   (let [p (:sim/player-pos sim)
-        near
-        (when p
-          (->> (:sim/mobs sim)
-               (keep (fn [[eid m]]
-                       (when-let [pos (:pos m)]
-                         (let [d (physics/distance p pos)] (when (<= d truth-radius) [d eid m])))))
-               (sort-by first)
-               (mapv (fn [[d eid m]] (assoc m :eid eid :d (/ (math/round (* 10.0 d)) 10.0))))))]
-    {:player {:pos p :health (:sim/health sim) :dimension (:sim/dimension sim)}
+        dealt (dealt-by sim)
+        near (when p
+               (->> (:sim/mobs sim)
+                    (keep (fn [[eid m]]
+                            (when-let [pos (:pos m)]
+                              (let [d (physics/distance p pos)]
+                                (when (<= d truth-radius) [d eid m])))))
+                    (sort-by first)
+                    (mapv (fn [[d eid m]]
+                            (assoc m
+                                   :eid eid
+                                   :d (/ (math/round (* 10.0 d)) 10.0)
+                                   :targets? (boolean (sim/targets? sim m))
+                                   :dealt (get dealt eid 0.0))))))]
+    {:t (:sim/now sim)
+     :player {:pos p :health (:sim/health sim) :dimension (:sim/dimension sim)}
      :mobs near
+     :hits (:sim/hit-log sim [])
      :death-causes (:sim/death-causes sim [])}))
+
+(defn truth-ring-add
+  "The truth ring (a vector of truth samples, oldest first) with sample added, the newest
+   truth-ring-keep kept. The sample's :hits are cut to this life's newest few, so a ring of
+   many is not many copies of a hit log."
+  [ring sample]
+  (let [s (update sample :hits #(vec (take-last 8 %)))
+        v (conj (or ring []) s)]
+    (cond (> (count v) truth-ring-keep) (subvec v (- (count v) truth-ring-keep))
+          :else v)))
+
+(defn truth-due?
+  "Is a sample of the truth due at simulated ms now, the last one taken at last (nil: none yet)?"
+  [last now]
+  (or (nil? last) (>= (- now last) truth-every-ms)))
 
 (defn lava-round
   "The lava cells the bot's world knows within two blocks of feet [x y z] (one under, two over),
@@ -491,6 +529,14 @@
          sensed (atom [])
          ledger (atom []) ; every change (senses/events), as a real bot's ledger keeps it
          ring (atom []) ; a moment a minute, the last senses/ring-keep (senses/moment)
+         truth-ring (atom []) ; the model's view round the player every truth-every-ms (truth-ring-add)
+         truth-at (atom nil)
+         truth-tap (fn [m]
+                     (let [sim (:sim m)
+                           now (:sim/now sim 0)]
+                       (when (truth-due? @truth-at now)
+                         (reset! truth-at now)
+                         (swap! truth-ring truth-ring-add (truth sim)))))
          lines-n (atom 0)
          next-sense (atom 0)
          slowest (atom 0)
@@ -557,7 +603,8 @@
              food (assoc :food food)))
           #(stopped? % (boolean fortress))
           max-ms
-          (go-of w until))
+          (go-of w until)
+          truth-tap)
          ok (and (nil? crashed) (main/ok? world until))]
      (assoc (cond-> (death-ended (main/result world until ok)
                                  world
@@ -571,6 +618,7 @@
             :run/ring @ring
             :run/final (senses/moment world)
             :run/truth (truth sim)
+            :run/truth-ring (truth-ring-add @truth-ring (truth sim))
             :run/ms (:time/now world)
             :run/violations (:sim/violations sim)
             :run/respawns (:sim/respawns sim 0)
@@ -878,6 +926,26 @@
          (sort-by #(parse-long (first (str/split (file-name %) #"\."))))
          vec)))
 
+(defn truth-texts
+  "The truth files of run r as {extension text}, for every run that ended, whatever its ending:
+   \".truth.edn\" the model's view round the player at the end (truth, or {:unavailable why} when
+   the run threw before there was a model) and \".truth-ring.edn\" its samples every
+   truth-every-ms, one EDN value a line (none: empty). A pure function of the run."
+  [r]
+  {".truth.edn" (prn-str (or (:run/truth r)
+                             {:unavailable (str (or (:error r) "no model at the end"))
+                              :reason (:reason r)}))
+   ".truth-ring.edn" (str/join (map prn-str (:run/truth-ring r)))})
+
+(defn write-truth!
+  "Write the truth files (truth-texts) of run r, named by stem, into dir (made); returns the path
+   of the first, the one a batch finds the rest beside. Never throws: a file that cannot be written
+   is lost, not the run."
+  [^java.io.File dir stem r]
+  (try (io/make-parents (io/file dir "x"))
+       (doseq [[ext text] (truth-texts r)] (spit (io/file dir (str stem ext)) text))
+       (str (io/file dir (str stem ".truth.edn")))
+       (catch Exception e (println "truth not written:" (ex-message e)) nil)))
 (defn cap-max-ms
   "The simulated ms a checkpoint run may take, [ms capped?]: the checkpoint's own cap
    (:simrace/checkpoint-max-minutes of config) when the run starts at a checkpoint (from names a
@@ -900,7 +968,8 @@
    :run/commit) and, when it failed, what bb failures reads (failure/mark) and a moment from
    before the choice that failed kept as a snapshot beside out (:run/snapshot, chosen-moment,
    issue #77). Also prints a GATE line: deaths by cause, minutes in :back-off, and minutes
-   to the kit, the stone pickaxe, the iron kit and the portal kit. Returns the run."
+   to the kit, the stone pickaxe, the iron kit and the portal kit. Every ended run, one that threw
+   too, also writes its truth beside its senses (write-truth!, :run/truth-file). Returns the run."
   ([w seed until max-ms commit out food] (play! w seed until max-ms commit out food false))
   ([w seed until max-ms commit out food capped?]
    (let [r (try (capped (run w seed until max-ms food) capped?)
@@ -941,12 +1010,14 @@
                                         (str (world-seed-name w seed) ".moment.edn"))]
                          (io/make-parents f)
                          (spit f (prn-str (:run/final r)))
-                         (spit (io/file (.getParent f) (str (world-seed-name w seed) ".truth.edn"))
-                               (prn-str (:run/truth r)))
                          (spit (io/file (.getParent f) (str (world-seed-name w seed) ".ring.edn"))
                                (str/join (map prn-str (:run/ring r))))
                          (str f)))
+         truth-path (write-truth! (io/file (.getParent (io/file (str out))) "senses")
+                                  (world-seed-name w seed)
+                                  r)
          r (cond-> (dissoc r
+                    :run/truth-ring
                     :run/end
                     :run/last
                     :run/moments
@@ -958,7 +1029,8 @@
              path (assoc :run/snapshot path :run/moment (:moment m))
              senses-path (assoc :run/senses-file senses-path)
              events-path (assoc :run/events-file events-path)
-             moment-path (assoc :run/moment-file moment-path))]
+             moment-path (assoc :run/moment-file moment-path)
+             truth-path (assoc :run/truth-file truth-path))]
      (locking out
        (let [reached (get-in r [:plan :plan/reached-after])]
          (println "GATE"

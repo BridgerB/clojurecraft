@@ -14,7 +14,8 @@
             [babashka.process :as p]
             [clojure.edn :as edn]
             [clojure.java.io :as io]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [clojurecraft.blind :as blind]))
 
 (set! *warn-on-reflection* true)
 
@@ -213,8 +214,8 @@
    nil when absent: a sim run's sits beside the file :run/moment-file names, a real run's beside its
    recording (<run/dir>/<bot><ext>)."
   [data-dir r ext]
-  (let [f (if-let [p (:run/moment-file r)]
-            (fs/path (str/replace (str p) #"\.moment\.edn$" ext))
+  (let [f (if-let [p (or (:run/moment-file r) (:run/truth-file r))]
+            (fs/path (str/replace (str p) #"\.(moment|truth)\.edn$" ext))
             (fs/path data-dir (or (:run/dir r) "") (str (:run/bot r) ext)))]
     (when (fs/exists? f) (str f))))
 
@@ -475,75 +476,91 @@
      :timeline w
      :replay replay}))
 
+(defn read-edn-file
+  "The EDN value in file path, or nil when the path is nil, absent or unreadable."
+  [path]
+  (when (and path (fs/exists? path))
+    (try (edn/read-string (slurp (str path))) (catch Exception _ nil))))
+
+(defn blind-of
+  "What the model's truth knew that the bot did not for run r (blind/blind): the truth file
+   beside the run (.truth.edn, a sim run's) set against its moment (.moment.edn); nil when
+   either is absent, so a real run has none."
+  [data-dir r]
+  (blind/blind (read-edn-file (beside data-dir r ".truth.edn"))
+               (read-edn-file (beside data-dir r ".moment.edn"))))
+
 (defn event-text
   "One ledger event as a timeline line, its time in seconds before end."
   [end e]
   (str (format "%7.1f " (/ (- (:t e 0) end) 1000.0)) (name (:ev e)) " " (pr-str (dissoc e :ev :t))))
 
 (defn case-text
-  "A case (case-of) as text a person or an agent reads in ten seconds."
+  "A case (case-of) as text a person or an agent reads in ten seconds, with the \"blind:\" lines of
+   its :blind (blind/blind) when the model's truth knew what the bot did not."
   [c]
   (let [{:keys [bot ending killer first-hit at-end choice hits hits-by swings landed replay timeline
                 end cause-of-fire items sight]}
         c]
     (str/join
      "\n"
-     (concat
-      [(str "CASE " bot "  ending " ending "  killer " killer)
-       (if first-hit
-         (str "first hit of the last minute "
-              (:s-before-end first-hit)
-              " s before the end: "
-              (name (:type first-hit))
-              " by "
-              (or (some-> (:by first-hit)
-                          name)
-                  "-")
-              "#"
-              (:eid first-hit)
-              " at hp "
-              (:hp first-hit)
-              ", doing "
-              (:doing first-hit)
-              " (why "
-              (:why first-hit)
-              ")")
-         "no hit in the last minute")
-       (if cause-of-fire
-         (str "cause of fire "
-              (:s-before-end cause-of-fire)
-              " s before the end: "
-              (name (:cause cause-of-fire))
-              (some->> (:by cause-of-fire)
-                       name
-                       (str " by ")))
-         "never caught fire in the last minute") (sight-text sight)
-       (str "items in the last minute: " (if (seq items) (pr-str items) "no change"))
-       (str "at the end: doing " (:doing at-end)
-            " (why " (:why at-end)
-            ") target " (:target at-end))
-       (if choice
-         (str "goal at the end: "
-              (:goal choice)
-              " over "
-              (:over choice)
-              " ("
-              (some-> (:how choice)
-                      name)
-              ", "
-              (:s-before-end choice)
-              " s before the end)")
-         "goal at the end: unknown")
-       (str "last minute: "
-            hits
-            " hits taken "
-            (pr-str hits-by)
-            ", "
-            swings
-            " swings sent, "
-            landed
-            " landed") (str "replay: " replay) "timeline (seconds before the end):"]
-      (map #(str "  " (event-text end %)) timeline)))))
+     (concat [(str "CASE " bot "  ending " ending "  killer " killer)
+              (if first-hit
+                (str "first hit of the last minute "
+                     (:s-before-end first-hit)
+                     " s before the end: "
+                     (name (:type first-hit))
+                     " by "
+                     (or (some-> (:by first-hit)
+                                 name)
+                         "-")
+                     "#"
+                     (:eid first-hit)
+                     " at hp "
+                     (:hp first-hit)
+                     ", doing "
+                     (:doing first-hit)
+                     " (why "
+                     (:why first-hit)
+                     ")")
+                "no hit in the last minute")
+              (if cause-of-fire
+                (str "cause of fire "
+                     (:s-before-end cause-of-fire)
+                     " s before the end: "
+                     (name (:cause cause-of-fire))
+                     (some->> (:by cause-of-fire)
+                              name
+                              (str " by ")))
+                "never caught fire in the last minute") (sight-text sight)
+              (str "items in the last minute: " (if (seq items) (pr-str items) "no change"))
+              (str "at the end: doing " (:doing at-end)
+                   " (why " (:why at-end)
+                   ") target " (:target at-end))
+              (if choice
+                (str "goal at the end: "
+                     (:goal choice)
+                     " over "
+                     (:over choice)
+                     " ("
+                     (some-> (:how choice)
+                             name)
+                     ", "
+                     (:s-before-end choice)
+                     " s before the end)")
+                "goal at the end: unknown")
+              (str "last minute: "
+                   hits
+                   " hits taken "
+                   (pr-str hits-by)
+                   ", "
+                   swings
+                   " swings sent, "
+                   landed
+                   " landed")]
+             (when (seq (:blind c)) [(blind/blind-text (:blind c))])
+             [(str "replay: " replay) "timeline (seconds before the end):"]
+             (map #(str "  " (event-text end %)) timeline)))))
 
 (defn upload!
   "Digest every run of a batch that has a recording under data-dir (a real one) into dir, beside
@@ -557,7 +574,7 @@
           recs (keep (fn [r]
                        (let [rec (recording data-dir r)
                              sf (senses-file data-dir r)]
-                         (when (or rec sf) [r rec sf])))
+                         (when (or rec sf (:run/truth-file r)) [r rec sf])))
                      runs)]
       (when (seq recs)
         (fs/create-dirs logs)
@@ -569,7 +586,9 @@
                (for [[r rec sf] recs
                      :let [stem (if (:run/bot r)
                                   (str (:run/dir r "s") "-" (:run/bot r))
-                                  (str/replace (fs/file-name sf) #"\.senses\.edn$" ""))
+                                  (str/replace (fs/file-name (or sf (:run/truth-file r)))
+                                               #"\.(senses|truth)\.edn$"
+                                               ""))
                            ef (events-file data-dir r)]]
                  (do
                    (when rec (digest-file! rec (str (fs/path logs (str stem ".log")))))
@@ -579,16 +598,20 @@
                      (fs/copy sf (fs/path logs (str stem ".senses.edn")) {:replace-existing true}))
                    (when ef
                      (fs/copy ef (fs/path logs (str stem ".events.edn")) {:replace-existing true}))
-                   (doseq [ext [".moment.edn" ".ring.edn" ".server.txt" ".truth.edn"]]
+                   (doseq [ext [".moment.edn" ".ring.edn" ".server.txt" ".truth.edn"
+                                ".truth-ring.edn" ".serverlog.txt"]]
                      (when-let [mf (beside data-dir r ext)]
                        (fs/copy mf (fs/path logs (str stem ext)) {:replace-existing true})))
                    ;; the case: how it ended, read for the reader (case-of), beside its evidence
                    (let [es (if ef (read-events ef) [])]
                      (when (seq es)
-                       (let [c (case-of
-                                (cond-> r (nil? (:run/bot r)) (assoc :run/bot stem)) ; a sim run is named by its world and seed
-                                es
-                                (str "bb probe why " t " " name " " stem " " (:t (peek es) 0)))]
+                       (let [c (assoc
+                                (case-of
+                                 (cond-> r (nil? (:run/bot r)) (assoc :run/bot stem)) ; a sim run is named by its world and seed
+                                 es
+                                 (str "bb probe why " t " " name " " stem " " (:t (peek es) 0)))
+                                :blind
+                                (blind-of data-dir r))]
                          (spit (str (fs/path logs (str stem ".case.edn")))
                                (prn-str (dissoc c :timeline)))
                          (spit (str (fs/path logs (str stem ".case.txt"))) (str (case-text c) "\n"))
