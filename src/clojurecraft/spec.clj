@@ -375,15 +375,20 @@
 (s/def :goal/stuck-after pos-int?)         ; ms without progress before the row is stuck
 (s/def :goal/facts-only? boolean?)         ; walking and tunnelling are no progress for the row
 (s/def :goal/progress (s/coll-of vector?)) ; terms (plan/progress-term) the watchdog compares
+(s/def :goal/commits
+  (s/or :all #{:all}
+        :kinds (s/coll-of keyword? :kind set?))) ; intents only an escape row may cut
+(s/def :goal/uncommitted (s/coll-of keyword? :kind set?)) ; kinds :goal/commits :all leaves cuttable
 (s/def :goal/id keyword?)
-(s/def :goal/priority int?)
+(s/def :goal/priority number?)
 (s/def ::goal
   (s/keys :req [:goal/id :goal/priority :goal/done?]
           :opt
           [:goal/needs :goal/holds :goal/spares :goal/passage-ok? :goal/build :goal/act
            :goal/target? :goal/until :goal/doc :goal/superseded-by :goal/always? :goal/aside?
            :goal/trap :goal/plan :goal/blocks :goal/depth :goal/dimension :goal/anchors :goal/resets
-           :goal/clocks :goal/stuck-after :goal/facts-only? :goal/progress]))
+           :goal/commits :goal/uncommitted :goal/clocks :goal/stuck-after :goal/facts-only?
+           :goal/progress]))
 
 (s/def ::world
   (s/keys :req [:bot/phase :bot/effects :time/now :time/tick]

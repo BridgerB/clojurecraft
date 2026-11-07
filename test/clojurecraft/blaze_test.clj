@@ -2092,7 +2092,7 @@
           (str "hp " hp " burning " burning? ": one row, the fight")))
     (doseq [hp [20.0 16.2 12.0]]
       (is (not (plan/interrupts? (tick hp true) row running)) (str "a running fight holds at " hp)))
-    (is (true? (plan/holds? running)) "and another row does not preempt it")
+    (is (true? (plan/holds? plan/goals running)) "and another row does not preempt it")
     (testing "under low-health an open landing is not a pocket, so the fight stands"
       (is (nil? (blaze/here-intent (tick 11.0 true))))
       (is (= :fight (fight (tick 11.0 true)))))))

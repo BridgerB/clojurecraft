@@ -1828,12 +1828,6 @@
   [world i]
   (and (= :fight (:intent/kind i)) (some? (commit-fight world))))
 
-(defmethod plan/holds? :fight
-  ;; a blaze-rods fight is not cut by another row (the default keeps a :defend row's fight
-  ;; cuttable, as a fight ends by its own break-off); the row's own interrupts? commits it
-  [i]
-  (= :blaze-rods (:intent/goal i)))
-
 (defmethod plan/interrupts? :blaze-rods
   ;; any running intent but a fight ends when a blaze is at hand (at-hand-blaze), and the act
   ;; fights it when healthy: gym blaze-fire-b run 3 (run 39136853644) tunnelled on with one hitting it in melee

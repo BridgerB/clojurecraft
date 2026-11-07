@@ -12,7 +12,8 @@
 ;; A row names how the stuck watchdog treats it: :goal/progress (terms the watchdog compares, see
 ;; plan/progress-term; absent: items held and stages reached), :goal/facts-only? (walking and
 ;; tunnelling are no progress), :goal/stuck-after (ms before it is stuck, else plan/stuck-ms),
-;; :goal/anchors (attributes forgotten when stuck), :goal/resets (attribute values it starts over
+;; :goal/commits (:all or the intent kinds of the row only an escape row may cut; :goal/uncommitted
+;; takes kinds out of :all), :goal/anchors (attributes forgotten when stuck), :goal/resets (attribute values it starts over
 ;; with) and :goal/clocks (paths inside attributes restarted at now).
 ;; A row is never edited into a different meaning or deleted: to fix one, add the fixed row under
 ;; a new id (moving :goal/until to it) and mark the old one :goal/superseded-by <new id>. It stays
@@ -43,6 +44,8 @@
   :goal/doc
   "answer a hostile mob within 4 blocks, a creeper within 6, before anything else but the escapes (issue #259): on Normal the night brings zombies, skeletons and creepers to every stage. Fought with the best sword held (attacks 650 ms apart); a creeper, or anything while the health is under 10, backed away from. An always row at priority 0 after the escapes and before the meal in this table: nothing is eaten with a zombie at hand"
   :goal/done? :safe?
+  :goal/commits :all
+  :goal/uncommitted #{:fight}
   :goal/plan :defend}
  {:goal/id :wood
   :goal/priority 1
@@ -386,6 +389,7 @@
   :goal/done? :rods-held?
   :goal/anchors #{:pocket/prepared-at :pocket/seal-failed-at :pocket/site :sortie/since}
   :goal/stuck-after 1200000
+  :goal/commits #{:fight :pocket :pocket-hold :seal :unseal}
   :goal/facts-only? true
   :goal/progress [[:held :blaze_rod] [:done :fight] [:seen :spawner]]
   :goal/plan :blaze-rods}
@@ -411,6 +415,7 @@
                   :plan/given-up}
   :goal/resets {:plan/blacklist #{}}
   :goal/clocks [[:pearls/gain :at]]
+  :goal/commits #{:pocket :pocket-hold :seal :unseal}
   :goal/facts-only? true
   :goal/progress [[:held :ender_pearl] [:done :provoke] [:done :fight] [:reached]]
   :goal/plan :pearls}
@@ -427,6 +432,7 @@
                   :plan/given-up}
   :goal/resets {:plan/blacklist #{}}
   :goal/clocks [[:pearls/gain :at]]
+  :goal/commits #{:pocket :pocket-hold :seal :unseal}
   :goal/facts-only? true
   :goal/progress [[:held :ender_pearl] [:done :provoke] [:done :fight] [:reached]]
   :goal/plan :pearls}

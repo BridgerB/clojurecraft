@@ -170,13 +170,6 @@
   {:arglists '([world goal])}
   (fn [_world goal] (:goal/plan goal :needs)))
 
-(defmulti holds?
-  "Is the running intent i a defence that another row's choice must not cut: one that runs to its own end, whatever row the planner chooses meanwhile? Keyed by :intent/kind; every intent of the :defend row by default, a fight excepted (it ends by its own break-off), and refuge kinds by a defmethod. Only an escape row (:goal/trap) preempts it."
-  {:arglists '([i])}
-  :intent/kind)
-
-(defmethod holds? :default [i] (and (= :defend (:intent/goal i)) (not= :fight (:intent/kind i))))
-
 (defmulti held-goal?
   "Is goal held by a threat or defense so the watchdog treats it as held, not stuck?"
   {:arglists '([world goal])}
@@ -184,18 +177,35 @@
 
 (defmethod held-goal? :default [_ _] false)
 
+(defn row-of
+  "The row of table with :goal/id id, or nil."
+  [table id]
+  (some #(when (= id (:goal/id %)) %) table))
+
+(defn commits?
+  "Does row commit its running intents of kind: only an escape row (:goal/trap) may cut one before
+   it ends? The row's :goal/commits is :all or the set of kinds; :goal/uncommitted removes kinds
+   from :all."
+  [row kind]
+  (let [c (:goal/commits row)]
+    (boolean (cond (= :all c) (not (contains? (:goal/uncommitted row #{}) kind))
+                   (set? c) (contains? c kind)))))
+
+(defn holds?
+  "Is the running intent i one its own row (:intent/goal in table) commits (commits?)?"
+  [table i]
+  (commits? (row-of table (:intent/goal i)) (:intent/kind i)))
+
 (defn held?
-  "Is running intent i kept against goal, or (with world) is goal held so the watchdog treats
-   it as held, not stuck?"
-  ([i goal]
-   (if (and i (contains? i :intent/kind))
-     (boolean (and goal
-                   (:intent/goal i)
-                   (not= (:goal/id goal) (:intent/goal i))
-                   (not (:goal/trap goal))
-                   (holds? i)))
-     (held-goal? i goal)))
-  ([world goal _] (held-goal? world goal)))
+  "Is running intent i, of another row than goal, kept against goal: its row commits it (holds?)
+   and goal is not an escape row (:goal/trap)?"
+  [table i goal]
+  (boolean (and i
+                goal
+                (:intent/goal i)
+                (not= (:goal/id goal) (:intent/goal i))
+                (not (:goal/trap goal))
+                (holds? table i))))
 
 (defmethod interrupts? :default [_ _ _] false)
 (defmethod steer :default [world _] world)
@@ -644,12 +654,12 @@
     [(held-counts world) (count (:plan/reached world #{}))]))
 
 (defn defended?
-  "Is the running intent i a defence (holds?) the bot is under fire in: damage taken within
+  "Is the running intent i a defence (holds? in table) the bot is under fire in: damage taken within
    quiet-ticks (:player/hurt-at against :time/tick)? A hold that has taken none for five minutes is
    quiet, and the watchdog may drop it: a pocket held for an hour with no blaze to fight."
-  [world i]
+  [world table i]
   (boolean (and i
-                (holds? i)
+                (holds? table i)
                 (:player/hurt-at world)
                 (<= (- (:time/tick world 0) (:player/hurt-at world)) quiet-ticks))))
 
@@ -720,7 +730,7 @@
         (reduce (fn [w path] (cond-> w (get-in w path) (assoc-in path now)))
                 w
                 (:goal/clocks goal [])))
-      (cond-> (not (or (menaced? world) (held? world goal)))
+      (cond-> (not (or (menaced? world) (held-goal? world goal)))
               (assoc :plan/explore (explore-cell world r)))
       (update :plan/avoid
               #(if (and (:until %) (< now (:until %)))
@@ -748,14 +758,14 @@
             (cond (nil? goal) world
                   (or (and (not (:goal/facts-only? goal)) (>= (extent w) stuck-extent))
                       (not= k (:key w))
-                      (held? world goal))
+                      (held-goal? world goal))
                   (assoc world :plan/watch (watch-stamp world k now now))
                   (or (< (- now (:at w)) (:goal/stuck-after goal stuck-ms))
                       (and (menaced? world)
                            (< (- now (:at w))
                               (+ menace-grace-ms (:goal/stuck-after goal stuck-ms))))
                       (not (can-abandon? world))
-                      (defended? world (:plan/intent world)))
+                      (defended? world table (:plan/intent world)))
                   (assoc world :plan/watch w)
                   :else (unstick world goal (:plan/intent world) (:event/rand event 0.5) now))))))
 
@@ -872,7 +882,7 @@
         i (:plan/intent world)
         active? (= :active (:plan/status world))
         goal (when active? (choose world table))
-        held (held? i goal)
+        held (held? table i goal)
         preempt? (and i goal (:intent/goal i) (not= (:goal/id goal) (:intent/goal i)) (not held))
         cut-world (when (and i goal (not preempt?) (not held) (interrupts? world goal i))
                     (abandon-intent world i :interrupted))
@@ -911,7 +921,7 @@
           preempt? (plan-tick (abandon-intent world i :preempted) event table)
           cut? (plan-tick cut-world event table)
           i (run-intent world i event table)
-          (and (:plan/explore world) (held? world goal))
+          (and (:plan/explore world) (held-goal? world goal))
           (plan-tick (dissoc world :plan/explore) event table)
           (and (:plan/explore world) (not (:goal/trap goal)))
           (start-intent (dissoc world :plan/explore)
