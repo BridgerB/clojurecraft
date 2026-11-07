@@ -927,26 +927,22 @@
                       (breath-reach %))
                  (vals (breaths world)))))
 
-(defn shelter-walk
-  "A walk to cell that ends standing in it (:intent/for :shelter), which a breath near the feet
-   does not end (plan/interrupts?): the cell is out of every breath's reach."
-  [cell]
-  {:intent/kind :walk :intent/target cell :intent/for :shelter})
+(def shelter-walk
+  "A walk to cell that ends standing in it (:intent/for :shelter); the cell is out of every
+   breath's reach. See combat/shelter-walk."
+  combat/shelter-walk)
 
-(defn escape
-  "The feet cell on the ground nearest the feet (other than the feet's own cell), of those
-   escape-from to escape-to out from the fountain in escape-ways directions, that no breath
-   reaches (breathed?) and that is not before the sitting dragon's head (before-head?), or nil
-   when none has ground loaded. Combat's :back-off walks straight away from the breath: gym
-   dragon3-a run 2 backed off from a fireball and its cloud on the stand into the fountain's
-   pillar, jumped against it for six seconds inside the cloud and died; a walk to a cell goes
-   round the pillar by its route."
-  [world]
+(defn ring-cell
+  "The feet cell on the ground nearest the feet (other than the feet's own cell), of those r out
+   from the fountain for each r in radii, in escape-ways directions, that no breath reaches
+   (breathed?), that is not before the sitting dragon's head (before-head?) nor on a way past it;
+   nil when none has ground loaded."
+  [world radii]
   (let [[_ d] (dragon world)
         [fx fz] fountain
         pos (:player/pos world)
         feet (intent/feet world)]
-    (->> (for [r (range escape-from (inc escape-to))
+    (->> (for [r radii
                k (range escape-ways)
                :let [a (* k (/ (* 2.0 math/PI) escape-ways))]]
            [(+ fx (* r (math/cos a))) (+ fz (* r (math/sin a)))])
@@ -958,27 +954,24 @@
          (sort-by #(physics/horizontal-distance pos (physics/centre %)))
          first)))
 
+(defn escape
+  "The feet cell on the ground nearest the feet (other than the feet's own cell), of those
+   escape-from to escape-to out from the fountain in escape-ways directions, that no breath
+   reaches (breathed?) and that is not before the sitting dragon's head (before-head?), or nil
+   when none has ground loaded. Combat's :back-off walks straight away from the breath: gym
+   dragon3-a run 2 backed off from a fireball and its cloud on the stand into the fountain's
+   pillar, jumped against it for six seconds inside the cloud and died; a walk to a cell goes
+   round the pillar by its route."
+  [world]
+  (ring-cell world (range escape-from (inc escape-to))))
+
 (defn step-out-cell
   "The feet cell on the ground nearest the feet, r (step-out-radius when not given) out from the
    fountain in any of escape-ways directions, that no breath reaches and that is not before the
    sitting dragon's head nor on a way past it; nil when none has ground loaded: the nearest place
    beyond the head's reach along the rim."
   ([world] (step-out-cell world step-out-radius))
-  ([world r]
-   (let [[_ d] (dragon world)
-         [fx fz] fountain
-         pos (:player/pos world)
-         feet (intent/feet world)]
-     (->> (for [k (range escape-ways)
-                :let [a (* k (/ (* 2.0 math/PI) escape-ways))]]
-            [(+ fx (* r (math/cos a))) (+ fz (* r (math/sin a)))])
-          (keep #(ground-cell world %))
-          (remove #{feet})
-          (remove #(breathed? world %))
-          (remove #(before-head? d (physics/centre %)))
-          (remove #(bite-on-way? d pos (physics/centre %)))
-          (sort-by #(physics/horizontal-distance pos (physics/centre %)))
-          first))))
+  ([world r] (ring-cell world [r])))
 
 (defn sheltered?
   "Is the bot standing in a safe shelter cell outside the fountain basin: at least escape-from
@@ -1034,13 +1027,8 @@
   "The two cells, at the feet's height and the eye's, beside stand cell [x y z] toward site cell
    [sx _ sz] along the axis with the farther way to go: where the blocks go that stand between the
    bot and the bed, as a vector of cells."
-  [[x y z] [sx _ sz]]
-  (let [dx (- sx x)
-        dz (- sz z)
-        [ux uz] (if (>= (abs dx) (abs dz))
-                  [(long (math/signum (double dx))) 0]
-                  [0 (long (math/signum (double dz)))])]
-    [[(+ x ux) y (+ z uz)] [(+ x ux) (inc y) (+ z uz)]]))
+  [[x _ z :as stand] [sx _ sz]]
+  (combat/wall-cells stand (- sx x) (- sz z)))
 
 (defn bed-stands
   "The cells to lay a bed at site cell [sx sy sz] from, nearest the feet first: the ground cells

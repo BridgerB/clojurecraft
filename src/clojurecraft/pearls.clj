@@ -2734,7 +2734,7 @@
    times in 0.6 s, each failing :no-path, because these walks never asked the blacklist."
   [world target]
   (when (and target (not (contains? (:plan/blacklist world #{}) target)))
-    {:intent/kind :walk :intent/target target :intent/for :shelter}))
+    (combat/shelter-walk target)))
 
 (defn uncage
   "A walk down to the burrow's end (:pearls/shelter) when the bot stands at a brink (brink?) and

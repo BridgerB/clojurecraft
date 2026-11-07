@@ -730,6 +730,12 @@
 
 (def struck-ms 4000)                  ; ms a strike stays the answer to who is hitting: the gym's piglin hits came about a second apart
 
+(defn shelter-walk
+  "A :walk to cell that ends standing in it, tagged :intent/for :shelter, which a breath near the
+   feet does not end (plan/interrupts?)."
+  [cell]
+  {:intent/kind :walk :intent/target cell :intent/for :shelter})
+
 (defn pack-neutral?
   "Is e a zombified piglin? Hitting one angers the pack, so one that has struck is backed away
    from and never swung at."
@@ -840,6 +846,16 @@
                           (< (- cy 1.0) ey (+ cy 1.5)))))
                  (vals (:world/entities world)))))
 
+(defn wall-cells
+  "The two cells, at cell [x y z]'s height and the one over it, beside it along the axis of
+   [dx dz] with the larger magnitude (x on a tie), as a vector: where blocks go between a bot at
+   the cell and something that way."
+  [[x y z] dx dz]
+  (let [[ux uz] (if (>= (abs dx) (abs dz))
+                  [(long (math/signum (double dx))) 0]
+                  [0 (long (math/signum (double dz)))])]
+    [[(+ x ux) y (+ z uz)] [(+ x ux) (inc y) (+ z uz)]]))
+
 (defn wall-cell
   "The first cell clear (path/classify) and unoccupied (occupied?) of the two beside the feet
    toward entity e, at the feet's height then the eye's, or nil when neither is: where a block
@@ -847,14 +863,10 @@
    on the cell its silverfish stood in, the server refused each (`intent :place failed: :rejected
    (attempt 3 of 3)`), and the plan failed."
   [world e]
-  (let [[fx fy fz] (intent/feet world)
-        [px _ pz] (:player/pos world)
-        [ex _ ez] (:entity/pos e)
-        dx (- ex px)
-        dz (- ez pz)
-        [sx sz] (if (>= (abs dx) (abs dz)) [(long (math/signum dx)) 0] [0 (long (math/signum dz))])]
+  (let [[px _ pz] (:player/pos world)
+        [ex _ ez] (:entity/pos e)]
     (first (filter #(and (= :clear (path/classify world %)) (not (occupied? world %)))
-                   [[(+ fx sx) fy (+ fz sz)] [(+ fx sx) (inc fy) (+ fz sz)]]))))
+                   (wall-cells (intent/feet world) (- ex px) (- ez pz))))))
 
 (defn nook-cell
   "The cell under the feet when the bot holds a pickaxe and it and the one under it are solid

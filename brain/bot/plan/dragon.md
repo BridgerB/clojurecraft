@@ -56,7 +56,7 @@ sourceRefs:
   - src/clojurecraft/dragon.clj#defn in-breath?
   - src/clojurecraft/dragon.clj#defn holds?
   - src/clojurecraft/dragon.clj#defn breathed?
-  - src/clojurecraft/dragon.clj#defn shelter-walk
+  - src/clojurecraft/dragon.clj#def shelter-walk
   - src/clojurecraft/dragon.clj#defn escape
   - src/clojurecraft/dragon.clj#defmethod combat/answers :dragon
   - src/clojurecraft/dragon.clj#defn pumpkin-worn?

@@ -1502,7 +1502,7 @@
   [world]
   (boolean (or (:player/on-fire? world) (reignited? world))))
 
-(def refuge-kinds
+(def refuge-answer-kinds
   "Intents that are the answer to a refuge: none of them is cut for one."
   #{:pocket :seal :unseal :pocket-hold :eat :fight :back-off :rest :dodge})
 
@@ -1853,11 +1853,11 @@
         (and (:intent/until i) (> (:time/now world 0) (:intent/until i)))
         (and (= :pocket-hold (:intent/kind i)) (= :seal (:intent/kind (hold-intent world))))
         (and (= :tunnel-to (:intent/kind i)) (some? (long-shot-cover world)))
-        (and (not (contains? refuge-kinds (:intent/kind i)))
+        (and (not (contains? refuge-answer-kinds (:intent/kind i)))
              (not= :fight (:intent/kind i))
              (not (rod-grab? world i))
              (sortie-over? world))
-        (and (not (contains? refuge-kinds (:intent/kind i)))
+        (and (not (contains? refuge-answer-kinds (:intent/kind i)))
              (not (and (rod-grab? world i) (grab-over-refuge? world)))
              (some? (refuge-now world (nearest-spawner world))))
         (and (not (hurt? world))
