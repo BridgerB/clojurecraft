@@ -195,3 +195,28 @@
                            {:stats {:stats/heard {:set-health 10} :stats/unknown {[:play 117] 100}}}
                            {:reason :timeout}]))
       "decoded by name, then the unknown ones added for the total"))
+
+(deftest a-case-says-who-faced-the-bot-and-what-hit-it-held
+  (let [t0 1793989108107
+        es
+        [{:ev :equip :t (- t0 90000) :eid 1203 :kind :wither_skeleton :equipment {:mainhand :bow}}
+         {:ev :equip
+          :t (- t0 5000)
+          :eid 1203
+          :kind :wither_skeleton
+          :equipment {:mainhand :stone_sword}} {:ev :facing :t (+ t0 1000) :eid 7 :kind :blaze}
+         {:ev :facing :t (+ t0 2000) :eid 8 :kind :blaze}
+         {:ev :facing :t (+ t0 3000) :eid 9 :kind :blaze}
+         {:ev :facing :t (+ t0 4000) :eid 4 :kind :enderman}
+         {:ev :hit :t (+ t0 5000) :type :mob_attack :by 1203 :by-kind :wither_skeleton :hp 12.0}
+         {:ev :death :t (+ t0 6000)}]
+        c (botlogs/case-of {:run/bot "Clj_x" :reason :death} es "replay")]
+    (is (= {:blaze 3 :enderman 1} (:faced-by (:sight c))))
+    (is (= [{:eid 1203 :kind :wither_skeleton :holding :stone_sword}] (:hit-by (:sight c)))
+        "the newest gear seen for the attacker")
+    (is (str/includes?
+         (botlogs/case-text c)
+         "sight: faced by blaze x3, enderman x1; hit by wither_skeleton#1203 holding stone_sword")))
+  (let [text (botlogs/case-text
+              (botlogs/case-of {:run/bot "Clj_x" :reason :death} [{:ev :death :t 1}] "replay"))]
+    (is (str/includes? text "sight: faced by none; hit by nothing"))))

@@ -13,6 +13,7 @@ sourceRefs:
   - src/clojurecraft/entity.clj#defn facing-bot?
   - src/clojurecraft/senses.clj#defn sight-events
   - src/clojurecraft/packet.clj#defn read-equipment
+  - bb/clojurecraft/botlogs.clj#defn sight-of
   - src/clojurecraft/game.clj#defn hit-of
   - src/clojurecraft/registry.clj#defn damage-type
   - src/clojurecraft/senses.clj#defn events
@@ -64,7 +65,7 @@ The bot's whole mind is one world value, so everything a reader needs about a ru
   - what it holds and wears (`:entity/equipment {slot item-name}`, from set-equipment, read by `packet/read-equipment`);
   - a fireball's acceleration power (`:entity/power`, projectile-power);
   - the newest four entity-event statuses other than death (`:entity/statuses`, kept in game.clj).
-  The ledger notes a gear change (`:equip`) and a hostile or enderman turning to face the bot (`:facing`), within 24 blocks and only on change (`senses/sight-events`); the sim sends set-equipment on a mob's spawn (`mob/equipment`) and rotate-head as it turns (`sim/face-player`).
+  The ledger notes a gear change (`:equip`) and a hostile or enderman turning to face the bot (`:facing`), within 24 blocks and only on change (`senses/sight-events`); the sim sends set-equipment on a mob's spawn (`mob/equipment`) and rotate-head as it turns (`sim/face-player`). A case file ends with a sight line from the last minute: the kinds that faced the bot and the main-hand gear of whatever hit it (`botlogs/sight-of`).
 
 ## What is kept, per run
 
