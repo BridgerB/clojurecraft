@@ -8,11 +8,9 @@
            "src/clojurecraft/failure.clj" 1
            "src/clojurecraft/forage.clj" 7
            "src/clojurecraft/fortress.clj" 13
-           "src/clojurecraft/intent.clj" 9
-           "src/clojurecraft/memory.clj" 4
-           "src/clojurecraft/model.clj" 4
+           "src/clojurecraft/memory.clj" 2
+           "src/clojurecraft/model.clj" 3
            "src/clojurecraft/picks.clj" 1
-           "src/clojurecraft/plan.clj" 15
            "src/clojurecraft/pocket.clj" 11
            "src/clojurecraft/stairs.clj" 29
            "test/clojurecraft/beds_test.clj" 1
@@ -67,7 +65,7 @@
           "test/clojurecraft/pearls/place_test.clj" 3
           "test/clojurecraft/pearls_support.clj" 1
           "test/clojurecraft/pearls_test.clj" 1
-          "test/clojurecraft/plan_test.clj" 20
+          "test/clojurecraft/plan_test.clj" 14
           "test/clojurecraft/runner.clj" 1
           "test/clojurecraft/sim_test.clj" 2
           "test/clojurecraft/stronghold_test.clj" 4
