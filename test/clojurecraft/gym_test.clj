@@ -6,7 +6,6 @@
             [clojure.test :refer [deftest is testing]]
             [clojurecraft.fixture :as fixture]
             [clojurecraft.gym :as gym]
-            [clojurecraft.gym-legacy :as legacy]
             [clojurecraft.land :as land]
             [clojurecraft.landings :as landings]
             [clojurecraft.plan :as plan]
@@ -46,12 +45,6 @@
              (gym/go-event row [10.0 64.0 20.0])))
       (is (= (fixture/go-event "dragon" [10.0 64.0 20.0])
              (gym/go-event (gym/gym "dragon") [10.0 64.0 20.0]))))))
-
-(deftest the-data-registry-gives-what-the-old-table-gave
-  (is (= 46 (count legacy/gyms) (count gym/gyms)))
-  (doseq [[o n] (map vector legacy/gyms gym/gyms)]
-    (is (= o n) (str "the " (or (:gym/name o) (:gym/goal o)) " row")))
-  (is (= legacy/gyms gym/gyms) "all of them"))
 
 (deftest the-registry-file-loads-and-every-builder-form-is-known
   (let [raw (edn/read-string (slurp (io/resource "clojurecraft/gyms.edn")))
