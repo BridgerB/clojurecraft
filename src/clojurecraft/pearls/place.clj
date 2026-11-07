@@ -1,6 +1,7 @@
 (ns clojurecraft.pearls.place
   "The burrow and the shelter geometry: where an enderman cannot reach the bot, the sites for one, and the intents that cut it, provoke from it and wait in it."
-  (:require [clojurecraft.avoided :as avoided]
+  (:require [clojure.spec.alpha :as s]
+            [clojurecraft.avoided :as avoided]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.combat :as combat]
             [clojurecraft.dimension :as dimension]
@@ -18,6 +19,15 @@
             [clojurecraft.terrain :as terrain]))
 
 (set! *warn-on-reflection* true)
+
+(def scratch
+  "The intent attributes only this namespace's executor reads and writes: {attribute {:doc meaning
+   :when lifetime}}. They are not world information, so they are not in clojurecraft.model;
+   scratch_test holds that no other namespace uses one."
+  {:intent/mouth {:doc "where a :burrow began: the stairs go down from it"
+                  :when ":burrow, from its first tick"}})
+
+(s/def :intent/mouth :clojurecraft.spec/block-pos)
 
 (defmethod intent/run :provoke
   ;; {:intent/kind :provoke :intent/target eid}: a stare at its head until the server says it has

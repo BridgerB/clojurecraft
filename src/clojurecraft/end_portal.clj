@@ -17,7 +17,8 @@
    floor round a 3x3 pit of lava, reached up a staircase of three stairs blocks with a
    silverfish spawner in the middle of the top step; the way up is a side of the stairs. The
    room is the gym's :portal-room landing (gym/portal-room)."
-  (:require [clojurecraft.blocks :as blocks]
+  (:require [clojure.spec.alpha :as s]
+            [clojurecraft.blocks :as blocks]
             [clojurecraft.build :as build]
             [clojurecraft.dimension :as dimension]
             [clojurecraft.end :as end]
@@ -31,6 +32,17 @@
             [clojurecraft.terrain :as terrain]))
 
 (set! *warn-on-reflection* true)
+
+(def scratch
+  "The intent attributes only this namespace's executor reads and writes: {attribute {:doc meaning
+   :when lifetime}}. They are not world information, so they are not in clojurecraft.model;
+   scratch_test holds that no other namespace uses one."
+  {:intent/enter?
+   {:doc
+    "does the :end-portal intent step into the portal once every frame is eyed (the :enter-end row's) or stop at the lit portal (the :end-portal row's) (issue #266)"
+    :when "an :end-portal intent"}})
+
+(s/def :intent/enter? boolean?)
 
 (def portal-radius 64)                ; blocks from the feet a remembered end portal block is the RESULT's :portal
 

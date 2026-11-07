@@ -38,6 +38,7 @@
    before any crystal (toward-island). Not done: the cages round two spikes (the strike
    through their bars is unproven; the gym takes them away), and the exit portal."
   (:require [clojure.math :as math]
+            [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [clojurecraft.armour :as armour]
             [clojurecraft.beds :as beds]
@@ -61,6 +62,24 @@
             [clojurecraft.window :as window]))
 
 (set! *warn-on-reflection* true)
+
+(def scratch
+  "The intent attributes only this namespace's executor reads and writes: {attribute {:doc meaning
+   :when lifetime}}. They are not world information, so they are not in clojurecraft.model;
+   scratch_test holds that no other namespace uses one."
+  {:intent/under
+   {:doc "the feet cell a :pillar's jump left, which its block fills once the body is clear of it"
+    :when "a :pillar, between a jump and its block"}
+   :intent/refusals {:doc "placements under the feet the server answered with the cell still empty"
+                     :when "a :pillar, after one"}
+   :intent/perched
+   {:doc
+    "ticks in a row the dragon has held within dragon/perch-radius of the fountain under dragon/perch-below, perched (issue #267)"
+    :when "a :perch intent"}})
+
+(s/def :intent/under :clojurecraft.spec/block-pos)
+(s/def :intent/refusals nat-int?)
+(s/def :intent/perched nat-int?)
 
 (def pillar-blocks
   "The blocks the bot pillars and walls with, the first held first: what mining leaves in the

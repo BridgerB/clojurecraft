@@ -37,6 +37,7 @@
    descent is judged by the feet having actually gone down, never by a packet having been
    sent, since a dig the server refused leaves the bot where it stood."
   (:require [clojure.math :as math]
+            [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [clojurecraft.avoided :as avoided]
             [clojurecraft.blocks :as blocks]
@@ -52,6 +53,60 @@
             [clojurecraft.terrain :as terrain]))
 
 (set! *warn-on-reflection* true)
+
+(def scratch
+  "The intent attributes only this namespace's executor reads and writes: {attribute {:doc meaning
+   :when lifetime}}. They are not world information, so they are not in clojurecraft.model;
+   scratch_test holds that no other namespace uses one."
+  {:intent/turns {:doc "quarter turns taken after refused stairs; four fail :boxed"
+                  :when "stairs-down, after a refusal"}
+   :intent/cells
+   {:doc
+    "the cells the current stair opens, top first: three, or four for a stair cut for a taller body (:intent/tall)"
+    :when "stairs-down, while a stair is cut"}
+   :intent/level-cells
+   {:doc "the two cells a level step opens, head then feet, when every stair down was refused"
+    :when "stairs-down, during a level step"}
+   :intent/bore
+   {:doc
+    "the rock cells over the head a climb out from under a lake digs through, bottom first, before it rises up the shaft (stairs/bore-cells)"
+    :when "a stairs-up in its :bore stage, with no pickaxe held"}
+   :intent/lay
+   {:doc
+    "the cells a block is laid in, in order, before a stair or level step is cut: a floor and its holder (a holder under the block under the feet, then the floor under the new feet) for a stair down, a missing step for a stair up, or the water cells beside a stair up (a seal, at most the four neighbours of each of three cells)"
+    :when "a staircase, while cells are laid"}
+   :intent/level-steps
+   {:doc
+    "level steps this staircase (past stairs/max-level-steps it fails :boxed) or tunnel (done at its length) has taken"
+    :when "stairs-down and tunnel, after a level step"}
+   :intent/side {:doc
+                 "the side a tunnel steps to, keeping its heading, where the heading is refused"
+                 :when "tunnel, once one is taken"}
+   :intent/level-dir
+   {:doc "the way the staircase's last level step went; the next keeps it while allowed"
+    :when "stairs-down and stairs-up, after a level step"}
+   :intent/rise
+   {:doc
+    "which way the feet go for the stair being cut when it is not the staircase's own: -1 for a climb's stair down under water (stairs/duck)"
+    :when "stairs-up, from a duck until its stair is taken"}
+   :intent/started-y {:doc
+                      "feet height when the current stair began; a step is judged by going below it"
+                      :when "stairs-down, per stair"}
+   :intent/started-tick {:doc "tick the current stair or its step began"
+                         :when "stairs-down, per stair"}})
+
+(s/def :intent/turns nat-int?)
+(s/def :intent/cells (s/coll-of :clojurecraft.spec/block-pos :kind vector? :min-count 3))
+(s/def :intent/level-cells (s/coll-of :clojurecraft.spec/block-pos :kind vector? :count 2))
+(s/def :intent/bore (s/coll-of :clojurecraft.spec/block-pos :kind vector? :min-count 1))
+(s/def :intent/lay
+  (s/coll-of :clojurecraft.spec/block-pos :kind vector? :min-count 1 :max-count 12))
+(s/def :intent/level-steps pos-int?)
+(s/def :intent/side (s/tuple int? int?))
+(s/def :intent/level-dir (s/tuple int? int?))
+(s/def :intent/rise #{-1 1})
+(s/def :intent/started-y number?)
+(s/def :intent/started-tick int?)
 
 (def max-turns 4)                     ; refusals before a level step, or :boxed (one full turn)
 (def max-level-steps 32)              ; level steps around what refuses every stair before :boxed

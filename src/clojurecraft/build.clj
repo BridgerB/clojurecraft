@@ -17,6 +17,7 @@
    placed only where the rock is missing. Positions are written for the bot working from +z
    (:south) and turned for the other facings."
   (:require [clojure.math :as math]
+            [clojure.spec.alpha :as s]
             [clojurecraft.avoided :as avoided]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.chunk :as chunk]
@@ -40,6 +41,23 @@
 
 (set! *warn-on-reflection* true)
 
+(def scratch
+  "The intent attributes only this namespace's executor reads and writes: {attribute {:doc meaning
+   :when lifetime}}. They are not world information, so they are not in clojurecraft.model;
+   scratch_test holds that no other namespace uses one."
+  {:intent/build {:doc "which plan a :build works: :cast-one, :portal or :nether" :when ":build"}
+   :intent/origin {:doc "a build's frame origin [bx by bz]" :when ":build"}
+   :intent/facing {:doc "the side of the frame a build works from: :south :north :east :west"
+                   :when ":build"}
+   :intent/access
+   {:doc
+    "a build's lava height over its room's floor, which its access steps climb to (build/station)"
+    :when ":build"}})
+
+(s/def :intent/build #{:cast-one :portal :nether})
+(s/def :intent/origin :clojurecraft.spec/block-pos)
+(s/def :intent/access nat-int?)
+
 (def layers
   "The frame cells [dx dy] from the origin, in the order they are cast: the bottom pair, the two
    columns a block a layer, the top pair. Never sorted by height: a sort interleaves the columns and
@@ -51,6 +69,7 @@
   "The portal's inside, [dx dy]: two wide, three high."
   (for [dx [1 2] dy [1 2 3]] [dx dy]))
 (def facings #{:south :north :east :west}) ; the side of the frame the bot works from
+(s/def :intent/facing facings)
 
 ;; ---------------------------------------------------------------- predicates
 

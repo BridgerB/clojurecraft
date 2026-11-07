@@ -21,6 +21,7 @@ water, it carves one: a notch two high in the nearest wall just over the float l
    :flee is the lava half: the nearest standable cell with no lava beside or under it, walked to
    with forward and jump; the planner ends it the moment the trap clears."
   (:require [clojure.math :as math]
+            [clojure.spec.alpha :as s]
             [clojurecraft.avoided :as avoided]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.chunk :as chunk]
@@ -36,6 +37,43 @@ water, it carves one: a notch two high in the nearest wall just over the float l
             [clojurecraft.trap :as trap]))
 
 (set! *warn-on-reflection* true)
+
+(def scratch
+  "The intent attributes only this namespace's executor reads and writes: {attribute {:doc meaning
+   :when lifetime}}. They are not world information, so they are not in clojurecraft.model;
+   scratch_test holds that no other namespace uses one."
+  {:intent/bank {:doc "the cell a :swim-out swims to, chosen once"
+                 :when "while a :swim-out has one"}
+   :intent/wet? {:doc "a :wade or a :cross has had the body in water at some point"
+                 :when "while a :wade or a :cross runs"}
+   :intent/from-dist {:doc "how far on the plane a :cross started from its trunk"
+                      :when "while a :cross runs"}
+   :intent/water {:doc "the water cell a :wade enters from its bank (:intent/target)"
+                  :when "while a :wade has an entry"}
+   :intent/dig-when-down {:doc
+                          "the cell a :swim-out or :cross will dig once it has sunk to the floor"
+                          :when "while a :swim-out sinks"}
+   :intent/no-lay
+   {:doc "a :swim-out whose block laid for a bank was refused: it notches the wall instead"
+    :when "after a refused lay"}
+   :intent/dug
+   {:doc
+    "ticks the child digs a :swim-out has finished took, added to its escape time (swim/dug-credit)"
+    :when "after a :swim-out's first finished dig"}
+   :intent/next-search {:doc "the tick a :swim-out with no bank yet looks for one again"
+                        :when "while a :swim-out rises with no bank"}
+   :intent/shore {:doc "the point at the water's surface a :swim-out with no bank swims toward"
+                  :when "while a :swim-out with no bank sees dry ground out to swim/shore-reach"}})
+
+(s/def :intent/bank :clojurecraft.spec/block-pos)
+(s/def :intent/wet? boolean?)
+(s/def :intent/from-dist number?)
+(s/def :intent/water :clojurecraft.spec/block-pos)
+(s/def :intent/dig-when-down :clojurecraft.spec/block-pos)
+(s/def :intent/no-lay boolean?)
+(s/def :intent/dug nat-int?)
+(s/def :intent/next-search int?)
+(s/def :intent/shore :clojurecraft.spec/block-pos)
 
 (def bank-radius 16)                  ; how far on the plane a bank is looked for
 (def bank-rise 1)                     ; a bank at most this far above the highest feet level afloat (steve's landing set W)

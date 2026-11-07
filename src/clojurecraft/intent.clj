@@ -5,6 +5,7 @@
    new namespace. Every deadline is an absolute ms value compared against :time/now; the only
    randomness comes in on the tick event."
   (:require [clojure.math :as math]
+            [clojure.spec.alpha :as s]
             [clojurecraft.avoided :as avoided]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.dig :as dig]
@@ -18,6 +19,44 @@
             [clojurecraft.terrain :as terrain]))
 
 (set! *warn-on-reflection* true)
+
+(def scratch
+  "The intent attributes only this namespace's executor reads and writes: {attribute {:doc meaning
+   :when lifetime}}. They are not world information, so they are not in clojurecraft.model;
+   scratch_test holds that no other namespace uses one."
+  {:intent/face {:doc "block face it acts on" :when "dig"}
+   :intent/finish-at {:doc "ms after which FINISH may be sent" :when "dig"}
+   :intent/slot {:doc "hotbar slot the dig holds its tool in (0 for the hand)"
+                 :when "dig, from START"}
+   :intent/tool {:doc "item id of the tool the dig holds, nil for the hand" :when "dig, from START"}
+   :intent/dig-ms {:doc "ms the server needs to break the target with that tool"
+                   :when "dig, from START"}
+   :intent/state
+   {:doc
+    "the target's state id at START; the cell still in it when the ack of FINISH comes means the server did not break it"
+    :when "dig, from START"}
+   :intent/confirm-left {:doc "ticks left to wait for the server's word after FINISH"
+                         :when "dig, :confirm stage"}
+   :intent/at {:doc "index of the next waypoint" :when "walk, once planned"}
+   :intent/replans {:doc "routes planned for this walk; more than intent/max-replans fails :no-path"
+                    :when "walk, once planned"}
+   :intent/planned-chunks
+   {:doc
+    "chunk columns loaded when the route was made (kept for the record; a new chunk no longer replans by itself)"
+    :when "walk, once planned"}
+   :intent/drops-before {:doc "items of :intent/drops held when collecting began" :when "collect"}})
+
+(s/def :intent/face int?)
+(s/def :intent/finish-at number?)
+(s/def :intent/slot (s/int-in 0 9))
+(s/def :intent/tool (s/nilable int?))
+(s/def :intent/dig-ms nat-int?)
+(s/def :intent/state int?)
+(s/def :intent/confirm-left nat-int?)
+(s/def :intent/at nat-int?)
+(s/def :intent/replans nat-int?)
+(s/def :intent/planned-chunks nat-int?)
+(s/def :intent/drops-before nat-int?)
 
 (def reach 4.0)                       ; eye → block centre; the server allows ~4.5
 (def walk-timeout-ticks 1200)         ; 60 s

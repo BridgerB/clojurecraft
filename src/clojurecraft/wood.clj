@@ -3,6 +3,7 @@
    height (so the drop lands where the bot can stand, not in a hole under the rest of the
    trunk), pick up the drop. The :gather act of the goal table (clojurecraft.make) runs this."
   (:require [clojure.math :as math]
+            [clojure.spec.alpha :as s]
             [clojurecraft.avoided :as avoided]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.game :as game]
@@ -16,6 +17,18 @@
             [clojurecraft.terrain :as terrain]))
 
 (set! *warn-on-reflection* true)
+
+(def scratch
+  "The intent attributes only this namespace's executor reads and writes: {attribute {:doc meaning
+   :when lifetime}}. They are not world information, so they are not in clojurecraft.model;
+   scratch_test holds that no other namespace uses one."
+  {:intent/clears {:doc "leaf blocks cleared for this drop"
+                   :when "a collect resumed after clearing"}
+   :intent/resume {:doc "the intent to run after clearing a blocker"
+                   :when "a dig that clears a blocker"}})
+
+(s/def :intent/clears nat-int?)
+(s/def :intent/resume (s/keys :req [:intent/kind]))
 
 (def search-radius 48)                ; blocks from the eye searched for a remembered log
 (def far-radius 256)                  ; a trunk remembered on the way in, past the near band

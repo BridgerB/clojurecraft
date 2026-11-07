@@ -8,13 +8,23 @@
    slots and cursor); the server adopts it and then sends only what differs. We predict no
    changed slots, so every changed slot comes back; and an empty cursor, so the world drops
    :window/cursor on every click and the server corrects it only when it is not empty."
-  (:require [clojurecraft.blocks :as blocks]
+  (:require [clojure.spec.alpha :as s]
+            [clojurecraft.blocks :as blocks]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
             [clojurecraft.recipe :as recipe]))
 
 (set! *warn-on-reflection* true)
+
+(def scratch
+  "The intent attributes only this namespace's executor reads and writes: {attribute {:doc meaning
+   :when lifetime}}. They are not world information, so they are not in clojurecraft.model;
+   scratch_test holds that no other namespace uses one."
+  {:intent/lost {:doc "clicks the server lost in this intent; the intent resumed from its slots"
+                 :when "craft, smelt, place, equip, scoop, pour, after a lost click"}})
+
+(s/def :intent/lost pos-int?)
 
 (def answer-timeout 3000)             ; a click the server never answers fails the intent
 

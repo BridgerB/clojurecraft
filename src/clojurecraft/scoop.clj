@@ -18,6 +18,7 @@
    an unanswered scoop is tried again, and the last try fails :no-scoop, which blacklists the
    source. Nothing is remembered that the inventory can tell."
   (:require [clojure.math :as math]
+            [clojure.spec.alpha :as s]
             [clojurecraft.avoided :as avoided]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.chunk :as chunk]
@@ -37,6 +38,15 @@
             [clojurecraft.window :as window]))
 
 (set! *warn-on-reflection* true)
+
+(def scratch
+  "The intent attributes only this namespace's executor reads and writes: {attribute {:doc meaning
+   :when lifetime}}. They are not world information, so they are not in clojurecraft.model;
+   scratch_test holds that no other namespace uses one."
+  {:intent/tries {:doc "scoops sent at this source; the last of scoop/max-tries fails :no-scoop"
+                  :when "scoop, after a scoop went unanswered"}})
+
+(s/def :intent/tries pos-int?)
 
 (def search-radius 24)                ; blocks from the eye searched for water in the loaded terrain
 (def pool-radius 96)                  ; blocks from the eye a remembered pool is walked to from

@@ -9,6 +9,7 @@
    Nothing is predicted; a rejected placement comes back as a block update with the old state
    and an ack, and the intent fails rather than believing the block is there."
   (:require [clojure.math :as math]
+            [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.game :as game]
@@ -23,6 +24,33 @@
             [clojurecraft.window :as window]))
 
 (set! *warn-on-reflection* true)
+
+(def scratch
+  "The intent attributes only this namespace's executor reads and writes: {attribute {:doc meaning
+   :when lifetime}}. They are not world information, so they are not in clojurecraft.model;
+   scratch_test holds that no other namespace uses one."
+  {:intent/retreated?
+   {:doc
+    "a :place that has walked off to fresh rock once (place/fresh-rock) and fails :no-spot next"
+    :when "on a :place after its walk to fresh rock"}
+   :intent/niche
+   {:doc
+    "the cell a :place chose to cut out of the wall for its block (place/niche): once empty it is the spot, even where a route could run through it (powder snow over it)"
+    :when "on a :place from the tick it starts cutting its niche"}
+   :intent/click-face {:doc
+                       "the face of the clicked block a placement clicks, toward the cell it fills"
+                       :when ":place, once it has a spot"}
+   :intent/against {:doc "block the placement is against" :when "place"}
+   :intent/nudges
+   {:doc
+    "ticks a placement into a given cell has walked toward the middle of the feet's cell, the body clipping the cell's edge (place/nudge-off); place/max-nudges of them, then the server is asked anyway"
+    :when "place into a given cell the body clips"}})
+
+(s/def :intent/retreated? boolean?)
+(s/def :intent/niche :clojurecraft.spec/block-pos)
+(s/def :intent/click-face #{:down :up :north :south :west :east})
+(s/def :intent/against :clojurecraft.spec/block-pos)
+(s/def :intent/nudges nat-int?)
 
 (def place-reach 4.0)                 ; eye → target centre
 (def open-reach 4.5)                  ; eye → container centre for opening it; the server allows about 4.5

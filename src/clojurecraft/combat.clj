@@ -19,6 +19,7 @@
    for its row to retreat (:intent/yield?). A row whose act answers a kind of hostile itself
    (answers) has the :defend row leave that kind to it."
   (:require [clojure.math :as math]
+            [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [clojurecraft.armour :as armour]
             [clojurecraft.avoided :as avoided]
@@ -40,6 +41,16 @@
             [clojurecraft.window :as window]))
 
 (set! *warn-on-reflection* true)
+
+(def scratch
+  "The intent attributes only this namespace's executor reads and writes: {attribute {:doc meaning
+   :when lifetime}}. They are not world information, so they are not in clojurecraft.model;
+   scratch_test holds that no other namespace uses one."
+  {:intent/swings
+   {:doc "attacks a :fight has sent in reach of its target; combat/max-swings make it a ghost"
+    :when "fight, after its first attack"}})
+
+(s/def :intent/swings pos-int?)
 
 (def swing-every 650)                 ; ms between attacks: past a mob's 10-tick hurt invulnerability and a sword's full charge
 (def approach-range 3.0)              ; blocks on the plane to the target where the approach stops

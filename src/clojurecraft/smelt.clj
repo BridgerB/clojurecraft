@@ -29,6 +29,7 @@ back to (make/collect-batch) and not mined for again: the planner counts the inv
    cursor or in the furnace is not in the inventory, so the planner, which plans from the
    inventory, could not plan for it again (lost)."
   (:require [clojure.math :as math]
+            [clojure.spec.alpha :as s]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
@@ -38,6 +39,17 @@ back to (make/collect-batch) and not mined for again: the planner counts the inv
             [clojurecraft.window :as window]))
 
 (set! *warn-on-reflection* true)
+
+(def scratch
+  "The intent attributes only this namespace's executor reads and writes: {attribute {:doc meaning
+   :when lifetime}}. They are not world information, so they are not in clojurecraft.model;
+   scratch_test holds that no other namespace uses one."
+  {:intent/cook-by
+   {:doc
+    "ms by which the batch must be cooked; past it the cook stage fails once the furnace stops cooking"
+    :when "smelt, :cook stage, once the furnace is loaded"}})
+
+(s/def :intent/cook-by int?)
 
 (def stage-timeout 5000)              ; ms a smelt stage waits on the server before it fails
 (def cook-slack 5000)                 ; ms past the batch's cook time before the cook stage fails

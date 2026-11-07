@@ -29,6 +29,7 @@
    (memory/landmark-kinds), however deep it lies. Every long walk goes in hops a route reaches
    (hop), as the pearl hunt's roam does."
   (:require [clojure.math :as math]
+            [clojure.spec.alpha :as s]
             [clojurecraft.avoided :as avoided]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.drops :as drops]
@@ -49,6 +50,22 @@
             [clojurecraft.wood :as wood]))
 
 (set! *warn-on-reflection* true)
+
+(def scratch
+  "The intent attributes only this namespace's executor reads and writes: {attribute {:doc meaning
+   :when lifetime}}. They are not world information, so they are not in clojurecraft.model;
+   scratch_test holds that no other namespace uses one."
+  {:intent/eye-from {:doc "where the eye a :throw-eye follows was first seen [x y z]"
+                     :when ":throw-eye, once its eye is seen"}
+   :intent/eye-pos {:doc "where the eye a :throw-eye follows was last seen [x y z]; it drops there"
+                    :when ":throw-eye, once its eye is seen"}
+   :intent/gone-at {:doc
+                    "ms the server removed the eye a :throw-eye follows; its drop may come after"
+                    :when ":throw-eye, once its eye is removed"}})
+
+(s/def :intent/eye-from :clojurecraft.spec/vec3)
+(s/def :intent/eye-pos :clojurecraft.spec/vec3)
+(s/def :intent/gone-at int?)
 
 (def eye :ender_eye)                  ; the item thrown
 (def eye-type (blocks/entity-types :eye_of_ender)) ; the entity a thrown eye becomes (50)

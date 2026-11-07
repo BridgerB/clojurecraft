@@ -11,6 +11,7 @@
    neighbour behind a wall cannot be capped before the wall is dug, and Nether lava flows a block
    every half second), else another step is tried: up or down, the other axis, sideways."
   (:require [clojure.math :as math]
+            [clojure.spec.alpha :as s]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.build :as build]
             [clojurecraft.dimension :as dimension]
@@ -29,6 +30,27 @@
             [clojurecraft.window :as window]))
 
 (set! *warn-on-reflection* true)
+
+(def scratch
+  "The intent attributes only this namespace's executor reads and writes: {attribute {:doc meaning
+   :when lifetime}}. They are not world information, so they are not in clojurecraft.model;
+   scratch_test holds that no other namespace uses one."
+  {:intent/tunnel-visited
+   {:doc
+    "the feet cells this tunnel-to has started steps from; fresh steps and short floored turns precede a retreat"
+    :when ":tunnel-to, after choosing its first step"}
+   :intent/retreats
+   {:doc
+    "retreats in a row a :tunnel-to has stepped, into cells it already stood in (fortress/retreat?); a fresh step resets it, and more than fortress/retreats-allowed fail the tunnel :blocked (issue #338)"
+    :when ":tunnel-to, after choosing its first step"}
+   :intent/airborne
+   {:doc
+    "ticks a :tunnel-to has waited for feet in the air to land before choosing a step (fortress/air-grace); absent while it has not waited"
+    :when ":tunnel-to, with the feet off the ground and no step chosen"}})
+
+(s/def :intent/tunnel-visited (s/coll-of :clojurecraft.spec/block-pos :kind set?))
+(s/def :intent/retreats nat-int?)
+(s/def :intent/airborne nat-int?)
 
 (def reach 6)                         ; blocks from a fortress brick that count as at the fortress
 (def brick-min-y 32)                  ; bricks under this are below the lava sea's surface (y 31): never tunnel to them

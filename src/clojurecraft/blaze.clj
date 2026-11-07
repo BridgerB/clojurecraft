@@ -30,6 +30,7 @@
    damage-event log is where to look if they kill. The bot does not put itself out: no water
    works in the Nether, and the gym rows give Fire Resistance until potions exist."
   (:require [clojure.math :as math]
+            [clojure.spec.alpha :as s]
             [clojurecraft.avoided :as avoided]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.build :as build]
@@ -59,6 +60,30 @@
             [datascript.core :as d]))
 
 (set! *warn-on-reflection* true)
+
+(def scratch
+  "The intent attributes only this namespace's executor reads and writes: {attribute {:doc meaning
+   :when lifetime}}. They are not world information, so they are not in clojurecraft.model;
+   scratch_test holds that no other namespace uses one."
+  {:intent/spawner {:doc "the remembered spawner a :camp waits by for its blazes (issue #262)"
+                    :when "camp"}
+   :intent/blazes
+   {:doc
+    "the blazes within fight range when a :camp began, or watching when a :rest began; a new one ends it"
+    :when "camp, rest"}
+   :intent/health
+   {:doc
+    "the health when a :camp or a :rest began; a fall under it ends it, since nothing else ends a running intent (issue #262)"
+    :when "camp, rest"}
+   :intent/until
+   {:doc
+    "ms (:time/now) after which the running intent is cut for the row's next choice: set by the blaze row's long-shot wall (3 s), whose :place waited 17 s under fire in blaze-race-z7 landing 2"
+    :when "a :place from blaze/long-shot-cover"}})
+
+(s/def :intent/spawner :clojurecraft.spec/block-pos)
+(s/def :intent/blazes (s/coll-of int? :kind set?))
+(s/def :intent/health number?)
+(s/def :intent/until number?)
 
 (def rods-wanted 7)                   ; six for the twelve blaze powder twelve eyes take, one spare
 (def fight-radius 12.0)               ; a blaze this near the feet is fought

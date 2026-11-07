@@ -1,7 +1,10 @@
 ;; clojure-lsp's settings: shared by every editor that opens the repo, and by the pre-commit hook
 ;; and CI (scripts/clojure-lsp diagnostics, clean-ns).
 {;; a public var nothing calls is dead code: raised from info so the hook and CI refuse it
- :linters {:clojure-lsp/unused-public-var {:level :warning}}
+ ;; `scratch` (an executor's private intent attributes) is read by name through ns-resolve, which the
+ ;; analysis cannot see; scratch_test holds it
+ :linters {:clojure-lsp/unused-public-var {:level :warning
+                                           :exclude-regex #{"clojurecraft\\..*/scratch"}}}
  ;; clean-ns sorts the :require and :import entries and :refer lists, and drops unused ones. The
  ;; layout is zprint's (:keep): zprint hangs a short :require on its line and drops a long one below
  ;; it, and clean-ns forcing either fought the other, so a ns could not grow past 47 requires (main's,

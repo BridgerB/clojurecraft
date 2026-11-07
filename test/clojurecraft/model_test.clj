@@ -8,6 +8,7 @@
             [clojurecraft.make]
             [clojurecraft.model :as model]
             [clojurecraft.plan :as plan]
+            [clojurecraft.scratch-test :as scratch-test]
             [clojurecraft.sim :as sim]
             [clojurecraft.spec]
             [clojurecraft.wood]
@@ -45,7 +46,10 @@
 (deftest every-key-a-running-bot-writes-is-in-the-model
   (let [ks (keys-of-a-pickaxe-run)]
     (is (< 50 (count ks)) "the run exercised the model")
-    (is (= [] (sort (remove model/by-attribute ks))))))
+    (is (= []
+           (sort (remove (some-fn model/by-attribute
+                                  (set (mapcat keys (vals (scratch-test/scratches)))))
+                         ks))))))
 
 (deftest every-attribute-in-the-model-has-a-spec
   (is (= [] (remove s/get-spec (map first model/attributes)))))
