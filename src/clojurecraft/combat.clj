@@ -18,9 +18,7 @@
    blacklisted by the planner; below retreat-health the fight breaks off and walks away, or ends
    for its row to retreat (:intent/yield?). A row whose act answers a kind of hostile itself
    (answers) has the :defend row leave that kind to it."
-  (:require [clojure.edn :as edn]
-            [clojure.java.io :as io]
-            [clojure.math :as math]
+  (:require [clojure.math :as math]
             [clojure.string :as str]
             [clojurecraft.armour :as armour]
             [clojurecraft.dimension :as dimension]
@@ -38,6 +36,7 @@
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.terrain :as terrain]
+            [clojurecraft.threat :as threat]
             [clojurecraft.window :as window]))
 
 (set! *warn-on-reflection* true)
@@ -398,7 +397,7 @@
 
 (def kinds
   "{kind facts}: what the :defend row knows of each hostile kind (resources/clojurecraft/threats.edn)."
-  (edn/read-string (slurp (io/resource "clojurecraft/threats.edn"))))
+  (:kinds threat/data))
 
 (defn kind-facts
   "The facts (kinds) of entity kind k, or nil for a kind with none."
@@ -912,26 +911,51 @@
    50 ms for a second and died standing in it."
   [world e]
   (let [food (when (< (:player/food world 20) 20) (eat/food-held world))
-        near? (<= (physics/distance (game/eye world) (aim e)) attack-reach)
         wall (let [w (wall-cell world e)] (when-not (wall-failed? world w) w))
-        filler (filler/pick world wall-fill)
-        pillar (when-not (pillar-failed? world) (filler/pick world pillar-fill))
-        nook (nook-cell world)
-        [_ fy _] (intent/feet world)]
-    (cond (>= (horizontal world e) back-off-to)
-          (intent/why :cover/horizontal-world-e-back-off-to
-                      (if food {:intent/kind :eat :intent/item food} {:plan/wait :resting}))
-          (and food (not near?))
-          (intent/why :cover/and-food-not-near? {:intent/kind :eat :intent/item food})
-          (and wall filler)
-          (intent/why :cover/and-wall-filler
-                      {:intent/kind :place :intent/item filler :intent/cell wall})
-          pillar
-          (intent/why :cover/pillar
-                      {:intent/kind :pillar :intent/item pillar :intent/top (+ fy pillar-height)})
-          food (intent/why :cover/food {:intent/kind :eat :intent/item food})
-          nook (intent/why :cover/nook {:intent/kind :dig :intent/target nook})
-          :else (intent/why :cover/else {:plan/wait :cornered}))))
+        [_ fy _] (intent/feet world)
+        ctx {:e e
+             :food food
+             :far? (>= (horizontal world e) back-off-to)
+             :near? (<= (physics/distance (game/eye world) (aim e)) attack-reach)
+             :wall wall
+             :filler (filler/pick world wall-fill)
+             :pillar (when-not (pillar-failed? world) (filler/pick world pillar-fill))
+             :top (+ fy pillar-height)
+             :nook (nook-cell world)}]
+    (threat/shelter world
+                    ctx
+                    (:cover-ladder threat/data)
+                    (intent/why :cover/else {:plan/wait :cornered}))))
+
+(defmethod threat/measure :far-rest
+  [_ {:keys [far? food]} _]
+  (when far?
+    (intent/why :cover/horizontal-world-e-back-off-to
+                (if food {:intent/kind :eat :intent/item food} {:plan/wait :resting}))))
+
+(defmethod threat/measure :eat-out-of-reach
+  [_ {:keys [food near?]} _]
+  (when (and food (not near?))
+    (intent/why :cover/and-food-not-near? {:intent/kind :eat :intent/item food})))
+
+(defmethod threat/measure :wall
+  [_ {:keys [wall filler]} _]
+  (when (and wall filler)
+    (intent/why :cover/and-wall-filler
+                {:intent/kind :place :intent/item filler :intent/cell wall})))
+
+(defmethod threat/measure :pillar
+  [_ {:keys [pillar top]} _]
+  (when pillar
+    (intent/why :cover/pillar {:intent/kind :pillar :intent/item pillar :intent/top top})))
+
+(defmethod threat/measure :eat
+  [_ {:keys [food]} _]
+  (when food (intent/why :cover/food {:intent/kind :eat :intent/item food})))
+
+(defmethod threat/measure :nook
+  [_ {:keys [nook]} _]
+  (when nook (intent/why :cover/nook {:intent/kind :dig :intent/target nook})))
 
 (defn teleport-cover
   "The cover against e when it is one of teleporters, which no back-off gets away from, and a
