@@ -419,20 +419,17 @@
 (defn equipped
   "world after an equip step of a :pillar: when it went on to the :climb, the window click's
    leftovers cleared (:intent/awaiting, :intent/awaiting-window, :intent/clicks), and its send
-   time (:intent/sent-at) too while no placement is pending (no :intent/sequence: a placement
-   sends its sequence with its time, a window click only the time), since the climb reads a send
-   time as a block put and unanswered. Sim snapshot R1-11-5 (issue #178): the swap of a fresh
-   stack into the hand left its send time, and three seconds on the climb failed :no-answer with
-   nothing placed, the shaft was given up and the climb cut stairs at twice the time a level.
-   Real races d3ce99b and 9cedf7c (issue #263): a re-equip mid-climb, the feet cell already kept
-   as :intent/under, left a click's time with no sequence, and the climb's ack test
-   (>= last-ack nil) crashed the bot with a NullPointerException."
+   time (:intent/sent-at) too while no placement is pending (no :intent/under), since the climb
+   reads a send time as a block put and unanswered. Sim snapshot R1-11-5 (issue #178): the swap
+   of a fresh stack into the hand left its send time, and three seconds on the climb failed
+   :no-answer with nothing placed, the shaft was given up and the climb cut stairs at twice the
+   time a level."
   [world]
   (let [i (:plan/intent world)]
     (cond-> world
       (= :climb (:intent/stage i))
       (intent/dissoc-intent :intent/awaiting :intent/awaiting-window :intent/clicks)
-      (and (= :climb (:intent/stage i)) (nil? (:intent/sequence i)))
+      (and (= :climb (:intent/stage i)) (nil? (:intent/under i)))
       (intent/dissoc-intent :intent/sent-at))))
 
 (defmethod intent/run :pillar
