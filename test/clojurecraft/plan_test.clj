@@ -2364,9 +2364,7 @@
       (let [w (tick (assoc (blocked-tunnels) :time/now 1050))]
         (is (nil? (get-in w [:plan/intent :intent/for])))))))
 
-;;; TUNNEL STALL: a hollow pocket at the feet must not cut the tunnel every tick
-
-(def tunnel-stall-goal {:goal/id :blaze-rods :goal/done? :never :goal/plan :tunnel-stall})
+;;; TUNNEL STALL: a hollow pocket at the feet is no reason to cut the tunnel
 
 (defn open-landing
   "z16 job 5 (plan 41276280629) at the end: feet [2148.5 72.0 1763.5], a :tunnel-to
@@ -2396,54 +2394,38 @@
                 {:intent/kind :tunnel-to :intent/target [2210 60 1793] :intent/goal :blaze-rods}}
                :world/chunks {[(bit-shift-right 2148 4) (bit-shift-right 1763 4)] col}))))
 
-(defn tick-tunnel
-  "One plan-tick of w with interrupts? true and next-intent answering next. The running intent
-   is a no-op, so a tunnel that is kept is still the one that went in."
-  [w next]
-  (with-redefs [plan/choose (constantly tunnel-stall-goal)
-                plan/interrupts? (constantly true)
-                plan/next-intent (constantly next)
-                intent/run (fn [world _ _] world)]
-    (plan/plan-tick w {:event/kind :tick :event/now 50 :event/rand 0.5} [tunnel-stall-goal])))
-
-(deftest ^:eftest/synchronized a-hollow-pocket-at-the-feet-does-not-cut-the-tunnel
-  ;; z16 job 5: 57942 starts of :tunnel-to [2210 60 1793] alternating with :pocket, no stage and
-  ;; no dig, still at [2148 72 1763] after 300 min. here-site refuses the cell (nothing to lay the
-  ;; roof on). A pocket handed in at that cell anyway is still not a reason to cut the tunnel:
-  ;; steer drops the site and the next tick would choose the tunnel again.
+(deftest a-hollow-pocket-at-the-feet-is-no-reason-to-cut-a-tunnel
+  ;; a pocket at the cell the feet stand in that cannot be sealed ends the tick it is entered, and
+  ;; the row would choose the tunnel again, so blaze's interrupts? does not cut the tunnel for it
   (let [w (open-landing)
         cell [2148 72 1763]
-        hollow
-        {:intent/kind :pocket
-         :intent/site
-         {:pocket/cell cell :pocket/here? true :pocket/stand nil :pocket/dig [] :pocket/placed []}}]
+        pocket-at
+        (fn [c]
+          {:intent/kind :pocket
+           :intent/site
+           {:pocket/cell c :pocket/here? true :pocket/stand nil :pocket/dig [] :pocket/placed []}})]
     (is (= cell (intent/feet w)))
-    (is (nil? (pocket/here-site w)) "an open landing is not chosen")
     (is (true? (pocket/unlayable? w cell)) "open roof: nothing to lay")
-    (testing "two ticks, the guard holding on each: the tunnel is still the one that was running"
-      (let [kept (tick-tunnel (tick-tunnel w hollow) hollow)]
-        (is (= 7 (get-in kept [:plan/intent :intent/id])))
-        (is (= :tunnel-to (get-in kept [:plan/intent :intent/kind])))
-        (is (= [2210 60 1793] (get-in kept [:plan/intent :intent/target])))
-        (is (= 7 (:plan/intents kept)) "no new intent was started")))
-    (testing "a pocket at the feet that can be sealed still cuts"
-      (let [cut (with-redefs [pocket/cannot-seal? (constantly false)] (tick-tunnel w hollow))]
-        (is (= :pocket (get-in cut [:plan/intent :intent/kind])))
-        (is (= 8 (:plan/intents cut)))))
-    (testing "a fight still cuts"
-      (let [cut (tick-tunnel w {:intent/kind :fight :intent/target 1})]
-        (is (= :fight (get-in cut [:plan/intent :intent/kind])))
-        (is (= 8 (:plan/intents cut)))))
-    (testing "a pocket that is not the cell the feet stand in still cuts"
-      (let [cut (tick-tunnel w
-                             {:intent/kind :pocket
-                              :intent/site {:pocket/cell [2200 60 1790]
-                                            :pocket/here? true
-                                            :pocket/stand nil
-                                            :pocket/dig []
-                                            :pocket/placed []}})]
-        (is (= :pocket (get-in cut [:plan/intent :intent/kind])))
-        (is (= 8 (:plan/intents cut)))))))
+    (is (blaze/hollow-pocket? w (pocket-at cell)))
+    (is (not (blaze/hollow-pocket? w {:intent/kind :fight :intent/target 1})))
+    (is (not (blaze/hollow-pocket? w (pocket-at [2200 60 1790]))) "not the cell the feet stand in")
+    (is (not (blaze/hollow-pocket? w nil)))
+    (testing "a pocket at the feet that can be sealed is no hollow one: it still cuts"
+      (let [lx (bit-and 2148 15)
+            lz (bit-and 1763 15)
+            stone (blocks/default-state :stone)
+            walls (into {}
+                        (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
+                              y [72 73]]
+                          [[(+ lx dx) y (+ lz dz)] stone]))
+            col (world/column
+                 (merge
+                  walls
+                  {[lx 71 lz] stone [lx 72 lz] blocks/air [lx 73 lz] blocks/air [lx 74 lz] stone}))
+            closed
+            (assoc w :world/chunks {[(bit-shift-right 2148 4) (bit-shift-right 1763 4)] col})]
+        (is (false? (pocket/cannot-seal? closed cell)) "every side already firm")
+        (is (not (blaze/hollow-pocket? closed (pocket-at cell))))))))
 
 (deftest ^:eftest/synchronized an-unlayable-landing-is-not-chosen-as-a-pocket
   ;; z16 fold at t=233999 (probes 41303425892 and 41304181213): the running :tunnel-to was cut for

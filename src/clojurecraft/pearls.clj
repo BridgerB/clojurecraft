@@ -28,6 +28,7 @@
    fight's look is combat/aim, its legs, never its head. Water hurts it and it teleports out of
    rain and water: the trap rows already keep the bot from fighting while it stands in water."
   (:require [clojurecraft.avoided :as avoided]
+            [clojurecraft.blaze :as blaze]
             [clojurecraft.combat :as combat]
             [clojurecraft.dimension :as dimension]
             [clojurecraft.entity :as entity]
@@ -256,25 +257,27 @@
   ;; where none reaches. A walk out to anywhere but the mouth (out-walk?) ends as soon as an angry
   ;; one is near the mouth (angry-near), not only at hand
   [world goal i]
-  (or (and (fexit/blaze-refuge world)
-           (not (contains? #{:eat :fight} (:intent/kind i)))
-           (not (same-choice? i (fexit/blaze-refuge world))))
-      (held-idle? world i)
-      (and (= :relocate (:intent/for i)) (nil? (:pearls/relocate world)))
-      (and (not (contains? pparams/answers-to-hand (:intent/kind i)))
-           (not (:intent/wall? i))
-           (not (and (= :walk (:intent/kind i)) (= (:intent/target i) (:pearls/shelter world))))
-           (not= (:pearls/shelter world) (intent/feet world))
-           (or (psense/beset? world)
-               (and (out-walk? world i)
-                    (some? (pplace/shelter world))
-                    (or (some? (psense/angry-near world))
-                        (psense/angry-within? world pparams/hold-radius)))
-               (some? (first (psense/struck-by world)))
-               (some? (fexit/tunnel-answer world))
-               (psense/shot-at? world)
-               (and (= :lookout (:intent/kind i)) (some? (first (psense/threat world)))))
-           (not (same-choice? i (plan/next-intent world goal plan/goals))))))
+  (and (or (and (fexit/blaze-refuge world)
+                (not (contains? #{:eat :fight} (:intent/kind i)))
+                (not (same-choice? i (fexit/blaze-refuge world))))
+           (held-idle? world i)
+           (and (= :relocate (:intent/for i)) (nil? (:pearls/relocate world)))
+           (and (not (contains? pparams/answers-to-hand (:intent/kind i)))
+                (not (:intent/wall? i))
+                (not (and (= :walk (:intent/kind i))
+                          (= (:intent/target i) (:pearls/shelter world))))
+                (not= (:pearls/shelter world) (intent/feet world))
+                (or (psense/beset? world)
+                    (and (out-walk? world i)
+                         (some? (pplace/shelter world))
+                         (or (some? (psense/angry-near world))
+                             (psense/angry-within? world pparams/hold-radius)))
+                    (some? (first (psense/struck-by world)))
+                    (some? (fexit/tunnel-answer world))
+                    (psense/shot-at? world)
+                    (and (= :lookout (:intent/kind i)) (some? (first (psense/threat world)))))
+                (not (same-choice? i (plan/next-intent world goal plan/goals)))))
+       (not (blaze/hollow-replacement? world goal i))))
 
 (defmethod plan/fire-cover :pearls
   ;; a ghast or blaze in sight, or one that was within shot-hold-ms (recently-shot?): the cover

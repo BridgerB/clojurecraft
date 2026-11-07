@@ -156,7 +156,16 @@
 (defmulti interrupts?
   "Should the running intent i of goal (the goal chosen now) end before it is done, so the row's
    act plans again? Nothing else ends a running intent but itself. Keyed by :goal/plan; never by
-   default."
+   default.
+   Only :blaze-rods and :ender-pearls define one. A row whose plan is ordered by urgency cuts by
+   rank instead (:goal/ranks, outranks?), with a stale walk ended by still-wanted?. These two cannot:
+   each is a matrix of triggers (a blaze at hand, a dodge, a refuge, a fire, a volley, an angry
+   enderman near the burrow ...) against exemptions on what is running (a rod pick-up, a meal, the
+   refuge's own intents, a fight to its end), and an exemption is not an order: a dodge outranks
+   everything except a pick-up already under way, and some exemptions read the world (a rod
+   within a step, a pick-up younger than two seconds). Each exemption is a past flip-flop, so the
+   matrix stays code, its kind sets named data in its namespace and its world tests named
+   predicates, until the plan itself is ordered so that the exemptions fall out of its order."
   {:arglists '([world goal i])}
   (fn [_world goal _i] (:goal/plan goal :needs)))
 
@@ -349,8 +358,6 @@
         (assoc world :plan/status :failed :plan/reason :no-landing)
         :else world))
 
-(def churn-log-every "Repeats of one intent between two `churn` log lines." 20)
-
 (def choice-keys
   "The keys of a planned intent that make it this intent and not another: what it is (kind,
    purpose), what it works on (item, recipe, target, cell) and how far (to-y). A deadline, the goal
@@ -368,28 +375,9 @@
 
 (defn mark-ended
   "The world with :plan/ended set to the choice-key of intent i and the
-   ms it ended at: what start-intent compares the next intent with (churn-count)."
+   ms it ended at: the identity of what ended, read by the rows that ask what just ended."
   [world i]
   (assoc world :plan/ended (assoc (choice-key i) :ended/at (:time/now world 0))))
-
-(defn churn-count
-  "How many times in a row the planner has started the same choice (choice-key) the tick after it ended, with i about to be the next one: 0 when i is not that repeat, else one more than :plan/churn counted for the same choice. Churn is the planner's choice and the intent's own end check disagreeing about one state. Observation only: nothing reads it back."
-  [world i]
-  (let [e (:plan/ended world)
-        same? (fn [m] (= (select-keys m choice-keys) (choice-key i)))
-        repeat? (and e (same? e) (<= (- (:time/now world 0) (:ended/at e)) physics/tick-ms))]
-    (cond (not repeat?) 0
-          (same? (:plan/churn world)) (inc (:churn/n (:plan/churn world)))
-          :else 1)))
-
-(defn note-churn
-  "The world with :plan/churn updated for the intent i about to start (churn-count), and, once
-   every churn-log-every repeats, a `churn <kind> <target> xN` line."
-  [world i]
-  (let [n (churn-count world i)]
-    (cond-> (assoc world :plan/churn (assoc (choice-key i) :churn/n n))
-      (and (pos? n) (zero? (mod n churn-log-every)))
-      (game/say (str "churn " (:intent/kind i) " " (:intent/target i) " x" n)))))
 
 (def instant-limit
   "No-progress instant ends of one choice in a row after which it counts as failed. Real churn repeats every tick, so three in a row is already a loop; a legitimate repeat never ends in its first tick with nothing done."
@@ -808,7 +796,6 @@
       (cond-> (and feet (not= feet (peek trail)))
               (assoc :plan/trail (vec (take-last 128 (conj trail feet)))))
       (memory/remember-intention i :started)
-      (note-churn i)
       (cond-> (:intent/dead-end i) (avoided/note :boxed-at (:intent/dead-end i)))
       (dissoc :plan/waiting :plan/waiting-since :plan/waiting-ticks :plan/failed)
       (game/say (str "intent " (:intent/kind i) " " (or (:intent/target i) (:intent/recipe i)))))))
@@ -862,17 +849,6 @@
   [i next]
   (boolean (and i next (not (:plan/wait next)) (= (choice-key i) (choice-key next)))))
 
-(defn hollow-pocket?
-  "Is next a :pocket at the feet that cannot be sealed (pocket/cannot-seal?)? Steer drops such a site the tick it is entered, the pocket ends at once, and the row chooses the tunnel again, so cutting the tunnel for it never moves the bot. plan cannot require pocket (pocket requires build and build requires plan), so the predicate is resolved when asked."
-  [world next]
-  (boolean (when-let [c (and (= :pocket (:intent/kind next))
-                             (:player/pos world)
-                             (:pocket/cell (:intent/site next)))]
-             (and (= c (intent/feet world))
-                  (let [^clojure.lang.IFn cannot-seal? (requiring-resolve
-                                                        'clojurecraft.pocket/cannot-seal?)]
-                    (cannot-seal? world c))))))
-
 (defn rank-of
   "The rank of intent i in row goal's :goal/ranks: the position of its why label (intent/why-of)
    in the table, lower is more urgent; a label the table does not list ranks last."
@@ -899,9 +875,7 @@
    :done, whatever is running; a running intent that serves another target than the one chosen
    now is preempted, as is one the chosen row's plan now answers with a branch ranked strictly
    above it (outranks?, the row's :goal/ranks), or that its interrupts? cuts short unless the row,
-   planning again without it, would start the same intent (same-choice?). A :tunnel-to
-   also keeps running when the replacement is a hollow pocket at the feet (hollow-pocket?): it
-   ends at once and cutting the tunnel for it moves nothing. A defence
+   planning again without it, would start the same intent (same-choice?). A defence
    (holds?) is neither preempted nor cut by another row but an escape: it runs to its own end.
    Either waits
    while the cursor holds an item. Otherwise the intent runs, or
@@ -922,10 +896,7 @@
         replacement (when cut-world (next-intent cut-world goal table))
         cut? (and cut-world
                   (or (outranks? goal i replacement)
-                      (and hooked?
-                           (not (same-choice? i replacement))
-                           (not (and (= :tunnel-to (:intent/kind i))
-                                     (hollow-pocket? cut-world replacement))))))
+                      (and hooked? (not (same-choice? i replacement)))))
         next (when (and goal (nil? i)) (next-intent world goal table))
         feet (when (:player/pos world) (intent/feet world))
         failed (:plan/failed world)
