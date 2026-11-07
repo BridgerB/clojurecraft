@@ -6,6 +6,7 @@
             [clojure.test.check :as tc]
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]
+            [clojurecraft.armour :as armour]
             [clojurecraft.blaze]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.bytes :as b]
@@ -844,21 +845,43 @@
                                     [9 64 8]))
         "a wall with no support a moment ago: no wall")))
 
+(defn kitted
+  "w wearing the pearl kit (iron helmet, chestplate and leggings, golden boots: 14 points, as the
+   logged hoglin hits of 3.0 to 3.3 imply) and holding an iron sword."
+  [w]
+  (-> w
+      (assoc-in [:player/inventory 0] (item :iron_sword 1))
+      (assoc-in [:player/inventory (armour/worn-slot 0)] (item :iron_helmet 1))
+      (assoc-in [:player/inventory (armour/worn-slot 1)] (item :iron_chestplate 1))
+      (assoc-in [:player/inventory (armour/worn-slot 2)] (item :iron_leggings 1))
+      (assoc-in [:player/inventory (armour/worn-slot 3)] (item :golden_boots 1))))
+
 (deftest a-fight-is-taken-only-when-it-is-winnable
   ;; Logged state, sim R1/17 seed 1 (probe rh6-R1-17, issue #263): :fight on a hoglin at 17.5 health,
-  ;; a second hoglin 2 to 3 blocks off hitting 0.75 s later: 4.6 s to kill the first, 1.5 s to die,
-  ;; dead in six seconds. The fight is judged on the time to kill against the time to die.
+  ;; a second hoglin 2 to 3 blocks off hitting 0.75 s later, hits of 3.0 to 3.3 through the pearl kit:
+  ;; 4.6 s to kill the first, 2.6 s to die to two, dead in six seconds. The fight is judged on the time
+  ;; to kill against the time to die, the damage taken through the armour worn (the vanilla formula).
   (let [hoglin #(mob :hoglin % 40.0)
+        one #(-> (standing {7 (hoglin [10.5 64.0 8.5])})
+                 kitted
+                 (assoc :player/health %))
         two (-> (standing {7 (hoglin [10.5 64.0 8.5]) 8 (hoglin [8.5 64.0 11.0])})
+                kitted
                 (assoc :player/health 17.5))
-        zombie (standing {7 (mob :zombie [10.5 64.0 8.5] 20.0)})]
-    (is (not (combat/winnable? two [7 (get-in two [:world/entities 7])]))
-        "two hoglins at 2 to 3 blocks, 17.5 health: no fight")
-    (is (combat/winnable? zombie [7 (get-in zombie [:world/entities 7])])
-        "one zombie at 20 health: a fight")
-    (is (not (combat/winnable? (assoc zombie :player/health 3.0)
-                               [7 (get-in zombie [:world/entities 7])]))
-        "the same zombie at 3 health: no fight")
+        e7 (fn [w] [7 (get-in w [:world/entities 7])])
+        zombie (kitted (standing {7 (mob :zombie [10.5 64.0 8.5] 20.0)}))]
+    (is (< 3.0 (combat/hostile-dps two (get-in two [:world/entities 7])) 3.6) "3.4 through the kit")
+    (is (> (combat/hostile-dps (standing {7 (hoglin [10.5 64.0 8.5])}) (hoglin [10.5 64.0 8.5]))
+           5.9)
+        "6 bare")
+    (is (combat/winnable? (one 20.0) (e7 (one 20.0)))
+        "the kit against one hoglin at 20: a close fight, won")
+    (is (combat/winnable? (one 17.5) (e7 (one 17.5))) "and at 17.5")
+    (is (not (combat/winnable? (one 12.0) (e7 (one 12.0)))) "and not at 12")
+    (is (not (combat/winnable? two (e7 two))) "the kit against two hoglins at 17.5: no fight")
+    (is (combat/winnable? zombie (e7 zombie)) "one zombie at 20 health: a fight")
+    (is (not (combat/winnable? (assoc zombie :player/health 2.0) (e7 zombie)))
+        "the same zombie at 2 health: no fight")
     (is (combat/winnable?
          (assoc two :world/entities {7 (hoglin [40.5 64.0 8.5]) 8 (hoglin [8.5 64.0 50.0])})
          [7 (hoglin [40.5 64.0 8.5])])

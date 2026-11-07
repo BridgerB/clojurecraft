@@ -474,14 +474,27 @@
     (* swing-every (math/ceil (/ (double hp) (double (weapon-damage world)))))
     Double/POSITIVE_INFINITY))
 
+(defn worn-armour
+  "[points toughness] of the armour the bot wears (armour/worn over the four slots, mob/armour-points
+   summed), [0 0.0] bare."
+  [world]
+  (reduce (fn [[pt tg] n]
+            (let [[dp dt] (get mob/armour-points (armour/worn world n) [0 0.0])]
+              [(+ pt dp) (+ tg dt)]))
+          [0 0.0]
+          (range 4)))
+
 (defn hostile-dps
-  "Damage a second the melee hostile e deals at hand: melee-damage over its :every ticks (a second's
-   twenty, mob/kinds), 0.0 for a kind that has no melee hit (a ranged one, an unknown one)."
-  [e]
+  "Damage a second the melee hostile e deals at hand to the bot through the armour it wears: its
+   melee-damage on Normal taken through worn-armour (mob/absorbed, the vanilla formula), over its
+   :every ticks (a second's twenty, mob/kinds), 0.0 for a kind that has no melee hit (a ranged one,
+   an unknown one). The iron kit takes a hoglin's 6 to 3.4, as probe rh6-R1-17 measured (3.0 to 3.3)."
+  [world e]
   (let [kind (entity/kind e)
         dmg (melee-damage kind)
-        every (get-in mob/kinds [kind :every] 20)]
-    (if dmg (/ (double dmg) (/ (double every) 20.0)) 0.0)))
+        every (get-in mob/kinds [kind :every] 20)
+        [points toughness] (worn-armour world)]
+    (if dmg (/ (mob/absorbed (double dmg) points toughness) (/ (double every) 20.0)) 0.0)))
 
 (def reach-follow 16.0) ; blocks a hostile of no :follow in mob/kinds is taken to come from
 
@@ -496,15 +509,16 @@
 
 (defn winnable?
   "Is the fight with entity e [eid entity] one the bot wins: the time to kill e (kill-ms) under the
-   time to die, the health over the summed hostile-dps of every hostile (entity/hostiles, and e)
+   time to die, the health over the summed hostile-dps (through the armour worn) of every hostile (entity/hostiles, and e)
    that can reach the feet within the time to kill (can-reach-by?)? Pure over the world and mob
-   data; errs high on the damage taken (armour is not counted, as danger-line). Sim R1/17 seed 1
+   data; Sim R1/17 seed 1
    (probe rh6-R1-17, issue #263) took a fight with one hoglin at 17.5 health, a second joined in 0.75 s: 4.6 s to
    kill the first against 1.5 s to die, dead in six seconds."
   [world [eid e]]
   (let [ms (kill-ms world e)
         pool (assoc (entity/hostiles world) eid e)
-        dps (reduce + 0.0 (for [[_ o] pool :when (can-reach-by? world o ms)] (hostile-dps o)))]
+        dps
+        (reduce + 0.0 (for [[_ o] pool :when (can-reach-by? world o ms)] (hostile-dps world o)))]
     (or (zero? dps) (< ms (* 1000.0 (/ (double (:player/health world 20.0)) dps))))))
 
 (defn breathed-on?
