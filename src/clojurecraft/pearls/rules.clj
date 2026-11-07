@@ -58,6 +58,12 @@
   [world goal table]
   (decide-in (facts/context world {:goal goal :table table}) all-rules))
 
+(defn row-of
+  "The id of the first row of the hunt's rules that holds in world: the row that decides, whatever
+   label an inner planner puts on its intent."
+  [world]
+  (let [f (facts/context world)] (:rule/id (first (filter #(holds? f (:rule/when %)) rules)))))
+
 (defn phase
   "The id of the first phase of the hunt that is not done in world (its :phase/done facts do not
    all hold); the last phase when every earlier one is."

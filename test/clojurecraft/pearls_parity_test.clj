@@ -5,6 +5,7 @@
   (:require [clojure.java.io :as io]
             [clojure.test :refer [deftest is]]
             [clojurecraft.blaze :as blaze]
+            [clojurecraft.blocks :as blocks]
             [clojurecraft.intent :as intent]
             [clojurecraft.memory :as memory]
             [clojurecraft.pearls-legacy :as legacy]
@@ -53,6 +54,16 @@
    ["sealed-burrow" #(ps/burrowed [8.5 61.0 8.5] % {[7 62 8] ps/stone [7 61 8] ps/stone})]
    ["walled" #(assoc (ps/walled-in (ps/passage 12 14) [20.5 64.0 20.5]) :world/entities %)]])
 
+(defn with-fights
+  "w with n :fight intentions on enderman 7 done, ids apart from the lookouts' (ps/fought's would
+   collide with ps/looked's)."
+  [w n]
+  (reduce #(memory/remember-intention %1
+                                      {:intent/id (+ 200 %2) :intent/kind :fight :intent/target 7}
+                                      :done)
+          w
+          (range n)))
+
 (def conditions
   "Changes to a world: [name fn]."
   [["fresh" identity] ["hurt" #(assoc % :player/health 9.0)]
@@ -67,8 +78,8 @@
    ["stale" #(ps/looked % 14)] ["lured" #(ps/lured % 3)] ["fought-out" #(ps/fought % 9)]
    ["relocating" #(assoc % :pearls/relocate {:from [8 64 8] :at 0 :near #{}} :time/now 600000)]
    ["deaths" #(assoc % :stats/deaths 1)] ["tired" #(assoc % :player/health 15.0)]
-   ["struck" #(assoc % :player/health 12.0)] ["fought-looked" #(ps/fought (ps/looked % 7) 9)]
-   ["fought-looked-blacklisted" #(assoc (ps/fought (ps/looked % 7) 9) :plan/blacklist #{7})]
+   ["struck" #(assoc % :player/health 12.0)] ["fought-looked" #(with-fights (ps/looked % 7) 9)]
+   ["fought-looked-blacklisted" #(assoc (with-fights (ps/looked % 7) 9) :plan/blacklist #{7})]
    ["filler-hurt"
     #(assoc-in (assoc % :player/health 9.0) [:player/inventory 3] (ps/item :cobblestone 64))]])
 
@@ -112,6 +123,19 @@
      (fortress-world
       {:blaze blaze :pick pick :trail trail :stage stage :ghast ghast :filler filler :hp hp})]))
 
+(def water "Water's default state." (blocks/default-state :water))
+
+(def void-under
+  "Air under the whole column's floor from y 40 to 62: the floor is one block thick over a drop."
+  (into {} (for [x (range 16) z (range 16) y (range 40 63)] [[x y z] ps/air])))
+
+(defn nook-world
+  "A bot in the nook (nook-blocks) holding a pickaxe, with entities."
+  [entities]
+  (-> (ps/wide (ps/standing entities nook-blocks))
+      (assoc :pearls/shelter [8 64 8] :pearls/mouth [9 64 8])
+      (assoc-in [:player/inventory 1] (ps/item :iron_pickaxe 1))))
+
 (def named-worlds
   "States the pearl tests build by name, and ones the grid cannot reach."
   (concat
@@ -135,6 +159,51 @@
      (-> (ps/standing {7 (ps/enderman [11.5 64.0 8.5])})
          (assoc :player/health 9.0 :plan/cornered #{7})
          (assoc-in [:player/inventory 3] (ps/item :cobblestone 64)))]
+    ;; a nook with a clear line east: a ghast in sight, health 15 and food: the meal row
+    ["nook-ghast-fed"
+     (-> (nook-world {10 (ps/mob :ghast [18.5 66.0 8.5])})
+         (assoc :player/health 15.0 :player/food 12)
+         (assoc-in [:player/inventory 2] (ps/item :cooked_beef 8)))]
+    ;; the nook with a calm enderman to stare at, rested and not
+    ["nook-quarry" (nook-world {7 (ps/enderman [28.5 64.0 8.5])})]
+    ["nook-quarry-tired" (assoc (nook-world {7 (ps/enderman [28.5 64.0 8.5])}) :player/health 15.0)]
+    ;; stone only in the way of the stairs: water where the burrow's stairs would go, so a site
+    ;; beside the feet is walked to
+    ["water-by-feet"
+     (-> (ps/wide (ps/standing {7 (ps/enderman [20.5 64.0 8.5])}
+                               (into {} (for [c [[7 63 8] [7 62 8] [6 62 8] [5 62 8]]] [c water]))))
+         (assoc-in [:player/inventory 1] (ps/item :iron_pickaxe 1)))]
+    ;; a one-block slab over a void with an angry enderman coming: no burrow, no site
+    ["void-slab-angry"
+     (-> (ps/standing {7 (assoc (ps/enderman [28.5 64.0 8.5]) :entity/creepy? true)} void-under)
+         (assoc-in [:player/inventory 1] (ps/item :iron_pickaxe 1)))]
+    ;; hurt on the slab with a zombie at hand and blocks to lay: backing off is pointless
+    ["void-slab-zombie"
+     (-> (ps/standing {8 (ps/mob :zombie [9.5 64.0 8.5])} void-under)
+         (assoc :player/health 9.0)
+         (assoc-in [:player/inventory 3] (ps/item :cobblestone 64)))]
+    ;; the burrow's end, an angry enderman near the mouth fought out and blacklisted, after
+    ;; lookouts: the lure
+    ["lure"
+     (-> (ps/burrowed [8.5 61.0 8.5] {7 (assoc (ps/enderman [11.5 64.0 8.5]) :entity/creepy? true)})
+         (with-fights 9)
+         (ps/looked 7)
+         (assoc :plan/blacklist #{7}))]
+    ;; a calm enderman standing in the stairs, the bot at the end, no lookouts yet
+    ;; a ghast in sight with a calm enderman tracked and nothing to cover with, hurt a little
+    ;; and fed: no cover walk, no block to lay, so the meal
+    ["ghast-and-enderman-fed"
+     (-> (ps/wide (ps/standing {10 (ps/mob :ghast [18.5 66.0 8.5])
+                                7 (ps/enderman [40.5 64.0 8.5])}))
+         (assoc :player/health 15.0 :player/food 12)
+         (assoc-in [:player/inventory 2] (ps/item :cooked_beef 8)))]
+    ;; hurt, a zombie in range of the defence but past the swarm, already as far as a back-off
+    ;; goes, blocks to lay
+    ["hurt-far-zombie"
+     (-> (ps/wide (ps/standing {8 (ps/mob :zombie [20.5 64.0 8.5])}))
+         (assoc :player/health 9.0)
+         (assoc-in [:player/inventory 3] (ps/item :cobblestone 64)))]
+    ["stairs-blocker" (ps/burrowed [8.5 61.0 8.5] {7 (ps/enderman [4.5 63.0 8.5])})]
     ["hurt-threat-filler"
      (-> (ps/standing {8 (ps/mob :zombie [9.5 64.0 8.5])})
          (assoc :player/health 9.0)
@@ -162,12 +231,14 @@
 
 (deftest the-rule-table-chooses-what-the-cond-chose
   (let [worlds (remove (comp nil? second) (grid))
-        results
-        (mapv (fn [[label w]]
-                {:label label :table (outcome rules/decide w) :cond (outcome legacy/legacy-hunt w)})
-              worlds)
+        results (mapv (fn [[label w]]
+                        {:label label
+                         :world w
+                         :table (outcome rules/decide w)
+                         :cond (outcome legacy/legacy-hunt w)})
+                      worlds)
         differ (remove #(= (:table %) (:cond %)) results)
-        whys (into #{} (keep (comp second :cond)) results)]
+        whys (into #{} (map #(rules/row-of (:world %))) results)]
     (is (empty? (map :label (take 5 differ))) "worlds where the table and the cond differ")
     (is (< 200 (count results)) "worlds compared")
     (when (.isDirectory (io/file "out"))
@@ -176,7 +247,12 @@
                      :rules (count rules/rules)
                      :hit (count whys)
                      :not-hit (vec (sort (remove whys (map :rule/id rules/rules))))
-                     :differ (vec (map :label (take 20 differ)))})))))
+                     :differ (vec (map :label (take 20 differ)))
+                     :named (into (sorted-map)
+                                  (for [r results
+                                        :when (not (re-find #"^[^/]+/\d+/" (:label r)))
+                                        :when (not (re-find #"^fortress/" (:label r)))]
+                                    [(:label r) (rules/row-of (:world r))]))})))))
 
 (deftest the-phase-of-a-hunt-is-the-first-not-done
   (is (= :set-up (rules/phase (ps/standing {}))))
