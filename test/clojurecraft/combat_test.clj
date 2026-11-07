@@ -686,7 +686,7 @@
             far (at [17.0 64.0 8.5] steak)]
         (doseq [w [(at [13.0 64.0 8.5] steak) (at close (merge steak stone)) (at close {}) pick
                    taken far (at [17.0 64.0 8.5] {}) (at close steak)
-                   (at close (merge stone pick))]]
+                   (at close (merge stone {2 (item :stone_pickaxe 1)}))]]
           (is (= (old-cover w (e w)) (combat/cover w (e w)))))))
     (testing "the wall cell taken, a pillar"
       (let [w (assoc-in (at close stone)
