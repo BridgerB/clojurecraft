@@ -85,7 +85,7 @@ Asleep at the wheel means a tick that ends with nothing changed: "lanes still ru
 
 **The reading routine, every tick, in order:**
 1. `node T/cases.ts <sha7> [n] [signature]`: coverage (cases over runs; under 1.0 is a blind spot, fixed before any bot change), the signatures ranked, the top one's case texts.
-2. Read three case texts of the top signature. The `why` names the planner branch that chose each intent (`intent/why`, e.g. `:hunt/and-near?-hurt?-not-in?`).
+2. Read three case texts of the top signature. The `why` names the planner branch that chose each intent (`intent/why`, e.g. `:hunt/back-off-from-enderman`).
 3. Only when a case cannot answer: `bb probe why <tag> <asset> <stem> <ms>` (the replay command in the case) folds the recording on a runner and prints the moment and every branch's answer. No probe branch needed.
 
 - **Batches:** `node T/batches.ts <sha7>` gives runs, stage reached, pearls and issue signatures per commit and kind (gh-pages data/batches/<UTC date>.ndjson; each row's `failures` holds per-stage reasons).
@@ -117,7 +117,7 @@ Asleep at the wheel means a tick that ends with nothing changed: "lanes still ru
   - **Endermen:** seen by 23 bots, always 54–105 m away, never provoked. #726 chases them; not yet measured.
 - **Stage 18 from the checkpoint, 2026-11-07 (every lane, bots capped at 60 min and filed as `:bot-timeout`, #773):**
   - **Throughput:** 9cedf7c ended 140 real-18 and 106 sim-18 runs (from 15 and 20 before the cap). No pearl yet.
-  - **The lookout stall, the top signature** (`[:bot-timeout nil :lookout :hunt/else]`, 86 of 246 on 9cedf7c, 49 of 140 on d3ce99b): the fortress tunnel-out target was re-derived every act and flipped between two cells, hundreds of `:tunnel-to` until the pickaxe wore out, then sealed with no route and nothing to dig with (probe 42357825200, sim R1/11 seed 1). Fixed by holding the target (#786). Open: about half the stalled bots still held a pickaxe; the roof (y 122) as a target.
+  - **The lookout stall, the top signature** (`[:bot-timeout nil :lookout :hunt/search]`, 86 of 246 on 9cedf7c, 49 of 140 on d3ce99b): the fortress tunnel-out target was re-derived every act and flipped between two cells, hundreds of `:tunnel-to` until the pickaxe wore out, then sealed with no route and nothing to dig with (probe 42357825200, sim R1/11 seed 1). Fixed by holding the target (#786). Open: about half the stalled bots still held a pickaxe; the roof (y 122) as a target.
   - **Never near an enderman:** 72 of 107 capped real bots on 9cedf7c saw none within 32 blocks.
   - **Dying while tunnelling out:** wither skeletons and hoglins hit the bot mid-tunnel and it never swung back (the hunt claims those kinds, so `:defend` left them). Fixed by #784 (fight at or above the danger line, avoided kinds only at 18 and alone, else cover).
   - **Crashes:** 4 real bots on d3ce99b, a NullPointerException in the pillar climb (a click's send time read as a placement's). Fixed by #785.
