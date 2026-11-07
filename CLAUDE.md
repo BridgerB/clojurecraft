@@ -111,6 +111,36 @@ src/clojurecraft/watch.clj    observers of the atom: --telemetry diffs successiv
 src/clojurecraft/senses.clj   observer of the atom: a line a second of what a race bot senses and decides, the loop's slowest event, the classes a run ends in
 src/clojurecraft/main.clj     loop, effects, RESULT line, --record, --telemetry, replay
 src/clojurecraft/cli.clj      what every entry point shares: --key value options, a timestamped stderr line
+src/clojurecraft/avoided.clj  what the bot has learned not to try again, behind one interface (noted?, mark-of): blacklist, boxed cells, unreached logs
+src/clojurecraft/shapes.clj   the two shapes position attributes share (vec3, block-pos), a leaf so executors can spec before spec.clj loads
+src/clojurecraft/memo.clj     a pure function's answers remembered by its inputs, where the inputs are a world's parts
+src/clojurecraft/registry.clj the generated registries a fight is told in: damage types, attributes, mob effects, sounds
+src/clojurecraft/nbt.clj      network NBT as values: the server's text components read, the model's written
+src/clojurecraft/text.clj     the server's text components as plain values, for death messages
+src/clojurecraft/said.clj     the one place a heard line joins :world/chat
+src/clojurecraft/chat.clj     what the server says in words, kept as facts
+src/clojurecraft/hear.clj     what the server says about a fight beyond health and the damage event, kept as facts
+src/clojurecraft/ear.clj      what the server lets the bot hear and see happen beyond its own sight
+src/clojurecraft/eye.clj      what the bot sees of a creature beyond where it is and how hurt
+src/clojurecraft/derived.clj  senses two successive worlds hold together: what set the bot alight, items gained and lost, the biome, breath
+src/clojurecraft/failure.clj  what a failed run was doing and why, as a value both races share
+src/clojurecraft/churn_guard.clj the invariant that catches an intent chosen again every tick, for every intent
+src/clojurecraft/scene.clj    what the world looked like at a moment, for a reader: the facts a fix starts from and the blocks round the feet
+src/clojurecraft/drops.clj    picking up what lies on the ground
+src/clojurecraft/vein.clj     the whole of an iron vein
+src/clojurecraft/gear.clj     the gear a bot takes into the Nether
+src/clojurecraft/picks.clj    the spare-pickaxes row
+src/clojurecraft/fire.clj     fire on the player as the server keeps it, for the model
+src/clojurecraft/beds.clj     the bed as a weapon in the End, as data and pure functions
+src/clojurecraft/blaze.clj    blaze rods (stage 17): the act, the hold in a pocket, the rest, the camp, the walk or tunnel to the spawner
+src/clojurecraft/pocket.clj   a pocket to fight blazes from: sites, seals, what a seal needs
+src/clojurecraft/dodge.clj    dodging a blaze's fireballs
+src/clojurecraft/dragon.clj   the dragon (stage 25): crystals, the perch, the beds, the meal
+src/clojurecraft/end_portal.clj the end portal lit and stepped into
+src/clojurecraft/start.clj    where and with what a bot begins, as data (starts.edn), read by the real and the sim race alike
+src/clojurecraft/lanes.clj    which start and page kind a lane plays (ci/lanes.edn), pure
+src/clojurecraft/land.clj     landing a bot where a run starts over RCON: land! (open, by kind of start), pads and arenas, the race's fortress landings
+src/clojurecraft/race_facts.clj a race as values: the board, samples, milestones, when a slot may start its next bot
 dev/clojurecraft/datagen.clj  vanilla --reports and the inner jar's data → resources/clojurecraft/*.edn
 dev/clojurecraft/jar_probe.clj hardness and tool materials read from the game's own classes, for datagen
 dev/clojurecraft/brain.clj    the brain checker (clojure -M:brain)
