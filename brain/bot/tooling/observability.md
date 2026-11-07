@@ -17,6 +17,8 @@ sourceRefs:
   - src/clojurecraft/senses.clj#defn senses!
   - "src/clojurecraft/intent.clj#Intent i labelled with the planner's branch that chose it"
   - src/clojurecraft/intent.clj#defn why-of
+  - src/clojurecraft/intent.clj#defn why-or-default
+  - src/clojurecraft/intent.clj#defn child-why
   - "src/clojurecraft/memory.clj#The fact for intent i reaching event"
   - src/clojurecraft/race.clj#defn near-truth!
   - src/clojurecraft/race.clj#defn play-one!
@@ -52,7 +54,7 @@ The bot's whole mind is one world value, so everything a reader needs about a ru
 - **The ledger:** `senses/events` names every change between two worlds; `senses/ledger!` keeps them all, unsampled, and counts any it drops. Written to `<name>.events.edn`.
 - **The senses:** one line a second (`senses/of`), and the ring: a moment a minute for the last five (`senses/senses!`).
 - **The moment:** the whole mind at the ending (`senses/moment`): facts, the blocks round the feet, the intent chain, the plan, the stages' keys, entities near, hits, effects, armour, and the newest 40 intentions.
-- **Why:** the stuck stage's planners label each intent with the branch that chose it (`intent/why`, on metadata, so equality is unchanged); intention facts keep `:intention/why`.
+- **Why:** every running intent carries a why (`intent/why`, on metadata, so equality is unchanged): a planner that tags its branches gives the finer label (the stuck stage's do), else `plan/start-intent` labels it `:<goal>/<kind>` (`intent/why-or-default`), and a child an executor starts inherits its parent's (`intent/child-why`, in `run-child`); intention facts keep `:intention/why`.
 - **Server truth** (real): every entity within 32 blocks of the ending and the bot's own entity, whole (`race/near-truth!`), as `<name>.server.txt`.
 - **The recording** of every failed run (`botlogs/keep-recording?`).
 
