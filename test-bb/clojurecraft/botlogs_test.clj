@@ -168,3 +168,11 @@
                "{:ev :intent, :kind :walk, :why :hunt/travel, :t 1}\n"
                "{:ev :intent, :kind :dig, :t 2}\n" "{:ev :hp, :hp 19.0, :t 3}\n"))
     (is (= {:intents 2 :whys 1 :dropped 1} (botlogs/ledger-facts f)))))
+
+(deftest a-batch-counts-the-packets-it-heard
+  (is (= [130 1130]
+         (botlogs/packets [{:stats {:stats/heard {:set-time 100 :add-entity 20}
+                                    :stats/unknown {[:play 83] 900}}}
+                           {:stats {:stats/heard {:set-health 10} :stats/unknown {[:play 117] 100}}}
+                           {:reason :timeout}]))
+      "decoded by name, then the unknown ones added for the total"))

@@ -247,6 +247,7 @@
    [:stats/keep-alives "keep-alives answered" "always"]
    [:stats/teleports "teleports accepted" "always"] [:stats/chunks "chunk columns loaded" "always"]
    [:stats/unknown "{[phase id] n}: packets with no handler" "always"]
+   [:stats/heard "{name n}: packets decoded, every phase" "after the first packet"]
    [:stats/last-ack "last block-changed-ack sequence from the server" "after the first ack"]
    [:stats/pickups "take-item-entity packets seen" "after the first pickup"]
    [:stats/deaths "times health fell to zero from above it" "after the first death"]

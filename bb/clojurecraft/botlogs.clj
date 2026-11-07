@@ -161,6 +161,15 @@
           {}
           (for [r runs kn (get-in r [:stats :stats/unknown])] kn)))
 
+(defn packets
+  "[decoded total] of the packets the runs' servers sent them: decoded is every packet a RESULT
+   counted by name (:stats/heard), total adds the unknown ones (:stats/unknown, the deliberate
+   included). A run from before :stats/heard counts no decoded packet, so a batch's share reads 0."
+  [runs]
+  (let [sum (fn [k] (reduce + 0 (for [r runs n (vals (get-in r [:stats k]))] n)))
+        decoded (sum :stats/heard)]
+    [decoded (+ decoded (sum :stats/unknown))]))
+
 (def observed-kinds
   "The files a run's coverage counts, each [key needs], where needs names the runs that should
    have it: :all every run, :failed-real a real run that failed (its recording), :truth every run
@@ -313,12 +322,15 @@
 
 (defn observed-of
   "The observability row of a batch's runs under data-dir (observed over run-facts, with the
-   unknown packets named from resources/clojurecraft/packets.edn under the checkout root)."
+   unknown packets named from resources/clojurecraft/packets.edn under the checkout root), and
+   :packets, [decoded total] (packets)."
   [data-dir runs]
   (let [names (packet-names (or (try (edn/read-string (slurp "resources/clojurecraft/packets.edn"))
                                      (catch Exception _ nil))
                                 {}))]
-    (observed (map #(run-facts data-dir %) runs) (unheard names runs))))
+    (assoc (observed (map #(run-facts data-dir %) runs) (unheard names runs))
+           :packets
+           (packets runs))))
 
 ;; ---------------------------------------------------------------- the case: how a run ended, read for you
 

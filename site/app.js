@@ -683,6 +683,7 @@
       var bad = p[0] < p[1];
       h += '<tr><td>' + esc(k[1]) + '</td><td class="r num">' + p[0] + ' / ' + p[1] + '</td><td class="r num"' + (bad ? ' style="color:var(--bad)"' : '') + '>' + pct(share(p[0], p[1])) + '</td></tr>';
     });
+    if (o.packets) h += '<tr><td>packets decoded of all the server sent</td><td class="r num">' + compact(o.packets[0]) + ' / ' + compact(o.packets[1]) + '</td><td class="r num">' + pct(share(o.packets[0], o.packets[1])) + '</td></tr>';
     h += '<tr><td>ledger events dropped</td><td class="r num"' + (o.dropped > 0 ? ' style="color:var(--bad)"' : '') + '>' + (o.dropped || 0) + '</td><td></td></tr>';
     var u = Object.keys(o.unheard || {}).sort(function (a, b) { return o.unheard[b] - o.unheard[a]; });
     h += '<tr><td>packets thrown away</td><td class="r num"' + (u.length ? ' style="color:var(--bad)"' : '') + '>' + u.length + ' kinds</td><td></td></tr></tbody></table>';
