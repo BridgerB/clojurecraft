@@ -158,3 +158,18 @@
     (assoc pkt
            :chunk/column
            (try (decode (:data pkt)) (catch Exception e {:chunk/error (str e)})))))
+
+(defn biome-at
+  "The biome registry id at world position [x y z] (feet or block) from a {[cx cz] column} map, read
+   from the column's :chunk/biomes (cells of 4x4x4, y then z then x), or nil: the chunk is not
+   loaded, or the column has no biomes."
+  [chunks [x y z]]
+  (let [x (long (math/floor (double x)))
+        y (long (math/floor (double y)))
+        z (long (math/floor (double z)))]
+    (when-let [col (get chunks [(bit-shift-right x 4) (bit-shift-right z 4)])]
+      (when-let [biomes (get-in col [:chunk/biomes (bit-shift-right (- y (column-min-y col)) 4)])]
+        (section-get biomes
+                     (bit-or (bit-shift-left (bit-shift-right (bit-and y 15) 2) 4)
+                             (bit-shift-left (bit-shift-right (bit-and z 15) 2) 2)
+                             (bit-shift-right (bit-and x 15) 2)))))))

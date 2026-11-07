@@ -313,6 +313,13 @@
                     (packet {:packet/name :unknown :packet/id 83})])]
     (is (= {[:play 83] 2} (:stats/unknown w)))))
 
+(deftest every-packet-heard-is-counted-by-name
+  (let [[w _] (run (in-play)
+                   [(packet {:packet/name :set-time}) (packet {:packet/name :set-time})
+                    (packet {:packet/name :unknown :packet/id 83})])]
+    (is (= 2 (get-in w [:stats/heard :set-time])) "a decoded packet, handled or not")
+    (is (nil? (get-in w [:stats/heard :unknown])) "an unknown one is counted apart")))
+
 (deftest a-mob-is-tracked-with-its-motion-health-and-death
   ;; issue #258: every entity is kept, with its velocity, a living one's health and flags from its
   ;; metadata, and its death as the server states it; an interaction's float at the health index
@@ -428,3 +435,26 @@
                              (assoc :player/dimension "minecraft:the_end")
                              (assoc-in [:player/inventory inventory/head-slot] pumpkin)))))
         "the End with the pumpkin on: as the server set it")))
+
+(deftest the-server-moving-the-bot-is-kept
+  (let [w (-> (game/init fx/opts)
+              (assoc :bot/phase :play
+                     :time/now 500
+                     :player/entity-id 7
+                     :player/pos [1.0 64.0 1.0]
+                     :player/loaded? true))
+        [w2 _] (run w
+                    [(packet {:packet/name :set-entity-motion :entity-id 7 :vel [0.5 0.25 0.0]})
+                     (packet {:packet/name :player-position
+                              :teleport-id 9
+                              :x 4.0
+                              :y 64.0
+                              :z 5.0
+                              :dx 0.0
+                              :dy 0.0
+                              :dz 0.0
+                              :yaw 0.0
+                              :pitch 0.0
+                              :flags 0})])]
+    (is (= {:vel [0.5 0.25 0.0] :at 500} (:player/knock w2)) "its own motion, not an entity's")
+    (is (= {:d 5.0 :at 500} (:player/corrected w2)) "3-4-5 from where it stood")))

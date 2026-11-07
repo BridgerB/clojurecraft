@@ -4198,8 +4198,14 @@
                             cz [-1 0 1]
                             :when (not= [0 0] [cx cz])]
                         [[cx cz] (world/column {})])))
-        asked (atom [])]
-    (with-redefs [intent/routable? (fn [_ i] (swap! asked conj (:intent/max-nodes i)) false)]
+        asked (atom [])
+        me (Thread/currentThread)]
+    ;; with-redefs is global and the suite runs tests in parallel: count only this thread's calls
+    ;; (the issue check on #771 counted six, three of them another test's)
+    (with-redefs [intent/routable? (fn [_ i]
+                                     (when (identical? me (Thread/currentThread))
+                                       (swap! asked conj (:intent/max-nodes i)))
+                                     false)]
       (is (nil? (pearls/stare-site w e)) "no route: no site"))
     (is (<= 1 (count @asked) pearls/vantage-tries) "at most vantage-tries route tests")
     (is (every? #(= pearls/vantage-nodes %) @asked) "each within vantage-nodes")))

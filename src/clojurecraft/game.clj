@@ -148,13 +148,15 @@
 
 (defn apply-teleport
   "The server moved the player: set pos and look (relative per flags; stare-safe-look), stop,
-   accept the teleport and echo the position. The first teleport also sends player-loaded."
+   accept the teleport and echo the position. The first teleport also sends player-loaded; any
+   later one is kept as :player/corrected, how far the server moved the bot and when."
   [world {:keys [teleport-id x y z yaw pitch flags]}]
   (let [[ox oy oz] (or (:player/pos world) [0.0 0.0 0.0])
         [oyaw opitch] (:player/look world)
-        loaded? (:player/loaded? world)]
+        loaded? (:player/loaded? world)
+        moved [(relative flags 1 ox x) (relative flags 2 oy y) (relative flags 4 oz z)]]
     (-> world
-        (assoc :player/pos [(relative flags 1 ox x) (relative flags 2 oy y) (relative flags 4 oz z)]
+        (assoc :player/pos moved
                :player/look
                (stare-safe-look world
                                 [(relative flags 8 oyaw yaw) (relative flags 16 opitch pitch)])
@@ -163,6 +165,9 @@
                :player/teleport-id teleport-id
                :player/synced-at (:time/now world))
         (update :stats/teleports inc)
+        (cond-> loaded?
+                (assoc :player/corrected
+                       {:d (physics/distance [ox oy oz] moved) :at (:time/now world 0)}))
         (emit {:packet/name :accept-teleportation :teleport-id teleport-id})
         send-position
         (cond-> (not loaded?)
@@ -418,8 +423,12 @@
   [w eid deg]
   (cond-> w deg (track eid assoc :entity/yaw (double deg))))
 (defmethod on-packet [:play :set-entity-motion]
+  ;; the bot's own id is not a tracked entity: the server setting its motion (a hit's knockback, an
+  ;; explosion) is kept as :player/knock, which the ledger notes
   [w {:keys [entity-id vel]}]
-  (track w entity-id assoc :entity/vel vel))
+  (cond-> (track w entity-id assoc :entity/vel vel)
+    (= entity-id (or (:player/entity-id w) (:player/eid w)))
+    (assoc :player/knock {:vel (vec vel) :at (:time/now w 0)})))
 (defmethod on-packet [:play :teleport-entity]
   ;; position and velocity, each axis relative when its Relative bit says so (X 1 Y 2 Z 4, the
   ;; deltas 32 64 128), as the player's own teleport reads them
@@ -615,7 +624,16 @@
                :next-state (p/value :next-state :login)})
         (emit {:packet/name :hello :username (:bot/name world) :uuid (:bot/uuid world)}))))
 
-(defmethod on-event :packet [world {:event/keys [packet]}] (on-packet world packet))
+(defn heard
+  "The world with packet pkt counted in :stats/heard by its name: every packet the server sent that
+   decoded (an unknown one is counted in :stats/unknown instead, a decode error and the close in
+   neither), so a run says how much it heard and how much of it it understood."
+  [world pkt]
+  (let [n (:packet/name pkt)]
+    (cond (contains? #{:unknown :decode-error :closed} n) world
+          :else (update-in world [:stats/heard n] (fnil inc 0)))))
+
+(defmethod on-event :packet [world {:event/keys [packet]}] (on-packet (heard world packet) packet))
 (defmethod on-event :tick [world event] (on-tick world event))
 (defmethod on-event :closed [world {:event/keys [reason]}] (assoc world :bot/closed reason))
 

@@ -586,6 +586,7 @@
 (def snapshot-budget-ms 120000)       ; simulated ms an old snapshot (no :snapshot/moment) is played on for
 (def decision-lead-ms 30000)          ; a snapshot's moment comes at least this long before the choice that failed
 (def stall-window-ms 300000)          ; a :timeout is a stall: five simulated minutes with no new stage, where its moment is kept
+(def stall-reasons #{:timeout :bot-timeout}) ; a checkpoint run's own cap (:bot-timeout) is a stall like the horizon's
 (def stall-judge-ms 900000)           ; and the window a stall is judged over: fifteen simulated minutes (issue #62)
 (def window-tail-ms 60000)            ; a failure's window runs this long past the stop it led to
 
@@ -608,7 +609,7 @@
         started (some #(when (and (= first-id (:intention/id %)) (= :started (:intention/event %)))
                          (:intention/at %))
                       facts)]
-    (cond (= :timeout (second signature)) {:why :stall :t (- now stall-window-ms)}
+    (cond (contains? stall-reasons (second signature)) {:why :stall :t (- now stall-window-ms)}
           (= :crashed (second signature)) {:why :crash :t now}
           (and (:plan/waiting-since world) (= (:plan/reason world) (:plan/waiting world)))
           {:why :wait :t (:plan/waiting-since world)}
@@ -792,7 +793,7 @@
 (defn timeout-signature?
   "Is a snapshot's signature a :timeout: the run used up its simulated time, a stall?"
   [snap]
-  (= :timeout (second (:snapshot/signature snap))))
+  (contains? stall-reasons (second (:snapshot/signature snap))))
 
 (defn recurs?
   "Does a snapshot's failure come back when it is judged (judged)? A stall recurs when the window
@@ -877,6 +878,22 @@
          (sort-by #(parse-long (first (str/split (file-name %) #"\."))))
          vec)))
 
+(defn cap-max-ms
+  "The simulated ms a checkpoint run may take, [ms capped?]: the checkpoint's own cap
+   (:simrace/checkpoint-max-minutes of config) when the run starts at a checkpoint (from names a
+   start) and the cap is under max-ms, else [max-ms false]."
+  [config from max-ms]
+  (let [cap (when (starts from)
+              (some-> (:simrace/checkpoint-max-minutes config)
+                      (* 60000)))]
+    (if (and cap (< cap max-ms)) [cap true] [max-ms false])))
+
+(defn capped
+  "A RESULT r of a run its own cap stopped (capped?) rather than the lane's horizon: a :timeout
+   becomes :bot-timeout, filed like any stage's failure. Any other RESULT is unchanged."
+  [r capped?]
+  (cond-> r (and capped? (= :timeout (:reason r))) (assoc :reason :bot-timeout)))
+
 (defn play!
   "One run, never throwing (a run that throws is a :crashed RESULT), its RESULT printed as a
    SIMRUN line and appended to out as it ends, with what reproduces it (:run/file, :run/seed,
@@ -884,83 +901,84 @@
    before the choice that failed kept as a snapshot beside out (:run/snapshot, chosen-moment,
    issue #77). Also prints a GATE line: deaths by cause, minutes in :back-off, and minutes
    to the kit, the stone pickaxe, the iron kit and the portal kit. Returns the run."
-  [w seed until max-ms commit out food]
-  (let [r (try (run w seed until max-ms food)
-               (catch Exception e
-                 {:ok false
-                  :until until
-                  :reason :crashed
-                  :error (str e)
-                  :run/world (select-keys w [:capture/set :capture/landing])
-                  :run/seed seed}))
-        r (failure/mark (assoc r :run/commit commit :run/file (:capture/file w)))
-        sig (:run/signature r)
-        m (when (and sig (:run/last r))
-            (chosen-moment (:run/moments r) (:run/last r) (decision (:run/end r) sig) (:run/ms r)))
-        path (when m
-               (let [p
-                     (snapshot-name (io/file (.getParent (io/file (str out))) "snapshots") w seed)]
-                 (capture/write-world! p (snapshot w seed until commit sig m))
-                 p))
-        sensed (:run/senses r)
-        senses-path (when (seq sensed)
-                      (let [f (io/file (.getParent (io/file (str out)))
-                                       "senses"
-                                       (str (world-seed-name w seed) ".senses.edn"))]
-                        (io/make-parents f)
-                        (senses/write! (str f) sensed)
-                        (str f)))
-        events-path (when (seq (:run/events r))
-                      (let [f (io/file (.getParent (io/file (str out)))
-                                       "senses"
-                                       (str (world-seed-name w seed) ".events.edn"))]
-                        (io/make-parents f)
-                        (senses/write-events! (str f) (:run/events r) 0)
-                        (str f)))
-        moment-path (when (:run/final r)
-                      (let [f (io/file (.getParent (io/file (str out)))
-                                       "senses"
-                                       (str (world-seed-name w seed) ".moment.edn"))]
-                        (io/make-parents f)
-                        (spit f (prn-str (:run/final r)))
-                        (spit (io/file (.getParent f) (str (world-seed-name w seed) ".truth.edn"))
-                              (prn-str (:run/truth r)))
-                        (spit (io/file (.getParent f) (str (world-seed-name w seed) ".ring.edn"))
-                              (str/join (map prn-str (:run/ring r))))
-                        (str f)))
-        r (cond-> (dissoc r
-                   :run/end
-                   :run/last
-                   :run/moments
-                   :run/senses
-                   :run/events
-                   :run/ring
-                   :run/final
-                   :run/truth)
-            path (assoc :run/snapshot path :run/moment (:moment m))
-            senses-path (assoc :run/senses-file senses-path)
-            events-path (assoc :run/events-file events-path)
-            moment-path (assoc :run/moment-file moment-path))]
-    (locking out
-      (let [reached (get-in r [:plan :plan/reached-after])]
-        (println "GATE"
-                 (pr-str {:world (:run/world r)
-                          :seed (:run/seed r)
-                          :ok (:ok r)
-                          :reason (:reason r)
-                          :deaths (frequencies (:run/death-causes r []))
-                          :deaths-n (get-in r [:stats :stats/deaths])
-                          :backoff-min (/ (:run/backoff-ms r 0) 60000.0)
-                          :ms (:run/ms r)
-                          :reached (into {}
-                                         (keep (fn [id]
-                                                 (when-let [ms (get reached id)]
-                                                   [id (/ ms 60000.0)])))
-                                         [:kit :stone-pickaxe :iron-kit :portal-kit])})))
-      (println "SIMRUN" (pr-str (dissoc r :plan :stats)))
-      (spit out (str (pr-str r) "\n") :append true)
-      (flush))
-    r))
+  ([w seed until max-ms commit out food] (play! w seed until max-ms commit out food false))
+  ([w seed until max-ms commit out food capped?]
+   (let [r (try (capped (run w seed until max-ms food) capped?)
+                (catch Exception e
+                  {:ok false
+                   :until until
+                   :reason :crashed
+                   :error (str e)
+                   :run/world (select-keys w [:capture/set :capture/landing])
+                   :run/seed seed}))
+         r (failure/mark (assoc r :run/commit commit :run/file (:capture/file w)))
+         sig (:run/signature r)
+         m (when (and sig (:run/last r))
+             (chosen-moment (:run/moments r) (:run/last r) (decision (:run/end r) sig) (:run/ms r)))
+         path (when m
+                (let [p
+                      (snapshot-name (io/file (.getParent (io/file (str out))) "snapshots") w seed)]
+                  (capture/write-world! p (snapshot w seed until commit sig m))
+                  p))
+         sensed (:run/senses r)
+         senses-path (when (seq sensed)
+                       (let [f (io/file (.getParent (io/file (str out)))
+                                        "senses"
+                                        (str (world-seed-name w seed) ".senses.edn"))]
+                         (io/make-parents f)
+                         (senses/write! (str f) sensed)
+                         (str f)))
+         events-path (when (seq (:run/events r))
+                       (let [f (io/file (.getParent (io/file (str out)))
+                                        "senses"
+                                        (str (world-seed-name w seed) ".events.edn"))]
+                         (io/make-parents f)
+                         (senses/write-events! (str f) (:run/events r) 0)
+                         (str f)))
+         moment-path (when (:run/final r)
+                       (let [f (io/file (.getParent (io/file (str out)))
+                                        "senses"
+                                        (str (world-seed-name w seed) ".moment.edn"))]
+                         (io/make-parents f)
+                         (spit f (prn-str (:run/final r)))
+                         (spit (io/file (.getParent f) (str (world-seed-name w seed) ".truth.edn"))
+                               (prn-str (:run/truth r)))
+                         (spit (io/file (.getParent f) (str (world-seed-name w seed) ".ring.edn"))
+                               (str/join (map prn-str (:run/ring r))))
+                         (str f)))
+         r (cond-> (dissoc r
+                    :run/end
+                    :run/last
+                    :run/moments
+                    :run/senses
+                    :run/events
+                    :run/ring
+                    :run/final
+                    :run/truth)
+             path (assoc :run/snapshot path :run/moment (:moment m))
+             senses-path (assoc :run/senses-file senses-path)
+             events-path (assoc :run/events-file events-path)
+             moment-path (assoc :run/moment-file moment-path))]
+     (locking out
+       (let [reached (get-in r [:plan :plan/reached-after])]
+         (println "GATE"
+                  (pr-str {:world (:run/world r)
+                           :seed (:run/seed r)
+                           :ok (:ok r)
+                           :reason (:reason r)
+                           :deaths (frequencies (:run/death-causes r []))
+                           :deaths-n (get-in r [:stats :stats/deaths])
+                           :backoff-min (/ (:run/backoff-ms r 0) 60000.0)
+                           :ms (:run/ms r)
+                           :reached (into {}
+                                          (keep (fn [id]
+                                                  (when-let [ms (get reached id)]
+                                                    [id (/ ms 60000.0)])))
+                                          [:kit :stone-pickaxe :iron-kit :portal-kit])})))
+       (println "SIMRUN" (pr-str (dissoc r :plan :stats)))
+       (spit out (str (pr-str r) "\n") :append true)
+       (flush))
+     r)))
 
 (defn read-nether
   "The captured Nether at path as a world's (sim-nether), read and decoded."
@@ -1049,7 +1067,8 @@
                       slurp
                       edn/read-string)
         until (or until default-until)
-        max-ms (* 60000 (Long/parseLong (or minutes (str default-max-minutes))))
+        [max-ms capped?]
+        (cap-max-ms config from (* 60000 (Long/parseLong (or minutes (str default-max-minutes)))))
         first-seed (Long/parseLong (or seed "1"))
         files (cond given (mapv io/file (distinct (map first given)))
                     world [(io/file world)]
@@ -1097,13 +1116,13 @@
         take! (fn [] (let [[old _] (swap-vals! todo rest)] (first old)))
         runs-file (str (io/file out "runs.edn"))
         n-threads (Long/parseLong (or threads (str (.availableProcessors (Runtime/getRuntime)))))
-        worker (fn []
-                 (loop [done []]
-                   (let [job (when (or (nil? deadline) (< (System/currentTimeMillis) deadline))
-                               (take!))]
-                     (if-let [[i s] job]
-                       (recur (conj done (play! (ws i) s until max-ms commit runs-file food)))
-                       done))))]
+        worker
+        (fn []
+          (loop [done []]
+            (let [job (when (or (nil? deadline) (< (System/currentTimeMillis) deadline)) (take!))]
+              (if-let [[i s] job]
+                (recur (conj done (play! (ws i) s until max-ms commit runs-file food capped?)))
+                done))))]
     (io/make-parents runs-file)
     (cli/log "simrace:" (count ws) "worlds," n-threads "threads, until" until)
     (let [workers (mapv (fn [_] (future (worker))) (range n-threads))
