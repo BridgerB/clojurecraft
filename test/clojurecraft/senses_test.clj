@@ -117,6 +117,16 @@
     (is (seq (:slice m)) "the blocks round the feet")
     (is (nil? (senses/moment (dissoc w :player/pos))))))
 
+(deftest the-ledger-notes-a-new-planner-choice
+  (let [before (nether)
+        c {:choice/goal :defend :choice/over :blaze-rods :choice/how :preempted :choice/at 5}
+        after (assoc before :plan/choice c :plan/choices [c])
+        es (senses/events before after)]
+    (is (= [{:ev :choice :goal :defend :over :blaze-rods :how :preempted :t (:time/now before)}]
+           (filterv #(= :choice (:ev %)) es)))
+    (is (empty? (filter #(= :choice (:ev %)) (senses/events after after))) "no change: no event")
+    (is (= c (get-in (senses/moment after) [:plan :plan/choice])) "the moment keeps it")
+    (is (= [c] (get-in (senses/moment after) [:plan :plan/choices])))))
 (deftest a-child-intent-is-an-event-with-its-why
   (let [parent (fn [child]
                  (cond-> {:intent/kind :tunnel-to :intent/id 3} child (assoc :intent/child child)))

@@ -33,6 +33,10 @@ sourceRefs:
   - src/clojurecraft/senses.clj#defn ledger!
   - src/clojurecraft/senses.clj#defn moment
   - src/clojurecraft/senses.clj#defn senses!
+  - src/clojurecraft/senses.clj#defn intent-events
+  - src/clojurecraft/plan.clj#defn chose
+  - src/clojurecraft/plan.clj#defn choice-how
+  - bb/clojurecraft/botlogs.clj#defn choice-at
   - "src/clojurecraft/intent.clj#Intent i labelled with the planner's branch that chose it"
   - src/clojurecraft/intent.clj#defn why-of
   - src/clojurecraft/intent.clj#defn why-or-default
@@ -89,6 +93,7 @@ The bot's whole mind is one world value, so everything a reader needs about a ru
 - **Derived senses** (`derived/events`, folded into the ledger): `:alight` with its cause (the newest non-burning hit within two seconds, `derived/alight-cause`, else lava or fire at the feet, else `:unknown`) and `:out` for `:player/on-fire?`; `:item` with the delta for the pearls, rods, eyes, pickaxes, food, buckets and cobblestone (per 64 crossed); `:knock` for the server setting the bot's own motion (`:player/knock`) and `:corrected` for a teleport after it was loaded (`:player/corrected`); `:biome` with the server's registry id under the feet (`chunk/biome-at`, no name table exists); `:air` at each three seconds of breath lost. Path search effort is not told: `path/plan` is called from many executors and its result never reaches the world.
 - **The senses:** one line a second (`senses/of`), and the ring: a moment a minute for the last five (`senses/senses!`).
 - **The moment:** the whole mind at the ending (`senses/moment`): facts, the blocks round the feet, the intent chain, the plan, the stages' keys, entities near, hits, effects, armour, and the newest 40 intentions.
+- **The planner's choice:** `plan/chose` (composed after `plan-tick` in `plan/step-over`, one write per outer tick) records `:plan/choice` `{:choice/goal :choice/over :choice/how :choice/at}` and the newest 20 in `:plan/choices` when the goal or the how changes (`plan/choice-how`: :start :preempted :interrupted :explore :regroup :retreat :wait :retry :done :other-dimension; :held and :leave are not named). `senses/intent-events` emits `{:ev :choice}`, the moment keeps both attributes, and a case says "goal at the end: :defend over :blaze-rods (preempted, 1.9 s before the end)" (`botlogs/choice-at`).
 - **Why:** every running intent carries a why (`intent/why`, on metadata, so equality is unchanged): a planner that tags its branches gives the finer label (the stuck stage's do), else `plan/start-intent` labels it `:<goal>/<kind>` (`intent/why-or-default`), and a child an executor starts inherits its parent's (`intent/child-why`, in `run-child`); intention facts keep `:intention/why`.
 - **Server truth** (real): every entity within 32 blocks of the ending and the bot's own entity, whole (`race/near-truth!`), as `<name>.server.txt`.
 - **The recording** of every failed run (`botlogs/keep-recording?`).
