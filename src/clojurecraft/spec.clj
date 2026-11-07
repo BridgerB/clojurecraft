@@ -369,6 +369,12 @@
 (s/def :goal/blocks (s/coll-of keyword? :kind vector? :min-count 1)) ; what a :mine row digs
 (s/def :goal/depth int?)                   ; the lowest feet height a :mine row cuts stairs to
 (s/def :goal/dimension string?)            ; the dimension a row is worked in; elsewhere it waits
+(s/def :goal/anchors (s/coll-of keyword? :kind set?)) ; attributes forgotten when the row is stuck
+(s/def :goal/resets map?)                  ; attribute values the row starts over with when stuck
+(s/def :goal/clocks (s/coll-of vector?))   ; paths of ms clocks restarted at now when stuck
+(s/def :goal/stuck-after pos-int?)         ; ms without progress before the row is stuck
+(s/def :goal/facts-only? boolean?)         ; walking and tunnelling are no progress for the row
+(s/def :goal/progress (s/coll-of vector?)) ; terms (plan/progress-term) the watchdog compares
 (s/def :goal/id keyword?)
 (s/def :goal/priority int?)
 (s/def ::goal
@@ -376,7 +382,8 @@
           :opt
           [:goal/needs :goal/holds :goal/spares :goal/passage-ok? :goal/build :goal/act
            :goal/target? :goal/until :goal/doc :goal/superseded-by :goal/always? :goal/aside?
-           :goal/trap :goal/plan :goal/blocks :goal/depth :goal/dimension]))
+           :goal/trap :goal/plan :goal/blocks :goal/depth :goal/dimension :goal/anchors :goal/resets
+           :goal/clocks :goal/stuck-after :goal/facts-only? :goal/progress]))
 
 (s/def ::world
   (s/keys :req [:bot/phase :bot/effects :time/now :time/tick]

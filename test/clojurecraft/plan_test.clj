@@ -1856,8 +1856,20 @@
 
 ;;; STUCK: no progress for stuck-ms sends the bot elsewhere
 
+(defn watchdog-fields
+  "The shipped row's fields the stuck watchdog reads (progress, anchors, resets, clocks, stuck-after)."
+  [id]
+  (select-keys (first (filter #(= id (:goal/id %)) plan/goals))
+               [:goal/anchors :goal/resets :goal/clocks :goal/stuck-after :goal/facts-only?
+                :goal/progress]))
+
 (def pearls-table
-  [{:goal/id :ender-pearls :goal/target? true :goal/done? :never :goal/plan :pearls}])
+  [(merge (watchdog-fields :ender-pearls)
+          {:goal/id :ender-pearls :goal/target? true :goal/done? :never :goal/plan :pearls})])
+
+(def blaze-table
+  [(merge (watchdog-fields :blaze-rods)
+          {:goal/id :blaze-rods :goal/target? true :goal/done? :never :goal/plan :blaze-rods})])
 
 (def walker-table [{:goal/id :walker :goal/target? true :goal/done? :never :goal/plan :flip-test}])
 
@@ -1935,8 +1947,6 @@
   ;; blaze-race-z job 1 (run 41173997255) tunnelled 106 min (473 :tunnel-to) round a ring 67 blocks
   ;; across, digging netherrack every leg: items held changed, rods, fights and spawners never
   (let [event {:event/kind :tick :event/now 0 :event/rand 0.75}
-        blaze-table
-        [{:goal/id :blaze-rods :goal/target? true :goal/done? :never :goal/plan :blaze-rods}]
         start
         (-> (frozen-world 0)
             (assoc
@@ -1995,8 +2005,6 @@
   ;; blaze-rods: a camp can wait 14 to 16 min for its first blaze to be hurt; a :pocket, :seal or
   ;; :pocket-hold running is not dropped, however long
   (let [event {:event/kind :tick :event/now 0 :event/rand 0.25}
-        blaze-table
-        [{:goal/id :blaze-rods :goal/target? true :goal/done? :never :goal/plan :blaze-rods}]
         at (fn [ms i]
              (let [w (-> (frozen-world ms)
                          (assoc :plan/intent
