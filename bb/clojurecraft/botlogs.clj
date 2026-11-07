@@ -385,6 +385,41 @@
    (remove (fn [[_ n]] (zero? n)))
    (reduce (fn [m e] (update m (:item e) (fnil + 0) (:n e))) {} (filter #(= :item (:ev %)) w))))
 
+(defn sight-of
+  "What the ledger saw of the creatures in window w (the last minute's events) out of all of es:
+   {:faced-by {kind n}} the hostiles that turned to face the bot (:facing events), and :hit-by a
+   vector of {:eid :kind :holding} for each distinct attacker of a :hit, :holding the main hand of
+   the newest :equip event for that eid in es (nil when none was seen). A pure function of values."
+  [es w]
+  (let [gear (reduce (fn [m e] (if (= :equip (:ev e)) (assoc m (:eid e) (:equipment e)) m)) {} es)
+        hits (filter #(= :hit (:ev %)) w)]
+    {:faced-by (frequencies (keep #(when (= :facing (:ev %)) (:kind %)) w))
+     :hit-by (vec (for [[eid by-kind] (distinct (map (juxt :by :by-kind) hits))
+                        :when eid]
+                    {:eid eid :kind by-kind :holding (get-in gear [eid :mainhand])}))}))
+
+(defn sight-text
+  "The sight line of a case: `faced by: blaze x3, enderman x1; hit by wither_skeleton#1203 holding
+   stone_sword`, or that nothing faced the bot and no attacker's gear was seen."
+  [{:keys [faced-by hit-by]}]
+  (str "sight: faced by "
+       (if (seq faced-by)
+         (str/join ", " (map (fn [[k n]] (str (name k) " x" n)) (sort-by (comp name key) faced-by)))
+         "none")
+       "; hit by "
+       (if (seq hit-by)
+         (str/join ", "
+                   (map (fn [{:keys [eid kind holding]}]
+                          (str (some-> kind
+                                       name)
+                               "#"
+                               eid
+                               (some->> holding
+                                        name
+                                        (str " holding "))))
+                        hit-by))
+         "nothing")))
+
 (defn case-of
   "How run r ended, from its ledger es (the observability plan, part G): its ending, the killer (the
    death text the bot heard, else the server log's death line, else the last hit's attacker or damage type), the last case-window-ms of the
@@ -433,6 +468,7 @@
      :hits-by (frequencies (map #(or (:by-kind %) (:type %)) hits))
      :swings (count (filter #(= :swing (:ev %)) w))
      :landed landed
+     :sight (sight-of es w)
      :signature [(:reason r)
                  (some-> last-hit
                          (#(or (:by-kind %) (:type %)))) (:kind doing-end) (:why doing-end)]
@@ -448,7 +484,7 @@
   "A case (case-of) as text a person or an agent reads in ten seconds."
   [c]
   (let [{:keys [bot ending killer first-hit at-end choice hits hits-by swings landed replay timeline
-                end cause-of-fire items]}
+                end cause-of-fire items sight]}
         c]
     (str/join
      "\n"
@@ -481,7 +517,7 @@
               (some->> (:by cause-of-fire)
                        name
                        (str " by ")))
-         "never caught fire in the last minute")
+         "never caught fire in the last minute") (sight-text sight)
        (str "items in the last minute: " (if (seq items) (pr-str items) "no change"))
        (str "at the end: doing " (:doing at-end)
             " (why " (:why at-end)
