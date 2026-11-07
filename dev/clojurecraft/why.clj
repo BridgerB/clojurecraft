@@ -10,6 +10,7 @@
    The fold is exact only at the commit that made the recording (record/header names it); a
    later commit's planner answers what it would do now, which is what a fix is judged by."
   (:require [clojure.pprint :as pp]
+            [clojurecraft.blaze :as blaze]
             [clojurecraft.game :as game]
             [clojurecraft.main :as main]
             [clojurecraft.memory :as memory]
@@ -79,7 +80,13 @@
                   :dig/uncage #(pearls/uncage w)
                   :dig/last-intent #(select-keys (:plan/last w) [:intent/kind :intent/reason])
                   :dig/worn-out? #(pearls/worn-out? w)
-                  :dig/relocate #(:pearls/relocate w)}]
+                  :dig/relocate #(:pearls/relocate w)
+                  :exit/surface-y #(pearls/fortress-surface-y w)
+                  :exit/fresh-target #(pearls/fresh-tunnel-target w)
+                  :exit/held #(:pearls/exit-target w)
+                  :exit/dir #(pearls/fortress-exit-dir w)
+                  :exit/spawner #(blaze/nearest-spawner w)
+                  :exit/points #(count (pearls/fortress-points w))}]
        [k (safe f)]))))
 
 (defn -main
