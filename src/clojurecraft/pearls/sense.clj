@@ -652,3 +652,26 @@
                           (not (fought-out? world eid))
                           (<= (physics/distance p (:entity/pos e)) pparams/strike-range)))
                    (endermen (dissoc world :plan/blacklist) pparams/stare-range)))))
+
+(defn in-forest?
+  "Is a warped forest chunk known (memory/warped-chunks) within forest-reach chunks of the feet's
+   chunk, in the Nether? The hunt's ground: its endermen spawn there and nowhere near a fortress."
+  [world]
+  (let [[fx _ fz] (intent/feet world)
+        cx (math/floor-div (long fx) 16)
+        cz (math/floor-div (long fz) 16)]
+    (boolean (some (fn [{[x z] :forest/chunk}]
+                     (<= (max (abs (- x cx)) (abs (- z cz))) pparams/forest-reach))
+                   (memory/warped-chunks world)))))
+
+(defn nearest-forest
+  "The pos [x y z] of the nylium block of the nearest known warped forest chunk to the feet whose
+   cell above it is not in :plan/blacklist (a walk to it failed), or nil."
+  [world]
+  (let [feet (intent/feet world)
+        bl (:plan/blacklist world #{})]
+    (->> (memory/warped-chunks world)
+         (map :forest/pos)
+         (remove #(contains? bl (update % 1 inc)))
+         (sort-by #(path/octile feet %))
+         first)))

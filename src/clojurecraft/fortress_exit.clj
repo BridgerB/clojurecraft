@@ -11,7 +11,6 @@
             [clojurecraft.intent :as intent]
             [clojurecraft.memory :as memory]
             [clojurecraft.pearls.cover :as pcover]
-            [clojurecraft.pearls.move :as pmove]
             [clojurecraft.pearls.params :as pparams]
             [clojurecraft.pearls.sense :as psense]
             [clojurecraft.pearls.upkeep :as pupkeep]
@@ -125,7 +124,7 @@
   "The surface y to climb to once clear of the fortress: the forest height if known,
    else the spawner or starting height."
   [world]
-  (or (some-> (pmove/nearest-forest world)
+  (or (some-> (psense/nearest-forest world)
               second
               inc)
       (some-> (blaze/nearest-spawner world)
@@ -212,7 +211,7 @@
   (when-let [sp (blaze/nearest-spawner world)]
     (let [[sx _ sz] sp
           start (first (:plan/trail world []))
-          forest (pmove/nearest-forest world)
+          forest (psense/nearest-forest world)
           [tx tz] (cond (and start (not= [sx sz] [(first start) (last start)]))
                         [(first start) (last start)]
                         forest [(first forest) (last forest)]
@@ -304,7 +303,7 @@
   [world]
   (let [feet (intent/feet world)
         [fx _ fz] feet
-        target (pmove/nearest-forest world)
+        target (psense/nearest-forest world)
         sp (when-not target (or (blaze/nearest-spawner world) (fortress/nearest-brick world)))
         [tx tz] (cond target [(first target) (last target)]
                       sp

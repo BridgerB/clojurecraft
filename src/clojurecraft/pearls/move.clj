@@ -1,7 +1,6 @@
 (ns clojurecraft.pearls.move
   "The pearl hunt's movers: roam, wander, explore, travel to a forest, relocate, and the cuts out of a pocket that no walk leaves."
-  (:require [clojure.math :as math]
-            [clojurecraft.blaze :as blaze]
+  (:require [clojurecraft.blaze :as blaze]
             [clojurecraft.combat :as combat]
             [clojurecraft.dimension :as dimension]
             [clojurecraft.entity :as entity]
@@ -515,29 +514,6 @@
             (mod (quot (:time/now world 0) pparams/roam-turn-ms) (count pparams/headings))
             #{}))
 
-(defn in-forest?
-  "Is a warped forest chunk known (memory/warped-chunks) within forest-reach chunks of the feet's
-   chunk, in the Nether? The hunt's ground: its endermen spawn there and nowhere near a fortress."
-  [world]
-  (let [[fx _ fz] (intent/feet world)
-        cx (math/floor-div (long fx) 16)
-        cz (math/floor-div (long fz) 16)]
-    (boolean (some (fn [{[x z] :forest/chunk}]
-                     (<= (max (abs (- x cx)) (abs (- z cz))) pparams/forest-reach))
-                   (memory/warped-chunks world)))))
-
-(defn nearest-forest
-  "The pos [x y z] of the nylium block of the nearest known warped forest chunk to the feet whose
-   cell above it is not in :plan/blacklist (a walk to it failed), or nil."
-  [world]
-  (let [feet (intent/feet world)
-        bl (:plan/blacklist world #{})]
-    (->> (memory/warped-chunks world)
-         (map :forest/pos)
-         (remove #(contains? bl (update % 1 inc)))
-         (sort-by #(path/octile feet %))
-         first)))
-
 (defn explore
   "A walk to the end (far-ends) farthest from the targets of the last explore-memory walks arrived
    at (memory/newest-dones), ground not arrived at (memory/arrived) only: the widening search for
@@ -580,15 +556,15 @@
    explore for one. Real race 40980342194, Clj_r13 (issue #263): two hours of lookouts and
    wandering round a fortress at x 4250-4440, no pearl, no code that went to a forest."
   [world]
-  (when (and (= dimension/nether (dimension/of world)) (not (in-forest? world)))
+  (when (and (= dimension/nether (dimension/of world)) (not (psense/in-forest? world)))
     (cond (and (fexit/fortress-escaping? world) (fexit/can-tunnel-out? world))
           (fexit/fortress-tunnel-out world)
           (and (fexit/fortress-escaping? world) (not (fexit/can-tunnel-out? world)))
-          (if-let [pos (nearest-forest world)]
+          (if-let [pos (psense/nearest-forest world)]
             (forest-way world (fexit/room-waypoint world (update pos 1 inc)))
             (explore world))
           :else
-          (if-let [pos (nearest-forest world)]
+          (if-let [pos (psense/nearest-forest world)]
             (forest-way world
                         (if (fexit/near-fortress? world)
                           (fexit/room-waypoint world (update pos 1 inc))
@@ -603,7 +579,7 @@
    dozen blocks."
   [world]
   (boolean (and (= dimension/nether (dimension/of world))
-                (not (in-forest? world))
+                (not (psense/in-forest? world))
                 (empty? (psense/endermen world pparams/seek-radius))
                 (nil? (travel world)))))
 

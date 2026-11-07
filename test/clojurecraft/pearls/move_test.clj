@@ -382,7 +382,7 @@
                                                   plan/goals)))))
     (testing "in one: the hunt, no travel"
       (is (nil? (pmove/travel here)))
-      (is (pmove/in-forest? here))
+      (is (psense/in-forest? here))
       (is
        (= {:intent/kind :lookout :intent/for :pearls} (plan/next-intent here ps/row plan/goals))
        "in a forest with no enderman yet: the hunt stands where it is, no walk out (a walk
