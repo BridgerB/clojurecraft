@@ -10,6 +10,13 @@ verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/hear.clj#defn attributes-of
   - src/clojurecraft/game.clj#defn hit-of
+  - src/clojurecraft/nbt.clj#defn read-component
+  - src/clojurecraft/nbt.clj#defn write-component
+  - src/clojurecraft/text.clj#defn plain
+  - "src/clojurecraft/text.clj#A death message component as {:death/key"
+  - src/clojurecraft/text.clj#defn cause-component
+  - src/clojurecraft/chat.clj#defn death-line
+  - src/clojurecraft/sim.clj#defn record-death
   - src/clojurecraft/registry.clj#defn damage-type
   - src/clojurecraft/senses.clj#defn events
   - src/clojurecraft/derived.clj#defn alight-cause
@@ -61,6 +68,12 @@ The bot's whole mind is one world value, so everything a reader needs about a ru
   - the fight bracket (`:player/in-combat?`);
   - effects (`:player/effects`);
   - attributes (`:player/armor`, `:player/max-health`: the server's word on worn armour).
+
+- **chat.clj:** what the server says in words.
+  - `system-chat` lines (every player's death, the server's warnings) are kept in `:world/chat`, the last 20, each `{:at :text :key}`; the text is `text/plain` of the component, which `nbt/read-component` read from the wire (a `:text` field type; a malformed component reads as nil, never throws).
+  - `player-combat-kill` carries the bot's own death message: `:player/death-text` `{:at :text :key :killer}` (`text/death` splits the key and the killer; no English table is held, so a text reads as the translate key and its arguments, `death.attack.mob Clj_r05 entity.minecraft.blaze`), gone at the respawn.
+  - The ledger notes each new line as `:chat` and the text as `:death-text`, and the `:death` event carries it; the case file's killer is that text first, then the server log's line, then the last hit.
+  - The sim tells the same: `sim/record-death` sends `player-combat-kill` with `text/cause-component` (`death.attack.mob`, `.fireball`, `.arrow`, `.wither`, `.onFire`, `.lava`, `.inFire`, `.fall`, `.drown`) wherever the model records a death cause, which `nbt/write-component` lays down.
 
 ## What is kept, per run
 

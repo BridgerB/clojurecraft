@@ -11,7 +11,8 @@
    {:packet/name :unknown ...}; nothing here throws on foreign data."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
-            [clojurecraft.bytes :as b]))
+            [clojurecraft.bytes :as b]
+            [clojurecraft.nbt :as nbt]))
 
 (set! *warn-on-reflection* true)
 
@@ -146,7 +147,9 @@
                           [:game-type :u8] [:previous-game-type :i8] [:debug? :bool] [:flat? :bool]]
    [:play :s2c :damage-event] [[:entity-id :varint] [:source-type :varint] [:source-cause :varint]
                                [:source-direct :varint]]
-   [:play :s2c :player-combat-kill] [[:player-id :varint]]
+   ;; the bot's own death: its id, then the death message, a text component (nbt.clj; the last field
+   ;; is the observability plan's, appended: the cause in the server's words)
+   [:play :s2c :player-combat-kill] [[:player-id :varint] [:message :text]]
    [:play :s2c :game-event] [[:event :u8] [:param :f32]]
    ;; a boss bar shown or taken away: its id and the operation; what follows each operation (the
    ;; name, an NBT component) is an unmodelled tail, but the health update's float (operation 2)
@@ -171,6 +174,9 @@
      [:vec
       [[:id :varint] [:base :f64]
        [:modifiers [:vec [[:mod-id :string] [:amount :f64] [:operation :varint]]]]]]]]
+   ;; a line the server says to the bot: a text component and whether it shows over the hotbar
+   ;; (ClientboundSystemChatPacket): the death of every player and the server's warnings
+   [:play :s2c :system-chat] [[:content :text] [:overlay :bool]]
    ;; play, client → server
    [:play :c2s :keep-alive] [[:id :i64]]
    [:play :c2s :pong] [[:id :i32]]
@@ -398,6 +404,7 @@
            :write (fn [out ^bytes v] (b/write-varint out (alength v)) (b/write-bytes out v))
            :valid? bytes?}
    :rest {:read b/read-rest :write b/write-bytes :valid? bytes?}
+   :text {:read nbt/read-component :write nbt/write-component :valid? any?} ; a text component as network NBT (nbt.clj); nil when malformed
    :lpvec3 {:read b/read-lpvec3 :write b/write-lpvec3 :valid? vec3?}
    :metadata {:read read-metadata :valid? metadata?}
    :slot {:read read-slot :valid? slot?}
