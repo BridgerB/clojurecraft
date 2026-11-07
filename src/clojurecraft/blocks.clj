@@ -46,13 +46,11 @@
   (resource "materials"))
 
 (def passable-types
-  "Block definition types with no full-cube collision. The ground must never be here:
-   grass_block's type is :grass, short_grass's is :tall_grass. Powder snow is here: it has no
-   collision for a player without leather boots (the game's PowderSnowBlock), who sinks through
-   it to the block below. As a full cube it walled sim race 38811417241 runner 2 (issue #87,
-   world R2/20) into a powder-snow field, a spruce eight blocks off and no route a move long.
-   The end portal is here: a player falls into it (EndPortalBlock has no collision for entities),
-   which is how one goes to the End (issue #260)."
+  "Block definition types with no full-cube collision. The ground must never be here: grass_block's
+   type is :grass, short_grass's is :tall_grass. Powder snow is here: it has no collision for a
+   player without leather boots (the game's PowderSnowBlock), who sinks through it to the block
+   below. The end portal is here: a player falls into it (EndPortalBlock has no collision for
+   entities), which is how one goes to the End."
   #{:air :liquid :structure_void :light :bubble_column :flower :tall_flower :flower_bed :flower_pot
     :eyeblossom :wither_rose :bush :firefly_bush :sapling :bamboo_sapling :mangrove_propagule
     :tall_grass :double_plant :short_dry_grass :tall_dry_grass :dry_vegetation :leaf_litter
@@ -125,12 +123,11 @@
 (def flat-shape 0.125)                ; blocks a shape may rise to and still be walked over like the floor: a carpet 0.0625; a slab 0.5 is not
 
 (defn collision-top
-  "The top, in blocks over its cell's floor, of the box block state id collides as: 1.0 for a
-   full cube (solid?), the shape's top for a flat shape (partial-shapes no taller than
-   flat-shape: a carpet or a pale moss carpet 0.0625, a passable type otherwise), nil for
-   nothing. The server stands a player on a carpet a sixteenth over its block and refuses
-   every move of one whose feet are inside it: gym batch stronghold-265c (plan run
-   38934412014) run 3 landed in a pale garden and could not take one step for three minutes."
+  "The top, in blocks over its cell's floor, of the box block state id collides as: 1.0 for a full
+   cube (solid?), the shape's top for a flat shape (partial-shapes no taller than flat-shape: a
+   carpet or a pale moss carpet 0.0625, a passable type otherwise), nil for nothing. The server
+   stands a player on a carpet a sixteenth over its block and refuses every move of one whose feet
+   are inside it."
   [id]
   (if (solid? id)
     1.0
@@ -154,11 +151,10 @@
   (contains? falling-types (type-of id)))
 
 (def replaceable-names
-  "The blocks a placement may go into, by name: air and the few plants the game's replaceable
-   tag lists (grass, ferns, a dead bush, seagrass, vines, roots, lichen). A flower, a flower
-   bed (wildflowers, leaf litter), a bush or a sapling is not one: the server keeps it and
-   refuses the block (race 38477665442 bot Clj_r23 placed its table into wildflowers three
-   times, :rejected)."
+  "The blocks a placement may go into, by name: air and the few plants the game's replaceable tag
+   lists (grass, ferns, a dead bush, seagrass, vines, roots, lichen). A flower, a flower bed
+   (wildflowers, leaf litter), a bush or a sapling is not one: the server keeps it and refuses the
+   block."
   #{:air :cave_air :void_air :short_grass :fern :tall_grass :large_fern :dead_bush :seagrass
     :tall_seagrass :vine :hanging_roots :glow_lichen :short_dry_grass :tall_dry_grass})
 
@@ -172,23 +168,20 @@
   (contains? replaceable-states id))
 
 (defn placeable-into?
-  "Does the server let a block take the place of state id: replaceable? (air, a grass), or a
-   fluid? The game's replaceable tag lists water and lava beside the plants: a block placed
-   into a source or a flow replaces it (the portal's pad is cast into the pond's edge). A bubble
-   column is replaceable too (the game's block properties say .replaceable()): sim race
-   39068773618 runner 8 (issue #44, world R4/37) bridged a stream over magma with cobblestone
-   into its bubble column, which the model refused three times, :rejected. The bot chooses its own
-   spots among replaceable? cells; this is the server's wider rule, the model's."
+  "Does the server let a block take the place of state id: replaceable? (air, a grass), or a fluid?
+   The game's replaceable tag lists water and lava beside the plants: a block placed into a source
+   or a flow replaces it (the portal's pad is cast into the pond's edge). A bubble column is
+   replaceable too (the game's block properties say .replaceable()). The bot chooses its own spots
+   among replaceable? cells; this is the server's wider rule, the model's."
   [id]
   (or (replaceable? id) (= :liquid (type-of id)) (= :bubble_column (type-of id))))
 
 (defn log-name?
   "Does a block or item name end in _log (every species, stripped ones too), or is it a Nether
-   fungus's stem or hyphae (warped or crimson, stripped ones too)? The game's item tag :logs
-   lists the stems beside the logs and a stem crafts to planks as a log does, so the wood chain
-   takes a warped forest's trunks for the sticks and table of a new pickaxe where no tree grows
-   (issue #263: the hunt's pickaxe is spent on burrows there). A pumpkin's or melon's stem is a
-   plant, never a log: the warped or crimson in the name is what says trunk."
+   fungus's stem or hyphae (warped or crimson, stripped ones too)? The game's item tag :logs lists
+   the stems beside the logs and a stem crafts to planks as a log does, so the wood chain takes a
+   warped forest's trunks for the sticks and table of a new pickaxe where no tree grows. A pumpkin's
+   or melon's stem is a plant, never a log: the warped or crimson in the name is what says trunk."
   [n]
   (let [s (name n)]
     (or (str/ends-with? s "_log")
@@ -266,7 +259,7 @@
 (def water-states "Every state of water." (states-where (fn [[n]] (= n :water))))
 (def lava-states "Every state of lava." (states-where (fn [[n]] (= n :lava))))
 (def fire-states
-  "Every state of fire and soul fire: a cell that burns whoever stands in it (in_fire, issue #262)."
+  "Every state of fire and soul fire: a cell that burns whoever stands in it."
   (states-where (fn [[n]] (contains? #{:fire :soul_fire} n))))
 (def infested-states
   "Every state of an infested block (infested_stone, infested_stone_bricks ...): breaking one
