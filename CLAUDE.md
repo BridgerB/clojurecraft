@@ -49,7 +49,14 @@ src/clojurecraft/swim.clj     the escape goals' rules and executors: :swim-out, 
 src/clojurecraft/eat.clj      the :eat always row and executor: hungry under 14 with safe food held, one use-item, done when the server's food rises
 src/clojurecraft/combat.clj   the 775 attack: :fight (650 ms apart, a ghost after 25 swings, break off under 10 health), :back-off, the :defend always row and the gym's :attack
 src/clojurecraft/forage.clj     the food producer: hungry with nothing to eat, walk to the nearest cow, pig, sheep or rabbit, fight it, collect the meat
-src/clojurecraft/pearls.clj   ender pearls by hunting endermen: provoke by a stare from range, fight at the legs, the pearl picked up where it fell
+src/clojurecraft/pearls.clj   the hunt row (stage 18): ender pearls by hunting endermen: provoke by a stare from range, fight at the legs, the pearl picked up where it fell
+src/clojurecraft/pearls/params.clj   the pearl hunt's constants: the pearls.edn table and the values derived from it
+src/clojurecraft/pearls/sense.clj    what the hunt perceives: endermen, anger, menace, shooters
+src/clojurecraft/pearls/place.clj    the burrow and shelter geometry; the :burrow, :lookout and :provoke intents
+src/clojurecraft/pearls/cover.clj    cover from shooters and swarms
+src/clojurecraft/pearls/move.clj     the movers: roam, wander, explore, travel to a forest, relocate, the cuts out of a pocket
+src/clojurecraft/pearls/upkeep.clj   the sword and pickaxe made again, the reserve of digs and stems
+src/clojurecraft/fortress_exit.clj   the exit from the blaze fortress: sealed tunnel out, pocket bore, blaze refuge
 src/clojurecraft/eyes.clj     eyes of ender: the needs planner through the 2x2 craft rows, a wait that names the short stage (:no-pearls, :no-rods)
 src/clojurecraft/sword.clj    the :sword always row: the best sword the held items make without a trip, never from a log
 src/clojurecraft/armour.clj   the :wear-armour and :armour always rows: a piece held put on by two window-0 clicks; a helmet and chestplate from spare ingots
