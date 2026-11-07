@@ -2674,13 +2674,20 @@
 
 (defn recording
   "step, with every event written to tap before it is applied and only the effects that event
-   added written after (sim/run clears effects once a tick, after several events)."
-  [step tap]
-  (fn [w e]
-    ((:write tap) e)
-    (let [w' (step w e)]
-      ((:effects tap) (subvec (:bot/effects w') (count (:bot/effects w))))
-      w')))
+   added written after (sim/run clears effects once a tick, after several events). With a log
+   atom, a summary of the world after each event is appended to it (a diagnostic)."
+  ([step tap] (recording step tap nil))
+  ([step tap log]
+   (fn [w e]
+     ((:write tap) e)
+     (let [w' (step w e)]
+       ((:effects tap) (subvec (:bot/effects w') (count (:bot/effects w))))
+       (when log
+         (swap! log conj
+           (select-keys w'
+                        [:player/held-slot :player/inventory :plan/intent :plan/last :plan/failed
+                         :plan/attempts :time/tick :time/now :player/pos])))
+       w'))))
 
 (deftest ^:eftest/synchronized an-interrupted-smelt-is-gone-back-to-not-mined-for-again
   ;; issue #686 (PR #689): the iron kit gym with the forage let to cut into a smelt
@@ -3094,7 +3101,8 @@
 (deftest the-portal-from-a-kit-and-its-recording-replays
   (let [path (fx/temp-path "clojurecraft-portal" ".edn")
         tap (record/tap! path)
-        [w sim] (nether-run (recording step tap) {})]
+        log (atom [])
+        [w sim] (nether-run (recording step tap log) {})]
     ((:close tap))
     (is (= :done (:plan/status w)) (pr-str (plan/summary w)))
     (is (= "minecraft:the_nether" (:player/dimension w)))
@@ -3102,7 +3110,15 @@
     (is (not-any? #(= :failed (:intention/event %)) (memory/intentions w)))
     (is (empty? (:sim/violations sim)))
     (testing "the recording replays with every sent packet the same"
-      (is (nil? (record/verify step (game/init fx/opts) path))))))
+      (let [r (record/verify step (game/init fx/opts) path)
+            i (get-in r [:record/mismatch :index])]
+        (when r
+          (.mkdirs (java.io.File. "out"))
+          (spit "out/replay-diag.edn"
+                (pr-str {:mismatch (:record/mismatch r)
+                         :live (get @log i)
+                         :live-before (get @log (dec i))})))
+        (is (nil? r))))))
 
 (deftest a-death-mid-cast-resumes-at-the-first-op-not-done
   ;; the build stores no progress: after a death the planner starts it again at the site it

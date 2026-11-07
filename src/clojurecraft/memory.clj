@@ -53,14 +53,6 @@
 
 (defn empty-facts "A store with nothing seen yet." [] (d/empty-db schema))
 
-(defn forgotten
-  "world with nothing on record: empty facts and no sights index (the index is the facts current
-   view, so the two are emptied together)."
-  [world]
-  (-> world
-      (assoc :world/facts (empty-facts))
-      (dissoc :world/sights)))
-
 (defn empty-facts?
   "Does db hold no sighting yet? A world whose facts start empty keeps the sights index from its
    first sighting on; one saved with sightings and no index (older code) is asked by its facts."
@@ -275,11 +267,6 @@
                  db
                  dim)]
       (latest-forest db dim c))))
-
-(defn remember-forest
-  "The world with forest fact f appended."
-  [world f]
-  (update world :world/facts d/db-with [f]))
 
 (def brick-names #{:nether_bricks :nether_brick_fence :nether_brick_stairs})
 

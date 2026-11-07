@@ -149,9 +149,17 @@
                               produced (:bot/effects w)]
                           (if (= (sent produced) (sent r))
                             (assoc w :bot/effects [])
-                            (reduced
-                             {:record/mismatch
-                              {:index i :event e :recorded (sent r) :replayed (sent produced)}}))))
+                            (reduced {:record/mismatch {:index i
+                                                        :event e
+                                                        :recorded (sent r)
+                                                        :replayed (sent produced)
+                                                        :replay-world
+                                                        (select-keys w
+                                                                     [:player/held-slot
+                                                                      :player/inventory :plan/intent
+                                                                      :plan/last :plan/failed
+                                                                      :plan/attempts :time/tick
+                                                                      :time/now :player/pos])}}))))
                       world0
                       (map vector (range) (events path) recorded))]
       (when (:record/mismatch end) end))

@@ -2,8 +2,10 @@
   "Shared test helpers: spec instrumentation, event folding, effect filters."
   (:require [clojure.spec.test.alpha :as stest]
             [clojurecraft.game :as game]
+            [clojurecraft.memory :as memory]
             [clojurecraft.physics :as physics]
-            [clojurecraft.spec]))
+            [clojurecraft.spec]
+            [datascript.core :as d]))
 
 (defn instrument!
   "Instrument the reducers (the bot's and the server model's) and every function with a stated
@@ -66,3 +68,16 @@
   (let [f (java.io.File/createTempFile prefix suffix)]
     (.deleteOnExit f)
     (.getPath f)))
+
+(defn forgotten
+  "world with nothing on record: empty facts and no sights index (the index is the facts' current
+   view, so the two are emptied together)."
+  [world]
+  (-> world
+      (assoc :world/facts (memory/empty-facts))
+      (dissoc :world/sights)))
+
+(defn remember-forest
+  "The world with forest fact f appended."
+  [world f]
+  (update world :world/facts d/db-with [f]))
