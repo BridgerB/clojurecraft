@@ -919,6 +919,44 @@
                        #(str (rcon/command! % (str "data get entity " name " Dimension"))))
        (catch Exception e (str "truth failed: " (ex-message e)))))
 
+(def truth-radius 32)                  ; blocks round where a bot ended the server is asked about (near-truth!)
+(def truth-limit 12)                   ; the nearest this many entities asked about
+
+(defn near-commands
+  "The RCON commands that ask the server what stood round where bot name ended (pos, [x y z] in
+   dimension dim): every entity but items and orbs within truth-radius, nearest first, at most
+   truth-limit, whole (data get entity: type, Pos, Health, AngerTime, AngryAt, Target, HurtTime and
+   the rest), and the bot's own entity whole (health, effects, equipment, fire, fall distance). The
+   ground truth beside what the bot saw (the observability plan, part E)."
+  [name [x y z] dim]
+  [(str "execute in "
+        dim
+        " positioned "
+        x
+        " "
+        y
+        " "
+        z
+        " as @e[distance=.."
+        truth-radius
+        ",type=!item,type=!experience_orb,type=!player,sort=nearest,limit="
+        truth-limit
+        "] run data get entity @s") (str "data get entity " name)])
+
+(defn near-truth!
+  "The server's answers to near-commands for bot name ended at pos in dim, one block of text a
+   command, or why it could not be asked."
+  [{:keys [host rcon-port rcon-pass]} name pos dim]
+  (try (rcon/with-rcon
+        host
+        rcon-port
+        rcon-pass
+        (fn [rc]
+          (str/join "\n\n"
+                    (for [c (near-commands name (mapv #(long (math/floor (double %))) pos) dim)]
+                      (str "> " c "\n" (rcon/command! rc c))))))
+       (catch Exception e (str "near truth failed: " (ex-message e)))))
+
 (defn death-class
   "The class of a server death line (\"Clj_r23 was slain by Blaze\"), a keyword: :blaze, :enderman,
    :piglin (a piglin, zombified or brute), :hoglin, :wither (a wither skeleton), :ghast, :lava, :fire, :fall, else :other (also a nil
@@ -989,43 +1027,51 @@
     (swap! live assoc name world*)
     ((:watch watcher) name world*)
     (land-bot! server ch centre name queue (dec n))
-    (try (let [truth (promise)
-               {r :result}
-               (main/run-bot!
-                {:host (:host server)
-                 :port (:port server)
-                 :name name
+    (try
+      (let [truth (promise)
+            {r :result}
+            (main/run-bot!
+             {:host (:host server)
+              :port (:port server)
+              :name name
+              :until (:until server)
+              :chain true
+              :end-on-death? (fortress? (:from server))
+              :timeout-ms (max 1000 (- deadline (System/currentTimeMillis)))
+              :record (str (io/file record-dir (str name ".edn")))
+              :commit commit
+              :events queue
+              :world* world*
+              :on-ms (fn [ms] (swap! slowest max ms))
+              :on-result
+              (fn [r]
+                (write-senses!)
+                (deliver truth (truth! server name))
+                (when-let [pos (:pos r)]
+                  (try (spit (str (io/file record-dir (str name ".server.txt")))
+                             (near-truth! server
+                                          name
+                                          pos
+                                          (or (:player/dimension @world*) "minecraft:overworld")))
+                       (catch Exception e (cli/log name "near truth not written:" e))))
+                (println "RESULT" name (pr-str (marked (with-death-message server name r)))) ; what bb failures groups by
+                (flush))})]
+        {:name name :result r :truth @truth})
+      (catch Exception e
+        (cli/log name "failed:" e)
+        (write-senses!)
+        (let [r {:ok false
+                 :reason :crashed
+                 :error (ex-message e)
                  :until (:until server)
-                 :chain true
-                 :end-on-death? (fortress? (:from server))
-                 :timeout-ms (max 1000 (- deadline (System/currentTimeMillis)))
-                 :record (str (io/file record-dir (str name ".edn")))
-                 :commit commit
-                 :events queue
-                 :world* world*
-                 :on-ms (fn [ms] (swap! slowest max ms))
-                 :on-result
-                 (fn [r]
-                   (write-senses!)
-                   (deliver truth (truth! server name))
-                   (println "RESULT" name (pr-str (marked (with-death-message server name r)))) ; what bb failures groups by
-                   (flush))})]
-           {:name name :result r :truth @truth})
-         (catch Exception e
-           (cli/log name "failed:" e)
-           (write-senses!)
-           (let [r {:ok false
-                    :reason :crashed
-                    :error (ex-message e)
-                    :until (:until server)
-                    :plan (plan/summary @world*)}]
-             (println "RESULT" name (pr-str (marked r))) ; filed at the stage it crashed in (issue #152)
-             (flush)
-             {:name name :result r}))
-         (finally ((:unwatch watcher) world*)
-                  ((:close senses))
-                  ((:close ledger))
-                  (swap! live dissoc name)))))
+                 :plan (plan/summary @world*)}]
+          (println "RESULT" name (pr-str (marked r))) ; filed at the stage it crashed in (issue #152)
+          (flush)
+          {:name name :result r}))
+      (finally ((:unwatch watcher) world*)
+               ((:close senses))
+               ((:close ledger))
+               (swap! live dissoc name)))))
 
 (defn accepts?
   "Does the server take a connection on its game port now (within 2 s)?"
