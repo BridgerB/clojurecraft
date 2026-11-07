@@ -2887,14 +2887,22 @@
                       (assoc :player/inventory held))]
         (is (= [7 65 8] (:intent/cell (pearls/cover-from floor))))))))
 
-(deftest a-nether-climb-stops-under-the-bedrock-roof
+(deftest a-nether-climb-stops-under-the-ceiling
   ;; pearls-travel-d job 3 (plan run 41156746096, issue #263): the open pad was cut in rock; stairs
-  ;; up from y 72 in flights of eight to y 126, then :rejected three times at the server's bedrock
+  ;; up from y 72 in flights of eight to y 126, then :rejected three times at the server's bedrock.
+  ;; Probe 42374244659 (sim R1/17 seed 1): with the cap at the roof, stairs up from 88 to 120 and an
+  ;; hour in a cavity under the roof, with no forest or enderman there
   (let [w (-> (burrowed [8.5 100.0 8.5] {})
               (assoc :player/dimension nether))]
-    (is (= 120 (pearls/roof-cap w 112)) "eight up from 112 is the roof")
-    (is (= 120 (pearls/roof-cap w 118)))
+    (is (= 100 (pearls/roof-cap w 96)) "a pocket at y 96: the flight stops at the ceiling")
+    (is (= 100 (pearls/roof-cap w 112)))
+    (is (= 100 (pearls/roof-cap w 118)))
     (is (= 80 (pearls/roof-cap w 72)))
+    (is (every? #(<= (:intent/to-y %) pearls/nether-climb-ceiling)
+                (keep #(pearls/climb-out (assoc w :player/pos [8.5 (double %) 8.5]))
+                      (range 80 125)))
+        "no climb reaches past the ceiling, from any height")
+    (is (nil? (pearls/climb-out (assoc w :player/pos [8.5 99.0 8.5]))) "no flight at the ceiling")
     (is (= 119 (pearls/roof-cap (assoc w :player/dimension "minecraft:overworld") 111))
         "elsewhere eight")
     (is (nil? (pearls/climb-out (assoc w :player/pos [8.5 119.0 8.5]))) "no flight at the roof")))

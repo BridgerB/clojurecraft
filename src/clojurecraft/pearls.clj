@@ -1372,15 +1372,19 @@
               (when (and (solid-cut? world :stairs-up feet h) (not (brink? world step))) h)))
           ways)))
 
-(def nether-roof 120)                    ; the Nether's roof is bedrock from y 123: nothing is cut up past this
+(def nether-climb-ceiling 100)           ; the highest a climb out of a pocket goes in the Nether: the roof is bedrock from y 123, and the forests and the endermen are on the floors under y 100
 
 (defn roof-cap
-  "The height a stair up from y stops at: y + descend-step, in the Nether at most nether-roof. Pearls-
-   travel-d job 3 (plan run 41156746096, issue #263) climbed from y 72 to y 126 by eight-block
-   flights and failed :rejected three times at bedrock."
+  "The height a stair up from y stops at: y + descend-step, in the Nether at most
+   nether-climb-ceiling. Pearls-travel-d job 3 (plan run 41156746096, issue #263) climbed from y 72
+   to y 126 by eight-block flights and failed :rejected three times at bedrock; with the cap at the
+   roof itself (120), sim R1/17 seed 1 (probe 42374244659) climbed from y 88 to 120 by flights of
+   eight (109, 117, then the cap) and spent the hour penned in a cavity under the bedrock, where
+   neither a warped forest nor an enderman is: past the ceiling the bot digs and tunnels out
+   level (dig-out, tunnel-out), it does not climb."
   [world y]
   (let [up (+ y descend-step)]
-    (if (= dimension/nether (dimension/of world)) (min up nether-roof) up)))
+    (if (= dimension/nether (dimension/of world)) (min up nether-climb-ceiling) up)))
 
 (defn climb-out
   "Stairs up from the feet, descend-step higher along the heading whose first cut digs
