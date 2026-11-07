@@ -6,7 +6,9 @@
    effects on the bot (:player/effects: wither, poison, fire resistance) and its attributes
    (:player/armor, :player/max-health: whether the armour is worn is the server's word, not a
    guess from the bag). Each is a defmethod on game/on-packet, open dispatch, values in and out."
-  (:require [clojurecraft.game :as game]
+  (:require [clojurecraft.ear]
+            [clojurecraft.eye]
+            [clojurecraft.game :as game]
             [clojurecraft.registry :as registry]))
 
 (set! *warn-on-reflection* true)

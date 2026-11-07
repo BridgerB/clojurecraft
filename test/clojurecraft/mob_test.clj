@@ -13,6 +13,7 @@
             [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
+            [clojurecraft.registry :as registry]
             [clojurecraft.sim :as sim]
             [clojurecraft.world :as world]))
 
@@ -840,7 +841,25 @@
     (is (some? (:sim/fire sim)) "alight")
     (is (empty? (:sim/fireballs sim)) "spent")
     (is (some #{14} (map :source-type (said sim :damage-event))) "a fireball")
-    (is (some #(= [90] (:ids %)) (said sim :remove-entities)))))
+    (is (some #(= [90] (:ids %)) (said sim :remove-entities)))
+    (is (= [{:cause :blaze :by 91 :dealt 5.0 :health 15.0}]
+           (map #(select-keys % [:cause :by :dealt :health]) (:sim/hit-log sim)))
+        "the model's own account of the blow: its cause, who dealt it, how much")))
+
+(deftest the-hit-log-keeps-the-newest-blows-and-skips-the-ones-the-window-swallowed
+  (let [log (reduce (fn [l i] (sim/hit-logged l {:t i})) nil (range (+ sim/hit-log-keep 3)))]
+    (is (= sim/hit-log-keep (count log)))
+    (is (= 3 (:t (first log)))))
+  (let [s (-> (arena {} {} :normal night [])
+              (assoc :sim/now 1000 :sim/health 20.0)
+              (sim/hurt 6.0 true :zombie nil 7)
+              (assoc :sim/now 1100)
+              (sim/hurt 4.0 true :zombie nil 7)
+              (assoc :sim/now 1200)
+              (sim/hurt 9.0 true :skeleton nil 8))]
+    (is
+     (= [[:zombie 7 6.0] [:skeleton 8 3.0]] (map (juxt :cause :by :dealt) (:sim/hit-log s)))
+     "a weaker blow inside the hurt window lands nothing and is not logged; a harder one lands its excess")))
 
 (deftest a-blaze-s-aim-misses-as-often-as-the-formula-says
   ;; triangular error of half-width 1.1485 * sqrt(distance) on x and z: at 10 blocks about one
@@ -858,3 +877,52 @@
                                             (let [dh (- (+ 65.4 (* t dy)) 64.9)] (* dh dh))))]]
                (< miss 0.45))]
     (is (< 0.15 (/ (count (filter true? near)) (count near)) 0.35))))
+
+(deftest a-blaze-shot-is-heard-as-level-event-1018-and-a-stare-as-a-sound
+  ;; the observability plan, hearing: the model tells what the server does, so the bot hears the same
+  (let [sim (arena {} {} :normal night [{:type :blaze :pos [9.5 65.0 0.5]}])
+        later (ticks sim 70)
+        shots (count (filter #(= sim/fireball-type (:type %)) (said later :add-entity)))
+        events (said later :level-event)
+        sound-name #(registry/sound-name (:sound %))]
+    (is (pos? shots))
+    (is (= shots (count events)) "one level event to a fireball")
+    (is (every? #(and (= 1018 (:type %)) (= [9 65 0] (:pos %)) (not (:global %))) events)
+        "at the blaze's block")
+    (testing "an enderman that turns on the player says so, and its teleport is heard at both ends"
+      (let [esim (arena {} {} nil night [{:type :enderman :pos [6.5 64.0 0.5]}])
+            [yaw pitch] (physics/look-at (physics/eye [0.5 64.0 0.5])
+                                         (mob/head :enderman [6.5 64.0 0.5]))
+            stared (-> esim
+                       (sends {:packet/name :move-player-rot :yaw yaw :pitch pitch :flags 1})
+                       (ticks 3))
+            [far _] (angry-enderman {} [3.5 64.0 0.5])
+            [fyaw fpitch] (physics/look-at (physics/eye [0.5 64.0 0.5])
+                                           (mob/head :enderman [3.5 64.0 0.5]))
+            blinked (-> far
+                        (sends {:packet/name :move-player-rot :yaw fyaw :pitch fpitch :flags 1})
+                        (ticks 20))]
+        (is (some #{:entity.enderman.stare} (map sound-name (said stared :sound))))
+        (let [n (count (filter #{:entity.enderman.teleport}
+                               (map sound-name (said blinked :sound))))]
+          (is (and (pos? n) (even? n))
+              "where it left and where it landed, a pair for each jump"))))))
+(deftest a-mob-shows-its-gear-at-spawn-and-turns-its-head-toward-the-player
+  ;; issue #263: the model sends what the real server sends, so the bot senses the same in both
+  (let [sim (-> (sim/init {:columns (flat-world {})
+                           :spawn [0.5 64.0 0.5]
+                           :difficulty :normal
+                           :day-time night
+                           :seed 3})
+                (assoc :sim/phase :play :sim/player-pos [0.5 64.0 0.5] :sim/on-ground? true)
+                (sim/with-mobs [{:type :wither_skeleton :pos [6.5 64.0 0.5]}]))
+        [eid] (the-mob sim :wither_skeleton)
+        later (ticks sim 5)]
+    (is (= [{:packet/name :set-equipment
+             :entity-id eid
+             :equipment [[0 {:item (recipe/item-id :stone_sword) :count 1}]]}]
+           (said sim :set-equipment))
+        "its sword, told with its spawn")
+    (is (= [{:packet/name :rotate-head :entity-id eid :head-yaw 64}]
+           (filter #(= eid (:entity-id %)) (said later :rotate-head)))
+        "it looks along -x at the player, told once while the look holds")))

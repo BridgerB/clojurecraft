@@ -185,6 +185,10 @@
 (s/def :entity/phase int?)
 (s/def :entity/radius double?)
 (s/def :entity/yaw double?)
+(s/def :entity/head-yaw double?)
+(s/def :entity/equipment (s/map-of keyword? keyword?))
+(s/def :entity/power double?)
+(s/def :entity/statuses (s/coll-of (s/tuple int? number?) :kind vector?))
 (s/def :world/dragon-dead? boolean?)
 (s/def :world/boss-bars (s/coll-of uuid? :kind set?))
 (s/def :pearls/shelter ::block-pos)
@@ -464,6 +468,17 @@
 (s/def :player/hurt-at int?)
 (s/def :player/attacker int?)
 (s/def :world/boss-health (s/map-of uuid? number?))
+(s/def :world/sounds
+  (s/coll-of (s/keys :req-un [:heard/sound ::at] :opt-un [:heard/pos :heard/eid]) :kind vector?))
+(s/def :world/level-events
+  (s/coll-of (s/keys :req-un [:heard/event ::at] :opt-un [:heard/pos :heard/data]) :kind vector?))
+(s/def :heard/sound keyword?)
+(s/def :heard/event
+  (s/or :name keyword?
+        :type int?))
+(s/def :heard/pos (s/coll-of number? :kind vector? :count 3))
+(s/def :heard/eid int?)
+(s/def :heard/data int?)
 (s/def :player/food int?)               ; 0-20 from a server; the wire allows any varint, and step is total over it
 (s/def :player/saturation number?)
 (s/def :player/on-fire? boolean?)
@@ -540,6 +555,14 @@
 (s/def :ended/at int?)
 (s/def :plan/churn (s/keys :req [:intent/kind :churn/n]))
 (s/def :churn/n nat-int?)
+(s/def :choice/goal (s/nilable keyword?))
+(s/def :choice/over (s/nilable keyword?))
+(s/def :choice/how
+  #{:start :preempted :interrupted :explore :regroup :retreat :wait :retry :done :other-dimension})
+(s/def :choice/at int?)
+(s/def :plan/choice (s/keys :req [:choice/how :choice/at] :opt [:choice/goal :choice/over]))
+(s/def :plan/choices (s/coll-of :plan/choice :kind vector?))
+(s/def :ended/reason keyword?)
 (s/def :plan/instant (s/keys :req [:intent/kind :instant/n :instant/at]))
 (s/def :instant/n nat-int?)
 (s/def :instant/at int?)
@@ -855,6 +878,19 @@
 (s/def :sim.hurt/at int?)
 (s/def :sim.hurt/last number?)
 (s/def :sim/hurt (s/keys :req-un [:sim.hurt/at :sim.hurt/last])) ; the last hurt: when, how hard
+(s/def :sim.hit/t int?)
+(s/def :sim.hit/life nat-int?)
+(s/def :sim.hit/cause
+  (s/or :kw keyword?
+        :str string?))
+(s/def :sim.hit/by (s/nilable int?))
+(s/def :sim.hit/dealt number?)
+(s/def :sim.hit/health number?)
+(s/def :sim/hit-log ; the model's own cause for each blow that landed on the player (sim/hit-logged)
+  (s/coll-of (s/keys :req-un
+                     [:sim.hit/t :sim.hit/life :sim.hit/cause :sim.hit/dealt :sim.hit/health]
+                     :opt-un [:sim.hit/by])
+             :kind vector?))
 (s/def :sim.wither/until int?)
 (s/def :sim.wither/next int?)
 (s/def :sim/wither (s/keys :req-un [:sim.wither/until :sim.wither/next])) ; a wither skeleton's wither: when it ends, when it next hurts

@@ -1,7 +1,9 @@
 (ns clojurecraft.simrace-test
   "The sim race: a run over a world of many columns crosses from one to the next as the game's
    do, a run is the same run every time, and failures group by what they were doing and why."
-  (:require [clojure.test :refer [deftest is testing use-fixtures]]
+  (:require [clojure.java.io :as io]
+            [clojure.string :as str]
+            [clojure.test :refer [deftest is testing use-fixtures]]
             [clojurecraft.capture :as capture]
             [clojurecraft.chunk :as chunk]
             [clojurecraft.dimension :as dimension]
@@ -492,6 +494,59 @@
     (is (= 18.0 (get-in t [:player :health])))
     (is (= [:blaze] (:death-causes t)))))
 
+(deftest the-truth-says-who-targets-the-player-and-what-each-dealt
+  ;; truth always: per mob, whether it has the player as its target and what it dealt this life,
+  ;; and the model's own cause for each blow
+  (let [hit-1 {:t 1000 :life 0 :cause :blaze :by 5 :dealt 5.0 :health 15.0}
+        hit-2 {:t 2000 :life 0 :cause :lava :dealt 4.0 :health 11.0}
+        hit-3 {:t 3000 :life 1 :cause :blaze :by 5 :dealt 2.0 :health 18.0}
+        s {:sim/now 4000
+           :sim/player-pos [0.0 64.0 0.0]
+           :sim/health 18.0
+           :sim/respawns 1
+           :sim/hit-log [hit-1 hit-2 hit-3]
+           :sim/mobs {5 {:type :blaze :pos [3.0 64.0 0.0] :health 20.0}
+                      6 {:type :enderman :pos [4.0 64.0 0.0] :health 40.0}}}
+        t (simrace/truth s)
+        by-eid (into {} (map (juxt :eid identity)) (:mobs t))]
+    (is (= 4000 (:t t)))
+    (is (true? (:targets? (by-eid 5))) "a blaze in its follow range targets the player")
+    (is (false? (:targets? (by-eid 6))) "a neutral enderman not yet angered does not")
+    (is (= 2.0 (:dealt (by-eid 5))) "this life's damage only: the blow of life 0 is not counted")
+    (is (= 0.0 (:dealt (by-eid 6))))
+    (is (= [hit-1 hit-2 hit-3] (:hits t)) "the model's own cause for each blow")
+    (is (= {5 2.0} (simrace/dealt-by s)))))
+
+(deftest the-truth-ring-is-bounded-and-sampled-every-few-seconds
+  (let [ring (reduce (fn [r i] (simrace/truth-ring-add r {:t i :hits (vec (range 20))}))
+                     []
+                     (range (+ simrace/truth-ring-keep 5)))]
+    (is (= simrace/truth-ring-keep (count ring)))
+    (is (= 5 (:t (first ring))) "the newest are kept")
+    (is (= 8 (count (:hits (first ring)))) "a sample keeps only the newest hits"))
+  (is (simrace/truth-due? nil 0) "the first sample is due at once")
+  (is (not (simrace/truth-due? 1000 (+ 1000 (dec simrace/truth-every-ms)))))
+  (is (simrace/truth-due? 1000 (+ 1000 simrace/truth-every-ms))))
+
+(deftest every-ended-run-writes-its-truth-even-one-that-threw
+  ;; 47 of 136 sim runs had a truth file: it was written only beside a moment, which a run that
+  ;; threw, or that had no position, never had
+  (let [dir (.toFile (java.nio.file.Files/createTempDirectory
+                      "truth"
+                      (make-array java.nio.file.attribute.FileAttribute 0)))]
+    (try (let [threw {:ok false :reason :crashed :error "boom"}
+               ended
+               {:ok true :run/truth {:t 1 :player {} :mobs [] :hits []} :run/truth-ring [{:t 1}]}]
+           (is (= {:unavailable "boom" :reason :crashed}
+                  (read-string (get (simrace/truth-texts threw) ".truth.edn")))
+               "no model at the end: it says so, rather than no file")
+           (is (= "" (get (simrace/truth-texts threw) ".truth-ring.edn")))
+           (is (= (:run/truth ended) (read-string (get (simrace/truth-texts ended) ".truth.edn"))))
+           (let [path (simrace/write-truth! (io/file dir "senses") "T-1-9" threw)]
+             (is (.exists (io/file path)))
+             (is (.exists (io/file dir "senses" "T-1-9.truth-ring.edn"))))
+           (is (= "{:t 1}" (str/trim (get (simrace/truth-texts ended) ".truth-ring.edn")))))
+         (finally (run! #(.delete ^java.io.File %) (reverse (file-seq dir)))))))
 (deftest a-checkpoint-run-has-a-cap-of-its-own
   (let [config {:simrace/checkpoint-max-minutes 60}
         horizon (* 330 60000)]

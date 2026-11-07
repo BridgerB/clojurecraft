@@ -188,6 +188,12 @@
     "after the first boss bar"]
    [:world/boss-health "{uuid health}: health (0.0-1.0) of each boss bar (boss-event update-health)"
     "after the first update-health"]
+   [:world/sounds
+    "the last ear/kept-heard sounds heard within ear/heard-radius of the bot, oldest first, each {:sound name :pos [x y z] :at ms} (and :eid for a sound on an entity): a blaze's or ghast's, an enderman's stare, scream and teleport (sound, sound-entity, ear.clj)"
+    "after the first sound heard near"]
+   [:world/level-events
+    "the last ear/kept-heard level events near the bot, oldest first, each {:event name-or-type :pos block :data n :at ms}: 1015 :ghast-warn, 1016 :ghast-shoot, 1018 :blaze-shoot, 2001 :block-broken (level-event, ear.clj)"
+    "after the first level event heard near"]
    [:entity/type "entity type id (71 is an item)" "inside :world/entities"]
    [:entity/pos "last known entity position" "inside :world/entities"]
    [:entity/seen-at "ms the entity was added" "inside :world/entities"]
@@ -223,6 +229,18 @@
    [:entity/radius
     "an area effect cloud's radius in blocks, from its metadata (index 8): a dragon's breath cloud grows from 3 to 7 over its life, and the bot keeps out of all of it (issue #267)"
     "inside :world/entities, an area effect cloud, once its metadata said"]
+   [:entity/head-yaw
+    "degrees where the entity's head looks as the server sends it (add-entity, rotate-head, eye.clj): an enderman facing the bot, a mob lining up a shot (issue #263)"
+    "inside :world/entities, once the server said one"]
+   [:entity/equipment
+    "{slot-name item-name} of what a creature holds and wears (set-equipment, eye.clj): :mainhand :offhand :feet :legs :chest :head :body :saddle; a wither skeleton's sword, a piglin's crossbow (issue #263)"
+    "inside :world/entities, once the server said what it holds"]
+   [:entity/power
+    "a fireball's acceleration power (projectile-power, eye.clj), the server's word for how hard it is pushed (issue #263)"
+    "inside :world/entities, a projectile, once the server said one"]
+   [:entity/statuses
+    "[[status ms] ...] the newest few entity-event statuses other than death (an enderman's teleport particles, eating, a hurt), kept by game.clj (issue #263)"
+    "inside :world/entities, after its first such event"]
    [:sight/pos "an observation's block position" "a fact in :world/facts"]
    [:sight/state "the state id observed there" "a fact in :world/facts"]
    [:sight/at "ms of the observation" "a fact in :world/facts"]
@@ -453,6 +471,20 @@
    [:ended/at "ms the intent in :plan/ended ended at" "inside :plan/ended"]
    [:churn/n "times in a row the intent in :plan/churn started the tick after it ended"
     "inside :plan/churn"]
+   [:plan/choice
+    "{:choice/goal :choice/over :choice/how :choice/at} the planner's newest choice: the goal row now served, the one before it, how it got there (:start :preempted :interrupted :explore :regroup :retreat :wait :retry :done :other-dimension) and the ms; set only when the goal or the how changes; observation only (issue #263)"
+    "after the planner first chooses"]
+   [:plan/choices "the newest 20 :plan/choice values, oldest first"
+    "after the planner first chooses"]
+   [:choice/goal "id of the goal row the choice serves (nil when none is left)"
+    "inside :plan/choice"]
+   [:choice/over "id of the goal row the choice before served"
+    "inside :plan/choice, when there was one"]
+   [:choice/how "how the planner came to the choice" "inside :plan/choice"]
+   [:choice/at "ms the choice was made" "inside :plan/choice"]
+   [:ended/reason
+    "why the planner abandoned the intent in :plan/ended (:preempted :interrupted :goal-met)"
+    "inside :plan/ended, when abandoned"]
    [:plan/instant
     "{:intent/kind :intent/target :intent/for :instant/n :instant/at} of the choice whose intents end in their first tick with no progress (feet unchanged, no action packet), n of them in a row and the ms the last did: at plan/instant-limit the next such end counts as failed (:instant-churn, into :plan/failures) and logs `instant-churn <kind> <target> xN`"
     "after an intent ends in its first tick with no progress"]

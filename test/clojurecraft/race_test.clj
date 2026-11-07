@@ -2,6 +2,7 @@
   "The race (issue #17): the claims reducer never grants one cell to two bots, the spiral visits
    every cell once, and the race's board and summary are functions of values."
   (:require [clojure.math :as math]
+            [clojure.string :as str]
             [clojure.test :refer [are deftest is testing]]
             [clojure.test.check :as tc]
             [clojure.test.check.generators :as gen]
@@ -473,3 +474,41 @@
             "type=!experience_orb,type=!player,sort=nearest,limit=12] run data get entity @s")
            near))
     (is (= "data get entity Clj_r10" self))))
+
+(deftest a-bots-ending-keeps-the-server-log-lines-that-bear-on-it
+  (let
+    [log
+     (str/join
+      "\n"
+      ["[10:00:01] [Server thread/INFO]: Clj_r10 joined the game"
+       "[10:00:02] [Server thread/INFO]: Clj_r1 joined the game"
+       "[10:00:03] [Server thread/WARN]: Can't keep up! Is the server overloaded? Running 2301ms behind"
+       "[10:00:04] [Server thread/INFO]: Clj_r2 was slain by Blaze"
+       "[10:00:05] [Server thread/INFO]: Clj_r1 was slain by Blaze"
+       "[10:00:06] [Server thread/INFO]: Clj_r1 lost connection: Disconnected"
+       "[10:00:07] [Server thread/INFO]: Starting minecraft server"])]
+    (is
+     (=
+      ["[10:00:02] [Server thread/INFO]: Clj_r1 joined the game"
+       "[10:00:03] [Server thread/WARN]: Can't keep up! Is the server overloaded? Running 2301ms behind"
+       "[10:00:05] [Server thread/INFO]: Clj_r1 was slain by Blaze"
+       "[10:00:06] [Server thread/INFO]: Clj_r1 lost connection: Disconnected"]
+      (race/serverlog-lines log "Clj_r1"))
+     "its own lines whole-word, the server's trouble, not Clj_r10's or Clj_r2's")
+    (is (= [] (race/serverlog-lines "" "Clj_r1")))
+    (is (= race/serverlog-tail
+           (count (race/serverlog-lines (str/join "\n"
+                                                  (repeat (* 2 race/serverlog-tail) "Clj_r1 x"))
+                                        "Clj_r1")))
+        "only the newest lines are read")
+    (is (str/starts-with? (race/serverlog-text "no/such/latest.log" "Clj_r1") "no server log at"))
+    (is (str/starts-with? (race/serverlog-text nil "Clj_r1") "no server log named"))))
+
+(deftest a-long-log-is-read-by-its-tail
+  (let [f (java.io.File/createTempFile "latest" ".log")]
+    (try (spit f (str (str/join "\n" (repeat 100 "old line")) "\nClj_r1 was slain by Blaze\n"))
+         (let [t (race/file-tail f 40)]
+           (is (str/includes? t "Clj_r1 was slain by Blaze"))
+           (is (< (count t) 41)))
+         (is (str/includes? (race/serverlog-text (str f) "Clj_r1") "was slain by Blaze"))
+         (finally (.delete f)))))

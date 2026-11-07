@@ -80,6 +80,15 @@
       (:intent/goal i) (assoc :goal (:intent/goal i))
       (:intent/why (meta i)) (assoc :why (:intent/why (meta i))))))
 
+(defn heard-since
+  "The names of the sounds and level events heard in the last every-ms of world time (the interval
+   a line stands for), in order: what a line says it heard since the last one."
+  [world]
+  (let [t (:time/now world 0)
+        recent (fn [xs k] (for [x xs :when (> (:at x 0) (- t every-ms))] (get x k)))]
+    (vec (concat (recent (:world/sounds world) :sound)
+                 (recent (:world/level-events world) :event)))))
+
 (defn of
   "One line of what the bot senses and decides in world, a flat map: the time, its body
    (position, dimension, health, food, fire, trap), what it holds that the stages count (rods,
@@ -105,6 +114,7 @@
              (counted-near world projectile-radius #(contains? projectile-kinds (entity/kind %)))
              :endermen (counted-near world 128.0 #(= :enderman (entity/kind %)))}
       (:player/on-fire? world) (assoc :fire? true)
+      (seq (heard-since world)) (assoc :sounds (heard-since world))
       (:plan/trap world) (assoc :trap (:plan/trap world))
       (:plan/intent world) (assoc :intent (intent-view (:plan/intent world)))
       (:plan/waiting world) (assoc :waiting (:plan/waiting world))
@@ -187,6 +197,36 @@
                   :when (and o (:entity/creepy? e) (not (:entity/creepy? o)))]
               (assoc (view eid e) :ev :angry)))))
 
+(def sight-radius 24.0)                ; blocks from the feet a creature's gear change or turn to face the bot is noted within
+
+(defn sight-events
+  "What the bot saw of the creatures within sight-radius change between before and after, only on a
+   change: a creature's gear (:equip, with :equipment {slot item}: a wither skeleton's sword, a
+   piglin's crossbow) and a hostile (or an enderman, hostile only once angered) whose head turns
+   to face the bot (:facing, entity/facing-bot? within entity/stare-degrees, from not facing it)."
+  [before after]
+  (let [b (near-entities before)
+        pos (:player/pos after)
+        view (fn [eid e]
+               {:eid eid :kind (entity/kind e) :d (r1 (physics/distance pos (:entity/pos e)))})
+        gear #(or (:entity/equipment %) {})
+        facing? (fn [world e]
+                  (and (or (entity/hostile? e) (= :enderman (entity/kind e)))
+                       (entity/facing-bot? e (:player/pos world) entity/stare-degrees)))]
+    (concat (for [[eid e] (near-entities after)
+                  :let [o (get b eid)]
+                  :when (and o
+                             (<= (physics/distance pos (:entity/pos e)) sight-radius)
+                             (not= (gear o) (gear e)))]
+              (assoc (view eid e) :ev :equip :equipment (gear e)))
+            (for [[eid e] (near-entities after)
+                  :let [o (get b eid)]
+                  :when (and o
+                             (<= (physics/distance pos (:entity/pos e)) sight-radius)
+                             (facing? after e)
+                             (not (facing? before o)))]
+              (assoc (view eid e) :ev :facing)))))
+
 (defn child-key
   "What names a child intent for the ledger: its kind and target, or nil without a child. Two
    ticks of one child are the same child; a new target is a new one."
@@ -197,7 +237,7 @@
   "What changed in the plan between before and after: a new intent (:intent, with its kind,
    target, purpose, why and goal), a new child under the running intent (:child, with the child's
    kind, why and target: the executor's own step, a walk or a dig), a new failure (:failed, with its reason), a new wait (:wait),
-   a trap entered or left (:trap)."
+   a trap entered or left (:trap), a new planner choice (:choice, with its goal, the goal it was over and how)."
   [before after]
   (let [ib (:plan/intent before)
         ia (:plan/intent after)
@@ -210,7 +250,10 @@
       (and fa (not= fa fb)) (conj (assoc (intent-view fa) :ev :failed :reason (:intent/reason fa)))
       (not= (:plan/waiting before) (:plan/waiting after))
       (conj {:ev :wait :wait (:plan/waiting after)})
-      (not= (:plan/trap before) (:plan/trap after)) (conj {:ev :trap :trap (:plan/trap after)}))))
+      (not= (:plan/trap before) (:plan/trap after)) (conj {:ev :trap :trap (:plan/trap after)})
+      (not= (:plan/choice before) (:plan/choice after))
+      (conj (let [c (:plan/choice after)]
+              {:ev :choice :goal (:choice/goal c) :over (:choice/over c) :how (:choice/how c)})))))
 
 (defn new-lines
   "The lines of chat after that chat before did not hold, in order: what the server said between two
@@ -264,11 +307,47 @@
       :player-action {:ev :dig :status (:status packet) :pos (:pos packet)}
       :use-item-on {:ev :place :pos (:pos packet)})))
 
+(def heard-near 16.0)                  ; blocks within which every sound and level event is noted; farther only the loud ones (loud-sound?, level events but a block broken)
+(def loud-sound #"shoot|warn|stare|scream|teleport|angry|death")
+
+(defn loud-sound?
+  "Is sound name one a fight is told by (a shot, a warning, an enderman's stare, scream or
+   teleport, anger, a death): noted from anywhere the bot hears it, not only within heard-near?"
+  [sound]
+  (boolean (re-find loud-sound (name sound))))
+
+(defn fresh
+  "The entries of after that are not in before, as a multiset in order: the new ones of a bounded
+   vector the handlers append to, two equal entries counted twice."
+  [before after]
+  (first (reduce (fn [[out left] x]
+                   (if (pos? (get left x 0)) [out (update left x dec)] [(conj out x) left]))
+                 [[] (frequencies before)]
+                 after)))
+
+(defn heard-events
+  "What the bot heard between before and after (ear.clj): each new sound (:sound, its name and
+   distance from the feet) and level event (:level-event, its name and distance), the ones within
+   heard-near, and the loud ones from farther (a block broken is only noted near): ambient noise
+   from far would flood the ledger, a shot never."
+  [before after]
+  (let [me (:player/pos after)
+        d (fn [pos] (when (and me pos) (r1 (physics/distance me pos))))
+        near (fn [x] (or (nil? x) (<= x heard-near)))]
+    (concat (for [s (fresh (:world/sounds before) (:world/sounds after))
+                  :let [dist (d (:pos s))]
+                  :when (or (near dist) (loud-sound? (:sound s)))]
+              (cond-> {:ev :sound :sound (:sound s) :d dist} (:eid s) (assoc :eid (:eid s))))
+            (for [e (fresh (:world/level-events before) (:world/level-events after))
+                  :let [dist (d (:pos e))]
+                  :when (or (near dist) (not= :block-broken (:event e)))]
+              {:ev :level-event :event (:event e) :d dist}))))
+
 (defn events
   "Every change between two successive worlds a reader of a run wants, in order, each a map with
    :ev and :t (after's time): the plan's (intent-events), the body's (body-events), what the bot
-   sent (sent-events), the entities near it (entity-events) and what the world holds together
-   (derived/events: what lit the bot, items gained and lost, knockback, corrections, the biome,
+   sent (sent-events), the entities near it (entity-events), what it heard (heard-events) and what
+   the world holds together (derived/events: what lit the bot, items gained and lost, knockback, corrections, the biome,
    breath). A pure function of the two values:
    the ledger observer folds it over every write of the atom, so nothing is sampled away (the
    observability plan, part C: the digest, done in-process, named and the same in the sim)."
@@ -280,6 +359,8 @@
                     (body-events before after)
                     (sent-events after)
                     (entity-events before after)
+                    (heard-events before after)
+                    (sight-events before after)
                     (derived/events before after))))))
 
 ;; ---------------------------------------------------------------- the moment: the whole mind at an ending
@@ -301,7 +382,7 @@
 (def plan-keys
   "The plan's attributes a moment keeps whole."
   [:plan/status :plan/goals :plan/waiting :plan/failed :plan/ended :plan/last :plan/attempts
-   :plan/churn :plan/trap :plan/reached :plan/since])
+   :plan/churn :plan/trap :plan/reached :plan/since :plan/choice :plan/choices])
 
 (def stage-namespaces
   "The namespaces of the stages' own attributes a moment keeps whole: the hunt's, the pocket's, the
@@ -313,8 +394,9 @@
    part D): its facts and the blocks round its feet (scene/facts, scene/slice), the intent chain,
    the plan's attributes, the stages' own, every entity within ledger-radius with all it is known
    by (kind and distance added), its hits, effects and armour, and the newest moment-intentions
-   intention facts (memory/intentions: what it set out to do, with reasons). A pure function of the
-   world; nil before the bot has a position."
+   intention facts (memory/intentions: what it set out to do, with reasons), and the eids it ranked
+   as threats (:threats, combat/threats), which blind sets against the model's truth. A pure
+   function of the world; nil before the bot has a position."
   [world]
   (when-let [pos (:player/pos world)]
     {:t (:time/now world)
@@ -333,7 +415,8 @@
      :hits (:player/hits world [])
      :effects (:player/effects world {})
      :armor (:player/armor world)
-     :intentions (vec (take-last moment-intentions (memory/intentions world)))}))
+     :intentions (vec (take-last moment-intentions (memory/intentions world)))
+     :threats (vec (sort (keys (combat/threats world))))}))
 
 ;;;; I/O: the observer and its file ;;;;
 

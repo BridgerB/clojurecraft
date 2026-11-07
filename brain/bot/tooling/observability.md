@@ -9,6 +9,17 @@ lastUpdated: 2026-11-06
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/hear.clj#defn attributes-of
+  - src/clojurecraft/ear.clj#defn heard-sound
+  - src/clojurecraft/ear.clj#defn level-event-name
+  - src/clojurecraft/registry.clj#defn sound-name
+  - src/clojurecraft/senses.clj#defn heard-events
+  - src/clojurecraft/sim.clj#defn tell-sound
+  - src/clojurecraft/sim.clj#defn tell-level-event
+  - src/clojurecraft/eye.clj#defn equipment-of
+  - src/clojurecraft/entity.clj#defn facing-bot?
+  - src/clojurecraft/senses.clj#defn sight-events
+  - src/clojurecraft/packet.clj#defn read-equipment
+  - bb/clojurecraft/botlogs.clj#defn sight-of
   - src/clojurecraft/game.clj#defn hit-of
   - src/clojurecraft/nbt.clj#defn read-component
   - src/clojurecraft/nbt.clj#defn write-component
@@ -28,12 +39,22 @@ sourceRefs:
   - src/clojurecraft/senses.clj#defn ledger!
   - src/clojurecraft/senses.clj#defn moment
   - src/clojurecraft/senses.clj#defn senses!
+  - src/clojurecraft/senses.clj#defn intent-events
+  - src/clojurecraft/plan.clj#defn chose
+  - src/clojurecraft/plan.clj#defn choice-how
+  - bb/clojurecraft/botlogs.clj#defn choice-at
   - "src/clojurecraft/intent.clj#Intent i labelled with the planner's branch that chose it"
   - src/clojurecraft/intent.clj#defn why-of
   - src/clojurecraft/intent.clj#defn why-or-default
   - src/clojurecraft/intent.clj#defn child-why
   - "src/clojurecraft/memory.clj#The fact for intent i reaching event"
   - src/clojurecraft/race.clj#defn near-truth!
+  - src/clojurecraft/race.clj#defn serverlog-lines
+  - src/clojurecraft/sim.clj#defn hit-logged
+  - "src/clojurecraft/simrace.clj#What the model knew round the player at a moment"
+  - src/clojurecraft/simrace.clj#defn truth-ring-add
+  - src/clojurecraft/simrace.clj#defn truth-texts
+  - "bb/clojurecraft/blind.clj#What the truth knew that the bot did not:"
   - src/clojurecraft/race.clj#defn play-one!
   - bb/clojurecraft/botlogs.clj#defn case-of
   - bb/clojurecraft/botlogs.clj#defn case-text
@@ -65,6 +86,17 @@ The bot's whole mind is one world value, so everything a reader needs about a ru
   - the fight bracket (`:player/in-combat?`);
   - effects (`:player/effects`);
   - attributes (`:player/armor`, `:player/max-health`: the server's word on worn armour).
+- **ear.clj:** sounds and level events, heard where they are not seen.
+  - `:world/sounds`: the last 20 sounds within 48 blocks (sound, sound-entity, the holder read as a registry id or inline), each `{:sound name :pos :at}` and `:eid` on an entity;
+  - `:world/level-events`: the last 20 near (or global), named from `ear/level-events` (1015 `:ghast-warn`, 1016 `:ghast-shoot`, 1018 `:blaze-shoot`, 2001 `:block-broken` ...), else by number;
+  - the ledger notes each as `:sound` or `:level-event` with its distance (`senses/heard-events`): everything within 16 blocks, from farther only a shot, warning, stare, scream, teleport, anger or death, and no far block broken; a line carries `:sounds`, the names of the second it stands for;
+  - the sim sends level event 1018 with each blaze fireball and the enderman's stare and teleport sounds (`sim/tell-sound`, `sim/tell-level-event`), so the bot hears the same in both worlds.
+- **eye.clj:** what a creature shows beyond its place and health:
+  - where its head looks (`:entity/head-yaw`, from rotate-head and add-entity; `entity/facing-bot?` asks whether it faces the bot, `entity/stares?` is that for an enderman, observation only);
+  - what it holds and wears (`:entity/equipment {slot item-name}`, from set-equipment, read by `packet/read-equipment`);
+  - a fireball's acceleration power (`:entity/power`, projectile-power);
+  - the newest four entity-event statuses other than death (`:entity/statuses`, kept in game.clj).
+  The ledger notes a gear change (`:equip`) and a hostile or enderman turning to face the bot (`:facing`), within 24 blocks and only on change (`senses/sight-events`); the sim sends set-equipment on a mob's spawn (`mob/equipment`) and rotate-head as it turns (`sim/face-player`). A case file ends with a sight line from the last minute: the kinds that faced the bot and the main-hand gear of whatever hit it (`botlogs/sight-of`).
 
 - **chat.clj:** what the server says in words (the action bar, title and subtitle texts and a boss bar's name when it is added join the same window, each line naming its packet in `:chat/via`; `disguised-chat` is not decoded: its chat-type holder's layout is unconfirmed).
   - `system-chat` lines (every player's death, the server's warnings) are kept in `:world/chat`, the last 20, each `{:at :text :key}`; the text is `text/plain` of the component, which `nbt/read-component` read from the wire (a `:text` field type; a malformed component reads as nil, never throws).
@@ -78,8 +110,12 @@ The bot's whole mind is one world value, so everything a reader needs about a ru
 - **Derived senses** (`derived/events`, folded into the ledger): `:alight` with its cause (the newest non-burning hit within two seconds, `derived/alight-cause`, else lava or fire at the feet, else `:unknown`) and `:out` for `:player/on-fire?`; `:item` with the delta for the pearls, rods, eyes, pickaxes, food, buckets and cobblestone (per 64 crossed); `:knock` for the server setting the bot's own motion (`:player/knock`) and `:corrected` for a teleport after it was loaded (`:player/corrected`); `:biome` with the server's registry id under the feet (`chunk/biome-at`, no name table exists); `:air` at each three seconds of breath lost. Path search effort is not told: `path/plan` is called from many executors and its result never reaches the world.
 - **The senses:** one line a second (`senses/of`), and the ring: a moment a minute for the last five (`senses/senses!`).
 - **The moment:** the whole mind at the ending (`senses/moment`): facts, the blocks round the feet, the intent chain, the plan, the stages' keys, entities near, hits, effects, armour, and the newest 40 intentions.
+- **The planner's choice:** `plan/chose` (composed after `plan-tick` in `plan/step-over`, one write per outer tick) records `:plan/choice` `{:choice/goal :choice/over :choice/how :choice/at}` and the newest 20 in `:plan/choices` when the goal or the how changes (`plan/choice-how`: :start :preempted :interrupted :explore :regroup :retreat :wait :retry :done :other-dimension; :held and :leave are not named). `senses/intent-events` emits `{:ev :choice}`, the moment keeps both attributes, and a case says "goal at the end: :defend over :blaze-rods (preempted, 1.9 s before the end)" (`botlogs/choice-at`).
 - **Why:** every running intent carries a why (`intent/why`, on metadata, so equality is unchanged): a planner that tags its branches gives the finer label (the stuck stage's do), else `plan/start-intent` labels it `:<goal>/<kind>` (`intent/why-or-default`), and a child an executor starts inherits its parent's (`intent/child-why`, in `run-child`); intention facts keep `:intention/why`.
 - **Server truth** (real): every entity within 32 blocks of the ending and the bot's own entity, whole (`race/near-truth!`), as `<name>.server.txt`.
+- **Sim truth, every run:** the model's view round the player (`simrace/truth`: each mob within 32 blocks with its kind, position, health, anger, whether it targets the player and what it dealt this life, and the model's own cause for each blow from `:sim/hit-log`, `sim/hit-logged`) is written as `<run>.truth.edn` for every ended sim run, one that threw too (`simrace/truth-texts`, which says `:unavailable` instead of leaving no file). Every 5 simulated seconds the same view joins a ring of 120 (`simrace/truth-ring-add`, sampled by a tap on `sim/play-from`, only the mobs near the player), written as `<run>.truth-ring.edn`.
+- **Blind:** `blind/blind` sets the truth beside the bot's moment: mobs it never tracked, mobs that target it and it ranked as no threat (`:threats` in the moment), blows from an attacker it did not know. A case prints a `blind:` line for each (`botlogs/case-text`), for sim runs, which have both files.
+- **Server log** (real): the lines about the bot (its death line, a kick) and the server's trouble ("Can't keep up") from the log's tail, as `<name>.serverlog.txt` (`race/serverlog-lines`).
 - **The recording** of every failed run (`botlogs/keep-recording?`).
 
 ## How it is read

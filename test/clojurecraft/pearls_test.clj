@@ -4267,3 +4267,58 @@
       (is (not (contains? (pearls/fortress-exit-hold (assoc held :player/pos [400.5 77.0 400.5]))
                           :pearls/exit-target)))
       (is (not (contains? (game/die held) :pearls/exit-target))))))
+
+(deftest a-bot-hit-while-it-bores-out-of-the-fortress-answers-the-wither-skeleton
+  ;; Clj_r10 (d3ce99b, run 42353848749) was faced 16 times and hit 6 by wither skeletons, 20
+  ;; health to none in 21 s, a :tunnel-to its whole life: the hunt answers the heavy kinds itself,
+  ;; so :defend left them, and the bore never swung. Healthy it now fights the striker where it
+  ;; stands; hurt it lays a block between, never the fight and never the dig on (issue #263).
+  (let [skeleton-id 42
+        skeleton {:entity/type (blocks/entity-types :wither_skeleton)
+                  :entity/pos [8.5 64.0 9.5]
+                  :entity/seen-at 0
+                  :entity/health 20.0}
+        spawner-pos [8 64 2]
+        nether-brick (blocks/default-state :nether_bricks)
+        floor (into {} (for [x (range 0 16) z (range 0 16)] [[x 63 z] nether-brick]))
+        base (->
+               (standing {skeleton-id skeleton} floor)
+               (assoc :player/dimension "minecraft:the_nether"
+                      :player/pos [8.5 64.0 8.5]
+                      :player/health 20.0
+                      :player/food 20
+                      :time/now 200
+                      :player/attacker skeleton-id
+                      :player/struck-at 190
+                      :plan/status :active
+                      :plan/goals #{:ender-pearls}
+                      :plan/reached #{:blaze-rods}
+                      :plan/active [row])
+               (memory/observe spawner-pos blaze/spawner)
+               (update :player/inventory assoc 2 (item :cobblestone 64) 3 (item :iron_pickaxe 1)))]
+    (is (pearls/can-tunnel-out? base) "a pickaxe held and no lava round: the bore is the plan")
+    (testing "healthy and alone, the striker is fought where the bot stands"
+      (let [i (plan/next-intent base row plan/goals)]
+        (is (= :fight (:intent/kind i)))
+        (is (= skeleton-id (:intent/target i)))
+        (is (true? (:intent/hold? i)))))
+    (testing "a wither skeleton is fought only from avoided-health: at 12 the cover"
+      (let [i (plan/next-intent (assoc base :player/health 12.0) row plan/goals)]
+        (is (not (contains? #{:fight :tunnel-to :dig} (:intent/kind i))))))
+    (testing "two wither skeletons at full health: the cover, not the fight"
+      (let [w (-> base
+                  (assoc :player/health 20.0)
+                  (assoc-in [:world/entities 43] (assoc skeleton :entity/pos [7.5 64.0 8.5])))
+            i (plan/next-intent w row plan/goals)]
+        (is (not (contains? #{:fight :tunnel-to :dig} (:intent/kind i))))))
+    (testing "healthy at 18 and alone, the fight yields under retreat-health"
+      (let [i (plan/next-intent (assoc base :player/health 18.0) row plan/goals)]
+        (is (= :fight (:intent/kind i)))
+        (is (true? (:intent/yield? i)))))
+    (testing "hurt under the danger line, a block is laid between: not the fight, not the bore"
+      (let [i (plan/next-intent (assoc base :player/health 5.0) row plan/goals)]
+        (is (not (contains? #{:fight :tunnel-to :dig} (:intent/kind i))))
+        (is (contains? #{:place :pillar :eat} (:intent/kind i)))))
+    (testing "a strike long past leaves the bore going"
+      (let [i (plan/next-intent (assoc base :player/struck-at 0 :time/now 20000) row plan/goals)]
+        (is (= :tunnel-to (:intent/kind i)))))))

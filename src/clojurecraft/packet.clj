@@ -175,6 +175,23 @@
      [:vec
       [[:id :varint] [:base :f64]
        [:modifiers [:vec [[:mod-id :string] [:amount :f64] [:operation :varint]]]]]]]]
+   ;; what the bot hears (the observability plan, hearing): a sound at a point (the position in
+   ;; 1/8 blocks), a sound on an entity, and a level event (a ghast's warning, a blaze's shot, a
+   ;; block broken: type, block position, data, whether every player hears it); the sound is a
+   ;; holder, a registry id or inline (ClientboundSoundPacket, ClientboundSoundEntityPacket,
+   ;; ClientboundLevelEventPacket)
+   [:play :s2c :sound] [[:sound :sound-holder] [:source :varint] [:x :i32] [:y :i32] [:z :i32]
+                        [:volume :f32] [:pitch :f32] [:seed :i64]]
+   [:play :s2c :sound-entity] [[:sound :sound-holder] [:source :varint] [:entity-id :varint]
+                               [:volume :f32] [:pitch :f32] [:seed :i64]]
+   [:play :s2c :level-event] [[:type :i32] [:pos :position] [:data :i32] [:global :bool]]
+   ;; where a mob's head looks, in 1/256 turns (ClientboundRotateHeadPacket: varint id, a byte);
+   ;; what it holds and wears, each entry a slot byte (0x80 set when another follows) and a slot
+   ;; (ClientboundSetEquipmentPacket, read-equipment); a fireball's acceleration power, one double
+   ;; (ClientboundProjectilePowerPacket); the observability plan, issue #263
+   [:play :s2c :rotate-head] [[:entity-id :varint] [:head-yaw :i8]]
+   [:play :s2c :set-equipment] [[:entity-id :varint] [:equipment :equipment]]
+   [:play :s2c :projectile-power] [[:entity-id :varint] [:power :f64]]
    ;; a line the server says to the bot: a text component and whether it shows over the hotbar
    ;; (ClientboundSystemChatPacket): the death of every player and the server's warnings
    [:play :s2c :system-chat] [[:content :text] [:overlay :bool]]
@@ -321,7 +338,22 @@
               (do (dotimes [_ removed] (b/read-varint buf))
                   (cond-> {:item item :count n} (seq comps) (assoc :components comps))))))))
 
-(def metadata-end 255)                ; the index that ends an entity's metadata (the game's EOF_MARKER)
+(def more-bit 0x80)                   ; a set-equipment entry's slot byte has it set when another entry follows
+
+(defn read-equipment
+  "A set-equipment packet's entries as [[slot item] ...], slot 0-7 (0 main hand, 1 off hand, 2 feet,
+   3 legs, 4 chest, 5 head, 6 body, 7 saddle) and item a read-slot value (nil for an empty hand):
+   each entry is a slot byte, with more-bit set when another follows, then the slot. A slot whose
+   components could not be stepped over ends the frame, as it ends any."
+  [buf]
+  (loop [acc []]
+    (let [b (b/read-u8 buf)
+          item (read-slot buf)
+          acc (conj acc [(bit-and b 0x7f) item])]
+      (cond (or (:components? item) (zero? (bit-and b more-bit))) acc
+            :else (recur acc)))))
+
+(def metadata-end 255)               ; the index that ends an entity's metadata (the game's EOF_MARKER)
 
 (def metadata-readers
   "How the metadata values the bot steps over are written, by serializer id: the game's
@@ -382,6 +414,34 @@
   [x]
   (or (nil? x) (and (map? x) (int? (:item x)) (int? (:count x)))))
 
+(defn read-sound-holder
+  "A sound event as the game sends it (Holder<SoundEvent> in a stream codec): a varint that is the
+   registry id plus one gives {:id registry-id}; zero is followed by the event inline, an
+   identifier string and an optional fixed range (a bool, then an f32 when true) and gives
+   {:name identifier} with :range when it has one."
+  [buf]
+  (let [n (b/read-varint buf)]
+    (cond (pos? n) {:id (dec n)}
+          :else
+          (let [id (b/read-string buf)]
+            (cond-> {:name id} (b/read-bool buf) (assoc :range (b/read-f32 buf)))))))
+
+(defn write-sound-holder
+  "A sound holder (read-sound-holder) as the game writes it: {:id i} as the varint i+1, {:name n}
+   as zero, the identifier and the range option."
+  [out {:keys [id name range]}]
+  (cond id (b/write-varint out (inc id))
+        :else
+        (do (b/write-varint out 0)
+            (b/write-string out name)
+            (b/write-bool out (some? range))
+            (when range (b/write-f32 out range)))))
+
+(defn sound-holder?
+  "Is x a decoded sound holder: {:id registry-id} or {:name identifier} (with an optional number :range)?"
+  [x]
+  (and (map? x) (or (int? (:id x)) (string? (:name x)))))
+
 (def wire-types
   "Every primitive wire type the specs use: how to read one from a buffer, how to write one to a
    stream, and what a value of it must be (with the wire's own range). :slot and :metadata are
@@ -415,6 +475,9 @@
    :lpvec3 {:read b/read-lpvec3 :write b/write-lpvec3 :valid? vec3?}
    :metadata {:read read-metadata :valid? metadata?}
    :slot {:read read-slot :valid? slot?}
+   :sound-holder {:read read-sound-holder :write write-sound-holder :valid? sound-holder?}
+   :equipment {:read read-equipment
+               :valid? #(and (vector? %) (every? (fn [[i v]] (and (int-in? 0 127 i) (slot? v))) %))}
    :hashed-slot {:read read-hashed-slot :write write-hashed-slot :valid? slot?}})
 
 (defn type-fn
