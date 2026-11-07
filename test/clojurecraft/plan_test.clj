@@ -2486,3 +2486,71 @@
     (is (= 8 (count (:plan/reached gym))) "a gym stage keeps re-deriving: not this rule's")
     (is (= #{:wood} (:plan/reached again))
         "one check a life: the next stage reached in this life stays")))
+
+;;; the planner's choice as data (issue #263)
+
+(defn choice-over
+  "The world after one plan-tick (chosen-over) and chose, with row goal chosen over a running intent
+   i serving :blaze-rods, and next-intent answering next."
+  [i goal next]
+  (let [w (-> (walking #{} (:intent/goal i))
+              (assoc :plan/intent (merge {:intent/status :active :intent/id 1} i))
+              (assoc :time/now 1900
+                     :plan/choice {:choice/goal :blaze-rods :choice/how :start :choice/at 0}))]
+    (with-redefs [plan/choose (constantly goal)
+                  plan/next-intent (constantly next)
+                  intent/run (fn [world _ _] world)]
+      (plan/chose w
+                  (plan/plan-tick w {:event/kind :tick :event/now 50 :event/rand 0.5} [goal])
+                  [goal]))))
+
+(deftest a-row-that-preempts-is-recorded-with-the-row-it-was-over
+  (let [w (choice-over {:intent/kind :walk :intent/target [1 64 1] :intent/goal :blaze-rods}
+                       defend-row
+                       {:intent/kind :fight :intent/target 8})]
+    (is (= {:choice/goal :defend :choice/over :blaze-rods :choice/how :preempted :choice/at 1900}
+           (:plan/choice w)))
+    (is (= [(:plan/choice w)] (:plan/choices w)))))
+
+(deftest choice-how-names-each-way-the-planner-got-there
+  (let [i {:intent/id 1 :intent/kind :walk}
+        j {:intent/id 2 :intent/kind :walk}
+        ended (fn [reason] {:intent/kind :walk :ended/at 5 :ended/reason reason})]
+    (is (= :start (plan/choice-how {} {:plan/intent i})))
+    (is (nil? (plan/choice-how {:plan/intent i} {:plan/intent i})) "the same intent runs on")
+    (is (= :preempted
+           (plan/choice-how {:plan/intent i} {:plan/intent j :plan/ended (ended :preempted)})))
+    (is (= :interrupted
+           (plan/choice-how {:plan/intent i} {:plan/intent j :plan/ended (ended :interrupted)})))
+    (is (= :start
+           (plan/choice-how {:plan/intent i :plan/ended (ended :preempted)}
+                            {:plan/intent j :plan/ended (ended :preempted)}))
+        "an old abandonment is not this tick's")
+    (is (= :explore (plan/choice-how {} {:plan/intent (assoc j :intent/for :explore)})))
+    (is (= :regroup (plan/choice-how {} {:plan/intent (assoc j :intent/for :regroup)})))
+    (is (= :retreat (plan/choice-how {} {:plan/intent (assoc j :intent/for :retreat)})))
+    (is (= :wait (plan/choice-how {} {:plan/waiting :no-log})))
+    (is (nil? (plan/choice-how {:plan/waiting :no-log} {:plan/waiting :no-log})))
+    (is (= :retry (plan/choice-how {} {:plan/waiting :retrying})))
+    (is (= :other-dimension (plan/choice-how {} {:plan/waiting :other-dimension})))
+    (is (= :done (plan/choice-how {:plan/status :active} {:plan/status :done})))
+    (is (nil? (plan/choice-how {:plan/status :done} {:plan/status :done})))))
+
+(deftest chose-records-only-a-change-of-goal-or-how-and-keeps-twenty
+  (let [table [{:goal/id :wood :goal/done? :never}]
+        after (fn [w n] (assoc w :plan/intent {:intent/id n :intent/goal :wood} :time/now (* n 10)))
+        w1 (plan/chose {} (after {} 1) table)
+        w2 (plan/chose w1 (after w1 2) table)
+        w3 (reduce (fn [w n]
+                     (plan/chose
+                      w
+                      (assoc w :plan/intent {:intent/id n :intent/goal (keyword (str "g" n))})
+                      table))
+                   w2
+                   (range 3 40))]
+    (is (= {:choice/goal :wood :choice/over nil :choice/how :start :choice/at 10}
+           (:plan/choice w1)))
+    (is (= 1 (count (:plan/choices w2))) "the same goal started the same way is no new choice")
+    (is (= plan/choices-kept (count (:plan/choices w3))))
+    (is (= :g39 (:choice/goal (peek (:plan/choices w3)))))
+    (is (= :g38 (:choice/over (:plan/choice w3))))))
