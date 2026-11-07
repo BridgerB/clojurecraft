@@ -313,6 +313,13 @@
                     (packet {:packet/name :unknown :packet/id 83})])]
     (is (= {[:play 83] 2} (:stats/unknown w)))))
 
+(deftest every-packet-heard-is-counted-by-name
+  (let [[w _] (run (in-play)
+                   [(packet {:packet/name :set-time}) (packet {:packet/name :set-time})
+                    (packet {:packet/name :unknown :packet/id 83})])]
+    (is (= 2 (get-in w [:stats/heard :set-time])) "a decoded packet, handled or not")
+    (is (nil? (get-in w [:stats/heard :unknown])) "an unknown one is counted apart")))
+
 (deftest a-mob-is-tracked-with-its-motion-health-and-death
   ;; issue #258: every entity is kept, with its velocity, a living one's health and flags from its
   ;; metadata, and its death as the server states it; an interaction's float at the health index

@@ -129,3 +129,69 @@
   (let [c (botlogs/case-of {:run/bot "Clj_x" :reason :death} [{:ev :death :t 1}] "replay")]
     (is (nil? (:cause-of-fire c)))
     (is (str/includes? (botlogs/case-text c) "never caught fire"))))
+
+(deftest unknown-packets-are-named-and-the-deliberate-dropped
+  (let [names (botlogs/packet-names {:play {:s2c {:sound 117 :rotate-head 83 :system-chat 121}}
+                                     :configuration {:s2c {:registry-data 7}}})
+        runs [{:stats {:stats/unknown {[:play 117] 500 [:play 83] 9000 [:configuration 7] 28}}}
+              {:stats {:stats/unknown {[:play 117] 46 [:play 121] 3 [:play 999] 2}}}
+              {:reason :timeout}]]
+    (is (= :sound (names [:play 117])))
+    (is (= {"sound" 546 "system-chat" 3 "[:play 999]" 2} (botlogs/unheard names runs))
+        "rotate-head and registry-data are deliberate; an id with no name keeps its key")))
+
+(deftest a-batch-says-what-it-saw
+  (let [facts [{:ok? false
+                :real? true
+                :senses? true
+                :events? true
+                :moment? true
+                :ring? true
+                :truth? true
+                :recording? true
+                :intents 10
+                :whys 4
+                :dropped 0}
+               {:ok? false
+                :real? false
+                :senses? true
+                :events? true
+                :moment? true
+                :ring? true
+                :truth? false
+                :recording? false
+                :intents 6
+                :whys 6
+                :dropped 2}
+               {:ok? true
+                :real? true
+                :senses? true
+                :events? false
+                :moment? false
+                :ring? false
+                :truth? true
+                :recording? false}]
+        o (botlogs/observed facts {"sound" 3})]
+    (is (= [3 3] (:senses o)))
+    (is (= [2 3] (:events o)) "a run without its ledger is a blind spot")
+    (is (= [2 3] (:truth o)) "a sim run without its truth file is one")
+    (is (= [1 1] (:recording o)) "only a failed real run needs its recording")
+    (is (= [10 16] (:why o)))
+    (is (= 2 (:dropped o)))
+    (is (= {"sound" 3} (:unheard o)))))
+
+(deftest a-ledger-counts-its-intents-and-drops
+  (let [f (str (fs/create-temp-file {:suffix ".events.edn"}))]
+    (spit f
+          (str "#:ledger{:events 3, :dropped 1}\n"
+               "{:ev :intent, :kind :walk, :why :hunt/travel, :t 1}\n"
+               "{:ev :intent, :kind :dig, :t 2}\n" "{:ev :hp, :hp 19.0, :t 3}\n"))
+    (is (= {:intents 2 :whys 1 :dropped 1} (botlogs/ledger-facts f)))))
+
+(deftest a-batch-counts-the-packets-it-heard
+  (is (= [130 1130]
+         (botlogs/packets [{:stats {:stats/heard {:set-time 100 :add-entity 20}
+                                    :stats/unknown {[:play 83] 900}}}
+                           {:stats {:stats/heard {:set-health 10} :stats/unknown {[:play 117] 100}}}
+                           {:reason :timeout}]))
+      "decoded by name, then the unknown ones added for the total"))

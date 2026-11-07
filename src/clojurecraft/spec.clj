@@ -506,6 +506,7 @@
 (s/def :stats/teleports nat-int?)
 (s/def :stats/chunks nat-int?)
 (s/def :stats/unknown (s/map-of vector? nat-int?))
+(s/def :stats/heard (s/map-of keyword? pos-int?))
 (s/def :stats/last-ack int?)
 (s/def :stats/pickups (s/coll-of map? :kind vector?))
 (s/def :net/sent-pos ::vec3)
