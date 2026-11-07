@@ -19,7 +19,7 @@
 
 (deftest why-or-default-keeps-a-planners-label
   (let [tagged (intent/why :wood/nearest-log {:intent/kind :walk :intent/goal :wood})]
-    (is (= :wood/nearest-log (intent/why-or-default tagged)))
+    (is (= :wood/nearest-log (intent/why-of (intent/why-or-default tagged))))
     (is (= :wood/walk
            (intent/why-of (intent/why-or-default {:intent/kind :walk :intent/goal :wood}))))
     (is (nil? (intent/why-or-default nil)))
