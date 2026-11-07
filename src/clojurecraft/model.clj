@@ -130,6 +130,12 @@
    [:player/hits
     "the last game/hits-kept hits on the bot, oldest first, each {:at ms :type damage-type name :hp health before} with :by and :by-kind when a mob dealt it (game/hit-of)"
     "after the first damage-event on the bot"]
+   [:player/knock
+    "{:vel [vx vy vz] :at ms} of the last set-entity-motion the server sent for the bot's own entity (a hit's knockback, an explosion): the server setting its motion"
+    "after the server first sets the bot's own motion"]
+   [:player/corrected
+    "{:d blocks :at ms} of the last teleport the server made after the bot was loaded (player-position): how far it moved the bot, a rubber-band or a portal"
+    "after the first teleport after the bot is loaded"]
    [:player/armor "the bot's armour points, the server's word (update-attributes, hear.clj)"
     "after the server sends its attributes"]
    [:player/max-health "the bot's max health, the server's word (update-attributes, hear.clj)"

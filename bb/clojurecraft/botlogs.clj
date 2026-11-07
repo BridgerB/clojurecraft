@@ -218,11 +218,44 @@
   [es t]
   (last (filter #(and (= :intent (:ev %)) (<= (:t % 0) t)) es)))
 
+(def fire-hit-ms 2000)                 ; a hit this near an unexplained ignition is what lit it
+
+(defn cause-of-fire
+  "What lit the bot in the last window of ledger events w, the newest ignition (:alight): {:cause
+   kw :by kind :s-before-end s}, or nil when it never caught fire. An ignition the ledger could not
+   explain (:unknown) takes the nearest hit within fire-hit-ms either side (a damage-event can
+   arrive after the flag)."
+  [w end]
+  (when-let [a (last (filter #(= :alight (:ev %)) w))]
+    (let [near (->> w
+                    (filter #(and (= :hit (:ev %))
+                                  (not= :on_fire (:type %))
+                                  (<= (abs (- (:t % 0) (:t a 0))) fire-hit-ms)))
+                    (sort-by #(abs (- (:t % 0) (:t a 0))))
+                    first)
+          known? (not= :unknown (:cause a))]
+      (cond-> {:cause (cond known? (:cause a)
+                            near (:type near)
+                            :else :unknown)
+               :s-before-end (/ (- end (:t a 0)) 1000.0)}
+        (and known? (:by a)) (assoc :by (:by a))
+        (and (not known?) near (:by-kind near)) (assoc :by (:by-kind near))))))
+
+(defn items-moved
+  "{item delta} of the :item events of w: what the bot gained (positive) and lost (negative) of the
+   items the stages count, summed; items whose changes cancelled are left out."
+  [w]
+  (into
+   (sorted-map)
+   (remove (fn [[_ n]] (zero? n)))
+   (reduce (fn [m e] (update m (:item e) (fnil + 0) (:n e))) {} (filter #(= :item (:ev %)) w))))
+
 (defn case-of
   "How run r ended, from its ledger es (the observability plan, part G): its ending, the killer (the
    server's death line, else the last hit's attacker or damage type), the last case-window-ms of the
    run (the final fight): its first hit (when, by what, the health then, and what the bot was doing
-   and why), what it was doing at the end, the hits taken by attacker, the swings sent and how many
+   and why), what lit it (cause-of-fire), the items it gained and lost (items-moved), what it was
+   doing at the end, the hits taken by attacker, the swings sent and how many
    landed (a hurt flash on a swung-at entity), and the replay command (replay, a string). A pure
    function of values; the signature [ending killer doing why] is what a batch counts."
   [r es replay]
@@ -251,6 +284,8 @@
                    :doing (:kind doing-first)
                    :why (:why doing-first)})
      :at-end {:doing (:kind doing-end) :why (:why doing-end) :target (:target doing-end)}
+     :cause-of-fire (cause-of-fire w end)
+     :items (items-moved w)
      :hits (count hits)
      :hits-by (frequencies (map #(or (:by-kind %) (:type %)) hits))
      :swings (count (filter #(= :swing (:ev %)) w))
@@ -269,7 +304,8 @@
 (defn case-text
   "A case (case-of) as text a person or an agent reads in ten seconds."
   [c]
-  (let [{:keys [bot ending killer first-hit at-end hits hits-by swings landed replay timeline end]}
+  (let [{:keys [bot ending killer first-hit at-end hits hits-by swings landed replay timeline end
+                cause-of-fire items]}
         c]
     (str/join
      "\n"
@@ -294,6 +330,16 @@
               (:why first-hit)
               ")")
          "no hit in the last minute")
+       (if cause-of-fire
+         (str "cause of fire "
+              (:s-before-end cause-of-fire)
+              " s before the end: "
+              (name (:cause cause-of-fire))
+              (some->> (:by cause-of-fire)
+                       name
+                       (str " by ")))
+         "never caught fire in the last minute")
+       (str "items in the last minute: " (if (seq items) (pr-str items) "no change"))
        (str "at the end: doing " (:doing at-end)
             " (why " (:why at-end)
             ") target " (:target at-end))

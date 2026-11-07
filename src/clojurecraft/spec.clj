@@ -467,6 +467,12 @@
 (s/def :player/saturation number?)
 (s/def :player/on-fire? boolean?)
 (s/def :player/using-item? boolean?)
+(s/def :knock/vel (s/coll-of number? :kind vector? :count 3))
+(s/def :knock/at number?)
+(s/def :player/knock (s/keys :req-un [:knock/vel :knock/at]))
+(s/def :corrected/d number?)
+(s/def :corrected/at number?)
+(s/def :player/corrected (s/keys :req-un [:corrected/d :corrected/at]))
 (s/def :player/ignitions (s/coll-of number? :kind vector? :max-count 3))
 (s/def :player/struck-at number?)
 (s/def :player/hits
