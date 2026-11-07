@@ -547,3 +547,18 @@
              (is (.exists (io/file dir "senses" "T-1-9.truth-ring.edn"))))
            (is (= "[{:t 1}]" (str/trim (get (simrace/truth-texts ended) ".truth-ring.edn")))))
          (finally (run! #(.delete ^java.io.File %) (reverse (file-seq dir)))))))
+(deftest a-checkpoint-run-has-a-cap-of-its-own
+  (let [config {:simrace/checkpoint-max-minutes 60}
+        horizon (* 330 60000)]
+    (is (= [3600000 true] (simrace/cap-max-ms config "rods" horizon)))
+    (is (= [horizon false] (simrace/cap-max-ms config nil horizon)) "a plain run keeps the horizon")
+    (is (= [horizon false] (simrace/cap-max-ms {} "rods" horizon)) "no key, no cap")
+    (is (= [60000 false] (simrace/cap-max-ms config "rods" 60000)) "never beyond the horizon")
+    (is (= :bot-timeout (:reason (simrace/capped {:ok false :reason :timeout} true))))
+    (is (= :timeout (:reason (simrace/capped {:ok false :reason :timeout} false))))
+    (is (= :crashed (:reason (simrace/capped {:ok false :reason :crashed} true))))
+    (let [r (failure/mark
+             {:ok false :until "pearls-12" :reason :bot-timeout :plan {:plan/reached #{}}})]
+      (is (not (:run/infra? r)) "filed like any failure")
+      (is (simrace/timeout-signature? {:snapshot/signature (:run/signature r)})
+          "a capped run is a stall, its moment kept"))))

@@ -658,7 +658,7 @@
         '<td class="hide-sm num">' + esc((r.runners || []).join(', ')) + '</td><td>' + commitLink(r.commit) + '</td><td class="r num">' + r.runs + '</td><td class="r num">' + (r.ok ? '<b style="color:var(--good)">' + r.ok + '</b>' : '0') + '</td>' +
         '<td>' + (f ? esc(f) + ' <span class="muted">(' + r.reached[f] + ')</span>' : '—') + '</td><td class="hide-sm">' + funnelMini(r) + '</td>' +
         '<td>' + (r.failures || []).slice(0, 2).map(function (x) { return issueLink((r.issues || {})[x[0] + ' ' + x[1]], x[0] + ': ' + x[1]) + ' <span class="muted">' + x[2] + '</span>'; }).join('<br>') + '</td>' +
-        '<td>' + runLink(r.run) + '</td></tr>';
+        '<td>' + runLink(r.run) + (observedGap(r.observed) ? ' <span title="a blind spot: open the row" style="color:var(--bad)">●</span>' : '') + '</td></tr>';
       if (open) h += '<tr><td colspan="11">' + runDetail(r) + '</td></tr>';
     });
     h += '</tbody></table></div>';
@@ -666,6 +666,29 @@
       (pages > 1 ? '<button class="ghost" data-page="' + (H.page - 1) + '" ' + (H.page ? '' : 'disabled') + '>Newer</button><button class="ghost" data-page="' + (H.page + 1) + '" ' + (H.page < pages - 1 ? '' : 'disabled') + '>Older</button>' : '') +
       '<a href="data/batches/' + H.day + '.ndjson">every batch of the day (NDJSON)</a></div>';
     host.innerHTML = h;
+  }
+
+  // The observability row (botlogs/observed): runs with each file over the runs that should have
+  // one, intents with a why, ledger events dropped, packets the bot threw away. Anything short is red.
+  var OBSERVED = [['senses', 'senses lines'], ['events', 'ledger'], ['moment', 'moment'], ['ring', 'ring'], ['truth', 'server truth'], ['recording', 'recording (failed real)'], ['why', 'intents with a why']];
+  function observedGap(o) {
+    if (!o) return false;
+    return OBSERVED.some(function (k) { var p = o[k[0]]; return p && p[0] < p[1]; }) || o.dropped > 0 || Object.keys(o.unheard || {}).length > 0;
+  }
+  function observedDetail(o) {
+    if (!o) return '';
+    var h = '<h4>Observability</h4><table><thead><tr><th>what</th><th class="r">have</th><th class="r">share</th></tr></thead><tbody>';
+    OBSERVED.forEach(function (k) {
+      var p = o[k[0]]; if (!p) return;
+      var bad = p[0] < p[1];
+      h += '<tr><td>' + esc(k[1]) + '</td><td class="r num">' + p[0] + ' / ' + p[1] + '</td><td class="r num"' + (bad ? ' style="color:var(--bad)"' : '') + '>' + pct(share(p[0], p[1])) + '</td></tr>';
+    });
+    if (o.packets) h += '<tr><td>packets decoded of all the server sent</td><td class="r num">' + compact(o.packets[0]) + ' / ' + compact(o.packets[1]) + '</td><td class="r num">' + pct(share(o.packets[0], o.packets[1])) + '</td></tr>';
+    h += '<tr><td>ledger events dropped</td><td class="r num"' + (o.dropped > 0 ? ' style="color:var(--bad)"' : '') + '>' + (o.dropped || 0) + '</td><td></td></tr>';
+    var u = Object.keys(o.unheard || {}).sort(function (a, b) { return o.unheard[b] - o.unheard[a]; });
+    h += '<tr><td>packets thrown away</td><td class="r num"' + (u.length ? ' style="color:var(--bad)"' : '') + '>' + u.length + ' kinds</td><td></td></tr></tbody></table>';
+    if (u.length) h += '<p class="ink2">' + u.map(function (n) { return '<span class="mono">' + esc(n) + '</span> ' + compact(o.unheard[n]); }).join(' · ') + '</p>';
+    return h;
   }
 
   function runDetail(r) {
@@ -681,6 +704,7 @@
     if (r.leader) {
       h += '<h4>Furthest bot: <span class="mono">' + esc(r.leader.bot) + '</span></h4><p class="ink2">' + CHAIN.filter(function (m) { return r.leader.splits[m] != null; }).map(function (m) { return esc(m) + ' ' + clock(r.leader.splits[m]); }).join(' · ') + '</p>';
     }
+    h += observedDetail(r.observed);
     h += '<p class="muted">' + r.batches + ' batches' + (r.deaths != null ? ', ' + r.deaths + ' deaths over ' + r['death-runs'] + ' runs' : '') + ' · ' + runLink(r.run, 'the lane’s run') + ' · ' + commitLink(r.commit) + '</p></div></div>';
     return h;
   }

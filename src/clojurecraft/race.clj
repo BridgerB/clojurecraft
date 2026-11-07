@@ -144,6 +144,29 @@
               (* 60000))
       timeout-ms))
 
+(defn bot-cap-ms
+  "A checkpoint bot's own time limit, ms, from the config: :race/bot-minutes when the server's
+   start (from) is the :race/checkpoint's, so only the checkpoint lanes cap their bots; nil for
+   any other lane (a bot there plays until it ends or the job does)."
+  [config from]
+  (when (and from (= from (get-in config [:race/checkpoint :from])))
+    (some-> (:race/bot-minutes config)
+            (* 60000))))
+
+(defn bot-timeout-ms
+  "How long a bot may play, ms, started at now: until the job's deadline, or its own cap (ms, nil
+   for none) when that comes first; at least 1000."
+  [deadline now cap]
+  (max 1000 (min (- deadline now) (or cap Long/MAX_VALUE))))
+
+(defn capped
+  "A RESULT r of a bot that was stopped by its own cap (cap-ms, nil for none; started at start,
+   the job ending at deadline) rather than the job's end: a :timeout becomes :bot-timeout, a
+   stage's failure (no pearls in the time) that is filed. Any other RESULT is unchanged."
+  [r deadline start cap]
+  (cond-> r
+    (and (= :timeout (:reason r)) cap (< (+ start cap) deadline)) (assoc :reason :bot-timeout)))
+
 (defn marked
   "A RESULT as the race prints it: marked for bb failures (failure/mark), cut (failure/cut) when
    the job's end stopped the bot (a :timeout, the only timeout a churn bot has), and :run/infra?
@@ -1040,22 +1063,21 @@
   "One bot's whole life in a slot: the next serial's name (serials, an atom shared by the slots),
    its own atom and queue, on the board (live) and watched for milestones while it plays, landed on
    landing serial - 1 of the set (land-bot!), and played until its goal, its plan failing, a crash
-   or the job's end (deadline): no cap of its own. Its RESULT line is printed as it ends, marked
+   or the job's end (deadline); a checkpoint lane's bot also stops at :race/bot-minutes (bot-cap-ms),
+   a :bot-timeout, filed (capped), where the job's end is a cut. Its RESULT line is printed as it ends, marked
    cut (failure/cut) when the job's end stopped it. Its senses (senses/senses!: a line a second of
    what it sensed and decided, and the loop's slowest event) are written beside its recording as
    <name>.senses.edn the moment before its RESULT, so a batch that counts the RESULT has them,
    and its ledger beside them (senses/ledger!: every change, its hits, swings, intents and the
    entities round it) as <name>.events.edn, its mind at the end (senses/moment) as
    <name>.moment.edn and the minutes before (the ring) as <name>.ring.edn, and the server log's
-   lines about it (serverlog-lines: its death line, a kick, "
-  Can't
-  keep
-  up
-  ") as
+   lines about it (serverlog-lines: its death line, a kick, a server that can't keep up) as
    <name>.serverlog.txt.
    Returns {:name :result :truth}."
-  [{:keys [server ch centre serials live watcher prefix record-dir commit deadline]}]
+  [{:keys [server ch centre serials live watcher prefix record-dir commit deadline config]}]
   (let [n (swap! serials inc)
+        start (System/currentTimeMillis)
+        cap (bot-cap-ms config (:from server))
         name (bot-name prefix n)
         queue (async/chan events-buffer)
         world* (atom (game/init {:host (:host server) :port (:port server) :name name}))
@@ -1086,7 +1108,7 @@
               :until (:until server)
               :chain true
               :end-on-death? (fortress? (:from server))
-              :timeout-ms (max 1000 (- deadline (System/currentTimeMillis)))
+              :timeout-ms (bot-timeout-ms deadline start cap)
               :record (str (io/file record-dir (str name ".edn")))
               :commit commit
               :events queue
@@ -1106,9 +1128,12 @@
                                           pos
                                           (or (:player/dimension @world*) "minecraft:overworld")))
                        (catch Exception e (cli/log name "near truth not written:" e))))
-                (println "RESULT" name (pr-str (marked (with-death-message server name r)))) ; what bb failures groups by
+                (println "RESULT"
+                         name
+                         (pr-str (marked
+                                  (capped (with-death-message server name r) deadline start cap)))) ; what bb failures groups by
                 (flush))})]
-        {:name name :result r :truth @truth})
+        {:name name :result (capped r deadline start cap) :truth @truth})
       (catch Exception e
         (cli/log name "failed:" e)
         (write-senses!)

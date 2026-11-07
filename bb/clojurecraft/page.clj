@@ -154,11 +154,11 @@
 
 (defn round
   "The round as a value (see the namespace): runs and marks are what the report job downloaded,
-   the rest is the run's own facts (with :senses and :coverage from a real batch's senses files, botlogs/senses-summary). A run that never got into play (failures/unplayed?: its
+   the rest is the run's own facts (with :senses and :coverage from a real batch's senses files, botlogs/senses-summary, and :observed, the batch's observability row, botlogs/observed). A run that never got into play (failures/unplayed?: its
    server refused it or was gone) is no run of the bot's: it is kept out of every count and
    counted alone as :round/unplayed."
   [all marks milestones
-   {:keys [kind run commit at started ended issues runner batch senses coverage]}]
+   {:keys [kind run commit at started ended issues runner batch senses coverage observed]}]
   (let [runs (remove failures/unplayed? all)
         {:keys [deaths died]} (deaths runs)]
     (cond-> {:round/run run
@@ -180,6 +180,7 @@
       (seq marks) (assoc :round/first-at (first-at marks))
       (seq issues) (assoc :round/issues issues)
       coverage (assoc :round/coverage coverage :round/senses (or senses {}))
+      observed (assoc :round/observed observed)
       (leader runs marks milestones) (assoc :round/leader (leader runs marks milestones)))))
 
 (defn wall
@@ -242,7 +243,8 @@
       (seq issues) (assoc :issues issues)
       (:round/first-at r) (assoc :first (:round/first-at r))
       (:round/leader r) (assoc :leader (:round/leader r))
-      (:round/coverage r) (assoc :coverage (:round/coverage r) :senses (:round/senses r {})))))
+      (:round/coverage r) (assoc :coverage (:round/coverage r) :senses (:round/senses r {}))
+      (:round/observed r) (assoc :observed (:round/observed r)))))
 
 (defn day-of
   "The UTC day a batch belongs to, yyyy-mm-dd: its run's start's, else its commit's, else its
@@ -296,12 +298,28 @@
        (sort-by (fn [[[stage reason] n]] [(- n) stage reason]))
        (mapv (fn [[[stage reason] n]] [stage reason n]))))
 
+(defn observed-sum
+  "One observability row from several (botlogs/observed, a batch's each, read back from JSON):
+   each [have want] pair added, :dropped summed, :unheard counts merged by name."
+  [rows]
+  (reduce (fn [acc row]
+            (reduce-kv (fn [m k v]
+                         (cond (= k :unheard) (update m k #(merge-with + (or % {}) v))
+                               (number? v) (update m k (fnil + 0) v)
+                               (sequential? v) (update m k #(mapv + (or % [0 0]) v))
+                               :else m))
+                       acc
+                       row))
+          {}
+          rows))
+
 (defn combine
   "One row from batches (a run's, or a day's of one kind): counts summed, failures summed by
    signature, each milestone's fastest the least and its median weighted (speeds), the earliest
    start and first reach, the latest end, the runners, the furthest leader; deaths only over the
    batches that counted them, with the runs they cover as :death-runs; the runs that never got
-   into play (:unplayed, played) over the batches that kept them out."
+   into play (:unplayed, played) over the batches that kept them out; the observability rows
+   added (observed-sum)."
   [bs]
   (let [some-of (fn [k] (some k bs))
         sum (fn [k xs] (reduce + 0 (keep k xs)))
@@ -328,7 +346,8 @@
       (seq (keep :unplayed bs)) (assoc :unplayed (sum :unplayed bs))
       (seq (keep :issues bs)) (assoc :issues (apply merge (keep :issues bs)))
       (seq (keep :first bs)) (assoc :first (apply merge-with earliest (keep :first bs)))
-      (seq (keep :leader bs)) (assoc :leader (best-leader (keep :leader bs))))))
+      (seq (keep :leader bs)) (assoc :leader (best-leader (keep :leader bs)))
+      (seq (keep :observed bs)) (assoc :observed (observed-sum (keep :observed bs))))))
 
 (defn totals
   "A day's totals for one kind's batches (combine): the counts, times, first reaches and deaths;

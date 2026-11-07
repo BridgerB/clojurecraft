@@ -16,6 +16,7 @@
             [clojure.string :as str]
             [clojurecraft.blaze :as blaze]
             [clojurecraft.combat :as combat]
+            [clojurecraft.derived :as derived]
             [clojurecraft.entity :as entity]
             [clojurecraft.inventory :as inventory]
             [clojurecraft.memory :as memory]
@@ -245,7 +246,9 @@
 (defn events
   "Every change between two successive worlds a reader of a run wants, in order, each a map with
    :ev and :t (after's time): the plan's (intent-events), the body's (body-events), what the bot
-   sent (sent-events) and the entities near it (entity-events). A pure function of the two values:
+   sent (sent-events), the entities near it (entity-events) and what the world holds together
+   (derived/events: what lit the bot, items gained and lost, knockback, corrections, the biome,
+   breath). A pure function of the two values:
    the ledger observer folds it over every write of the atom, so nothing is sampled away (the
    observability plan, part C: the digest, done in-process, named and the same in the sim)."
   [before after]
@@ -255,7 +258,8 @@
             (concat (intent-events before after)
                     (body-events before after)
                     (sent-events after)
-                    (entity-events before after))))))
+                    (entity-events before after)
+                    (derived/events before after))))))
 
 ;; ---------------------------------------------------------------- the moment: the whole mind at an ending
 
