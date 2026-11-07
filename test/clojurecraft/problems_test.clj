@@ -25,3 +25,7 @@
 (deftest last-failure-is-one-sentence-and-history-is-data
   (is (= [] (filter #(< 300 (count (:problem/last-failure %))) problems))
       "a longer account of a failure belongs on the stage's issue, its runs in :problem/seen"))
+
+(deftest every-goal-doc-is-one-line
+  (is (= [] (filter #(< 120 (count (:goal/doc %))) plan/goals))
+      "a goal's doc says what it is in one line; the story is its stage's problem row"))
