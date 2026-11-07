@@ -2188,6 +2188,19 @@
       (let [w' (tick (assoc (pillar-failed :trail [] :fire? true) :plan/trail []))]
         (is (= :pillar (get-in w' [:plan/intent :intent/kind])))))))
 
+(deftest ^:eftest/synchronized a-retreat-is-never-to-a-cell-far-off
+  ;; Clj_r03 (59e528b, run 42364623752): 294 retreat walks to [607 42 -149], 1,500 blocks from
+  ;; the bot, restarted every 0.25 s under ghast fire; the trail held cells from before a teleport
+  (let [w (pillar-failed :trail [[607 42 -149]])
+        goal {:goal/id :blaze-rods :goal/done? :never :goal/plan :flip-test}
+        w' (with-redefs [plan/choose (constantly goal)
+                         plan/next-intent (constantly {:intent/kind :pillar
+                                                       :intent/item :cobblestone
+                                                       :intent/top 60})]
+             (plan/plan-tick w {:event/kind :tick :event/now 1050 :event/rand 0.5} [goal]))]
+    (is (not= :retreat (get-in w' [:plan/intent :intent/for])) "no walk to a far trail cell")
+    (is (= :retrying (:plan/waiting w')))))
+
 (deftest a-choice-with-no-target-is-refused-by-the-choice-it-is
   (let [pillar (fn [top] {:intent/kind :pillar :intent/item :cobblestone :intent/top top})
         fail (fn [w feet top at] (plan/remember-failure (assoc w :time/now at) (pillar top) feet))
