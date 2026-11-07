@@ -15,6 +15,7 @@
             [clojurecraft.build :as build]
             [clojurecraft.dimension :as dimension]
             [clojurecraft.eat :as eat]
+            [clojurecraft.filler :as filler]
             [clojurecraft.game :as game]
             [clojurecraft.hunger :as hunger]
             [clojurecraft.hunt :as hunt]
@@ -113,7 +114,7 @@
    when seal-behind? is true, filler is carried, and a solid foundation exists."
   [world from to seal-behind?]
   (let [seal-cell (plus from [0 1 0])]
-    (if (and seal-behind? world (stairs/building-filler world 1) (build/foundation world seal-cell))
+    (if (and seal-behind? world (filler/building world 1) (build/foundation world seal-cell))
       [(build/place-op seal-cell to nil :seal-behind)]
       [])))
 
@@ -137,20 +138,8 @@
    runs into the tunnel."
   [world lava]
   (and (<= (count lava) max-seals)
-       (some? (stairs/filler world (count lava)))
+       (some? (filler/for world (count lava)))
        (every? #(= % (build/foundation world %)) lava)))
-
-(defn walk-filler
-  "The filler a step's floor at cell is laid from: stairs/filler's item when a block of it laid
-   at cell stands as a floor (path/floor?), else nil. Soul sand, the last resort a hand-dug
-   tunnel carries, is no floor to a route (path treats it as awkward), so a step that laid it
-   in its floor dug it out and laid it again for ever (sim snapshot R1-20-1, issue #537: one
-   step's dig and place on the same cell for the whole window)."
-  [world cell]
-  (let [item (stairs/building-filler world 1)]
-    (when (and item
-               (path/floor? (assoc-in world [:world/blocks cell] (blocks/default-state item)) cell))
-      item)))
 
 (def deep-drop 3) ; non-solid cells under a floor that make it thin
 
@@ -173,14 +162,14 @@
 
 (defn underlay-possible?
   "Can the cell under floor be filled from the stand before the floor is walked: a filler carried
-   (stairs/filler), bridge-min-filler of them together so that the fill never eats a bridge's
+   (filler/for), bridge-min-filler of them together so that the fill never eats a bridge's
    reserve (landing 5 went from 64 cobblestone to 12 in 70 s, a floor and a fill under it at every
    step down its own pillar), and a solid neighbour to place against (build/foundation is the cell
    itself)?"
   [world floor]
   (let [under (plus floor [0 -1 0])]
-    (and (some? (stairs/filler world 1))
-         (>= (stairs/carried-filler world) bridge-min-filler)
+    (and (some? (filler/for world 1))
+         (>= (filler/carried world) bridge-min-filler)
          (= under (build/foundation world under)))))
 
 (defn underlay-ops
@@ -204,13 +193,13 @@
    with that one clause left out): every cell it opens and the floor loaded, none of them lava or
    something it never opens, and a floor that is solid, or lava a block placed against a solid
    neighbour fills, or a solid floor the route cannot walk on, replaced only with a filler
-   carried that stands as a floor once laid (walk-filler)."
+   carried that stands as a floor once laid (filler/walkable)."
   [world feet move]
   (let [cells (opens feet move)
         floor (plus (plus feet move) [0 -1 0])
         at #(terrain/block-at world %)
         lava? #(contains? blocks/lava-states (at %))
-        filler (walk-filler world floor)]
+        filler (filler/walkable world floor)]
     (and
      (every? some? (map at (conj cells floor)))
      (not-any? lava? cells)
@@ -331,7 +320,7 @@
    lava under it within stairs/bridge-depth (stairs/over-fluid?: a causeway over a lake is no
    cave's floor, unless fluid-ok?: bridge-over-void? asks for ground itself), a filler carried,
    the step dry? and, with that floor laid, safe?. The block laid is one that stands as a floor
-   once laid (walk-filler: soul sand, the last resort of stairs/filler, is not), as the safe?
+   once laid (filler/walkable: soul sand, the last resort of filler/for, is not), as the safe?
    asked of it assumes cobblestone and the placing puts the carried filler there: sim R1/37 seed 2
    (probe 40826098892) bridged the lava sea with soul sand and stood on five of its blocks, lava all
    round, and was :blocked three times in four seconds. The fortress's tunnel bridges only by
@@ -344,7 +333,7 @@
           (contains? #{:air :cave_air :void_air} (blocks/name-of (terrain/block-at world floor)))
           (= floor (build/foundation world floor))
           (or fluid-ok? (not (stairs/over-fluid? world floor)))
-          (some? (walk-filler world floor))
+          (some? (filler/walkable world floor))
           (dry? world feet move)
           (safe? (assoc-in world [:world/blocks floor] (blocks/default-state :cobblestone))
                  feet
@@ -375,7 +364,7 @@
    leaves only for the laid block) and, under that floor, ground-below? (over lava too only at
    bridge-lava-health, the sea under the Nether's caves: never bridged hurt), a filler reserve
    of bridge-min-filler and bridge-min-health: never over water, never hurt, never short of
-   blocks. The reserve is every filler carried together (stairs/carried-filler), not one kind of
+   blocks. The reserve is every filler carried together (filler/carried), not one kind of
    it: blaze-race-e landing 5 (step-bre5, 23c96b453) held cobblestone 12 and netherrack 4 at 70 s,
    neither 16 alone, and the level step across the void at [2157 67 1747] was refused for it. Sim world R2/12 (issue #338) met a cavern sixty blocks across over the lava sea, the
    basalt 26 blocks under its floor, that no step round its rim crossed in an hour."
@@ -386,15 +375,15 @@
          (bridge? world feet move true)
          (or (ground-below? world floor)
              (and (>= health bridge-lava-health) (ground-below? world floor true)))
-         (>= (stairs/carried-filler world) bridge-min-filler)
-         (some? (walk-filler world floor)))))
+         (>= (filler/carried world) bridge-min-filler)
+         (some? (filler/walkable world floor)))))
 
 (defn climb-out?
   "May the up move from feet stand on a block laid beside the feet at their own height: the
    step's floor (the cell beside the feet, under the cell stepped into) air that a solid
    neighbour holds up (build/foundation: a ledge's rock, a wall, a block laid before), the
    block under the feet solid, a filler carried that stands as a floor once laid
-   (walk-filler: soul sand laid is dug out again, and the climb offered for ever, sim
+   (filler/walkable: soul sand laid is dug out again, and the climb offered for ever, sim
    snapshot R1-20-1, issue #537), the step dry? when dry-only?, and with that
    floor laid, safe?. The way out of a dead end over a drop, where no level step has a floor and
    no turn may floor over the lava sea: the body stays on its stand while the block is laid
@@ -407,7 +396,7 @@
          (build/holds? world [:solid (plus feet [0 -1 0])])
          (contains? #{:air :cave_air :void_air} (blocks/name-of (terrain/block-at world floor)))
          (= floor (build/foundation world floor))
-         (some? (walk-filler world floor))
+         (some? (filler/walkable world floor))
          (or (not dry-only?) (dry? world feet move))
          (safe? (assoc-in world [:world/blocks floor] (blocks/default-state :cobblestone))
                 feet
@@ -835,7 +824,7 @@
                                       (seal-behind-ops world from to seal-behind?)))
             next (cond-> next
                    (= :place (:build/op next))
-                   (assoc :build/item (or (stairs/building-filler world 1) :cobblestone)))]
+                   (assoc :build/item (or (filler/building world 1) :cobblestone)))]
         (cond (nil? next)
               (reduce
                intent/dissoc-intent
@@ -851,9 +840,9 @@
               ;; never placed with a block that is not held (sim snapshots R2-17-1 and
               ;; R2-12-1, issue #410)
               (and (= :place (:build/op next))
-                   (or (nil? (stairs/building-filler world 1))
+                   (or (nil? (filler/building world 1))
                        (and (= :floor (:build/step next))
-                            (nil? (walk-filler world (:build/pos next))))))
+                            (nil? (filler/walkable world (:build/pos next))))))
               (reduce intent/dissoc-intent
                       (intent/assoc-intent (assoc world :player/controls {})
                                            :intent/tunnel-visited

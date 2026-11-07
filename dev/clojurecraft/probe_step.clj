@@ -7,11 +7,11 @@
 
    ms is the recording's clock; the target is the running :tunnel-to's own unless given."
   (:require [clojurecraft.blocks :as blocks]
+            [clojurecraft.filler :as filler]
             [clojurecraft.fortress :as fortress]
             [clojurecraft.intent :as intent]
             [clojurecraft.probe :as probe]
             [clojurecraft.recipe :as recipe]
-            [clojurecraft.stairs :as stairs]
             [clojurecraft.terrain :as terrain]))
 
 (set! *warn-on-reflection* true)
@@ -35,7 +35,7 @@
      :ground-below? (fortress/ground-below? w floor)
      :ground-below-lava-ok? (fortress/ground-below? w floor true)
      :bridge-over-void? (fortress/bridge-over-void? w feet move)
-     :walk-filler (fortress/walk-filler w floor)}))
+     :walk-filler (filler/walkable w floor)}))
 
 (defn -main
   "Print the report for each move toward the target at the recording's clock ms."
@@ -50,8 +50,8 @@
          :climb climb
          :intent (select-keys i [:intent/kind :intent/bridge? :intent/move :intent/retreats])
          :health (:player/health w)
-         :filler (stairs/filler w 1)
-         :filler16 (stairs/filler w 16)
+         :filler (filler/for w 1)
+         :filler16 (filler/for w 16)
          :held
          (into {}
                (comp (map val)

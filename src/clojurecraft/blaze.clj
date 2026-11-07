@@ -38,6 +38,7 @@
             [clojurecraft.drops :as drops]
             [clojurecraft.eat :as eat]
             [clojurecraft.entity :as entity]
+            [clojurecraft.filler :as filler]
             [clojurecraft.fortress :as fortress]
             [clojurecraft.game :as game]
             [clojurecraft.hunger :as hunger]
@@ -52,7 +53,6 @@
             [clojurecraft.plan :as plan]
             [clojurecraft.pocket :as pocket]
             [clojurecraft.recipe :as recipe]
-            [clojurecraft.stairs :as stairs]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.window :as window]
             [datascript.core :as d]))
@@ -1586,7 +1586,7 @@
             target (when cell
                      (let [f (build/foundation world cell)]
                        (when (and f (not (place/inside-player? world f))) f)))
-            filler (stairs/filler world combat/wall-fill)]
+            filler (filler/for world combat/wall-fill)]
         (when (and target filler (not (combat/wall-failed? world target)))
           {:intent/kind :place
            :intent/item filler

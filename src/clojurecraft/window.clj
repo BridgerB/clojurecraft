@@ -116,7 +116,7 @@
 
 (def junk
   "What a full inventory throws away to make room: what mining and walking pick up that no stage
-   asks for, no recipe the goals reach takes and no floor is laid from (stairs/fillers). Race
+   asks for, no recipe the goals reach takes and no floor is laid from (filler/fillers). Race
    38805920624 runner 5 (issues #172, #192): eight bots stopped at 36 full slots, 450 to 830
    cobblestone, the stones that drop themselves, raw copper, lapis, sand and clay among them;
    a craft's result or a furnace's output shift-clicked into the inventory had nowhere to go, the
@@ -124,7 +124,7 @@
    Nether adds what a tunnel to the fortress picks up (race 39337645053, issue #446: soul sand
    and soil, wart blocks, shroomlights, nuggets, quartz; magma blocks, which a tunnel through a
    basalt delta digs by the stack, probe 39855333521, issue #338, R3-28-1). The fortress's
-   own bricks and fences are junk too: no floor is laid from them (stairs/fillers) and no
+   own bricks and fences are junk too: no floor is laid from them (filler/fillers) and no
    recipe the goals reach takes them, and a fortress dug through fills slots with them by
    the hundred (issue #580: 705 nether bricks held, no slot for a craft's result)."
   #{:sand :red_sand :sandstone :red_sandstone :clay_ball :raw_copper :lapis_lazuli :redstone

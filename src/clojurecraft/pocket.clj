@@ -14,12 +14,12 @@
   (:require [clojure.string :as str]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.build :as build]
+            [clojurecraft.filler :as filler]
             [clojurecraft.intent :as intent]
             [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
             [clojurecraft.place :as place]
             [clojurecraft.recipe :as recipe]
-            [clojurecraft.stairs :as stairs]
             [clojurecraft.terrain :as terrain]))
 
 (set! *warn-on-reflection* true)
@@ -305,14 +305,6 @@
   [c placed]
   (mapv #(build/dig-op % c nil :unseal) (reverse placed)))
 
-(defn seal-filler
-  "The block to seal n cells with, or nil: the first of stairs/filler's list (cobblestone, then
-   the Nether's own rock, which a tunnel carries by the hundred) the bot holds n of. Blaze-race-v
-   job 5 laid its 64 cobblestone into a tunnel's floors in 8 minutes, held 160 netherrack, could
-   not seal, and held open under fire until dead (hp 14 to 1 in 26 s)."
-  [world n]
-  (stairs/filler world n))
-
 (def seal-retry-ms 60000) ; ms after a seal failed anywhere before another is tried
 
 (defn pickaxe-held?
@@ -342,7 +334,7 @@
          (or (nil? failed) (> (- (:time/now world 0) failed) seal-retry-ms))
          (pickaxe-held? world)
          (pos? n)
-         (some? (seal-filler world n)))))
+         (some? (filler/for world n)))))
 
 (defn ops
   "The site as build ops: a dig of each cell still to dig, from the stand, then (unless prepare?:
@@ -484,7 +476,7 @@
               (intent/assoc-intent :intent/started (or (:intent/started i) (:time/now world 0)))
               (work-ops
                i
-               (seal-ops (:pocket/cell site) cells (or (seal-filler world (count cells)) seal-item))
+               (seal-ops (:pocket/cell site) cells (or (filler/for world (count cells)) seal-item))
                event
                true)))))
 

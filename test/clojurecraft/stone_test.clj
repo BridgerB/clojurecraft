@@ -3,6 +3,7 @@
    collect waits for, the stairs it cuts when nothing is in sight, and where it stops."
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [clojurecraft.blocks :as blocks]
+            [clojurecraft.filler :as filler]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
@@ -1393,10 +1394,10 @@
 (deftest planks-are-the-last-filler-and-no-descent-spends-them
   (let [planks (standing 48 :birch_planks :birch_planks :birch_planks)
         both (standing 48 :birch_planks :birch_planks :birch_planks :dirt)]
-    (is (= :birch_planks (stairs/filler planks 3)) "nothing else held: planks")
-    (is (nil? (stairs/filler planks 4)) "not more than held")
-    (is (= :dirt (stairs/filler both 1)) "a filler first")
-    (is (zero? (stairs/carried-filler planks)) "a descent's reserve counts none")))
+    (is (= :birch_planks (filler/for planks 3)) "nothing else held: planks")
+    (is (nil? (filler/for planks 4)) "not more than held")
+    (is (= :dirt (filler/for both 1)) "a filler first")
+    (is (zero? (filler/carried planks)) "a descent's reserve counts none")))
 
 (deftest a-water-cell-with-no-support-is-laid-after-a-supported-one-beside-it
   (let [w (-> (standing 64 :cobblestone :cobblestone)

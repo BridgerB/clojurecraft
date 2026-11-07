@@ -26,6 +26,7 @@
             [clojurecraft.dimension :as dimension]
             [clojurecraft.eat :as eat]
             [clojurecraft.entity :as entity]
+            [clojurecraft.filler :as filler]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.memory :as memory]
@@ -36,7 +37,6 @@
             [clojurecraft.place :as place]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
-            [clojurecraft.stairs :as stairs]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.window :as window]))
 
@@ -905,7 +905,7 @@
    (back-off-pointless?), never a fight (#577, danger-health): with e back-off-to or more away, the
    meal when food is held and the bar can take one, else the wait :resting; otherwise the meal
    when food is held, the bar can take one and e is out of attack-reach, else a block laid
-   between (wall-cell, a filler of stairs/filler), else a pillar of pillar-height when
+   between (wall-cell, a filler of filler/for), else a pillar of pillar-height when
    pillar-fill filler is held, else the meal, else the dig of a nook under the feet (nook-cell,
    a pickaxe held) to stand in. Only with nothing at all held the wait :cornered, which ENDS THE
    PLAN after wait-ticks: the one choice here that is a death or a failure, taken with nothing
@@ -915,8 +915,8 @@
   (let [food (when (< (:player/food world 20) 20) (eat/food-held world))
         near? (<= (physics/distance (game/eye world) (aim e)) attack-reach)
         wall (let [w (wall-cell world e)] (when-not (wall-failed? world w) w))
-        filler (stairs/filler world wall-fill)
-        pillar (when-not (pillar-failed? world) (stairs/filler world pillar-fill))
+        filler (filler/for world wall-fill)
+        pillar (when-not (pillar-failed? world) (filler/for world pillar-fill))
         nook (nook-cell world)
         [_ fy _] (intent/feet world)]
     (cond (>= (horizontal world e) back-off-to)

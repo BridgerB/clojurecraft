@@ -37,6 +37,7 @@
             [clojurecraft.dimension :as dimension]
             [clojurecraft.drops :as drops]
             [clojurecraft.entity :as entity]
+            [clojurecraft.filler :as filler]
             [clojurecraft.fortress :as fortress]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
@@ -1574,11 +1575,11 @@
     (when (not= [0 0] [hx hz]) [(+ fx hx) (+ fy dy) (+ fz hz)])))
 
 (defn wall-toward
-  "A :place of one block of the filler held (stairs/filler) in the first open cell of levels (dy from
+  "A :place of one block of the filler held (filler/for) in the first open cell of levels (dy from
    the feet) on the side of the feet that point to lies on (cell-toward), or nil when all are solid
    or none is held. Marked :intent/wall?, so the hunt's interrupt does not cut it."
   [world to levels]
-  (when-let [item (stairs/filler world 2)]
+  (when-let [item (filler/for world 2)]
     (some (fn [dy]
             (when-let [c (cell-toward world to dy)]
               (when-not (solid-at? world c)
@@ -1888,7 +1889,7 @@
                                                           (combat/seen? world e))))
                                            (swarm world))
                                      (:player/pos world))]
-      (let [item (stairs/filler world 1)
+      (let [item (filler/for world 1)
             hide (hide-cell world e)
             line (when item (line-cell world e))]
         (cond hide {:intent/kind :walk :intent/target hide :intent/for :cover :intent/wall? true}

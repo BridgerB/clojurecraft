@@ -26,8 +26,8 @@ sourceRefs:
   - src/clojurecraft/stairs.clj#defn clear-way?
   - src/clojurecraft/stairs.clj#defn next-to-open
   - test/clojurecraft/stone_test.clj#a-carpet-over-the-head-is-a-cell-to-open-in-a-stair-up
-  - src/clojurecraft/stairs.clj#def fillers
-  - src/clojurecraft/stairs.clj#defn filler
+  - src/clojurecraft/filler.clj#def fillers
+  - src/clojurecraft/filler.clj#defn for
   - src/clojurecraft/stairs.clj#defn shaft?
   - src/clojurecraft/stairs.clj#defn shaft-safe?
   - test/clojurecraft/stone_test.clj#a-shaft-through-open-air-is-safe-beside-water
@@ -41,8 +41,8 @@ sourceRefs:
   - src/clojurecraft/stairs.clj#defn up-dry?
   - src/clojurecraft/stairs.clj#defn wet-feet
   - src/clojurecraft/stairs.clj#defn dry-feet
-  - src/clojurecraft/stairs.clj#defn planks-of
-  - src/clojurecraft/stairs.clj#defn filler
+  - src/clojurecraft/filler.clj#defn planks-of
+  - src/clojurecraft/filler.clj#defn for
   - test/clojurecraft/stone_test.clj#a-stair-up-is-not-cut-from-feet-in-fed-water
   - src/clojurecraft/stairs.clj#defn floors-affordable?
   - test/clojurecraft/stone_test.clj#a-stair-down-lays-floors-only-while-the-filler-reaches-its-depth

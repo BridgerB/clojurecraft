@@ -8,6 +8,7 @@
             [clojurecraft.blocks :as blocks]
             [clojurecraft.build :as build]
             [clojurecraft.dimension :as dimension]
+            [clojurecraft.filler :as filler]
             [clojurecraft.fortress :as fortress]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
@@ -15,7 +16,6 @@
             [clojurecraft.path :as path]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
-            [clojurecraft.stairs :as stairs]
             [clojurecraft.terrain :as terrain]))
 
 (def netherrack (blocks/default-state :netherrack))
@@ -374,7 +374,7 @@
         (is (not (fortress/bridge-over-void? short [0 64 0] [1 0 0])) "15 together: short")))
     (testing "soul sand is no bridge (R1/37 seed 2: soul sand 207, lava all round, :blocked)"
       (let [sand (assoc w :player/inventory {0 {:item (recipe/item-id :soul_sand) :count 207}})]
-        (is (some? (stairs/filler sand 16)) "it is the last resort filler")
+        (is (some? (filler/for sand 16)) "it is the last resort filler")
         (is (not (fortress/bridge-over-void? sand [0 64 0] [1 0 0])))
         (is (not (fortress/bridge? sand [0 64 0] [1 0 0] true)))))))
 
@@ -882,8 +882,8 @@
     (is (not (fortress/safe? (carry :gravel) [0 64 0] [1 0 0])) "gravel falls out of a floor")
     ;; Issue #537's R1-20-1: soul sand is a filler, but laid in a floor it stands as no
     ;; walk floor, so the step dug it out and laid it again for the whole window.
-    (is (nil? (fortress/walk-filler (carry :soul_sand) floor)) "soul sand laid is no walk floor")
-    (is (= :cobblestone (fortress/walk-filler (carry :cobblestone) floor)))
+    (is (nil? (filler/walkable (carry :soul_sand) floor)) "soul sand laid is no walk floor")
+    (is (= :cobblestone (filler/walkable (carry :cobblestone) floor)))
     (is (not (fortress/safe? (carry :soul_sand) [0 64 0] [1 0 0]))
         "a floor only soul sand could replace is not replaced")
     (doseq [item [:cobblestone :soul_soil :basalt :blackstone]]
@@ -1500,24 +1500,24 @@
                    (into {}
                          (map-indexed (fn [i [item n]] [i {:item (recipe/item-id item) :count n}]))
                          (partition 2 items))))]
-    (is (= :netherrack (stairs/building-filler (w :cobblestone 64 :netherrack 160) 1))
+    (is (= :netherrack (filler/building (w :cobblestone 64 :netherrack 160) 1))
         "the start of v job 5's tunnel")
-    (is (= :cobblestone (stairs/building-filler (w :cobblestone 64) 1))
+    (is (= :cobblestone (filler/building (w :cobblestone 64) 1))
         "no netherrack: cobblestone, above the reserve")
-    (is (= :cobblestone (stairs/building-filler (w :cobblestone 5) 1))
+    (is (= :cobblestone (filler/building (w :cobblestone 5) 1))
         "below the reserve and nothing else: still laid, a tunnel is not stopped")
     (is
-     (nil? (stairs/building-filler (w :cobblestone 3 :stick 8) 1))
+     (nil? (filler/building (w :cobblestone 3 :stick 8) 1))
      "with the sticks to make one the last three are a stone pickaxe's: z14 job 5 laid them all and ended with 8 sticks and no pickaxe")
-    (is (= :cobblestone (stairs/building-filler (w :cobblestone 3) 1))
+    (is (= :cobblestone (filler/building (w :cobblestone 3) 1))
         "with no sticks they make no pickaxe: laid")
-    (is (= :dirt (stairs/building-filler (w :cobblestone 3 :stick 8 :dirt 4) 1))
+    (is (= :dirt (filler/building (w :cobblestone 3 :stick 8 :dirt 4) 1))
         "another filler is laid before them")
-    (is (= :cobblestone (stairs/building-filler (w :cobblestone 4 :stick 8) 1))
+    (is (= :cobblestone (filler/building (w :cobblestone 4 :stick 8) 1))
         "one above the pickaxe's three")
-    (is (= :cobblestone (stairs/filler (w :cobblestone 64 :netherrack 160) 1))
+    (is (= :cobblestone (filler/for (w :cobblestone 64 :netherrack 160) 1))
         "seals and cover still take filler's cobblestone first")
-    (is (= :netherrack (fortress/walk-filler (w :cobblestone 64 :netherrack 160) [1 63 0])))))
+    (is (= :netherrack (filler/walkable (w :cobblestone 64 :netherrack 160) [1 63 0])))))
 
 (deftest a-step-down-onto-a-dead-cell-is-not-a-step-forward
   ;; blaze-race-z9 job 5 (run 41222838848): at [2162 69 1748] the tunnel to [2209 60 1794] chose

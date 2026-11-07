@@ -40,7 +40,7 @@ sourceRefs:
   - src/clojurecraft/fortress.clj#defn leg-done?
   - src/clojurecraft/fortress.clj#defn leg-over?
   - src/clojurecraft/fortress.clj#def leg-max
-  - src/clojurecraft/fortress.clj#defn walk-filler
+  - src/clojurecraft/filler.clj#defn walkable
   - test/clojurecraft/fortress_test.clj#a-leg-given-up-untravelled-turns-at-the-same-length
   - src/clojurecraft/fortress.clj#defn leg-progress
   - src/clojurecraft/fortress.clj#defn rock-run
@@ -72,7 +72,7 @@ sourceRefs:
   - test/clojurecraft/fortress_test.clj#a-tunnel-replaces-a-solid-floor-the-route-cannot-walk
   - test/clojurecraft/fortress_test.clj#a-tunnel-floors-with-carried-stone-after-cobblestone-is-spent
   - test/clojurecraft/fortress_test.clj#a-tunnel-resumes-a-reachable-entry-after-a-no-path
-  - src/clojurecraft/stairs.clj#defn filler
+  - src/clojurecraft/filler.clj#defn for
   - test/clojurecraft/fortress_test.clj#no-step-opens-a-spawner
   - src/clojurecraft/fortress.clj#defn arrived?
   - src/clojurecraft/fortress.clj#def aside

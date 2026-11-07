@@ -46,6 +46,7 @@
             [clojurecraft.dimension :as dimension]
             [clojurecraft.eat :as eat]
             [clojurecraft.entity :as entity]
+            [clojurecraft.filler :as filler]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
@@ -56,7 +57,6 @@
             [clojurecraft.place :as place]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
-            [clojurecraft.stairs :as stairs]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.window :as window]))
 
@@ -1087,7 +1087,7 @@
             under [sx (dec sy) sz]
             wall (bed-wall stand site)
             open (filter #(= :clear (path/classify world %)) wall)
-            stone (stairs/filler world 1)
+            stone (filler/for world 1)
             standing (- (count wall) (count open))
             dist (physics/horizontal-distance (physics/centre stand) (physics/centre site))
             health (:player/health world full-health)
