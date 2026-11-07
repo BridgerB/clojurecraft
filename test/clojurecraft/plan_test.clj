@@ -2201,6 +2201,26 @@
     (is (not= :retreat (get-in w' [:plan/intent :intent/for])) "no walk to a far trail cell")
     (is (= :retrying (:plan/waiting w')))))
 
+(defmethod plan/fire-cover :fire-test
+  [world _]
+  (when (:test/shot world) {:intent/kind :place :intent/item :cobblestone :intent/cell [1 2 3]}))
+
+(deftest ^:eftest/synchronized a-retry-under-fire-takes-cover-not-the-retreat-walk
+  ;; stage 18 (b3bfbfd, b54f648, 59e528b): 18 of 18 deaths in the open to ghast or blaze fire came
+  ;; during a :walk :for :retreat, the plan's retry with a trail cell to go to
+  (let [goal {:goal/id :blaze-rods :goal/done? :never :goal/plan :fire-test}
+        tick (fn [w]
+               (with-redefs [plan/choose (constantly goal)
+                             plan/next-intent (constantly {:intent/kind :pillar
+                                                           :intent/item :cobblestone
+                                                           :intent/top 60})]
+                 (plan/plan-tick w {:event/kind :tick :event/now 1050 :event/rand 0.5} [goal])))
+        w (pillar-failed)]
+    (is (= :retreat (get-in (tick w) [:plan/intent :intent/for])) "calm: the retreat walk")
+    (let [w' (tick (assoc w :test/shot true))]
+      (is (= :place (get-in w' [:plan/intent :intent/kind])) "under fire: the cover")
+      (is (not= :retreat (get-in w' [:plan/intent :intent/for]))))))
+
 (deftest a-choice-with-no-target-is-refused-by-the-choice-it-is
   (let [pillar (fn [top] {:intent/kind :pillar :intent/item :cobblestone :intent/top top})
         fail (fn [w feet top at] (plan/remember-failure (assoc w :time/now at) (pillar top) feet))

@@ -179,6 +179,16 @@
   {:arglists '([world goal i])}
   (fn [_world goal _i] (:goal/plan goal :needs)))
 
+(defmulti fire-cover
+  "The intent that covers the bot from ranged fire (a ghast's, a blaze's) at this moment, by the
+   goal row's own rules, or nil when the bot is not under fire or the row has no cover to take:
+   asked before a retry's retreat walk, which in the open is a walk under fire. Keyed by
+   :goal/plan; nil by default."
+  {:arglists '([world goal])}
+  (fn [_world goal] (:goal/plan goal :needs)))
+
+(defmethod fire-cover :default [_ _] nil)
+
 (defmulti steer
   "The world with the controls its running intent set this tick as goal, the row the intent
    serves, would have them: a row's own rule over every look its intents make, whatever their
@@ -1058,6 +1068,7 @@
         retrying? (and next
                        (or (identical-retry? next failed feet) (failed-before? world next feet)))
         danger? (or (:player/on-fire? world) (menaced? world))
+        covering (when (and retrying? goal) (fire-cover world goal))
         retreat-cell (when retrying?
                        (some #(when-not (or (= % feet)
                                             (contains? (:plan/blacklist world #{}) %)
@@ -1097,6 +1108,8 @@
           (nil? next) (wait world :nothing-to-do)
           (:plan/wait next) (wait world (:plan/wait next))
           leaving (start-intent world (assoc leaving :intent/goal (:goal/id goal)))
+          (and retrying? covering)
+          (start-intent world (assoc covering :intent/goal (:goal/id goal)))
           (and retrying? retreat-cell)
           (start-intent (update world :plan/boxed-at (fnil conj #{}) feet)
                         {:intent/kind :walk
