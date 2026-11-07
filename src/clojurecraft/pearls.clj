@@ -2367,6 +2367,26 @@
      :intent/seal-behind? true
      :intent/for :pearls}))
 
+(defn tunnel-answer
+  "The intent that answers a melee mob that has just struck the bot while it bores out of the
+   fortress (fortress-escaping?, can-tunnel-out?), or nil: the striker (combat/striker) is not a
+   ranged kind and stands within the sword's reach (combat/in-reach?). At or over the danger-line
+   (combat/danger-line) a :fight held where the bot stands (:intent/hold?); under it the cover
+   (combat/cover: a block laid between, a meal), never the fight and never the wait that ends
+   the plan. The hunt answers wither skeletons and hoglins itself (combat/answering), so the
+   :defend row leaves them, and the bore, which asks nothing, dug on with its back open: Clj_r10
+   (d3ce99b, run 42353848749) was faced 16 times and hit 6, 20 health to none in 21 s, with no
+   swing sent (issue #263)."
+  [world]
+  (when (and (fortress-escaping? world) (can-tunnel-out? world))
+    (when-let [[eid e] (combat/striker world)]
+      (when (and (not (contains? ranged-kinds (entity/kind e))) (combat/in-reach? world e))
+        (let [hurt? (< (:player/health world 20.0) (combat/danger-line world))
+              cover (when hurt? (combat/cover world e))]
+          (cond (not hurt?) {:intent/kind :fight :intent/target eid :intent/hold? true}
+                (contains? cover :intent/kind) (assoc cover :intent/wall? true)
+                :else nil))))))
+
 (defn pocket-bore
   "The sealed-pocket phase of the fortress exit, or nil when the bore itself should go on:
    in the blaze pocket (pocket/in?, the stage-17 refuge the rods were fought from), seal it
@@ -3025,6 +3045,7 @@
                (and (fortress-escaping? world) (not (shot-at? world)))))
       (intent/why :hunt/and-meal-or-empty?-filter-combat-seen?-world-val meal)
       (pocket-bore world) (intent/why :hunt/pocket-bore-world (pocket-bore world))
+      (tunnel-answer world) (intent/why :hunt/tunnel-answer (tunnel-answer world))
       (and (fortress-escaping? world) (can-tunnel-out? world) (shot-at? world) (cover-from world))
       (intent/why :hunt/and-fortress-escaping?-world-can-tunnel-out?-wor (cover-from world))
       (and (fortress-escaping? world) (can-tunnel-out? world))
@@ -3381,6 +3402,7 @@
                     (some? (shelter world))
                     (or (some? (angry-near world)) (angry-within? world hold-radius)))
                (some? (first (struck-by world)))
+               (some? (tunnel-answer world))
                (shot-at? world)
                (and (= :lookout (:intent/kind i)) (some? (first (threat world)))))
            (not (same-choice? i (plan/next-intent world goal plan/goals))))))
