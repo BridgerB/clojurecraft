@@ -52,8 +52,8 @@
 (s/def :gym/summon (s/coll-of string? :kind vector?)) ; RCON commands run in the row's dimension once the bot stands there with its kit (fill-in): the mobs it meets
 (s/def :gym/difficulty #{"peaceful" "easy" "normal" "hard"}) ; set before the bot is landed
 (s/def :gym/fixture? true?)              ; a row that judges the landing alone: its --until puts no goal in play
-(s/def :gym/name string?)                ; a row's own name, for a row that shares its goal and --until with another (issues #262, #263)
-(s/def :gym/goals (s/coll-of keyword? :kind vector? :min-count 1)) ; the stages a chained row plays in order (issue #10)
+(s/def :gym/name string?)                ; a row's own name, for a row that shares its goal and --until with another
+(s/def :gym/goals (s/coll-of keyword? :kind vector? :min-count 1)) ; the stages a chained row plays in order
 (s/def ::row
   (s/keys :req [:gym/goal :gym/until :gym/prereqs :gym/timeout-ms :gym/truth]
           :opt
@@ -102,17 +102,16 @@
 (def fortress-pad-open
   "The open fortress start: fortress-pad with a doorway, two cells high and three wide, cut in its
    east wall, so the bot walks out onto the Nether as a race bot arrives at a fortress, not sealed
-   in a box (pearls-travel-c jobs 2 and 3, issue #263: 106 and 111 minutes of lookouts with no
-   walk, the harness and not the bot)."
+   in a box."
   (conj fortress-pad "fill {x+2} {y} {z-1} {x+2} {y+1} {z+1} minecraft:air"))
 
 (def nether-arena
-  "A sealed room in the Nether (issue #261), ruststeve's arena-run.sh recipe: netherrack two
-   thick on every side round a room seven square and four high (an enderman stands in it, a
-   blaze hovers), its floor at the landing's feet. Nothing outside reaches in: no lava, no
-   ghast, no fall, so a row measures the fight and not the Nether. ruststeve built its blaze
-   arena in the overworld because its SDK streamed Nether chunks too slowly after the
-   cross-dimension teleport; ours reads the dimension's columns as they come (issue #11)."
+  "A sealed room in the Nether, ruststeve's arena-run.sh recipe: netherrack two thick on every side
+   round a room seven square and four high (an enderman stands in it, a blaze hovers), its floor at
+   the landing's feet. Nothing outside reaches in: no lava, no ghast, no fall, so a row measures the
+   fight and not the Nether. ruststeve built its blaze arena in the overworld because its SDK
+   streamed Nether chunks too slowly after the cross-dimension teleport; ours reads the dimension's
+   columns as they come."
   ["fill {x-5} {y-2} {z-5} {x+5} {y+5} {z+5} minecraft:netherrack"
    "fill {x-3} {y} {z-3} {x+3} {y+3} {z+3} minecraft:air"])
 
@@ -138,8 +137,8 @@
   ([entity d nbt] (str "summon minecraft:" entity " " (at-offset d) (when nbt (str " " nbt)))))
 
 (defn no-ai-zombie
-  "A zombie that never moves or attacks (NoAI) and never despawns, at d: the first thing a
-   fight row kills (issue #259's attack row)."
+  "A zombie that never moves or attacks (NoAI) and never despawns, at d: the first thing a fight row
+   kills."
   [d]
   (summon "zombie" d "{NoAI:1b,PersistenceRequired:1b}"))
 
@@ -153,10 +152,8 @@
    " minecraft:spawner{SpawnData:{entity:{id:\"minecraft:blaze\"}},SpawnCount:2,MaxNearbyEntities:6,RequiredPlayerRange:16,SpawnRange:2,MinSpawnDelay:40,MaxSpawnDelay:80}"))
 
 (defn slow-blaze-spawner
-  "A blaze spawner at d that makes one blaze at a time, every three to six seconds, two at most
-   near it: blaze-spawner's two every two to four seconds put three blazes' volleys on the bot at
-   once, and gym blaze-7c runs 1 and 2 (run 38894258652) went from 16 health to nothing in two
-   seconds, five hits in a row, before any break-off could act."
+  "A blaze spawner at d that makes one blaze at a time, every three to six seconds, two at most near
+   it."
   [d]
   (str
    "setblock "
@@ -169,13 +166,10 @@
   (vec (repeat n (summon "enderman" d "{PersistenceRequired:1b}"))))
 
 (def dragon
-  "A dragon of known state at the fountain: any other gone first, the exit portal its death
-   opens shut again, then one summoned with full health and DragonPhase 0 (circling). A summoned
-   dragon has no fight manager and starts in phase 10, hovering, so the siblings set both
-   (ruststeve gym.rs, steve gym/registry.ts). The portal: when the End's fight has scanned the
-   world before this kill, the dragon killed is the fight's own, its death opens the exit portal
-   in the basin where the bot waits, and gym dragon-c run 1 walked into it and got the credits
-   (a win by the server's word) 25 s in, with nothing fought."
+  "A dragon of known state at the fountain: any other gone first, the exit portal its death opens
+   shut again, then one summoned with full health and DragonPhase 0 (circling). A summoned dragon
+   has no fight manager and starts in phase 10, hovering, so the siblings set both (ruststeve
+   gym.rs, steve gym/registry.ts)."
   ["kill @e[type=minecraft:ender_dragon]"
    "fill -2 55 -2 2 70 2 minecraft:air replace minecraft:end_portal"
    "summon minecraft:ender_dragon 0 80 0 {DragonPhase:0,Health:200f}"])
@@ -204,8 +198,7 @@
 (def spike-cages
   "A :gym/setup, run with the island forceloaded: every crystal gone (a crystal lights fire in its
    own cell each tick, a block over its bedrock), then the iron cages and the fire taken off the
-   spikes' tops, so a crystal summoned on top stands on its bedrock (issue #267: a strike through a
-   cage's bars is unproven, left for a later change)."
+   spikes' tops, so a crystal summoned on top stands on its bedrock."
   (into [no-crystals] (concat (spike-tops "iron_bars") (spike-tops "fire"))))
 
 (def spike-crystals
@@ -248,10 +241,8 @@
 
 (def no-fire
   "A :gym/summon entry: the blazes' fireballs set no blocks alight (SmallFireball places fire only
-   when mob griefing is on). A fire lights the cells round it past 11, and a spawner's blaze
-   spawns only where the light is 11 or less: gym blaze-7a run 3 (run 38891910129) had the floor
-   by the spawner lit after its first fireballs, and the spawner made no blaze in the three
-   minutes after. The bot itself still burns when hit."
+   when mob griefing is on). A fire lights the cells round it past 11, and a spawner's blaze spawns
+   only where the light is 11 or less. The bot itself still burns when hit."
   "gamerule mob_griefing false")
 
 (defn rods-held
@@ -260,40 +251,32 @@
   {:truth/cmd "clear {name} minecraft:blaze_rod 0" :truth/re (str "Found ([" n "-9]|[1-9][0-9]) ")})
 (defn no-ai-enderman
   "An enderman that never moves, attacks or teleports (NoAI) and never despawns, at d: the first
-   thing the pearl rows kill (issue #263)."
+   thing the pearl rows kill."
   [d]
   (summon "enderman" d "{NoAI:1b,PersistenceRequired:1b}"))
 
 (def pearl-kit
-  "What a pearl row gives (issue #263): an iron sword, two iron pickaxes for the burrows the hunt
-   fights from, the iron helmet and chestplate #259's armour row makes (put on by the
-   :wear-armour row), and food for the fights' hunger: what a chained run carries by then. Two
-   pickaxes because the chain's :cast-one and :portal rows keep a spare (:goal/spares, #485), so
-   a run comes into the Nether holding two, and because one is 250 digs: gym batch
-   pearls-warped6-b (plan run 39700288080) cut eleven to thirteen burrows a run at ten to
-   sixteen digs each, and twelve pearls are about twenty-four kills."
+  "What a pearl row gives: an iron sword, two iron pickaxes for the burrows the hunt fights from,
+   the iron helmet and chestplate #259's armour row makes (put on by the :wear-armour row), and food
+   for the fights' hunger: what a chained run carries by then. Two pickaxes because the chain's
+   :cast-one and :portal rows keep a spare (:goal/spares, #485), so a run comes into the Nether
+   holding two, and because one is 250 digs."
   ["minecraft:iron_sword 1" "minecraft:iron_pickaxe 2" "minecraft:iron_helmet 1"
    "minecraft:iron_chestplate 1" "minecraft:cooked_beef 16"])
 
 (def pearl-arena
-  "The live pearl row's arena (issue #263): a block of stone 27 square from eight under the
-   landing to six over it, the room 25 square and seven high carved out of it (a floor eight
-   deep, a wall one thick and seven high round it), open to a clear midnight sky, light blocks
-   five over the floor: the burrow is cut in stone, the
-   endermen stand ten blocks off, far enough to be provoked by a stare (pearls/stare-from) and
-   never by accident, no sun or rain on them (either sends an enderman off), and no dark for a
-   zombie to spawn in (a monster spawns only at block light 0). The sealed Nether room is seven
-   square: every enderman in it is within reach, and gym batch pearls-263a's live trials fought
-   all three at once in the open; batch pearls-263b's unlit arena spawned a zombie that the
-   :defend row backed away from, turn about with the hunt, until the bot died. The wall: the
-   lit square's light reaches ten
-   blocks past its edge and no farther, the dark beyond spawns zombies, skeletons and creepers
-   at midnight, and they walked in, over the row's 300 s, to the burrow's stairs: batches
-   pearls-warped4-a and b lost two arena runs in six to them, pearls-warped5-b's run 2 died
-   five times in eighty seconds to zombies coming down its stairs one after another (probe
-   39683564524). Walled, nothing walks in, no arrow has a line, and the endermen, which teleport
-   only in daylight or when hurt by what is not alive, stay on the lit square. No roof: a
-   surface landing teleports onto the highest motion-blocking block, which a light block is not."
+  "The live pearl row's arena: a block of stone 27 square from eight under the landing to six over
+   it, the room 25 square and seven high carved out of it (a floor eight deep, a wall one thick and
+   seven high round it), open to a clear midnight sky, light blocks five over the floor: the burrow
+   is cut in stone, the endermen stand ten blocks off, far enough to be provoked by a stare
+   (pearls/stare-from) and never by accident, no sun or rain on them (either sends an enderman off),
+   and no dark for a zombie to spawn in (a monster spawns only at block light 0). The sealed Nether
+   room is seven square. The wall: the lit square's light reaches ten blocks past its edge and no
+   farther, the dark beyond spawns zombies, skeletons and creepers at midnight, and they walked in,
+   over the row's 300 s, to the burrow's stairs. Walled, nothing walks in, no arrow has a line, and
+   the endermen, which teleport only in daylight or when hurt by what is not alive, stay on the lit
+   square. No roof: a surface landing teleports onto the highest motion-blocking block, which a
+   light block is not."
   ["time set midnight" "weather clear"
    "fill {x-13} {y-8} {z-13} {x+13} {y+6} {z+13} minecraft:stone"
    "fill {x-12} {y} {z-12} {x+12} {y+6} {z+12} minecraft:air"
@@ -305,19 +288,17 @@
   {:truth/cmd "clear {name} minecraft:ender_pearl 0" :truth/re (str "Found " re " ")})
 
 (def portal-arena
-  "The portal rows' arena round the landing: stone ten deep under air, and a trench of lava
-   sources one wide set into its surface east of the landing, every source with stone beside it to
-   refill from (a scoop takes a source for good). The surface case of issue #124: the frame is cut
-   into the rock under the pool's level and the room dug out in front of it, so the stone must be
-   deep enough for a frame six under the surface."
+  "The portal rows' arena round the landing: stone ten deep under air, and a trench of lava sources
+   one wide set into its surface east of the landing, every source with stone beside it to refill
+   from (a scoop takes a source for good)."
   ["fill {x-8} {y-10} {z-8} {x+16} {y-1} {z+16} minecraft:stone"
    "fill {x-8} {y} {z-8} {x+16} {y+14} {z+16} minecraft:air"
    "fill {x+14} {y-1} {z-6} {x+14} {y-1} {z+6} minecraft:lava"])
 
 (def portal-kit
   "What a portal row gives: two buckets of lava, one of water, an empty one, a handful of
-   cobblestone (a cast cut into the rock places four, the walls its own holes opened: issue #124),
-   flint and steel, and the stone pickaxe the rows hold for the digs."
+   cobblestone (a cast cut into the rock places four, the walls its own holes opened), flint and
+   steel, and the stone pickaxe the rows hold for the digs."
   ["minecraft:lava_bucket 2" "minecraft:water_bucket 1" "minecraft:bucket 1"
    "minecraft:cobblestone 8" "minecraft:flint_and_steel 1" "minecraft:stone_pickaxe 1"])
 
@@ -344,13 +325,13 @@
   (str "fill " (piece a) " " (piece b) " minecraft:" block))
 
 (def portal-room
-  "The vanilla portal room round the landing, block for block from StrongholdPieces.PortalRoom
-   (issue #266): a hollow box of stone bricks, the staircase of three stairs blocks up to the
-   frames' height with the spawner in the middle of its top step (a bare spawner spawns
-   nothing), the platform with the 3x3 lava pit, the two lava troughs by the door, and the
-   twelve frames floating two over the floor, each facing inward as the game's own do (the
-   northern three face south: EndPortalFrameBlock's pattern takes no other facing). The
-   iron bars are left out: nothing need look in."
+  "The vanilla portal room round the landing, block for block from StrongholdPieces.PortalRoom: a
+   hollow box of stone bricks, the staircase of three stairs blocks up to the frames' height with
+   the spawner in the middle of its top step (a bare spawner spawns nothing), the platform with the
+   3x3 lava pit, the two lava troughs by the door, and the twelve frames floating two over the
+   floor, each facing inward as the game's own do (the northern three face south:
+   EndPortalFrameBlock's pattern takes no other facing). The iron bars are left out: nothing need
+   look in."
   [(piece-fill [0 0 0] [10 7 15] "stone_bricks hollow") (piece-fill [4 1 5] [6 1 7] "stone_bricks")
    (piece-fill [4 2 6] [6 2 7] "stone_bricks") (piece-fill [4 3 7] [6 3 7] "stone_bricks")
    (piece-fill [4 1 4] [6 1 4] "stone_brick_stairs[facing=south]")
@@ -398,7 +379,6 @@
     :gym/prereqs ["minecraft:wooden_pickaxe 1" "minecraft:stick 2" "minecraft:crafting_table 1"]
     :gym/timeout-ms trial-ms
     :gym/truth [{:truth/cmd "clear {name} minecraft:stone_pickaxe 0" :truth/re "Found [1-9]"}]}
-   ;; issue #6, one row per stage of the iron kit, each given what the stages before it make.
    ;; The furnace: a placed block is not in the inventory, so the server's word is that the
    ;; cobblestone was spent and no furnace is held; the bot's RESULT needs the placed block seen.
    {:gym/goal :furnace
@@ -430,8 +410,7 @@
     :gym/timeout-ms trial-ms
     :gym/truth [{:truth/cmd "clear {name} minecraft:flint_and_steel 0" :truth/re "Found [1-9]"}]}
    ;; the whole stage from what #9 ends with, as the sim's end-to-end run starts. Forty minutes:
-   ;; down to y 16, iron, coal, gravel and the smelts there, then the stairs back up to water; batch
-   ;; iron-a5's three runs that held flint and steel and the bucket were still climbing at twenty
+   ;; down to y 16, iron, coal, gravel and the smelts there, then the stairs back up to water.
    {:gym/goal :iron-kit
     :gym/until "iron-kit"
     :gym/prereqs ["minecraft:stone_pickaxe 1" "minecraft:crafting_table 1" "minecraft:cobblestone 8"
@@ -439,7 +418,6 @@
     :gym/timeout-ms trial-ms
     :gym/truth [{:truth/cmd "clear {name} minecraft:water_bucket 0" :truth/re "Found [1-9]"}
                 {:truth/cmd "clear {name} minecraft:flint_and_steel 0" :truth/re "Found [1-9]"}]}
-   ;; issue #8: the portal cast in an arena built round the landing, from the kit
    {:gym/goal :cast-one
     :gym/until "cast-one"
     :gym/prereqs portal-kit
@@ -459,10 +437,6 @@
     :gym/setup portal-arena
     :gym/timeout-ms trial-ms
     :gym/truth [{:truth/cmd "data get entity {name} Dimension" :truth/re "the_nether"}]}
-   ;; issue #5: wade in, get out; the server must see the bot on dry land (steve's onDryLand judge)
-   ;; issue #11: from a pad carved in the Nether 48 blocks west of a located fortress, tunnel to
-   ;; it; judged in the bot's own dimension: the Nether, and fortress bricks within 6 (a filtered
-   ;; clone of the cube round it counts them)
    {:gym/goal :fortress
     :gym/until "fortress"
     :gym/land :nether-fortress
@@ -474,9 +448,6 @@
      {:truth/cmd
       "execute as {name} at @s run clone ~-6 ~-6 ~-6 ~6 ~6 ~6 ~-6 ~20 ~-6 filtered minecraft:nether_bricks"
       :truth/re "cloned [1-9]"}]}
-   ;; issue #258: a pig summoned over the landing, held still and unhurt at a health no natural
-   ;; pig has; the bot's RESULT names the nearest pig's health from its metadata, and the server
-   ;; must report the same for the pig nearest the bot
    {:gym/goal :entities
     :gym/until "entities"
     :gym/prereqs []
@@ -488,9 +459,6 @@
       "execute as {name} at @s run data get entity @e[type=minecraft:pig,limit=1,sort=nearest] Health"
       :truth/re "entity data: {result}f"
       :truth/result [:mobs :pig]}]}
-   ;; issue #261: the arenas themselves, judged with no goal in play: the bot in the dimension,
-   ;; the kit held (given only after the server said so), the room and what was summoned in it.
-   ;; The rows that fight in them (#258, #259, #10) copy these starts.
    {:gym/goal :arena-nether
     :gym/until "arena-nether"
     :gym/fixture? true
@@ -532,9 +500,6 @@
     [{:truth/cmd
       "execute as {name} at @s unless block ~ ~ ~ minecraft:water unless block ~ ~1 ~ minecraft:water"
       :truth/re "Test passed"} {:truth/cmd "data get entity {name} OnGround" :truth/re "1b"}]}
-   ;; issue #259: landed hungry (the :hungry landing waits for the food to fall under
-   ;; hungry-food) with four breads, the bot eats until the bar is at 14 or more; judged by the
-   ;; server's food and the breads gone
    {:gym/goal :eat
     :gym/until "eat"
     :gym/land :hungry
@@ -542,8 +507,6 @@
     :gym/timeout-ms trial-ms
     :gym/truth [{:truth/cmd "data get entity {name} foodLevel" :truth/re "data: (1[4-9]|20)$"}
                 {:truth/cmd "clear {name} minecraft:bread 0" :truth/re "Found [1-3] |No items"}]}
-   ;; issue #259: the portal's iron held and thirteen ingots spare, a helmet and a chestplate made
-   ;; at a placed table and worn, judged by what the server has in the armour slots
    {:gym/goal :armour
     :gym/until "armour"
     :gym/prereqs ["minecraft:flint_and_steel 1" "minecraft:water_bucket 1" "minecraft:bucket 1"
@@ -553,11 +516,8 @@
                  :truth/re "Test passed"}
                 {:truth/cmd "execute if items entity {name} armor.chest minecraft:iron_chestplate"
                  :truth/re "Test passed"}]}
-   ;; issue #259: a husk that does not move (NoAI; a husk does not burn by day) three blocks east
-   ;; of the landing at noon, a stone sword given; judged by the husk gone. The attacks' spacing
-   ;; is read from the recording. This row and defend run at Normal: the gym server is peaceful by
-   ;; default and refuses to summon a monster there (gym combat-w1, run 40629957509, and
-   ;; gym-summon, run 40718460530, met no husk and no zombie)
+   ;; The attacks' spacing is read from the recording. This row and defend run at Normal: the gym
+   ;; server is peaceful by default and refuses to summon a monster there
    {:gym/goal :attack
     :gym/until "attack"
     :gym/difficulty "normal"
@@ -569,14 +529,9 @@
     [{:truth/cmd
       "execute positioned {x} {y} {z} unless entity @e[type=minecraft:husk,distance=..24]"
       :truth/re "Test passed"}]}
-   ;; issue #259: three zombies two blocks round the landing at midnight, the bot in iron armour
-   ;; (put on by the fixture: a zombie at hand comes before dressing) with an iron sword; judged
-   ;; by a zombie killed (a kill counter the setup adds: counting zombies round the landing counts
-   ;; the night's new ones too, five in defend-259b run 1) and the bot alive with health left (a
-   ;; death is its own outcome). Not all
-   ;; three: the row is done when none is within 4, and in gym defend-259a (run 38881961947)
-   ;; the others wandered off while the first was fought. Judged at the landing, never as the
-   ;; bot: execute as the bot answered RCON with nothing in every trial of that run
+   ;; Not all three: the row is done when none is within 4, and in gym defend-259a the others
+   ;; wandered off while the first was fought. Judged at the landing, never as the bot: execute as
+   ;; the bot answered RCON with nothing in every trial of that run
    {:gym/goal :defend
     :gym/until "defend"
     :gym/difficulty "normal"
@@ -587,19 +542,13 @@
                 "item replace entity {name} armor.chest with minecraft:iron_chestplate"
                 "item replace entity {name} armor.legs with minecraft:iron_leggings"
                 "item replace entity {name} armor.feet with minecraft:iron_boots"]
-    ;; summoned once the bot stands in the landing with its kit, then the settle: chain-w18 defend
-    ;; run 3 (plan run 40914832722) had them summoned in the setup, before the teleport, in chunks
-    ;; unforceloaded a command later, and the bot saw none (:entities 0), found the row done 0.35 s
-    ;; after landing and failed the kill count
+    ;; summoned once the bot stands in the landing with its kit, then the settle.
     :gym/summon ["summon minecraft:zombie {x+2} {y} {z} {PersistenceRequired:1b}"
                  "summon minecraft:zombie {x-2} {y} {z+1} {PersistenceRequired:1b}"
                  "summon minecraft:zombie {x} {y} {z-2} {PersistenceRequired:1b}"]
     :gym/timeout-ms trial-ms
     :gym/truth [{:truth/cmd "scoreboard players get {name} zkills" :truth/re "has [1-9]"}
                 {:truth/cmd "data get entity {name} Health" :truth/re "data: [1-9]"}]}
-   ;; issue #262: blaze rods. blaze-1: the nether arena with a blaze spawner in its corner and a
-   ;; blaze summoned, the bot unharmed (invulnerable) with six rods given, so one more is the
-   ;; goal's seventh: the fight, the pickup of a drop that may not come, the spawner camped by
    {:gym/goal :blaze-rods
     :gym/name "blaze-1"
     :gym/until "blaze-rods"
@@ -613,10 +562,8 @@
     :gym/truth [(rods-held 7)]}
    ;; blaze-7: the same room, all seven rods from its blazes, the bot in iron armour and hurt by
    ;; their fireballs, so the break-off under 10 health and the meal after it are played. Fire
-   ;; Resistance, as ruststeve's arena gave ("fire resistance only stops the burn"): a burning bot
-   ;; in the Nether has no water to put it out, and blaze-7a runs 1 and 2 (run 38891910129) burned
-   ;; to death inside a minute. The spawner is the slow one (slow-blaze-spawner): blaze-7c died to
-   ;; volleys of three blazes at once
+   ;; Resistance, as ruststeve's arena gave ("fire resistance only stops the burn"). The spawner is
+   ;; the slow one (slow-blaze-spawner): blaze-7c died to volleys of three blazes at once
    {:gym/goal :blaze-rods
     :gym/name "blaze-7"
     :gym/until "blaze-rods"
@@ -628,15 +575,12 @@
                        (summon "blaze" [-2 1 -2] "{PersistenceRequired:1b}")])
     :gym/timeout-ms trial-ms
     :gym/truth [(rods-held 7)]}
-   ;; blaze-fortress-fireproof: from the fortress row's pad 48 west of a located fortress, the spawner
-   ;; found in the chunks loaded round it, tunnelled to, camped by, seven rods from its blazes. It
-   ;; measures the FIGHT only, not the bot's survival: Fire Resistance (a fireball and the burning
-   ;; after it cost nothing, as blaze-7 has it: blaze-fortress-f and -g, runs 38902306126 and
-   ;; 38904048480, burned to death by the spawner in four runs of six) and four pieces of armour.
-   ;; Its passes are not evidence that a race bot lives there: main's two on 2026-10-29
-   ;; (walk-restart-a, 40908896872) took 0 fireball and 0 on_fire damage events in 7 minutes where
-   ;; blaze-race-j's ten took 2 to 9 and 1 to 22 and eight died. The race rows below are the truth.
-   ;; Named blaze-fortress until then, and read as a pass for the race.
+   ;; blaze-fortress-fireproof: from the fortress row's pad 48 west of a located fortress, the
+   ;; spawner found in the chunks loaded round it, tunnelled to, camped by, seven rods from its
+   ;; blazes. It measures the FIGHT only, not the bot's survival: Fire Resistance (a fireball and
+   ;; the burning after it cost nothing, as blaze-7 has it) and four pieces of armour. Its passes
+   ;; are not evidence that a race bot lives there: main's two on 2026-10-29. The race rows below
+   ;; are the truth. Named blaze-fortress until then, and read as a pass for the race.
    {:gym/goal :blaze-rods
     :gym/name "blaze-fortress-fireproof"
     :gym/until "blaze-rods"
@@ -675,10 +619,8 @@
                   "minecraft:iron_leggings 1" "minecraft:cooked_beef 4"]
     :gym/timeout-ms trial-ms
     :gym/truth [(rods-held 7)]}
-   ;; issue #263: endermen in the sealed Nether room (#261's arena), the pearl kit given there;
-   ;; judged by a pearl held. Five that never move or teleport (NoAI), each within the hunt's
-   ;; strike range of the landing, since a kill drops a pearl only one time in two (the loot
-   ;; table, probe 38889277228): one pearl is then 31 trials in 32
+   ;; Five that never move or teleport (NoAI), each within the hunt's strike range of the landing,
+   ;; since a kill drops a pearl only one time in two: one pearl is then 31 trials in 32
    {:gym/goal :ender-pearl
     :gym/until "pearls-1"
     :gym/land :nether-arena
@@ -709,10 +651,6 @@
     :gym/prereqs (conj pearl-kit "minecraft:cooked_beef 32")
     :gym/timeout-ms trial-ms
     :gym/truth [(pearls-held "(1[2-9]|[2-9][0-9]|[1-9][0-9][0-9])")]}
-   ;; issue #263: pearls-12 with what the race bot carries into the Nether besides the kit, a stack of
-   ;; cobblestone and one of netherrack (chain-dragon's lane-4 audit: 265 to 830 cobblestone), so that
-   ;; the ghast cover, the walls and the hole as a last-resort cover have blocks to lay; pearls-12 is
-   ;; unchanged and holds none
    {:gym/goal :ender-pearls
     :gym/name "pearls-12-race"
     :gym/until "pearls-12"
@@ -723,10 +661,6 @@
                         "minecraft:netherrack 64"])
     :gym/timeout-ms trial-ms
     :gym/truth [(pearls-held "(1[2-9]|[2-9][0-9]|[1-9][0-9][0-9])")]}
-   ;; issue #263: pearls-12-race with what race bots have carried since #628, a crafting table and
-   ;; sticks, so that the hunt can make a stone pickaxe when its digs run low (pearl-fight-i jobs 1
-   ;; and 2 stood still two hours in a rock pocket with 28 and 6 digs left and nothing to make one
-   ;; from); pearls-12-race is unchanged
    {:gym/goal :ender-pearls
     :gym/name "pearls-12-race-tools"
     :gym/until "pearls-12"
@@ -737,10 +671,7 @@
                         "minecraft:netherrack 64" "minecraft:crafting_table 1" "minecraft:stick 8"])
     :gym/timeout-ms trial-ms
     :gym/truth [(pearls-held "(1[2-9]|[2-9][0-9]|[1-9][0-9][0-9])")]}
-   ;; issue #263: the same twelve pearls from where the race leaves the bot, at a fortress in the
-   ;; Nether wastes with seven rods in the pack and no warped forest in view: the stage must find
-   ;; one itself (pearls/travel). pearls-12 above lands in a forest, which the race never does. No
-   ;; fire resistance: the race's bot has none at this stage
+   ;; No fire resistance: the race's bot has none at this stage
    {:gym/goal :ender-pearls
     :gym/name "pearls-12-from-fortress"
     :gym/until "pearls-12"
@@ -749,8 +680,6 @@
     :gym/prereqs (into pearl-kit ["minecraft:cooked_beef 32" "minecraft:blaze_rod 7"])
     :gym/timeout-ms trial-ms
     :gym/truth [(pearls-held "(1[2-9]|[2-9][0-9]|[1-9][0-9][0-9])")]}
-   ;; issue #263: pearls-12-from-fortress with a doorway in the pad, as a race bot arrives (no
-   ;; sealed box); the old row measures the harness, not the travel
    {:gym/goal :ender-pearls
     :gym/name "pearls-12-from-fortress-open"
     :gym/until "pearls-12"
@@ -759,9 +688,8 @@
     :gym/prereqs (into pearl-kit ["minecraft:cooked_beef 32" "minecraft:blaze_rod 7"])
     :gym/timeout-ms trial-ms
     :gym/truth [(pearls-held "(1[2-9]|[2-9][0-9]|[1-9][0-9][0-9])")]}
-   ;; issue #264: twelve eyes of ender crafted from what the two stages before make, given on a
-   ;; surface landing: seven rods and twelve pearls. Nothing to fight or fetch, so the row measures
-   ;; the 2x2 crafts alone (six of blaze powder, twelve of eyes)
+   ;; Nothing to fight or fetch, so the row measures the 2x2 crafts alone (six of blaze powder,
+   ;; twelve of eyes)
    {:gym/goal :eyes-of-ender
     :gym/until "eyes"
     :gym/difficulty "normal"
@@ -769,10 +697,6 @@
     :gym/timeout-ms trial-ms
     :gym/truth [{:truth/cmd "clear {name} minecraft:ender_eye 0"
                  :truth/re "Found (1[2-9]|[2-9][0-9]) "}]}
-   ;; issue #265: one eye thrown on a surface landing at noon (no night mobs on the bot), its line
-   ;; within bearing-within degrees of the way to the stronghold the server locates from the
-   ;; landing (the bot throws where it stands; a stronghold is hundreds of blocks off, so the
-   ;; block between is nothing)
    {:gym/goal :eye-throw
     :gym/until "throw"
     :gym/difficulty "normal"
@@ -784,11 +708,8 @@
                  :truth/re "\\[(-?\\d+), (?:~|-?\\d+), (-?\\d+)\\]"
                  :truth/check :bearing
                  :truth/result [:throws]}]}
-   ;; issue #265: from 250 blocks off the located stronghold (:near-stronghold), two throws or
-   ;; more, the walks, an end portal frame remembered: the server must have one at the cell the
-   ;; bot names (its RESULT's :frame). Eyes to spare for the throws a shatter costs; pickaxes for
-   ;; the tunnels where no walk goes; a sword, armour and food for the night the walks may run into
-   ;; at Normal
+   ;; Eyes to spare for the throws a shatter costs; pickaxes for the tunnels where no walk goes; a
+   ;; sword, armour and food for the night the walks may run into at Normal
    {:gym/goal :stronghold
     :gym/until "stronghold"
     :gym/land :near-stronghold
@@ -818,9 +739,6 @@
                 {:truth/cmd "execute positioned {at} if entity @a[name={name},distance=..7]"
                  :truth/re "Test passed"
                  :truth/at [:frame]}]}
-   ;; issue #266: the vanilla portal room built round the landing (portal-room), the bot on its
-   ;; floor inside the door with fourteen eyes (twelve for the frames, two to spare), judged by
-   ;; an end portal block at the cell the bot remembers one (its RESULT's :portal)
    {:gym/goal :end-portal
     :gym/until "end-portal"
     :gym/land :portal-room
@@ -841,13 +759,11 @@
     :gym/timeout-ms trial-ms
     :gym/truth [{:truth/cmd "execute as {name} at @s if dimension minecraft:the_end"
                  :truth/re "Test passed"}]}
-   ;; issue #267: the main island, the ten spikes' cages taken off and a crystal on each one's
-   ;; bedrock, the dragon gone; two stacks of cobblestone to pillar and wall with, a pickaxe to
-   ;; dig the pillars back down; judged by no crystal left. The bot takes no harm (invulnerable):
-   ;; the End's fight makes a dragon of its own on the bot's arrival, after the summons, which no
-   ;; command here can keep away, and gym dragon-b's three runs died to its fireballs and its
-   ;; knocks off a pillar, the row measuring the dragon and not the crystals (the wall's worth is
-   ;; read off the recording: dragon-b run 1 struck its first crystal from behind it for 1 damage)
+   ;; The bot takes no harm (invulnerable): the End's fight makes a dragon of its own on the bot's
+   ;; arrival, after the summons, which no command here can keep away, and gym dragon-b's three runs
+   ;; died to its fireballs and its knocks off a pillar, the row measuring the dragon and not the
+   ;; crystals (the wall's worth is read off the recording: dragon-b run 1 struck its first crystal
+   ;; from behind it for 1 damage)
    {:gym/goal :crystals
     :gym/until "crystals"
     :gym/land :end
@@ -861,8 +777,7 @@
                  "execute in minecraft:the_end unless entity @e[type=minecraft:end_crystal]"
                  :truth/re "Test passed"}]}
    ;; the crystals gone and the End fight's own dragon circling (the bot's arrival in the End starts
-   ;; the fight and spawns its dragon twenty ticks on; summoning a second raced that scan in gym
-   ;; dragon3-b run 1 and left two dragons in the End), the bot in iron with a sword, cobblestone
+   ;; the fight and spawns its dragon twenty ticks on), the bot in iron with a sword, cobblestone
    ;; and a pickaxe for any crystal left; judged by no dragon left in the End
    {:gym/goal :dragon
     :gym/until "dragon"
@@ -878,10 +793,10 @@
     :gym/truth [{:truth/cmd
                  "execute in minecraft:the_end unless entity @e[type=minecraft:ender_dragon]"
                  :truth/re "Test passed"}]}
-   ;; the speedrunners' kill, measured (issue #10): the dragon row with six beds and the bot
-   ;; invulnerable (Resistance V, Fire Resistance), so the damage a bed deals the perched dragon
-   ;; is read from the boss bar (boss-event update-health) before and after each, not the bot's
-   ;; survival; a bed explodes in the End and, in the open at 4.5 blocks, would kill the bot
+   ;; the speedrunners' kill, measured: the dragon row with six beds and the bot invulnerable
+   ;; (Resistance V, Fire Resistance), so the damage a bed deals the perched dragon is read from the
+   ;; boss bar (boss-event update-health) before and after each, not the bot's survival; a bed
+   ;; explodes in the End and, in the open at 4.5 blocks, would kill the bot
    {:gym/name "dragon-beds"
     :gym/goal :dragon
     :gym/until "dragon"
@@ -914,9 +829,6 @@
     :gym/truth [{:truth/cmd
                  "execute in minecraft:the_end unless entity @e[type=minecraft:ender_dragon]"
                  :truth/re "Test passed"}]}
-   ;; issue #10, step 13: the post-pearls chain in one game, from the Nether-exit kit near the
-   ;; stronghold through eyes, the stronghold, the portal room, lighting and entering the End
-   ;; portal, bridging to the island, the crystals and the dragon
    {:gym/name "chain"
     :gym/goal :dragon
     :gym/until "dragon"
@@ -941,8 +853,8 @@
 (def bot-heap "-Xmx1g")                 ; each bot is its own JVM; one fits several on a runner
 (def hold-ms 60000)                     ; how long an ok bot stays online for the judge's truth commands
 
-(def stronghold-off 250)                ; blocks from the located stronghold a stronghold row lands the bot (issue #265)
-(def bearing-within 10.0)                ; degrees a throw's line may be off the way to the located stronghold (issue #265)
+(def stronghold-off 250)                ; blocks from the located stronghold a stronghold row lands the bot
+(def bearing-within 10.0)                ; degrees a throw's line may be off the way to the located stronghold
 (def z95 1.959964)                      ; the normal quantile for a two-sided 95% interval
 (def judge-grace-ms 120000)             ; past the goal's timeout, how long the judge waits for RESULT
 (def trial-overhead-minutes 8)          ; setup, server start and judging, on top of a goal's timeout
@@ -951,8 +863,7 @@
 
 (defn gym
   "The registry row for a goal, named by its keyword or its --until name, or a row by its own
-   :gym/name (a row that shares both with another: pearls-1-live, issue #263); the first that
-   answers, or nil."
+   :gym/name (a row that shares both with another); the first that answers, or nil."
   [goal]
   (let [n (name goal)]
     (some #(when (or (= n (:gym/name %)) (= n (name (:gym/goal %))) (= n (:gym/until %))) %) gyms)))
@@ -983,10 +894,10 @@
   (str "execute as " bot " at @s if dimension " dim))
 
 (defn kit
-  "The commands that give row's prerequisites to bot: run only once the server says the bot is
-   in the row's dimension. steve gave its End kit before the cross-dimension teleport and the
-   server held none of it while the client counted six beds (issue #10's memory note); so the
-   gym lands, waits for the dimension, then gives (issue #261)."
+  "The commands that give row's prerequisites to bot: run only once the server says the bot is in
+   the row's dimension. steve gave its End kit before the cross-dimension teleport and the server
+   held none of it while the client counted six beds; so the gym lands, waits for the dimension,
+   then gives."
   [row bot]
   (mapv #(str "give " bot " " %) (:gym/prereqs row)))
 
@@ -998,9 +909,8 @@
 
 (defn truth-cmd
   "A row's truth command for the bot's name and the run's landing (fill-in), and, given the bot's
-   RESULT, {at} the block [x y z] at the row's :truth/at path in it written \"x y z\" (the
-   stronghold trials ask the server about the frame the bot names, issue #265); left as written
-   when the RESULT has none, which no server takes."
+   RESULT, {at} the block [x y z] at the row's :truth/at path in it written \"x y z\"; left as
+   written when the RESULT has none, which no server takes."
   ([row bot landing] (truth-cmd row bot landing nil))
   ([{:truth/keys [cmd at]} bot landing result]
    (let [p (when at (get-in result at))]
@@ -1010,9 +920,9 @@
 
 (defn truth-re
   "A truth row's pattern for the bot's RESULT: the row's :truth/re, or, when the row names a
-   :truth/result path, that pattern with {result} the value at the path, quoted, so the server
-   must say what the bot saw (the entities trial: the pig's health, issue #258); nil when the
-   RESULT has no value there, which no reply passes."
+   :truth/result path, that pattern with {result} the value at the path, quoted, so the server must
+   say what the bot saw (the entities trial); nil when the RESULT has no value there, which no reply
+   passes."
   [{:truth/keys [re] path :truth/result} result]
   (let [v (when path (get-in result path))]
     (cond (nil? path) re
@@ -1021,8 +931,7 @@
 
 (defmulti verdict
   "Does the server's reply pass truth row, given the bot's RESULT? Keyed by the row's :truth/check,
-   :re when absent: a check a pattern cannot state is a defmethod (the throw trial's bearing,
-   issue #265)."
+   :re when absent: a check a pattern cannot state is a defmethod."
   {:arglists '([row reply result])}
   (fn [row _reply _result] (:truth/check row :re)))
 
@@ -1165,8 +1074,7 @@
 
 (defn trial-name
   "The name a trial carries across the job boundary for row, which gym finds it by again: its own
-   :gym/name when it has one (issue #263: pearls-1 and pearls-1-live share a goal and a --until),
-   else its --until name."
+   :gym/name when it has one, else its --until name."
   [row]
   (:gym/name row (:gym/until row)))
 
@@ -1308,13 +1216,10 @@
     (mapv parse-long [x y z])))
 
 (defn spread
-  "The command that stands the bot named name on a floor in the Nether within r blocks of x z,
-   under the roof (spreadplayers ... under spread-under: the highest floor with two cells of air
-   over it below that height, scanning down (SpreadPlayersCommand.getSpawnY), where vanilla
-   judges a player safe: no lava, no fire). Gym batch pearls-263f (plan run 38918584959, probe
-   39130057525) spread under 110 where the forest's floor stood at 113 to 118: the scan went
-   down through the rock to the first cave under it, and the bot stood forty minutes in a
-   pocket of netherrack no route left."
+  "The command that stands the bot named name on a floor in the Nether within r blocks of x z, under
+   the roof (spreadplayers ... under spread-under: the highest floor with two cells of air over it
+   below that height, scanning down (SpreadPlayersCommand.getSpawnY), where vanilla judges a player
+   safe: no lava, no fire)."
   [x z r name]
   (str "execute in " dimension/nether
        " run spreadplayers " x
@@ -1336,10 +1241,6 @@
   (str "execute in " dimension/nether " if biome " x " " y " " z " minecraft:warped_forest"))
 
 (defmethod land! :near-stronghold
-  ;; issue #265: stronghold-off blocks from the stronghold the server locates from the landing,
-  ;; on the line from it through the landing, on dry ground (fixture/land-at!, which tries spots
-  ;; round it), the spawn pinned there: the row measures the throws, the walks and the way down,
-  ;; not a crossing of the whole world (the nearest stronghold is often a thousand blocks off)
   [rc _row name [x z _]]
   (let [reply (rcon/command!
                rc
@@ -1359,10 +1260,7 @@
 (def room-reach 16)                     ; blocks round the landing the portal room's chunks are forceloaded over while it is built
 
 (defmethod land! :portal-room
-  ;; issue #266: the row's room (its :gym/setup, portal-room) built round the landing with its
-  ;; chunks loaded, the bot teleported onto the room's floor at the landing itself, the spawn
-  ;; pinned there. Not on the surface (land! :surface): the surface over the landing is now the
-  ;; room's roof
+  ;; Not on the surface (land! :surface): the surface over the landing is now the room's roof
   [rc row name [x z y :as landing]]
   (fixture/with-forceload
    rc
@@ -1440,17 +1338,12 @@
 
 (defmethod land! :warped-forest
   ;; the warped forest nearest the landing's Nether coordinates (an eighth of the overworld's, so
-  ;; each landing has its own; issue #263's hunting ground, where endermen are the only hostile
-  ;; that spawns), and a floor in it: the bot spread onto one round the located point (spread),
-  ;; nearer ranges first, until the server says where it stands is warped forest (warped?) and
-  ;; not the air of a carved cave (pocket?), then stood on that cell with the row's setup round
-  ;; it. A forest with no floor found is left for the one nearest the next of warped-origins,
-  ;; each located forest tried once. Gym batches pearls-263a and b (plan runs 38892130785,
-  ;; 38895776486) looked for nylium cell by cell round the located point and found none: probe
-  ;; 38896760962 read that column netherrack from y 4 to 125, the biome's located height inside
-  ;; the rock. Batches d, e and f stood two landings in three forty minutes in a cave pocket the
-  ;; spread had put them in (probe 39130057525: cave_air at the feet, netherrack sixteen blocks
-  ;; round at every height)
+  ;; each landing has its own), and a floor in it: the bot spread onto one round the located point
+  ;; (spread), nearer ranges first, until the server says where it stands is warped forest (warped?)
+  ;; and not the air of a carved cave (pocket?), then stood on that cell with the row's setup round
+  ;; it. A forest with no floor found is left for the one nearest the next of warped-origins, each
+  ;; located forest tried once. Batches d, e and f stood two landings in three forty minutes in a
+  ;; cave pocket the spread had put them in
   [rc row name [x z _]]
   (let [dim dimension/nether
         {:keys [floor tried]} (warped-floor-from! rc name (warped-origins x z))
@@ -1458,10 +1351,10 @@
     (place! rc dim name [fx fz fy] 2 (vec (:gym/setup row)))))
 
 (defmethod land! :end
-  ;; the main island (issue #261), ruststeve's End start: the island round the fountain loaded,
-  ;; the bot on the surface at end-at (its first arrival starts the dragon fight, crystals and
-  ;; all), then the row's setup round where it stands. Every landing of the set starts here: the
-  ;; End has one main island. No portal and no stronghold: the rows past them start in the End
+  ;; the main island, ruststeve's End start: the island round the fountain loaded, the bot on the
+  ;; surface at end-at (its first arrival starts the dragon fight, crystals and all), then the row's
+  ;; setup round where it stands. Every landing of the set starts here: the End has one main island.
+  ;; No portal and no stronghold: the rows past them start in the End
   [rc row name _]
   (let [dim dimension/end
         [x z] end-at
@@ -1492,13 +1385,12 @@
             :else (do (Thread/sleep 250) (recur))))))
 
 (defn landing!
-  "The fixture's work for one run: wait for the bot, set the row's difficulty, reset it
-   (survival, empty inventory), land it (land!: on this run's landing of the set, or where the
-   row starts from it), and only once the server says it stands in the row's dimension give
-   its prerequisites (kit) and summon what it meets (summons). Returns what happened:
-   {:gym/landed? true :gym/landing :gym/at :gym/started}, or {:gym/landed? false :gym/error
-   ...}; never throws. A bot that never reaches the dimension is a failed landing, never a
-   kit given in the wrong world (issue #261)."
+  "The fixture's work for one run: wait for the bot, set the row's difficulty, reset it (survival,
+   empty inventory), land it (land!: on this run's landing of the set, or where the row starts from
+   it), and only once the server says it stands in the row's dimension give its prerequisites (kit)
+   and summon what it meets (summons). Returns what happened: {:gym/landed? true :gym/landing
+   :gym/at :gym/started}, or {:gym/landed? false :gym/error ...}; never throws. A bot that never
+   reaches the dimension is a failed landing, never a kit given in the wrong world."
   [{:keys [goal run name host rcon-port rcon-pass landings]}]
   (let [row (gym goal)
         landing (landings/landing-for (landings/read-landings landings) (parse-long (str run)))

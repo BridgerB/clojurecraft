@@ -41,8 +41,7 @@
   :goal/target? true
   :goal/always? true
   :goal/until "defend"
-  :goal/doc
-  "answer a hostile mob within 4 blocks, a creeper within 6, before anything else but the escapes (issue #259): on Normal the night brings zombies, skeletons and creepers to every stage. Fought with the best sword held (attacks 650 ms apart); a creeper, or anything while the health is under 10, backed away from. An always row at priority 0 after the escapes and before the meal in this table: nothing is eaten with a zombie at hand"
+  :goal/doc "answer a hostile mob within 4 blocks"
   :goal/done? :safe?
   :goal/commits :all
   :goal/uncommitted #{:fight}
@@ -95,8 +94,7 @@
   :goal/priority 8
   :goal/target? true
   :goal/until "ingots"
-  :goal/doc
-  "four iron ingots, the iron kit's: raw iron mined with a stone pickaxe and smelted with planned fuel; twenty-four sticks are kept too, twelve stone pickaxes' handles, cut at the trees where the ore is smelted, the last surface the bot passes before the descent to the lava: the Nether's tunnel wears a pickaxe out every 65 blocks, the fortress is 250 to 630 blocks off and the Nether has no wood (issue #338: sim traces came through the portal with one to five sticks and dug by hand at 11 s a step)"
+  :goal/doc "four iron ingots, the iron kit's"
   :goal/spares {:item/stick 24}
   :goal/provides {:item/iron_ingot 4}
   :goal/done? :provided?}
@@ -125,16 +123,14 @@
   :goal/priority 12
   :goal/target? true
   :goal/until "iron-kit"
-  :goal/doc
-  "the iron kit the portal needs: flint and steel and a filled water bucket (four ingots in all: one in the flint and steel, three in the bucket), the flint and steel first so all the iron is mined in one trip down and the climb out ends at the water"
+  :goal/doc "the iron kit the portal needs"
   :goal/provides {:item/flint_and_steel 1 :item/water_bucket 1}
   :goal/done? :provided?}
  {:goal/id :portal-kit
   :goal/priority 13
   :goal/target? true
   :goal/until "portal-kit"
-  :goal/doc
-  "what a portal cast spends that the iron kit does not hold: an empty bucket to carry lava from the pool to each hole, beside the filled water bucket poured over it and scooped back (issue #124). The few blocks a cast places where the rock is missing are asked for by the build itself, counted from the plan for the place chosen (build/held-first, blocks-needed), never a constant. Twenty-four sticks are kept too, twelve stone pickaxes' handles cut once from the trees at the surface, the last place the bot passes before the descent: the Nether's tunnel wears a pickaxe out every 65 blocks, the fortress is 250 to 630 blocks off, and the Nether has no wood (issue #338: sim traces came through the portal with one to five sticks and dug by hand at 11 s a step). The water bucket is counted here too: a chained run reaches a step once and never asks for it again, and race 38477665442 reached this one holding its only bucket still empty, then filled it, and the cast found no bucket for the lava (issue #49)"
+  :goal/doc "what a portal cast spends that the iron kit does not hold"
   :goal/provides {:item/water_bucket 1 :item/bucket 1}
   :goal/spares {:item/stick 24}
   :goal/done? :provided?}
@@ -142,8 +138,7 @@
   :goal/priority 14
   :goal/target? true
   :goal/until "gear"
-  :goal/doc
-  "an iron sword and iron helmet, chestplate and leggings before the portal is cast (issue #262): the iron they cost beyond the kit's mined and smelted through the needs planner, the armour and sword rows crafting each piece the moment its ingots are spare. The race bot reached the blazes with a stone sword, no armour and no food, where the gym rows that get seven rods in five minutes land with all of it. Given up fifty minutes after the portal kit (gear/gear-ms), so a world without iron never holds the run"
+  :goal/doc "an iron sword and iron helmet"
   :goal/done? :geared?
   :goal/plan :gear}
  {:goal/id :regear
@@ -151,8 +146,7 @@
   :goal/target? true
   :goal/always? true
   :goal/dimension "minecraft:overworld"
-  :goal/doc
-  "the gear again after a death in the Nether took it (issue #262): the :gear step is reached once and never asked again, so this always row, in the overworld and only once :gear was reached, makes what is missing before the way back"
+  :goal/doc "the gear again after a death in the Nether took it"
   :goal/done? :regeared?
   :goal/plan :regear}
  {:goal/id :cook
@@ -160,16 +154,14 @@
   :goal/target? true
   :goal/always? true
   :goal/dimension "minecraft:overworld"
-  :goal/doc
-  "the raw meat the hunt brought, cooked in the furnace (issue #262): after the portal kit in a chained run, the kind held most, all of it, through the needs planner's smelt (a furnace, fuel and the input), so the Nether leg begins with cooked meat, which feeds twice the raw and heals as the food bar needs"
+  :goal/doc "the raw meat the hunt brought"
   :goal/done? :cooked?
   :goal/plan :cook}
  {:goal/id :cast-one
   :goal/priority 14
   :goal/target? true
   :goal/until "cast-one"
-  :goal/doc
-  "one obsidian cast in the first cell of the frame, cut into the rock beside a lava pool (issue #124): the hole dug, lava poured into it, water poured into the cell straight over it and scooped back (the gym's cast-one stage); a pickaxe is held for the way to the lava and the digs, made before the build starts (sim race 38477665389 dug for its stance with none and failed :needs-tool, issue #70)"
+  :goal/doc "one obsidian cast in the first cell of the frame"
   :goal/holds {:tag/pickaxes 1}
   :goal/spares {:tag/pickaxes 1}
   :goal/plan :build
@@ -179,8 +171,7 @@
   :goal/priority 15
   :goal/target? true
   :goal/until "portal"
-  :goal/doc
-  "a nether portal cast from lava and water into holes cut in the rock beside a lava pool, a block placed only where the rock is missing, never mined, and lit with flint and steel (issue #124); a pickaxe is held, as for cast-one"
+  :goal/doc "a nether portal cast from lava and water into holes cut in the rock beside a lava pool"
   :goal/holds {:tag/pickaxes 1}
   :goal/spares {:tag/pickaxes 1}
   :goal/plan :build
@@ -200,8 +191,7 @@
   :goal/priority 16
   :goal/target? true
   :goal/always? true
-  :goal/doc
-  "return through a portal after respawning in the overworld when a reached Nether entry still has unfinished Nether targets"
+  :goal/doc "return through a portal after respawning in the overworld"
   :goal/dimension "minecraft:overworld"
   :goal/holds {:tag/pickaxes 1}
   :goal/plan :return-nether
@@ -211,8 +201,7 @@
   :goal/priority 17
   :goal/target? true
   :goal/until "fortress"
-  :goal/doc
-  "within 6 blocks of a nether fortress's bricks, reached by a tunnel that never opens a cell beside lava (issue #11)"
+  :goal/doc "within 6 blocks of a nether fortress's bricks"
   :goal/dimension "minecraft:the_nether"
   :goal/plan :fortress
   :goal/done? :at-fortress?}
@@ -229,8 +218,7 @@
   :goal/target? true
   :goal/aside? true
   :goal/until "entities"
-  :goal/doc
-  "see a living entity's health in the metadata the server sends for it (the gym's mob-model trial, issue #258): nothing to do but stand where landed until a living entity within reach of the bot's senses has :entity/health; the gym compares it with the server's own word"
+  :goal/doc "see a living entity's health in the metadata the server sends"
   :goal/done? :health-seen?
   :goal/plan :watch}
  {:goal/id :gather-log
@@ -250,8 +238,7 @@
   :goal/done? :provided?}
  {:goal/id :mine-coal
   :goal/priority 10
-  :goal/doc
-  "dig the nearest exposed coal ore with any pickaxe, or cut stairs down toward it, no deeper than y 40 (the game makes coal densest high up, around y 96, and none below y 0). A spare pickaxe is made while one is still held, from what is carried (sticks, cobblestone, the table): the coal for the ingots is dug at depth after the iron, and race 38477665442 bot Clj_r20 tunnelled for it with its last pickaxe, a wooden one, beside two sticks, a table and 249 cobblestone, until it broke and the run stopped :no-pickaxe (issue #36)"
+  :goal/doc "dig the nearest exposed coal ore with any pickaxe"
   :goal/holds {:tag/pickaxes 1}
   :goal/spares {:tag/pickaxes 1}
   :goal/provides {:item/coal 1}
@@ -261,8 +248,7 @@
   :goal/done? :provided?}
  {:goal/id :mine-iron
   :goal/priority 10
-  :goal/doc
-  "dig the nearest exposed iron ore with a stone pickaxe, or cut stairs down toward it and tunnel at y 16, where the game makes iron densest. A spare pickaxe is made before more ore is dug, gathering the wood when a walk to a trunk or stairs up to one can be started, so the last one is not worn out at the bottom. A walk back up the dug shaft is not that: it reaches the sky, not a tree. Four sticks are kept too, two more pickaxes' handles, gathered up at the trees before the descent: the stairs down, the tunnels and the climb out for the water dig some 390 blocks, three stone pickaxes' worth, and race 38477665442 bots Clj_r23 and Clj_r06 left the forest with three logs, made three pickaxes and broke the last on the climb (issue #39). Twenty-four sticks, a slot, twelve pickaxes' handles: the stairs down, the tunnels and the climb out wear three, and a stone pickaxe wears out in the Nether's tunnel in about 65 blocks, so the 250 to 630 blocks to the fortress take four to ten more, with no wood there (probes 39778484412 and 39846994607, issue #338: with four sticks the bots came through the portal with one to five and dug by hand; with 24, 17 to 23, and R2/12 made eight pickaxes in 36 minutes)"
+  :goal/doc "dig the nearest exposed iron ore with a stone pickaxe"
   :goal/holds {:item/stone_pickaxe 1}
   :goal/spares {:item/stone_pickaxe 1 :item/stick 24}
   :goal/provides {:item/raw_iron 1}
@@ -272,8 +258,7 @@
   :goal/done? :provided?}
  {:goal/id :dig-gravel
   :goal/priority 10
-  :goal/doc
-  "dig the nearest exposed gravel, by hand or with a shovel; a pickaxe is held for the stairs down when none is in sight, and a spare kept as the coal row keeps one: the gravel is tunnelled for at y 40 after the water, and race 38477665442 bot Clj_r19 wore both its pickaxes out in those tunnels with two sticks and 245 cobblestone in hand, its table left at the furnace, and the run stopped :no-pickaxe (issue #67)"
+  :goal/doc "dig the nearest exposed gravel"
   :goal/holds {:tag/pickaxes 1}
   :goal/spares {:tag/pickaxes 1}
   :goal/provides {:item/gravel 1}
@@ -293,8 +278,7 @@
   :goal/done? :provided?}
  {:goal/id :fill-bucket
   :goal/priority 10
-  :goal/doc
-  "scoop a surface water source with an empty bucket, walking to the nearest one in sight or remembered; a pickaxe is held for the stairs up out of a mine, and a spare made when what is held makes one, since one wears out on the way (a stone pickaxe lasts 131 blocks, a climb of fifty stairs digs about 150) and there may be no table or wood up there to make another"
+  :goal/doc "scoop a surface water source with an empty bucket"
   :goal/holds {:tag/pickaxes 1}
   :goal/spares {:tag/pickaxes 1}
   :goal/needs {:item/bucket 1}
@@ -303,8 +287,7 @@
   :goal/done? :provided?}
  {:goal/id :place-table
   :goal/priority 10
-  :goal/doc
-  "put a held crafting table down near the player, in a passage if nowhere else: it is taken along when the bot goes on, so the way is free again"
+  :goal/doc "put a held crafting table down near the player"
   :goal/passage-ok? true
   :goal/needs {:item/crafting_table 1}
   :goal/provides {:block/crafting_table :near}
@@ -324,16 +307,14 @@
   :goal/target? true
   :goal/always? true
   :goal/until "eat"
-  :goal/doc
-  "eat when the food the server sent is under 14 and something edible is held (issue #259): on Normal hunger drains with every dig and jump, and an empty bar stops healing; an always row at priority 0 like the escapes, after them in this table, so a trap still comes first and every other target waits for the meal"
+  :goal/doc "eat when the food the server sent is under 14 and something edible is held"
   :goal/done? :fed?
   :goal/plan :eat}
  {:goal/id :heal
   :goal/priority 0
   :goal/target? true
   :goal/always? true
-  :goal/doc
-  "eat for health back in the End (issue #267): hurt, the food under 18 (where natural regeneration stops, and the :eat row eats only under 14) and food held, in a lull: no breath cloud or fireball near, the dragon not sitting on its perch, no hostile within 8. An always row at priority 0 after the meal, in the End only"
+  :goal/doc "eat for health back in the End"
   :goal/dimension "minecraft:the_end"
   :goal/done? :healed?
   :goal/plan :heal}
@@ -341,16 +322,14 @@
   :goal/priority 0
   :goal/target? true
   :goal/always? true
-  :goal/doc
-  "food: hungry (food under 14) with nothing edible held, or the early provisioning of issue #504 (six edible items once a stone pickaxe is held, up to two minutes, under open sky and safe); kill the nearest cow, pig, sheep or rabbit a route reaches within 24 blocks and pick its meat up, for the meal row to eat raw (issue #259: the food producer); in the overworld with a stone pickaxe held (before the descent, issue #504) or the portal's iron held, and under six foods, it hunts within 48 blocks and, with none there, searches for animals on foot for two minutes (before the descent) or six (kit) at most, never from the water, and never out of a dig or a swim already begun (issue #501: the Nether has no game); an always row at priority 0 after the meal in this table"
+  :goal/doc "food: hungry (food under 14) with nothing edible held"
   :goal/done? :provisioned?
   :goal/plan :hunt}
  {:goal/id :wear-armour
   :goal/priority 0
   :goal/target? true
   :goal/always? true
-  :goal/doc
-  "put on any armour held whose slot is empty (issue #259): two clicks in window 0, so an always row at priority 0 after the meal, as the escapes preempt"
+  :goal/doc "put on any armour held whose slot is empty"
   :goal/done? :dressed?
   :goal/plan :wear}
  {:goal/id :armour
@@ -358,8 +337,7 @@
   :goal/target? true
   :goal/always? true
   :goal/until "armour"
-  :goal/doc
-  "an iron helmet, then an iron chestplate, from the ingots left once the iron the portal needs (flint and steel, the water bucket, the empty bucket) is held, with a table at hand (issue #259); an always row at the portal kit's priority, after it in this table, so a chained run makes them the moment that iron is in hand and never mines for them"
+  :goal/doc "an iron helmet, then an iron chestplate, from the spare ingots"
   :goal/done? :armoured?
   :goal/plan :armour}
  {:goal/id :attack
@@ -367,24 +345,21 @@
   :goal/target? true
   :goal/aside? true
   :goal/until "attack"
-  :goal/doc
-  "kill every hostile mob within 16 blocks (issue #259, the gym's attack trial: a zombie that does not move, gone, its attacks 650 ms apart in the recording); an aside, never a step of a chained run, as the water trial is one; fought with the best sword held"
+  :goal/doc "kill every hostile mob within 16 blocks"
   :goal/done? :cleared?
   :goal/plan :attack}
  {:goal/id :sword
   :goal/priority 13
   :goal/target? true
   :goal/always? true
-  :goal/doc
-  "the best sword the held items make without a trip, better than the best held that still has spare-uses swings left: iron from ingots the armour leaves spare, else stone from cobblestone, else wood from planks, never from a log (issue #259); an always row at the portal kit's priority after the armour in this table, so a chained run makes it once the portal's iron is in hand"
+  :goal/doc "the best sword the held items make without a trip"
   :goal/done? :armed?
   :goal/plan :sword}
  {:goal/id :blaze-rods
   :goal/priority 18
   :goal/target? true
   :goal/until "blaze-rods"
-  :goal/doc
-  "seven blaze rods (six for the twelve blaze powder twelve eyes of ender take, one spare), from the blazes a fortress's spawner makes (issue #262): a rod lying near picked up, the nearest blaze in sight and in reach of the floor fought, else the remembered spawner walked to on its floor or tunnelled to, into the open cell beside it, and camped by; hurt under 10, into a cell out of every watching blaze's sight, else food eaten, else backed away from the nearest watcher, else a rest; under 14 the same cover, meal or rest before the next fight; watched by three blazes at once, cover whatever the health; a fire by the spawner put out; in the Nether only. A step of the chain since the real race was raised to it (#491): an aside before, so plan/through stopped at the fortress"
+  :goal/doc "seven blaze rods, six for twelve eyes of ender and one spare"
   :goal/dimension "minecraft:the_nether"
   :goal/done? :rods-held?
   :goal/anchors #{:pocket/prepared-at :pocket/seal-failed-at :pocket/site :sortie/since}
@@ -399,16 +374,14 @@
   :goal/always? true
   :goal/until "spare-picks"
   :goal/dimension "minecraft:the_nether"
-  :goal/doc
-  "three stone pickaxes held before leaving the fortress after the blaze rods (issue #263): made from carried cobblestone, sticks and table when sealed and safe; made again whenever safe and down to one pickaxe with the materials, and drops one junk stack when sealed so a pearl drop has room; an always row at the blaze rods' priority"
+  :goal/doc "three stone pickaxes held before leaving the fortress after the blaze rods"
   :goal/done? :spare-picks-stocked?
   :goal/plan :spare-picks}
  {:goal/id :ender-pearls
   :goal/priority 19
   :goal/target? true
   :goal/until "pearls-12"
-  :goal/doc
-  "twelve ender pearls, from endermen hunted with the sword, never bartered (issue #263): the game's loot table drops a pearl one kill in two, so about twenty-four kills, in a warped forest of the Nether, where endermen are the only hostile that spawns. Each one within 24 with a clear line is provoked by a stare at its head from 6 blocks or more, so it comes to the bot; within 4.5 it is fought at its legs, never its face; the pearl is picked up where it died. A step of the chain since the real race reached the blaze rods and was raised to it: an aside before, so plan/through stopped at the blaze rods"
+  :goal/doc "twelve ender pearls, from endermen hunted with the sword, never bartered"
   :goal/provides {:item/ender_pearl 12}
   :goal/done? :provided?
   :goal/anchors #{:pearls/exit-target :pearls/mouth :pearls/relocate :pearls/shelter :plan/boxed-at
@@ -424,8 +397,7 @@
   :goal/target? true
   :goal/aside? true
   :goal/until "pearls-1"
-  :goal/doc
-  "one ender pearl from a hunted enderman (issue #263, the gym's first pearl trial): the :ender-pearls hunt, done at the first pearl held"
+  :goal/doc "one ender pearl from a hunted enderman"
   :goal/provides {:item/ender_pearl 1}
   :goal/done? :provided?
   :goal/anchors #{:pearls/exit-target :pearls/mouth :pearls/relocate :pearls/shelter :plan/boxed-at
@@ -441,8 +413,7 @@
   :goal/target? true
   :goal/aside? true
   :goal/until "eyes"
-  :goal/doc
-  "twelve eyes of ender, one for each frame of the end portal (issue #264): blaze powder crafted from the rods (two a rod, six of the seven), then each eye from a powder and a pearl, both in the 2x2 grid, no table and no trip; the needs planner finds the way through the generated craft rows. Twelve, not fourteen for the throws: the pearl stage makes twelve, and the throws that find the stronghold are the stronghold stage's to count. Short of pearls or rods it waits :no-pearls or :no-rods, the stage to look at. An aside until the stages before it (the blaze rods, the pearls) are proven and the chain is raised to it"
+  :goal/doc "twelve eyes of ender, one for each frame of the end portal"
   :goal/provides {:item/ender_eye 12}
   :goal/done? :provided?
   :goal/plan :eyes}
@@ -451,8 +422,7 @@
   :goal/target? true
   :goal/aside? true
   :goal/until "throw"
-  :goal/doc
-  "one eye of ender thrown and followed (issue #265, the gym's throw trial): the eye in hand, a look a little up (never down at an end portal frame, which a use-item fills), one use-item, the eye the server adds at the bot's middle followed for two seconds, the line it flew on the plane kept as a throw in :stronghold/throws; done when one is kept. In the overworld only: the eye finds no stronghold anywhere else. An aside: a trial of the throw alone, never a step of a chained run"
+  :goal/doc "one eye of ender thrown and followed"
   :goal/dimension "minecraft:overworld"
   :goal/done? :thrown?
   :goal/plan :throw}
@@ -461,8 +431,7 @@
   :goal/target? true
   :goal/aside? true
   :goal/until "stronghold"
-  :goal/doc
-  "the stronghold found by eyes of ender (issue #265): an eye thrown and followed, the eye it drops picked up; a way 64 blocks off its line at 60 degrees (hops a route reaches, a swim over water, else a dry tunnel) and a second throw once 32 off the line; the way to where the two lines cross (stronghold/triangulate), a tunnel there going down to y 30, and there with nothing seen a throw from there and walks round it; done when an end portal frame is remembered: the portal room is in the chunk data the moment its chunk loads, however deep. In the overworld only. An aside until the eyes (#264) are proven and the chain is raised to it"
+  :goal/doc "the stronghold found by eyes of ender"
   :goal/dimension "minecraft:overworld"
   :goal/done? :frames-seen?
   :goal/plan :stronghold}
@@ -471,8 +440,7 @@
   :goal/target? true
   :goal/aside? true
   :goal/until "portal-room"
-  :goal/doc
-  "the stronghold's portal room reached (issue #265): with an end portal frame remembered, the fortress's tunnel to it, one step at a time, each a plan of ops, down through the ground and the stronghold's walls, no step opening a cell beside lava or water, the frames never dug; with none remembered yet, the stronghold's search first (throws, walks, the crossing). Done within 6 blocks of a frame. In the overworld only. An aside until the eyes (#264) are proven and the chain is raised to it"
+  :goal/doc "the stronghold's portal room reached"
   :goal/dimension "minecraft:overworld"
   :goal/done? :in-portal-room?
   :goal/plan :portal-room}
@@ -481,8 +449,7 @@
   :goal/target? true
   :goal/aside? true
   :goal/until "end-portal"
-  :goal/doc
-  "the end portal lit (issue #266): an eye of ender into each remembered end portal frame whose state has none, each a use-on of the frame's top from a cell within reach that a route reaches, the frames walked on to reach the far side of the ring as a player walks them; done when an end portal block is remembered, which the server places the moment the twelfth eye goes in. Waits :no-frames with no frame on record, :no-eyes with fewer eyes held than frames lack them (the eyes stage, issue #264, is the one to look at). In the overworld only. An aside until the stronghold (#265) is proven and the chain is raised to it"
+  :goal/doc "the end portal lit"
   :goal/dimension "minecraft:overworld"
   :goal/done? :portal-lit?
   :goal/plan :end-portal}
@@ -491,8 +458,7 @@
   :goal/target? true
   :goal/aside? true
   :goal/until "enter-end"
-  :goal/doc
-  "the End entered (issue #266): the frames eyed as the end portal row does, the portal's nine blocks awaited, then the feet brought over the portal's middle, where the body drops into it and the server sends the End's respawn at once; done when the dimension is the End. On arrival the bot stands on the obsidian platform: a route never steps off it, since a column open to the void has no landing within three blocks (path/landing). An aside until the stronghold (#265) is proven and the chain is raised to it"
+  :goal/doc "the End entered"
   :goal/done? :in-end?
   :goal/plan :enter-end}
  {:goal/id :eye-frame
@@ -508,8 +474,7 @@
   :goal/target? true
   :goal/aside? true
   :goal/until "crystals"
-  :goal/doc
-  "every end crystal broken (issue #267): for the crystal nearest the feet, a pillar beside its spike along an axis (a block under the feet at the top of each jump) up to the spike's top, a walk onto a wide spike's top to the cell three out from the crystal, two blocks put in the cell between (the blast's line to the body shut), the crystal struck from behind them, then back down the pillar dug from its top; done when no crystal is shown and the feet are off every pillar and spike. In the End only. An aside until the End (#266) is entered from a stronghold and the chain is raised to it"
+  :goal/doc "every end crystal broken"
   :goal/dimension "minecraft:the_end"
   :goal/done? :crystals-gone?
   :goal/plan :crystals}
@@ -518,8 +483,7 @@
   :goal/target? true
   :goal/aside? true
   :goal/until "dragon"
-  :goal/doc
-  "the ender dragon dead (issue #267): the crystals first as the crystals row breaks them, then a wait on the ground five blocks from the fountain, where the dragon lands to perch; once it has held within six of the fountain and under y 70 for ten ticks, struck with the best sword every 650 ms while its box is in reach, a breath cloud or fireball within four backed away from; done when the server says it died (its death event, its removal near the bot with no boss bar, or the credits). In the End only. An aside until the End (#266) is entered from a stronghold and the chain is raised to it"
+  :goal/doc "the ender dragon dead"
   :goal/dimension "minecraft:the_end"
   :goal/done? :dragon-dead?
   ;; the branches of dragon/toward-dragon, most urgent first; a fresh answer ranked above the running

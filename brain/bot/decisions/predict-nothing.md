@@ -10,7 +10,6 @@ verifiedAgainst: 5c7d6c1
 sourceRefs:
   - src/clojurecraft/packet.clj#775 clicks carry the client's prediction as hashed slots
   - src/clojurecraft/window.clj#defn click
-  - "docs/issues/01-crafting-as-data.md#We have no prediction to drift: the world only changes on container-set-slot/container-set-content, and the executor gates each click on the state id advancing."
 related:
   - "[[bot/decisions/_moc|Decisions]]"
   - "[[mc-state-ids-prediction]]"

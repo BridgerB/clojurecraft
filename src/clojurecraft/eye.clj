@@ -1,12 +1,11 @@
 (ns clojurecraft.eye
   "What the bot sees of a creature beyond where it is and how hurt: where its head looks
-   (:entity/head-yaw, from rotate-head: an enderman facing the bot, a mob lining up a shot), what
-   it holds and wears (:entity/equipment, from set-equipment: a wither skeleton's sword, a
-   piglin's crossbow or gold), and the power of a fireball (:entity/power, projectile-power). Each
-   is a defmethod on game/on-packet, open dispatch, values in and out; all are facts about a
-   tracked entity, kept as new namespaced keys (the observability plan, issue #263: the bot threw
-   all of it away). The entity-event statuses and an add-entity's head yaw are kept in game.clj,
-   where those handlers already are."
+   (:entity/head-yaw, from rotate-head: an enderman facing the bot, a mob lining up a shot), what it
+   holds and wears (:entity/equipment, from set-equipment: a wither skeleton's sword, a piglin's
+   crossbow or gold), and the power of a fireball (:entity/power, projectile-power). Each is a
+   defmethod on game/on-packet, open dispatch, values in and out; all are facts about a tracked
+   entity, kept as new namespaced keys. The entity-event statuses and an add-entity's head yaw are
+   kept in game.clj, where those handlers already are."
   (:require [clojurecraft.entity :as entity]
             [clojurecraft.game :as game]
             [clojurecraft.recipe :as recipe]))

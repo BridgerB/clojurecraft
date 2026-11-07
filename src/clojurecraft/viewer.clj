@@ -25,7 +25,7 @@
             [clojurecraft.combat :as combat]
             [clojurecraft.eat :as eat]
             [clojurecraft.entity :as entity]
-            [clojurecraft.hunt :as hunt]
+            [clojurecraft.forage :as forage]
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
             [clojurecraft.physics :as physics]
@@ -357,19 +357,19 @@
 
 (defn hungry?
   "Does food matter to the bot now: its focus is the hunt or eating, its food is under
-   eat/hungry-below, or it is provisioning (hunt/provisioning?)?"
+   eat/hungry-below, or it is provisioning (forage/provisioning?)?"
   [world]
   (let [goal (:intent/goal (:plan/intent world))]
     (boolean (or (#{:hunt :eat} goal)
                  (some-> (:player/food world)
                          (< eat/hungry-below))
-                 (hunt/provisioning? world)))))
+                 (forage/provisioning? world)))))
 
 (defn care
   "Why the bot cares about entity e (id eid), by its own rules, or nil when it does not: :target
    (an intent's target is it), :threat (a hostile within the defence's reach: combat's
-   defend-radius, creeper-radius for a creeper), :hostile (within hunt/forage-wary, where a
-   hostile stops the search), :prey (an animal of hunt/game-kinds within hunt/reach while
+   defend-radius, creeper-radius for a creeper), :hostile (within forage/forage-wary, where a
+   hostile stops the search), :prey (an animal of forage/game-kinds within forage/reach while
    hungry?), :pearls (an enderman on the pearls stage), :rods (a blaze on the rods stage),
    :collect (a drop within two blocks of a :collect's cell)."
   [world eid e]
@@ -378,25 +378,28 @@
         kind (entity/kind e)
         chain (intents-in world)
         goal (:intent/goal (:plan/intent world))]
-    (cond
-      (some #(= eid (:intent/target %)) chain) :target
-      (and (entity/hostile? e)
-           (<= d
-               (cond (= :creeper kind) combat/creeper-radius
-                     :else combat/defend-radius)))
-      :threat
-      (and (entity/hostile? e) (<= d hunt/forage-wary)) :hostile
-      (and (hunt/game-kinds kind) (not (entity/dead? e)) (<= d (hunt/reach world)) (hungry? world))
-      :prey
-      (and (= :enderman kind) (= :ender-pearls goal)) :pearls
-      (and (= :blaze kind) (= :blaze-rods goal)) :rods
-      (and (entity/item? e)
-           (some #(and (= :collect (:intent/kind %))
-                       (vector? (:intent/target %))
-                       (<= (physics/distance (:entity/pos e) (physics/centre (:intent/target %)))
-                           2.0))
-                 chain))
-      :collect)))
+    (cond (some #(= eid (:intent/target %)) chain) :target
+          (and (entity/hostile? e)
+               (<= d
+                   (cond (= :creeper kind) combat/creeper-radius
+                         :else combat/defend-radius)))
+          :threat
+          (and (entity/hostile? e) (<= d forage/forage-wary)) :hostile
+          (and (forage/game-kinds kind)
+               (not (entity/dead? e))
+               (<= d (forage/reach world))
+               (hungry? world))
+          :prey
+          (and (= :enderman kind) (= :ender-pearls goal)) :pearls
+          (and (= :blaze kind) (= :blaze-rods goal)) :rods
+          (and (entity/item? e)
+               (some #(and (= :collect (:intent/kind %))
+                           (vector? (:intent/target %))
+                           (<= (physics/distance (:entity/pos e)
+                                                 (physics/centre (:intent/target %)))
+                               2.0))
+                     chain))
+          :collect)))
 
 (defn walk-route
   "A walk's feet cells still to go: its :intent/waypoints from :intent/at, then its target."

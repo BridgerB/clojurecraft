@@ -1,4 +1,4 @@
-(ns clojurecraft.hunt
+(ns clojurecraft.forage
   "The food producer (issue #259): hungry with nothing to eat, the bot kills the nearest animal
    that drops meat and picks the meat up; the :eat row eats it raw.
 
@@ -190,16 +190,17 @@
                    ee))))))
 
 (defn fresh-kill
-  "The hunt's kill whose drop is still to pick up: the last intent, when it is a :fight for :hunt
-   that ended done with where its target was last seen, and the target is gone (entity/gone?: a
-   fight that ended with the animal alive is no kill, whatever ended it); nil otherwise."
-  [world]
-  (let [l (:plan/last world)]
-    (when (and (= :fight (:intent/kind l))
-               (= :hunt (:intent/for l))
-               (:intent/target-pos l)
-               (entity/gone? world (:intent/target l)))
-      l)))
+  "The kill whose drop is still to pick up: the last intent, when it is a :fight for `purpose` (:hunt
+   by default) that ended done with where its target was last seen, and the target is gone
+   (entity/gone?: a fight that ended with the target alive is no kill); nil otherwise."
+  ([world] (fresh-kill world :hunt))
+  ([world purpose]
+   (let [l (:plan/last world)]
+     (when (and (= :fight (:intent/kind l))
+                (= purpose (:intent/for l))
+                (:intent/target-pos l)
+                (entity/gone? world (:intent/target l)))
+       l))))
 
 (defn forage-goal
   "The path goal of a forage leg along heading [dx dz] from feet, reach blocks out: any cell more

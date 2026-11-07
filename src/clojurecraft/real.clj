@@ -1,22 +1,21 @@
 (ns clojurecraft.real
-  "Real failures as snapshots (issue #299): a real race's recording folded with the code that
-   made it, a moment kept from before the choice that failed exactly as a sim run keeps one
-   (simrace/decision, simrace/chosen-moment), and the server model joined to the bot's world
-   there (sim/joined), so a real failure is the same :snapshot/* value a sim run's is and a fix's
-   check judges it the same way (simrace/judged, simrace/recurs?).
+  "Real failures as snapshots: a real race's recording folded with the code that made it, a moment
+   kept from before the choice that failed exactly as a sim run keeps one (simrace/decision,
+   simrace/chosen-moment), and the server model joined to the bot's world there (sim/joined), so a
+   real failure is the same :snapshot/* value a sim run's is and a fix's check judges it the same
+   way (simrace/judged, simrace/recurs?).
 
-     clojure -M:simrace --from-recording s2/Clj_r17.edn[.gz|.zst][,...] [--signature '[:fortress :no-path]']
-       [--out data/real] [--name real-Clj_r17.edn.gz[,...]] [--seed 1] [--round 38929353563]
+   
 
-   The recording is the evidence: every event the bot folded, and so every column the server
-   sent it, byte for byte (a captured world is nothing more, capture.clj), and every block that
-   changed since (the bot's own overlay, :world/blocks). A fold is the run again only with the
-   reducer that made the recording (issue #111): the race's churn converts on the runner at the
-   commit that played the race, so the fold is exact there. What the bot never heard the model
-   cannot know: the time of day (set-time is decoded fieldless; day-time-of guesses), what a
-   closed furnace holds, the hunger clock, where a death respawns, the entities it does not model.
-   So a real snapshot is kept only when it recurs against the model with the same code; one that
-   does not is a model gap, printed with what the bot did instead (gap), never filed as evidence."
+   The recording is the evidence: every event the bot folded, and so every column the server sent
+   it, byte for byte (a captured world is nothing more, capture.clj), and every block that changed
+   since (the bot's own overlay, :world/blocks). A fold is the run again only with the reducer that
+   made the recording: the race's churn converts on the runner at the commit that played the race,
+   so the fold is exact there. What the bot never heard the model cannot know: the time of day
+   (set-time is decoded fieldless; day-time-of guesses), what a closed furnace holds, the hunger
+   clock, where a death respawns, the entities it does not model. So a real snapshot is kept only
+   when it recurs against the model with the same code; one that does not is a model gap, printed
+   with what the bot did instead (gap), never filed as evidence."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.math :as math]
@@ -280,9 +279,7 @@
   "The real Nether a moment's portal leads to, {:columns :at} as sim/arrive takes it, when the
    moment is in the overworld and the run ended in the Nether: the Nether columns the recording
    holds by its end within radius chunks of where the bot last arrived there (:nether-at), and that
-   place. Race 38929353563 (issue #299): Clj_r17 and Clj_r05 failed in the Nether three seconds
-   after arriving, so their moments, half a minute earlier, stood at the portal, and a model with
-   no Nether to send them to failed them :rejected instead. nil otherwise."
+   place. nil otherwise."
   [{:keys [world columns nether-at]} m]
   (when (and nether-at
              (= dimension/nether (dimension/of world))
@@ -306,15 +303,12 @@
       (snapshot m (model m (cond-> opts nether (assoc :nether nether))) opts))))
 
 (defn gap
-  "How a real snapshot that does not recur (simrace/recurs?) got past its failure against the
-   model, a kind: :halted (the judge ran out of wall time: the check counts that as recurring,
-   but it is no sight of the failure); :crashed; :reached (the plan done, or the signature's
-   stage reached); :other (it failed, with another signature: the model answered otherwise);
-   :active (still playing when the window ended); nil when it recurs, or :slow when it recurs
-   but its judge took more than simrace/slow-ms of wall time (judge-ms): its verdict hangs on the
-   runner's speed. s2/Clj_r13 [:water-bucket :no-water] recurred in 220 s in probe 38940300595
-   and halted at 240 s in probe 38942963330, the same snapshot to the byte: a check judging it
-   would pass or fail by the machine."
+  "How a real snapshot that does not recur (simrace/recurs?) got past its failure against the model,
+   a kind: :halted (the judge ran out of wall time: the check counts that as recurring, but it is no
+   sight of the failure); :crashed; :reached (the plan done, or the signature's stage reached);
+   :other (it failed, with another signature: the model answered otherwise); :active (still playing
+   when the window ended); nil when it recurs, or :slow when it recurs but its judge took more than
+   simrace/slow-ms of wall time (judge-ms)."
   ([snap played] (gap snap played 0))
   ([snap played judge-ms]
    (cond (:run/halted? played) :halted
@@ -330,20 +324,20 @@
 ;;;; I/O: the recording, the snapshot file, the lines ;;;;
 
 (defn bot-of
-  "The bot a recording's file is: its name before the first dot (Clj_r17.edn.zst is Clj_r17)."
+  "The bot a recording's file is: its name before the first dot."
   [path]
   (first (str/split (.getName (io/file (str path))) #"\.")))
 
 (defn from-recording!
   "Fold the recording at path a line at a time (record/reduce-entries, fold), keep its failure's
    moment as a real snapshot (convert), write it, read it back as the check will, and judge it at
-   once against the model with this code (simrace/judged, with judge!'s wall-clock budget): the
-   code that played the race, when the race's churn runs it on the runner (issue #299). When it
-   recurs it stays at <out>/<name> and a REAL line says so; when it does not, it moves to
-   <out>/gaps/<name> and a GAP line says how it got past (gap): a failure the model does not
-   reproduce is a finding about the model, never evidence. STORY lines say what the bot did over
-   the window either way. o: the command line's options, --signature (else the recording's
-   RESULT's), --out, --name, --seed, --round, --bot. Returns {:path :recurs? :gap}."
+   once against the model with this code (simrace/judged, with judge!'s wall-clock budget): the code
+   that played the race, when the race's churn runs it on the runner. When it recurs it stays at
+   <out>/<name> and a REAL line says so; when it does not, it moves to <out>/gaps/<name> and a GAP
+   line says how it got past (gap): a failure the model does not reproduce is a finding about the
+   model, never evidence. STORY lines say what the bot did over the window either way. o: the
+   command line's options, --signature (else the recording's RESULT's), --out, --name, --seed,
+   --round, --bot. Returns {:path :recurs? :gap}."
   [path o]
   (let [t0 (System/currentTimeMillis)
         folded (record/reduce-entries fold-step (start) path)
@@ -401,9 +395,8 @@
 
 (defn from-recordings!
   "from-recording! for each recording --from-recording names (comma-separated), in order, in one
-   process (the race's churn converts a batch's failures at once, issue #299): --name, when given,
-   names their snapshots in the same order. One that throws prints a GAP line with :gap :error and
-   its message, and the rest go on. Returns their answers."
+   process: --name, when given, names their snapshots in the same order. One that throws prints a
+   GAP line with :gap :error and its message, and the rest go on. Returns their answers."
   [o]
   (let [paths (str/split (:from-recording o) #",")
         names (some-> (:name o)
