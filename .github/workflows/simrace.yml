@@ -59,9 +59,9 @@ jobs:
                    (println (str "max-minutes=" (:simrace/max-minutes r)))
                    (println (str "budget=" (:simrace/budget-minutes r)))
                    (println (str "heap=" (:simrace/heap-mb r)))
-                   (let [c (:simrace/checkpoint r) lane (parse-long "${{ inputs.lane }}") on? (contains? (set (:lanes c)) lane)]
-                     (println (str "from=" (if on? (:from c) "")))
-                     (println (str "kind=" (if on? (:kind c) "sim")))))' >> "$GITHUB_OUTPUT"
+                   (let [cs (let [c (:simrace/checkpoint r)] (cond (nil? c) [] (map? c) [c] :else c)) lane (parse-long "${{ inputs.lane }}") c (first (filter (fn [c] (contains? (set (:lanes c)) lane)) cs))]
+                     (println (str "from=" (if c (:from c) "")))
+                     (println (str "kind=" (if c (:kind c) "sim")))))' >> "$GITHUB_OUTPUT"
           cat "$GITHUB_OUTPUT"
 
   sim:
