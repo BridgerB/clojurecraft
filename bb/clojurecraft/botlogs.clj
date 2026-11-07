@@ -106,6 +106,96 @@
   [lines]
   (second (reduce digest-line [{} []] lines)))
 
+;; ---------------------------------------------------------------- what a batch saw: coverage, packets unheard
+
+(def deliberate
+  "Inbound packets the bot does not decode on purpose, by name, each with the reason: what a
+   batch's unknown counts drop before the page flags the rest (unheard). A packet not here and not
+   decoded is a fact the server sent and the bot threw away (the observability plan, part A)."
+  {:bundle-delimiter "brackets a bundle of packets; carries nothing"
+   :rotate-head "a mob's head yaw; its body's facing comes with its moves"
+   :light-update "sky and block light; the bot reads no light"
+   :chunk-batch-start "brackets a batch of chunks; chunk-batch-finished is answered"
+   :recipe-book-add "the client's recipe book; recipes come from datagen"
+   :recipe-book-remove "the client's recipe book"
+   :recipe-book-settings "the client's recipe book"
+   :update-recipes "the client's recipe display; recipes come from datagen"
+   :update-advancements "advancement toasts"
+   :commands "the command tree for tab completion"
+   :server-data "the server's motd and icon"
+   :initialize-border "the world border, thirty million blocks out"
+   :change-difficulty "the difficulty; fixed by the server's properties"
+   :ticking-state "the tick rate; the bot's clock is its own"
+   :ticking-step "the tick rate's frozen steps"
+   :waypoint "locator-bar waypoints of other players"
+   :player-info-update "the tab list's players"
+   :player-info-remove "the tab list's players"
+   :set-player-team "scoreboard teams"
+   :set-chunk-cache-center "the chunk the client centres its cache on"
+   :set-default-spawn-position "the world spawn's compass target"
+   :player-abilities "flying and creative flags; survival never changes them"
+   :set-experience "experience points; nothing the run spends"
+   :set-passengers "riders (a strider's, a jockey's)"
+   :level-particles "particles drawn"
+   :custom-payload "plugin channels (brand)"
+   :registry-data "registry contents; the order of each (damage types) comes from datagen"
+   :update-enabled-features "feature flags"
+   :update-tags "block and item tags; datagen reads them"
+   :select-known-packs "data packs known"})
+
+(defn packet-names
+  "{[phase id] name} of every inbound (server to client) packet in packets, the generated
+   {phase {:s2c {name id}}} table: how a run's :stats/unknown keys are named."
+  [packets]
+  (into {} (for [[phase dirs] packets [n id] (:s2c dirs)] [[phase id] n])))
+
+(defn unheard
+  "{name n} of the packets the runs' RESULTs counted unknown (:stats/unknown, {[phase id] n}),
+   named by names (packet-names; an id with no name keeps its [phase id]), less the deliberate
+   ones: what the server said that the bot threw away."
+  [names runs]
+  (reduce (fn [m [k n]]
+            (let [nm (get names k k)]
+              (cond (contains? deliberate nm) m
+                    :else (update m (if (keyword? nm) (name nm) (pr-str nm)) (fnil + 0) n))))
+          {}
+          (for [r runs kn (get-in r [:stats :stats/unknown])] kn)))
+
+(defn packets
+  "[decoded total] of the packets the runs' servers sent them: decoded is every packet a RESULT
+   counted by name (:stats/heard), total adds the unknown ones (:stats/unknown, the deliberate
+   included). A run from before :stats/heard counts no decoded packet, so a batch's share reads 0."
+  [runs]
+  (let [sum (fn [k] (reduce + 0 (for [r runs n (vals (get-in r [:stats k]))] n)))
+        decoded (sum :stats/heard)]
+    [decoded (+ decoded (sum :stats/unknown))]))
+
+(def observed-kinds
+  "The files a run's coverage counts, each [key needs], where needs names the runs that should
+   have it: :all every run, :failed-real a real run that failed (its recording), :truth every run
+   (a real one's server.txt, a sim one's truth.edn)."
+  [[:senses :all] [:events :all] [:moment :all] [:ring :all] [:truth :all]
+   [:recording :failed-real]])
+
+(defn observed
+  "A batch's observability row (the observability plan, part G) from facts, one map a run:
+   {:ok? :real? :senses? :events? :moment? :ring? :truth? :recording? :intents n :whys n
+   :dropped n}. Returns {kind [have want]} for each of observed-kinds, :why [intents with a why,
+   intents], :dropped (ledger events lost, summed) and :unheard (unheard). Every pair whole and
+   :dropped 0 is full sight; anything less is the first thing fixed (LOOP.md section 4)."
+  [facts unheard-counts]
+  (let [wants (fn [need f]
+                (case need
+                  :all true
+                  :failed-real (and (:real? f) (not (:ok? f)))))]
+    (into {:why [(reduce + 0 (keep :whys facts)) (reduce + 0 (keep :intents facts))]
+           :dropped (reduce + 0 (keep :dropped facts))
+           :unheard unheard-counts}
+          (for [[k need] observed-kinds
+                :let [want (filter #(wants need %) facts)
+                      have-key (keyword (str (name k) "?"))]]
+            [k [(count (filter have-key want)) (count want)]]))))
+
 ;;;; I/O: the recordings, the archive, the release ;;;;
 
 (defn senses-file
@@ -201,6 +291,47 @@
       (spit out (str (str/join "\n" (digest (line-seq rdr))) "\n"))
       true)))
 
+(defn ledger-facts
+  "{:intents n :whys n :dropped n} of a ledger file: its :intent events, how many carry a :why,
+   and the drops its head line counts (#:ledger{:events n :dropped n}); {} when unreadable."
+  [ef]
+  (or (try (with-open [r (io/reader ef)]
+             (let [[head & lines] (remove str/blank? (line-seq r))
+                   intents (filter #(str/includes? % ":ev :intent") lines)]
+               {:intents (count intents)
+                :whys (count (filter #(str/includes? % ":why ") intents))
+                :dropped (:ledger/dropped (edn/read-string head) 0)}))
+           (catch Exception _ nil))
+      {}))
+
+(defn run-facts
+  "What a batch holds of run r under data-dir, for observed: which of its files exist and its
+   ledger's counts (ledger-facts). A real run is one named by its bot (:run/bot)."
+  [data-dir r]
+  (let [real? (some? (:run/bot r))
+        ef (events-file data-dir r)]
+    (merge {:ok? (boolean (:ok r))
+            :real? real?
+            :senses? (some? (senses-file data-dir r))
+            :events? (some? ef)
+            :moment? (some? (beside data-dir r ".moment.edn"))
+            :ring? (some? (beside data-dir r ".ring.edn"))
+            :truth? (some? (beside data-dir r (if real? ".server.txt" ".truth.edn")))
+            :recording? (some? (recording data-dir r))}
+           (when ef (ledger-facts ef)))))
+
+(defn observed-of
+  "The observability row of a batch's runs under data-dir (observed over run-facts, with the
+   unknown packets named from resources/clojurecraft/packets.edn under the checkout root), and
+   :packets, [decoded total] (packets)."
+  [data-dir runs]
+  (let [names (packet-names (or (try (edn/read-string (slurp "resources/clojurecraft/packets.edn"))
+                                     (catch Exception _ nil))
+                                {}))]
+    (assoc (observed (map #(run-facts data-dir %) runs) (unheard names runs))
+           :packets
+           (packets runs))))
+
 ;; ---------------------------------------------------------------- the case: how a run ended, read for you
 
 (def case-window-ms 60000)             ; the last minute of a run a case tells: its final fight
@@ -218,11 +349,44 @@
   [es t]
   (last (filter #(and (= :intent (:ev %)) (<= (:t % 0) t)) es)))
 
+(def fire-hit-ms 2000)                 ; a hit this near an unexplained ignition is what lit it
+
+(defn cause-of-fire
+  "What lit the bot in the last window of ledger events w, the newest ignition (:alight): {:cause
+   kw :by kind :s-before-end s}, or nil when it never caught fire. An ignition the ledger could not
+   explain (:unknown) takes the nearest hit within fire-hit-ms either side (a damage-event can
+   arrive after the flag)."
+  [w end]
+  (when-let [a (last (filter #(= :alight (:ev %)) w))]
+    (let [near (->> w
+                    (filter #(and (= :hit (:ev %))
+                                  (not= :on_fire (:type %))
+                                  (<= (abs (- (:t % 0) (:t a 0))) fire-hit-ms)))
+                    (sort-by #(abs (- (:t % 0) (:t a 0))))
+                    first)
+          known? (not= :unknown (:cause a))]
+      (cond-> {:cause (cond known? (:cause a)
+                            near (:type near)
+                            :else :unknown)
+               :s-before-end (/ (- end (:t a 0)) 1000.0)}
+        (and known? (:by a)) (assoc :by (:by a))
+        (and (not known?) near (:by-kind near)) (assoc :by (:by-kind near))))))
+
+(defn items-moved
+  "{item delta} of the :item events of w: what the bot gained (positive) and lost (negative) of the
+   items the stages count, summed; items whose changes cancelled are left out."
+  [w]
+  (into
+   (sorted-map)
+   (remove (fn [[_ n]] (zero? n)))
+   (reduce (fn [m e] (update m (:item e) (fnil + 0) (:n e))) {} (filter #(= :item (:ev %)) w))))
+
 (defn case-of
   "How run r ended, from its ledger es (the observability plan, part G): its ending, the killer (the
    server's death line, else the last hit's attacker or damage type), the last case-window-ms of the
    run (the final fight): its first hit (when, by what, the health then, and what the bot was doing
-   and why), what it was doing at the end, the hits taken by attacker, the swings sent and how many
+   and why), what lit it (cause-of-fire), the items it gained and lost (items-moved), what it was
+   doing at the end, the hits taken by attacker, the swings sent and how many
    landed (a hurt flash on a swung-at entity), and the replay command (replay, a string). A pure
    function of values; the signature [ending killer doing why] is what a batch counts."
   [r es replay]
@@ -251,6 +415,8 @@
                    :doing (:kind doing-first)
                    :why (:why doing-first)})
      :at-end {:doing (:kind doing-end) :why (:why doing-end) :target (:target doing-end)}
+     :cause-of-fire (cause-of-fire w end)
+     :items (items-moved w)
      :hits (count hits)
      :hits-by (frequencies (map #(or (:by-kind %) (:type %)) hits))
      :swings (count (filter #(= :swing (:ev %)) w))
@@ -269,7 +435,8 @@
 (defn case-text
   "A case (case-of) as text a person or an agent reads in ten seconds."
   [c]
-  (let [{:keys [bot ending killer first-hit at-end hits hits-by swings landed replay timeline end]}
+  (let [{:keys [bot ending killer first-hit at-end hits hits-by swings landed replay timeline end
+                cause-of-fire items]}
         c]
     (str/join
      "\n"
@@ -294,6 +461,16 @@
               (:why first-hit)
               ")")
          "no hit in the last minute")
+       (if cause-of-fire
+         (str "cause of fire "
+              (:s-before-end cause-of-fire)
+              " s before the end: "
+              (name (:cause cause-of-fire))
+              (some->> (:by cause-of-fire)
+                       name
+                       (str " by ")))
+         "never caught fire in the last minute")
+       (str "items in the last minute: " (if (seq items) (pr-str items) "no change"))
        (str "at the end: doing " (:doing at-end)
             " (why " (:why at-end)
             ") target " (:target at-end))
