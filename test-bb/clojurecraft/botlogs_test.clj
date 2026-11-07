@@ -111,6 +111,22 @@
     (is (= [:death-hoglin :hoglin :eat :pocket-bore/and-in?-hp-20-0] (:signature c)))
     (is (str/includes? (botlogs/case-text c) "9 hits taken"))))
 
+(deftest a-killer-prefers-the-death-text-the-bot-heard
+  ;; the bot's own player-combat-kill text beats the server log's line, which beats the last hit
+  (let [es [{:ev :hit :t 1000 :type :mob_attack :by 7 :by-kind :zombie :hp 4.0}
+            {:ev :death-text
+             :t 2000
+             :text "death.attack.mob Clj_r05 entity.minecraft.blaze"
+             :key "death.attack.mob"
+             :killer "blaze"}
+            {:ev :death :t 2000 :text "death.attack.mob Clj_r05 entity.minecraft.blaze"}]
+        r {:run/bot "Clj_r05" :reason :death :death-message "Clj_r05 was slain by Blaze"}]
+    (is (= "death.attack.mob Clj_r05 entity.minecraft.blaze"
+           (:killer (botlogs/case-of r es "replay"))))
+    (is (= "Clj_r05 was slain by Blaze" (:killer (botlogs/case-of r (subvec es 0 1) "replay"))))
+    (is (= "zombie"
+           (:killer (botlogs/case-of (dissoc r :death-message) (subvec es 0 1) "replay"))))))
+
 (deftest a-case-names-what-lit-the-bot-and-the-items-it-moved
   (let [t0 1793989108107
         es [{:ev :item :t t0 :item :blaze_rod :n 3 :have 3}

@@ -74,6 +74,7 @@
           :sound-holder
           (gen/one-of [(gen/fmap (fn [i] {:id i}) (gen/choose 0 2000))
                        (gen/fmap (fn [n] {:name n}) gen/string)])
+          :text (gen/one-of [gen/string (gen/map gen/string gen/string {:max-elements 3})])
           :hashed-slot
           (gen/one-of [(gen/return nil)
                        (gen/hash-map :item (gen/choose 0 2000) :count (gen/choose 1 64))])

@@ -189,6 +189,33 @@
   (cond (and (map? i) (:intent/kind i) (nil? (why-of i))) (vary-meta i assoc :intent/why label)
         :else i))
 
+(defn default-why
+  "The label an intent gets when its planner named no branch (why): :<goal>/<kind> for an intent
+   chosen for a goal row (:intent/goal), :planner/<kind> for one chosen outside any (the leave-area
+   and regroup starts), :planner/unknown for a map with no kind. It names the row and the kind, not
+   the cond branch: a planner that tags its own branches (why) keeps the finer label."
+  [i]
+  (let [kind (some-> (:intent/kind i)
+                     name)
+        goal (some-> (:intent/goal i)
+                     name)]
+    (keyword (or goal "planner") (or kind "unknown"))))
+
+(defn why-or-default
+  "Intent i with a why: its own label if a planner tagged it (why), else default-why. Nil and a
+   non-intent (a {:plan/wait ...}) pass through. Applied in one place, plan/start-intent, so every
+   intent that becomes the running one carries a why whatever planner chose it."
+  [i]
+  (cond (and (map? i) (:intent/kind i) (nil? (why-of i))) (why (default-why i) i)
+        :else i))
+
+(defn child-why
+  "The label of a child intent started by an executor under parent: the parent's own why when it
+   has one, else :child/<parent kind>. One rule, applied in run-child, so a :walk or :dig inside a
+   :tunnel-to, :pocket, :stairs-down or :mine is labelled by what it serves."
+  [parent]
+  (or (why-of parent) (keyword "child" (name (:intent/kind parent :unknown)))))
+
 (defn feet
   "The cell the feet stand in: y a touch below the position, since physics jitter dips it
    just under the integer (ruststeve's (p.y - 0.5).floor())."
@@ -223,7 +250,9 @@
    :plan/intent for the tick, then returns to its place. Returns the world."
   [world event]
   (let [parent (:plan/intent world)
-        world (run (assoc world :plan/intent (:intent/child parent)) (:intent/child parent) event)
+        labelled (cond->> (:intent/child parent)
+                   (map? (:intent/child parent)) (why (child-why parent)))
+        world (run (assoc world :plan/intent labelled) labelled event)
         child (:plan/intent world)]
     (assoc world :plan/intent (assoc parent :intent/child child))))
 

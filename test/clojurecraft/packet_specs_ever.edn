@@ -83,9 +83,10 @@
                         [:previous-game-type :i8] [:debug? :bool] [:flat? :bool]]
  [:play :s2c :damage-event] [[:entity-id :varint] [:source-type :varint] [:source-cause :varint]
                              [:source-direct :varint]]
- [:play :s2c :player-combat-kill] [[:player-id :varint]]
+ [:play :s2c :player-combat-kill] [[:player-id :varint] [:message :text]]
  [:play :s2c :game-event] [[:event :u8] [:param :f32]]
- [:play :s2c :boss-event] [[:uuid :uuid] [:action :varint] [:health [:if :action 2 :f32]]]
+ [:play :s2c :boss-event] [[:uuid :uuid] [:action :varint] [:health [:if :action 2 :f32]]
+                           [:name [:if :action 0 :text]]]
  [:play :c2s :client-command] [[:action :varint]]
  [:play :s2c :section-blocks-update] [[:section :i64] [:blocks [:vec :varlong]]]
  [:play :s2c :set-cursor-item] [[:item :slot]]
@@ -118,4 +119,8 @@
                       [:volume :f32] [:pitch :f32] [:seed :i64]]
  [:play :s2c :sound-entity] [[:sound :sound-holder] [:source :varint] [:entity-id :varint]
                              [:volume :f32] [:pitch :f32] [:seed :i64]]
- [:play :s2c :level-event] [[:type :i32] [:pos :position] [:data :i32] [:global :bool]]}
+ [:play :s2c :level-event] [[:type :i32] [:pos :position] [:data :i32] [:global :bool]]
+ [:play :s2c :system-chat] [[:content :text] [:overlay :bool]]
+ [:play :s2c :set-action-bar-text] [[:text :text]]
+ [:play :s2c :set-title-text] [[:text :text]]
+ [:play :s2c :set-subtitle-text] [[:text :text]]}

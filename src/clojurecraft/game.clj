@@ -29,7 +29,9 @@
             [clojurecraft.packet :as p]
             [clojurecraft.physics :as physics]
             [clojurecraft.registry :as registry]
-            [clojurecraft.terrain :as terrain]))
+            [clojurecraft.said :as said]
+            [clojurecraft.terrain :as terrain]
+            [clojurecraft.text :as text]))
 
 (set! *warn-on-reflection* true)
 
@@ -247,7 +249,7 @@
   ;; that follows places it
   (-> w
       inventory/fresh-menus
-      (dissoc :player/dead?)
+      (dissoc :player/dead? :player/death-text)
       (change-dimension (:dimension p))
       (assoc :world/entities {}
              :player/vel [0.0 0.0 0.0]
@@ -504,9 +506,13 @@
 (defmethod on-packet [:play :boss-event]
   ;; the bars shown, by id (issue #267): the dragon fight's goes when its dragon dies;
   ;; action 2 updates health (0.0 to 1.0)
-  [w {:keys [uuid action health]}]
+  [w {:keys [uuid action health name]}]
   (cond (nil? uuid) w
-        (= action (p/value :boss-event :add)) (update w :world/boss-bars (fnil conj #{}) uuid)
+        (= action (p/value :boss-event :add))
+        (cond-> (update w :world/boss-bars (fnil conj #{}) uuid)
+          ;; the bar's title, a text component: the dragon fight's announces itself in words
+          (some? name)
+          (said/say {:at (:time/now w 0) :text (text/plain name) :chat/via :boss-event}))
         (= action (p/value :boss-event :remove))
         (-> w
             (update :world/boss-bars (fnil disj #{}) uuid)
