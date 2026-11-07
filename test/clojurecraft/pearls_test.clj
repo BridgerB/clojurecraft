@@ -4451,3 +4451,20 @@
     (is (= :tunnel-to (:intent/kind i)) "the hunt's mover is the heading's tunnel")
     (is (<= (second (:intent/target i)) pearls/heading-max-y) "down to y 90 and under")
     (is (= i (pearls/travel (pearls/reach-heading-hold held))) "the same leg at the next act")))
+
+(deftest a-fortress-exit-whose-tunnel-failed-is-given-up
+  ;; Logged state, sim R1/17 seed 1 (probes rh5-20 and rh5-33, issue #263): :tunnel-to [938 75 -209]
+  ;; failed :blocked in 50 ms, was blacklisted by fail-intent, and the far fallback target chose it
+  ;; again: 107 attempts by minute 20, a thirty-second :retrying wait between each, forty minutes
+  ;; with no intent running. A target a tunnel failed to is not chosen again; the exit ends.
+  (let [w (-> (standing {})
+              (assoc :player/dimension nether :player/pos [-163.5 38.0 221.5])
+              (memory/observe [-176 70 219] blaze/spawner)
+              (memory/observe [-164 40 221] (blocks/default-state :nether_bricks))
+              (assoc-in [:player/inventory 1] (item :iron_pickaxe 1)))
+        target (pearls/fortress-tunnel-target w)
+        failed (assoc w :plan/blacklist #{target})]
+    (is (some? target) "an exit target is chosen")
+    (is (pearls/fortress-escaping? w))
+    (is (nil? (pearls/fortress-tunnel-target failed)) "not the failed target again")
+    (is (not (pearls/fortress-escaping? failed)) "the exit is over: the other movers apply")))

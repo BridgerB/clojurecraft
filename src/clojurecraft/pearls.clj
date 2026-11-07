@@ -2395,10 +2395,17 @@
    fortress), however long a target has been held. A fresh target is bore-reach ahead of the feet
    and a blocked step turns the bore round, so re-derived each act it flipped between two
    targets four blocks apart for an hour of :tunnel-to, wearing the pickaxe out (sim
-   d3ce99b R1-24-1: [-188 78 163] and [-188 78 160], 620 :tunnel-to intents, no pearl)."
+   d3ce99b R1-24-1: [-188 78 163] and [-188 78 160], 620 :tunnel-to intents, no pearl). Nil too
+   when the target is one a tunnel to failed (:plan/blacklist): the exit is given up, and the
+   hunt's other movers (the held heading) take over. The far fallback target ignored the
+   blacklist: in sim R1/17 seed 1 (probes rh5-20 and rh5-33, issue #263) :tunnel-to [938 75 -209]
+   failed :blocked in 50 ms, was blacklisted, was chosen again, and failed again every thirty
+   seconds (the plan's :retrying wait) for forty minutes, 107 attempts by minute 20."
   [world]
   (when (seq (fortress-points world))
-    (when-let [fresh (fresh-tunnel-target world)] (or (held-exit-target world) fresh))))
+    (when-let [fresh (fresh-tunnel-target world)]
+      (let [t (or (held-exit-target world) fresh)]
+        (when-not (contains? (:plan/blacklist world #{}) t) t)))))
 
 (defn fortress-escaping?
   "Is the bot leaving the fortress via sealed tunnel-out: inside/near the fortress,
