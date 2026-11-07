@@ -75,7 +75,5 @@ Section numbers are kept everywhere, so "AGENTS.md section 8.4" is section 8.4 o
 - [`docs/fixing/issues.md`](docs/fixing/issues.md): The bot and how its failures become issues (section 2)
 - [`docs/fixing/loop.md`](docs/fixing/loop.md): The loop in full: decisions, reading an issue, evidence, probes, the cause, the fix, committing, the pull request, merging, hand-off (sections 5-14)
 - [`docs/fixing/traps.md`](docs/fixing/traps.md): Context traps, catches, failures seen with a worked example, and when you are stuck (sections 15-18)
-- [`docs/fixing/planner.md`](docs/fixing/planner.md): Reference: the planner and every intent (section 19)
 - [`docs/fixing/world.md`](docs/fixing/world.md): Reference: world, protocol, game, physics, windows, mechanics, the server model, gotchas (section 20)
-- [`docs/fixing/stages.md`](docs/fixing/stages.md): Reference: the stage chain and every failure reason (sections 21-22)
 - [`docs/fixing/ci.md`](docs/fixing/ci.md): Reference: tests you cannot run, the CI map, Hickey patterns (sections 23-25)
