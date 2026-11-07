@@ -370,7 +370,7 @@
     "whether the fortress exit choice was logged: boolean (can-tunnel-out?) while escaping, dropped once clear"
     "pearls/fortress-exit-log"]
    [:pearls/heading
-    "the long heading a bot with no forest known tunnels along: {:dir [dx dz] :from feet :turns n}, turned a quarter on a blocked leg, dropped once a forest is known or at a death"
+    "the long heading a bot with no forest known tunnels along: {:dir [dx dz] :from feet :target leg-target :turns n}, the target held until the feet are within 3 of it, turned a quarter when it is blacklisted, dropped once a forest is known or at a death"
     "pearls/reach-heading-hold"]
    [:pearls/exit-target
     "the fortress tunnel-out target held until reached or failed, so the bore does not flip between targets as the feet move: [x y z], dropped once clear"

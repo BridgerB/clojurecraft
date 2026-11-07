@@ -2612,21 +2612,28 @@
 (def heading-min-y 40) ; the heading's tunnels stay in y 40 to 90: over the lava sea, under the roof
 (def heading-max-y 90)
 
+(def heading-arrived 3.0) ; blocks from a leg's target within which the leg is over and the next is picked
+
+(defn leg-from
+  "The [x y z] cell heading-leg blocks ahead of feet along dir [dx dz], at the feet's own y held to
+   heading-min-y to heading-max-y (and over lava-floor)."
+  [world [fx fy fz] [dx dz]]
+  [(+ fx (* heading-leg dx))
+   (long (max (max heading-min-y (lava-floor world)) (min heading-max-y fy)))
+   (+ fz (* heading-leg dz))])
+
 (defn heading-target
-  "The [x y z] cell heading-leg blocks ahead of the feet along the held heading's :dir, at the feet's
-   own y held to heading-min-y to heading-max-y (and over lava-floor), or nil with no heading held."
+  "The leg's target [x y z] held in :pearls/heading (:target), or nil with no heading held. It is
+   held, not recomputed from the feet: a target heading-leg ahead of the feet moves at every act."
   [world]
-  (when-let [{[dx dz] :dir} (:pearls/heading world)]
-    (let [[fx fy fz] (intent/feet world)]
-      [(+ fx (* heading-leg dx))
-       (long (max (max heading-min-y (lava-floor world)) (min heading-max-y fy)))
-       (+ fz (* heading-leg dz))])))
+  (:target (:pearls/heading world)))
 
 (defn reach-heading
-  "The sealed :tunnel-to along the held heading (:pearls/heading) toward heading-target: a long
-   leg, the same heading at every act, for a bot in the Nether with no forest known that explore
-   finds no end for. Nil with no heading held. In sim R2/21 (probe stall-R2-21, 42383622038) it
-   stood caged with 131 digs and no forest, 170 to 485 blocks from the nearest."
+  "The sealed :tunnel-to along the held heading (:pearls/heading) toward its held leg target
+   (heading-target): a long leg, the same target at every act, for a bot in the Nether with no
+   forest known that explore finds no end for. Nil with no heading held. In sim R2/21 (probe
+   stall-R2-21, 42383622038) it stood caged with 131 digs and no forest, 170 to 485 blocks from
+   the nearest."
   [world]
   (when-let [t (heading-target world)]
     {:intent/kind :tunnel-to
@@ -2637,33 +2644,37 @@
      :intent/for :pearls}))
 
 (defn reach-heading-hold
-  "The world with :pearls/heading {:dir [dx dz] :from feet :turns n} held while the bot is in the
-   Nether with no warped forest known: picked once, away from the fortress (fortress-exit-dir,
-   rounded to the nearer axis), kept at every act; turned a quarter when its target is blacklisted
-   (a leg blocked), and picked again from the feet after heading-span blocks along it. Dropped
-   once a forest is known or off the Nether. The world as it was otherwise."
+  "The world with :pearls/heading {:dir [dx dz] :from feet :target leg-target :turns n} held while
+   the bot is in the Nether with no warped forest known: picked once, away from the fortress
+   (fortress-exit-dir, rounded to the nearer axis), its leg target kept at every act. A new leg
+   target (leg-from, from the feet) only when the feet are within heading-arrived of it; when it
+   is blacklisted (a leg blocked) the heading turns a quarter first; and after heading-span blocks
+   along the heading it is picked again. Dropped once a forest is known or off the Nether. The
+   world as it was otherwise."
   [world]
   (let [nether? (= dimension/nether (dimension/of world))
         h (:pearls/heading world)
         feet (intent/feet world)
         [x _ z] feet
         pick (fn []
-               (let [[ex ez] (fortress-exit-dir world)]
-                 {:dir (if (>= (abs ex) (abs ez)) [(if (neg? ex) -1 1) 0] [0 (if (neg? ez) -1 1)])
-                  :from feet
-                  :turns 0}))]
+               (let [[ex ez] (fortress-exit-dir world)
+                     dir
+                     (if (>= (abs ex) (abs ez)) [(if (neg? ex) -1 1) 0] [0 (if (neg? ez) -1 1)])]
+                 {:dir dir :from feet :target (leg-from world feet dir) :turns 0}))
+        t (:target h)]
     (cond (or (not nether?) (seq (memory/warped-chunks world))) (dissoc world :pearls/heading)
           (or (nil? h)
               (> (math/sqrt (+ (math/pow (- x (first (:from h))) 2.0)
                                (math/pow (- z (last (:from h))) 2.0)))
                  heading-span))
           (assoc world :pearls/heading (pick))
-          (contains? (:plan/blacklist world #{}) (heading-target world))
-          (assoc world
-                 :pearls/heading
-                 (-> h
-                     (update :dir (fn [[dx dz]] [(- dz) dx]))
-                     (update :turns inc)))
+          (contains? (:plan/blacklist world #{}) t)
+          (let [dir ((fn [[dx dz]] [(- dz) dx]) (:dir h))]
+            (assoc world
+                   :pearls/heading
+                   (assoc h :dir dir :target (leg-from world feet dir) :turns (inc (:turns h)))))
+          (<= (physics/horizontal-distance feet t) heading-arrived)
+          (assoc-in world [:pearls/heading :target] (leg-from world feet (:dir h)))
           :else world)))
 
 (defn fortress-exit-log

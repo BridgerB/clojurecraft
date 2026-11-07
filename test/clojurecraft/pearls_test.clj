@@ -4398,11 +4398,17 @@
     (is (= :tunnel-to (:intent/kind i)))
     (is (>= (- (first (:intent/target i)) 8) pearls/heading-leg) "a long leg along the heading")
     (is (<= pearls/heading-min-y (second (:intent/target i)) pearls/heading-max-y))
-    (is (= h (:pearls/heading moved)) "the same heading at the next act, from other feet")
+    (is (= h (:pearls/heading moved))
+        "the same heading and leg target at the next act, from other feet")
+    (is (= (:intent/target i) (:intent/target (pearls/reach-heading moved)))
+        "the same target from two different feet along the leg")
+    (testing "a new leg target once the feet are within 3 of it"
+      (let [near (pearls/reach-heading-hold (assoc held :player/pos [(+ 8.5 62) 60.0 8.5]))]
+        (is (= [(+ 8 62 pearls/heading-leg) 60 8] (:target (:pearls/heading near))))))
     (testing "a blocked leg turns a quarter and goes on"
-      (let [blocked (assoc held :plan/blacklist #{(:intent/target i)})
+      (let [blocked (assoc moved :plan/blacklist #{(:intent/target i)})
             turned (:pearls/heading (pearls/reach-heading-hold blocked))]
-        (is (= [0 1] (:dir turned)))
+        (is (= [0 1] (:dir turned)) "blocked after the bot moved: the held target still matches")
         (is (= 1 (:turns turned)))))
     (testing "picked again after heading-span blocks"
       (is (= [(+ 8 400) 60 8]
