@@ -5,17 +5,13 @@
      clojure -M:run --port 25571 [--name N] [--until play|wood|table|pickaxe] [--chain true]
                     [--events stdin]
                     [--timeout-ms 120000] [--hold-ms 0] [--record run.edn [--commit sha]]
-                    [--telemetry t.edn] [--viewer 4600 [--viewer-jar client.jar]
-                    [--viewer-rcon-port 25581 --viewer-rcon-pass-file rcon.pass]]
+                    [--telemetry t.edn]
      clojure -M:replay run.edn
 
    With --events stdin the bot reads EDN events (one per line) from stdin: that is how the
    fixture (clojure -M:harness, its own process) tells it to go. Without it, a planned --until
    starts where the bot stands, once it is loaded. --telemetry writes one EDN line per change of
-   the world, from a watch on the atom (clojurecraft.watch) that never slows the loop. --viewer
-   serves a 3D view of the bot's world and thoughts on that port (clojurecraft.viewer), from
-   another watch; with RCON its Pause button freezes the server, and its flags go beside the
-   recording."
+   the world, from a watch on the atom (clojurecraft.watch) that never slows the loop."
   (:require
     [clojure.core.async :as async]
     [clojure.edn :as edn]
@@ -59,7 +55,6 @@
     [clojurecraft.swim]
     [clojurecraft.sword]
     [clojurecraft.vein]
-    [clojurecraft.viewer :as viewer]
     [clojurecraft.watch :as watch]
     [clojurecraft.wood])
   (:gen-class))
@@ -252,8 +247,7 @@
   "Connect, run until the goal, a failed plan, the deadline or a closed socket, print RESULT,
    hold for an outside judge, and exit 0 when ok else 1."
   [& args]
-  (let [{:keys [host port name until timeout-ms hold-ms events record commit telemetry chain viewer
-                viewer-jar viewer-rcon-port viewer-rcon-pass-file]
+  (let [{:keys [host port name until timeout-ms hold-ms events record commit telemetry chain]
          :or {host "127.0.0.1"
               port "25571"
               name "Clj_wood"
@@ -264,18 +258,7 @@
         queue (when (= events "stdin") (async/chan 16))
         world* (atom (game/init {:host host :port (Long/parseLong port) :name name}))
         watcher (some->> telemetry
-                         (watch/telemetry! world*))
-        view (when viewer
-               (viewer/serve! world*
-                              (Long/parseLong viewer)
-                              {:jar viewer-jar
-                               :rcon (when viewer-rcon-port
-                                       {:port (Long/parseLong viewer-rcon-port)
-                                        :pass (some-> viewer-rcon-pass-file
-                                                      slurp
-                                                      str/trim)})
-                               :notes (some-> record
-                                              (str ".notes.ndjson"))}))]
+                         (watch/telemetry! world*))]
     (when queue (read-events! *in* queue)) ; a fixture speaks through the pipe
     (let [{r :result} (run-bot! {:host host
                                  :port (Long/parseLong port)
@@ -290,7 +273,6 @@
                                  :world* world*
                                  :on-result (fn [r] (prn 'RESULT r) (flush))})]
       (when watcher ((:close watcher)) (cli/log "telemetry dropped" ((:dropped watcher)) "lines"))
-      (when view ((:close view)))
       (shutdown-agents)
       (System/exit (if (:ok r) 0 1)))))
 

@@ -90,7 +90,6 @@ src/clojurecraft/gym.clj      the gym: registry, one trial (land, judge, retry a
 src/clojurecraft/landings.clj landing sets: grid, biome snap, surface checks, pregeneration
 src/clojurecraft/watch.clj    observers of the atom: --telemetry diffs successive worlds, bounded, off-thread
 src/clojurecraft/senses.clj   observer of the atom: a line a second of what a race bot senses and decides, the loop's slowest event, the classes a run ends in
-src/clojurecraft/viewer.clj   observer of the atom: --viewer serves the world round the bot, drawn by steve's vendored renderer, and its thinking
 src/clojurecraft/main.clj     loop, effects, RESULT line, --record, --telemetry, replay
 src/clojurecraft/cli.clj      what every entry point shares: --key value options, a timestamped stderr line
 dev/clojurecraft/datagen.clj  vanilla --reports and the inner jar's data → resources/clojurecraft/*.edn

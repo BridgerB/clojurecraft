@@ -6,7 +6,7 @@
    expanded to 4096 entries; block-at indexes the bits on demand. The long[] is never mutated
    after decode, so a section is a value. :chunk/biomes holds each section's biome container the
    same way (64 cells, 4x4x4 blocks each, ids in the server's biome registry); nothing in the bot
-   reads it, the viewer tints by it."
+   reads it."
   (:require [clojure.math :as math]
             [clojurecraft.bytes :as b]
             [clojurecraft.dimension :as dimension])
@@ -40,11 +40,6 @@
   (b/read-i16 buf)
   (b/read-i16 buf)
   [(read-container buf 8 4096) (read-container buf 3 64)])
-
-(defn read-section
-  "One section's block container (read-section-with-biomes without the biomes)."
-  [^ByteBuffer buf]
-  (first (read-section-with-biomes buf)))
 
 (defn decode
   "The chunkData bytes of level_chunk_with_light → column: every section the bytes hold (the
