@@ -439,14 +439,8 @@
    [:plan/trail "feet positions of recently started intents, oldest first" "while planning"]
    [:plan/last "the last intent that ended, with its outcome" "after one ends"]
    [:plan/ended
-    "{:intent/kind :intent/target :intent/for :ended/at} of the intent that ended last (finished, failed or abandoned) and the ms it did: churn detection compares the next start with it"
-    "after one ends"]
-   [:plan/churn
-    "{:intent/kind :intent/target :intent/for :churn/n} of the intent last started, n the times in a row the planner started it the tick after it ended (0: not a repeat): CHURN, the planner's choice and the intent's own end check disagreeing about one state (issue #615); logged `churn <kind> <target> xN` every 20 repeats; observation only"
-    "after the first intent"]
-   [:ended/at "ms the intent in :plan/ended ended at" "inside :plan/ended"]
-   [:churn/n "times in a row the intent in :plan/churn started the tick after it ended"
-    "inside :plan/churn"]
+    "{:intent/kind :intent/target :intent/for :ended/at} of the intent that ended last (finished, failed or abandoned) and the ms it did: read by the rows that ask what just ended"
+    "after one ends"] [:ended/at "ms the intent in :plan/ended ended at" "inside :plan/ended"]
    [:plan/choice
     "{:choice/goal :choice/over :choice/how :choice/at} the planner's newest choice: the goal row now served, the one before it, how it got there (:start :preempted :interrupted :explore :regroup :retreat :wait :retry :done :other-dimension) and the ms; set only when the goal or the how changes; observation only (issue #263)"
     "after the planner first chooses"]

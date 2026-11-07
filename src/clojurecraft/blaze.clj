@@ -1669,8 +1669,7 @@
    10 off, past the at-hand radius, shot the bot from 16.8 health to none in ten seconds, since
    nothing ends a running intent but itself and the planner is asked only then."
   [world i]
-  (and (not (contains? #{:fight :eat :rest :back-off :pocket-hold :pocket :seal :unseal :dodge}
-                       (:intent/kind i)))
+  (and (not (contains? refuge-answer-kinds (:intent/kind i)))
        (not= :cover (:intent/for i))
        (seq (watchers world))
        (some? (cond (hurt? world) (healing world false)
@@ -1855,12 +1854,30 @@
   [world i]
   (and (= :fight (:intent/kind i)) (some? (commit-fight world))))
 
+(defn hollow-pocket?
+  "Is next a :pocket at the feet that cannot be sealed (pocket/cannot-seal?)? The steer drops such a
+   site the tick it is entered and the pocket ends at once, so cutting a tunnel for it moves
+   nothing."
+  [world next]
+  (boolean (when-let [c (and (= :pocket (:intent/kind next))
+                             (:player/pos world)
+                             (:pocket/cell (:intent/site next)))]
+             (and (= c (intent/feet world)) (pocket/cannot-seal? world c)))))
+
+(defn hollow-replacement?
+  "Would the row, planning again without the running :tunnel-to i, answer with a hollow pocket at
+   the feet (hollow-pocket?)? Then the tunnel is not cut for it."
+  [world goal i]
+  (and (= :tunnel-to (:intent/kind i))
+       (let [cut (plan/abandon-intent world i :interrupted)]
+         (hollow-pocket? cut (plan/next-intent cut goal plan/goals)))))
+
 (defmethod plan/interrupts? :blaze-rods
   ;; any running intent but a fight ends when a blaze is at hand (at-hand-blaze), and the act
   ;; fights it when healthy: gym blaze-fire-b run 3 (run 39136853644) tunnelled on with one hitting it in melee
   ;; from 20 health to 13.8, since nothing else ends a running intent; never interrupt cover or healing when hurt (#577);
   ;; and one hurt and watched (under-fire?) by blazes further off, whatever the intent but the answer to it
-  [world _ i]
+  [world goal i]
   (and (not (committed-fight? world i))
        (or ;; a fire block lit in the feet's cell or the head's while an intent runs (a pick-up of a rod
            ;; lying in it, a hold): the row's @out is asked only when none runs. Blaze-race-z8 job 3
@@ -1888,7 +1905,8 @@
              (not (and (= :cover (:intent/for i)) (crowded? world)))
              (not (and (= :collect-drops (:intent/kind i)) (some? (near-rod world))))
              (some? (fightable-blaze world)))
-        (under-fire? world i))))
+        (under-fire? world i))
+       (not (hollow-replacement? world goal i))))
 
 (defn passive?
   "Is the bot healthy and idle at the fortress: hp at passive-health or more, not burning, no blaze

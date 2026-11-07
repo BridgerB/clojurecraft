@@ -382,7 +382,7 @@
 (def plan-keys
   "The plan's attributes a moment keeps whole."
   [:plan/status :plan/goals :plan/waiting :plan/failed :plan/ended :plan/last :plan/attempts
-   :plan/churn :plan/trap :plan/reached :plan/since :plan/choice :plan/choices])
+   :plan/trap :plan/reached :plan/since :plan/choice :plan/choices])
 
 (def stage-namespaces
   "The namespaces of the stages' own attributes a moment keeps whole: the hunt's, the pocket's, the

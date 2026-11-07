@@ -551,8 +551,6 @@
 (s/def :plan/last (s/keys :req [:intent/kind]))
 (s/def :plan/ended (s/keys :req [:intent/kind :ended/at]))
 (s/def :ended/at int?)
-(s/def :plan/churn (s/keys :req [:intent/kind :churn/n]))
-(s/def :churn/n nat-int?)
 (s/def :choice/goal (s/nilable keyword?))
 (s/def :choice/over (s/nilable keyword?))
 (s/def :choice/how
