@@ -490,7 +490,9 @@
 (s/def :chat/key string?)
 (s/def :chat/killer string?)
 (s/def :player/death-text (s/keys :req-un [::at :chat/text] :opt-un [:chat/key :chat/killer]))
-(s/def :world/chat (s/coll-of (s/keys :req-un [::at :chat/text] :opt-un [:chat/key]) :kind vector?))
+(s/def :chat/via keyword?)
+(s/def :world/chat
+  (s/coll-of (s/keys :req-un [::at :chat/text] :opt-un [:chat/key] :opt [:chat/via]) :kind vector?))
 (s/def :intent/food-before int?)
 (s/def :intent/eat-by number?)
 (s/def :entity/seen-at int?)

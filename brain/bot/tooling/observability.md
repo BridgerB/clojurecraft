@@ -16,6 +16,7 @@ sourceRefs:
   - "src/clojurecraft/text.clj#A death message component as {:death/key"
   - src/clojurecraft/text.clj#defn cause-component
   - src/clojurecraft/chat.clj#defn death-line
+  - src/clojurecraft/said.clj#defn say
   - src/clojurecraft/sim.clj#defn record-death
   - src/clojurecraft/registry.clj#defn damage-type
   - src/clojurecraft/senses.clj#defn events
@@ -29,6 +30,8 @@ sourceRefs:
   - src/clojurecraft/senses.clj#defn senses!
   - "src/clojurecraft/intent.clj#Intent i labelled with the planner's branch that chose it"
   - src/clojurecraft/intent.clj#defn why-of
+  - src/clojurecraft/intent.clj#defn why-or-default
+  - src/clojurecraft/intent.clj#defn child-why
   - "src/clojurecraft/memory.clj#The fact for intent i reaching event"
   - src/clojurecraft/race.clj#defn near-truth!
   - src/clojurecraft/race.clj#defn serverlog-lines
@@ -69,7 +72,7 @@ The bot's whole mind is one world value, so everything a reader needs about a ru
   - effects (`:player/effects`);
   - attributes (`:player/armor`, `:player/max-health`: the server's word on worn armour).
 
-- **chat.clj:** what the server says in words.
+- **chat.clj:** what the server says in words (the action bar, title and subtitle texts and a boss bar's name when it is added join the same window, each line naming its packet in `:chat/via`; `disguised-chat` is not decoded: its chat-type holder's layout is unconfirmed).
   - `system-chat` lines (every player's death, the server's warnings) are kept in `:world/chat`, the last 20, each `{:at :text :key}`; the text is `text/plain` of the component, which `nbt/read-component` read from the wire (a `:text` field type; a malformed component reads as nil, never throws).
   - `player-combat-kill` carries the bot's own death message: `:player/death-text` `{:at :text :key :killer}` (`text/death` splits the key and the killer; no English table is held, so a text reads as the translate key and its arguments, `death.attack.mob Clj_r05 entity.minecraft.blaze`), gone at the respawn.
   - The ledger notes each new line as `:chat` and the text as `:death-text`, and the `:death` event carries it; the case file's killer is that text first, then the server log's line, then the last hit.
@@ -81,7 +84,7 @@ The bot's whole mind is one world value, so everything a reader needs about a ru
 - **Derived senses** (`derived/events`, folded into the ledger): `:alight` with its cause (the newest non-burning hit within two seconds, `derived/alight-cause`, else lava or fire at the feet, else `:unknown`) and `:out` for `:player/on-fire?`; `:item` with the delta for the pearls, rods, eyes, pickaxes, food, buckets and cobblestone (per 64 crossed); `:knock` for the server setting the bot's own motion (`:player/knock`) and `:corrected` for a teleport after it was loaded (`:player/corrected`); `:biome` with the server's registry id under the feet (`chunk/biome-at`, no name table exists); `:air` at each three seconds of breath lost. Path search effort is not told: `path/plan` is called from many executors and its result never reaches the world.
 - **The senses:** one line a second (`senses/of`), and the ring: a moment a minute for the last five (`senses/senses!`).
 - **The moment:** the whole mind at the ending (`senses/moment`): facts, the blocks round the feet, the intent chain, the plan, the stages' keys, entities near, hits, effects, armour, and the newest 40 intentions.
-- **Why:** the stuck stage's planners label each intent with the branch that chose it (`intent/why`, on metadata, so equality is unchanged); intention facts keep `:intention/why`.
+- **Why:** every running intent carries a why (`intent/why`, on metadata, so equality is unchanged): a planner that tags its branches gives the finer label (the stuck stage's do), else `plan/start-intent` labels it `:<goal>/<kind>` (`intent/why-or-default`), and a child an executor starts inherits its parent's (`intent/child-why`, in `run-child`); intention facts keep `:intention/why`.
 - **Server truth** (real): every entity within 32 blocks of the ending and the bot's own entity, whole (`race/near-truth!`), as `<name>.server.txt`.
 - **Sim truth, every run:** the model's view round the player (`simrace/truth`: each mob within 32 blocks with its kind, position, health, anger, whether it targets the player and what it dealt this life, and the model's own cause for each blow from `:sim/hit-log`, `sim/hit-logged`) is written as `<run>.truth.edn` for every ended sim run, one that threw too (`simrace/truth-texts`, which says `:unavailable` instead of leaving no file). Every 5 simulated seconds the same view joins a ring of 120 (`simrace/truth-ring-add`, sampled by a tap on `sim/play-from`, only the mobs near the player), written as `<run>.truth-ring.edn`.
 - **Blind:** `blind/blind` sets the truth beside the bot's moment: mobs it never tracked, mobs that target it and it ranked as no threat (`:threats` in the moment), blows from an attacker it did not know. A case prints a `blind:` line for each (`botlogs/case-text`), for sim runs, which have both files.

@@ -85,7 +85,8 @@
                              [:source-direct :varint]]
  [:play :s2c :player-combat-kill] [[:player-id :varint] [:message :text]]
  [:play :s2c :game-event] [[:event :u8] [:param :f32]]
- [:play :s2c :boss-event] [[:uuid :uuid] [:action :varint] [:health [:if :action 2 :f32]]]
+ [:play :s2c :boss-event] [[:uuid :uuid] [:action :varint] [:health [:if :action 2 :f32]]
+                           [:name [:if :action 0 :text]]]
  [:play :c2s :client-command] [[:action :varint]]
  [:play :s2c :section-blocks-update] [[:section :i64] [:blocks [:vec :varlong]]]
  [:play :s2c :set-cursor-item] [[:item :slot]]
@@ -114,4 +115,7 @@
    [:vec
     [[:id :varint] [:base :f64]
      [:modifiers [:vec [[:mod-id :string] [:amount :f64] [:operation :varint]]]]]]]]
- [:play :s2c :system-chat] [[:content :text] [:overlay :bool]]}
+ [:play :s2c :system-chat] [[:content :text] [:overlay :bool]]
+ [:play :s2c :set-action-bar-text] [[:text :text]]
+ [:play :s2c :set-title-text] [[:text :text]]
+ [:play :s2c :set-subtitle-text] [[:text :text]]}

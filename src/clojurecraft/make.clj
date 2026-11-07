@@ -468,14 +468,19 @@
    table along (take-table), make room (make-room) or act on the row the needs planner reaches
    through table."
   [world goal table]
-  (or (wood/continue-gather world)
-      (intent/chain-next (:plan/last world) :take-table table-drops {})
-      (collect-batch world)
-      (vein world)
+  (or (intent/why :make/continue-gather (wood/continue-gather world))
+      (intent/why :make/table-pickup-in-flight
+                  (intent/chain-next (:plan/last world) :take-table table-drops {}))
+      (intent/why :make/collect-batch (collect-batch world))
+      (intent/why :make/vein (vein world))
       (let [row (next-row world goal table)]
         (cond (nil? row) nil
               (= :stuck row) {:plan/wait :stuck}
-              :else (or (take-table world row) (make-room world row) (plan/act world row))))))
+              :else
+              (or (intent/why :make/take-table (take-table world row))
+                  (intent/why :make/make-room (make-room world row))
+                  (intent/why (keyword "make" (str "act-" (name (:goal/act row))))
+                              (plan/act world row)))))))
 
 (defmethod plan/next-intent :needs [world goal table] (decide world goal table))
 
@@ -490,13 +495,14 @@
 
 ;; ---------------------------------------------------------------- acts
 
-(defmethod plan/act :gather [world _] (wood/gather-or-out world))
+(defmethod plan/act :gather [world _] (intent/why :make/gather (wood/gather-or-out world)))
 
 (defmethod plan/act :place
   [world row]
-  (place/ashore world
-                (cond-> {:intent/kind :place :intent/item (:goal/item row)}
-                  (:goal/passage-ok? row) (assoc :intent/passage-ok? true))))
+  (intent/why :make/place-item
+              (place/ashore world
+                            (cond-> {:intent/kind :place :intent/item (:goal/item row)}
+                              (:goal/passage-ok? row) (assoc :intent/passage-ok? true)))))
 
 (defn at-container
   "The intent i once the window of the placed block (a table, a furnace) is open; before that,
@@ -507,18 +513,20 @@
              (get-in world [:window/open :window/menu-type]))
           i
           (and pos (<= (physics/distance (game/eye world) (physics/centre pos)) place/open-reach))
-          {:intent/kind :open-container :intent/target pos}
-          pos {:intent/kind :walk :intent/target pos}
+          (intent/why :make/open-container {:intent/kind :open-container :intent/target pos})
+          pos (intent/why :make/walk-to-container {:intent/kind :walk :intent/target pos})
           :else {:plan/wait wait})))
 
 (defmethod plan/act :craft
   [world {:goal/keys [recipe]}]
   (if (recipe/fits? (recipe/by-id recipe) 2)
-    {:intent/kind :craft :intent/recipe recipe :intent/window :inventory}
+    (intent/why :make/craft-in-inventory
+                {:intent/kind :craft :intent/recipe recipe :intent/window :inventory})
     (at-container world
                   :crafting_table
                   :no-table
-                  {:intent/kind :craft :intent/recipe recipe :intent/window :table})))
+                  (intent/why :make/craft-at-table
+                              {:intent/kind :craft :intent/recipe recipe :intent/window :table}))))
 
 (defmethod plan/act :smelt
   [world {:goal/keys [smelt]}]
@@ -527,5 +535,6 @@
       (at-container world
                     :furnace
                     :no-furnace
-                    {:intent/kind :smelt :intent/smelt smelt :intent/count n})
+                    (intent/why :make/smelt
+                                {:intent/kind :smelt :intent/smelt smelt :intent/count n}))
       {:plan/wait :no-fuel})))

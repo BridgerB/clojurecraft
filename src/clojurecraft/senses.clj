@@ -187,9 +187,16 @@
                   :when (and o (:entity/creepy? e) (not (:entity/creepy? o)))]
               (assoc (view eid e) :ev :angry)))))
 
+(defn child-key
+  "What names a child intent for the ledger: its kind and target, or nil without a child. Two
+   ticks of one child are the same child; a new target is a new one."
+  [i]
+  (when-let [c (:intent/child i)] [(:intent/kind c) (:intent/target c)]))
+
 (defn intent-events
   "What changed in the plan between before and after: a new intent (:intent, with its kind,
-   target, purpose, why and goal), a new failure (:failed, with its reason), a new wait (:wait),
+   target, purpose, why and goal), a new child under the running intent (:child, with the child's
+   kind, why and target: the executor's own step, a walk or a dig), a new failure (:failed, with its reason), a new wait (:wait),
    a trap entered or left (:trap)."
   [before after]
   (let [ib (:plan/intent before)
@@ -198,6 +205,8 @@
         fa (:plan/failed after)]
     (cond-> []
       (and ia (not= (:intent/id ia) (:intent/id ib))) (conj (assoc (intent-view ia) :ev :intent))
+      (and (child-key ia) (not= (child-key ia) (child-key ib)))
+      (conj (assoc (intent-view (:intent/child ia)) :ev :child :parent (:intent/kind ia)))
       (and fa (not= fa fb)) (conj (assoc (intent-view fa) :ev :failed :reason (:intent/reason fa)))
       (not= (:plan/waiting before) (:plan/waiting after))
       (conj {:ev :wait :wait (:plan/waiting after)})

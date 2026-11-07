@@ -198,10 +198,12 @@
   (let [w (-> (playing)
               (heard (said "Welcome"))
               (heard (said blaze-death-map)))]
-    (is
-     (= [{:at 1000 :text "Welcome"}
-         {:at 1000 :text "death.attack.mob Clj_r05 entity.minecraft.blaze" :key "death.attack.mob"}]
-        (:world/chat w)))))
+    (is (= [{:at 1000 :text "Welcome" :chat/via :system-chat}
+            {:at 1000
+             :text "death.attack.mob Clj_r05 entity.minecraft.blaze"
+             :key "death.attack.mob"
+             :chat/via :system-chat}]
+           (:world/chat w)))))
 
 (deftest chat-keeps-the-newest-twenty-lines
   (let [w (reduce (fn [w i] (heard (assoc w :time/now i) (said (str "line " i))))
@@ -212,7 +214,7 @@
     (is (= "line 29" (:text (peek (:world/chat w)))))))
 
 (deftest a-malformed-component-is-a-blank-line-not-a-crash
-  (is (= [{:at 1000 :text ""}] (:world/chat (heard (playing) (said nil))))))
+  (is (= [{:at 1000 :text "" :chat/via :system-chat}] (:world/chat (heard (playing) (said nil))))))
 
 (deftest the-bots-own-death-text-is-kept-and-gone-at-the-respawn
   (let [w (heard (playing) {:packet/name :player-combat-kill :player-id 5 :message blaze-death-map})
@@ -254,7 +256,7 @@
   (let [before (assoc (playing) :player/pos [0.0 64.0 0.0])
         said-w (heard before (said "careful"))
         events (senses/events before said-w)]
-    (is (= [{:ev :chat :at 1000 :text "careful" :t 1000}] events)))
+    (is (= [{:ev :chat :at 1000 :text "careful" :chat/via :system-chat :t 1000}] events)))
   (let [alive (assoc (playing) :player/pos [0.0 64.0 0.0] :player/health 4.0)
         heard-w (heard alive
                        {:packet/name :player-combat-kill :player-id 5 :message blaze-death-map})
@@ -303,3 +305,60 @@
     (is (= (:message pkt) (:message got)))
     (is (= {:death/key "death.attack.fireball" :death/victim "Clj_r05" :death/by "blaze"}
            (text/death (:message got))))))
+
+;; ---------------------------------------------------------------- the other lines
+
+(deftest the-action-bar-title-and-subtitle-are-kept-with-their-packet
+  (let [w (-> (playing)
+              (heard {:packet/name :set-action-bar-text :text "Low on food"})
+              (heard {:packet/name :set-title-text :text {"text" "Round 2" "color" "gold"}})
+              (heard {:packet/name :set-subtitle-text :text {"translate" "k.sub" "with" ["x"]}}))]
+    (is (= [{:at 1000 :text "Low on food" :chat/via :set-action-bar-text}
+            {:at 1000 :text "Round 2" :chat/via :set-title-text}
+            {:at 1000 :text "k.sub x" :key "k.sub" :chat/via :set-subtitle-text}]
+           (:world/chat w)))))
+
+(deftest a-boss-bars-name-is-a-line-when-the-bar-is-added
+  (let [bar (java.util.UUID/fromString "6d986270-cdc1-46bd-9cdb-2f89cb3b1a83")
+        w (heard (playing)
+                 {:packet/name :boss-event
+                  :uuid bar
+                  :action 0
+                  :name {"translate" "entity.minecraft.ender_dragon"}})]
+    (is (= #{bar} (:world/boss-bars w)) "the bar is shown as before")
+    (is (= [{:at 1000 :text "entity.minecraft.ender_dragon" :chat/via :boss-event}]
+           (:world/chat w)))
+    (testing "an add whose name did not read, a health update and a removal say nothing"
+      (is (nil? (:world/chat (heard (playing) {:packet/name :boss-event :uuid bar :action 0}))))
+      (is (= 1
+             (count (:world/chat
+                     (heard w {:packet/name :boss-event :uuid bar :action 2 :health 0.5}))))
+          "an update adds no line")
+      (is (= 1 (count (:world/chat (heard w {:packet/name :boss-event :uuid bar :action 1}))))))))
+
+(deftest the-new-packets-decode-from-wire-bytes
+  (let [frame (fn [pkt-name & parts]
+                (b/with-out (fn [out]
+                              (b/write-varint out (get-in p/ids [:play :s2c pkt-name]))
+                              (run! #(.write ^DataOutputStream out ^bytes %) parts))))
+        bar (java.util.UUID/fromString "6d986270-cdc1-46bd-9cdb-2f89cb3b1a83")]
+    (is (= {:packet/name :set-action-bar-text :text "hi"}
+           (p/decode :play :s2c (frame :set-action-bar-text (raw 8 "hi")))))
+    (is (= {:packet/name :set-title-text :text {"text" "T"}}
+           (p/decode :play :s2c (frame :set-title-text (raw 10 8 "text" "T" 0)))))
+    (is (= {:packet/name :set-subtitle-text :text "s"}
+           (p/decode :play :s2c (frame :set-subtitle-text (raw 8 "s")))))
+    (testing "a boss bar add carries its name, then its colour and the rest unread"
+      (let [add (frame :boss-event
+                       (b/with-out #(do (b/write-uuid % bar) (b/write-varint % 0)))
+                       (raw 8 "Ender Dragon")
+                       (b/with-out #(b/write-f32 % 1.0)))
+            d (p/decode :play :s2c add)]
+        (is (= "Ender Dragon" (:name d)))
+        (is (not (contains? d :health)))))
+    (testing "a health update still reads its float, with no name"
+      (let [upd (frame :boss-event
+                       (b/with-out
+                        #(do (b/write-uuid % bar) (b/write-varint % 2) (b/write-f32 % 0.75))))]
+        (is (= {:packet/name :boss-event :uuid bar :action 2 :health 0.75}
+               (p/decode :play :s2c upd)))))))

@@ -154,7 +154,8 @@
    ;; a boss bar shown or taken away: its id and the operation; what follows each operation (the
    ;; name, an NBT component) is an unmodelled tail, but the health update's float (operation 2)
    ;; comes first and is read (ClientboundBossEventPacket, issue #267)
-   [:play :s2c :boss-event] [[:uuid :uuid] [:action :varint] [:health [:if :action 2 :f32]]]
+   [:play :s2c :boss-event] [[:uuid :uuid] [:action :varint] [:health [:if :action 2 :f32]]
+                             [:name [:if :action 0 :text]]]
    ;; what the bot hears of a fight beyond the damage-event (the observability plan, part A):
    ;; an entity's hurt flash (ClientboundHurtAnimationPacket: id, yaw), an entity's arm swing
    ;; (ClientboundAnimatePacket: id, action; 0 the main hand), the server's fight bracket
@@ -177,6 +178,12 @@
    ;; a line the server says to the bot: a text component and whether it shows over the hotbar
    ;; (ClientboundSystemChatPacket): the death of every player and the server's warnings
    [:play :s2c :system-chat] [[:content :text] [:overlay :bool]]
+   ;; the other lines the server shows the bot, each one text component (ClientboundSetActionBarText,
+   ;; SetTitleText, SetSubtitleTextPacket); disguised-chat is not modelled: its chat-type holder's
+   ;; layout is unconfirmed here
+   [:play :s2c :set-action-bar-text] [[:text :text]]
+   [:play :s2c :set-title-text] [[:text :text]]
+   [:play :s2c :set-subtitle-text] [[:text :text]]
    ;; play, client → server
    [:play :c2s :keep-alive] [[:id :i64]]
    [:play :c2s :pong] [[:id :i32]]
