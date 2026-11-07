@@ -41,11 +41,11 @@
 
 (defn decide-in
   "The intent of the first of rows whose :rule/when holds under the fact getter f, labelled with
-   the row's :rule/id (intent/why), or nil when its builder yields none. The last row of every
+   the row's :rule/id (intent/ranked), or nil when its builder yields none. The last row of every
    list has no conditions."
   [f rows]
   (let [row (first (filter #(holds? f (:rule/when %)) rows))]
-    (intent/why (:rule/id row) (then f (:rule/then row)))))
+    (intent/ranked (:rule/id row) (then f (:rule/then row)))))
 
 (defn decide
   "The hunt's intent in world: decide-in over the rows of the hunt alone."

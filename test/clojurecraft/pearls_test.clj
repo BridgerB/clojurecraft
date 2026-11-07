@@ -666,7 +666,10 @@
         w (ps/standing {7 far})]
     (is (not (pearls/held-idle? (at w (+ 1000 pparams/hold-patience-ms)) fight)) "not yet")
     (is (pearls/held-idle? (at w (+ 1001 pparams/hold-patience-ms)) fight) "then cut")
-    (is (plan/interrupts? (at w (+ 1001 pparams/hold-patience-ms)) ps/row fight))
+    (is (not (intent/still-wanted? (at w (+ 1001 pparams/hold-patience-ms))
+                                   (intent/ranked :hunt/and-in?-fight-id fight)))
+        "a held fight gone idle is no longer wanted")
+    (is (intent/still-wanted? (at w 1500) (intent/ranked :hunt/and-in?-fight-id fight)))
     (is (not (pearls/held-idle? (at w 99999) (dissoc fight :intent/hold?))) "a fight that walks up")
     (is (not (pearls/held-idle? (at (ps/standing {7 (assoc far :entity/pos [10.5 64.0 8.5])}) 99999)
                                 fight))
@@ -858,9 +861,11 @@
     (is (some? (:pearls/relocate (pearls/relocation
                                   (assoc-in arrived [:pearls/relocate :near] #{1}))))
         "an enderman that was near the start is not a reason to stop")
-    (is (plan/interrupts? (pearls/relocation arrived) ps/row walk)
+    (is (not (intent/still-wanted? (pearls/relocation arrived)
+                                   (intent/ranked :hunt/relocate-now walk)))
         "the walk is cut once it is over")
-    (is (not (plan/interrupts? base ps/row walk)) "and not while it goes on")))
+    (is (intent/still-wanted? base (intent/ranked :hunt/relocate-now walk))
+        "and not while it goes on")))
 
 (deftest a-relocation-waits-for-an-angry-one-near-then-walks-past-a-parked-one
   ;; pearl-fight-h job 3 (plan run 41173013374): at 9m43s with no pearl, the relocation walked out

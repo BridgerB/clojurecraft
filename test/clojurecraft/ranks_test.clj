@@ -11,8 +11,13 @@
    the two arms of an (if test a b) in its first argument."
   [file ns-name]
   (let [label (str ":" ns-name "/[a-z0-9?-]+")
-        call (re-pattern
-              (str "\\(ranked\\s+(?:\\(if\\s+\\S+\\s+(" label ")\\s+(" label ")\\)|(" label "))"))]
+        call (re-pattern (str "\\(intent/ranked\\s+(?:\\(if\\s+\\S+\\s+("
+                              label
+                              ")\\s+("
+                              label
+                              ")\\)|("
+                              label
+                              "))"))]
     (set (mapcat #(remove nil? (rest %)) (re-seq call (slurp file))))))
 
 (deftest every-branch-the-dragon-plan-labels-is-ranked-and-every-rank-is-a-branch

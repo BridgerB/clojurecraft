@@ -220,6 +220,14 @@
   (cond (and (map? i) (:intent/kind i) (nil? (why-of i))) (vary-meta i assoc :intent/why label)
         :else i))
 
+(defn ranked
+  "Intent i labelled (why-of) with label, the branch of its row's plan that chose it, whatever an
+   inner planner labelled it: the label is what a row's :goal/ranks and still-wanted? read. A wait
+   is labelled too (a plan that says stop outranks a running intent); nil passes through."
+  [label i]
+  (cond (and (map? i) (or (:intent/kind i) (:plan/wait i))) (vary-meta i assoc :intent/why label)
+        :else i))
+
 (defn default-why
   "The label an intent gets when its planner named no branch (why): :<goal>/<kind> for an intent
    chosen for a goal row (:intent/goal), :planner/<kind> for one chosen outside any (the leave-area
@@ -429,9 +437,10 @@
   (+ walk-timeout-ticks (* waypoint-ticks (count waypoints))))
 
 (defmulti still-wanted?
-  "Is running walk i still worth walking: false ends it (done) so its row plans again. A row's
-   branch declares when the geometry under its walk went stale, by a defmethod on the branch label
-   (why-of); every other walk is wanted until it ends by itself."
+  "Is running intent i still worth running? A row's branch declares when the world went stale under
+   what it chose, by a defmethod on the branch label (why-of); every other intent is wanted until
+   it ends by itself. False asks the planner to cut i (plan-tick), unless the row, planning again,
+   would start the same intent."
   {:arglists '([world i])}
   (fn [_world i] (why-of i)))
 
@@ -448,10 +457,6 @@
           (-> world
               (assoc :player/controls
                      {:control/look (physics/look-at (game/eye world) (physics/centre target))})
-              done)
-          (not (still-wanted? world i))
-          (-> world
-              (assoc :player/controls {})
               done)
           (> (- tick started) (walk-deadline i))
           (-> world

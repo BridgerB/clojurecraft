@@ -158,7 +158,7 @@
    act plans again? Nothing else ends a running intent but itself. Keyed by :goal/plan; never by
    default.
    Only :blaze-rods and :ender-pearls define one. A row whose plan is ordered by urgency cuts by
-   rank instead (:goal/ranks, outranks?), with a stale walk ended by still-wanted?. These two cannot:
+   rank instead (:goal/ranks, outranks?), with a stale intent cut by still-wanted?. These two cannot:
    each is a matrix of triggers (a blaze at hand, a dodge, a refuge, a fire, a volley, an angry
    enderman near the burrow ...) against exemptions on what is running (a rod pick-up, a meal, the
    refuge's own intents, a fight to its end), and an exemption is not an order: a dodge outranks
@@ -890,7 +890,7 @@
         held (held? table i goal)
         preempt? (and i goal (:intent/goal i) (not= (:goal/id goal) (:intent/goal i)) (not held))
         cuttable? (and i goal (not preempt?) (not held))
-        hooked? (and cuttable? (interrupts? world goal i))
+        hooked? (and cuttable? (or (not (intent/still-wanted? world i)) (interrupts? world goal i)))
         cut-world (when (and cuttable? (or hooked? (seq (:goal/ranks goal))))
                     (abandon-intent world i :interrupted))
         replacement (when cut-world (next-intent cut-world goal table))

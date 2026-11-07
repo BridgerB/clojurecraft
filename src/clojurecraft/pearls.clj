@@ -239,6 +239,17 @@
                       (> (physics/distance (:player/pos world) (:entity/pos e))
                          pparams/strike-range))))))
 
+(defmethod intent/still-wanted? :hunt/and-in?-fight-id [world i] (not (held-idle? world i)))
+
+(defmethod intent/still-wanted? :hunt/and-not-hurt?-ce-not-unfightable?-world-ceid-ce
+  [world i]
+  (not (held-idle? world i)))
+
+(defmethod intent/still-wanted? :hunt/relocate-now
+  ;; the relocation walk ends when the relocation does (arrived, far enough, or timed out)
+  [world _]
+  (some? (:pearls/relocate world)))
+
 (defmethod plan/held-goal? :pearls
   ;; with an angry enderman within hold-radius and a burrow held, the hunt waits inside: the stuck
   ;; watchdog counts this as held, not stuck, and never forces an explore walk out of the burrow
@@ -246,17 +257,17 @@
   (boolean (and (pplace/shelter world) (psense/angry-within? world pparams/hold-radius))))
 
 (defmethod plan/interrupts? :pearls
-  ;; any running intent but an answer (answers-to-hand) or the walk home ends with an angry
-  ;; enderman at hand (beset?), and the hunt plans again: home, the fight held there, or the
-  ;; fight where the bot stands. Nothing else ends a running intent. Never in the burrow's end,
-  ;; where none reaches. A walk out to anywhere but the mouth (out-walk?) ends as soon as an angry
-  ;; one is near the mouth (angry-near), not only at hand
+  ;; the trigger x exemption matrix (see plan/interrupts? for why it is not ranks). Triggers: a
+  ;; blaze refuge to take, an angry enderman at hand (beset?) or near the mouth for a walk out
+  ;; (out-walk?, angry-near), the bot struck, a tunnel answer, a shot, a threat over a lookout.
+  ;; Exemptions: what answers (answers-to-hand), a wall, the walk home, the burrow's end, an eat or
+  ;; fight for the refuge, and a replacement that is the same choice or a hollow pocket. The two
+  ;; stale cases, a held fight gone idle and a relocation walk after the relocation, are
+  ;; still-wanted? methods on their rule ids.
   [world goal i]
   (and (or (and (fexit/blaze-refuge world)
                 (not (contains? #{:eat :fight} (:intent/kind i)))
                 (not (same-choice? i (fexit/blaze-refuge world))))
-           (held-idle? world i)
-           (and (= :relocate (:intent/for i)) (nil? (:pearls/relocate world)))
            (and (not (contains? pparams/answers-to-hand (:intent/kind i)))
                 (not (:intent/wall? i))
                 (not (and (= :walk (:intent/kind i))
