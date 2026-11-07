@@ -2,10 +2,8 @@
   "What the bot's world looked like at a moment, for a reader: the few facts a fix starts from
    (where it stood, its health and food, what it held, the intent it ran and the last one that
    ended) and the blocks round its feet as text. The judge prints both for a snapshot's kept
-   moment and for where its play ended (simrace/judge!), and the Copilot session's brief carries
-   them (bb brief), so a fix never begins with a throwaway probe that loads the snapshot to ask
-   the same questions (2026-10-17: 46 such probes and 13 Python scripts in 32 sessions, each a JVM
-   start polled at a session's full context). Values in, values out."
+   moment and for where its play ended (simrace/judge!), so a fix does not begin with a throwaway
+   probe that loads the snapshot to ask the same questions. Values in, values out."
   (:require [clojure.math :as math]
             [clojure.string :as str]
             [clojurecraft.blocks :as blocks]

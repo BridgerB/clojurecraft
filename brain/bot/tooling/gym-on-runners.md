@@ -47,7 +47,6 @@ sourceRefs:
   - bb/clojurecraft/worlds.clj#a forceload was left behind
   - ".github/workflows/gym.yml#fail-on-cache-miss: true"
   - ".github/workflows/gym.yml#max-parallel: 20"
-  - .github/workflows/full.yml#One fresh world, nothing given.
   - src/clojurecraft/plan.clj#defn through
   - test/clojurecraft/gym_test.clj#outcome-is-judged-twice
   - test/clojurecraft/recordings_test.clj#every-recorded-run-replays
@@ -62,7 +61,7 @@ related:
 
 # Gym on runners
 
-`test.yml` runs the suite and the brain checker on every push in a few minutes on three runners ([[test-fixtures]]: the parallel runner, one forest shard of 250, actionlint; a dispatch runs all eight shards): the races hold sixteen of the twenty runners without end, so a push gets the other four. `gym.yml` runs real runs of goals on real terrain by hand only: one goal `runs` times (`goal`, `runs`, `landing-set`, `label`); it ran every goal once on every push until the rounds made that twelve runners a push. `world.yml` builds a landing set's world once and caches it. `full.yml` is the one fresh world, nothing given: spawn, every step up to the current stage (`plan/through`), 5.5 hours, by hand only. A gym trial still names one target (`plan/goals-for`).
+`test.yml` runs the suite and the brain checker on every push in a few minutes on three runners ([[test-fixtures]]: the parallel runner, one forest shard of 250, actionlint; a dispatch runs all eight shards): the races hold sixteen of the twenty runners without end, so a push gets the other four. `gym.yml` runs real runs of goals on real terrain by hand only: one goal `runs` times (`goal`, `runs`, `landing-set`, `label`); it ran every goal once on every push until the rounds made that twelve runners a push. `world.yml` builds a landing set's world once and caches it. A gym trial still names one target (`plan/goals-for`).
 
 ## How a batch runs
 1. **plan**: refuses when more than 20 jobs are already running in the repository, then `clojure -M:gym plan --goals ... --runs N` prints the trial matrix; only goal, run number and job minutes cross the job boundary.

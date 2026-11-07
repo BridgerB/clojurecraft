@@ -29,7 +29,7 @@ related:
 # Remembered by identity
 
 ## The problem
-How many bots a runner carries is set by CPU (the capacity ramp, [[race]]): the bots' JVM was at 185% of the runner's four cores with twenty racers, and a bot short of CPU falls below 20 ticks a second. The planner re-derives everything every tick (docs/RICH-HICKEY.md: nothing is remembered that the world can tell you), and a JFR profile of a ten-bot local race showed what that cost: `plan-tick` was 49% of all samples, of which the walk to remembered blocks (`make/near` → `memory/positions-now`, a Datalog query over every fact) was 19%, the exposed-ore scan (`stone/exposed-of-states`) 25% and the route search 15%. Each was asked again every tick about a world whose parts had not changed.
+How many bots a runner carries is set by CPU (the capacity measure, [[race]]): the bots' JVM was at 185% of the runner's four cores with twenty racers, and a bot short of CPU falls below 20 ticks a second. The planner re-derives everything every tick (docs/RICH-HICKEY.md: nothing is remembered that the world can tell you), and a JFR profile of a ten-bot local race showed what that cost: `plan-tick` was 49% of all samples, of which the walk to remembered blocks (`make/near` → `memory/positions-now`, a Datalog query over every fact) was 19%, the exposed-ore scan (`stone/exposed-of-states`) 25% and the route search 15%. Each was asked again every tick about a world whose parts had not changed.
 
 ## The choice
 **Ask the parts, and remember by them.** A world's parts are values: the facts, the chunks, the block overlay. `memo/by` remembers a function's answers keyed by its arguments, a part by identity (`identical?`, one pointer compare) and a small argument (a cell, a goal, a set of states) by value. The costly questions are asked of their parts: `memory/positions-in [facts states dim]`, `stone/exposed-cells [chunks blocks feet-chunk states blacklist lo hi]`, `path/plan-on [chunks blocks traps from goal max-nodes]` (traps filtered to those in force first, so the clock is not an input). The cache is a fixed array of slots shared by the bots of a JVM; a race between threads replaces a whole slot, never mixes two.
@@ -42,7 +42,7 @@ How many bots a runner carries is set by CPU (the capacity ramp, [[race]]): the 
 Each remembered answer is the function's answer for those inputs, so a run remembered and a run recomputed are the same run. `a-remembered-function-answers-as-the-function-does` holds it over call sequences that collide in the slots, with equal parts that are not the same object. `the-cells-of-a-world-answer-as-classify-does` holds `cells` to `classify` in any order, loaded or not. Nothing here reads a clock or the atom.
 
 ## Measured
-On the Mac, the bots' JVM went from 12.7% to 4.6% of the machine for the same ten-bot race after the memo, and to 4.3% after the chunk-load scans (confounded: the machine was busy). The runner measure is the capacity ramp (`capacity.yml`), not a laptop.
+On the Mac, the bots' JVM went from 12.7% to 4.6% of the machine for the same ten-bot race after the memo, and to 4.3% after the chunk-load scans (confounded: the machine was busy). The runner measure is a loaded race on a runner, not a laptop.
 
 ## What would change the answer
 A profile in which a remembered function's misses dominate. Then the key is too coarse: key it on the region it reads, not the whole part.

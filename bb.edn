@@ -15,8 +15,6 @@
    :requires ([clojure.test :as ct]
               [clojurecraft.blind-test]
               [clojurecraft.botlogs-test]
-              [clojurecraft.brief-test]
-              [clojurecraft.copilot-test]
               [clojurecraft.evidence-test]
               [clojurecraft.fleet-test]
               [clojurecraft.lanes-test]
@@ -25,8 +23,6 @@
               [clojurecraft.verify-test])
    :task (let [{:keys [fail error]} (ct/run-tests 'clojurecraft.blind-test
                                                   'clojurecraft.botlogs-test
-                                                  'clojurecraft.brief-test
-                                                  'clojurecraft.copilot-test
                                                   'clojurecraft.evidence-test
                                                   'clojurecraft.fleet-test
                                                   'clojurecraft.lanes-test
@@ -74,16 +70,10 @@
            :task (apply clojure "-M:harness" *command-line-args*)}
   gym {:doc "The gym: plan, landings, trial, report (clojure -M:gym <command> ...)"
        :task (apply clojure "-M:gym" *command-line-args*)}
-  plan {:doc "A plan: plan, work, report, pull (clojure -M:plan <command> ...)"
-        :task (apply clojure "-M:plan" *command-line-args*)}
   server {:doc
           "A vanilla 26.1.2 server: bb server start|stop, set up by PORT RCON_PORT RCON_PASS WORLD"
           :requires ([clojurecraft.server :as server])
           :task (server/command! (first *command-line-args*) (server/env-opts))}
-  capacity {:doc
-            "The capacity experiment (capacity.yml): sample <out> <runner> | report <dir> [title]"
-            :requires ([clojurecraft.capacity :as capacity])
-            :task (apply capacity/-main *command-line-args*)}
   page
   {:doc
    "The results' data (issue #116): round <dir> <kind> <run> <commit> <at> | wall <dir> | publish <round.edn>"
@@ -106,23 +96,9 @@
   {:doc "Failed runs become issues, one per signature (simrace.yml, race.yml): report <dir> <title>"
    :requires ([clojurecraft.failures :as failures])
    :task (apply failures/-main *command-line-args*)}
-  board {:doc
-         "The bot-failure board (AGENTS.md section 3): todo | heal | move <n> <todo|progress|done>"
-         :requires ([clojurecraft.board :as board])
-         :task (apply board/-main *command-line-args*)}
-  copilot
-  {:doc
-   "Copilot sessions on the bot-failure issues until each closes (copilot.yml): dispatch [--dry-run]"
-   :requires ([clojurecraft.copilot :as copilot])
-   :task (apply copilot/-main *command-line-args*)}
-  brief
-  {:doc
-   "A fix session's brief (copilot-setup-steps.yml, probes): write puts cache/issues/<n>/brief.md for the issue Copilot holds; issue <n>... fetches and briefs any issues"
-   :requires ([clojurecraft.brief :as brief])
-   :task (apply brief/-main *command-line-args*)}
   verify
   {:doc
-   "A fix's whole check in one command (bot-fixer profile): verify <n> judges the issue's snapshots on this tree, runs the suite without the forest property and bb check, and prints a verdict"
+   "A fix's whole check in one command: verify <n> judges the issue's snapshots on this tree, runs the suite without the forest property and bb check, and prints a verdict"
    :requires ([clojurecraft.verify :as verify])
    :task (apply verify/-main *command-line-args*)}
   probe
@@ -142,7 +118,7 @@
    :task (apply fleet/-main *command-line-args*)}
   issue-check
   {:doc
-   "A fix's fixtures (issue.yml, issues-test): fetch <n> brings the issue's snapshots into test/issues/<n>/"
+   "A fix's fixtures (bb verify, bb probe): fetch <n> brings the issue's snapshots into cache/issues/<n>/"
    :requires ([clojurecraft.issue-check :as check])
    :task (apply check/-main *command-line-args*)}
   prepare-world
@@ -153,10 +129,6 @@
                 :requires ([clojurecraft.server :as server])
                 :task (server/command! (or (first *command-line-args*) "start")
                                        (server/local-opts))}
-  viewer-loop
-  {:doc
-   "One bot from spawn through the whole chain on a fresh local world, again and again, served by --viewer on 4600 (dev/viewer/loop.sh)"
-   :task (shell "dev/viewer/loop.sh")}
   datagen {:doc "Regenerate the EDN tables in resources/clojurecraft/ from the server jar"
            :requires ([clojurecraft.gen-tables :as gen-tables])
            :task (gen-tables/-main)}}}

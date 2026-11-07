@@ -1,6 +1,6 @@
 (ns clojurecraft.site-test
   "The results site's pure parts (bb site): the road from the goal table, a gym summary read
-   back, the gym lines kept once each, the agents' history shaped from GitHub's lists. Babashka
+   back, the gym lines kept once each, the bot-failure issues shaped from GitHub's list. Babashka
    runs these (bb test:bb)."
   (:require [clojure.edn :as edn]
             [clojure.string :as str]
@@ -90,7 +90,7 @@ reasons: goal 12
   (is (= ["fortress" "no-pickaxe"] (site/signature-of "Bot stops at fortress: no-pickaxe")))
   (is (nil? (site/signature-of "Roadmap"))))
 
-(deftest the-agents-history-from-github
+(deftest the-issues-from-github
   (let [issues [{:number 10
                  :title "Bot stops at cast-one: no-site"
                  :state "CLOSED"
@@ -104,76 +104,16 @@ reasons: goal 12
                  :stateReason ""
                  :createdAt "2026-10-15T00:00:00Z"
                  :labels [{:name "bot-failure"} {:name "agent-stuck"}]}]
-        prs [{:number 20
-              :title "Fix"
-              :headRefName "copilot/fix-cast"
-              :author {:login "app/copilot-swe-agent"}
-              :state "MERGED"
-              :isDraft false
-              :createdAt "2026-10-14T05:00:00Z"
-              :mergedAt "2026-10-15T00:00:00Z"
-              :closedAt "2026-10-15T00:00:00Z"
-              :closingIssuesReferences [{:number 10}]}
-             {:number 21
-              :title "Tooling"
-              :headRefName "feat/page"
-              :author {:login "BridgerB"}
-              :state "OPEN"
-              :isDraft false
-              :createdAt "2026-10-15T00:00:00Z"
-              :closingIssuesReferences []}
-             {:number 22
-              :title "Fix wood"
-              :headRefName "fix/11-wood"
-              :author {:login "BridgerB"}
-              :state "OPEN"
-              :isDraft true
-              :createdAt "2026-10-15T01:00:00Z"
-              :closingIssuesReferences [{:number 11}]}]
-        a (site/agents issues prs "2026-10-16T00:00:00Z")]
+        a (site/agents issues "2026-10-16T00:00:00Z")]
     (is (= [{:n 10 :stage "cast-one" :reason "no-site" :state "closed" :why "completed"}
             {:n 11 :stage "wood" :reason "no-log" :state "open"}]
-           (map #(select-keys % [:n :stage :reason :state :why]) (:issues a))))
-    (is (= [[20 "copilot" "merged" [10]] [22 "fixer" "open" [11]]]
-           (map (juxt :n :by :state :fixes) (:prs a)))
-        "a pull request that fixes no bot-failure issue and is not Copilot's is left out")))
+           (map #(select-keys % [:n :stage :reason :state :why]) (:issues a))))))
 
 (deftest the-road-json-cannot-end-its-script-early
   (is (not (str/includes? (site/json-in-html {:says "</script><b>"}) "</"))))
 
 (def road-def (edn/read-string (slurp "ci/road.edn")))
 (def gym-stage (:road/gym-stage road-def))
-
-(def plan-md
-  "A plan run's report, as plan.yml's aggregate writes it (and comments on the plan's issue)."
-  "## plan dragon3-b (ci/plan/dragon3-b.edn) at ff8a0aa, run 39593702551
-
-## crystals (head)
-
-### crystals
-
-pass 3/3 [44%, 100%]; not counted: harness 0, disconnect 0
-
-| run | landing | outcome | s | reason | truth |
-|---|---|---|---|---|---|
-| 1 | 1,2 | pass | 700 | goal | ok |
-
-outcomes: pass 3
-reasons: goal 3
-
-## dragon (head)
-
-### dragon
-
-pass 3/3 [44%, 100%]; not counted: harness 0, disconnect 0
-
-outcomes: pass 3
-reasons: goal 3
-
-### sim forests
-
-worlds 10 in 1 shards; failing shards 0
-")
 
 (deftest a-gym-row-maps-to-its-road-stage
   (is (= "dragon" (site/stage-of gym-stage "crystals" "crystals")))
@@ -207,24 +147,3 @@ worlds 10 in 1 shards; failing shards 0
     (testing "a stage with no row is not built"
       (let [r (site/road (remove #(= :enter-end (:goal/id %)) goals) "fortress" road-def)]
         (is (false? (:goal (some #(when (= "the-end" (:id %)) %) (:stages r)))))))))
-
-(deftest a-plan-run-becomes-a-gym-line
-  (let [summary (site/plan-summary gym-stage plan-md)
-        line (site/plan-line {:id 39593702551
-                              :created_at "2026-10-21T11:40:33Z"
-                              :head_branch "feat/267-dragon3"
-                              :head_sha "ff8a0aaa4d4d694c1623bba93f4d11babcc905d6"
-                              :conclusion "success"}
-                             summary)]
-    (is (= {:label "dragon3-b" :plan "ci/plan/dragon3-b.edn" :sha "ff8a0aa" :run 39593702551}
-           (select-keys summary [:label :plan :sha :run])))
-    (is (= [["dragon" "crystals" 3 3] ["dragon" "dragon" 3 3]]
-           (map (juxt :goal :row :pass :n) (:goals line))))
-    (is (= ["crystals" "dragon"] (:rows line)))
-    (is (= {:run 39593702551 :at "2026-10-21T11:40:33Z" :via "plan" :conclusion "success"}
-           (select-keys line [:run :at :via :conclusion])))
-    (testing "a report with no gym section still gives a line, so it is not read again"
-      (is (= []
-             (:goals (site/plan-line {:id 1}
-                                     (site/plan-summary gym-stage
-                                                        "## plan x (p) at s, run 1\n"))))))))

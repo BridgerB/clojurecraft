@@ -99,13 +99,8 @@
     (is (= (land/landing-of set 5 7) (land/landing-of set 5 7))
         "the same racer, the same landing")))
 
-(deftest a-ramp-joins-bots-in-steps
-  (let [cfg {:race/stagger-ms 3000 :race/ramp #:ramp{:start 10 :step 10 :every-ms 300000}}]
-    (is (= [0 3000 27000] (map #(facts/start-at cfg %) [0 1 9]))
-        "the first ten together, a stagger apart")
-    (is (= [300000 303000 600000] (map #(facts/start-at cfg %) [10 11 20]))
-        "then ten more every five minutes")
-    (is (= 6000 (facts/start-at {:race/stagger-ms 3000} 2)) "no ramp: a stagger apart")))
+(deftest racers-join-a-stagger-apart
+  (is (= [0 3000 27000] (map #(facts/start-at {:race/stagger-ms 3000} %) [0 1 9]))))
 
 (deftest the-servers-tick-times-are-read-from-its-answer
   (is
@@ -145,9 +140,7 @@
     (is (= {:goal 1 :no-site 2} (:race/reasons s)))
     (is (= ["a" "b" "c"] (map :name (:race/runs s))))))
 
-(deftest a-race-plays-for-its-deadline-else-its-minutes
-  (is (= 600000 (facts/run-ms {:race/deadline-ms 600000 :race/run-minutes 330}))
-      "the capacity ramp's one deadline")
+(deftest a-race-plays-for-its-minutes-else-its-timeout
   (is (= 19800000 (facts/run-ms {:race/run-minutes 330 :race/timeout-ms 5})) "the churn's job")
   (is (= 5 (facts/run-ms {:race/timeout-ms 5}))))
 
