@@ -467,6 +467,17 @@
 (s/def :player/hurt-at int?)
 (s/def :player/attacker int?)
 (s/def :world/boss-health (s/map-of uuid? number?))
+(s/def :world/sounds
+  (s/coll-of (s/keys :req-un [:heard/sound ::at] :opt-un [:heard/pos :heard/eid]) :kind vector?))
+(s/def :world/level-events
+  (s/coll-of (s/keys :req-un [:heard/event ::at] :opt-un [:heard/pos :heard/data]) :kind vector?))
+(s/def :heard/sound keyword?)
+(s/def :heard/event
+  (s/or :name keyword?
+        :type int?))
+(s/def :heard/pos (s/coll-of number? :kind vector? :count 3))
+(s/def :heard/eid int?)
+(s/def :heard/data int?)
 (s/def :player/food int?)               ; 0-20 from a server; the wire allows any varint, and step is total over it
 (s/def :player/saturation number?)
 (s/def :player/on-fire? boolean?)

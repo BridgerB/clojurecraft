@@ -4,7 +4,8 @@
    (update-attributes: armour, max health), mob effects (wither, poison, fire resistance) and sound
    events. Id to name lookups; nothing here is mutable."
   (:require [clojure.edn :as edn]
-            [clojure.java.io :as io]))
+            [clojure.java.io :as io]
+            [clojure.string :as str]))
 
 (set! *warn-on-reflection* true)
 
@@ -23,3 +24,15 @@
    table does not have."
   [id]
   (get damage-types id :unknown))
+
+(def sound-ids "{name id}: the sound events' registry ids, by name" (resource "sounds"))
+(def sounds "{id name}: a sound packet's registry id" (by-id sound-ids))
+
+(defn sound-name
+  "The name of the sound a decoded sound holder ({:id registry-id} or inline {:name identifier})
+   gives, a keyword (:entity.blaze.shoot), or :unknown for an id the table does not have. An
+   inline identifier loses its minecraft: namespace."
+  [{:keys [id name]}]
+  (cond id (get sounds id :unknown)
+        (string? name) (keyword (str/replace name #"^minecraft:" ""))
+        :else :unknown))

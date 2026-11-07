@@ -71,6 +71,9 @@
           :rest gen/bytes
           :lpvec3 (gen/vector (gen/double* {:infinite? false :NaN? false :min -100 :max 100}) 3)
           :metadata metadata-gen
+          :sound-holder
+          (gen/one-of [(gen/fmap (fn [i] {:id i}) (gen/choose 0 2000))
+                       (gen/fmap (fn [n] {:name n}) gen/string)])
           :equipment
           (gen/vector (gen/tuple (gen/choose 0 7)
                                  (gen/one-of [(gen/return nil)

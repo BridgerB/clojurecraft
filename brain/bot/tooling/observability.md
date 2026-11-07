@@ -9,6 +9,12 @@ lastUpdated: 2026-11-06
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/hear.clj#defn attributes-of
+  - src/clojurecraft/ear.clj#defn heard-sound
+  - src/clojurecraft/ear.clj#defn level-event-name
+  - src/clojurecraft/registry.clj#defn sound-name
+  - src/clojurecraft/senses.clj#defn heard-events
+  - src/clojurecraft/sim.clj#defn tell-sound
+  - src/clojurecraft/sim.clj#defn tell-level-event
   - src/clojurecraft/eye.clj#defn equipment-of
   - src/clojurecraft/entity.clj#defn facing-bot?
   - src/clojurecraft/senses.clj#defn sight-events
@@ -74,6 +80,11 @@ The bot's whole mind is one world value, so everything a reader needs about a ru
   - the fight bracket (`:player/in-combat?`);
   - effects (`:player/effects`);
   - attributes (`:player/armor`, `:player/max-health`: the server's word on worn armour).
+- **ear.clj:** sounds and level events, heard where they are not seen.
+  - `:world/sounds`: the last 20 sounds within 48 blocks (sound, sound-entity, the holder read as a registry id or inline), each `{:sound name :pos :at}` and `:eid` on an entity;
+  - `:world/level-events`: the last 20 near (or global), named from `ear/level-events` (1015 `:ghast-warn`, 1016 `:ghast-shoot`, 1018 `:blaze-shoot`, 2001 `:block-broken` ...), else by number;
+  - the ledger notes each as `:sound` or `:level-event` with its distance (`senses/heard-events`): everything within 16 blocks, from farther only a shot, warning, stare, scream, teleport, anger or death, and no far block broken; a line carries `:sounds`, the names of the second it stands for;
+  - the sim sends level event 1018 with each blaze fireball and the enderman's stare and teleport sounds (`sim/tell-sound`, `sim/tell-level-event`), so the bot hears the same in both worlds.
 - **eye.clj:** what a creature shows beyond its place and health:
   - where its head looks (`:entity/head-yaw`, from rotate-head and add-entity; `entity/facing-bot?` asks whether it faces the bot, `entity/stares?` is that for an enderman, observation only);
   - what it holds and wears (`:entity/equipment {slot item-name}`, from set-equipment, read by `packet/read-equipment`);

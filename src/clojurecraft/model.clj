@@ -188,6 +188,12 @@
     "after the first boss bar"]
    [:world/boss-health "{uuid health}: health (0.0-1.0) of each boss bar (boss-event update-health)"
     "after the first update-health"]
+   [:world/sounds
+    "the last ear/kept-heard sounds heard within ear/heard-radius of the bot, oldest first, each {:sound name :pos [x y z] :at ms} (and :eid for a sound on an entity): a blaze's or ghast's, an enderman's stare, scream and teleport (sound, sound-entity, ear.clj)"
+    "after the first sound heard near"]
+   [:world/level-events
+    "the last ear/kept-heard level events near the bot, oldest first, each {:event name-or-type :pos block :data n :at ms}: 1015 :ghast-warn, 1016 :ghast-shoot, 1018 :blaze-shoot, 2001 :block-broken (level-event, ear.clj)"
+    "after the first level event heard near"]
    [:entity/type "entity type id (71 is an item)" "inside :world/entities"]
    [:entity/pos "last known entity position" "inside :world/entities"]
    [:entity/seen-at "ms the entity was added" "inside :world/entities"]
