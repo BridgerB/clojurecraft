@@ -1165,9 +1165,9 @@
 (defn ranked
   "Intent i labelled (intent/why) with label, the branch of toward-dragon that chose it, whatever
    an inner planner labelled it: the label is the intent's rank in the dragon row's :goal/ranks.
-   Nil and a wait pass through."
+   A wait is labelled too (a plan that says stop outranks a running intent); nil passes through."
   [label i]
-  (cond (and (map? i) (:intent/kind i)) (vary-meta i assoc :intent/why label)
+  (cond (and (map? i) (or (:intent/kind i) (:plan/wait i))) (vary-meta i assoc :intent/why label)
         :else i))
 
 (defn toward-dragon

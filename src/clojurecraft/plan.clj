@@ -883,8 +883,9 @@
 
 (defn outranks?
   "Does the fresh answer next of row goal rank strictly above (a lower number than) the running
-   intent i? Only a strictly more urgent branch of the row's plan cuts a running intent; an equal
-   one is the same commitment and a wait or nil never cuts. False for a row with no :goal/ranks."
+   intent i? Only a strictly more urgent branch of the row's plan cuts a running intent, an intent or
+   a labelled wait (the plan says: stop, there is nothing safe to do yet); an equal one is the same
+   commitment and nil or an unlisted wait never cuts. False for a row with no :goal/ranks."
   [goal i next]
   (boolean
    (and (seq (:goal/ranks goal)) i (:intent/kind next) (< (rank-of goal next) (rank-of goal i)))))
