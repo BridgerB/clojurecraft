@@ -24,6 +24,10 @@ sourceRefs:
   - bb/clojurecraft/botlogs.clj#defn case-text
   - bb/clojurecraft/botlogs.clj#defn keep-recording?
   - bb/clojurecraft/botlogs.clj#defn upload!
+  - "bb/clojurecraft/botlogs.clj#A batch's observability row (the observability plan, part G) from facts"
+  - bb/clojurecraft/botlogs.clj#defn unheard
+  - bb/clojurecraft/botlogs.clj#def deliberate
+  - bb/clojurecraft/page.clj#defn observed-sum
   - bb/clojurecraft/probe_run.clj#defn why-command
   - dev/clojurecraft/why.clj#defn answers
 related:
@@ -59,4 +63,5 @@ The bot's whole mind is one world value, so everything a reader needs about a ru
 ## How it is read
 
 - **Each batch** writes `<stem>.case.txt` and `.case.edn` for every ended run (`botlogs/case-of`, `case-text`): the ending, the killer, the last minute's first hit and what the bot did then and why, what it did at the end, hits by attacker, swings sent and landed, and the replay command. It also writes `cases.edn`, every case's signature `[ending killer doing why]`.
+- **The coverage row** (`botlogs/observed`, on each batch as `:observed`, added up per lane run by `page/observed-sum`, shown on the results page in each run's detail, with a red dot on the row when anything is short): runs with each file over the runs that should have one (senses, ledger, moment, ring, truth: a real run's server.txt, a sim run's truth.edn; the recording of a failed real run), intents with a why over intents, ledger events dropped, and the packets the bot threw away (`botlogs/unheard`: each RESULT's `:stats/unknown` named from packets.edn, less `botlogs/deliberate`, the packets skipped on purpose with their reasons). Every pair whole, 0 dropped and nothing unheard is full sight.
 - **The routine** (LOOP.md section 4): `T/cases.ts` first, three case texts of the top signature, and `bb probe why <tag> <asset> <stem> <ms>` only when a case cannot answer (`probe-run/why-command`, `dev/clojurecraft/why.clj`: the recording folded on a runner, the moment and the planner's answers printed).

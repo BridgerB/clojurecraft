@@ -611,7 +611,16 @@
                :next-state (p/value :next-state :login)})
         (emit {:packet/name :hello :username (:bot/name world) :uuid (:bot/uuid world)}))))
 
-(defmethod on-event :packet [world {:event/keys [packet]}] (on-packet world packet))
+(defn heard
+  "The world with packet pkt counted in :stats/heard by its name: every packet the server sent that
+   decoded (an unknown one is counted in :stats/unknown instead, a decode error and the close in
+   neither), so a run says how much it heard and how much of it it understood."
+  [world pkt]
+  (let [n (:packet/name pkt)]
+    (cond (contains? #{:unknown :decode-error :closed} n) world
+          :else (update-in world [:stats/heard n] (fnil inc 0)))))
+
+(defmethod on-event :packet [world {:event/keys [packet]}] (on-packet (heard world packet) packet))
 (defmethod on-event :tick [world event] (on-tick world event))
 (defmethod on-event :closed [world {:event/keys [reason]}] (assoc world :bot/closed reason))
 
