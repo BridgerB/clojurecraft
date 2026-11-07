@@ -138,14 +138,30 @@
         (remove (fn [[_ e]] (given-up-drop? world e)))
         (drops/lying world (recipe/item-id :crafting_table) (:player/pos world) 8.0)))
 
+(defn placing-table?
+  "Is the running intent this row's own placement of the crafting table (a :place of
+   :crafting_table for :spare-picks)? Between the packet sent and the block seen the bag no longer
+   holds the table and memory does not yet show it placed: with neither, the row read as done and
+   the pearls row cut the placement, the pickaxe never crafted at the table left behind (sim
+   stage-18 runs R1-3-1, R1-4-1 and R1-44-1 on 59e528b, the same place, then a cut 50 ms later,
+   in 12 of 44 stalled runs; issue #263)."
+  [world]
+  (let [i (:plan/intent world)]
+    (boolean (and (= :place (:intent/kind i))
+                  (= :crafting_table (:intent/item i))
+                  (= :spare-picks (:intent/goal i))
+                  (= :active (:intent/status i))))))
+
 (defn table-needed?
   "Is the crafting table placed near, dropped, or being collected, not yet held in the bag, with
    room for it to come back (table-room?)? Without room the table is left: the row never waits on
-   a pickup that cannot happen."
+   a pickup that cannot happen. Its own placement in flight (placing-table?) counts: the table
+   is about to stand."
   [world]
   (boolean (and (zero? (long (get (make/counts world) :crafting_table 0)))
                 (table-room? world)
-                (or (make/near world :crafting_table)
+                (or (placing-table? world)
+                    (make/near world :crafting_table)
                     (= :take-table (:intent/for (:plan/intent world)))
                     (take-table-just-ended? world)
                     (seq (table-drops-near world))))))
@@ -196,35 +212,37 @@
 
 (defn spare-intent
   "The spare-picks row's next intent, or nil: nil when not pending?, and nil when pending? but
-   none of its steps can start now (no toss, no pickup, no craft, no table to take)."
+   none of its steps can start now (no toss, no pickup, no craft, no table to take). Its own
+   table placement in flight (placing-table?) goes on as the running intent."
   [world goal table]
   (when (pending? world)
-    (or
-     ;; 1. Toss 1 junk stack if sealed and all 36 slots are used (room for pearl)
-     (when (room-needed? world)
-       (intent/why :picks/toss-for-pearl-room (window/reserve-toss world 1)))
-     ;; 1b. The table is to come back and no slot is free: throw a junk stack first, so the
-     ;; pickup can happen (a full bag left it lying and the collect failing every tick)
-     (when (and (table-needed? world) (zero? (long (window/free-count world))))
-       (intent/why :picks/toss-for-table-pickup (window/reserve-toss world 1)))
-     ;; 2. In-flight table pickup
-     (intent/why :picks/table-pickup-in-flight
-                 (intent/chain-next (:plan/last world) :take-table make/table-drops {}))
-     ;; 3. Craft pickaxes up to target-picks (3)
-     (when (and (< (serviceable-count world) target-picks) (materials? world))
-       (intent/why :picks/craft-spare-pickaxe
-                   (make/decide (for-decide world)
-                                (assoc goal :goal/provides {:item/stone_pickaxe 1})
-                                (filterv #(not= :stone-pickaxe (:goal/id %)) table))))
-     ;; 4. Take the placed table along once crafted
-     (when (placed-table? world) (intent/why :picks/take-table-along (make/take-table-along world)))
-     ;; 5. Collect dropped table if lying near
-     (when-let [[_ e] (entity/nearest (table-drops-near world) (:player/pos world))]
-       (intent/why :picks/collect-dropped-table
-                   {:intent/kind :collect-drops
-                    :intent/item :crafting_table
-                    :intent/target (drop-cell e)
-                    :intent/for :take-table})))))
+    (or (when (placing-table? world) (:plan/intent world))
+        ;; 1. Toss 1 junk stack if sealed and all 36 slots are used (room for pearl)
+        (when (room-needed? world)
+          (intent/why :picks/toss-for-pearl-room (window/reserve-toss world 1)))
+        ;; 1b. The table is to come back and no slot is free: throw a junk stack first, so the
+        ;; pickup can happen (a full bag left it lying and the collect failing every tick)
+        (when (and (table-needed? world) (zero? (long (window/free-count world))))
+          (intent/why :picks/toss-for-table-pickup (window/reserve-toss world 1)))
+        ;; 2. In-flight table pickup
+        (intent/why :picks/table-pickup-in-flight
+                    (intent/chain-next (:plan/last world) :take-table make/table-drops {}))
+        ;; 3. Craft pickaxes up to target-picks (3)
+        (when (and (< (serviceable-count world) target-picks) (materials? world))
+          (intent/why :picks/craft-spare-pickaxe
+                      (make/decide (for-decide world)
+                                   (assoc goal :goal/provides {:item/stone_pickaxe 1})
+                                   (filterv #(not= :stone-pickaxe (:goal/id %)) table))))
+        ;; 4. Take the placed table along once crafted
+        (when (placed-table? world)
+          (intent/why :picks/take-table-along (make/take-table-along world)))
+        ;; 5. Collect dropped table if lying near
+        (when-let [[_ e] (entity/nearest (table-drops-near world) (:player/pos world))]
+          (intent/why :picks/collect-dropped-table
+                      {:intent/kind :collect-drops
+                       :intent/item :crafting_table
+                       :intent/target (drop-cell e)
+                       :intent/for :take-table})))))
 
 (defmethod plan/done-by :spare-picks-stocked?
   ;; done whenever no step of the row can start (spare-intent nil), not only when not pending?:
