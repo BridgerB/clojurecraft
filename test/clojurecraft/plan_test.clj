@@ -2188,21 +2188,21 @@
       (let [w' (tick (assoc (pillar-failed :trail [] :fire? true) :plan/trail []))]
         (is (= :pillar (get-in w' [:plan/intent :intent/kind])))))))
 
-(defmethod plan/fire-cover :fire-test
+(defmethod plan/fire-cover :test/fire
   [world _]
   (when (:test/shot world) {:intent/kind :place :intent/item :cobblestone :intent/cell [1 2 3]}))
 
-(defmethod plan/next-intent :fire-test
+(defmethod plan/next-intent :test/fire
   [_ _ _]
   {:intent/kind :pillar :intent/item :cobblestone :intent/top 60})
 
 (def fire-test-goal
-  "A row of its own plan key (:fire-test), so no test redefines the planner for the others."
+  "A row of its own plan key (:test/fire), so no test redefines the planner for the others."
   {:goal/id :blaze-rods
    :goal/target? true
    :goal/priority 1
    :goal/done? :never
-   :goal/plan :fire-test})
+   :goal/plan :test/fire})
 
 (defn fire-test-tick
   "The world after one plan-tick over fire-test-goal's table."

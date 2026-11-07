@@ -143,7 +143,9 @@
     (is (= #{:needs :escape :wade :build :return-nether :fortress :eat :wear :armour :watch :defend
              :attack :hunt :sword :gear :regear :cook :pearls :blaze-rods :eyes :throw :stronghold
              :portal-room :end-portal :enter-end :crystals :dragon :heal :spare-picks}
-           (set (keys (dissoc (methods plan/next-intent) :default)))))))
+           ;; test rows (:test/...) register their own methods
+           (set (remove #(= "test" (namespace %))
+                        (keys (dissoc (methods plan/next-intent) :default))))))))
 
 (def kit (first (filter #(= :kit (:goal/id %)) plan/goals)))
 
