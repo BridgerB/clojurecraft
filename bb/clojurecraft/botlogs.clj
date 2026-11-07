@@ -349,7 +349,7 @@
                    (let [es (if ef (read-events ef) [])]
                      (when (seq es)
                        (let [c (case-of
-                                r
+                                (cond-> r (nil? (:run/bot r)) (assoc :run/bot stem)) ; a sim run is named by its world and seed
                                 es
                                 (str "bb probe why " t " " name " " stem " " (:t (peek es) 0)))]
                          (spit (str (fs/path logs (str stem ".case.edn")))
