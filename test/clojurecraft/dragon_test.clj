@@ -310,10 +310,14 @@
         "its reach, radius and margin, counts")
     (is (cuts? (w (cloud [10.5 64.0 0.5])) (as :dragon/walk-to-stand {:intent/kind :walk}))
         "a breath near ends a walk")
-    (let [near (w (cloud [10.5 64.0 0.5]))]
-      (is
-       (not (cuts? near (planner-answer near)))
-       "never the answer the planner gives itself: a back-off it chose is not cut by the same breath"))
+    (let [near (w (cloud [10.5 64.0 0.5]))
+          answer (planner-answer near)]
+      (is (= [:dragon/shelter-flight :walk :shelter]
+             [(intent/why-of answer) (:intent/kind answer) (:intent/for answer)])
+          "a cell out of the breath's reach is loaded: the walk to it, not a straight back-off")
+      (is (cuts? near (as :dragon/back-off-breath {:intent/kind :back-off}))
+          "a back-off begun before that cell was known gives way to the walk (the safer answer)")
+      (is (not (cuts? near answer)) "and the walk to it is not cut by the breath it flees"))
     (is (not (cuts? (w (cloud [7.5 64.0 9.5])) (as :dragon/walk-to-stand {:intent/kind :walk})))
         "none near: the walk goes on")))
 
@@ -467,9 +471,14 @@
     (is (not (cuts? (round-fountain [4.5 64.0 0.5] (sitting 90.0))
                     (as :dragon/out-of-bite {:intent/kind :walk :intent/target [4 64 5]})))
         "never the walk out from under it")
-    (let [basin (round-fountain [-0.5 64.0 -1.5] (sitting 90.0))]
-      (is (not (cuts? basin (planner-answer basin)))
-          "nor the walk the planner chose in the basin, by the answer that names itself"))))
+    (let [basin (round-fountain [-0.5 64.0 -1.5] (sitting 90.0))
+          answer (planner-answer basin)]
+      (is
+       (= [:dragon/perch-blocked :perch] [(intent/why-of answer) (:intent/kind answer)])
+       "in the basin behind the sitting head, through its scanning turn: hold where the feet are")
+      (is (cuts? basin (as :dragon/walk-to-stand {:intent/kind :walk :intent/target [2 64 0]}))
+          "a walk to the stand begun before the turn gives way to the hold")
+      (is (not (cuts? basin answer)) "and the hold is not cut by the walk it holds against"))))
 
 (deftest the-bot-keeps-the-basins-floor-while-the-dragon-sits-or-lands
   ;; every head death of gym dragon2-a and dragon2-b was a bot up on the basin's rim (a way
