@@ -902,7 +902,7 @@
   (let [n (inc (:plan/intents world 0))
         feet (when (:player/pos world) (intent/feet world))
         trail (:plan/trail world [])
-        i (assoc i
+        i (assoc (intent/why-or-default i)
                  :intent/plan (dissoc i :intent/status :intent/id :intent/plan)
                  :intent/status :active
                  :intent/id n)]

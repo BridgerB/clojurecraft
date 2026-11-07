@@ -24,6 +24,7 @@
             [clojurecraft.armour]
             [clojurecraft.blaze]
             [clojurecraft.build]
+            [clojurecraft.chat]
             [clojurecraft.cli :as cli]
             [clojurecraft.combat]
             [clojurecraft.conn :as conn]

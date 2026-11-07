@@ -145,6 +145,12 @@
     "after the first effect on the bot"]
    [:player/in-combat? "inside the server's fight bracket (player-combat-enter, -end, hear.clj)"
     "after the first player-combat-enter"]
+   [:player/death-text
+    "the server's account of the bot's own death, {:at ms :text plain text} with :key (\"death.attack.mob\") and :killer (the killer's short name) when the component says them (player-combat-kill, chat.clj); gone at the respawn"
+    "after the server announces the bot's death"]
+   [:world/chat
+    "the last chat/chat-kept lines the server said to the bot, oldest first, each {:at ms :text plain text :chat/via packet name} with :key when a translate key (system-chat, set-action-bar-text, set-title-text, set-subtitle-text, a boss bar's name, chat.clj): every player's death and the server's warnings"
+    "after the first line the server says"]
    [:control/forward? "walk forward" "inside :player/controls"]
    [:control/jump? "jump when allowed" "inside :player/controls"]
    [:control/yaw "heading to walk on" "inside :player/controls"]

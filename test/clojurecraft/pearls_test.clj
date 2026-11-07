@@ -31,6 +31,19 @@
 
 (def stone 1)
 
+(def real-routable? "intent/routable? as loaded, before any test redefines it." intent/routable?)
+
+(defn routable-here
+  "A stand-in for intent/routable? that answers with answer (a fn of world and intent) on the
+   thread that made it and with the real one on every other: with-redefs is global and the suite
+   runs tests in parallel, so a plain (constantly false) answered another test's route tests too
+   (#777's burrow-site test lost its site to it)."
+  [answer]
+  (let [me (Thread/currentThread)]
+    (fn [world i]
+      (cond (identical? me (Thread/currentThread)) (answer world i)
+            :else (real-routable? world i)))))
+
 (defn item "A stack of n of the item named k." [k n] {:item (recipe/item-id k) :count n})
 
 (defn enderman
@@ -2795,7 +2808,7 @@
               (assoc :player/pos [8.5 64.0 8.5] :pearls/shelter [8 61 9] :pearls/mouth [8 64 8])
               (assoc-in [:player/inventory 1] (item :iron_pickaxe 1)))]
     (is (pearls/brink? w [8 64 8]) "a ledge")
-    (with-redefs [intent/routable? (constantly true)]
+    (with-redefs [intent/routable? (routable-here (constantly true))]
       (is (= {:intent/kind :walk :intent/target [8 61 9] :intent/for :shelter} (pearls/uncage w))
           "down to the burrow's end")
       (is (nil? (pearls/uncage (assoc w :player/pos [8.5 61.0 9.5])))
@@ -3007,7 +3020,7 @@
   (let [w (-> (standing {} ledge)
               (assoc :player/pos [8.5 64.0 8.5] :pearls/shelter [8 61 9] :pearls/mouth [8 64 8])
               (assoc-in [:player/inventory 1] (item :iron_pickaxe 1)))]
-    (with-redefs [intent/routable? (constantly true)]
+    (with-redefs [intent/routable? (routable-here (constantly true))]
       (is (= {:intent/kind :walk :intent/target [8 61 9] :intent/for :relocate}
              (pearls/relocate-walk w))))))
 
@@ -3062,7 +3075,7 @@
                       3 (item :stick 4)
                       4 (item :cobblestone 43)})
               (memory/remember-intention {:intent/id 1 :intent/kind :burrow} :done))]
-    (with-redefs [intent/routable? (constantly false)]
+    (with-redefs [intent/routable? (routable-here (constantly false))]
       (is (contains? #{:craft :place :open-container}
                      (:intent/kind (plan/next-intent w row plan/goals)))
           "not the walk to a table nothing reaches"))))
@@ -4198,14 +4211,10 @@
                             cz [-1 0 1]
                             :when (not= [0 0] [cx cz])]
                         [[cx cz] (world/column {})])))
-        asked (atom [])
-        me (Thread/currentThread)]
-    ;; with-redefs is global and the suite runs tests in parallel: count only this thread's calls
-    ;; (the issue check on #771 counted six, three of them another test's)
-    (with-redefs [intent/routable? (fn [_ i]
-                                     (when (identical? me (Thread/currentThread))
-                                       (swap! asked conj (:intent/max-nodes i)))
-                                     false)]
+        asked (atom [])]
+    ;; only this thread's route tests are counted (routable-here)
+    (with-redefs [intent/routable? (routable-here
+                                    (fn [_ i] (swap! asked conj (:intent/max-nodes i)) false))]
       (is (nil? (pearls/stare-site w e)) "no route: no site"))
     (is (<= 1 (count @asked) pearls/vantage-tries) "at most vantage-tries route tests")
     (is (every? #(= pearls/vantage-nodes %) @asked) "each within vantage-nodes")))
@@ -4214,7 +4223,7 @@
   ;; real-18 Clj_r09 (4f317da lane 8): boxed in, eleven walks to one forest in four seconds, each
   ;; failed :no-path, and the run ended :no-path
   (let [w (assoc-in (standing {}) [:player/inventory 1] (item :iron_pickaxe 1))]
-    (with-redefs [intent/routable? (constantly false)]
+    (with-redefs [intent/routable? (routable-here (constantly false))]
       (is (= {:intent/kind :tunnel-to
               :intent/target [40 64 40]
               :intent/reach 1.5
@@ -4224,7 +4233,7 @@
           "no route, a pickaxe: tunnel")
       (is (= :walk (:intent/kind (pearls/forest-way (standing {}) [40 64 40])))
           "no pickaxe: the walk as before"))
-    (with-redefs [intent/routable? (constantly true)]
+    (with-redefs [intent/routable? (routable-here (constantly true))]
       (is (= {:intent/kind :walk :intent/target [40 64 40] :intent/for :pearls}
              (pearls/forest-way w [40 64 40]))
           "a route: the walk"))))

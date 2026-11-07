@@ -127,6 +127,22 @@
     (is (empty? (filter #(= :choice (:ev %)) (senses/events after after))) "no change: no event")
     (is (= c (get-in (senses/moment after) [:plan :plan/choice])) "the moment keeps it")
     (is (= [c] (get-in (senses/moment after) [:plan :plan/choices])))))
+(deftest a-child-intent-is-an-event-with-its-why
+  (let [parent (fn [child]
+                 (cond-> {:intent/kind :tunnel-to :intent/id 3} child (assoc :intent/child child)))
+        child (with-meta {:intent/kind :dig :intent/target [1 2 3]} {:intent/why :child/tunnel-to})
+        before {:plan/intent (parent nil)}
+        after {:plan/intent (parent child)}
+        es (senses/intent-events before after)]
+    (is (= [{:ev :child :kind :dig :target [1 2 3] :why :child/tunnel-to :parent :tunnel-to}] es))
+    (is (empty? (senses/intent-events after after)) "the same child is not said twice")
+    (is (= [:dig]
+           (mapv :kind
+                 (senses/intent-events after
+                                       {:plan/intent (parent {:intent/kind :dig
+                                                              :intent/target [1 2 4]})})))
+        "a new target is a new child")))
+
 (deftest the-ledger-names-what-lit-the-bot
   ;; 62% of hits over 450 runs were burning and none said what lit the bot
   (let [dry (assoc (nether) :player/on-fire? false)

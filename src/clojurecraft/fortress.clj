@@ -1088,12 +1088,16 @@
   (let [back (fn [] (plan/next-intent world (assoc goal :goal/plan :build) table))]
     (cond (plan/done-by world goal) nil
           (not (ready-for-nether? world))
-          (cond (>= (:player/food world 20) hunger/heal-level) {:intent/kind :rest}
-                (eat/scrap-held world) {:intent/kind :eat :intent/item (eat/scrap-held world)}
-                (hunt/search-spent? world) (back)
-                :else {:intent/kind :rest})
-          (or (fed-for-nether? world) (hunt/search-spent? world)) (back)
-          :else {:intent/kind :rest})))
+          (cond (>= (:player/food world 20) hunger/heal-level)
+                (intent/why :return-nether/rest-while-food-heals {:intent/kind :rest})
+                (eat/scrap-held world)
+                (intent/why :return-nether/eat-scrap
+                            {:intent/kind :eat :intent/item (eat/scrap-held world)})
+                (hunt/search-spent? world) (intent/why :return-nether/back-after-search (back))
+                :else (intent/why :return-nether/rest-until-hunt-searched {:intent/kind :rest}))
+          (or (fed-for-nether? world) (hunt/search-spent? world))
+          (intent/why :return-nether/back-ready (back))
+          :else (intent/why :return-nether/rest-for-food {:intent/kind :rest}))))
 
 (defn back-target
   "The cell to walk back to when a pickaxe must be remade and no ground is near: the oldest
@@ -1140,27 +1144,35 @@
                (back-target world (or brick (when search (leg-target search)))))]
     (cond (not nether?) {:plan/wait :other-dimension}
           :else
-          (or (window/reserve-toss world)
+          (or (intent/why :fortress/toss-for-room (window/reserve-toss world))
               (when back
-                {:intent/kind :tunnel-to
-                 :intent/target back
-                 :intent/steps steps-per-tunnel
-                 :intent/bridge? true})
+                (intent/why :fortress/tunnel-back-to-remake-pickaxe
+                            {:intent/kind :tunnel-to
+                             :intent/target back
+                             :intent/steps steps-per-tunnel
+                             :intent/bridge? true}))
               (let [want (pickaxes-wanted world)]
                 (when (and grounded? (build/pickaxe-at-hand? world want))
-                  (make/decide world (assoc goal :goal/provides {:tag/pickaxes want}) table)))
-              (and grounded? (intent/chain-next (:plan/last world) :take-table make/table-drops {}))
-              (and grounded? (make/take-table-along world))
+                  (intent/why
+                   :fortress/make-pickaxe
+                   (make/decide world (assoc goal :goal/provides {:tag/pickaxes want}) table))))
+              (and grounded?
+                   (intent/why
+                    :fortress/table-pickup-in-flight
+                    (intent/chain-next (:plan/last world) :take-table make/table-drops {})))
+              (and grounded? (intent/why :fortress/take-table-along (make/take-table-along world)))
               (when brick
-                {:intent/kind :tunnel-to
-                 :intent/target brick
-                 :intent/steps steps-per-tunnel
-                 :intent/bridge? true})
+                (intent/why :fortress/tunnel-to-brick
+                            {:intent/kind :tunnel-to
+                             :intent/target brick
+                             :intent/steps steps-per-tunnel
+                             :intent/bridge? true}))
               (when search
-                {:intent/kind :tunnel-to
-                 :intent/target (leg-target search)
-                 :intent/steps steps-per-tunnel
-                 :intent/bridge? (or (pos? (long (or (:search/stalled search) 0)))
-                                     (on-bridge? world))
-                 :intent/search search})
+                (intent/why :fortress/tunnel-search-leg
+                            {:intent/kind :tunnel-to
+                             :intent/target (leg-target search)
+                             :intent/steps steps-per-tunnel
+                             :intent/bridge? (or (pos? (long (or (:search/stalled search) 0)))
+                                                 (on-bridge? world))
+                             :intent/search search}))
               {:plan/wait :no-way}))))
