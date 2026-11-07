@@ -6,6 +6,7 @@
             [clojurecraft.combat :as combat]
             [clojurecraft.dimension :as dimension]
             [clojurecraft.entity :as entity]
+            [clojurecraft.forage :as forage]
             [clojurecraft.fortress-exit :as fexit]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
@@ -16,7 +17,8 @@
             [clojurecraft.pearls.sense :as psense]
             [clojurecraft.pearls.upkeep :as pupkeep]
             [clojurecraft.physics :as physics]
-            [clojurecraft.sword :as sword]))
+            [clojurecraft.sword :as sword]
+            [clojurecraft.window :as window]))
 
 (set! *warn-on-reflection* true)
 
@@ -213,6 +215,29 @@
    :in-forest-or-overworld (fn [_ w]
                              (or (not= dimension/nether (dimension/of w)) (psense/in-forest? w)))
    :set-up-done? (fn [f w] (boolean (and (f :home) (sword/serviceable w) (pupkeep/spare? w))))
+   ;; the rows of next-intent that came before the hunt: the kill's drop, fire, the kit
+   :menaced? (fn [_ w] (psense/menaced? w))
+   :fire (fn [_ w] (psense/burning-at w))
+   :fresh-kill (fn [f w] (when-not (f :menaced?) (forage/fresh-kill w :pearls)))
+   :drop (fn [f w] (when (f :fresh-kill) (second (psense/drop-of w (f :fresh-kill)))))
+   :collect-drop (fn [f _]
+                   {:intent/kind :collect-drops
+                    :intent/item pparams/pearl
+                    :intent/target (combat/cell (:entity/pos (f :drop)))
+                    :intent/for :pearls})
+   :over-body? (fn [f w] (and (f :fresh-kill) (psense/body? w (f :fresh-kill))))
+   :replacing (fn [f w]
+                (when-not (sword/serviceable w) (pupkeep/make-sword w (f :goal) (f :table))))
+   :remaking (fn [f w]
+               (when (and (not (pupkeep/spare? w)) (not (f :menaced?)))
+                 (pupkeep/make-pickaxe w (f :goal) (f :table))))
+   :respawned? (fn [_ w] (and (pos? (:stats/deaths w 0)) (= dimension/overworld (dimension/of w))))
+   :seek-wood (fn [f w] (when (f :respawned?) (or (pmove/roam w) lookout)))
+   :no-sword? (fn [_ w] (nil? (combat/sword w)))
+   :reserve-gather (fn [_ w] (pupkeep/reserve-gather w))
+   :worn-out-homeless? (fn [f w]
+                         (and (pupkeep/worn-out? w) (nil? (pplace/shelter w)) (not (f :menaced?))))
+   :reserve-toss (fn [f w] (and (not (f :menaced?)) (window/reserve-toss w)))
    :angry-tracked-hold? (fn [_ w] (psense/angry-tracked? w pparams/hold-radius))
    :search
    (fn [f w]
@@ -243,13 +268,15 @@
 
 (defn context
   "The fact getter for world: (f k) is the value of fact k, computed on its first ask and kept for
-   the rest of the call. Throws on a key facts lacks."
-  [world]
-  (let [cache (volatile! {})]
-    (fn get-fact [k]
-      (let [c @cache]
-        (if (contains? c k)
-          (c k)
-          (let [v ((or (facts k) (throw (ex-info "no such fact" {:fact k}))) get-fact world)]
-            (vswap! cache assoc k v)
-            v))))))
+   the rest of the call; extra (a map of fact key to value, e.g. :goal and :table) is given. Throws
+   on a key facts lacks."
+  ([world] (context world {}))
+  ([world extra]
+   (let [cache (volatile! extra)]
+     (fn get-fact [k]
+       (let [c @cache]
+         (if (contains? c k)
+           (c k)
+           (let [v ((or (facts k) (throw (ex-info "no such fact" {:fact k}))) get-fact world)]
+             (vswap! cache assoc k v)
+             v)))))))

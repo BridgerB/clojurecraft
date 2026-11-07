@@ -10,7 +10,11 @@
                  {:phase/id :set-up :phase/done [:set-up-done?]}
                  {:phase/id :provoke :phase/done [:coming?]} {:phase/id :fight}]
  :pearls/rules
- [{:rule/id :hunt/blaze-refuge-world
+ [{:rule/id :pearls/fire
+   :rule/phase :fire
+   :rule/when [:fire]
+   :rule/then [:intent {:intent/kind :dig :intent/target [:fact :fire]}]}
+  {:rule/id :hunt/blaze-refuge-world
    :rule/phase :survive
    :rule/when [:blaze-refuge]
    :rule/then [:fact :blaze-refuge]}
@@ -124,6 +128,43 @@
    :rule/phase :provoke
    :rule/when [:in? :aid-or-angry-within?]
    :rule/then [:intent {:intent/kind :lookout :intent/for :pearls}]}
+  {:rule/id :pearls/d :rule/phase :collect :rule/when [:drop] :rule/then [:fact :collect-drop]}
+  {:rule/id :pearls/and-k-body?-world-k
+   :rule/phase :collect
+   :rule/when [:over-body?]
+   :rule/then [:intent {:plan/wait :drop}]}
+  {:rule/id :pearls/replacing
+   :rule/phase :upkeep
+   :rule/when [[:not :hurt?] :replacing]
+   :rule/then [:fact :replacing]}
+  {:rule/id :pearls/and-seek-wood-nil?-combat-sword-world
+   :rule/phase :upkeep
+   :rule/when [[:not :hurt?] :seek-wood :no-sword?]
+   :rule/then [:fact :seek-wood]}
+  {:rule/id :pearls/nil?-combat-sword-world
+   :rule/phase :upkeep
+   :rule/when [[:not :hurt?] :no-sword?]
+   :rule/then [:intent {:plan/wait :no-sword}]}
+  {:rule/id :pearls/remaking
+   :rule/phase :upkeep
+   :rule/when [[:not :hurt?] :remaking]
+   :rule/then [:fact :remaking]}
+  {:rule/id :pearls/reserve-gather-world
+   :rule/phase :upkeep
+   :rule/when [[:not :hurt?] :reserve-gather]
+   :rule/then [:fact :reserve-gather]}
+  {:rule/id :pearls/and-seek-wood-worn-out?-world-nil?-shelter-world
+   :rule/phase :upkeep
+   :rule/when [[:not :hurt?] :seek-wood :worn-out-homeless?]
+   :rule/then [:fact :seek-wood]}
+  {:rule/id :pearls/and-worn-out?-world-nil?-shelter-world-not-menac
+   :rule/phase :upkeep
+   :rule/when [[:not :hurt?] :worn-out-homeless?]
+   :rule/then [:intent {:plan/wait :no-pickaxe}]}
+  {:rule/id :pearls/and-not-menaced?-world-window-reserve-toss-world
+   :rule/phase :upkeep
+   :rule/when [[:not :hurt?] :reserve-toss]
+   :rule/then [:fact :reserve-toss]}
   {:rule/id :hunt/travel-walk
    :rule/phase :reach-forest
    :rule/when [:travel-walk]

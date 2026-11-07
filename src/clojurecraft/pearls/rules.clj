@@ -12,7 +12,14 @@
   "The rules file as data: {:pearls/phases [...] :pearls/rules [...]}."
   (edn/read-string (slurp (io/resource "clojurecraft/pearls-rules.edn"))))
 
-(def rules "The hunt's rows in the order they are tried." (:pearls/rules table))
+(def all-rules
+  "Every row, in the order next-intent tries them: fire, the hunt's survival rows, the pearl's
+   drop, the kit's upkeep, then the rest of the hunt."
+  (:pearls/rules table))
+
+(def rules
+  "The rows of the hunt alone (hunt), in the order they are tried."
+  (vec (remove (comp #{:fire :collect :upkeep} :rule/phase) all-rules)))
 
 (def phases
   "The hunt's phases in order, each with the facts that say it is done (the last has none)."
@@ -32,13 +39,24 @@
     :fact (f arg)
     :intent (update-vals arg (fn [v] (if (and (vector? v) (= :fact (first v))) (f (second v)) v)))))
 
-(defn decide
-  "The intent of the first row of rules whose :rule/when holds in world, labelled with the row's
-   :rule/id (intent/why), or nil when its builder yields none. The last row has no conditions."
-  [world]
-  (let [f (facts/context world)
-        row (first (filter #(holds? f (:rule/when %)) rules))]
+(defn decide-in
+  "The intent of the first of rows whose :rule/when holds under the fact getter f, labelled with
+   the row's :rule/id (intent/why), or nil when its builder yields none. The last row of every
+   list has no conditions."
+  [f rows]
+  (let [row (first (filter #(holds? f (:rule/when %)) rows))]
     (intent/why (:rule/id row) (then f (:rule/then row)))))
+
+(defn decide
+  "The hunt's intent in world: decide-in over the rows of the hunt alone."
+  [world]
+  (decide-in (facts/context world) rules))
+
+(defn decide-all
+  "The pearl stage's intent in world, for goal row goal and its needs table: decide-in over every
+   row. Nil when the last row yields none (next-intent then falls back)."
+  [world goal table]
+  (decide-in (facts/context world {:goal goal :table table}) all-rules))
 
 (defn phase
   "The id of the first phase of the hunt that is not done in world (its :phase/done facts do not

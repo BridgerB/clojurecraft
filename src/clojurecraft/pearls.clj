@@ -28,9 +28,7 @@
    fight's look is combat/aim, its legs, never its head. Water hurts it and it teleports out of
    rain and water: the trap rows already keep the bot from fighting while it stands in water."
   (:require [clojurecraft.combat :as combat]
-            [clojurecraft.dimension :as dimension]
             [clojurecraft.entity :as entity]
-            [clojurecraft.forage :as forage]
             [clojurecraft.fortress-exit :as fexit]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
@@ -41,11 +39,8 @@
             [clojurecraft.pearls.place :as pplace]
             [clojurecraft.pearls.rules :as rules]
             [clojurecraft.pearls.sense :as psense]
-            [clojurecraft.pearls.upkeep :as pupkeep]
             [clojurecraft.physics :as physics]
-            [clojurecraft.plan :as plan]
-            [clojurecraft.sword :as sword]
-            [clojurecraft.window :as window]))
+            [clojurecraft.plan :as plan]))
 
 (set! *warn-on-reflection* true)
 
@@ -312,58 +307,11 @@
       (and (fexit/pearls-stage? world) (contains? pparams/heavy-kinds (entity/kind e)))))
 
 (defmethod plan/next-intent :pearls
-  ;; a fire the bot stands in put out first (a :dig: the server breaks fire on the first click,
-  ;; as blaze/put-out does); then the kill's drop, unless another angry one is near (menaced?);
-  ;; with no serviceable sword (none, or one under window/spare-uses swings), make the one the
-  ;; held items pay for when that craft can start (make-sword). With none at all and no craft,
-  ;; a wait that fails the plan, never a bare-hand hunt (:no-sword). A worn sword that cannot be
-  ;; replaced yet is still hunted with.
-  ;; With no pickaxe over spare-digs (spare?) and none angry near (menaced?), a new one is made
-  ;; first when that craft can start (make-pickaxe): a burrow is about sixteen digs. With the
-  ;; pickaxe worn out (worn-out?) and no craft to start, no burrow near and none angry near, no
-  ;; hunt either (:no-pickaxe): no burrow can be cut.
+  ;; the rows of pearls-rules.edn in order: a fire put out, then the hunt's survival and threat
+  ;; rows, the kill's drop (picked up, or its body waited over), the sword and the pickaxe made
+  ;; again and the slots kept free (not while hurt), then the rest of the hunt. A hurt bot gets
+  ;; the rows' answer as it stands; otherwise nil from them falls to pearl-fallback.
   [world goal table]
-  (let [k (when-not (psense/menaced? world) (forage/fresh-kill world :pearls))
-        [_ d] (when k (psense/drop-of world k))
-        fire (psense/burning-at world)
-        replacing (when-not (sword/serviceable world) (pupkeep/make-sword world goal table))
-        remaking (when (and (not (pupkeep/spare? world)) (not (psense/menaced? world)))
-                   (pupkeep/make-pickaxe world goal table))
-        ;; the hands a death leaves empty at the overworld spawn: no trunk sighted yet is
-        ;; no reason to fail; looking and roaming load more, and the remake is asked again after
-        ;; each. A sword merely broken where the bot hunts still waits.
-        respawned? (and (pos? (:stats/deaths world 0)) (= dimension/overworld (dimension/of world)))
-        seek-wood (when respawned?
-                    (or (pmove/roam world) {:intent/kind :lookout :intent/for :pearls}))]
-    (cond
-      fire (intent/why :pearls/fire {:intent/kind :dig :intent/target fire})
-      d
-      (intent/why :pearls/d
-                  {:intent/kind :collect-drops
-                   :intent/item pparams/pearl
-                   :intent/target (combat/cell (:entity/pos d))
-                   :intent/for :pearls})
-      (and k (psense/body? world k)) (intent/why :pearls/and-k-body?-world-k {:plan/wait :drop})
-      (< (:player/health world 20.0) pparams/danger-health)
-      (intent/why :pearls/player-health-world-20-0-danger-health (hunt world))
-      replacing (intent/why :pearls/replacing replacing)
-      (and seek-wood (nil? (combat/sword world)))
-      (intent/why :pearls/and-seek-wood-nil?-combat-sword-world seek-wood)
-      (nil? (combat/sword world))
-      (intent/why :pearls/nil?-combat-sword-world {:plan/wait :no-sword})
-      remaking (intent/why :pearls/remaking remaking)
-      (pupkeep/reserve-gather world)
-      (intent/why :pearls/reserve-gather-world (pupkeep/reserve-gather world))
-      (and seek-wood
-           (pupkeep/worn-out? world)
-           (nil? (pplace/shelter world))
-           (not (psense/menaced? world)))
-      (intent/why :pearls/and-seek-wood-worn-out?-world-nil?-shelter-world seek-wood)
-      (and (pupkeep/worn-out? world) (nil? (pplace/shelter world)) (not (psense/menaced? world)))
-      (intent/why :pearls/and-worn-out?-world-nil?-shelter-world-not-menac {:plan/wait :no-pickaxe})
-      ;; slots kept free for the drops (window/free-reserve), as the blaze row keeps them: a
-      ;; pearl is picked up on contact only with a slot free; the race kit fills all 36
-      (and (not (psense/menaced? world)) (window/reserve-toss world))
-      (intent/why :pearls/and-not-menaced?-world-window-reserve-toss-world
-                  (window/reserve-toss world))
-      :else (intent/why :pearls/else (or (hunt world) (pearl-fallback world))))))
+  (let [i (rules/decide-all world goal table)]
+    (cond (< (:player/health world 20.0) pparams/danger-health) i
+          :else (or i (pearl-fallback world)))))
