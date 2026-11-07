@@ -310,13 +310,13 @@
 (defmethod on-packet [:play :section-blocks-update] [w p] (terrain/section-update w p))
 (defn die
   "Health reached zero: the bot is dead until the server respawns it. Count the death, drop the
-   running intent and the last one (a new life plans afresh), stop moving, and ask to respawn."
+   running intent and the last one and the held fortress exit (a new life plans afresh), stop moving, and ask to respawn."
   [w]
   (-> w
       (assoc :player/dead? true :player/controls {})
       (memory/remember-answer {:answer/kind :death})
       (update :stats/deaths (fnil inc 0))
-      (dissoc :plan/intent :plan/last)
+      (dissoc :plan/intent :plan/last :pearls/exit-target)
       (emit {:packet/name :client-command :action (p/value :client-command :perform-respawn)})))
 
 (defmethod on-packet [:play :set-health]

@@ -2314,11 +2314,12 @@
           candidate
           (recur (+ dist 8.0)))))))
 
-(defn fortress-tunnel-target
-  "The [x y z] target for the sealed fortress tunnel-out: the pocket bore along the fixed
+(defn fresh-tunnel-target
+  "The [x y z] target for the sealed fortress tunnel-out, derived from the feet now: the pocket bore along the fixed
    heading (pocket-bore-target) through solid rock at the same y, else a retrace of the inbound
    path through enclosed cells, boring parallel to open corridors at the same y. Once
-   beyond 48 blocks from the fortress, surfaces to surface-y."
+   beyond 48 blocks from the fortress, surfaces to surface-y. Moves with the feet: the held
+   target of fortress-tunnel-target is what the hunt follows."
   [world]
   (let [pts (fortress-points world)]
     (when (seq pts)
@@ -2343,6 +2344,29 @@
           (< (long fy) (long surface-y)) [(first @exit) surface-y (second @exit)]
           ;; Surfaced and clear of fortress
           :else nil)))))
+
+(def exit-reach 2.0) ; blocks from the feet within which a held exit target is reached
+
+(defn held-exit-target
+  "The held tunnel-out target (:pearls/exit-target), or nil when none is held, the feet are within
+   exit-reach of it (reached) or a walk or tunnel to it failed (:plan/blacklist)."
+  [world]
+  (let [held (:pearls/exit-target world)]
+    (when (and held
+               (>= (physics/distance (intent/feet world) held) exit-reach)
+               (not (contains? (:plan/blacklist world #{}) held)))
+      held)))
+
+(defn fortress-tunnel-target
+  "The [x y z] target for the sealed fortress tunnel-out: the one held (held-exit-target) until
+   reached or failed, else fresh-tunnel-target; nil once the fresh one is nil (clear of the
+   fortress), however long a target has been held. A fresh target is bore-reach ahead of the feet
+   and a blocked step turns the bore round, so re-derived each act it flipped between two
+   targets four blocks apart for an hour of :tunnel-to, wearing the pickaxe out (sim
+   d3ce99b R1-24-1: [-188 78 163] and [-188 78 160], 620 :tunnel-to intents, no pearl)."
+  [world]
+  (when (seq (fortress-points world))
+    (when-let [fresh (fresh-tunnel-target world)] (or (held-exit-target world) fresh))))
 
 (defn fortress-escaping?
   "Is the bot leaving the fortress via sealed tunnel-out: inside/near the fortress,
@@ -2540,6 +2564,16 @@
               ;; watchers, the refuge's chain came back nil and the hunt laid a
               ;; wall where it stood, 14.4 to 1.6 in two seconds, death-blaze)
               (blaze/hide world)))))))
+
+(defn fortress-exit-hold
+  "The world with :pearls/exit-target set to the tunnel-out target while the bot escapes the
+   fortress (fortress-tunnel-target: the held one while it stands, else a fresh one), and dropped
+   once it is clear. The world as it was when it already holds that target."
+  [world]
+  (let [t (when (fortress-escaping? world) (fortress-tunnel-target world))]
+    (cond (= t (:pearls/exit-target world)) world
+          t (assoc world :pearls/exit-target t)
+          :else (dissoc world :pearls/exit-target))))
 
 (defn fortress-exit-log
   "The world with one log line when the fortress exit choice is made or changed."
@@ -3319,7 +3353,8 @@
         world (cond-> (track-distant (track-refuge (relocation (track-gain (track-angry
                                                                             (uncovered-log
                                                                              (fortress-exit-log
-                                                                              world)))))))
+                                                                              (fortress-exit-hold
+                                                                               world))))))))
                 (shot-at? world) (assoc :pearls/shot-at-ms (:time/now world 0))
                 (sealed-full? world) (assoc :pearls/refuge-done true))]
     (cond (or (nil? look)

@@ -129,7 +129,8 @@
 (def anchors
   "{:goal/plan #{attribute}}: the places a row holds on to (the pearl hunt's burrow, a blaze pocket),
    dropped when it has made no progress for stuck-ms, so it does not walk back to them."
-  {:pearls #{:pearls/shelter :pearls/mouth :pearls/relocate :plan/boxed-at :plan/given-up}
+  {:pearls #{:pearls/exit-target :pearls/shelter :pearls/mouth :pearls/relocate :plan/boxed-at
+             :plan/given-up}
    :blaze-rods #{:pocket/site :pocket/prepared-at :pocket/seal-failed-at :sortie/since}})
 (def resets
   "{:goal/plan {attribute value}}: what a stuck row starts over with (the pearl hunt's blacklist)."

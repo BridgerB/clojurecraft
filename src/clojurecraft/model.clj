@@ -369,6 +369,9 @@
    [:pearls/exit-logged
     "whether the fortress exit choice was logged: boolean (can-tunnel-out?) while escaping, dropped once clear"
     "pearls/fortress-exit-log"]
+   [:pearls/exit-target
+    "the fortress tunnel-out target held until reached or failed, so the bore does not flip between targets as the feet move: [x y z], dropped once clear"
+    "pearls/fortress-exit-hold"]
    [:pearls/mouth "where the pearl hunt's burrow began, on the surface its stairs go down from"
     "after the hunt dug one"]
    [:pearls/refuge-done
