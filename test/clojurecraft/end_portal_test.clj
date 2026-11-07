@@ -178,16 +178,11 @@
                 :intent/reach 1.5
                 :intent/climb 1}
                (end-portal/next-toward outside false)))
-        (is (false? (plan/interrupts? outside
-                                      {:goal/id :end-portal :goal/plan :end-portal}
-                                      {:intent/kind :tunnel-to}))
-            "tunnel-to into the room is not interrupted before a stand is reachable")
+        (is (not (end-portal/eye-in-reach? outside))
+            "outside the room's wall no stand is reachable: the tunnel is not preempted")
         (let [far-away (standing (room 0) [-10.5 64.0 8.5] eyes)]
-          (is
-           (false? (plan/interrupts? far-away
-                                     {:goal/id :end-portal :goal/plan :end-portal}
-                                     {:intent/kind :tunnel-to}))
-           "far away (> 6 blocks from nearest frame), interrupts? never spends expansions checking eye-ops"))))
+          (is (not (end-portal/eye-in-reach? far-away))
+              "far away (> 6 blocks from the nearest frame) no eye-op is looked for"))))
     (testing "the rows' done predicates"
       (let [lit-row (first (filter #(= :end-portal (:goal/id %)) plan/goals))
             end-row (first (filter #(= :enter-end (:goal/id %)) plan/goals))]

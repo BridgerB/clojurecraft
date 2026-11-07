@@ -54,6 +54,13 @@
   [table]
   (filterv #(and (:goal/target? %) (live? %)) table))
 
+(defn satellites-of
+  "The live satellite rows of a table: rows with a :goal/parent (a set of row ids), in play
+   whenever a parent is. A threat or an opportunity of a stage is a satellite: it is undone only
+   while it applies, then it outranks its parent, and its intent is not cut by the parent's row."
+  [table]
+  (filterv #(and (:goal/parent %) (live? %)) table))
+
 (def targets (targets-of goals))
 
 (defn goals-for
@@ -219,8 +226,11 @@
    row marked :goal/always? is in play whatever --until asked for: the escapes are."
   [world table]
   (let [goals (:plan/goals world)]
-    (->> (targets-of table)
-         (filter #(or (nil? goals) (:goal/always? %) (contains? goals (:goal/id %))))
+    (->> (concat (targets-of table) (satellites-of table))
+         (filter #(or (nil? goals)
+                      (:goal/always? %)
+                      (contains? goals (:goal/id %))
+                      (some goals (:goal/parent %))))
          (sort-by :goal/priority))))
 
 (defn here?
@@ -291,6 +301,7 @@
     (let [world (restart-after-death world)
           new (into []
                     (comp (remove :goal/always?)
+                          (remove :goal/parent)
                           (remove #(contains? (:plan/reached world #{}) (:goal/id %))) ; reached is reached: never asked again
                           (filter #(done-by world %))
                           (map :goal/id))

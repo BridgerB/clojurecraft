@@ -197,21 +197,20 @@
           (empty? (portals world)) {:plan/wait :lighting}
           :else nil)))
 
-(defmethod plan/interrupts? :end-portal
-  [world _ i]
-  (and (not= :end-portal (:intent/kind i))
-       (let [f (stronghold/nearest-frame world)]
-         (and f
-              (<= (physics/distance (intent/feet world) f) 6.0)
-              (some? (some #(eye-op world %) (empty-frames world)))))))
+(defn eye-in-reach?
+  "Is the nearest remembered frame within 6 blocks of the feet with an empty frame an eye can be put
+   into from a reachable stand (eye-op)? Asked only in the overworld and, before any search, only
+   near a frame."
+  [world]
+  (boolean (and (:player/pos world)
+                (= dimension/overworld (dimension/of world))
+                (when-let [f (stronghold/nearest-frame world)]
+                  (and (<= (physics/distance (intent/feet world) f) 6.0)
+                       (some #(eye-op world %) (empty-frames world)))))))
 
-(defmethod plan/interrupts? :enter-end
-  [world _ i]
-  (and (not= :end-portal (:intent/kind i))
-       (let [f (stronghold/nearest-frame world)]
-         (and f
-              (<= (physics/distance (intent/feet world) f) 6.0)
-              (some? (some #(eye-op world %) (empty-frames world)))))))
+(defmethod plan/done-by :no-eye-in-reach? [world _] (not (eye-in-reach? world)))
+
+(defmethod plan/next-intent :eye-frame [_ _ _] {:intent/kind :end-portal :intent/enter? false})
 
 (defmethod plan/done-by :portal-lit? [world _] (boolean (seq (portals world))))
 
