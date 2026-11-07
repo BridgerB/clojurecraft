@@ -7,7 +7,7 @@
    (biome-events) and its breath running out (air-events).
 
    Why: 14,156 of 19,018 hits over 450 runs named no attacker, 62% of all hits were burning, and
-   what lit the bot was never said (issue #263)."
+   what lit the bot was never said."
   (:require [clojure.math :as math]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.chunk :as chunk]
