@@ -232,3 +232,17 @@
         (is (= ["2026-10-21" "2026-10-22"] (map :date (:days s))) "a day with no batches is kept")
         (is (= 5 (get-in s [:days 1 :real :runs])))
         (is (= "u" (:updated s)))))))
+
+(deftest a-runs-observability-adds-up-its-batches
+  (let [a (assoc (page/batch (round {}))
+                 :observed
+                 {:senses [3 3] :events [2 3] :why [4 10] :dropped 0 :unheard {:sound 5}})
+        b (assoc
+           (page/batch (round {:round/batch 2}))
+           :observed
+           {:senses [1 1] :events [1 1] :why [6 6] :dropped 2 :unheard {:sound 1 :system-chat 2}})
+        r (page/combine [a b])]
+    (is (= {:senses [4 4] :events [3 4] :why [10 16] :dropped 2 :unheard {:sound 6 :system-chat 2}}
+           (:observed r)))
+    (is (nil? (:observed (page/combine [(page/batch (round {}))])))
+        "a run whose batches kept no row has none")))
