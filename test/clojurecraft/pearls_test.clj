@@ -4255,7 +4255,7 @@
                (standing {skeleton-id skeleton} floor)
                (assoc :player/dimension "minecraft:the_nether"
                       :player/pos [8.5 64.0 8.5]
-                      :player/health 15.0
+                      :player/health 20.0
                       :player/food 20
                       :time/now 200
                       :player/attacker skeleton-id
@@ -4267,11 +4267,24 @@
                (memory/observe spawner-pos blaze/spawner)
                (update :player/inventory assoc 2 (item :cobblestone 64) 3 (item :iron_pickaxe 1)))]
     (is (pearls/can-tunnel-out? base) "a pickaxe held and no lava round: the bore is the plan")
-    (testing "healthy, the striker is fought where the bot stands"
+    (testing "healthy and alone, the striker is fought where the bot stands"
       (let [i (plan/next-intent base row plan/goals)]
         (is (= :fight (:intent/kind i)))
         (is (= skeleton-id (:intent/target i)))
         (is (true? (:intent/hold? i)))))
+    (testing "a wither skeleton is fought only from avoided-health: at 12 the cover"
+      (let [i (plan/next-intent (assoc base :player/health 12.0) row plan/goals)]
+        (is (not (contains? #{:fight :tunnel-to :dig} (:intent/kind i))))))
+    (testing "two wither skeletons at full health: the cover, not the fight"
+      (let [w (-> base
+                  (assoc :player/health 20.0)
+                  (assoc-in [:world/entities 43] (assoc skeleton :entity/pos [7.5 64.0 8.5])))
+            i (plan/next-intent w row plan/goals)]
+        (is (not (contains? #{:fight :tunnel-to :dig} (:intent/kind i))))))
+    (testing "healthy at 18 and alone, the fight yields under retreat-health"
+      (let [i (plan/next-intent (assoc base :player/health 18.0) row plan/goals)]
+        (is (= :fight (:intent/kind i)))
+        (is (true? (:intent/yield? i)))))
     (testing "hurt under the danger line, a block is laid between: not the fight, not the bore"
       (let [i (plan/next-intent (assoc base :player/health 5.0) row plan/goals)]
         (is (not (contains? #{:fight :tunnel-to :dig} (:intent/kind i))))

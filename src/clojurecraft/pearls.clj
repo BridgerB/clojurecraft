@@ -2371,7 +2371,9 @@
   "The intent that answers a melee mob that has just struck the bot while it bores out of the
    fortress (fortress-escaping?, can-tunnel-out?), or nil: the striker (combat/striker) is not a
    ranged kind and stands within the sword's reach (combat/in-reach?). At or over the danger-line
-   (combat/danger-line) a :fight held where the bot stands (:intent/hold?); under it the cover
+   (combat/danger-line) a :fight held where the bot stands (:intent/hold?, :intent/yield?: it ends
+   under retreat-health); a kind of combat/avoided only at combat/avoided-health or more and with no
+   other of those within defend-radius; under those lines the cover
    (combat/cover: a block laid between, a meal), never the fight and never the wait that ends
    the plan. The hunt answers wither skeletons and hoglins itself (combat/answering), so the
    :defend row leaves them, and the bore, which asks nothing, dug on with its back open: Clj_r10
@@ -2381,9 +2383,19 @@
   (when (and (fortress-escaping? world) (can-tunnel-out? world))
     (when-let [[eid e] (combat/striker world)]
       (when (and (not (contains? ranged-kinds (entity/kind e))) (combat/in-reach? world e))
-        (let [hurt? (< (:player/health world 20.0) (combat/danger-line world))
+        (let [hp (:player/health world 20.0)
+              avoided? (contains? combat/avoided (entity/kind e))
+              pack? (some (fn [[oid o]]
+                            (and (not= oid eid)
+                                 (contains? combat/avoided (entity/kind o))
+                                 (<= (physics/distance (:player/pos world) (:entity/pos o))
+                                     combat/defend-radius)))
+                          (entity/hostiles world))
+              hurt? (or (< hp (combat/danger-line world))
+                        (and avoided? (or pack? (< hp combat/avoided-health))))
               cover (when hurt? (combat/cover world e))]
-          (cond (not hurt?) {:intent/kind :fight :intent/target eid :intent/hold? true}
+          (cond (not hurt?)
+                {:intent/kind :fight :intent/target eid :intent/hold? true :intent/yield? true}
                 (contains? cover :intent/kind) (assoc cover :intent/wall? true)
                 :else nil))))))
 
