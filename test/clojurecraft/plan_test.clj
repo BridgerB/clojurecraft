@@ -2385,7 +2385,23 @@
     (is (blaze/hollow-pocket? w (pocket-at cell)))
     (is (not (blaze/hollow-pocket? w {:intent/kind :fight :intent/target 1})))
     (is (not (blaze/hollow-pocket? w (pocket-at [2200 60 1790]))) "not the cell the feet stand in")
-    (is (not (blaze/hollow-pocket? w nil)))))
+    (is (not (blaze/hollow-pocket? w nil)))
+    (testing "a pocket at the feet that can be sealed is no hollow one: it still cuts"
+      (let [lx (bit-and 2148 15)
+            lz (bit-and 1763 15)
+            stone (blocks/default-state :stone)
+            walls (into {}
+                        (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
+                              y [72 73]]
+                          [[(+ lx dx) y (+ lz dz)] stone]))
+            col (world/column
+                 (merge
+                  walls
+                  {[lx 71 lz] stone [lx 72 lz] blocks/air [lx 73 lz] blocks/air [lx 74 lz] stone}))
+            closed
+            (assoc w :world/chunks {[(bit-shift-right 2148 4) (bit-shift-right 1763 4)] col})]
+        (is (false? (pocket/cannot-seal? closed cell)) "every side already firm")
+        (is (not (blaze/hollow-pocket? closed (pocket-at cell))))))))
 
 (deftest ^:eftest/synchronized an-unlayable-landing-is-not-chosen-as-a-pocket
   ;; z16 fold at t=233999 (probes 41303425892 and 41304181213): the running :tunnel-to was cut for
