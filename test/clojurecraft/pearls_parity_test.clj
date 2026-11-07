@@ -222,7 +222,12 @@
                      :rules (count rules/rules)
                      :hit (count whys)
                      :not-hit (vec (sort (remove whys (map :rule/id rules/rules))))
-                     :differ (vec (map :label (take 20 differ)))})))))
+                     :differ (vec (map :label (take 20 differ)))
+                     :named (into (sorted-map)
+                                  (for [r results
+                                        :when (not (re-find #"^[^/]+/\d+/" (:label r)))
+                                        :when (not (re-find #"^fortress/" (:label r)))]
+                                    [(:label r) (second (:cond r))]))})))))
 
 (deftest the-phase-of-a-hunt-is-the-first-not-done
   (is (= :set-up (rules/phase (ps/standing {}))))
