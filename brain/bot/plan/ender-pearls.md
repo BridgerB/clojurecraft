@@ -15,198 +15,198 @@ sourceRefs:
   - test/clojurecraft/picks_test.clj#a-rod-bot-sealed-in-fortress-makes-spare-pickaxes-to-hold-three
   - test/clojurecraft/picks_test.clj#drops-one-junk-stack-when-sealed-with-36-slots-full
   - test/clojurecraft/picks_test.clj#a-sim-pass-makes-the-pickaxes
-  - src/clojurecraft/pearls.clj#defn distant-sighting
-  - src/clojurecraft/pearls.clj#defn distant-stand
-  - src/clojurecraft/pearls.clj#defn go-toward-sighting
-  - src/clojurecraft/pearls.clj#defn distant-gave-up?
-  - src/clojurecraft/pearls.clj#defn track-distant
+  - src/clojurecraft/pearls/move.clj#defn distant-sighting
+  - src/clojurecraft/pearls/move.clj#defn distant-stand
+  - src/clojurecraft/pearls/move.clj#defn go-toward-sighting
+  - src/clojurecraft/pearls/move.clj#defn distant-gave-up?
+  - src/clojurecraft/pearls/move.clj#defn track-distant
   - src/clojurecraft/pearls.clj#defn pearl-fallback
-  - src/clojurecraft/pearls.clj#defn refuge-expired?
-  - src/clojurecraft/pearls.clj#defn track-refuge
-  - test/clojurecraft/pearls_test.clj#a-distant-sighting-is-gone-toward-until-in-hunt-range
+  - src/clojurecraft/fortress_exit.clj#defn refuge-expired?
+  - src/clojurecraft/fortress_exit.clj#defn track-refuge
+  - test/clojurecraft/pearls/move_test.clj#a-distant-sighting-is-gone-toward-until-in-hunt-range
   - test/clojurecraft/pearls_test.clj#the-pearl-fallback-never-waits-with-nothing-pending
-  - test/clojurecraft/pearls_test.clj#the-refuge-hands-the-exit-over-after-minutes-at-full-health
-  - src/clojurecraft/pearls.clj#defn fortress-tunnel-out
+  - test/clojurecraft/fortress_exit_test.clj#the-refuge-hands-the-exit-over-after-minutes-at-full-health
+  - src/clojurecraft/fortress_exit.clj#defn fortress-tunnel-out
   - "src/clojurecraft/plan.clj#defmulti fire-cover"
-  - src/clojurecraft/pearls.clj#defn tunnel-answer
-  - test/clojurecraft/pearls_test.clj#a-bot-hit-while-it-bores-out-of-the-fortress-answers-the-wither-skeleton
-  - src/clojurecraft/pearls.clj#defn fortress-tunnel-target
-  - src/clojurecraft/pearls.clj#defn far-ends
-  - test/clojurecraft/pearls_test.clj#a-far-end-near-one-already-walked-to-is-not-new-ground
-  - src/clojurecraft/pearls.clj#defn exit-anchors
-  - src/clojurecraft/pearls.clj#defn escape-near?
-  - test/clojurecraft/pearls_test.clj#the-tunnel-out-ends-clear-of-the-spawner-however-far-the-fortress-runs
-  - src/clojurecraft/pearls.clj#defn fresh-tunnel-target
-  - src/clojurecraft/pearls.clj#defn held-exit-target
-  - src/clojurecraft/pearls.clj#defn fortress-exit-hold
-  - test/clojurecraft/pearls_test.clj#the-tunnel-out-target-is-held-while-the-feet-move-along-the-bore
-  - src/clojurecraft/pearls.clj#defn fortress-retrace-target
-  - src/clojurecraft/pearls.clj#defn enclosed?
-  - src/clojurecraft/pearls.clj#defn side-bore-cell
-  - src/clojurecraft/pearls.clj#defn near-fortress?
-  - src/clojurecraft/pearls.clj#defn can-tunnel-out?
-  - src/clojurecraft/pearls.clj#defn surrounded-by-lava?
-  - test/clojurecraft/pearls_test.clj#a-rod-bot-at-the-spawner-leaves-by-sealed-tunnel-out-and-never-walks-corridors
-  - test/clojurecraft/pearls_test.clj#a-rod-bot-retraces-inbound-dug-tunnel
-  - test/clojurecraft/pearls_test.clj#a-trail-crossing-corridor-bores-parallel-wall-at-same-y
-  - test/clojurecraft/pearls_test.clj#fortress-exit-never-steps-or-digs-down
-  - test/clojurecraft/pearls_test.clj#the-fortress-tunnel-out-carries-zero-climb-so-descent-does-not-stall-short-of-under-y
-  - test/clojurecraft/pearls_test.clj#a-rod-bot-at-spawner-descends-only-a-few-blocks-below-local-floor-and-seals-overhead
-  - test/clojurecraft/pearls_test.clj#the-tunnel-out-refuses-lava-and-routes-around-or-falls-back
-  - test/clojurecraft/pearls_test.clj#the-tunnel-out-surfaces-only-beyond-48-blocks
-  - src/clojurecraft/pearls.clj#defn trail-cells
-  - src/clojurecraft/pearls.clj#defn out-of-sight-cell
-  - src/clojurecraft/pearls.clj#defn room-boxes
-  - src/clojurecraft/pearls.clj#defn room-exit
-  - src/clojurecraft/pearls.clj#defn room-waypoint
+  - src/clojurecraft/fortress_exit.clj#defn tunnel-answer
+  - test/clojurecraft/fortress_exit_test.clj#a-bot-hit-while-it-bores-out-of-the-fortress-answers-the-wither-skeleton
+  - src/clojurecraft/fortress_exit.clj#defn fortress-tunnel-target
+  - src/clojurecraft/pearls/move.clj#defn far-ends
+  - test/clojurecraft/pearls/move_test.clj#a-far-end-near-one-already-walked-to-is-not-new-ground
+  - src/clojurecraft/fortress_exit.clj#defn exit-anchors
+  - src/clojurecraft/fortress_exit.clj#defn escape-near?
+  - test/clojurecraft/fortress_exit_test.clj#the-tunnel-out-ends-clear-of-the-spawner-however-far-the-fortress-runs
+  - src/clojurecraft/fortress_exit.clj#defn fresh-tunnel-target
+  - src/clojurecraft/fortress_exit.clj#defn held-exit-target
+  - src/clojurecraft/fortress_exit.clj#defn fortress-exit-hold
+  - test/clojurecraft/fortress_exit_test.clj#the-tunnel-out-target-is-held-while-the-feet-move-along-the-bore
+  - src/clojurecraft/fortress_exit.clj#defn fortress-retrace-target
+  - src/clojurecraft/fortress_exit.clj#defn enclosed?
+  - src/clojurecraft/fortress_exit.clj#defn side-bore-cell
+  - src/clojurecraft/fortress_exit.clj#defn near-fortress?
+  - src/clojurecraft/fortress_exit.clj#defn can-tunnel-out?
+  - src/clojurecraft/fortress_exit.clj#defn surrounded-by-lava?
+  - test/clojurecraft/fortress_exit_test.clj#a-rod-bot-at-the-spawner-leaves-by-sealed-tunnel-out-and-never-walks-corridors
+  - test/clojurecraft/fortress_exit_test.clj#a-rod-bot-retraces-inbound-dug-tunnel
+  - test/clojurecraft/fortress_exit_test.clj#a-trail-crossing-corridor-bores-parallel-wall-at-same-y
+  - test/clojurecraft/fortress_exit_test.clj#fortress-exit-never-steps-or-digs-down
+  - test/clojurecraft/fortress_exit_test.clj#the-fortress-tunnel-out-carries-zero-climb-so-descent-does-not-stall-short-of-under-y
+  - test/clojurecraft/fortress_exit_test.clj#a-rod-bot-at-spawner-descends-only-a-few-blocks-below-local-floor-and-seals-overhead
+  - test/clojurecraft/fortress_exit_test.clj#the-tunnel-out-refuses-lava-and-routes-around-or-falls-back
+  - test/clojurecraft/fortress_exit_test.clj#the-tunnel-out-surfaces-only-beyond-48-blocks
+  - src/clojurecraft/pearls/cover.clj#defn trail-cells
+  - src/clojurecraft/pearls/cover.clj#defn out-of-sight-cell
+  - src/clojurecraft/pearls/cover.clj#defn room-boxes
+  - src/clojurecraft/fortress_exit.clj#defn room-exit
+  - src/clojurecraft/fortress_exit.clj#defn room-waypoint
   - src/clojurecraft/memory.clj#defn forest-fact
-  - src/clojurecraft/pearls.clj#defn travel-caged?
-  - test/clojurecraft/pearls_test.clj#a-hunt-with-no-warped-forest-near-travels-or-explores
-  - src/clojurecraft/pearls.clj#defn swarmed?
+  - src/clojurecraft/pearls/move.clj#defn travel-caged?
+  - test/clojurecraft/pearls/move_test.clj#a-hunt-with-no-warped-forest-near-travels-or-explores
+  - src/clojurecraft/pearls/sense.clj#defn swarmed?
   - src/clojurecraft/pearls.clj#defn held-idle?
-  - src/clojurecraft/pearls.clj#defn unseal
+  - src/clojurecraft/pearls/cover.clj#defn unseal
   - test/clojurecraft/pearls_test.clj#a-swarmed-hunt-goes-home-seals-the-mouth-and-opens-it-when-they-are-gone
-  - src/clojurecraft/pearls.clj#defn wandering?
-  - test/clojurecraft/pearls_test.clj#a-hunt-with-no-enderman-it-can-walk-to-goes-elsewhere-after-five-minutes
-  - src/clojurecraft/pearls.clj#defn struck-by
-  - test/clojurecraft/pearls_test.clj#one-that-has-struck-and-stands-in-reach-is-fought-back
-  - src/clojurecraft/pearls.clj#defn reaches?
-  - test/clojurecraft/pearls_test.clj#with-a-pickaxe-held-no-walk-goes-to-an-endermans-feet-without-a-stare-site
-  - test/clojurecraft/pearls_test.clj#an-unreachable-enderman-under-16-blocks-is-no-quarry
-  - test/clojurecraft/pearls_test.clj#a-distant-angry-enderman-is-met-standing-not-charged-with-a-pickaxe-held
+  - src/clojurecraft/pearls/move.clj#defn wandering?
+  - test/clojurecraft/pearls/move_test.clj#a-hunt-with-no-enderman-it-can-walk-to-goes-elsewhere-after-five-minutes
+  - src/clojurecraft/pearls/sense.clj#defn struck-by
+  - test/clojurecraft/pearls/sense_test.clj#one-that-has-struck-and-stands-in-reach-is-fought-back
+  - src/clojurecraft/pearls/sense.clj#defn reaches?
+  - test/clojurecraft/pearls/place_test.clj#with-a-pickaxe-held-no-walk-goes-to-an-endermans-feet-without-a-stare-site
+  - test/clojurecraft/pearls/sense_test.clj#an-unreachable-enderman-under-16-blocks-is-no-quarry
+  - test/clojurecraft/pearls/place_test.clj#a-distant-angry-enderman-is-met-standing-not-charged-with-a-pickaxe-held
   - test/clojurecraft/pearls_test.clj#empty-hands-make-a-wooden-sword-from-a-remembered-trunk
-  - test/clojurecraft/pearls_test.clj#empty-hands-hunt-the-wood-of-a-pickaxe
+  - test/clojurecraft/pearls/upkeep_test.clj#empty-hands-hunt-the-wood-of-a-pickaxe
   - resources/clojurecraft/pearls.edn#:hunt-radius
   - resources/clojurecraft/pearls.edn#:cut-reach
-  - src/clojurecraft/pearls.clj#defn within-cut-reach?
-  - src/clojurecraft/pearls.clj#def roam-reaches
-  - src/clojurecraft/pearls.clj#defn at-hand
-  - src/clojurecraft/pearls.clj#defn lure?
-  - src/clojurecraft/pearls.clj#def lure-lookouts
-  - test/clojurecraft/pearls_test.clj#a-roam-with-every-near-end-walked-to-goes-farther
-  - test/clojurecraft/pearls_test.clj#a-roam-with-every-end-spent-walks-to-the-farthest-again
-  - test/clojurecraft/pearls_test.clj#a-calm-one-given-up-on-at-hand-gets-no-burrow-cut-for-it
+  - src/clojurecraft/pearls/place.clj#defn within-cut-reach?
+  - src/clojurecraft/pearls/params.clj#def roam-reaches
+  - src/clojurecraft/pearls/sense.clj#defn at-hand
+  - src/clojurecraft/pearls/sense.clj#defn lure?
+  - src/clojurecraft/pearls/params.clj#def lure-lookouts
+  - test/clojurecraft/pearls/move_test.clj#a-roam-with-every-near-end-walked-to-goes-farther
+  - test/clojurecraft/pearls/move_test.clj#a-roam-with-every-end-spent-walks-to-the-farthest-again
+  - test/clojurecraft/pearls/sense_test.clj#a-calm-one-given-up-on-at-hand-gets-no-burrow-cut-for-it
   - src/clojurecraft/gym.clj#def pearl-kit
-  - src/clojurecraft/pearls.clj#def thresholds
+  - src/clojurecraft/pearls/params.clj#def thresholds
   - resources/clojurecraft/pearls.edn#:seek-radius
   - test/clojurecraft/pearls_test.clj#hunt-thresholds-table-is-loaded-and-complete
-  - src/clojurecraft/pearls.clj#def stare-from (:stare-from thresholds)
+  - src/clojurecraft/pearls/params.clj#def stare-from (:stare-from thresholds)
   - resources/clojurecraft/pearls.edn#:stare-ms
   - resources/clojurecraft/pearls.edn#:burrow-depth
   - resources/clojurecraft/pearls.edn#:burrow-length
-  - src/clojurecraft/pearls.clj#defn stand?
-  - src/clojurecraft/pearls.clj#defn shelter?
-  - src/clojurecraft/pearls.clj#defn away
-  - src/clojurecraft/pearls.clj#defmethod intent/run :burrow
-  - src/clojurecraft/pearls.clj#defmethod intent/run :lookout
-  - src/clojurecraft/pearls.clj#def seek-radius (:seek-radius thresholds)
+  - src/clojurecraft/pearls/place.clj#defn stand?
+  - src/clojurecraft/pearls/place.clj#defn shelter?
+  - src/clojurecraft/pearls/place.clj#defn away
+  - src/clojurecraft/pearls/place.clj#defmethod intent/run :burrow
+  - src/clojurecraft/pearls/place.clj#defmethod intent/run :lookout
+  - src/clojurecraft/pearls/params.clj#def seek-radius (:seek-radius thresholds)
   - src/clojurecraft/combat.clj#defmethod fight-stage :approach
   - src/clojurecraft/entity.clj#def creepy-index 17
   - src/clojurecraft/mob.clj#defn tall
   - src/clojurecraft/sim.clj#defn anger
-  - src/clojurecraft/pearls.clj#defn endermen
-  - src/clojurecraft/pearls.clj#defn provokable?
-  - src/clojurecraft/pearls.clj#defn quarry
-  - src/clojurecraft/pearls.clj#defn roam-goal
-  - src/clojurecraft/pearls.clj#defn roam "A walk to look round
-  - src/clojurecraft/pearls.clj#defn toward
-  - test/clojurecraft/pearls_test.clj#a-roam-follows-a-caves-passage-to-where-it-can-look-from
-  - test/clojurecraft/pearls_test.clj#an-enderman-no-route-reaches-is-walked-toward-as-far-as-the-route-goes
-  - test/clojurecraft/pearls_test.clj#a-walk-toward-one-is-never-to-a-place-already-in-reach
+  - src/clojurecraft/pearls/sense.clj#defn endermen
+  - src/clojurecraft/pearls/sense.clj#defn provokable?
+  - src/clojurecraft/pearls/sense.clj#defn quarry
+  - src/clojurecraft/pearls/move.clj#defn roam-goal
+  - src/clojurecraft/pearls/move.clj#defn roam "A walk to look round
+  - src/clojurecraft/pearls/move.clj#defn toward
+  - test/clojurecraft/pearls/sense_test.clj#a-roam-follows-a-caves-passage-to-where-it-can-look-from
+  - test/clojurecraft/pearls/sense_test.clj#an-enderman-no-route-reaches-is-walked-toward-as-far-as-the-route-goes
+  - test/clojurecraft/pearls/sense_test.clj#a-walk-toward-one-is-never-to-a-place-already-in-reach
   - test/clojurecraft/pearls_test.clj#one-at-hand-not-yet-coming-is-met-from-a-burrow-and-a-hurt-bot-rests-in-it
   - test/clojurecraft/pearls_test.clj#an-angry-one-given-up-on-is-met-from-the-burrow-when-it-comes
   - test/clojurecraft/combat_test.clj#a-fight-that-holds-its-ground-gives-up-on-one-in-reach-on-the-plane-only
-  - src/clojurecraft/pearls.clj#defn crowded?
-  - src/clojurecraft/pearls.clj#defn descend
-  - src/clojurecraft/pearls.clj#defn ascend
-  - test/clojurecraft/pearls_test.clj#one-far-above-no-route-reaches-is-climbed-to-by-stairs
-  - test/clojurecraft/pearls_test.clj#a-vantage-farther-from-home-than-from-the-enderman-is-no-vantage
+  - src/clojurecraft/pearls/sense.clj#defn crowded?
+  - src/clojurecraft/pearls/move.clj#defn descend
+  - src/clojurecraft/pearls/move.clj#defn ascend
+  - test/clojurecraft/pearls/move_test.clj#one-far-above-no-route-reaches-is-climbed-to-by-stairs
+  - test/clojurecraft/pearls/sense_test.clj#a-vantage-farther-from-home-than-from-the-enderman-is-no-vantage
   - src/clojurecraft/gym.clj#def pearl-arena
   - src/clojurecraft/plan.clj#def boxing-kinds
   - test/clojurecraft/gym_test.clj#the-pearl-arena-is-a-walled-lit-room-with-no-roof
-  - src/clojurecraft/pearls.clj#defn burrowable?
-  - src/clojurecraft/pearls.clj#defn bore
-  - src/clojurecraft/pearls.clj#defn dig-out
-  - src/clojurecraft/pearls.clj#defn cheapest-heading
-  - test/clojurecraft/pearls_test.clj#a-hunt-walled-in-with-no-end-to-roam-to-cuts-its-way-out
-  - test/clojurecraft/pearls_test.clj#a-way-out-is-cut-where-the-rock-is-already-cut
-  - src/clojurecraft/pearls.clj#defn lured-out?
-  - src/clojurecraft/pearls.clj#def lure-tries
-  - test/clojurecraft/pearls_test.clj#an-angry-one-blacklisted-that-never-comes-to-the-lure-holds-the-burrow-no-longer
+  - src/clojurecraft/pearls/place.clj#defn burrowable?
+  - src/clojurecraft/pearls/move.clj#defn bore
+  - src/clojurecraft/pearls/move.clj#defn dig-out
+  - src/clojurecraft/pearls/move.clj#defn cheapest-heading
+  - test/clojurecraft/pearls/move_test.clj#a-hunt-walled-in-with-no-end-to-roam-to-cuts-its-way-out
+  - test/clojurecraft/pearls/move_test.clj#a-way-out-is-cut-where-the-rock-is-already-cut
+  - src/clojurecraft/pearls/sense.clj#defn lured-out?
+  - src/clojurecraft/pearls/params.clj#def lure-tries
+  - test/clojurecraft/pearls/sense_test.clj#an-angry-one-blacklisted-that-never-comes-to-the-lure-holds-the-burrow-no-longer
   - test/clojurecraft/pearls_test.clj#one-coming-with-no-way-home-is-fought-not-stood-under
   - test/clojurecraft/pearls_test.clj#no-sword-held-no-hunt
   - test/clojurecraft/pearls_test.clj#a-broken-sword-is-made-when-the-craft-can-start
   - test/clojurecraft/pearls_test.clj#a-worn-sword-is-replaced-before-the-hunt
   - test/clojurecraft/pearls_test.clj#a-bot-under-one-hit-plus-a-margin-never-fights-on
-  - src/clojurecraft/pearls.clj#defn burning-at
-  - test/clojurecraft/pearls_test.clj#a-fire-the-bot-stands-in-is-put-out-first
-  - src/clojurecraft/pearls.clj#defn brink?
-  - test/clojurecraft/pearls_test.clj#no-way-out-is-cut-from-the-brink-of-a-drop
-  - src/clojurecraft/pearls.clj#def provoke-health
-  - test/clojurecraft/pearls_test.clj#no-enderman-is-provoked-hurt
-  - src/clojurecraft/pearls.clj#defn at-site?
-  - test/clojurecraft/pearls_test.clj#at-a-burrow-site-the-burrow-is-cut-with-the-quarry-hidden
+  - src/clojurecraft/pearls/sense.clj#defn burning-at
+  - test/clojurecraft/pearls/sense_test.clj#a-fire-the-bot-stands-in-is-put-out-first
+  - src/clojurecraft/pearls/place.clj#defn brink?
+  - test/clojurecraft/pearls/place_test.clj#no-way-out-is-cut-from-the-brink-of-a-drop
+  - src/clojurecraft/pearls/params.clj#def provoke-health
+  - test/clojurecraft/pearls/sense_test.clj#no-enderman-is-provoked-hurt
+  - src/clojurecraft/pearls/sense.clj#defn at-site?
+  - test/clojurecraft/pearls/sense_test.clj#at-a-burrow-site-the-burrow-is-cut-with-the-quarry-hidden
   - src/clojurecraft/path.clj#defmethod goal-done? :afar
-  - src/clojurecraft/pearls.clj#defn burrow-site
-  - src/clojurecraft/pearls.clj#defn burrow-steps
-  - src/clojurecraft/pearls.clj#defn mouth-cells
-  - test/clojurecraft/pearls_test.clj#a-burrows-mouth-is-opened-to-an-endermans-height-first
+  - src/clojurecraft/pearls/place.clj#defn burrow-site
+  - src/clojurecraft/pearls/place.clj#defn burrow-steps
+  - src/clojurecraft/pearls/place.clj#defn mouth-cells
+  - test/clojurecraft/pearls/place_test.clj#a-burrows-mouth-is-opened-to-an-endermans-height-first
   - src/clojurecraft/stairs.clj#defn tall-stair-cells
-  - test/clojurecraft/pearls_test.clj#a-burrow-site-is-one-a-walk-reaches-and-none-a-walk-failed-toward
-  - test/clojurecraft/pearls_test.clj#a-burrows-stairs-are-four-high-so-an-enderman-walks-down-them
+  - test/clojurecraft/pearls/place_test.clj#a-burrow-site-is-one-a-walk-reaches-and-none-a-walk-failed-toward
+  - test/clojurecraft/pearls/place_test.clj#a-burrows-stairs-are-four-high-so-an-enderman-walks-down-them
   - resources/clojurecraft/pearls.edn#:spare-digs
-  - src/clojurecraft/pearls.clj#defn digs-left
-  - src/clojurecraft/pearls.clj#defn spare?
+  - src/clojurecraft/pearls/upkeep.clj#defn digs-left
+  - src/clojurecraft/pearls/upkeep.clj#defn spare?
   - src/clojurecraft/memory.clj#defn arrived
   - src/clojurecraft/memory.clj#defn done-since
-  - src/clojurecraft/pearls.clj#defn crowd "{eid entity} of the endermen standing
-  - src/clojurecraft/pearls.clj#defn stale?
-  - src/clojurecraft/pearls.clj#defn threat
-  - src/clojurecraft/pearls.clj#defn blocking
-  - src/clojurecraft/pearls.clj#defn angry-near
-  - src/clojurecraft/pearls.clj#defn feet-at
-  - src/clojurecraft/pearls.clj#defn vantage
-  - src/clojurecraft/pearls.clj#def crowd-reach
-  - src/clojurecraft/pearls.clj#def crowd-margin
-  - src/clojurecraft/pearls.clj#defn crowder
-  - src/clojurecraft/pearls.clj#defn crowd-site
-  - src/clojurecraft/pearls.clj#defn stare-site
-  - src/clojurecraft/pearls.clj#defn menaced?
+  - src/clojurecraft/pearls/sense.clj#defn crowd "{eid entity} of the endermen standing
+  - src/clojurecraft/pearls/sense.clj#defn stale?
+  - src/clojurecraft/pearls/sense.clj#defn threat
+  - src/clojurecraft/pearls/sense.clj#defn blocking
+  - src/clojurecraft/pearls/sense.clj#defn angry-near
+  - src/clojurecraft/pearls/sense.clj#defn feet-at
+  - src/clojurecraft/pearls/place.clj#defn vantage
+  - src/clojurecraft/pearls/params.clj#def crowd-reach
+  - src/clojurecraft/pearls/params.clj#def crowd-margin
+  - src/clojurecraft/pearls/place.clj#defn crowder
+  - src/clojurecraft/pearls/place.clj#defn crowd-site
+  - src/clojurecraft/pearls/place.clj#defn stare-site
+  - src/clojurecraft/pearls/sense.clj#defn menaced?
   - src/clojurecraft/pearls.clj#defn look-off
   - src/clojurecraft/pearls.clj#defmethod plan/steer :pearls
-  - src/clojurecraft/pearls.clj#defn beset?
-  - src/clojurecraft/pearls.clj#defn worn-out?
-  - test/clojurecraft/pearls_test.clj#a-pickaxe-worn-out-on-burrows-ends-the-hunt-in-the-open
-  - src/clojurecraft/pearls.clj#defn floored-length
-  - src/clojurecraft/pearls.clj#defn blocked-out?
-  - src/clojurecraft/pearls.clj#defn cut-out
-  - test/clojurecraft/pearls_test.clj#one-given-up-on-in-the-stairs-is-cut-out-past
-  - test/clojurecraft/pearls_test.clj#a-tunnel-step-out-over-a-drop-is-refused
-  - src/clojurecraft/pearls.clj#defn make-pickaxe
-  - src/clojurecraft/pearls.clj#defn worn-pick?
+  - src/clojurecraft/pearls/sense.clj#defn beset?
+  - src/clojurecraft/pearls/upkeep.clj#defn worn-out?
+  - test/clojurecraft/pearls/upkeep_test.clj#a-pickaxe-worn-out-on-burrows-ends-the-hunt-in-the-open
+  - src/clojurecraft/pearls/place.clj#defn floored-length
+  - src/clojurecraft/pearls/sense.clj#defn blocked-out?
+  - src/clojurecraft/pearls/move.clj#defn cut-out
+  - test/clojurecraft/pearls/sense_test.clj#one-given-up-on-in-the-stairs-is-cut-out-past
+  - test/clojurecraft/pearls/place_test.clj#a-tunnel-step-out-over-a-drop-is-refused
+  - src/clojurecraft/pearls/upkeep.clj#defn make-pickaxe
+  - src/clojurecraft/pearls/upkeep.clj#defn worn-pick?
   - src/clojurecraft/blocks.clj#defn log-name?
   - test/clojurecraft/pearls_test.clj#a-spent-pickaxe-is-made-again-from-a-warped-stem
-  - src/clojurecraft/pearls.clj#def answers-to-hand
+  - src/clojurecraft/pearls/params.clj#def answers-to-hand
   - src/clojurecraft/pearls.clj#defmethod plan/interrupts? :pearls
-  - test/clojurecraft/pearls_test.clj#out-of-the-burrow-no-look-stares-at-a-calm-one-and-one-angry-at-hand-ends-the-intent
-  - test/clojurecraft/pearls_test.clj#one-hidden-is-walked-to-a-site-it-is-stared-at-from-never-up-to
+  - test/clojurecraft/pearls/sense_test.clj#out-of-the-burrow-no-look-stares-at-a-calm-one-and-one-angry-at-hand-ends-the-intent
+  - test/clojurecraft/pearls/sense_test.clj#one-hidden-is-walked-to-a-site-it-is-stared-at-from-never-up-to
   - src/clojurecraft/pearls.clj#defmethod combat/answering :pearls
   - src/clojurecraft/gym.clj#defn warped-origins
-  - test/clojurecraft/pearls_test.clj#a-burrow-crowded-by-a-calm-one-for-a-minute-is-given-up-for-one-beside-it
-  - test/clojurecraft/pearls_test.clj#a-calm-one-at-hand-in-the-burrow-is-waited-out-never-held-a-fight
-  - test/clojurecraft/pearls_test.clj#one-hidden-from-the-mouth-is-no-reason-to-walk-out-of-the-burrows-close-reach
-  - test/clojurecraft/pearls_test.clj#another-hostile-near-the-burrow-is-met-from-it-not-fought-in-the-open
+  - test/clojurecraft/pearls/sense_test.clj#a-burrow-crowded-by-a-calm-one-for-a-minute-is-given-up-for-one-beside-it
+  - test/clojurecraft/pearls/sense_test.clj#a-calm-one-at-hand-in-the-burrow-is-waited-out-never-held-a-fight
+  - test/clojurecraft/pearls/sense_test.clj#one-hidden-from-the-mouth-is-no-reason-to-walk-out-of-the-burrows-close-reach
+  - test/clojurecraft/pearls/sense_test.clj#another-hostile-near-the-burrow-is-met-from-it-not-fought-in-the-open
   - test/clojurecraft/gym_test.clj#a-warped-forest-with-no-floor-is-left-for-the-next-one
-  - test/clojurecraft/pearls_test.clj#a-worn-pickaxe-is-kept-for-the-burrow
-  - test/clojurecraft/pearls_test.clj#a-walk-toward-one-never-ends-where-a-walk-already-arrived
-  - test/clojurecraft/pearls_test.clj#a-burrow-is-cut-where-it-would-shelter-and-the-provoke-goes-from-its-mouth
-  - test/clojurecraft/pearls_test.clj#one-far-below-no-route-reaches-is-descended-to-by-stairs
+  - test/clojurecraft/pearls/upkeep_test.clj#a-worn-pickaxe-is-kept-for-the-burrow
+  - test/clojurecraft/pearls/move_test.clj#a-walk-toward-one-never-ends-where-a-walk-already-arrived
+  - test/clojurecraft/pearls/place_test.clj#a-burrow-is-cut-where-it-would-shelter-and-the-provoke-goes-from-its-mouth
+  - test/clojurecraft/pearls/move_test.clj#one-far-below-no-route-reaches-is-descended-to-by-stairs
   - test/clojurecraft/pearls_test.clj#a-lookout-that-found-nothing-roams-somewhere-else
-  - test/clojurecraft/pearls_test.clj#the-stare-is-for-the-nearest-one-in-sight-not-only-the-nearest
+  - test/clojurecraft/pearls/sense_test.clj#the-stare-is-for-the-nearest-one-in-sight-not-only-the-nearest
   - src/clojurecraft/forage.clj#defn fresh-kill
-  - src/clojurecraft/pearls.clj#defn drop-of
-  - src/clojurecraft/pearls.clj#defn body?
-  - src/clojurecraft/pearls.clj#defmethod intent/run :provoke
+  - src/clojurecraft/pearls/sense.clj#defn drop-of
+  - src/clojurecraft/pearls/sense.clj#defn body?
+  - src/clojurecraft/pearls/place.clj#defmethod intent/run :provoke
   - src/clojurecraft/pearls.clj#defn hunt
   - src/clojurecraft/pearls.clj#defmethod plan/next-intent :pearls
   - "resources/clojurecraft/goals.edn#{:goal/id :ender-pearls"
@@ -217,13 +217,13 @@ sourceRefs:
   - src/clojurecraft/sim.clj#defn armoured
   - test/clojurecraft/pearls_test.clj#one-in-reach-is-fought-one-in-sight-provoked-one-hidden-walked-to
   - test/clojurecraft/pearls_test.clj#the-provoke-stares-at-the-head-until-the-server-says-it-has-a-target
-  - test/clojurecraft/pearls_test.clj#the-burrow-end-is-out-of-an-endermans-reach
+  - test/clojurecraft/pearls/place_test.clj#the-burrow-end-is-out-of-an-endermans-reach
   - test/clojurecraft/pearls_test.clj#the-hunt-digs-a-burrow-provokes-from-its-mouth-and-fights-from-its-end
   - test/clojurecraft/combat_test.clj#a-fight-that-holds-its-ground-never-walks
   - test/clojurecraft/mob_test.clj#an-enderman-stays-out-of-a-tunnel-two-high
-  - test/clojurecraft/pearls_test.clj#a-kill-is-picked-up-where-it-fell-a-kill-with-no-drop-is-left
+  - test/clojurecraft/pearls/sense_test.clj#a-kill-is-picked-up-where-it-fell-a-kill-with-no-drop-is-left
   - test/clojurecraft/pearls_test.clj#twelve-pearls-held-the-stage-is-done
-  - test/clojurecraft/pearls_test.clj#an-enderman-is-provoked-and-killed-from-a-burrow-against-the-model
+  - test/clojurecraft/pearls/place_test.clj#an-enderman-is-provoked-and-killed-from-a-burrow-against-the-model
   - test/clojurecraft/mob_test.clj#armour-takes-its-share-of-a-mobs-hit
 related:
   - "[[bot/plan/_moc|Plan]]"

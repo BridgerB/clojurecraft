@@ -8,7 +8,11 @@
             [clojurecraft.intent :as intent]
             [clojurecraft.main]
             [clojurecraft.memory :as memory]
-            [clojurecraft.pearls :as pearls]
+            [clojurecraft.pearls.move :as pmove]
+            [clojurecraft.pearls.params :as pparams]
+            [clojurecraft.pearls.place :as pplace]
+            [clojurecraft.pearls.sense :as psense]
+            [clojurecraft.pearls.upkeep :as pupkeep]
             [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
             [clojurecraft.real :as real]
@@ -17,29 +21,29 @@
 (defn report
   "Prints what the hunt sees in world w: feet, burrow, staleness and the value of each act."
   [w minute]
-  (let [far (pearls/endermen w pearls/seek-radius)
-        near (pearls/endermen w pearls/descend-radius)
+  (let [far (psense/endermen w pparams/seek-radius)
+        near (psense/endermen w pparams/descend-radius)
         row (first (filter #(= :ender-pearls (:goal/id %)) plan/goals))]
     (println "---" minute
              "min"
              {:feet (intent/feet w)
               :shelter (:pearls/shelter w)
               :mouth (:pearls/mouth w)
-              :home (pearls/shelter w)
-              :stale? (pearls/stale? w)
-              :stuck? (pearls/stuck? w)
+              :home (pplace/shelter w)
+              :stale? (psense/stale? w)
+              :stuck? (pmove/stuck? w)
               :last (:intent/kind (:plan/last w))
-              :in? (= (pearls/shelter w) (intent/feet w))
-              :threat (pearls/threat w)
-              :angry-near (pearls/angry-near w)
-              :lure? (pearls/lure? w)
-              :at-hand (pearls/at-hand w)
-              :quarry (first (pearls/quarry w))
+              :in? (= (pplace/shelter w) (intent/feet w))
+              :threat (psense/threat w)
+              :angry-near (psense/angry-near w)
+              :lure? (psense/lure? w)
+              :at-hand (psense/at-hand w)
+              :quarry (first (psense/quarry w))
               :boxed-at (:plan/boxed-at w)
               :blacklist (count (:plan/blacklist w))
               :health (:player/health w)
-              :pickaxe? (pearls/pickaxe? w)
-              :spare? (pearls/spare? w)
+              :pickaxe? (pupkeep/pickaxe? w)
+              :spare? (pupkeep/spare? w)
               :far (into {}
                          (map (fn [[id e]] [id
                                             [(mapv #(math/round (double %)) (:entity/pos e))
@@ -50,13 +54,13 @@
               :within-descend (count near)
               :arrived (count (memory/arrived w))})
     (println "  next-intent" (plan/next-intent w row plan/goals))
-    (println "  roam" (pearls/roam w))
-    (println "  climb-out" (pearls/climb-out w))
-    (println "  dig-out" (pearls/dig-out w))
-    (println "  descend" (pearls/descend w near))
-    (println "  ascend" (pearls/ascend w near))
-    (println "  toward" (pearls/toward w far))
-    (println "  bore" (pearls/bore w near))))
+    (println "  roam" (pmove/roam w))
+    (println "  climb-out" (pmove/climb-out w))
+    (println "  dig-out" (pmove/dig-out w))
+    (println "  descend" (pmove/descend w near))
+    (println "  ascend" (pmove/ascend w near))
+    (println "  toward" (pmove/toward w far))
+    (println "  bore" (pmove/bore w near))))
 
 (defn -main
   "Folds the recording at path and reports at each minute given."
