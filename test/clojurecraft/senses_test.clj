@@ -116,3 +116,81 @@
     (is (= :fireball (:type (first (:hits m)))))
     (is (seq (:slice m)) "the blocks round the feet")
     (is (nil? (senses/moment (dissoc w :player/pos))))))
+
+(deftest the-ledger-names-what-lit-the-bot
+  ;; 62% of hits over 450 runs were burning and none said what lit the bot
+  (let [dry (assoc (nether) :player/on-fire? false)
+        t (inc (:time/now dry))
+        lit (fn [w]
+              (-> w
+                  (assoc :time/now t :player/on-fire? true)))
+        ev (fn [w] (first (filter #(= :alight (:ev %)) (senses/events dry w))))]
+    (testing "a fireball hit just before: its type and the attacker"
+      (is (= {:ev :alight :cause :fireball :by :blaze :t t}
+             (ev (assoc (lit dry)
+                        :player/hits
+                        [{:at (- t 100) :type :fireball :hp 20.0 :by 42615 :by-kind :blaze}])))))
+    (testing "a burning hit is not a cause, and an old one is not either"
+      (is (= :unknown
+             (:cause (ev (assoc (lit dry)
+                                :player/hits
+                                [{:at (- t 100) :type :on_fire :hp 20.0}
+                                 {:at (- t 9000) :type :lava :hp 20.0}]))))))
+    (testing "lava in the feet cell lights it when no hit came first"
+      (let [col (world/column {[8 64 8] blocks/lava-base})]
+        (is (= :lava (:cause (ev (assoc-in (lit dry) [:world/chunks [0 0]] col)))))))
+    (testing "going out is noted, staying lit is not"
+      (is (= [:out] (mapv :ev (senses/events (lit dry) (assoc (lit dry) :player/on-fire? false)))))
+      (is (empty? (filter #{:alight :out} (map :ev (senses/events (lit dry) (lit dry)))))))))
+
+(deftest the-ledger-notes-items-gained-and-lost
+  (let [before (nether)
+        t (inc (:time/now before))
+        pearl (recipe/item-id :ender_pearl)
+        stone (recipe/item-id :cobblestone)
+        ev (fn [inv] (senses/events before (assoc before :time/now t :player/inventory inv)))
+        item (fn [es k] (first (filter #(and (= :item (:ev %)) (= k (:item %))) es)))]
+    (testing "a pearl picked up and the rods lost on one line each"
+      (let [es (ev {37 {:item pearl :count 2}})]
+        (is (= {:ev :item :item :ender_pearl :n 2 :have 2 :t t} (item es :ender_pearl)))
+        (is (= -7 (:n (item es :blaze_rod))))))
+    (testing "cobblestone only when a multiple of 64 is crossed"
+      (is (nil? (item (ev {36 {:item (recipe/item-id :blaze_rod) :count 7}
+                           38 {:item stone :count 10}})
+                      :cobblestone)))
+      (is (= 64
+             (:have (item (ev {36 {:item (recipe/item-id :blaze_rod) :count 7}
+                               38 {:item stone :count 64}})
+                          :cobblestone)))))
+    (testing "no change, no event"
+      (is (empty? (filter #(= :item (:ev %)) (senses/events before (assoc before :time/now t))))))))
+
+(deftest the-ledger-notes-what-the-server-does-to-the-body
+  (let [before (nether)
+        t (inc (:time/now before))
+        after (assoc before
+                     :time/now t
+                     :player/knock {:vel [0.4 0.3612 -0.2] :at t}
+                     :player/corrected {:d 2.456 :at t})
+        by (group-by :ev (senses/events before after))]
+    (is (= [0.4 0.36 -0.2] (:v (first (:knock by)))))
+    (is (= 2.46 (:d (first (:corrected by)))))
+    (is (empty? (filter #{:knock :corrected} (map :ev (senses/events after after)))))))
+
+(deftest the-ledger-notes-a-new-biome-and-the-breath
+  (let [col (fn [id]
+              (assoc (world/column {}) :chunk/min-y 0 :chunk/biomes (vec (repeat 16 {:single id}))))
+        before (assoc-in (nether) [:world/chunks [0 0]] (col 3))
+        t (inc (:time/now before))
+        moved (assoc-in (assoc before :time/now t) [:world/chunks [0 0]] (col 5))]
+    (is (= [{:ev :biome :biome 5 :t t}] (filterv #(= :biome (:ev %)) (senses/events before moved))))
+    (is (empty? (filter #(= :biome (:ev %)) (senses/events moved moved)))))
+  (let [w (assoc (nether) :player/air 300)
+        t (inc (:time/now w))
+        air (fn [a b]
+              (filterv #(= :air (:ev %))
+                       (senses/events (assoc w :player/air a)
+                                      (assoc w :time/now t :player/air b))))]
+    (is (empty? (air 299 298)) "inside one step: nothing")
+    (is (= [:air] (map :ev (air 241 239))) "crossed 240")
+    (is (= 300 (:air (first (air 250 300)))) "a full breath again")))
