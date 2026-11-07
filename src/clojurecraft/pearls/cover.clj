@@ -59,9 +59,7 @@
 
 (defn wall-off
   "A wall-toward enderman e, the feet's level and then the head's: an enderman cannot reach through
-   two full blocks. Run 1 of gym plan run 40747177526 (issue #263, pearls-12) stood ninety seconds
-   at 7.6 health with one beside it, backing off into a wall, forty-eight cooked beef and 84 blocks
-   held, and was slain: never fought under danger-health (#577), so what is left is to eat, or to
+   two full blocks. The hunt never fights under danger-health, so what is left is to eat, or to
    put a block between."
   [world e]
   (wall-toward world (:entity/pos e) [0 1]))
@@ -114,9 +112,8 @@
 (defn near-cover-cell
   "The nearest cell within cover-reach (the plane, two up or down) that the feet could stand on
    (path/standable?) and that no entity of shooters has a clear line to, or nil: the way out of a
-   shooter's sight when the trail has no cell for it (a race bot that tunnelled in a different way,
-   or a trail reset by another tunnel). Clj_r11 of race f8b28e39d (chain-dragon) dug a shaft
-   straight up under fire, place :no-support and pillar :boxed, repeating, until dead."
+   shooter's sight when the trail has no cell for it (a bot that tunnelled in a different way,
+   or a trail reset by another tunnel)."
   [world]
   (let [ss (vals (psense/shooters world))
         feet (intent/feet world)
@@ -139,7 +136,7 @@
    fortress trail cell out of sight (out-of-sight-cell), else to the nearest cell round the feet out
    of sight (near-cover-cell) when outside every blaze room, else cover-from, else, at under
    danger-health, a back-off from the nearest shooter in view: never a dig or a pillar in its
-   sight, which is where the rod bots' hp went from 20 to 3.3 in 37 s (probe 41251668076). Pure."
+   sight. Pure."
   [world]
   (let [shot (into {} (filter (fn [[_ e]] (combat/seen? world e))) (psense/shooters world))]
     (when (and (seq shot) (empty? (psense/endermen world pparams/seek-radius)))
@@ -158,8 +155,7 @@
 (defn line-cell
   "The first cell from the eye toward entity e's aim, a block to six along the line, that is open,
    neither the feet's nor the head's, and has a solid neighbour to lay a block against (the walls
-   of a stair cut included), or nil. A fireball travels that line: gym plan run 40839050567 job 6
-   (issue #263) was shot five times down an open diagonal stair cut."
+   of a stair cut included), or nil. A fireball travels that line."
   [world e]
   (let [eye (game/eye world)
         aim (combat/aim e)
@@ -213,14 +209,13 @@
 (defn cover-from
   "The intent that covers the bot from the swarm: from a shooter in sight (shot-at?, never fought,
    never out-ranged) a walk to a cell beside the feet out of its sight (hide-cell; :intent/for
-   :cover, so the walk ends only centred in the cell: for :pearls it ended at once one cell
-   short and was planned again every 50 ms, gym plan run 40905321229 job 6), else a block of
-   the filler held on the line from the eye to it (line-cell), else, on open ground where no cell
-   on the line has anything to lay against, a block at the feet's level and one over it on its side
-   (wall-toward: the line to a shooter a little above is at the head's height), else a dig into the
-   solid side away from it (dig-away) to stand in; from the others what combat/cover gives for the
-   nearest (meal, a block between, a pillar, a nook dug under the feet). Nil when it only waits
-   (cover's :plan/wait ends the plan) or nothing can be done."
+   :cover, so the walk ends only centred in the cell), else a block of the filler held on the
+   line from the eye to it (line-cell), else, on open ground where no cell on the line has
+   anything to lay against, a block at the feet's level and one over it on its side (wall-toward:
+   the line to a shooter a little above is at the head's height), else a dig into the solid side
+   away from it (dig-away) to stand in; from the others what combat/cover gives for the nearest
+   (meal, a block between, a pillar, a nook dug under the feet). Nil when it only waits (cover's
+   :plan/wait ends the plan) or nothing can be done."
   [world]
   (if (psense/shot-at? world)
     (when-let [[_ e] (entity/nearest (into {}
