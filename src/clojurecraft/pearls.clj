@@ -2071,6 +2071,24 @@
   [world]
   (concat (memory/positions-now world [blaze/spawner]) (fortress/bricks world)))
 
+(defn exit-anchors
+  "The positions the tunnel-out leaves: the known spawners when any is known, else every
+   fortress point. A fortress runs a hundred blocks and more, and every brick of it seen through
+   the tunnel kept the bot near it: in sim R1/17 (batch 59e528b, probe 42370534718, 9642 points)
+   it tunnelled 110 blocks out, 60 from the spawner, then back 100 and spent nine pickaxes and
+   all its wood. The blaze room, the spawner, is what the exit leaves."
+  [world]
+  (let [spawners (memory/positions-now world [blaze/spawner])]
+    (if (seq spawners) spawners (fortress-points world))))
+
+(defn escape-near?
+  "Is the bot within fortress-escape-reach of any exit-anchors position (the spawner, else any fortress point)?"
+  [world]
+  (let [feet (intent/feet world)]
+    (boolean (some #(or (<= (physics/distance feet %) fortress-escape-reach)
+                        (<= (physics/horizontal-distance feet %) fortress-escape-reach))
+                   (exit-anchors world)))))
+
 (defn near-fortress?
   "Is the bot within fortress-escape-reach of any known spawner or fortress brick?"
   [world]
@@ -2300,9 +2318,9 @@
 
 (defn fortress-exit-horizontal
   "A 2D point [exit-x exit-z] along dir that is > fortress-escape-reach from every
-   known spawner and fortress brick."
+   known exit anchor (exit-anchors: the spawners, else the fortress points)."
   [world [fx fz] [dir-x dir-z]]
-  (let [pts (fortress-points world)]
+  (let [pts (exit-anchors world)]
     (loop [dist 52.0]
       (let [candidate [(math/round (+ (double fx) (* (double dist) (double dir-x))))
                        (math/round (+ (double fz) (* (double dist) (double dir-z))))]]
@@ -2325,7 +2343,7 @@
     (when (seq pts)
       (let [feet (intent/feet world)
             [fx fy fz] feet
-            near? (near-fortress? world)
+            near? (escape-near? world)
             surface-y (fortress-surface-y world)
             ;; the exit only when a fallback needs it: the bore and the retrace answer first
             exit (delay (fortress-exit-horizontal world
