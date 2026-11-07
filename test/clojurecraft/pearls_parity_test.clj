@@ -186,10 +186,23 @@
     ;; lookouts: the lure
     ["lure"
      (-> (ps/burrowed [8.5 61.0 8.5] {7 (assoc (ps/enderman [11.5 64.0 8.5]) :entity/creepy? true)})
-         (ps/looked 7)
          (with-fights 9)
+         (ps/looked 7)
          (assoc :plan/blacklist #{7}))]
     ;; a calm enderman standing in the stairs, the bot at the end, no lookouts yet
+    ;; a ghast in sight with a calm enderman tracked and nothing to cover with, hurt a little
+    ;; and fed: no cover walk, no block to lay, so the meal
+    ["ghast-and-enderman-fed"
+     (-> (ps/wide (ps/standing {10 (ps/mob :ghast [18.5 66.0 8.5])
+                                7 (ps/enderman [40.5 64.0 8.5])}))
+         (assoc :player/health 15.0 :player/food 12)
+         (assoc-in [:player/inventory 2] (ps/item :cooked_beef 8)))]
+    ;; hurt, a zombie in range of the defence but past the swarm, already as far as a back-off
+    ;; goes, blocks to lay
+    ["hurt-far-zombie"
+     (-> (ps/wide (ps/standing {8 (ps/mob :zombie [20.5 64.0 8.5])}))
+         (assoc :player/health 9.0)
+         (assoc-in [:player/inventory 3] (ps/item :cobblestone 64)))]
     ["stairs-blocker" (ps/burrowed [8.5 61.0 8.5] {7 (ps/enderman [4.5 63.0 8.5])})]
     ["hurt-threat-filler"
      (-> (ps/standing {8 (ps/mob :zombie [9.5 64.0 8.5])})
