@@ -4,7 +4,9 @@
    canned states."
   (:require [clojure.java.io :as io]
             [clojure.test :refer [deftest is]]
+            [clojurecraft.blaze :as blaze]
             [clojurecraft.intent :as intent]
+            [clojurecraft.memory :as memory]
             [clojurecraft.pearls-legacy :as legacy]
             [clojurecraft.pearls-support :as ps]
             [clojurecraft.pearls.rules :as rules]))
@@ -50,9 +52,74 @@
    ["relocating" #(assoc % :pearls/relocate {:from [8 64 8] :at 0 :near #{}} :time/now 600000)]
    ["deaths" #(assoc % :stats/deaths 1)]])
 
+(defn fortress-world
+  "A bot in the Nether at a known blaze spawner (as the fortress tests build one), with the
+   options: :blaze a blaze in sight, :pick a pickaxe, :trail an inbound trail, :stage the pearl
+   stage in play, :hp its health, :ghast a ghast in sight."
+  [{:keys [blaze pick trail stage hp ghast]}]
+  (let [spawner [889 60 -206]
+        entities (cond-> {}
+                   blaze (assoc 9 (assoc (ps/mob :blaze [892.5 60.0 -204.5]) :entity/health 20.0))
+                   ghast (assoc 10 (ps/mob :ghast [900.5 64.0 -204.5])))]
+    (cond-> (-> (ps/standing entities)
+                (assoc :player/dimension nether :player/pos [890.5 60.0 -203.9] :player/health hp)
+                (memory/observe spawner blaze/spawner))
+      pick (assoc-in [:player/inventory 1] (ps/item :iron_pickaxe 1))
+      trail
+      (assoc :fortress/trail {:trail/target spawner :trail/cells []}
+             :plan/trail
+             [[976 48 -176] [958 49 -190] [926 63 -190] [902 63 -198] [897 61 -204] [890 60 -204]])
+      stage (assoc :plan/goals #{:ender-pearls}))))
+
+(def fortress-worlds
+  "Fortress states: every combination of a blaze, a pickaxe, a trail, the stage and a ghast in
+   sight, at full health and hurt."
+  (for [blaze [false true]
+        pick [false true]
+        trail [false true]
+        stage [false true]
+        ghast [false true]
+        hp [20.0 9.0]]
+    [(str "fortress/"
+          (if blaze "b" "-")
+          (if pick "p" "-")
+          (if trail "t" "-")
+          (if stage "s" "-")
+          (if ghast "g" "-")
+          hp)
+     (fortress-world {:blaze blaze :pick pick :trail trail :stage stage :ghast ghast :hp hp})]))
+
 (def named-worlds
-  "States the pearl tests build by name."
-  [["stranded" ps/stranded] ["distant" (ps/distant-world [100.5 64.0 8.5])]])
+  "States the pearl tests build by name, and ones the grid cannot reach."
+  (concat
+   [["stranded" ps/stranded] ["distant" (ps/distant-world [100.5 64.0 8.5])]
+    ;; a bot on a lone two-high pillar
+    ["perched"
+     (assoc (ps/standing {} {[8 64 8] ps/stone [8 65 8] ps/stone}) :player/pos [8.5 66.0 8.5])]
+    ;; at the burrow's end with a blacklisted enderman standing out of reach in its stairs,
+    ;; after a long stand there
+    ["blocked-out"
+     (-> (ps/looked (ps/burrowed [8.5 61.0 8.5] {7 (ps/enderman [4.5 63.0 8.5])}) 14)
+         (assoc :plan/blacklist #{7}))]
+    ;; a hunt that has stood looking for five minutes with nothing tracked
+    ["wander" (ps/stuck-in (ps/wide (ps/standing {})) 61)]
+    ["wander-pickaxe"
+     (ps/stuck-in (ps/wide
+                   (assoc-in (ps/standing {}) [:player/inventory 1] (ps/item :iron_pickaxe 1)))
+                  61)]
+    ;; hurt and cornered by a calm enderman with blocks to lay
+    ["cornered-filler"
+     (-> (ps/standing {7 (ps/enderman [11.5 64.0 8.5])})
+         (assoc :player/health 9.0 :plan/cornered #{7})
+         (assoc-in [:player/inventory 3] (ps/item :cobblestone 64)))]
+    ["hurt-threat-filler"
+     (-> (ps/standing {8 (ps/mob :zombie [9.5 64.0 8.5])})
+         (assoc :player/health 9.0)
+         (assoc-in [:player/inventory 3] (ps/item :cobblestone 64)))]
+    ["swarmed-filler"
+     (-> (ps/standing ps/burst)
+         (assoc-in [:player/inventory 3] (ps/item :cobblestone 64)))]]
+   fortress-worlds))
 
 (defn grid
   "Every [label world] of places x entity sets x conditions, then the named worlds."
