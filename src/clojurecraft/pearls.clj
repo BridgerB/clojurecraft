@@ -2448,7 +2448,8 @@
                                      combat/defend-radius)))
                           (entity/hostiles world))
               hurt? (or (< hp (combat/danger-line world))
-                        (and avoided? (or pack? (< hp combat/avoided-health))))
+                        (and avoided? (or pack? (< hp combat/avoided-health)))
+                        (not (combat/winnable? world [eid e])))
               cover (when hurt? (combat/cover world e))]
           (cond (not hurt?)
                 {:intent/kind :fight :intent/target eid :intent/hold? true :intent/yield? true}
@@ -2663,6 +2664,31 @@
            :intent/for :pearls}
           :else walk)))
 
+(defn heavy-near?
+  "Is a hostile of a heavy kind (heavy?) within the range it follows from (combat/can-reach-by? with
+   no time: its :follow), tracked now? A hoglin field, where the hunt walks through it."
+  [world]
+  (boolean (some (fn [[_ e]]
+                   (and (heavy? e)
+                        (<= (physics/distance (:player/pos world) (:entity/pos e))
+                            (get-in mob/kinds [(entity/kind e) :follow] combat/reach-follow))))
+                 (entity/hostiles world))))
+
+(defn tunnel-past-heavy
+  "The intent i for the way to a forest, a :walk replaced by a sealed :tunnel-to to the same target
+   when a heavy hostile is near (heavy-near?) and a pickaxe is held: the hunt does not walk in the
+   open through hoglins. Sim R1/17 seed 1 (probe rh6-R1-17, issue #263) walked 40 blocks with four hoglins
+   in sight, was struck at 659.6 s and dead at 665.6. Any other intent, and a walk with none near, as it is."
+  [world i]
+  (if (and (= :walk (:intent/kind i)) (heavy-near? world) (pickaxe? world))
+    {:intent/kind :tunnel-to
+     :intent/target (:intent/target i)
+     :intent/reach 1.5
+     :intent/steps fortress/steps-per-tunnel
+     :intent/seal-behind? true
+     :intent/for :pearls}
+    i))
+
 (defn travel
   "The way to a warped forest (forest-way: a walk, or a sealed tunnel when no walk reaches it), or nil: none in the Nether when the bot is in one (in-forest?);
    to the cell over the nylium nearest of the nearest known forest chunk (nearest-forest), else
@@ -2670,18 +2696,20 @@
    wandering round a fortress at x 4250-4440, no pearl, no code that went to a forest."
   [world]
   (when (and (= dimension/nether (dimension/of world)) (not (in-forest? world)))
-    (cond (and (fortress-escaping? world) (can-tunnel-out? world)) (fortress-tunnel-out world)
-          (and (fortress-escaping? world) (not (can-tunnel-out? world)))
-          (if-let [pos (nearest-forest world)]
-            (forest-way world (room-waypoint world (update pos 1 inc)))
-            (explore world))
-          :else
-          (if-let [pos (nearest-forest world)]
-            (forest-way world
-                        (if (near-fortress? world)
-                          (room-waypoint world (update pos 1 inc))
-                          (update pos 1 inc)))
-            (explore world)))))
+    (tunnel-past-heavy world
+                       (cond (and (fortress-escaping? world) (can-tunnel-out? world))
+                             (fortress-tunnel-out world)
+                             (and (fortress-escaping? world) (not (can-tunnel-out? world)))
+                             (if-let [pos (nearest-forest world)]
+                               (forest-way world (room-waypoint world (update pos 1 inc)))
+                               (explore world))
+                             :else
+                             (if-let [pos (nearest-forest world)]
+                               (forest-way world
+                                           (if (near-fortress? world)
+                                             (room-waypoint world (update pos 1 inc))
+                                             (update pos 1 inc)))
+                               (explore world))))))
 
 (defn travel-caged?
   "Is the bot in the Nether, in no warped forest, with no enderman tracked, and no walk to or toward

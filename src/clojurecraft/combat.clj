@@ -458,6 +458,55 @@
           (or (empty? hits) (some nil? hits)) retreat-health
           :else (min retreat-health (+ danger-margin (reduce + hits))))))
 
+(defn weapon-damage
+  "The damage of one swing of the best sword held (sword), the hand's when none is."
+  [world]
+  (mob/weapon-damage (some->> (first (sword world))
+                              (get (:player/inventory world))
+                              :item)))
+
+(defn kill-ms
+  "Ms to kill entity e with swings of weapon-damage, swing-every apart: its health (the server's, else
+   the kind's in mob/kinds) over the damage, rounded up, times swing-every. Infinite for a target
+   of no known health."
+  [world e]
+  (if-let [hp (or (:entity/health e) (get-in mob/kinds [(entity/kind e) :health]))]
+    (* swing-every (math/ceil (/ (double hp) (double (weapon-damage world)))))
+    Double/POSITIVE_INFINITY))
+
+(defn hostile-dps
+  "Damage a second the melee hostile e deals at hand: melee-damage over its :every ticks (a second's
+   twenty, mob/kinds), 0.0 for a kind that has no melee hit (a ranged one, an unknown one)."
+  [e]
+  (let [kind (entity/kind e)
+        dmg (melee-damage kind)
+        every (get-in mob/kinds [kind :every] 20)]
+    (if dmg (/ (double dmg) (/ (double every) 20.0)) 0.0)))
+
+(def reach-follow 16.0) ; blocks a hostile of no :follow in mob/kinds is taken to come from
+
+(defn can-reach-by?
+  "Can hostile e, walking at its mob/kinds :speed (blocks a tick), be within attack-reach of the
+   feet within ms, and is it within the range it follows from (:follow)?"
+  [world e ms]
+  (let [k (get mob/kinds (entity/kind e))
+        d (physics/distance (:player/pos world) (:entity/pos e))]
+    (and (<= d (get k :follow reach-follow))
+         (<= d (+ attack-reach (* (get k :speed 0.2) 20.0 (/ ms 1000.0)))))))
+
+(defn winnable?
+  "Is the fight with entity e [eid entity] one the bot wins: the time to kill e (kill-ms) under the
+   time to die, the health over the summed hostile-dps of every hostile (entity/hostiles, and e)
+   that can reach the feet within the time to kill (can-reach-by?)? Pure over the world and mob
+   data; errs high on the damage taken (armour is not counted, as danger-line). Sim R1/17 seed 1
+   (probe rh6-R1-17, issue #263) took a fight with one hoglin at 17.5 health, a second joined in 0.75 s: 4.6 s to
+   kill the first against 1.5 s to die, dead in six seconds."
+  [world [eid e]]
+  (let [ms (kill-ms world e)
+        pool (assoc (entity/hostiles world) eid e)
+        dps (reduce + 0.0 (for [[_ o] pool :when (can-reach-by? world o ms)] (hostile-dps o)))]
+    (or (zero? dps) (< ms (* 1000.0 (/ (double (:player/health world 20.0)) dps))))))
+
 (defn breathed-on?
   "Does the bot stand in the dragon's breath (entity/in-breath?) in the End? A fight there is the
    bot's death: gym chain-w11 runs 3 and 4 fought an enderman inside a cloud, six health every

@@ -843,3 +843,23 @@
                                             :no-support 99500)
                                     [9 64 8]))
         "a wall with no support a moment ago: no wall")))
+
+(deftest a-fight-is-taken-only-when-it-is-winnable
+  ;; Logged state, sim R1/17 seed 1 (probe rh6-R1-17, issue #263): :fight on a hoglin at 17.5 health,
+  ;; a second hoglin 2 to 3 blocks off hitting 0.75 s later: 4.6 s to kill the first, 1.5 s to die,
+  ;; dead in six seconds. The fight is judged on the time to kill against the time to die.
+  (let [hoglin #(mob :hoglin % 40.0)
+        two (-> (standing {7 (hoglin [10.5 64.0 8.5]) 8 (hoglin [8.5 64.0 11.0])})
+                (assoc :player/health 17.5))
+        zombie (standing {7 (mob :zombie [10.5 64.0 8.5] 20.0)})]
+    (is (not (combat/winnable? two [7 (get-in two [:world/entities 7])]))
+        "two hoglins at 2 to 3 blocks, 17.5 health: no fight")
+    (is (combat/winnable? zombie [7 (get-in zombie [:world/entities 7])])
+        "one zombie at 20 health: a fight")
+    (is (not (combat/winnable? (assoc zombie :player/health 3.0)
+                               [7 (get-in zombie [:world/entities 7])]))
+        "the same zombie at 3 health: no fight")
+    (is (combat/winnable?
+         (assoc two :world/entities {7 (hoglin [40.5 64.0 8.5]) 8 (hoglin [8.5 64.0 50.0])})
+         [7 (hoglin [40.5 64.0 8.5])])
+        "hostiles far past their follow range are not counted")))

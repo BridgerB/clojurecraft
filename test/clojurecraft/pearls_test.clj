@@ -4378,3 +4378,20 @@
                   (pearls/far-ends after 0 #{}))
         "no end is left within roam-reach of a visited one")
     (is (< (count (pearls/far-ends after 0 #{})) (count ends)) "the ends walked to are gone")))
+
+(deftest a-walk-through-hoglins-is-a-tunnel
+  ;; Logged state, sim R1/17 seed 1 (probe rh6-R1-17, issue #263): :walk [987 58 -288] :for :pearls
+  ;; with four hoglins 24 to 32 blocks off, struck at 659.6 s, dead at 665.6. With a heavy hostile near
+  ;; and a pickaxe held, the way is a sealed tunnel; with none near, or no pickaxe, the walk.
+  (let [walk {:intent/kind :walk :intent/target [40 64 8] :intent/for :pearls}
+        w (-> (standing {7 (mob :hoglin [28.5 64.0 8.5])} {})
+              (assoc :player/dimension nether)
+              (assoc-in [:player/inventory 1] (item :iron_pickaxe 1)))
+        calm (assoc w :world/entities {})
+        bare (update w :player/inventory dissoc 1)]
+    (is (pearls/heavy-near? w) "a hoglin 20 blocks off follows from there")
+    (is (= :tunnel-to (:intent/kind (pearls/tunnel-past-heavy w walk))))
+    (is (= [40 64 8] (:intent/target (pearls/tunnel-past-heavy w walk))))
+    (is (true? (:intent/seal-behind? (pearls/tunnel-past-heavy w walk))))
+    (is (= walk (pearls/tunnel-past-heavy calm walk)) "none near: the walk")
+    (is (= walk (pearls/tunnel-past-heavy bare walk)) "no pickaxe: the walk")))
