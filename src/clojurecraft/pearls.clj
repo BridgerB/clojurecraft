@@ -1934,12 +1934,21 @@
                         wander-lookouts)
                     (nil? (routable world (endermen world seek-radius)))))))
 
+(def explore-memory 6) ; walks arrived at lately that an explore sets out away from, and a far-end is not within roam-reach of
+
 (defn far-ends
   "Where each of the eight headings' routes (path/plan toward ground wander-reach out, from index
    start in headings) ends, as [status end gain] with gain the end's octile distance from the feet:
-   the ends roam-reach or more away and not in spent, :found first, then the farthest."
+   the ends roam-reach or more away and not in spent, nor within roam-reach of where one of the
+   last explore-memory walks arrived (an end near one already walked to is not new ground: in sim
+   R1/17 under the roof, probe 42374244659, the bot shuttled for forty minutes between the two ends of
+   its own tunnels, [1013 120 -205] and [1015 120 -165], with a pickaxe at 131 digs unused),
+   :found first, then the farthest."
   [world start spent]
   (let [feet (intent/feet world)
+        visited (into []
+                      (keep #(when (vector? (:intention/target %)) (:intention/target %)))
+                      (memory/newest-dones world :walk explore-memory))
         ends (for [k (range (count headings))
                    :let [heading (nth headings (mod (+ start k) (count headings)))
                          r (path/plan world
@@ -1947,7 +1956,10 @@
                                       (roam-goal feet heading wander-reach)
                                       {})
                          to (last (:path/waypoints r))]
-                   :when (and to (not= to feet) (not (contains? spent to)))]
+                   :when (and to
+                              (not= to feet)
+                              (not (contains? spent to))
+                              (not-any? #(< (path/octile to %) roam-reach) visited))]
                [(:path/status r) to (path/octile feet to)])
         far (filter #(>= (nth % 2) roam-reach) ends)]
     (concat (filter #(= :found (first %)) far)
@@ -1992,8 +2004,6 @@
          (remove #(contains? bl (update % 1 inc)))
          (sort-by #(path/octile feet %))
          first)))
-
-(def explore-memory 6)                 ; walks arrived at lately that an explore sets out away from
 
 (defn explore
   "A walk to the end (far-ends) farthest from the targets of the last explore-memory walks arrived
