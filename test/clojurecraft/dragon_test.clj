@@ -1338,3 +1338,18 @@
     (is (= {:intent/kind :back-off :intent/target 50}
            (dragon/back-off-breath (assoc w :player/pos [6.5 64.0 0.5]) (near 7.0)))
         "2 out: a back-off gets somewhere")))
+
+(deftest a-detour-round-the-head-ends-when-the-head-turns-onto-its-cell
+  ;; the old rule cut a walk whose destination was before the head; a plain walk with no detour
+  ;; was re-chosen as the same walk (same-choice?) and went on, and still does (cuts? above)
+  (let [w (round-fountain [12.5 64.0 0.5] (sitting 90.0))
+        [_ d] (dragon/dragon w)
+        cells (for [x (range -14 15) z (range -10 11)] [x 64 z])
+        before (first (filter #(dragon/before-head? d (physics/centre %)) cells))
+        clear (first (remove #(dragon/before-head? d (physics/centre %)) cells))
+        walk (fn [label t] (as label {:intent/kind :walk :intent/target t}))]
+    (is (some? before) "the sitting head has cells before it")
+    (is (not (intent/still-wanted? w (walk :dragon/walk-around-head before))))
+    (is (intent/still-wanted? w (walk :dragon/walk-around-head clear)))
+    (is (intent/still-wanted? w (walk :dragon/walk-to-stand before))
+        "a plain walk is wanted until it ends or the row cuts it")))

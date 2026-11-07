@@ -1315,6 +1315,13 @@
     (or (wear-pumpkin world) (toward-crystals world))
     {:plan/wait :other-dimension}))
 
+(defmethod intent/still-wanted? :dragon/walk-around-head
+  ;; the detour round the sitting head ends when the head has turned onto its cell: the row plans
+  ;; again, round the head's new place or straight, as the old cut of a walk before the head did
+  [world i]
+  (let [[_ d] (dragon world)]
+    (or (nil? d) (in-basin? world) (not (before-head? d (physics/centre (:intent/target i)))))))
+
 (defmethod combat/answers :dragon
   ;; the dragon is the row's own: gym dragon2-a run 1's :defend fought the perched dragon at hand
   ;; by :fight's aim point, off its stand

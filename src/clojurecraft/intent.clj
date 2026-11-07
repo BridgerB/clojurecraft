@@ -428,6 +428,15 @@
   [{:intent/keys [waypoints]}]
   (+ walk-timeout-ticks (* waypoint-ticks (count waypoints))))
 
+(defmulti still-wanted?
+  "Is running walk i still worth walking: false ends it (done) so its row plans again. A row's
+   branch declares when the geometry under its walk went stale, by a defmethod on the branch label
+   (why-of); every other walk is wanted until it ends by itself."
+  {:arglists '([world i])}
+  (fn [_world i] (why-of i)))
+
+(defmethod still-wanted? :default [_ _] true)
+
 (defmethod run :walk
   [world {:intent/keys [target started waypoints at replans] :or {replans 0}} _]
   (let [tick (:time/tick world)
@@ -439,6 +448,10 @@
           (-> world
               (assoc :player/controls
                      {:control/look (physics/look-at (game/eye world) (physics/centre target))})
+              done)
+          (not (still-wanted? world i))
+          (-> world
+              (assoc :player/controls {})
               done)
           (> (- tick started) (walk-deadline i))
           (-> world
