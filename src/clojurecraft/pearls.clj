@@ -1070,7 +1070,7 @@
 
 (def vantage-reach 10)                ; cells on the plane from an enderman, at most, a vantage is looked for within (stare-from at the least): the nearer the stare, the surer it follows
 (def vantage-rise 2)                  ; cells up or down from an enderman's feet a vantage may stand: one on the stairs is three below the ground, and is waited out
-(def vantage-tries 8)                 ; vantages, nearest the feet first, a route is asked for before none is taken: the route is the costly test
+(def vantage-tries 3)                 ; vantages, nearest the feet first, a route is asked for before none is taken: the route is the costly test. At 8, and stare-site's route test without vantage-nodes, 3 endermen by 8 vantages at the full budget froze real-18 bots 19 to 53 s a tick and the server timed them out (4f317da lane 2, Clj_r01: profile probe 42327950512, 921 of 1219 samples in stare-site)
 (def vantage-nodes 1500)              ; expansions a route to or from a vantage may spend: it lies within shelter-reach, and sixteen such routes may be asked in one planner tick
 
 (def provoke-home-reach (:provoke-home-reach thresholds)) ; blocks from the burrow's end within which an enderman is provoked from outside the mouth: a provoked one is at the bot in about a second, and four hits fell it in the 3.6 s a walk of six blocks home took (gym plan run 40747177526 run 6)
@@ -1190,7 +1190,10 @@
          (take vantage-tries)
          (some (fn [c]
                  (when (intent/routable? world
-                                         {:intent/kind :walk :intent/target c :intent/for :shelter})
+                                         {:intent/kind :walk
+                                          :intent/target c
+                                          :intent/for :shelter
+                                          :intent/max-nodes vantage-nodes})
                    c))))))
 
 (defn crowd-site
