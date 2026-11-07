@@ -72,10 +72,10 @@
    [:configuration :s2c :finish-configuration] []
    [:configuration :c2s :finish-configuration] []
    [:configuration :s2c :disconnect] [[:reason :rest]]
-   ;; play, server → client
-   ;; login: the player's id, the server's settings, then CommonPlayerSpawnInfo as respawn has it,
-   ;; so a bot that joins in the Nether knows it; the death location and what follows are an
-   ;; unmodelled tail. Field order read from the game's ClientboundLoginPacket.write (issue #11)
+   ;; play, server → client login: the player's id, the server's settings, then
+   ;; CommonPlayerSpawnInfo as respawn has it, so a bot that joins in the Nether knows it; the death
+   ;; location and what follows are an unmodelled tail. Field order read from the game's
+   ;; ClientboundLoginPacket.write
    [:play :s2c :login]
    [[:entity-id :i32] [:hardcore? :bool] [:levels [:vec :string]] [:max-players :varint]
     [:view-distance :varint] [:simulation-distance :varint] [:reduced-debug? :bool]
@@ -102,7 +102,7 @@
    [:play :s2c :set-player-inventory] [[:slot :varint] [:item :slot]]
    ;; add-entity: then its velocity (an LpVec3), pitch, yaw and head yaw in 1/256 turns, and its
    ;; data (an item frame's facing, a falling block's state), field order read from the game's
-   ;; ClientboundAddEntityPacket.write (probe run 38876275250, issue #258)
+   ;; ClientboundAddEntityPacket.write
    [:play :s2c :add-entity] [[:entity-id :varint] [:uuid :uuid] [:type :varint] [:x :f64] [:y :f64]
                              [:z :f64] [:vel :lpvec3] [:pitch :i8] [:yaw :i8] [:head-yaw :i8]
                              [:data :varint]]
@@ -121,8 +121,7 @@
    [:play :s2c :move-entity-pos] [[:entity-id :varint] [:dx :i16] [:dy :i16] [:dz :i16]
                                   [:on-ground :bool]]
    ;; the moves' rotations in 1/256 turns, then on-ground (ClientboundMoveEntityPacket.PosRot and
-   ;; .Rot); the sync's is PositionMoveRotation then on-ground, as teleport-entity's (issue #267:
-   ;; the dragon's yaw, where its head is)
+   ;; .Rot); the sync's is PositionMoveRotation then on-ground, as teleport-entity's
    [:play :s2c :move-entity-pos-rot] [[:entity-id :varint] [:dx :i16] [:dy :i16] [:dz :i16]
                                       [:yaw :i8] [:pitch :i8] [:on-ground :bool]]
    [:play :s2c :move-entity-rot] [[:entity-id :varint] [:yaw :i8] [:pitch :i8] [:on-ground :bool]]
@@ -142,7 +141,7 @@
    [:play :s2c :start-configuration] []
    ;; respawn: CommonPlayerSpawnInfo first; the optional death location and what follows are an
    ;; unmodelled tail (the decoder ignores the rest of a frame). Field order read from the game's
-   ;; own ClientboundRespawnPacket at datagen (issue #5)
+   ;; own ClientboundRespawnPacket at datagen
    [:play :s2c :respawn] [[:dimension-type :varint] [:dimension :string] [:seed :i64]
                           [:game-type :u8] [:previous-game-type :i8] [:debug? :bool] [:flat? :bool]]
    [:play :s2c :damage-event] [[:entity-id :varint] [:source-type :varint] [:source-cause :varint]
@@ -153,7 +152,7 @@
    [:play :s2c :game-event] [[:event :u8] [:param :f32]]
    ;; a boss bar shown or taken away: its id and the operation; what follows each operation (the
    ;; name, an NBT component) is an unmodelled tail, but the health update's float (operation 2)
-   ;; comes first and is read (ClientboundBossEventPacket, issue #267)
+   ;; comes first and is read
    [:play :s2c :boss-event] [[:uuid :uuid] [:action :varint] [:health [:if :action 2 :f32]]
                              [:name [:if :action 0 :text]]]
    ;; what the bot hears of a fight beyond the damage-event (the observability plan, part A):
@@ -188,7 +187,7 @@
    ;; where a mob's head looks, in 1/256 turns (ClientboundRotateHeadPacket: varint id, a byte);
    ;; what it holds and wears, each entry a slot byte (0x80 set when another follows) and a slot
    ;; (ClientboundSetEquipmentPacket, read-equipment); a fireball's acceleration power, one double
-   ;; (ClientboundProjectilePowerPacket); the observability plan, issue #263
+   ;; (ClientboundProjectilePowerPacket).
    [:play :s2c :rotate-head] [[:entity-id :varint] [:head-yaw :i8]]
    [:play :s2c :set-equipment] [[:entity-id :varint] [:equipment :equipment]]
    [:play :s2c :projectile-power] [[:entity-id :varint] [:power :f64]]
@@ -221,8 +220,8 @@
    [:play :c2s :player-action] [[:status :varint] [:pos :position] [:face :i8] [:sequence :varint]]
    [:play :c2s :swing] [[:hand :varint]]
    ;; an attack on an entity, its id alone: 775 split attacking out of interact, which is a
-   ;; right-click now (ruststeve src/bot/mod.rs: an interact with mouse 1 dealt nothing, and with
-   ;; no hand field got the bot kicked); ServerboundAttackPacket's codec, issue #259
+   ;; right-click now (ruststeve src/bot/mod.rs: an interact with mouse 1 dealt nothing, and with no
+   ;; hand field got the bot kicked).
    [:play :c2s :attack] [[:entity-id :varint]]
    ;; right-click with the held item, aimed by look: a bucket fills or pours here, not through
    ;; use-item-on; field order read from the game's ServerboundUseItemPacket
@@ -357,15 +356,13 @@
 
 (def metadata-readers
   "How the metadata values the bot steps over are written, by serializer id: the game's
-   EntityDataSerializers in registration order, read in the 26.1.2 jar (probe run 38876275250,
-   issue #258). A byte (0) is read unsigned, since the one the bot reads is a bitfield (index 0,
-   the shared flags: on fire, sneaking ...). Direction (12) and pose (20) are varint enums. An item
-   stack (7) is read as a slot (read-slot): a dropped item's stack is its index 8, and a drop is
-   known by what it holds (issue #262: a blaze rod picked out from the cobblestone). An optional
-   block state (15) is one varint, 0 for none: an enderman's carried block (index 16) comes just
-   before its creepy flag (17), which the pearl hunt reads (issue #263). The rest
-   (components, particles, block positions, variants) are not here: a skim stops at the first of
-   them."
+   EntityDataSerializers in registration order, read in the 26.1.2 jar. A byte (0) is read unsigned,
+   since the one the bot reads is a bitfield (index 0, the shared flags: on fire, sneaking ...).
+   Direction (12) and pose (20) are varint enums. An item stack (7) is read as a slot (read-slot): a
+   dropped item's stack is its index 8, and a drop is known by what it holds. An optional block
+   state (15) is one varint, 0 for none: an enderman's carried block (index 16) comes just before
+   its creepy flag (17), which the pearl hunt reads. The rest (components, particles, block
+   positions, variants) are not here: a skim stops at the first of them."
   {0 b/read-u8      ; BYTE
    1 b/read-varint  ; INT
    2 b/read-varlong ; LONG
@@ -399,8 +396,8 @@
 (declare slot?)
 
 (defn metadata?
-  "A skimmed metadata map: {index value}, each index 0-254, each value a number, a boolean, a
-   string or a slot (an item stack, nil when empty: issue #262)."
+  "A skimmed metadata map: {index value}, each index 0-254, each value a number, a boolean, a string
+   or a slot (an item stack, nil when empty)."
   [x]
   (and (map? x)
        (every? (fn [[k v]]
