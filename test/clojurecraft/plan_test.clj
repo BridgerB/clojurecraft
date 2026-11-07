@@ -2188,36 +2188,41 @@
       (let [w' (tick (assoc (pillar-failed :trail [] :fire? true) :plan/trail []))]
         (is (= :pillar (get-in w' [:plan/intent :intent/kind])))))))
 
-(deftest ^:eftest/synchronized a-retreat-is-never-to-a-cell-far-off
-  ;; Clj_r03 (59e528b, run 42364623752): 294 retreat walks to [607 42 -149], 1,500 blocks from
-  ;; the bot, restarted every 0.25 s under ghast fire; the trail held cells from before a teleport
-  (let [w (pillar-failed :trail [[607 42 -149]])
-        goal {:goal/id :blaze-rods :goal/done? :never :goal/plan :flip-test}
-        w' (with-redefs [plan/choose (constantly goal)
-                         plan/next-intent (constantly {:intent/kind :pillar
-                                                       :intent/item :cobblestone
-                                                       :intent/top 60})]
-             (plan/plan-tick w {:event/kind :tick :event/now 1050 :event/rand 0.5} [goal]))]
-    (is (not= :retreat (get-in w' [:plan/intent :intent/for])) "no walk to a far trail cell")
-    (is (= :retrying (:plan/waiting w')))))
-
 (defmethod plan/fire-cover :fire-test
   [world _]
   (when (:test/shot world) {:intent/kind :place :intent/item :cobblestone :intent/cell [1 2 3]}))
 
-(deftest ^:eftest/synchronized a-retry-under-fire-takes-cover-not-the-retreat-walk
+(defmethod plan/next-intent :fire-test
+  [_ _ _]
+  {:intent/kind :pillar :intent/item :cobblestone :intent/top 60})
+
+(def fire-test-goal
+  "A row of its own plan key (:fire-test), so no test redefines the planner for the others."
+  {:goal/id :blaze-rods
+   :goal/target? true
+   :goal/priority 1
+   :goal/done? :never
+   :goal/plan :fire-test})
+
+(defn fire-test-tick
+  "The world after one plan-tick over fire-test-goal's table."
+  [w]
+  (plan/plan-tick w {:event/kind :tick :event/now 1050 :event/rand 0.5} [fire-test-goal]))
+
+(deftest a-retreat-is-never-to-a-cell-far-off
+  ;; Clj_r03 (59e528b, run 42364623752): 294 retreat walks to [607 42 -149], 1,500 blocks from
+  ;; the bot, restarted every 0.25 s under ghast fire; the trail held cells from before a teleport
+  (let [w' (fire-test-tick (pillar-failed :trail [[607 42 -149]]))]
+    (is (not= :retreat (get-in w' [:plan/intent :intent/for])) "no walk to a far trail cell")
+    (is (= :retrying (:plan/waiting w')))))
+
+(deftest a-retry-under-fire-takes-cover-not-the-retreat-walk
   ;; stage 18 (b3bfbfd, b54f648, 59e528b): 18 of 18 deaths in the open to ghast or blaze fire came
   ;; during a :walk :for :retreat, the plan's retry with a trail cell to go to
-  (let [goal {:goal/id :blaze-rods :goal/done? :never :goal/plan :fire-test}
-        tick (fn [w]
-               (with-redefs [plan/choose (constantly goal)
-                             plan/next-intent (constantly {:intent/kind :pillar
-                                                           :intent/item :cobblestone
-                                                           :intent/top 60})]
-                 (plan/plan-tick w {:event/kind :tick :event/now 1050 :event/rand 0.5} [goal])))
-        w (pillar-failed)]
-    (is (= :retreat (get-in (tick w) [:plan/intent :intent/for])) "calm: the retreat walk")
-    (let [w' (tick (assoc w :test/shot true))]
+  (let [w (pillar-failed)]
+    (is (= :retreat (get-in (fire-test-tick w) [:plan/intent :intent/for]))
+        "calm: the retreat walk")
+    (let [w' (fire-test-tick (assoc w :test/shot true))]
       (is (= :place (get-in w' [:plan/intent :intent/kind])) "under fire: the cover")
       (is (not= :retreat (get-in w' [:plan/intent :intent/for]))))))
 
