@@ -4322,3 +4322,27 @@
     (testing "a strike long past leaves the bore going"
       (let [i (plan/next-intent (assoc base :player/struck-at 0 :time/now 20000) row plan/goals)]
         (is (= :tunnel-to (:intent/kind i)))))))
+
+(deftest the-tunnel-out-ends-clear-of-the-spawner-however-far-the-fortress-runs
+  ;; Logged state, sim R1/17 (batch 59e528b, probe 42370534718): 9642 fortress points known, the
+  ;; spawner at [921 69 -117]. The bot tunnelled east to x 982, 60 blocks from the spawner, but
+  ;; fortress bricks seen on the way kept it "near", so the escape went on: up to the roof, back
+  ;; 100 blocks west, nine pickaxes and every plank and stick spent. The exit leaves the spawner.
+  (let [brick (blocks/default-state :nether_bricks)
+        w (-> (standing {})
+              (assoc :player/dimension "minecraft:the_nether" :player/pos [68.5 94.0 8.5])
+              (assoc-in [:player/inventory 1] (item :iron_pickaxe 1))
+              (memory/observe [8 70 8] blaze/spawner)
+              (memory/observe [76 70 8] brick)
+              (assoc :plan/status :active
+                     :plan/goals #{:ender-pearls}
+                     :plan/reached #{:blaze-rods}
+                     :plan/active [row]))]
+    (is (pearls/near-fortress? w) "a brick of the fortress is ten blocks off")
+    (is (not (pearls/escape-near? w)) "but the spawner is sixty blocks off")
+    (is (nil? (pearls/fortress-tunnel-target w)) "the exit is done: no target")
+    (is (not (pearls/fortress-escaping? w)))
+    (testing "near the spawner it still escapes"
+      (let [near (assoc w :player/pos [20.5 70.0 8.5])]
+        (is (pearls/escape-near? near))
+        (is (some? (pearls/fortress-tunnel-target near)))))))

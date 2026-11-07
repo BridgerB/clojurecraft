@@ -10,6 +10,7 @@
    The fold is exact only at the commit that made the recording (record/header names it); a
    later commit's planner answers what it would do now, which is what a fix is judged by."
   (:require [clojure.pprint :as pp]
+            [clojurecraft.blaze :as blaze]
             [clojurecraft.game :as game]
             [clojurecraft.main :as main]
             [clojurecraft.memory :as memory]
@@ -68,7 +69,31 @@
                   :travel/wandering? #(pearls/wandering? w)
                   :travel/wander #(pearls/wander w)
                   :travel/caged? #(pearls/travel-caged? w)
-                  :travel/blacklist #(:plan/blacklist w)}]
+                  :travel/blacklist #(:plan/blacklist w)
+                  :dig/digs-left #(pearls/digs-left w)
+                  :dig/spare? #(pearls/spare? w)
+                  :dig/boxed-at #(:plan/boxed-at w)
+                  :dig/stuck? #(pearls/stuck? w)
+                  :dig/tunnel-out #(pearls/tunnel-out w)
+                  :dig/climb-out #(pearls/climb-out w)
+                  :dig/dig-out #(pearls/dig-out w)
+                  :dig/uncage #(pearls/uncage w)
+                  :dig/last-intent #(select-keys (:plan/last w) [:intent/kind :intent/reason])
+                  :dig/worn-out? #(pearls/worn-out? w)
+                  :dig/relocate #(:pearls/relocate w)
+                  :exit/surface-y #(pearls/fortress-surface-y w)
+                  :exit/fresh-target #(pearls/fresh-tunnel-target w)
+                  :exit/held #(:pearls/exit-target w)
+                  :exit/dir #(pearls/fortress-exit-dir w)
+                  :exit/spawner #(blaze/nearest-spawner w)
+                  :exit/points #(count (pearls/fortress-points w))
+                  :relocate/walk #(pearls/relocate-walk w)
+                  :relocate/state #(:pearls/relocate w)
+                  :relocate/walk-dones #(mapv (juxt :intention/at :intention/target)
+                                              (memory/newest-dones w :walk 8))
+                  :relocate/endermen-128 #(count (pearls/endermen (dissoc w :plan/blacklist) 128.0))
+                  :relocate/last-intents #(mapv (juxt :intent/kind :intent/for :intent/target)
+                                                (take 4 (:plan/history w)))}]
        [k (safe f)]))))
 
 (defn -main
