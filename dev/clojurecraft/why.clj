@@ -18,6 +18,8 @@
             [clojurecraft.senses :as senses]
             [clojurecraft.window :as window]))
 
+(set! *warn-on-reflection* true)
+
 (defn at
   "The world of the recording at path folded up to at-ms (the first event past it stops the fold)."
   [path at-ms]
