@@ -623,10 +623,19 @@
                       (some-> below
                               blocks/solid?))))))
 
+(defn item-data
+  "The set-entity-data that tells the client item entity eid what it holds (stack {:item id
+   :count n}), the packet a vanilla server sends with the add-entity of a drop: without it the
+   client does not know a cobblestone from a crafting table (issue #263)."
+  [eid stack]
+  {:packet/name :set-entity-data
+   :entity-id eid
+   :metadata {entity/item-index {:item (:item stack) :count (:count stack 1)}}})
+
 (defn spawn-item
   "The model with stack {:item id :count n} lying at point [x y z] as an item entity: its own
    entity id, handed over once its pickup delay has passed (pick-up), the client told
-   (add-entity)."
+   (add-entity, then what it holds: item-data)."
   [sim [x y z :as at] stack]
   (let [eid (:sim/next-eid sim)]
     (-> sim
@@ -638,7 +647,8 @@
                :type blocks/item-entity-type
                :x x
                :y y
-               :z z}))))
+               :z z})
+        (send (item-data eid stack)))))
 
 (defn break-block
   "Block id at pos is broken by the player holding held in slot: gone (placed or not), its
@@ -1292,15 +1302,16 @@
                              (tell-gear eid type))))
                      sim
                      (:sim/mobs sim))]
-    (reduce (fn [sim [eid {[x y z] :pos}]]
-              (send sim
-                    {:packet/name :add-entity
-                     :entity-id eid
-                     :uuid nil
-                     :type blocks/item-entity-type
-                     :x x
-                     :y y
-                     :z z}))
+    (reduce (fn [sim [eid {[x y z] :pos stack :item}]]
+              (cond-> (send sim
+                            {:packet/name :add-entity
+                             :entity-id eid
+                             :uuid nil
+                             :type blocks/item-entity-type
+                             :x x
+                             :y y
+                             :z z})
+                stack (send (item-data eid stack))))
             told
             (:sim/items sim))))
 

@@ -132,11 +132,17 @@
   (>= (long (memory/failed-count-since world :collect-drops (drop-cell e) 0)) take-table-tries))
 
 (defn table-drops-near
-  "{eid entity} of the table drops lying within 8 blocks of the bot that it has not given up on."
+  "{eid entity} of the table drops lying within 8 blocks of the bot that it has not given up on.
+   A drop that has not said what it holds (:entity/item nil) is no table drop: drops/lying lets
+   it pass, and every block the tunnel dug was taken for one for the tick before its metadata
+   came, a :collect-drops :for :take-table started and cut after 450 ms, over and over (sim
+   stage-18 runs R1-3-1, R1-4-1, R1-44-1, 59e528b; issue #263)."
   [world]
-  (into {}
-        (remove (fn [[_ e]] (given-up-drop? world e)))
-        (drops/lying world (recipe/item-id :crafting_table) (:player/pos world) 8.0)))
+  (let [table (recipe/item-id :crafting_table)]
+    (into {}
+          (comp (filter (fn [[_ e]] (= table (:entity/item e))))
+                (remove (fn [[_ e]] (given-up-drop? world e))))
+          (drops/lying world table (:player/pos world) 8.0))))
 
 (defn placing-table?
   "Is the running intent this row's own placement of the crafting table (a :place of

@@ -193,6 +193,25 @@
       (is (not (picks/placing-table?
                 (assoc w :plan/intent (assoc placing :intent/status :done))))))))
 
+(deftest a-drop-that-has-not-said-what-it-holds-is-no-table
+  ;; sim stage-18 runs R1-3-1, R1-4-1, R1-44-1 (59e528b): each dug block's drop, its item still
+  ;; unknown, started a :collect-drops :for :take-table that the row's own done cut 450 ms on
+  (let [drop-pos [9.5 63.0 8.5]
+        w (sealed-pocket-world [(item :blaze_rod 7) (item :stone_pickaxe 1) (item :stone_pickaxe 1)
+                                (item :stone_pickaxe 1) (item :stick 8) (item :cobblestone 58)])
+        with-drop (fn [e]
+                    (assoc w
+                           :world/entities
+                           {77 (merge {:entity/type blocks/item-entity-type :entity/pos drop-pos}
+                                      e)}))
+        table (recipe/item-id :crafting_table)]
+    (is (empty? (picks/table-drops-near (with-drop {}))) "nothing said: not a table")
+    (is (empty? (picks/table-drops-near (with-drop {:entity/item (recipe/item-id :cobblestone)})))
+        "a cobblestone")
+    (is (= [77] (keys (picks/table-drops-near (with-drop {:entity/item table})))) "a table")
+    (is (not (picks/table-needed? (with-drop {}))))
+    (is (picks/table-needed? (with-drop {:entity/item table})))))
+
 (deftest a-table-pickup-that-ended-is-not-pending-for-ever
   ;; the planner chooses this row ahead of the hunt while it is pending; a pickup that ended with
   ;; no table placed or lying held it pending with nothing to start, until :nothing-to-do
@@ -226,9 +245,11 @@
         w (-> (sealed-pocket-world [(item :blaze_rod 7) (item :stone_pickaxe 1)
                                     (item :stone_pickaxe 1) (item :stone_pickaxe 1) (item :stick 8)
                                     (item :cobblestone 58)])
-              (assoc
-               :world/entities
-               {77 {:entity/type blocks/item-entity-type :entity/pos drop-pos :entity/seen-at 0}}))]
+              (assoc :world/entities
+                     {77 {:entity/type blocks/item-entity-type
+                          :entity/pos drop-pos
+                          :entity/item (recipe/item-id :crafting_table)
+                          :entity/seen-at 0}}))]
     (is (picks/table-needed? (failed w 2)) "two failed pickups: still worth a try")
     (is (not (picks/table-needed? (failed w 3))) "three: the table is left where it lies")))
 
