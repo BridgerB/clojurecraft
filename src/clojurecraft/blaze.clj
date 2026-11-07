@@ -54,6 +54,7 @@
             [clojurecraft.plan :as plan]
             [clojurecraft.pocket :as pocket]
             [clojurecraft.recipe :as recipe]
+            [clojurecraft.shapes]
             [clojurecraft.stairs :as stairs]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.window :as window]

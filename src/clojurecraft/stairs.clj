@@ -50,6 +50,7 @@
             [clojurecraft.physics :as physics]
             [clojurecraft.place :as place]
             [clojurecraft.recipe :as recipe]
+            [clojurecraft.shapes]
             [clojurecraft.terrain :as terrain]))
 
 (set! *warn-on-reflection* true)

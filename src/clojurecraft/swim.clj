@@ -32,6 +32,7 @@ water, it carves one: a notch two high in the nearest wall just over the float l
             [clojurecraft.physics :as physics]
             [clojurecraft.place :as place]
             [clojurecraft.plan :as plan]
+            [clojurecraft.shapes]
             [clojurecraft.stairs :as stairs]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.trap :as trap]))

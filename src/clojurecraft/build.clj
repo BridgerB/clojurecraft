@@ -33,6 +33,7 @@
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.scoop :as scoop]
+            [clojurecraft.shapes]
             [clojurecraft.stairs :as stairs]
             [clojurecraft.stone :as stone]
             [clojurecraft.terrain :as terrain]

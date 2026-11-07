@@ -20,6 +20,7 @@
             [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
             [clojurecraft.recipe :as recipe]
+            [clojurecraft.shapes]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.window :as window]))
 

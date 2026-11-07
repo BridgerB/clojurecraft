@@ -14,6 +14,7 @@
             [clojurecraft.pearls.params :as pparams]
             [clojurecraft.pearls.sense :as psense]
             [clojurecraft.physics :as physics]
+            [clojurecraft.shapes]
             [clojurecraft.stairs :as stairs]
             [clojurecraft.stone :as stone]
             [clojurecraft.terrain :as terrain]))
