@@ -7,9 +7,12 @@
 (def namespaces
   "Every namespace under src/clojurecraft, by file name."
   (->> (file-seq (io/file "src/clojurecraft"))
-       (map #(.getName ^java.io.File %))
+       (map #(.getPath ^java.io.File %))
        (filter #(str/ends-with? % ".clj"))
-       (map #(symbol (str "clojurecraft." (str/replace (subs % 0 (- (count %) 4)) "_" "-"))))
+       (map #(symbol (-> %
+                         (subs (count "src/") (- (count %) 4))
+                         (str/replace "/" ".")
+                         (str/replace "_" "-"))))
        sort))
 
 (defn undocumented
