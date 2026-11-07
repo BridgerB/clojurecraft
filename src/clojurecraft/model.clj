@@ -649,9 +649,6 @@
    [:intent/blazes
     "the blazes within fight range when a :camp began, or watching when a :rest began; a new one ends it"
     "camp, rest"]
-   [:intent/raised?
-    "true once a :block has sent the use key to the offhand shield, so it is sent once (issue #262)"
-    "block, after its first tick"]
    [:intent/health
     "the health when a :camp or a :rest began; a fall under it ends it, since nothing else ends a running intent (issue #262)"
     "camp, rest"]
@@ -743,9 +740,6 @@
    [:intent/started-tick "tick the current stair or its step began" "stairs-down, per stair"]
    [:intent/best-dist "closest it has come to the target" "walk, collect, a :fight's approach"]
    [:intent/best-tick "tick of the last progress" "walk, collect, a :fight's approach"]
-   [:intent/detour-until "tick a detour ends" "walk, while detouring"]
-   [:intent/detour-yaw "heading offset of the detour" "walk, while detouring"]
-   [:intent/detours "detours taken" "walk"]
    [:intent/waypoints "the route's feet cells still to walk, from clojurecraft.path"
     "walk, once planned"]
    [:intent/route "how the route ended: :found, :partial (budget spent) or :none (no way on)"
@@ -757,7 +751,6 @@
    [:intent/planned-chunks
     "chunk columns loaded when the route was made (kept for the record; a new chunk no longer replans by itself)"
     "walk, once planned"]
-   [:intent/logs-before "logs held when collecting began" "collect, before :intent/drops"]
    [:intent/drops
     "the item ids a collect is for: one more of any of them than it began with ends it"
     "collect, redig"]
