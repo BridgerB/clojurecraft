@@ -34,7 +34,7 @@
    26.x pauses an empty server after 60 s, and forceloaded landings would stop generating.
    max-tick-time: the watchdog's limit on one tick, 60000 ms unless MAX_TICK_TIME says (-1 turns
    it off: a race's locate biome far from any forest took a 60 s tick and the watchdog killed
-   the server under ten bots). max-players: 20 unless MAX_PLAYERS says (a capacity ramp seats 150).
+   the server under ten bots). max-players: 20 unless MAX_PLAYERS says.
    network-compression-threshold: vanilla's 256 unless COMPRESSION_THRESHOLD says (-1, none: a
    race's bots are on the same machine, where zlib is only CPU, the server deflating every chunk
    for every bot and each bot inflating it). sync-chunk-writes: vanilla's true unless

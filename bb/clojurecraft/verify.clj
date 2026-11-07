@@ -1,16 +1,13 @@
 (ns clojurecraft.verify
-  "A fix's whole check in one command, for a Copilot session (bot-fixer profile) or anyone:
+  "A fix's whole check in one command:
 
      bb verify <n>    the issue's snapshots judged on the working tree, the suite without the
                       forest property, and every static check; a short verdict at the end
 
-   A session that ran these one at a time started each in the background and asked after it again
-   and again, every question re-sending its whole context (2026-10-17: 461 such polls in 32
-   sessions, 53 million input tokens, a third of the day's). One command run to its end prints
-   only what a fix needs: which snapshots still recur, which tests fail, which checks complain.
+   One command run to its end prints only what a fix needs: which snapshots still recur, which tests fail, which checks complain.
    Each step's full output stays in /tmp/verify-<step>.log for a closer look.
 
-   The snapshots are test/issues/<n>/*.edn.gz, else cache/issues/<n>/*.edn.gz (the brief's)."
+   The snapshots are cache/issues/<n>/*.edn.gz (bb issue-check fetch <n>)."
   (:require [babashka.fs :as fs]
             [babashka.process :as p]
             [clojure.edn :as edn]
@@ -51,7 +48,8 @@
         test-ok (ok-test? tests)
         check-ok (zero? (:exit check))
         left (cond-> []
-               (empty? snapshots) (conj "no snapshots under test/issues/<n>/ or cache/issues/<n>/")
+               (empty? snapshots)
+               (conj "no snapshots under cache/issues/<n>/ (bb issue-check fetch <n>)")
                (seq recurring) (conj (str (count recurring) " snapshot(s) still recur"))
                (pos? unjudged) (conj (str unjudged " snapshot(s) not judged (the judge crashed)"))
                (not test-ok) (conj "tests fail")
@@ -79,7 +77,7 @@
     (select-keys r [:exit :out])))
 
 (defn snapshots
-  "The issue's snapshots: test/issues/<n>/, else cache/issues/<n>/."
+  "The issue's snapshots: cache/issues/<n>/."
   [n]
   (let [of (fn [dir] (sort (map str (fs/glob dir "*.edn.gz"))))]
     (or (seq (of (str "test/issues/" n))) (of (str "cache/issues/" n)))))
