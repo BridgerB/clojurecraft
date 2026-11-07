@@ -11,8 +11,6 @@
             [clojurecraft.bytes :as b]
             [clojurecraft.combat :as combat]
             [clojurecraft.dimension :as dimension]
-            [clojurecraft.eat :as eat]
-            [clojurecraft.filler :as filler]
             [clojurecraft.fixtures :as fx :refer [packet]]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
@@ -621,26 +619,6 @@
     (is (= #{7} (set (keys (combat/threats (standing (merge zombie (cloud [9.5 64.0 8.5])))))))
         "outside the End a cloud is no reason to leave a fight")))
 
-(defn old-cover
-  "The cover choice as the cond it was before the ladder became data: the reference the ladder in
-   threats.edn must reproduce."
-  [world e]
-  (let [food (when (< (:player/food world 20) 20) (eat/food-held world))
-        near? (<= (physics/distance (game/eye world) (combat/aim e)) combat/attack-reach)
-        wall (let [w (combat/wall-cell world e)] (when-not (combat/wall-failed? world w) w))
-        filler (filler/pick world combat/wall-fill)
-        pillar (when-not (combat/pillar-failed? world) (filler/pick world combat/pillar-fill))
-        nook (combat/nook-cell world)
-        [_ fy _] (intent/feet world)]
-    (cond (>= (combat/horizontal world e) combat/back-off-to)
-          (if food {:intent/kind :eat :intent/item food} {:plan/wait :resting})
-          (and food (not near?)) {:intent/kind :eat :intent/item food}
-          (and wall filler) {:intent/kind :place :intent/item filler :intent/cell wall}
-          pillar {:intent/kind :pillar :intent/item pillar :intent/top (+ fy combat/pillar-height)}
-          food {:intent/kind :eat :intent/item food}
-          nook {:intent/kind :dig :intent/target nook}
-          :else {:plan/wait :cornered})))
-
 (deftest a-back-off-that-ends-at-once-is-never-chosen-again-and-never-a-fight
   ;; gym chain-w13 dragon run 2 (plan run 40798605016, job 4): an angry enderman on the End's
   ;; island, the bot under 10 health, `intent :back-off 86` every 50 ms from 04:03:36.6 and
@@ -677,17 +655,6 @@
       (let [pick (at close {2 (item :stone_pickaxe 1)})]
         (is (= {:intent/kind :dig :intent/target [8 63 8]} (combat/cover pick (e pick)))
             "a pickaxe and nothing to lay: a hole a block deep under the feet")))
-    (testing "the ladder in threats.edn reproduces the old cover cond on every fixture here"
-      (let [pick (at close {2 (item :stone_pickaxe 1)})
-            taken (assoc-in (at close stone)
-                   [:world/chunks [0 0]]
-                   (world/column {[9 64 8] (blocks/default-state :stone)
-                                  [9 65 8] (blocks/default-state :stone)}))
-            far (at [17.0 64.0 8.5] steak)]
-        (doseq [w [(at [13.0 64.0 8.5] steak) (at close (merge steak stone)) (at close {}) pick
-                   taken far (at [17.0 64.0 8.5] {}) (at close steak)
-                   (at close (merge stone {2 (item :stone_pickaxe 1)}))]]
-          (is (= (old-cover w (e w)) (combat/cover w (e w)))))))
     (testing "the wall cell taken, a pillar"
       (let [w (assoc-in (at close stone)
                [:world/chunks [0 0]]
