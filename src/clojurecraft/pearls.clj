@@ -2404,9 +2404,7 @@
    seconds (the plan's :retrying wait) for forty minutes, 107 attempts by minute 20."
   [world]
   (when (seq (fortress-points world))
-    (when-let [fresh (fresh-tunnel-target world)]
-      (let [t (or (held-exit-target world) fresh)]
-        (when-not (contains? (:plan/blacklist world #{}) t) t)))))
+    (when-let [fresh (fresh-tunnel-target world)] (let [t (or (held-exit-target world) fresh)] t))))
 
 (defn fortress-escaping?
   "Is the bot leaving the fortress via sealed tunnel-out: inside/near the fortress,
