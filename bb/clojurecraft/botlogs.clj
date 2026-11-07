@@ -342,7 +342,7 @@
                      (fs/copy sf (fs/path logs (str stem ".senses.edn")) {:replace-existing true}))
                    (when ef
                      (fs/copy ef (fs/path logs (str stem ".events.edn")) {:replace-existing true}))
-                   (doseq [ext [".moment.edn" ".ring.edn" ".server.txt"]]
+                   (doseq [ext [".moment.edn" ".ring.edn" ".server.txt" ".truth.edn"]]
                      (when-let [mf (beside data-dir r ext)]
                        (fs/copy mf (fs/path logs (str stem ext)) {:replace-existing true})))
                    ;; the case: how it ended, read for the reader (case-of), beside its evidence
