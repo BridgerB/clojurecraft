@@ -54,6 +54,16 @@
    ["sealed-burrow" #(ps/burrowed [8.5 61.0 8.5] % {[7 62 8] ps/stone [7 61 8] ps/stone})]
    ["walled" #(assoc (ps/walled-in (ps/passage 12 14) [20.5 64.0 20.5]) :world/entities %)]])
 
+(defn with-fights
+  "w with n :fight intentions on enderman 7 done, ids apart from the lookouts' (ps/fought's would
+   collide with ps/looked's)."
+  [w n]
+  (reduce #(memory/remember-intention %1
+                                      {:intent/id (+ 200 %2) :intent/kind :fight :intent/target 7}
+                                      :done)
+          w
+          (range n)))
+
 (def conditions
   "Changes to a world: [name fn]."
   [["fresh" identity] ["hurt" #(assoc % :player/health 9.0)]
@@ -68,8 +78,8 @@
    ["stale" #(ps/looked % 14)] ["lured" #(ps/lured % 3)] ["fought-out" #(ps/fought % 9)]
    ["relocating" #(assoc % :pearls/relocate {:from [8 64 8] :at 0 :near #{}} :time/now 600000)]
    ["deaths" #(assoc % :stats/deaths 1)] ["tired" #(assoc % :player/health 15.0)]
-   ["struck" #(assoc % :player/health 12.0)] ["fought-looked" #(ps/fought (ps/looked % 7) 9)]
-   ["fought-looked-blacklisted" #(assoc (ps/fought (ps/looked % 7) 9) :plan/blacklist #{7})]
+   ["struck" #(assoc % :player/health 12.0)] ["fought-looked" #(with-fights (ps/looked % 7) 9)]
+   ["fought-looked-blacklisted" #(assoc (with-fights (ps/looked % 7) 9) :plan/blacklist #{7})]
    ["filler-hurt"
     #(assoc-in (assoc % :player/health 9.0) [:player/inventory 3] (ps/item :cobblestone 64))]])
 
@@ -122,7 +132,7 @@
 (defn nook-world
   "A bot in the nook (nook-blocks) holding a pickaxe, with entities."
   [entities]
-  (-> (ps/standing entities nook-blocks)
+  (-> (ps/wide (ps/standing entities nook-blocks))
       (assoc :pearls/shelter [8 64 8] :pearls/mouth [9 64 8])
       (assoc-in [:player/inventory 1] (ps/item :iron_pickaxe 1))))
 
@@ -160,8 +170,8 @@
     ;; stone only in the way of the stairs: water where the burrow's stairs would go, so a site
     ;; beside the feet is walked to
     ["water-by-feet"
-     (-> (ps/standing {7 (ps/enderman [20.5 64.0 8.5])}
-                      (into {} (for [c [[7 63 8] [7 62 8] [6 62 8] [5 62 8]]] [c water])))
+     (-> (ps/wide (ps/standing {7 (ps/enderman [20.5 64.0 8.5])}
+                               (into {} (for [c [[7 63 8] [7 62 8] [6 62 8] [5 62 8]]] [c water]))))
          (assoc-in [:player/inventory 1] (ps/item :iron_pickaxe 1)))]
     ;; a one-block slab over a void with an angry enderman coming: no burrow, no site
     ["void-slab-angry"
@@ -177,7 +187,7 @@
     ["lure"
      (-> (ps/burrowed [8.5 61.0 8.5] {7 (assoc (ps/enderman [11.5 64.0 8.5]) :entity/creepy? true)})
          (ps/looked 7)
-         (ps/fought 9)
+         (with-fights 9)
          (assoc :plan/blacklist #{7}))]
     ;; a calm enderman standing in the stairs, the bot at the end, no lookouts yet
     ["stairs-blocker" (ps/burrowed [8.5 61.0 8.5] {7 (ps/enderman [4.5 63.0 8.5])})]
@@ -208,12 +218,14 @@
 
 (deftest the-rule-table-chooses-what-the-cond-chose
   (let [worlds (remove (comp nil? second) (grid))
-        results
-        (mapv (fn [[label w]]
-                {:label label :table (outcome rules/decide w) :cond (outcome legacy/legacy-hunt w)})
-              worlds)
+        results (mapv (fn [[label w]]
+                        {:label label
+                         :world w
+                         :table (outcome rules/decide w)
+                         :cond (outcome legacy/legacy-hunt w)})
+                      worlds)
         differ (remove #(= (:table %) (:cond %)) results)
-        whys (into #{} (keep (comp second :cond)) results)]
+        whys (into #{} (map #(rules/row-of (:world %))) results)]
     (is (empty? (map :label (take 5 differ))) "worlds where the table and the cond differ")
     (is (< 200 (count results)) "worlds compared")
     (when (.isDirectory (io/file "out"))
@@ -227,7 +239,7 @@
                                   (for [r results
                                         :when (not (re-find #"^[^/]+/\d+/" (:label r)))
                                         :when (not (re-find #"^fortress/" (:label r)))]
-                                    [(:label r) (second (:cond r))]))})))))
+                                    [(:label r) (rules/row-of (:world r))]))})))))
 
 (deftest the-phase-of-a-hunt-is-the-first-not-done
   (is (= :set-up (rules/phase (ps/standing {}))))
