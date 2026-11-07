@@ -72,8 +72,7 @@ jobs:
             elif printf '%s\n' "$named" | grep -qx "$m"; then
               labels=$(gh api "repos/$GITHUB_REPOSITORY/issues/$m" --jq '[.labels[].name] | join(",")' 2>/dev/null || echo '')
               if echo ",$labels," | grep -q ',sim,'; then
-                echo "::error::issue $m is reproduced in the sim (label sim) but this pull request adds no snapshot under test/issues/$m: bb issue-check fetch $m, or do not say Fixes"
-                red=1
+                echo "::warning::issue $m is reproduced in the sim (label sim) but this pull request adds no snapshot: judge the fetched ones with bb probe (AGENTS.md section 4, step 9)"
               else
                 echo "::warning::issue $m has no sim reproduction and no snapshot: it closes on the real recordings' word alone"
               fi

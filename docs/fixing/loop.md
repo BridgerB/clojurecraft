@@ -52,7 +52,7 @@ Then the code that raises the reason and the notes that explain it: `grep -rn ':
 
 Reading artifacts is allowed locally; running code on them is not.
 
-**Snapshots (sim issues, and real ones the model reproduces).** `bb issue-check fetch <n>` reads the issue's comments newest first, then its body, and copies at most two snapshots into `test/issues/<n>/`, one a world (two seeds of one world are one moment), only snapshots with a kept moment, each under its file name; it prints what it took and what it passed over. Each comes from the evidence release its line names (`gh release download evidence-<day>-<hour> --repo BridgerB/clojurecraft -p <run>-<file>` by hand), kept for good; a comment from before the releases names a runner's artifact instead, which fetch still reads while it lasts (7 days; `gh run download <run> -n simrace-<sha>-<runner> -D /tmp/ev/<n>/r<runner>` by hand). A real snapshot (`real-<runner>-<s>-<bot>.edn.gz`) is its own world.
+**Snapshots (sim issues, and real ones the model reproduces).** `bb issue-check fetch <n>` reads the issue's comments newest first, then its body, and copies at most two snapshots into `cache/issues/<n>/`, one a world (two seeds of one world are one moment), only snapshots with a kept moment, each under its file name; it prints what it took and what it passed over. Each comes from the evidence release its line names (`gh release download evidence-<day>-<hour> --repo BridgerB/clojurecraft -p <run>-<file>` by hand), kept for good; a comment from before the releases names a runner's artifact instead, which fetch still reads while it lasts (7 days; `gh run download <run> -n simrace-<sha>-<runner> -D /tmp/ev/<n>/r<runner>` by hand). A real snapshot (`real-<runner>-<s>-<bot>.edn.gz`) is its own world.
 
 **Run maps.** `runs.edn` is one run map a line; `:pos`, `:held`, `:plan` (`:plan/boxed-at`, `:plan/reached-after`, `:plan/last`, `:plan/intent`) say a lot before any code runs:
 
@@ -237,7 +237,7 @@ Before/after, each snapshot judged over its window (the check's summary, or prob
     snapshot   main                     this branch
     R4-35-2    [:cast-one :rejected]    active at [:portal]: cast done
 
-<The test that holds it. What is under test/issues/<n>/. What is not proven and why.>
+<The test that holds it. Which snapshots were judged. What is not proven and why.>
 
 Fixes #<n>
 ```
@@ -247,11 +247,11 @@ Fixes #<n>
 **The checks** (both required):
 
 - `unit / unit`: every test but the forest property, then the static checks.
-- `check` (`issue.yml`): only the issues the PR names (its branch `fix/<n>` and its `Fixes #n` lines). Every issue the body fixes that is labelled `sim` must have snapshots under `test/issues/<n>/` or it fails at once (`issue <n> is reproduced in the sim (label sim) but test/issues/<n> holds no snapshot`) (every issue filed since #299 is; one filed before it with only real runs is only warned about). Only the snapshots the PR itself adds or changes are judged (a snapshot already on main proved an earlier fix; a fix/<n>-r2 for a regression brings its own or says Refs). Then, restoring only the captured worlds those snapshots name, `clojure -M:simrace --judge` judges them on the base commit (each must recur: a moment that does not reproduce its failure proves nothing) and on the PR's code (none may), in parallel, and writes both, JUDGE and STORY lines, to the step summary. Limit 15 minutes; a few minutes in practice. Older issues are not judged again: the races are the regression guard (the filer reopens an issue whose failure comes back).
+- `check` (`issue.yml`): only the issues the PR names (its branch `fix/<n>` and its `Fixes #n` lines); it is a naming check unless the PR itself adds snapshots under `test/issues/<n>/`, which are then judged on the base commit (each must recur) and on the PR's code (none may). Snapshots are no longer committed (they live in the evidence releases, `bb issue-check fetch <n>` puts them in `cache/issues/<n>/`, and the old ones are in the release `snapshots-2026-11-07`), so the judging is yours, by `bb probe` before the PR (9 above). Older issues are not judged again: the races are the regression guard (the filer reopens an issue whose failure comes back).
 
-Two snapshots an issue at most, from two landings when it has them, each under GitHub's 100 MiB file limit.
+Two snapshots an issue at most, from two landings when it has them.
 
-**A red check:** `gh pr checks <pr>`, then `gh run view <id> --log-failed`, read it whole, fix, push; the checks rerun. Typical: a test asserting the old behaviour; a new key without its model row or spec; a failure that still recurs on the PR's code (the moment, 9.2; read its STORY lines); a moment that does not recur on the base (fetch another, or take one from the newest comment); a sim issue without snapshots; "no checks reported" because the PR conflicts (section 13). A failure outside the code (a lost runner, a cache miss): `gh run rerun <id>`.
+**A red check:** `gh pr checks <pr>`, then `gh run view <id> --log-failed`, read it whole, fix, push; the checks rerun. Typical: a test asserting the old behaviour; a new key without its model row or spec; a failure that still recurs on the PR's code (the moment, 9.2; read its STORY lines); a moment that does not recur on the base (fetch another, or take one from the newest comment); "no checks reported" because the PR conflicts (section 13). A failure outside the code (a lost runner, a cache miss): `gh run rerun <id>`.
 
 ---
 

@@ -60,8 +60,8 @@ The same way every time. Work in your own clone or worktree, one per task (`git 
    ```
 
    Never sit in a sleep loop, never end a turn only because a run is going, never rerun anything locally to confirm.
-9. **Judge the snapshots** before the PR, the way the check will: `bb probe run <n>-judge 'clojure -M:simrace --judge test/issues/<n>/R4-35-2.edn.gz,test/issues/<n>/R1-7-1.edn.gz --expect pass' R1,R4` from the pushed fix branch (seconds a snapshot), and the same with `--expect recur` from `main` (each moment must reproduce its failure there, or it proves nothing: take another).
-10. **Open the PR when ready** (section 12): fix and test pushed, `test.yml` green, the snapshots under `test/issues/<n>/`, the before/after in hand. Never a draft.
+9. **Judge the snapshots** before the PR, the way the check will: `bb issue-check fetch <n>` (into `cache/issues/<n>/`, never committed), then `bb probe run <n>-judge 'clojure -M:simrace --judge cache/issues/<n>/R4-35-2.edn.gz,cache/issues/<n>/R1-7-1.edn.gz --expect pass' R1,R4` from the pushed fix branch (seconds a snapshot), and the same with `--expect recur` from `main` (each moment must reproduce its failure there, or it proves nothing: take another).
+10. **Open the PR when ready** (section 12): fix and test pushed, `test.yml` green, the before/after of each snapshot in hand. Never a draft.
 11. **Merge when green** (section 13).
 12. **Stopping before the merge,** for any reason: hand off (section 14).
 13. **Stop.** One issue a session.

@@ -111,7 +111,7 @@
    :task (apply fleet/-main *command-line-args*)}
   issue-check
   {:doc
-   "A fix's fixtures (issue.yml, issues-test): fetch <n> brings the issue's snapshots into test/issues/<n>/"
+   "A fix's fixtures (bb verify, bb probe): fetch <n> brings the issue's snapshots into cache/issues/<n>/"
    :requires ([clojurecraft.issue-check :as check])
    :task (apply check/-main *command-line-args*)}
   prepare-world
