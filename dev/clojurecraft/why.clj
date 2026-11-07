@@ -68,7 +68,18 @@
                   :travel/wandering? #(pearls/wandering? w)
                   :travel/wander #(pearls/wander w)
                   :travel/caged? #(pearls/travel-caged? w)
-                  :travel/blacklist #(:plan/blacklist w)}]
+                  :travel/blacklist #(:plan/blacklist w)
+                  :dig/digs-left #(pearls/digs-left w)
+                  :dig/spare? #(pearls/spare? w)
+                  :dig/boxed-at #(:plan/boxed-at w)
+                  :dig/stuck? #(pearls/stuck? w)
+                  :dig/tunnel-out #(pearls/tunnel-out w)
+                  :dig/climb-out #(pearls/climb-out w)
+                  :dig/dig-out #(pearls/dig-out w)
+                  :dig/uncage #(pearls/uncage w)
+                  :dig/last-intent #(select-keys (:plan/last w) [:intent/kind :intent/reason])
+                  :dig/worn-out? #(pearls/worn-out? w)
+                  :dig/relocate #(:pearls/relocate w)}]
        [k (safe f)]))))
 
 (defn -main
