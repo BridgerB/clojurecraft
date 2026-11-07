@@ -13,7 +13,7 @@ Once per session, before the first issue. A fix in the wrong style is a wrong fi
 3. **The brain, in part.** `brain/_index.md`, `brain/rules.md`, then `brain/bot/gotchas/` and `brain/bot/decisions/` (traps already paid for, choices already made). The rest on demand: `grep -rl "<namespace-or-function>" brain/` before touching a namespace. The brain holds decisions, gotchas and game facts; what a function does is its docstring.
 4. **The code you change, and what it calls.** Read the namespace you will edit and the registries it plugs into (`plan.clj` for goals and intents, `intent.clj` for executors, `model.clj` for attributes). Add `sim.clj` when a fix touches the server model. Do not read the rest in advance.
 
-Then this file, Part I in full, and Part II's sections 19 to 22 once.
+Then this file, Part I in full.
 
 ---
 

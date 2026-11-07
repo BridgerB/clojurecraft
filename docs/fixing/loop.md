@@ -44,7 +44,7 @@ Read the body and every comment.
 - "(regressed: ...)": a fix did not hold or was undone. Read the closing PR first.
 - A hand-off comment (section 14): start from its next step.
 
-Then the code that raises the reason and the notes that explain it: `grep -rn ':no-log' src/clojurecraft/`, `grep -rln 'no-log' brain/`, and section 22.
+Then the code that raises the reason and the notes that explain it: `grep -rn ':no-log' src/clojurecraft/`, `grep -rln 'no-log' brain/`, and `resources/clojurecraft/goals.edn` for the stage chain.
 
 ---
 
