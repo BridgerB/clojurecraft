@@ -64,35 +64,34 @@
   "Tuning parameters and thresholds for the hunt, read from resources/clojurecraft/pearls.edn."
   (edn/read-string (slurp (io/resource "clojurecraft/pearls.edn"))))
 
-(def hunt-radius 32.0)                ; blocks from the feet an enderman is hunted within
-(def sighting-radius 128.0)           ; blocks from the feet a tracked enderman sighting is gone toward: the server shows them that far, and every first sighting of the 2026-11-05 rod bots was 54 to 105 blocks off, past hunt-radius, so none ever became a hunt
-(def chase-max-fails 3)               ; failed goes toward one sighting after which it is given up (blacklisted) and the hunt goes on
-(def chase-giveup-ms 300000)          ; ms a sighting chase may go on at most before it is given up, however it is failing
-(def refuge-leave-ms 180000)          ; ms the blaze refuge may hold a full-health rod bot after the rods before the sealed exit goes anyway, watcher or not: #723's protection is the first minutes at the spawner, not the whole run at a spawner that never stops spawning
+(def hunt-radius (:hunt-radius thresholds))
+(def sighting-radius (:sighting-radius thresholds))
+(def chase-max-fails (:chase-max-fails thresholds))
+(def chase-giveup-ms (:chase-giveup-ms thresholds))
+(def refuge-leave-ms (:refuge-leave-ms thresholds))
 (def seek-radius (:seek-radius thresholds)) ; blocks from the feet an enderman is walked toward, none nearer
-(def lookout-ms 5000)                 ; ms a :lookout stands turning before the plan looks again
-(def lookout-turn 0.09)               ; degrees of yaw a :lookout turns a ms: a full turn in four seconds
-(def roam-reach 16)                   ; blocks a roam walks from the feet, at the least, to look round somewhere else
-(def toward-gain 4)                   ; blocks nearer an enderman, by a route's measure, a walk toward one must bring the feet
-(def roam-turn-ms 10000)              ; ms after which a roam sets out a heading further round
+(def lookout-ms (:lookout-ms thresholds))
+(def lookout-turn (:lookout-turn thresholds))
+(def roam-reach (:roam-reach thresholds))
+(def toward-gain (:toward-gain thresholds))
+(def roam-turn-ms (:roam-turn-ms thresholds))
 (def headings ; the eight ways a roam may go, a quarter turn of each other in pairs
   [[1 0] [1 1] [0 1] [-1 1] [-1 0] [-1 -1] [0 -1] [1 -1]])
-(def strike-range 4.5)                ; blocks from the feet, height counted, within which an enderman is at hand (forage/strike-range: past a walk's reach)
+(def strike-range (:strike-range thresholds))
 (def stare-range (:stare-range thresholds)) ; blocks to the head within which a provoke stares, with a clear line: the enderman's follow range
 (def stare-from (:stare-from thresholds)) ; never stare nearer: an angry enderman stared at within 4 teleports away
-(def provoke-range (or (:provoke-range thresholds) stare-from)) ; blocks within which a stare can provoke an enderman
-(def stare-ms 3000)                   ; ms a provoke stares at most before the enderman says it has a target (creepy)
-(def burrow-depth 3)                  ; stairs down a burrow cuts: from the third, the ground roofs a tunnel two high
-(def burrow-length 2)                 ; tunnel steps past the stairs: two keep the bot out of an enderman's reach from the last stair
+(def stare-ms (:stare-ms thresholds))
+(def burrow-depth (:burrow-depth thresholds))
+(def burrow-length (:burrow-length thresholds))
 (def burrow-span (+ burrow-depth burrow-length)) ; blocks from the burrow's end every cell of it lies within: a walk toward one never ends inside
-(def shelter-reach 16.0)              ; blocks from the feet a burrow is still the hunt's shelter; farther, a new one is dug
-(def descend-drop 8)                  ; blocks below the feet the nearest enderman stands, at the least, before the hunt cuts stairs down toward it
-(def descend-step 8)                  ; blocks one flight of those stairs goes down before the hunt looks round again
-(def descend-radius 128.0)            ; blocks from the feet an enderman far below is descended toward: the server shows them that far
-(def bore-length 8)                   ; level steps a tunnel toward an enderman no route reaches cuts before the hunt looks again
-(def site-reach 6)                    ; cells on the plane round the feet a burrow site is looked for within, when none can be cut from the feet
-(def candidates 3)                    ; nearest endermen asked for a route, as the other acts ask
-(def spare-digs 32)                   ; digs a pickaxe keeps for a burrow: a burrow's sixteen (burrow-steps) twice over, for one that turns or fails :no-shelter; with fewer left no stairs or tunnel is cut for anything else
+(def shelter-reach (:shelter-reach thresholds))
+(def descend-drop (:descend-drop thresholds))
+(def descend-step (:descend-step thresholds))
+(def descend-radius (:descend-radius thresholds))
+(def bore-length (:bore-length thresholds))
+(def site-reach (:site-reach thresholds))
+(def candidates (:candidates thresholds))
+(def spare-digs (:spare-digs thresholds))
 
 ;; ---------------------------------------------------------------- the quarry
 
@@ -171,12 +170,12 @@
                             (endermen (dissoc world :plan/blacklist)))
                       (:player/pos world)))))
 
-(def danger-radius 16.0)              ; blocks from the burrow's mouth an angry enderman keeps the bot in from: the enderman's own stare range (EndermanLookForPlayerGoal: within 16 an angry one stands while looked at and rushes when not; farther, one with a target teleports to it after 30 ticks, so one farther that has not come has lost its target); eight let a burrow go stale with one angry nine to sixteen off that would rush the bot stepping out. The wait within is bounded by the lure (lure?), where one that never comes held batch pearls-warped-d run 1 thirty-four minutes
-(def danger-rise 8)                   ; blocks above or below the burrow's mouth an angry enderman keeps the bot in from: one seventeen below in another cave never comes (batch pearls-warped-c run 1's forty minutes); one five or six below on the slope beside the mouth comes the moment the bot steps out (batch pearls-warped6-a run 4, three times, the third its death)
+(def danger-radius (:danger-radius thresholds))
+(def danger-rise (:danger-rise thresholds))
 
-(def lure-tries 3)                    ; lures (a walk out to the burrow's mouth and one back in) after which a blacklisted angry enderman near the mouth that has not come holds the burrow no longer
+(def lure-tries (:lure-tries thresholds))
 
-(def fight-tries 8)                   ; :fight intentions ended :done on one enderman, of the newest sixteen, after which it is fought no more for a rest (fought-out?)
+(def fight-tries (:fight-tries thresholds))
 (def fight-rest-ms combat/give-up-ms) ; ms one fought out is left, as combat leaves one its engage gave up on (combat/given-up?)
 
 (defn fought-out?
@@ -201,9 +200,9 @@
                        (< (- (:time/now world 0) (:intention/at (first on-eid) 0))
                           fight-rest-ms))))))
 
-(def fight-giveups 3)                   ; fights on one enderman cut or failed within fight-giveup-ms, after which it is fought no more until it is in reach
-(def fight-giveup-ms 600000)           ; ms (ten minutes) over which those fights are counted
-(def fight-retry-ms 30000)             ; ms after a fight on an enderman failed that it is not fought again until within the sword's reach
+(def fight-giveups (:fight-giveups thresholds))
+(def fight-giveup-ms (:fight-giveup-ms thresholds))
+(def fight-retry-ms (:fight-retry-ms thresholds))
 
 (defn unfightable?
   "Is enderman e (id eid) no fight's target now: fought out (fought-out?), given up by a fight's
@@ -284,9 +283,9 @@
                             (<= (abs (- (physics/y-of q) (physics/y-of p))) danger-rise))))
                    (endermen (dissoc world :plan/blacklist) stare-range)))))
 
-(def park-ms 60000)                    ; ms an angry enderman has not closed in before it is parked
-(def park-near 8.0)                    ; blocks within which one is never parked: it is on the bot
-(def close-gain 2.0)                   ; blocks nearer than its best distance that count as closing in: a parked enderman jitters one or two blocks (pearl-fight-g job 3, enderman 75 at 9 to 11 blocks for 90 min)
+(def park-ms (:park-ms thresholds))
+(def park-near (:park-near thresholds))
+(def close-gain (:close-gain thresholds))
 
 (defn track-angry
   "The world with :pearls/angry updated: for each angry enderman (entity/creepy?) within stare-range
@@ -357,8 +356,8 @@
                           (endermen (dissoc world :plan/blacklist) stare-range))
                     p)))
 
-(def stale-lookouts 12)              ; lookouts (five seconds each, a minute) stood with the burrow and nothing to do from it before it is given up for one cut beside the next enderman
-(def lure-lookouts 6)                 ; lookouts (half a minute) stood in the burrow over an angry enderman near its mouth that has not come before the bot shows itself at the mouth to bring it
+(def stale-lookouts (:stale-lookouts thresholds))
+(def lure-lookouts (:lure-lookouts thresholds))
 
 (defn lure?
   "Has the bot stood lure-lookouts or more :lookout intents since its last walk ended
@@ -871,7 +870,7 @@
   (boolean (some-> (digs-left world)
                    (>= spare-digs))))
 
-(def cut-reach 32)                    ; blocks on the plane (path/octile), at most, from the feet to an enderman stairs or a tunnel are cut toward: a flight is eight blocks and about twenty digs, so one farther off is walked toward first (toward); batch pearls-warped6-b's run 2 cut four flights toward ones 47 to 69 off, 10 to 14 below, and three of its tunnels toward ones 41 to 61 off, with its kill's pearl in hand
+(def cut-reach (:cut-reach thresholds))
 
 (defn level?
   "Does enderman e stand on the bot's level: less than descend-drop above or below the feet?"
@@ -887,7 +886,7 @@
   (<= (path/octile (path/feet-cell (:player/pos world)) (combat/cell (:entity/pos e))) cut-reach))
 
 (def lava-sea-top 32)                   ; the Nether's lava fills every cell up to this height
-(def lava-margin 4)                    ; cells over it that nothing is cut below
+(def lava-margin (:lava-margin thresholds))
 
 (defn lava-floor
   "The height in the Nether under which no stair, tunnel or burrow is cut: the lava sea's top and
@@ -1054,10 +1053,10 @@
                              {:intent/kind :walk :intent/target c :intent/for :shelter}))
                    c))))))
 
-(def vantage-reach 10)                ; cells on the plane from an enderman, at most, a vantage is looked for within (stare-from at the least): the nearer the stare, the surer it follows
-(def vantage-rise 2)                  ; cells up or down from an enderman's feet a vantage may stand: one on the stairs is three below the ground, and is waited out
-(def vantage-tries 3)                 ; vantages, nearest the feet first, a route is asked for before none is taken: the route is the costly test. At 8, and stare-site's route test without vantage-nodes, 3 endermen by 8 vantages at the full budget froze real-18 bots 19 to 53 s a tick and the server timed them out (4f317da lane 2, Clj_r01: profile probe 42327950512, 921 of 1219 samples in stare-site)
-(def vantage-nodes 1500)              ; expansions a route to or from a vantage may spend: it lies within shelter-reach, and sixteen such routes may be asked in one planner tick
+(def vantage-reach (:vantage-reach thresholds))
+(def vantage-rise (:vantage-rise thresholds))
+(def vantage-tries (:vantage-tries thresholds))
+(def vantage-nodes (:vantage-nodes thresholds))
 
 (def provoke-home-reach (:provoke-home-reach thresholds)) ; blocks from the burrow's end within which an enderman is provoked from outside the mouth: a provoked one is at the bot in about a second, and four hits fell it in the 3.6 s a walk of six blocks home took (gym plan run 40747177526 run 6)
 
@@ -1130,8 +1129,8 @@
                                 (when (and (intent/routable? world i) (way-home c))
                                   (dissoc i :intent/max-nodes)))))))))))
 
-(def crowd-reach 10)                  ; cells on the plane from a calm enderman crowding a given-up burrow's mouth, at most, a new burrow is cut within: the nearer its mouth, the surer the stare from it follows
-(def crowd-margin 1.0)                ; blocks past stare-from that a new burrow's mouth stands from that enderman's head, at the least, so that the stare from it is not cut short as one that came near (:provoke)
+(def crowd-reach (:crowd-reach thresholds))
+(def crowd-margin (:crowd-margin thresholds))
 
 (defn crowder
   "[eid entity] of the nearest calm enderman (not entity/creepy?) crowding the burrow's mouth
@@ -1274,7 +1273,7 @@
   (first (sort-by (fn [h] (count (filter #(solid-or-unloaded? world %) ((first-cut kind) feet h))))
                   (cons toward (remove #{toward} stairs/directions)))))
 
-(def brink-drop 3)                    ; blocks of open air under a cell beside the feet that make the feet a brink no cut starts from
+(def brink-drop (:brink-drop thresholds))
 
 (defn brink?
   "Does one of the eight cells beside feet [x y z] at its height stand open over brink-drop or more
@@ -1361,7 +1360,7 @@
               (when (and (solid-cut? world :stairs-up feet h) (not (brink? world step))) h)))
           ways)))
 
-(def nether-climb-ceiling 100)           ; the highest a climb out of a pocket goes in the Nether: the roof is bedrock from y 123, and the forests and the endermen are on the floors under y 100
+(def nether-climb-ceiling (:nether-climb-ceiling thresholds))
 
 (defn roof-cap
   "The height a stair up from y stops at: y + descend-step, in the Nether at most
@@ -1520,17 +1519,16 @@
 (def provoke-health (:provoke-health thresholds)) ; health under which no enderman is provoked, from the mouth or anywhere: the bot rests in its burrow first (sim-endermen3's probe 39847287615: in worlds R1, R2 and R4 the first death came of a provoke 4 to 8 blocks off at 10.8 to 17.8 health just outside the burrow, the enderman landing three to five blows in five seconds); away from the mouth (a vantage) only at full health
 
 (def danger-health (or (:danger-health thresholds) combat/retreat-health)) ; health under which the hunt never fights, provokes or goes toward an enderman: one enderman hit (7 on Normal, ns doc) plus a margin, the same line combat breaks a fight off at. At or under it the bot backs off, walks home, eats or rests where it stands until its health is back over it (issue #563, probe 40022662598: after the second stone sword was crafted the hunt re-fought an angry enderman it had just backed away from, again and again down to 1.3 health, one hit from death)
-(def break-line (:break-line thresholds)) ; health thresholds for breaking off an open fight with an enderman [break-hp resume-hp]
-(def break-hp (or (:break-hp thresholds) (first break-line)))
-(def resume-hp (or (:resume-hp thresholds) (second break-line)))
+(def break-hp (:break-hp thresholds))
+(def resume-hp (:resume-hp thresholds))
 
 
-(def wander-lookouts 60)                 ; lookouts (five seconds each, five minutes) stood with no walk taken since before the hunt goes elsewhere (wander)
-(def loiter-walks 12)                  ; walks ended whose targets all lie within loiter-radius of the feet: a hunt shuffling in one place
-(def loiter-radius 8)                  ; blocks on the plane (path/octile) within which twelve walks' ends are one place
-(def wander-reach 64)                  ; blocks a wander looks for ground to walk to, on each of the headings
-(def hold-patience-ms 12000)             ; ms a held fight waits with its target past strike-range before the hunt plans again (combat/hold-timeout-ms is a minute)
-(def struck-health 14.0)                ; health under which an enderman at hand has landed a hit (7 on Normal off 20): fought back, fought out or not
+(def wander-lookouts (:wander-lookouts thresholds))
+(def loiter-walks (:loiter-walks thresholds))
+(def loiter-radius (:loiter-radius thresholds))
+(def wander-reach (:wander-reach thresholds))
+(def hold-patience-ms (:hold-patience-ms thresholds))
+(def struck-health (:struck-health thresholds))
 
 (defn struck-by
   "[eid e] of the nearest angry enderman (entity/creepy?) within the sword's reach (combat/in-reach?)
@@ -1698,7 +1696,7 @@
            (filter #(unseen-from? world ss %))
            first))))
 
-(def cover-reach 5)                     ; blocks round the feet within which a standable cell out of a shooter's sight is looked for
+(def cover-reach (:cover-reach thresholds))
 
 (defn near-cover-cell
   "The nearest cell within cover-reach (the plane, two up or down) that the feet could stand on
@@ -1753,7 +1751,7 @@
   (boolean (some (fn [[_ e]] (and (contains? ranged-kinds (entity/kind e)) (combat/seen? world e)))
                  (swarm world))))
 
-(def shot-hold-ms 10000)                ; ms after a ghast was last in sight that no walk goes elsewhere
+(def shot-hold-ms (:shot-hold-ms thresholds))
 
 (defn recently-shot?
   "Was a ghast in sight (:pearls/shot-at-ms, shot-at?) less than shot-hold-ms ago? Pearls-fight-c job 1
@@ -1762,7 +1760,7 @@
   [world]
   (let [t (:pearls/shot-at-ms world)] (boolean (and t (< (- (:time/now world 0) t) shot-hold-ms)))))
 
-(def weak-melee 4.0)                    ; the hit (mob/kinds :melee) at or under which a mob is fought at hand with no burrow: a zombie's 3, a spider's 2
+(def weak-melee (:weak-melee thresholds))
 
 (defn weak?
   "Is entity e of a kind mob/kinds knows to hit for weak-melee or less on Normal (a zombie, a
@@ -1927,7 +1925,7 @@
                         wander-lookouts)
                     (nil? (routable world (endermen world seek-radius)))))))
 
-(def explore-memory 6) ; walks arrived at lately that an explore sets out away from, and a far-end is not within roam-reach of
+(def explore-memory (:explore-memory thresholds))
 
 (defn far-ends
   "Where each of the eight headings' routes (path/plan toward ground wander-reach out, from index
@@ -1973,7 +1971,7 @@
   [world]
   (far-walk world (mod (quot (:time/now world 0) roam-turn-ms) (count headings)) #{}))
 
-(def forest-reach 2)                   ; chunks round the feet's own within which the bot is in a warped forest
+(def forest-reach (:forest-reach thresholds))
 
 (defn in-forest?
   "Is a warped forest chunk known (memory/warped-chunks) within forest-reach chunks of the feet's
@@ -2244,7 +2242,7 @@
                                         blocks/name-of))
                             (concat cells (mapcat others cells)))))))
 
-(def bore-reach 4) ; blocks ahead along the heading a bore targets: past the tunnel's reach (1.5), one step at a time replanned
+(def bore-reach (:bore-reach thresholds))
 
 (defn pocket-bore-target
   "The [x y z] target of the pocket bore from the feet, or nil: bore-reach ahead along the
@@ -2366,7 +2364,7 @@
           ;; Surfaced and clear of fortress
           :else nil)))))
 
-(def exit-reach 2.0) ; blocks from the feet within which a held exit target is reached
+(def exit-reach (:exit-reach thresholds))
 
 (defn held-exit-target
   "The held tunnel-out target (:pearls/exit-target), or nil when none is held, the feet are within
@@ -2744,7 +2742,7 @@
 (def relocate-dist (:relocate-dist thresholds)) ; blocks from where it began that a relocation walks before it is over
 (def relocate-timeout-ms (:relocate-timeout-ms thresholds)) ; ms a relocation goes on at most (seven minutes) before the clock starts again
 (def relocate-patience-ms (:relocate-patience-ms thresholds)) ; ms a relocation waits in place for an angry enderman near to come or go (menaced?) before it walks past one that is parked (live-menaced?)
-(def cluster-radius 24.0)             ; blocks round an enderman within which the others count toward how thick the place is
+(def cluster-radius (:cluster-radius thresholds))
 
 (defn pearls-held
   "The ender pearls held."
@@ -3626,8 +3624,8 @@
   (cond-> (sword/with-laid (drop-worn-picks world))
     (and (log-counted? world) (= :log (:intent/for (:plan/last world)))) (dissoc :plan/last)))
 
-(def reserve-digs 64)               ; digs a held pickaxe may fall to before the hunt cuts the stems for its successor: twice spare-digs
-(def reserve-stems 6)                 ; warped stems held that make a table, sticks and a pickaxe's planks
+(def reserve-digs (:reserve-digs thresholds))
+(def reserve-stems (:reserve-stems thresholds))
 
 (defn log-count
   "The logs and stems held (blocks/log-name?)."

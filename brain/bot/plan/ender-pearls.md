@@ -76,8 +76,8 @@ sourceRefs:
   - test/clojurecraft/pearls_test.clj#a-distant-angry-enderman-is-met-standing-not-charged-with-a-pickaxe-held
   - test/clojurecraft/pearls_test.clj#empty-hands-make-a-wooden-sword-from-a-remembered-trunk
   - test/clojurecraft/pearls_test.clj#empty-hands-hunt-the-wood-of-a-pickaxe
-  - src/clojurecraft/pearls.clj#def hunt-radius 32.0
-  - src/clojurecraft/pearls.clj#def cut-reach 32
+  - resources/clojurecraft/pearls.edn#:hunt-radius
+  - resources/clojurecraft/pearls.edn#:cut-reach
   - src/clojurecraft/pearls.clj#defn within-cut-reach?
   - src/clojurecraft/pearls.clj#def roam-reaches
   - src/clojurecraft/pearls.clj#defn at-hand
@@ -91,9 +91,9 @@ sourceRefs:
   - resources/clojurecraft/pearls.edn#:seek-radius
   - test/clojurecraft/pearls_test.clj#hunt-thresholds-table-is-loaded-and-complete
   - src/clojurecraft/pearls.clj#def stare-from (:stare-from thresholds)
-  - src/clojurecraft/pearls.clj#def stare-ms 3000
-  - src/clojurecraft/pearls.clj#def burrow-depth 3
-  - src/clojurecraft/pearls.clj#def burrow-length 2
+  - resources/clojurecraft/pearls.edn#:stare-ms
+  - resources/clojurecraft/pearls.edn#:burrow-depth
+  - resources/clojurecraft/pearls.edn#:burrow-length
   - src/clojurecraft/pearls.clj#defn stand?
   - src/clojurecraft/pearls.clj#defn shelter?
   - src/clojurecraft/pearls.clj#defn away
@@ -154,7 +154,7 @@ sourceRefs:
   - src/clojurecraft/stairs.clj#defn tall-stair-cells
   - test/clojurecraft/pearls_test.clj#a-burrow-site-is-one-a-walk-reaches-and-none-a-walk-failed-toward
   - test/clojurecraft/pearls_test.clj#a-burrows-stairs-are-four-high-so-an-enderman-walks-down-them
-  - src/clojurecraft/pearls.clj#def spare-digs 32
+  - resources/clojurecraft/pearls.edn#:spare-digs
   - src/clojurecraft/pearls.clj#defn digs-left
   - src/clojurecraft/pearls.clj#defn spare?
   - src/clojurecraft/memory.clj#defn arrived
