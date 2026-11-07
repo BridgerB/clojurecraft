@@ -4,6 +4,9 @@
 
      bb probe run <label> '<command>' [worlds]   dispatch probe.yml for the current branch; prints
                                                  the run id, or why it would not dispatch
+     bb probe why <tag> <asset> <stem> <ms>      one moment of a shipped recording explained
+                                                 (dev/clojurecraft/why.clj): the botlogs archive
+                                                 downloaded on the runner, no branch needed
      bb probe log <id>                           when the run is done: its artifact into
                                                  /tmp/probe-<id> (cleared first) and out/run.log
                                                  printed; when not, its status
@@ -111,10 +114,30 @@
                      "no run.log in the artifact (a run before run.log existed: see probe.log)"))
               (flush)))))
 
+(defn why-command
+  "The probe command that explains one moment of a shipped recording: the batch's botlogs archive
+   asset of release tag downloaded and unpacked under out/a, then dev/clojurecraft/why.clj on the
+   bot's recording (stem: s1-Clj_r07, as the archive names it) folded to at-ms."
+  [tag asset stem at-ms]
+  (str "mkdir -p out/a && gh release download "
+       tag
+       " --repo "
+       repo
+       " -p "
+       asset
+       " -D out/a"
+       " && tar -xzf out/a/"
+       asset
+       " -C out/a"
+       " && clojure -M:dev -m clojurecraft.why out/a/" stem
+       ".edn.zst " at-ms))
+
 (defn -main
-  "run <label> <command> [worlds] | log <id>."
-  [& [cmd a b c]]
+  "run <label> <command> [worlds] | log <id> | why <tag> <asset> <stem> <at-ms>."
+  [& [cmd a b c d]]
   (case cmd
     "run" (dispatch! a b c)
     "log" (log! a)
-    (println "bb probe run <label> '<command>' [worlds] | bb probe log <id>")))
+    "why" (dispatch! (str "why-" c "-" d) (why-command a b c d) nil)
+    (println (str "bb probe run <label> '<command>' [worlds] | bb probe log <id>"
+                  " | bb probe why <botlogs tag> <asset> <stem> <at-ms>"))))
