@@ -4,6 +4,7 @@
    :pocket intent. Worlds are one chunk column, stone below y 64, air above, feet at [8.5 64 8.5]."
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [clojurecraft.blocks :as blocks]
+            [clojurecraft.filler :as filler]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
@@ -210,7 +211,7 @@
         w (-> (world-of walled)
               (assoc-in [:player/inventory 9] {:item (recipe/item-id :netherrack) :count 40})
               (assoc-in [:player/inventory 10] {:item (recipe/item-id :iron_pickaxe) :count 1}))]
-    (is (= :netherrack (pocket/seal-filler w 2)))
+    (is (= :netherrack (filler/pick w 2)))
     (is (pocket/can-seal? w site) "no cobblestone: the Nether's own rock seals")
     (is (every? #(= :netherrack (:build/item %))
                 (pocket/seal-ops [8 64 8] [[7 64 8] [7 65 8]] :netherrack)))

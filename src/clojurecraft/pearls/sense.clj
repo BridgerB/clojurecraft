@@ -317,7 +317,8 @@
           d (physics/distance (physics/centre c) (:entity/pos e))
           goal (if (map? to) to {:goal/kind :block :goal/pos c})]
       (or (> d pparams/danger-radius)
-          (= :found (:path/status (path/plan world ec goal {:path/max-nodes 300})))))))
+          (= :found
+             (:path/status (path/plan world ec goal {:path/max-nodes (path/budget :reach)})))))))
 
 (defn quarry
   "[eid entity] of the enderman a stare is for: the nearest within stare-range not yet coming

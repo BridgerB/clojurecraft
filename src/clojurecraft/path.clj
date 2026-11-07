@@ -25,7 +25,20 @@
 (set! *warn-on-reflection* true)
 
 (def max-fall 3)                     ; blocks a drop may fall; vanilla damage starts above 3
-(def default-max-nodes 6000)          ; expansions one plan may spend
+(def budgets
+  "{name expansions}: how many nodes a route search may spend, by what it is for: :near (a local
+   stand, a walk to a candidate close by), :reach (is one place reachable at all), :cover (a
+   corridor or cover walk), :vantage (a route to or from a vantage, many asked in one tick),
+   :explore (each search of an explore pass), :far (one plan, the default) and :return (a complete
+   way back to the trees)."
+  {:near 400 :reach 300 :cover 800 :vantage 1500 :explore 2000 :far 6000 :return 120000})
+
+(defn budget
+  "The expansions (budgets) a search for purpose k may spend; nil for a purpose with none."
+  [k]
+  (get budgets k))
+
+(def default-max-nodes (budget :far)) ; expansions one plan may spend
 (def sky-weight 4.0)                  ; a block of height in the :sky heuristic, more than a jump costs
 (def walk-cost 1.0)                   ; one cell on the level
 (def jump-cost 2.0)                   ; one cell up

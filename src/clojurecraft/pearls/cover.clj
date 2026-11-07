@@ -4,6 +4,7 @@
             [clojurecraft.blaze :as blaze]
             [clojurecraft.combat :as combat]
             [clojurecraft.entity :as entity]
+            [clojurecraft.filler :as filler]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.memory :as memory]
@@ -12,8 +13,7 @@
             [clojurecraft.pearls.place :as pplace]
             [clojurecraft.pearls.sense :as psense]
             [clojurecraft.pearls.upkeep :as pupkeep]
-            [clojurecraft.physics :as physics]
-            [clojurecraft.stairs :as stairs]))
+            [clojurecraft.physics :as physics]))
 
 (set! *warn-on-reflection* true)
 
@@ -31,11 +31,11 @@
     (when (not= [0 0] [hx hz]) [(+ fx hx) (+ fy dy) (+ fz hz)])))
 
 (defn wall-toward
-  "A :place of one block of the filler held (stairs/filler) in the first open cell of levels (dy from
+  "A :place of one block of the filler held (filler/pick) in the first open cell of levels (dy from
    the feet) on the side of the feet that point to lies on (cell-toward), or nil when all are solid
    or none is held. Marked :intent/wall?, so the hunt's interrupt does not cut it."
   [world to levels]
-  (when-let [item (stairs/filler world 2)]
+  (when-let [item (filler/pick world 2)]
     (some (fn [dy]
             (when-let [c (cell-toward world to dy)]
               (when-not (pplace/solid-or-unloaded? world c)
@@ -225,7 +225,7 @@
                                                           (combat/seen? world e))))
                                            (psense/swarm world))
                                      (:player/pos world))]
-      (let [item (stairs/filler world 1)
+      (let [item (filler/pick world 1)
             hide (hide-cell world e)
             line (when item (line-cell world e))]
         (cond hide {:intent/kind :walk :intent/target hide :intent/for :cover :intent/wall? true}
