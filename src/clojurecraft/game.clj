@@ -137,11 +137,9 @@
 
 (defn stare-safe-look
   "The look [yaw pitch] to send in world after a teleport: the one the server set, or in the End,
-   with no carved pumpkin on the head, straight down (pitch 90). An enderman is provoked by a
-   look at it from the first tick the player is there, and the End's arrival faces yaw 0, pitch 0:
-   in the dragon gym that is straight at endermen thirty blocks off. Gym chain-w22 and main's
-   dragon-main-a run 1 (plan run 41092662823) had enderman 105 angry (metadata 17 true) before the
-   pumpkin was worn, with the first sent look [0 0], and was slain by two of them."
+   with no carved pumpkin on the head, straight down (pitch 90). An enderman is provoked by a look
+   at it from the first tick the player is there, and the End's arrival faces yaw 0, pitch 0: in the
+   dragon gym that is straight at endermen thirty blocks off."
   [world [yaw _ :as look]]
   (let [worn (get-in world [:player/inventory inventory/head-slot :item])]
     (if (and (= dimension/end (:player/dimension world)) (not= (blocks/items :carved_pumpkin) worn))
@@ -154,12 +152,11 @@
   32.0)
 
 (defn apply-teleport
-  "The server moved the player: set pos and look (relative per flags; stare-safe-look), stop,
-   accept the teleport and echo the position. The first teleport also sends player-loaded; any
-   later one is kept as :player/corrected, how far the server moved the bot and when, and one
-   of trail-breaking-teleport or more drops :plan/trail: its cells lie in another place, and a
-   retreat walk to one is a walk the bot cannot make (Clj_r03, 59e528b run 42364623752: 294
-   retreat walks to a cell 1,500 blocks off, under ghast fire, never moving)."
+  "The server moved the player: set pos and look (relative per flags; stare-safe-look), stop, accept
+   the teleport and echo the position. The first teleport also sends player-loaded; any later one is
+   kept as :player/corrected, how far the server moved the bot and when, and one of
+   trail-breaking-teleport or more drops :plan/trail: its cells lie in another place, and a retreat
+   walk to one is a walk the bot cannot make."
   [world {:keys [teleport-id x y z yaw pitch flags]}]
   (let [[ox oy oz] (or (:player/pos world) [0.0 0.0 0.0])
         [oyaw opitch] (:player/look world)
@@ -295,12 +292,10 @@
 (def server-tick-ms 50)               ; a server tick at the target rate, 20 a second
 
 (defn clocked
-  "The world after a set-time packet: the server sends one every 20 of its ticks, so the time
-   since the last one, over 20, is how long its ticks take now (:server/tick-ms, never under
+  "The world after a set-time packet: the server sends one every 20 of its ticks, so the time since
+   the last one, over 20, is how long its ticks take now (:server/tick-ms, never under
    server-tick-ms, halfway to each new reading). A loaded server's ticks are longer, and what it
-   counts in ticks (a dig's progress) takes longer by the clock: race 38665691517 (issues #88,
-   #144) ran its server at 130 ms a tick, and digs finished by the bot's clock were left
-   standing."
+   counts in ticks (a dig's progress) takes longer by the clock."
   [w]
   (let [now (:time/now w)
         last-at (:server/time-at w)
@@ -333,9 +328,8 @@
 
 (defmethod on-packet [:play :set-health]
   [w p]
-  ;; the food and saturation ride on the same packet (issue #259: the :eat row reads the food); a
-  ;; packet decoded short, a prefix of the spec, has health alone.
-  ;; When health drops, record the tick so fight-or-flee triggers at once.
+  ;; the food and saturation ride on the same packet; a packet decoded short, a prefix of the spec,
+  ;; has health alone. When health drops, record the tick so fight-or-flee triggers at once.
   (let [hurt? (and (:player/health w) (< (double (:health p)) (double (:player/health w))))]
     (cond-> (assoc w :player/health (:health p))
       hurt? (assoc :player/hurt-at (:time/tick w 0))
@@ -362,8 +356,7 @@
                      (dec (long source-direct))
                      (when (pos? (long (or source-cause 0))) (dec (long source-cause))))]
       ;; :player/hurt-at is in ticks (the dragon's rules read it); :player/struck-at is the same
-      ;; moment in ms (:time/now), which combat/striker ages against struck-ms (gym blaze-wall-b,
-      ;; plan 40624888909: zombified piglin 126 arrived as 127, 144 as 145). :player/hits keeps
+      ;; moment in ms (:time/now), which combat/striker ages against struck-ms. :player/hits keeps
       ;; each hit named (hit-of): the damage type was decoded and dropped before
       (cond-> (-> w
                   (assoc :player/hurt-at (:time/tick w 0) :player/struck-at (:time/now w 0))
@@ -422,8 +415,8 @@
   (if (get-in w [:world/entities eid]) (apply update-in w [:world/entities eid] f args) w))
 
 (defmethod on-packet [:play :add-entity]
-  ;; every entity, not only items (issue #258): mobs, players, projectiles, an eye of ender; its
-  ;; velocity and yaw when the packet carries them (a recording from before the spec grew does not)
+  ;; every entity, not only items: mobs, players, projectiles, an eye of ender; its velocity and yaw
+  ;; when the packet carries them (a recording from before the spec grew does not)
   [w {:keys [entity-id type x y z vel yaw head-yaw]}]
   (assoc-in w
    [:world/entities entity-id]
@@ -462,8 +455,8 @@
                yaw (assoc :entity/yaw (double (relative flags 8 (:entity/yaw e 0.0) yaw))))))))
 (defmethod on-packet [:play :entity-event]
   ;; status 3 is a living entity's death: a fact before the body is removed; the dragon's is the
-  ;; run's win (issue #267); every other status (a teleport's particles, eating, a hurt) is kept
-  ;; as the entity's newest few, :entity/statuses (issue #263)
+  ;; run's win; every other status (a teleport's particles, eating, a hurt) is kept as the entity's
+  ;; newest few, :entity/statuses
   [w {:keys [entity-id status]}]
   (let [death? (= entity/death-status status)]
     (cond-> w
@@ -474,8 +467,7 @@
       (assoc :world/dragon-dead? true))))
 (defn ignite
   "w with :player/on-fire? set to lit?; a flag that turns on from off adds :time/now to
-   :player/ignitions, the last three (blaze-race-k: the burn is five seconds, a second ignition
-   within thirty means the fight is lost for now)."
+   :player/ignitions, the last three."
   [w lit?]
   (cond-> (assoc w :player/on-fire? lit?)
     (and lit? (not (:player/on-fire? w)))
@@ -485,8 +477,7 @@
   ;; the skimmed metadata: shared flags, and a living entity's health (entity/metadata-facts)
   [w {:keys [entity-id metadata]}]
   (cond-> (track w entity-id (fn [e] (merge e (entity/metadata-facts (:entity/type e) metadata))))
-    ;; the bot's own flags byte: bit 0x01 is on fire (gym blaze-fortress-race run 4: {0 1} at the
-    ;; first fireball, {0 0} when it burned out)
+    ;; the bot's own flags byte: bit 0x01 is on fire
     (and (= entity-id (:player/entity-id w)) (number? (get metadata entity/flags-index)))
     (ignite (odd? (long (get metadata entity/flags-index))))
     ;; the living flags byte: bit 0x01 is a held use key (a raised shield, a meal)
@@ -520,8 +511,8 @@
   (cond-> (update w :world/entities #(apply dissoc % ids))
     (some #(entity/dragon-gone? w %) ids) (assoc :world/dragon-dead? true)))
 (defmethod on-packet [:play :boss-event]
-  ;; the bars shown, by id (issue #267): the dragon fight's goes when its dragon dies;
-  ;; action 2 updates health (0.0 to 1.0)
+  ;; the bars shown, by id: the dragon fight's goes when its dragon dies; action 2 updates health
+  ;; (0.0 to 1.0)
   [w {:keys [uuid action health name]}]
   (cond (nil? uuid) w
         (= action (p/value :boss-event :add))
@@ -537,9 +528,9 @@
         (cond-> w health (assoc-in [:world/boss-health uuid] health))
         :else w))
 (defmethod on-packet [:play :game-event]
-  ;; win_game: the bot went through the exit portal, so the dragon is dead; the vanilla client
-  ;; shows the credits and then asks to respawn (client-command 0, typecraft bot/game.ts), and so
-  ;; does the bot (issue #267). Every other event is unread
+  ;; win_game: the bot went through the exit portal, so the dragon is dead; the vanilla client shows
+  ;; the credits and then asks to respawn (client-command 0, typecraft bot/game.ts), and so does the
+  ;; bot. Every other event is unread
   [w {:keys [event]}]
   (cond-> w
     (= event (p/value :game-event :win-game))
@@ -667,10 +658,8 @@
   (fn [world event] (reduce (fn [w f] (f w event)) world steps)))
 
 (defn summary
-  "The game part of the RESULT line: phase, position, counts and every :stats/* attribute.
-   :entities counts the item entities, as it did when they were the only ones tracked: every
-   entity is since issue #258, and a recorded run's RESULT must still replay to the one it
-   printed."
+  "The game part of the RESULT line: phase, position, counts and every :stats/* attribute. :entities
+   counts the item entities, as it did when they were the only ones tracked."
   [world]
   {:phase (:bot/phase world)
    :pos (:player/pos world)

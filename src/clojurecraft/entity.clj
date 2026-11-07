@@ -1,27 +1,25 @@
 (ns clojurecraft.entity
-  "The entities the server shows the bot, as values: every one it adds is kept in
-   :world/entities by id ({:entity/type :entity/pos :entity/seen-at}, with :entity/vel once the
-   server gives one, for a living one :entity/health and :entity/flags from its metadata, and for
-   a dropped item :entity/item, what it holds),
-   until the server removes it. A death is a fact the server states (entity-event status 3,
-   :entity/died-at) before it removes the body. Then the questions a fight asks of them: which
-   are hostile, which is nearest, whether one is gone. Items, mobs and other players are all
-   entities; a reader that wants one kind asks for it (kind, living?, item?). Issue #258: the
-   world held item drops only, and combat, blazes, endermen and the dragon need every entity."
+  "The entities the server shows the bot, as values: every one it adds is kept in :world/entities by
+   id ({:entity/type :entity/pos :entity/seen-at}, with :entity/vel once the server gives one, for a
+   living one :entity/health and :entity/flags from its metadata, and for a dropped item
+   :entity/item, what it holds), until the server removes it. A death is a fact the server states
+   (entity-event status 3, :entity/died-at) before it removes the body. Then the questions a fight
+   asks of them: which are hostile, which is nearest, whether one is gone. Items, mobs and other
+   players are all entities; a reader that wants one kind asks for it (kind, living?, item?)."
   (:require [clojure.math :as math]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.physics :as physics]))
 
 (set! *warn-on-reflection* true)
 
-(def health-index 9)                  ; LivingEntity.DATA_HEALTH_ID, a float (probe run 38876275250)
+(def health-index 9)                  ; LivingEntity.DATA_HEALTH_ID, a float
 (def flags-index 0)                   ; Entity.DATA_SHARED_FLAGS_ID, a byte: 0x01 on fire, 0x02 crouching, 0x20 invisible
 (def blaze-flags-index 16)            ; Blaze.DATA_FLAGS_ID, a byte: 0x01 charging, set 60 ticks before its fireballs and lowered after the volley
 (def living-flags-index 8)            ; LivingEntity.DATA_LIVING_ENTITY_FLAGS, a byte: 0x01 using an item (a shield raised, food eaten), 0x02 the offhand's
 (def using-item-bit 0x01)             ; in the living flags: the entity holds its use key
 (def item-index 8)                    ; ItemEntity.DATA_ITEM, an item stack: what a drop holds
 (def phase-index 16)                  ; EnderDragon.DATA_PHASE, an int: its EnderDragonPhase id (gym dragon-a's recording: 0 circling, 3 landing, 6 sitting)
-(def creepy-index 17)                 ; EnderMan.DATA_CREEPY, a boolean: it has a target (probe run 38876275250)
+(def creepy-index 17)                 ; EnderMan.DATA_CREEPY, a boolean: it has a target
 (def radius-index 8)                  ; AreaEffectCloud.DATA_RADIUS, a float: a dragon's breath cloud grows from 3 to 7 (gym dragon-d's recordings)
 (def death-status 3)                  ; an entity-event's status for a living entity's death (EntityEvent.DEATH)
 (def on-fire-bit 0x01)                ; in the shared flags: burning (a blaze's state, a mob in lava)
@@ -68,15 +66,12 @@
   "The attributes an entity of type type-id gets from a skimmed metadata map ({index value},
    packet/read-metadata): its shared flags at flags-index, for a living type only its health at
    health-index, and for a dropped item only the item id of the stack at item-index; a value of
-   another shape there (no server sends one) is left out. The same health index is an
-   interaction's height and a boat's hurt direction, so health is never read off a type the game
-   gives no health; the same item index is a fireball's look (issue #262: a drop is told apart by
-   what it holds, a blaze rod from cobblestone); for an enderman only, its creepy flag at
-   creepy-index (issue #263: true while it has a target, the hunt's sign one is coming); for the
-   dragon only, its phase at phase-index (issue #267: sitting on its perch or flying); for an
-   area effect cloud only, its radius at radius-index (the same index as a drop's stack: a
-   dragon's breath grows, and the bot keeps out of all of it). An index the skim did not reach
-   is simply absent: what was known stays."
+   another shape there (no server sends one) is left out. The same health index is an interaction's
+   height and a boat's hurt direction, so health is never read off a type the game gives no health;
+   the same item index is a fireball's look; for an enderman only, its creepy flag at creepy-index;
+   for the dragon only, its phase at phase-index; for an area effect cloud only, its radius at
+   radius-index (the same index as a drop's stack: a dragon's breath grows, and the bot keeps out of
+   all of it). An index the skim did not reach is simply absent: what was known stays."
   [type-id metadata]
   (let [flags (get metadata flags-index)
         health (get metadata health-index)
@@ -110,9 +105,7 @@
 
 (defn hostile?
   "Would the entity attack the bot: alive, of the game's monster category, and not one of the
-   neutral ones unless the server says it has a target (creepy?: gym dragon-b run 1 and dragon-c
-   runs 2 and 3 were slain by an enderman the bot had stared at while it faced the flying
-   dragon, and never fought back, the enderman being neutral)."
+   neutral ones unless the server says it has a target."
   [e]
   (and (not (dead? e))
        (= :monster (:category (blocks/mobs (kind e))))
@@ -127,8 +120,7 @@
 
 (defn in-breath?
   "Are the feet within a breath cloud's or fireball's own radius on the plane (:entity/radius,
-   breath-radius when unsaid), where it hurts? Gym chain-w11 runs 3 and 4 fought an enderman on
-   the island standing in a cloud, six health every half second of magic, and died there."
+   breath-radius when unsaid), where it hurts?"
   [world]
   (let [pos (:player/pos world)]
     (boolean (and pos
@@ -166,8 +158,7 @@
 
 (defn healths
   "{kind health} of the living entities whose health the server has said, for each kind the one
-   nearest the point from: what the bot knows of the mobs round it, for the RESULT line and the
-   gym's entities trial, which compares the nearest pig's with the server's own word."
+   nearest the point from."
   [world from]
   (->> (:world/entities world)
        (filter (fn [[_ e]] (contains? e :entity/health)))
@@ -176,10 +167,10 @@
        (into {})))
 
 (defn dragon-gone?
-  "Does the removal of entity eid say the dragon died (issue #267): it is the dragon, no boss bar
-   is shown (:world/boss-bars: the fight's bar goes with its dragon, and a summoned dragon has
-   none), and it was last seen within dragon-seen-radius of the bot, so a dragon that flew out of
-   the bot's tracking is not taken for dead."
+  "Does the removal of entity eid say the dragon died: it is the dragon, no boss bar is shown
+   (:world/boss-bars: the fight's bar goes with its dragon, and a summoned dragon has none), and it
+   was last seen within dragon-seen-radius of the bot, so a dragon that flew out of the bot's
+   tracking is not taken for dead."
   [world eid]
   (let [e (get-in world [:world/entities eid])
         pos (:player/pos world)]
@@ -226,7 +217,7 @@
 
 (defn stares?
   "Is e an enderman whose head faces the bot standing at bot-pos within stare-degrees: the pearl
-   hunt's other side of the stare (issue #263). Observation only, not wired into any decision."
+   hunt's other side of the stare. Observation only, not wired into any decision."
   [e bot-pos]
   (and (= :enderman (kind e)) (facing-bot? e bot-pos stare-degrees)))
 
