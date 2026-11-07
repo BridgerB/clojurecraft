@@ -4262,4 +4262,8 @@
         "a new target once the held one is reached")
     (is (not= first-target
               (pearls/fortress-tunnel-target (assoc along :plan/blacklist #{first-target})))
-        "a failed target is passed over")))
+        "a failed target is passed over")
+    (testing "the held target is dropped once clear of the fortress, and at a death"
+      (is (not (contains? (pearls/fortress-exit-hold (assoc held :player/pos [400.5 77.0 400.5]))
+                          :pearls/exit-target)))
+      (is (not (contains? (game/die held) :pearls/exit-target))))))
