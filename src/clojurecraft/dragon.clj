@@ -60,6 +60,7 @@
             [clojurecraft.recipe :as recipe]
             [clojurecraft.shapes]
             [clojurecraft.terrain :as terrain]
+            [clojurecraft.threat :as threat]
             [clojurecraft.window :as window]))
 
 (set! *warn-on-reflection* true)
@@ -962,18 +963,19 @@
   (let [[_ d] (dragon world)
         [fx fz] fountain
         pos (:player/pos world)
-        feet (intent/feet world)]
-    (->> (for [r radii
-               k (range escape-ways)
-               :let [a (* k (/ (* 2.0 math/PI) escape-ways))]]
-           [(+ fx (* r (math/cos a))) (+ fz (* r (math/sin a)))])
-         (keep #(ground-cell world %))
-         (remove #{feet})
-         (remove #(breathed? world %))
-         (remove #(before-head? d (physics/centre %)))
-         (remove #(bite-on-way? d pos (physics/centre %)))
-         (sort-by #(physics/horizontal-distance pos (physics/centre %)))
-         first)))
+        feet (intent/feet world)
+        cells (->> (for [r radii
+                         k (range escape-ways)
+                         :let [a (* k (/ (* 2.0 math/PI) escape-ways))]]
+                     [(+ fx (* r (math/cos a))) (+ fz (* r (math/sin a)))])
+                   (keep #(ground-cell world %))
+                   (remove #{feet}))]
+    (threat/nearest-safe cells
+                         (fn [c]
+                           (or (breathed? world c)
+                               (before-head? d (physics/centre c))
+                               (bite-on-way? d pos (physics/centre c))))
+                         (fn [c] (physics/horizontal-distance pos (physics/centre c))))))
 
 (defn escape
   "The feet cell on the ground nearest the feet (other than the feet's own cell), of those
