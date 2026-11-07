@@ -2752,14 +2752,14 @@
           (and (fortress-escaping? world) (not (can-tunnel-out? world)))
           (if-let [pos (nearest-forest world)]
             (forest-way world (room-waypoint world (update pos 1 inc)))
-            (or (explore world) (reach-heading world)))
+            (explore world))
           :else
           (if-let [pos (nearest-forest world)]
             (forest-way world
                         (if (near-fortress? world)
                           (room-waypoint world (update pos 1 inc))
                           (update pos 1 inc)))
-            (or (explore world) (reach-heading world))))))
+            (explore world)))))
 
 (defn travel-caged?
   "Is the bot in the Nether, in no warped forest, with no enderman tracked, and no walk to or toward
