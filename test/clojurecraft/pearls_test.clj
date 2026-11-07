@@ -4184,3 +4184,22 @@
     (is (= "hunt" (namespace (intent/why-of i))))
     (is (= (intent/why-of i)
            (:intention/why (memory/intention (assoc i :intent/id 3) :started 0))))))
+
+(deftest a-stare-site-asks-few-cheap-routes
+  ;; 4f317da lane 2, Clj_r01: three endermen by eight vantages, each route test at the full budget,
+  ;; froze real-18 bots 19 to 53 s a tick and the server timed them out (profile probe
+  ;; 42327950512: 921 of 1219 samples in stare-site); each test now spends at most vantage-nodes
+  (let [e (enderman [8.5 64.0 15.5])
+        w (-> (standing {7 e} wall)
+              (assoc-in [:player/inventory 1] (item :iron_pickaxe 1))
+              (update :world/chunks
+                      into
+                      (for [cx [-1 0 1]
+                            cz [-1 0 1]
+                            :when (not= [0 0] [cx cz])]
+                        [[cx cz] (world/column {})])))
+        asked (atom [])]
+    (with-redefs [intent/routable? (fn [_ i] (swap! asked conj (:intent/max-nodes i)) false)]
+      (is (nil? (pearls/stare-site w e)) "no route: no site"))
+    (is (<= 1 (count @asked) pearls/vantage-tries) "at most vantage-tries route tests")
+    (is (every? #(= pearls/vantage-nodes %) @asked) "each within vantage-nodes")))
