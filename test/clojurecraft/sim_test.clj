@@ -176,6 +176,21 @@
     (is (contains? (:sim/broken sim) [3 65 0]) "it broke the leaf in its way")
     (is (zero? (:plan/attempts w)) "no failed attempts")))
 
+(deftest a-drop-is-told-with-what-it-holds
+  ;; issue #263: a vanilla server sends a drop's stack (set-entity-data) with its add-entity; a
+  ;; model that does not leaves the bot unable to tell a cobblestone from a crafting table
+  (let [table (recipe/item-id :crafting_table)
+        sim (-> (sim/init {:column (world/column-bytes {}) :spawn [0.5 64.0 0.5]})
+                (assoc :sim/out [])
+                (sim/spawn-item [3.5 64.5 3.5] {:item table :count 1}))
+        [added data] (:sim/out sim)]
+    (is (= :add-entity (:packet/name added)))
+    (is (= {:packet/name :set-entity-data
+            :entity-id (:entity-id added)
+            :metadata {entity/item-index {:item table :count 1}}}
+           data)
+        "then what it holds")))
+
 (deftest a-stale-click-gets-the-full-window
   (let [sim (-> (sim/init {:column (world/column-bytes {})
                            :spawn [0.5 64.0 0.5]
