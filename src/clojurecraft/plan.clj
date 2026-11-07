@@ -887,8 +887,10 @@
    a labelled wait (the plan says: stop, there is nothing safe to do yet); an equal one is the same
    commitment and nil or an unlisted wait never cuts. False for a row with no :goal/ranks."
   [goal i next]
-  (boolean
-   (and (seq (:goal/ranks goal)) i (:intent/kind next) (< (rank-of goal next) (rank-of goal i)))))
+  (boolean (and (seq (:goal/ranks goal))
+                i
+                (or (:intent/kind next) (:plan/wait next))
+                (< (rank-of goal next) (rank-of goal i)))))
 
 (defn plan-tick
   "One planning tick while :active. The goals are re-derived from the world every tick, even

@@ -464,8 +464,7 @@
  {:goal/id :eye-frame
   :goal/priority 23.5
   :goal/parent #{:end-portal :enter-end}
-  :goal/doc
-  "an eye of ender into a frame within reach of a stand: outranks the walk or tunnel toward the room, which it preempts; done when no frame within 6 blocks has a reachable stand"
+  :goal/doc "an eye of ender into a frame within reach of a stand"
   :goal/dimension "minecraft:overworld"
   :goal/done? :no-eye-in-reach?
   :goal/plan :eye-frame}

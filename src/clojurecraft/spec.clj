@@ -1057,7 +1057,7 @@
          :target ::block-pos
          :climb nat-int?
          :dry-only? boolean?
-         :visited :intent/tunnel-visited
+         :visited (s/coll-of ::block-pos :kind set?)
          :bridge-ok? (s/? boolean?)
          :no-down? (s/? boolean?))
   :ret (s/nilable :intent/move))
