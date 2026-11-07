@@ -371,9 +371,13 @@
    one under (place/use-item-on), looking straight down; the block shown, the next jump. Done on
    the ground at :intent/top; failed :boxed with no room over the head, :not-held with the block
    gone from the hand, :rejected after max-refusals placements the server answered with the cell
-   empty, :no-answer when one goes unacked, :stuck after block-ms with no block put."
-  [world {:intent/keys [item top under refusals since sent-at sequence] :or {refusals 0}}]
-  (let [now (:time/now world)
+   empty, :no-answer when one goes unacked, :stuck after block-ms with no block put. A send time
+   with no sequence is a window click's (a re-equip mid-climb, the feet cell already kept as
+   :intent/under), not a placement: it reads as none in flight. Real races d3ce99b and 9cedf7c
+   (issue #263) crashed with a NullPointerException on (>= last-ack nil) from such a time."
+  [world {:intent/keys [item top under refusals since sequence] :or {refusals 0} :as i}]
+  (let [sent-at (when sequence (:intent/sent-at i))
+        now (:time/now world)
         [fx fy fz :as feet] (intent/feet world)
         py (physics/y-of (:player/pos world))
         ground? (:player/on-ground? world)
