@@ -4425,3 +4425,29 @@
                                                        :forest/dimension nether}))
                           :pearls/heading)))
       (is (not (contains? (game/die held) :pearls/heading))))))
+
+(deftest a-bot-above-the-climb-ceiling-with-no-mover-tunnels-down-along-its-heading
+  ;; Logged state, sim R1/17 seed 1 (probe p2facts 42402292588, issue #263): at [961 104 -144] in the
+  ;; Nether, health 20, fortress exit done, no forest known, can-tunnel-out? true, 5 hoglins 25 to 30
+  ;; blocks off. travel, explore, wander, cage-break and relocate all nil: 55 minutes of
+  ;; :hunt/else lookouts, above nether-climb-ceiling (100) where no climb or route goes. The held
+  ;; heading's leg target is held to y 90 and under, so the tunnel goes down and along.
+  (let [netherrack (blocks/default-state :netherrack)
+        pocket #{[8 104 8] [8 105 8]}
+        rock (into {}
+                   (for [x (range 0 16)
+                         y (range 80 112)
+                         z (range 0 16)
+                         :when (not (contains? pocket [x y z]))]
+                     [[x y z] netherrack]))
+        w (-> (standing {} rock)
+              (assoc :player/dimension nether :player/pos [8.5 104.0 8.5])
+              (assoc-in [:player/inventory 1] (item :iron_pickaxe 1))
+              (assoc :plan/status :active :plan/goals #{:ender-pearls} :plan/active [row]))
+        held (pearls/reach-heading-hold w)
+        i (pearls/travel held)]
+    (is (> 104 pearls/nether-climb-ceiling) "above the ceiling")
+    (is (some? (:pearls/heading held)) "a heading is held with no forest known")
+    (is (= :tunnel-to (:intent/kind i)) "the hunt's mover is the heading's tunnel")
+    (is (<= (second (:intent/target i)) pearls/heading-max-y) "down to y 90 and under")
+    (is (= i (pearls/travel (pearls/reach-heading-hold held))) "the same leg at the next act")))
