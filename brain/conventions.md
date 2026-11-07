@@ -11,6 +11,9 @@ lastUpdated: 2026-10-09
 ## Frontmatter schema
 `title`, `description` (one line: what the note answers, shown by its MOC), `type` (index | moc | reference | explanation | decision | how-to | glossary), `tags`, `aliases`, `status` (verified | draft), `lastUpdated`, `verifiedAgainst` (see pins), `sourceRefs`, `related` (at least two, including the area MOC).
 
+## When to write a note
+Only for a design decision (`decisions/`), a gotcha (`gotchas/`), a game fact (`game/`) or a sibling finding (`siblings/`). Never to restate what a function does (its docstring says that) or what a run showed (the stage's `problems.edn` row and issue say that). A fix that adds a rule to the planner edits no note.
+
 ## sourceRefs
 `path#symbolName` for code, `path#the text the line says` for prose, config and EDN. Never a line number. Each ref must resolve to exactly one place; quote a whole symbol, line or sentence, spelled as the source spells it. Paths are relative to the repository root. Two prefixes reach the sibling checkouts: `steve:` resolves under `/Users/bridger/Developer/mc/upstream/steve`, `ruststeve:` under `/Users/bridger/Developer/mc/upstream/ruststeve` (overridable with `STEVE_DIR` / `RUSTSTEVE_DIR` for the checker).
 

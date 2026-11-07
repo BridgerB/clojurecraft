@@ -1,6 +1,6 @@
 (ns clojurecraft.problems-test
   "docs/RICH-HICKEY.md: before each stage, a written problem statement (what information it needs,
-   what can go wrong, what done means in world terms, what the last recorded failure showed),
+   what can go wrong, what done means in world terms, what the last recorded failure showed in one sentence),
    kept as a fact next to the goal table. These tests keep that true."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
@@ -21,3 +21,11 @@
 
 (deftest every-source-exists
   (is (= [] (remove #(.exists (io/file %)) (mapcat :problem/sources problems)))))
+
+(deftest last-failure-is-one-sentence-and-history-is-data
+  (is (= [] (filter #(< 300 (count (:problem/last-failure %))) problems))
+      "a longer account of a failure belongs on the stage's issue, its runs in :problem/seen"))
+
+(deftest every-goal-doc-is-one-line
+  (is (= [] (filter #(< 120 (count (:goal/doc %))) plan/goals))
+      "a goal's doc says what it is in one line; the story is its stage's problem row"))

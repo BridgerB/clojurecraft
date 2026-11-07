@@ -43,7 +43,7 @@ related:
 Done (issue #9): `dig/ms` is a pure function over hardness and tool materials read from the game's own classes at datagen and the jar's `mineable/*` and `needs_*_tool` tags, no name heuristics; datagen throws rather than default a hardness. The late FINISH rule stays ([[sib-dig-stop-timing]]). See [[hardness-and-tools]].
 
 ## Limits
-typecraft's hardness source (its Java datagen mod) and the tag files in the server jar were not opened here; see docs/issues/05 for those claims.
+typecraft's hardness source (its Java datagen mod) and the tag files in the server jar were not opened here; see issue #9 for those claims.
 
 ## See also
 - [[sib-held-slot-drift]] - the other cause of a too-short dig.

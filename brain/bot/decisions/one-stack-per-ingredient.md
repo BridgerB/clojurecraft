@@ -12,7 +12,6 @@ sourceRefs:
   - src/clojurecraft/recipe.clj#defn sources
   - test/clojurecraft/recipe_test.clj#a group no single stack covers is drawn from several, lowest first
   - test/clojurecraft/recipe_test.clj#one stack per ingredient: a short stack is skipped for one that covers it
-  - "docs/issues/01-crafting-as-data.md#Our craft/clicks is a pure function of the inventory value that chooses one source stack per ingredient key up front."
 related:
   - "[[bot/decisions/_moc|Decisions]]"
   - "[[recipe-clicks]]"

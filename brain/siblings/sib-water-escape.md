@@ -38,7 +38,7 @@ Two answers to the same failure (a bot whose head goes under while some other st
 5. **steve's portal exception.** `getNextStep` lets only `escape_water` or `enter_nether` run while a lit portal waits in the overworld, so a regressed kit step cannot steal the bot from its own portal.
 
 ## What it means here
-Our planner already re-derives the goal every tick, but it never preempts an active intent ([[goals-and-intents]]). The water issue (docs/issues/06) needs both halves: a priority-zero goal whose done-ness is a sticky trap signal, and preemption so an intent in flight yields when the eye is under. Because `:time/now` is an event field, the 1 s / 6 s breath timers are absolute deadlines in the world, not wall-clock waits.
+Our planner already re-derives the goal every tick, but it never preempts an active intent ([[goals-and-intents]]). The water issue (issue #5) needs both halves: a priority-zero goal whose done-ness is a sticky trap signal, and preemption so an intent in flight yields when the eye is under. Because `:time/now` is an event field, the 1 s / 6 s breath timers are absolute deadlines in the world, not wall-clock waits.
 
 ## Limits
 The watchdog's per-tick code in ruststeve `src/bot/mod.rs` was not opened; item 4 rests on the CHANGES entry. steve's `escapeWaterInner` route-to-shore and notch-dig strategies are not summarised.

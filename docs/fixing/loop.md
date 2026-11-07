@@ -44,7 +44,7 @@ Read the body and every comment.
 - "(regressed: ...)": a fix did not hold or was undone. Read the closing PR first.
 - A hand-off comment (section 14): start from its next step.
 
-Then the code that raises the reason and the notes that explain it: `grep -rn ':no-log' src/clojurecraft/`, `grep -rln 'no-log' brain/`, and section 22.
+Then the code that raises the reason and the notes that explain it: `grep -rn ':no-log' src/clojurecraft/`, `grep -rln 'no-log' brain/`, and `resources/clojurecraft/goals.edn` for the stage chain.
 
 ---
 
@@ -190,8 +190,8 @@ Most walls have been hit before. Grep the brain and the code for the reason and 
 - **Docstrings carry the evidence:** what the rule does and the run that taught it ("Sim race 38664661309 (issue #142, 89 runs in 18 rounds): ..."). Keep the existing evidence when you change a function; add yours.
 - **A test of the decision:** the smallest world with the situation (builders in the test namespaces: `standing`, `open-ground`, `standing-at`, `deep-in`, `world/column` with `{[x y z] state}`), call the function, assert. Name it for the behaviour (`a-lone-lava-source-is-no-site`), issue and run in a comment. It must fail without the fix: you cannot run it, so reason it through, or push the test first and let `test.yml` show it red. Grep `test/` for the function's name: tests asserting the old behaviour must be updated deliberately. Section 23 has more.
 - **New keys and packets:** a world or intent key gets a row in `model.clj` and a spec in `spec.clj`. A newly decoded packet: its spec in `packet.clj`, the same entry in `test/clojurecraft/packet_specs_ever.edn`, and check `packet_test` does not use it as its unmodelled example (16.10).
-- **The brain note, in the same change:** find it (`grep -rln '<fn>' brain/`), add the new function and test to its `sourceRefs` (`src/clojurecraft/<ns>.clj#defn <name>`; when one name prefixes another, anchor on a unique phrase of the docstring), and the rule to its prose with the run that taught it. `bb check` runs the brain checker: `broken 0`, `ambiguous 0`, `unresolved 0`.
-- **`problems.edn`, in the same change:** append one sentence to the stage row's `:problem/last-failure` (find the row by `:problem/goals`): the round, the issue, what the bot did, what it does now. One line.
+- **The brain, only when the fix decides or discovers something:** a design decision goes to a `decisions/` note (the choice, what was rejected and why), a trap to a `gotchas/` note (symptom first), a game fact to a `game/` note. A fix that only adds a rule needs no brain edit. `bb check` runs the brain checker: `broken 0`, `ambiguous 0`, `unresolved 0`.
+- **`problems.edn`, in the same change:** replace the stage row's one-sentence `:problem/last-failure` only when the failure is new in kind (find the row by `:problem/goals`), add the run to its `:problem/seen` (`{:issue n :run "id"}`), and put the story on the stage's issue as a comment, not in the row.
 
 ---
 
@@ -262,7 +262,7 @@ gh pr view <pr> --json mergeStateStatus --jq .mergeStateStatus      # CLEAN, BLO
 git fetch origin && git merge --no-edit origin/main && git push      # when DIRTY or BEHIND
 ```
 
-`DIRTY` runs no checks until resolved. The usual conflict is `problems.edn`, where two fixes appended to the same `:problem/last-failure` line: keep both sentences.
+`DIRTY` runs no checks until resolved. The usual conflict is `problems.edn`, where two fixes edited the same `:problem/seen` list: keep both entries.
 
 Green and the body has the before/after: `gh pr merge <pr> --merge` (merge commits, never squash, never `--admin`). Confirm `gh issue view <n> --json state` reads CLOSED for each issue.
 
