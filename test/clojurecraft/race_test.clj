@@ -11,7 +11,7 @@
             [clojurecraft.failure :as failure]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
-            [clojurecraft.gym :as gym]
+            [clojurecraft.land :as land]
             [clojurecraft.main :as main]
             [clojurecraft.plan :as plan]
             [clojurecraft.race :as race]))
@@ -92,10 +92,10 @@
   ;; racer i of a server whose bots start at offset lands on landing offset + i, wrapping: the
   ;; servers and runners sharing a set land on different landings, the same ones every commit
   (let [set [[10 20 70] [30 40 71] [50 60 72]]]
-    (is (= [[10 20] [30 40] [50 60]] (map #(race/landing-of set 0 %) [0 1 2])))
-    (is (= [50 60] (race/landing-of set 2 0)) "a server's bots start at its offset")
-    (is (= [10 20] (race/landing-of set 2 1)) "past the end, round to the start")
-    (is (= (race/landing-of set 5 7) (race/landing-of set 5 7))
+    (is (= [[10 20] [30 40] [50 60]] (map #(land/landing-of set 0 %) [0 1 2])))
+    (is (= [50 60] (land/landing-of set 2 0)) "a server's bots start at its offset")
+    (is (= [10 20] (land/landing-of set 2 1)) "past the end, round to the start")
+    (is (= (land/landing-of set 5 7) (land/landing-of set 5 7))
         "the same racer, the same landing")))
 
 (deftest a-ramp-joins-bots-in-steps
@@ -230,7 +230,7 @@
   ;; f9c021c race lane 2: 7 of 7 lava deaths 4 to 10 s after the teleport, lava in the pad
   (is (= (str "execute in minecraft:the_nether run fill 1030 51 422 1050 55 442"
               " minecraft:netherrack replace minecraft:lava")
-         (race/lava-clear-command [1040 432 52]))))
+         (land/lava-clear-command [1040 432 52]))))
 
 (deftest a-failure-of-a-fortress-race-is-filed-at-its-own-stages
   ;; a run that played only blaze-rods and ender-pearls: nothing reached, it failed at the blaze
@@ -255,12 +255,12 @@
   ;; race 41219596455 (first fortress lanes): ten bots a server on one pad, and Clj_r10 and r11 told
   ;; :go/at [176 -160 72] (the pad's [x z y]) and ended :no-landing 30 s later
   (let [fortress [200 -160]
-        pads (map #(race/pad-of fortress %) (range 8))]
+        pads (map #(land/pad-of fortress %) (range 8))]
     (is (= 8 (count (set pads))) "eight bots, eight pads")
-    (is (= (first pads) (race/pad-of fortress 8)) "the ninth comes round to the first")
+    (is (= (first pads) (land/pad-of fortress 8)) "the ninth comes round to the first")
     (is (every? #(= 72 (nth % 2)) pads) "all at the pad height")
     (is (= [152 -160 72] (first pads)) "the first, 48 west of the fortress, as the gym's")
-    (is (= [176.5 72.0 -159.5] (race/standing-on [176 -160 72])) "x y z: the middle of the cell")))
+    (is (= [176.5 72.0 -159.5] (land/standing-on [176 -160 72])) "x y z: the middle of the cell")))
 
 (deftest a-spawn-is-pinned-in-the-dimension-the-bot-landed-in
   ;; spawnpoint takes the dimension of its source, the server's overworld: a bot that died at the
@@ -273,15 +273,15 @@
 (deftest a-landing-near-a-located-fortress-is-not-searched-for-again
   ;; race 41218543330: fifteen bots at once asked the server to locate a fortress, a search in one
   ;; tick each; the tick stalled for 31 s and 120 bots timed out
-  (is (nil? (race/nearby-fortress [] [10 10])))
-  (is (= [200 -160] (race/nearby-fortress [[200 -160] [900 900]] [260 -100])) "within 128 blocks")
-  (is (nil? (race/nearby-fortress [[200 -160]] [600 -160])) "400 off: another fortress"))
+  (is (nil? (land/nearby-fortress [] [10 10])))
+  (is (= [200 -160] (land/nearby-fortress [[200 -160] [900 900]] [260 -100])) "within 128 blocks")
+  (is (nil? (land/nearby-fortress [[200 -160]] [600 -160])) "400 off: another fortress"))
 
 (deftest a-bot-is-teleported-onto-a-pad-built-before-it-joined
   ;; race 41225389190: the first pad was built 40 s after ten bots joined, generating Nether chunks
   ;; in the server's thread, and seven of them timed out; the pads are built first (prepare!)
   (is (= "execute in minecraft:the_nether run tp Clj_r03 152.5 72 -159.5"
-         (race/tp-command "Clj_r03" [152 -160 72]))
+         (land/tp-command "Clj_r03" [152 -160 72]))
       "x.5 y z.5 of the pad cell: -160 and .5 is -159.5, the middle of the cell"))
 
 (deftest a-replacement-bot-lands-on-its-slots-pad
@@ -290,16 +290,16 @@
   (is (= [0 1 9 0 1 9 5] (map #(race/slot-index % 10) [0 1 9 10 11 19 25])))
   (is (= 7 (race/slot-index 7 nil)) "no slot count: as before")
   (let [fortress [200 -160]]
-    (is (= (race/pad-of fortress (race/slot-index 3 10))
-           (race/pad-of fortress (race/slot-index 13 10)))
+    (is (= (land/pad-of fortress (race/slot-index 3 10))
+           (land/pad-of fortress (race/slot-index 13 10)))
         "the serial after a slot's bot lands on the same pad")))
 
 (deftest a-pad-is-pregenerated-within-one-forceload
   ;; a forceload takes at most 256 chunks; pad-view blocks each side of a pad, however the square
   ;; lies on the chunk grid, and past the server's view distance (6 chunks, 96 blocks)
-  (let [span (+ 2 (quot (* 2 race/pad-view) 16))]
+  (let [span (+ 2 (quot (* 2 land/pad-view) 16))]
     (is (<= (* span span) 256) "a square of pad-view each side is at most 256 chunks")
-    (is (>= race/pad-view (* 6 16)) "the bot's whole view is generated")))
+    (is (>= land/pad-view (* 6 16)) "the bot's whole view is generated")))
 
 (deftest a-fortress-run-ends-at-its-first-death-and-is-filed-at-its-stage
   ;; race 41224855928, Clj_r23: seven rods out of 23 deaths in 2.5 minutes, each respawn at the pad
@@ -367,48 +367,48 @@
 (deftest a-pad-is-chosen-outside-the-fortress-and-clear-of-mobs
   ;; the first deaths of the bots at the fortress came 14 to 27 s after landing (race 41229255270)
   (let [fortress [200 -160]
-        cands (race/pad-candidates fortress 3)]
+        cands (land/pad-candidates fortress 3)]
     (is (= 24 (count (set cands))) "eight compass points at three distances")
-    (is (= (race/pad-of fortress 3) (first cands)) "the first is the 48-block pad")
+    (is (= (land/pad-of fortress 3) (first cands)) "the first is the 48-block pad")
     (is (= [48 80 112]
            (map #(long (math/hypot (double (- (first %) 200)) (double (- (second %) -160))))
                 [(first cands) (nth cands 8) (nth cands 16)]))
         "the same points at 48, 80 and 112 blocks (axis points)")
-    (is (= (first cands) (race/choose-pad (constantly nil) cands)) "safe: the first")
-    (is (= (second cands) (race/choose-pad #(when (= % (first cands)) :bricks) cands))
+    (is (= (first cands) (land/choose-pad (constantly nil) cands)) "safe: the first")
+    (is (= (second cands) (land/choose-pad #(when (= % (first cands)) :bricks) cands))
         "the first in the fortress: the next compass point")
-    (is (= (nth cands 8) (race/choose-pad #(when (some #{%} (take 8 cands)) :mobs) cands))
+    (is (= (nth cands 8) (land/choose-pad #(when (some #{%} (take 8 cands)) :mobs) cands))
         "all eight unsafe: the same points at 80")
-    (is (= (first cands) (race/choose-pad (constantly :bricks) cands))
+    (is (= (first cands) (land/choose-pad (constantly :bricks) cands))
         "none safe: the nearest, as before")))
 
 (deftest the-probes-for-a-pad-are-within-the-range
   (let [pad [100 -50 72]
-        cells (race/brick-probes pad)]
+        cells (land/brick-probes pad)]
     (is (= 75 (count cells)))
     (is (every? (fn [[x y z]]
-                  (and (<= (abs (- x 100)) race/brick-range)
-                       (<= (abs (- z -50)) race/brick-range)
+                  (and (<= (abs (- x 100)) land/brick-range)
+                       (<= (abs (- z -50)) land/brick-range)
                        (<= (abs (- y 72)) 8)))
                 cells))
     (is (= "execute in minecraft:the_nether if block 100 72 -50 minecraft:nether_bricks"
-           (race/brick-test [100 72 -50] "minecraft:nether_bricks")))
+           (land/brick-test [100 72 -50] "minecraft:nether_bricks")))
     (is
      (=
       "execute in minecraft:the_nether positioned 100 72 -50 if entity @e[type=minecraft:blaze,distance=..32]"
-      (race/mob-test pad "minecraft:blaze")))))
+      (land/mob-test pad "minecraft:blaze")))))
 
 (deftest a-pad-stands-on-ground-with-ground-round-it
   ;; race 9d15bd6, lane 7: two of three bots stepped off a pad built at y 72 into a cavern and fell
   ;; 37 blocks into the lava sea
-  (is (= 8 (count race/ground-ring)))
-  (is (every? #(= 4 (apply max (map abs %))) race/ground-ring) "four blocks off, on a square")
-  (is (not-any? #{[0 0]} race/ground-ring))
+  (is (= 8 (count land/ground-ring)))
+  (is (every? #(= 4 (apply max (map abs %))) land/ground-ring) "four blocks off, on a square")
+  (is (not-any? #{[0 0]} land/ground-ring))
   (is (= "execute in minecraft:the_nether if block 3 60 -4 #minecraft:base_stone_nether"
-         (race/ground-test [3 60 -4])))
+         (land/ground-test [3 60 -4])))
   (is (= "execute in minecraft:the_nether if block 3 61 -4 minecraft:cave_air"
-         (race/air-test [3 61 -4] "minecraft:cave_air")))
-  (is (< race/ground-bottom 40.01) "over the lava sea (y 31)"))
+         (land/air-test [3 61 -4] "minecraft:cave_air")))
+  (is (< land/ground-bottom 40.01) "over the lava sea (y 31)"))
 
 (deftest racers-are-a-team-with-friendly-fire-off
   ;; race 9d15bd6, lanes 1 to 6: 47 of 344 deaths were a bot killed by a bot, the 44 "slain by Clj_rNN"
@@ -420,25 +420,25 @@
   ;; race f8b28e3, lane 2: 41 Nether bots in two fortresses, 26 at one: shared blaze aggro, fire and
   ;; spawner refills a solo player never meets
   (let [pool
-        (reduce race/pool-add [] [[100 100] [150 120] [800 100] [100 900] [820 130] [-700 -600]])]
+        (reduce land/pool-add [] [[100 100] [150 120] [800 100] [100 900] [820 130] [-700 -600]])]
     (is (= [[100 100] [800 100] [100 900] [-700 -600]] pool) "fortresses within 160 blocks are one")
     (is (= [[100 100] [800 100] [100 900] [-700 -600] [100 100]]
-           (map #(race/fortress-for pool %) (range 5)))
+           (map #(land/fortress-for pool %) (range 5)))
         "slot i has fortress i mod n")
-    (is (= 1 (race/per-fortress 10 10)) "ten fortresses, ten slots: one bot each")
-    (is (= 2 (race/per-fortress 10 5)))
-    (is (= 4 (race/per-fortress 10 3)) "a pool of three: four bots on one")
-    (is (= 10 (race/per-fortress 10 0)) "no pool: as before"))
-  (let [cs (take 9 (race/search-centres [10 20]))]
+    (is (= 1 (land/per-fortress 10 10)) "ten fortresses, ten slots: one bot each")
+    (is (= 2 (land/per-fortress 10 5)))
+    (is (= 4 (land/per-fortress 10 3)) "a pool of three: four bots on one")
+    (is (= 10 (land/per-fortress 10 0)) "no pool: as before"))
+  (let [cs (take 9 (land/search-centres [10 20]))]
     (is (= [10 20] (first cs)) "the landing's own first")
     (is (= 9 (count (set cs))) "then rings of eight points, all different")
     (is (= #{600} (set (map (fn [[x z]] (max (abs (- x 10)) (abs (- z 20)))) (rest cs))))
-        "the first ring is race/pool-step off")))
+        "the first ring is land/pool-step off")))
 
 (deftest the-floor-round-a-pad-may-slope
   ;; race f8b28e3, lane 2: 525 candidates answered :no-ground and 15 of 16 pads fell back to y 72
-  (is (= 3 race/ground-drop) "a floor three lower is a slope, a deeper drop is a ledge")
-  (is (< race/ground-drop 8)))
+  (is (= 3 land/ground-drop) "a floor three lower is a slope, a deeper drop is a ledge")
+  (is (< land/ground-drop 8)))
 
 (deftest the-server-is-asked-what-stood-round-an-ending
   ;; the observability plan, part E: the ground truth beside what the bot saw
@@ -488,14 +488,14 @@
          (finally (.delete f)))))
 
 (deftest the-forest-is-located-from-the-pad-then-from-farther-off
-  (let [origins (race/forest-origins [-100 200 70])]
+  (let [origins (land/forest-origins [-100 200 70])]
     (is (= [-100 200] (first origins)) "the pad's own point first")
-    (is (= (inc (* 4 (count gym/locate-offsets))) (count origins)))
+    (is (= (inc (* 4 (count land/locate-offsets))) (count origins)))
     (is (= [(+ -100 256) 200] (second origins)))
-    (is (= (gym/warped-origins 800 1600) (gym/search-points-from 100 200))
+    (is (= (land/warped-origins 800 1600) (land/search-points-from 100 200))
         "the gym's origins are the same function of the Nether point"))
   (testing "the located point is read from the server's reply"
     (is (= [2420 64 2216]
-           (gym/located-pos
+           (land/located-pos
             "The nearest minecraft:warped_forest is at [2420, 64, 2216] (310 blocks away)")))
-    (is (nil? (gym/located-pos "Could not find a biome of type minecraft:warped_forest")))))
+    (is (nil? (land/located-pos "Could not find a biome of type minecraft:warped_forest")))))

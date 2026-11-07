@@ -44,6 +44,7 @@
             [clojurecraft.fixture :as fixture]
             [clojurecraft.game :as game]
             [clojurecraft.gym :as gym]
+            [clojurecraft.land :as land]
             [clojurecraft.landings :as landings]
             [clojurecraft.main :as main]
             [clojurecraft.plan :as plan]
@@ -298,13 +299,6 @@
           nil
           (take claim-tries (drop offset (claims/spiral)))))
 
-(defn landing-of
-  "The [x z] racer i (from 0) lands on in a landing set ([[x z y] ...]), offset into it: the
-   set's landing offset + i, wrapping, so a runner's servers and the runners sharing a set start
-   their bots on different landings, and the same racer always on the same one."
-  [set offset i]
-  (let [[x z _] (landings/landing-for set (inc (+ offset i)))] [x z]))
-
 (def team
   "The scoreboard team every racer joins: friendly fire off, so a bot's sweep or a retaliation never hurts another."
   "racers")
@@ -333,450 +327,6 @@
                          (rcon/command! rc "gamerule keep_inventory true")
                          (doseq [c team-commands] (rcon/command! rc c))))
        (catch Exception e (cli/log "gamerule failed:" e))))
-
-(def pad-offsets
-  "Where, round a fortress, racer i's pad is: eight compass points 48 blocks off, so the bots of one
-   fortress (a landing set's 48 landings, 40 blocks apart in the Nether, find only two or three
-   fortresses) do not stand on one pad."
-  [[-48 0] [48 0] [0 -48] [0 48] [-48 -48] [48 48] [-48 48] [48 -48]])
-
-(defn pad-of
-  "The pad [x z y] of racer i (from 0) at the fortress located at [fx fz]: pad-offsets (i mod 8)
-   from it, at gym/pad-y."
-  [[fx fz] i]
-  (let [[dx dz] (nth pad-offsets (mod i (count pad-offsets)))] [(+ fx dx) (+ fz dz) gym/pad-y]))
-
-(def pad-radii
-  "How far from the fortress a pad may be, nearest first: the eight compass points at each."
-  [48 80 112])
-
-(def pad-compass [[-1 0] [1 0] [0 -1] [0 1] [-1 -1] [1 1] [-1 1] [1 -1]])
-
-(defn pad-candidates
-  "The pads [x z y] racer i may have at the fortress [fx fz], in the order they are tried: the eight
-   compass points at 48 blocks starting at point (i mod 8), then at 80, then at 112. The first is
-   pad-of."
-  [[fx fz] i]
-  (for [r pad-radii
-        k (range (count pad-compass))
-        :let [[dx dz] (nth pad-compass (mod (+ i k) (count pad-compass)))]]
-    [(+ fx (* r dx)) (+ fz (* r dz)) gym/pad-y]))
-
-(def brick-blocks ["minecraft:nether_bricks" "minecraft:nether_brick_fence"])
-
-(def brick-range 16)                  ; blocks round a pad in which no fortress block may stand: outside its body
-
-(defn brick-probes
-  "The cells [x y z] looked at for a fortress block round the pad [x z y]: five by five columns eight
-   apart (brick-range each side) at three heights eight apart, 75 cells."
-  [[x z y]]
-  (for [dx [-16 -8 0 8 16] dz [-16 -8 0 8 16] dy [-8 0 8]] [(+ x dx) (+ y dy) (+ z dz)]))
-
-(defn brick-test
-  "The RCON test that passes when the Nether's cell [x y z] holds block."
-  [[x y z] block]
-  (str "execute in minecraft:the_nether if block " x " " y " " z " " block))
-
-(def danger-mobs
-  "What a bot is not landed within mob-range of: a fortress's blaze, wither skeleton, the bastion's
-   brute, the forest's hoglin, the ghast."
-  ["minecraft:blaze" "minecraft:hoglin" "minecraft:wither_skeleton" "minecraft:piglin_brute"
-   "minecraft:ghast"])
-
-(def mob-range 32)
-
-(defn mob-test
-  "The RCON test that passes when a mob (an entity type) is within mob-range of the pad [x z y]."
-  [[x z y] mob]
-  (str "execute in minecraft:the_nether positioned "
-       x
-       " "
-       y
-       " "
-       z
-       " if entity @e[type="
-       mob
-       ",distance=.."
-       mob-range
-       "]"))
-
-(defn choose-pad
-  "The first of candidates for which (unsafe pad) is nil, else the first candidate: a pad is taken
-   outside the fortress's body and clear of mobs when one is, else the nearest as before."
-  [unsafe candidates]
-  (or (first (filter #(nil? (unsafe %)) candidates)) (first candidates)))
-
-(defn standing-on
-  "[x y z], where a bot stands on the pad [x z y]: the middle of its cell (the order a :go/at has:
-   gym/place! teleports to x.5 y z.5). Returned from the pad, never from a question to the server: a
-   landing that read a position nil handed the planner the pad's own [x z y], which is not a place,
-   and 30 s later the run ended :no-landing."
-  [[x z y]]
-  [(+ x 0.5) (double y) (+ z 0.5)])
-
-(def fortress-near 128)               ; Nether blocks within which a located fortress is the one for a landing: fortresses stand 400 or more apart, so one this near is the nearest
-
-(defn nearby-fortress
-  "The first of known ([fx fz] ...) within fortress-near blocks of the Nether point [nx nz], or nil."
-  [known [nx nz]]
-  (some (fn [[fx fz :as f]]
-          (when (<= (math/hypot (double (- fx nx)) (double (- fz nz))) fortress-near) f))
-        known))
-
-(def fortresses
-  "The fortresses located so far on this server, [[fx fz] ...] (an atom): a landing is given one
-   within fortress-near of it before the server is asked."
-  (atom []))
-
-(def pool-step 600)                   ; Nether blocks between the points a pool of fortresses is searched from, ring by ring
-(def pool-apart 160)                  ; Nether blocks a fortress must stand from the others of the pool to be another
-(def pool-max-locates 40)             ; searches a pool makes at most
-
-(defn search-centres
-  "The Nether points [x z] a pool of fortresses is searched from, nearest first: the centre, then
-   rings of eight compass points at pool-step, 2 pool-step, ... from it."
-  [[cx cz]]
-  (cons [cx cz]
-        (for [r (iterate inc 1)
-              [dx dz] pad-compass]
-          [(+ cx (* r pool-step dx)) (+ cz (* r pool-step dz))])))
-
-(defn pool-add
-  "The pool with fortress f added when it stands at least pool-apart from each of the pool's, else
-   as it was."
-  [pool [fx fz :as f]]
-  (if (some (fn [[x z]] (< (math/hypot (double (- x fx)) (double (- z fz))) pool-apart)) pool)
-    pool
-    (conj pool f)))
-
-(defn fortress-for
-  "The fortress of slot i in the pool: i mod the pool's size, so each slot has a fortress of its own
-   while the pool has as many as there are slots, and the pool's fortresses are shared evenly
-   when it has fewer."
-  [pool i]
-  (nth pool (mod i (count pool))))
-
-(defn per-fortress
-  "The most bots of slots slots at once on one fortress of a pool of n: the slots over the pool,
-   rounded up (fortress-for)."
-  [slots n]
-  (if (pos? n) (long (math/ceil (/ slots (double n)))) slots))
-
-(defn locate-fortress!
-  "The fortress for the landing [x z] (overworld coordinates; the Nether's are an eighth): one
-   already located within fortress-near (nearby-fortress), else the nearest as the server locates
-   it, remembered. A locate is a search in one tick of the server's thread, tens of seconds: asked
-   of fifteen bots at once it stopped the server's keepalives and every bot timed out. Running
-   31317ms behind`)."
-  [rc [x z]]
-  (let [here [(quot x 8) (quot z 8)]]
-    (or (nearby-fortress @fortresses here)
-        (let [reply (rcon/command! rc
-                                   (str "execute in minecraft:the_nether positioned "
-                                        (first here)
-                                        " 64 "
-                                        (second here)
-                                        " run locate structure minecraft:fortress"))
-              at (or (fixture/parse-located reply)
-                     (throw (ex-info "no fortress located" {:reply reply})))]
-          (swap! fortresses conj at)
-          at))))
-
-(def fortress-pool
-  "The fortresses a race's slots land at, [[fx fz] ...] distinct (pool-add), a vector in an atom,
-   built by prepare! (build-pool!)."
-  (atom []))
-
-(defn locate-from!
-  "The fortress nearest the Nether point [nx nz] as the server locates it, [fx fz], or nil."
-  [rc [nx nz]]
-  (fixture/parse-located (rcon/command! rc
-                                        (str "execute in minecraft:the_nether positioned "
-                                             nx
-                                             " 64 "
-                                             nz
-                                             " run locate structure minecraft:fortress"))))
-
-(defn build-pool!
-  "Fill fortress-pool with up to slots distinct fortresses, searching from search-centres of
-   centre ([nx nz], Nether coordinates) one at a time (at most pool-max-locates searches), and log
-   how many were found and the most bots a fortress carries. Fortresses a landing set's landings
-   cannot supply (they are 40 Nether blocks apart, two or three fortresses): lane 2 of race
-   f8b28e3 had 41 bots in two fortresses, 26 of them at one, sharing blaze aggro, fire and
-   spawner refills that a solo player never meets."
-  [rc centre slots]
-  (reset! fortress-pool (loop [pool []
-                               cs (take pool-max-locates (search-centres centre))]
-                          (cond (or (>= (count pool) slots) (empty? cs)) pool
-                                :else
-                                (recur (if-let [f (locate-from! rc (first cs))]
-                                         (pool-add pool f)
-                                         pool)
-                                       (rest cs)))))
-  (let [n (count @fortress-pool)]
-    (cli/log "fortress pool" n
-             "distinct for" slots
-             "slots, at most" (per-fortress slots n)
-             "bots on a fortress:" @fortress-pool)
-    (when (< n (quot (inc slots) 2))
-      (cli/log "fortress pool short: more than 2 bots on a fortress"))))
-
-(def pads-built
-  "The pads built so far on this server, #{[x z y] ...} (an atom): a pad is built once, before a
-   bot is sent to it."
-  (atom #{}))
-
-(defn tp-command
-  "The RCON command that teleports bot name onto the pad [x z y], the middle of its cell, in the
-   Nether."
-  [name [x z y]]
-  (gym/in-dimension dimension/nether (str "tp " name " " (+ x 0.5) " " y " " (+ z 0.5))))
-
-(def pad-view 112)                    ; blocks round a pad generated before a bot is sent to it: 15 by 15 chunks, within one forceload's 256 and past the server's view distance (6 chunks, bb/clojurecraft/server.clj)
-
-(defn pregenerate!
-  "Generate the Nether round the pad [x z y] to pad-view blocks with no bot on it: the square
-   forceloaded and waited for (best effort, three waits of 30 s), then released. A bot teleported
-   onto a pad whose surroundings were not generated made the server generate its whole view,
-   fortress structure included, in its thread."
-  [rc [x z _]]
-  (let [square [(- x pad-view) (- z pad-view) (+ x pad-view) (+ z pad-view)]
-        where (str/join " " square)]
-    (rcon/command! rc (gym/in-dimension dimension/nether (str "forceload add " where)))
-    (try (loop [n 3]
-           (when (and (pos? n) (not (gym/wait-loaded-in! rc dimension/nether square)))
-             (recur (dec n))))
-         (finally
-          (rcon/command! rc (gym/in-dimension dimension/nether (str "forceload remove " where)))))))
-
-(def lava-clear-radius 10) ; blocks round a pad on the plane cleared of lava.
-
-(defn lava-clear-command
-  "The RCON fill that turns every lava block round the pad [x z y] into netherrack:
-   lava-clear-radius on the plane, from a block under the pad's floor to its roof. The pad is a box
-   with a doorway (gym/fortress-pad-open), built once and landed on by every bot of its slot, and a
-   pad beside a lava sea let the lava in: on f9c021c every lava death of race lane 2 (the stage-18
-   rods start, landing set R2), 7 of 7, came 4 to 10 s after the teleport, hit by lava before the
-   bot's :go."
-  [[x z y]]
-  (gym/in-dimension dimension/nether
-                    (str "fill "
-                         (str/join " "
-                                   [(- x lava-clear-radius) (dec y) (- z lava-clear-radius)
-                                    (+ x lava-clear-radius) (+ y 3) (+ z lava-clear-radius)])
-                         " minecraft:netherrack replace minecraft:lava")))
-
-(defn build-pad!
-  "Build the pad [x z y] (gym/fortress-pad-open) in the Nether with no bot: the square round it
-   forceloaded and waited for, the commands, the forceload released. The first build of a Nether
-   region generates its chunks and a fortress's structure, seconds of the server's thread each: done
-   with a bot connected, the server fell 12 to 34 s behind and the bots timed out. Remembered in
-   pads-built."
-  [rc [x z _ :as pad]]
-  (when-not (contains? @pads-built pad)
-    (let [where (str/join " " [(- x 2) (- z 2) (+ x 2) (+ z 2)])]
-      (rcon/command! rc (gym/in-dimension dimension/nether (str "forceload add " where)))
-      (try (when-not (gym/wait-loaded-in! rc dimension/nether [(- x 2) (- z 2) (+ x 2) (+ z 2)])
-             (throw (ex-info "the pad's chunks never loaded" {:pad pad})))
-           (rcon/command! rc (lava-clear-command pad))
-           (doseq [c gym/fortress-pad-open]
-             (rcon/command! rc (gym/in-dimension dimension/nether (gym/fill-in c "" pad))))
-           (swap! pads-built conj pad)
-           (pregenerate! rc pad)
-           (finally (rcon/command! rc
-                                   (gym/in-dimension dimension/nether
-                                                     (str "forceload remove " where))))))))
-
-(defn with-loaded
-  "Call (f) with the Nether's square [x0 z0 x1 z1] forceloaded and waited for (best effort, 30 s),
-   and released after, even when f throws: a test of a block or an entity only sees a loaded chunk."
-  [rc square f]
-  (let [where (str/join " " square)]
-    (rcon/command! rc (gym/in-dimension dimension/nether (str "forceload add " where)))
-    (try (gym/wait-loaded-in! rc dimension/nether square)
-         (f)
-         (finally
-          (rcon/command! rc (gym/in-dimension dimension/nether (str "forceload remove " where)))))))
-
-(defn mobs-near?
-  "Is a danger-mob within mob-range of the pad [x z y] now? The chunks round it are loaded for the
-   question."
-  [rc [x z _ :as pad]]
-  (with-loaded
-   rc
-   [(- x 40) (- z 40) (+ x 40) (+ z 40)]
-   (fn [] (boolean (some #(fixture/passed? (rcon/command! rc (mob-test pad %))) danger-mobs)))))
-
-(defn bricks-near?
-  "Is a fortress block within brick-range of the pad [x z y]? (brick-probes, brick-blocks), the
-   chunks round it loaded for the question."
-  [rc [x z _ :as pad]]
-  (with-loaded rc
-               [(- x 24) (- z 24) (+ x 24) (+ z 24)]
-               (fn []
-                 (boolean (some (fn [cell]
-                                  (some #(fixture/passed? (rcon/command! rc (brick-test cell %)))
-                                        brick-blocks))
-                                (brick-probes pad))))))
-
-(def ground-ring
-  "The cells [dx dz] round a pad, four blocks off, that must stand on ground too: the way out of
-   its doorway is not a ledge. Eight points."
-  (for [dx [-4 0 4] dz [-4 0 4] :when (not= [0 0] [dx dz])] [dx dz]))
-
-(defn ground-test
-  "The RCON test that passes when the Nether's cell [x y z] is ground, a block of the nether's
-   own stone (netherrack, basalt, blackstone): not lava, not air."
-  [[x y z]]
-  (str "execute in minecraft:the_nether if block " x " " y " " z " #minecraft:base_stone_nether"))
-
-(defn air-test
-  "The RCON test that passes when the Nether's cell [x y z] holds block (minecraft:air or
-   minecraft:cave_air)."
-  [[x y z] block]
-  (str "execute in minecraft:the_nether if block " x " " y " " z " " block))
-
-(def ground-drop 3)                   ; blocks the floor may fall away round a pad and still be ground: the Nether's floors are not level, a step down of three is no ledge
-(def ground-top 100)
-(def ground-bottom 40)               ; the lava sea is at y 31; a pad is cut well over it
-
-(defn ground-y
-  "The height of the first ground under the roof for a pad at [x z], from ground-top down to
-   ground-bottom: ground under the cell, air in it and the two over it, and ground under every cell
-   of ground-ring within ground-drop below it (a ledge is not ground, a slope is), or nil. The first
-   version asked the ring at exactly the pad's floor: of 16 pads chosen in lane 2 of race f8b28e3,
-   15 fell back to y 72 after 333 and 192 `:no-ground` rejections. Race 9d15bd6, lane 7."
-  [rc [x z _]]
-  (with-loaded rc
-               [(- x 24) (- z 24) (+ x 24) (+ z 24)]
-               (fn []
-                 (let [ok? #(fixture/passed? (rcon/command! rc %))
-                       air? (fn [c]
-                              (or (ok? (air-test c "minecraft:air"))
-                                  (ok? (air-test c "minecraft:cave_air"))))]
-                   (loop [y ground-top]
-                     (cond (< y ground-bottom) nil
-                           (and (ok? (ground-test [x (dec y) z]))
-                                (every? air? [[x y z] [x (inc y) z] [x (+ y 2) z]])
-                                (every? (fn [[dx dz]]
-                                          (some #(ok? (ground-test [(+ x dx) (- y %) (+ z dz)]))
-                                                (range 1 (inc ground-drop))))
-                                        ground-ring))
-                           y
-                           :else (recur (dec y))))))))
-
-(defn pad-unsafe
-  "Why the pad is no landing, :bricks (inside the fortress's body) or :mobs (a danger-mob near), or
-   nil."
-  [rc pad]
-  (cond (bricks-near? rc pad) :bricks
-        (mobs-near? rc pad) :mobs))
-
-(def pads-chosen
-  "The pad each slot lands on, {slot [x z y]} (an atom), chosen by prepare! before any bot joins."
-  (atom {}))
-
-(defn choose-pad!
-  "Choose racer k's pad at the fortress [fx fz]: in the order of pad-candidates (minus the [x z]
-   of exclude), the first with ground (ground-y: its height is the pad's) that pad-unsafe finds
-   safe; else the first candidate as before. Build it (build-pad!), remember it (pads-chosen) and
-   log it with its distance to the fortress."
-  [rc [fx fz :as fortress] k exclude]
-  (let [skip (set (map (juxt first second) exclude))
-        candidates (remove #(skip [(first %) (second %)]) (pad-candidates fortress k))
-        pad (or (loop [[c & more] candidates]
-                  (when c
-                    (let [y (ground-y rc c)
-                          g (when y [(first c) (second c) y])
-                          why (if g (pad-unsafe rc g) :no-ground)]
-                      (when why (cli/log "pad" k c "unsafe:" why))
-                      (if why (recur more) g))))
-                (first candidates))]
-    (build-pad! rc pad)
-    (swap! pads-chosen assoc k pad)
-    (cli/log "pad" k
-             "chosen" pad
-             "fortress" fortress
-             "distance"
-             (long (math/hypot (double (- (first pad) fx)) (double (- (second pad) fz)))))
-    pad))
-
-(defn prepare!
-  "Before any bot joins: locate the fortresses and build the pads for the first bots' landings
-   (racers 0 to n - 1), one at a time on one RCON session, so the searches and the Nether's
-   chunk generation stall a server nobody is connected to (build-pad!). Then each of those bots
-   is only teleported onto a pad made, and finds its fortress in the cache."
-  [{:keys [host rcon-port rcon-pass landings landing-offset]} n]
-  (when landings
-    (try (rcon/with-rcon
-          host
-          rcon-port
-          rcon-pass
-          (fn [rc]
-            (let [t0 (System/currentTimeMillis)
-                  [x z] (landing-of landings (or landing-offset 0) 0)]
-              (build-pool! rc [(quot x 8) (quot z 8)] n)
-              (doseq [i (range n)]
-                (let [fortress (if (seq @fortress-pool)
-                                 (fortress-for @fortress-pool i)
-                                 (locate-fortress! rc
-                                                   (landing-of landings (or landing-offset 0) i)))]
-                  (choose-pad! rc fortress i nil)))
-              (cli/log "prepared" n "pads in" (quot (- (System/currentTimeMillis) t0) 1000) "s"))))
-         (catch Exception e (cli/log "prepare failed:" e)))))
-
-(defn land-fortress!
-  "Land the bot named name (racer i) at the fortress of its landing: the pad (pad-of the fortress the
-   server locates, built by prepare! or here when it is new, build-pad!), its lava cleared again
-   (lava-clear-command: lava flows back between landings), the bot teleported onto it; wait for the server to say it stands in the Nether, clear its inventory and give it kit
-   (\"minecraft:iron_sword 1\" ...: what a race bot carries to the fortress, ci/race.edn's
-   start/kit-commands). Returns where it stands ([x y z], standing-on the pad), or nil when the dimension
-   never came; a landing that cannot locate a fortress throws."
-  [rc name landing i kit]
-  (let [fortress
-        (if (seq @fortress-pool) (fortress-for @fortress-pool i) (locate-fortress! rc landing))
-        pad (or (get @pads-chosen i) (choose-pad! rc fortress i nil))
-        pad (if (mobs-near? rc pad) (choose-pad! rc fortress i [pad]) pad)]
-    (build-pad! rc pad)
-    (with-loaded rc
-                 [(- (first pad) lava-clear-radius) (- (second pad) lava-clear-radius)
-                  (+ (first pad) lava-clear-radius) (+ (second pad) lava-clear-radius)]
-                 #(cli/log "pad lava:" (rcon/command! rc (lava-clear-command pad))))
-    (cli/log "tp:" (rcon/command! rc (tp-command name pad)))
-    (when (gym/wait-in! rc name dimension/nether)
-      (rcon/command! rc (str "clear " name))
-      (doseq [item kit] (rcon/command! rc (str "give " name " " item)))
-      (Thread/sleep (long fixture/settle-ms))
-      (standing-on pad))))
-
-(defn forest-origins
-  "The Nether points [x z] a bot's forest is located from, nearest first, for its fortress pad
-   [x z y]: the pad's own point, then gym/locate-offsets off it along each axis for when the
-   nearest forest gives no floor (gym/search-points-from)."
-  [[x z _]]
-  (gym/search-points-from x z))
-
-(defn land-forest!
-  "Land the bot named name (racer i) on a floor of the warped forest nearest its fortress pad: the
-   pad as land-fortress! chooses it (built by prepare! or here), the forest the server locates
-   from it, the bot spread onto a floor round that point (gym/warped-floor-from!: warped forest,
-   never a carved cave's air, each forest tried once, the next nearest when one gives no floor),
-   then its inventory cleared and kit given as at the fortress. Returns where it stands ([x y z],
-   standing-on the floor), or nil when the dimension never came; throws when no forest near gave
-   a floor."
-  [rc name landing i kit]
-  (let [fortress
-        (if (seq @fortress-pool) (fortress-for @fortress-pool i) (locate-fortress! rc landing))
-        pad (or (get @pads-chosen i) (choose-pad! rc fortress i nil))
-        {:keys [floor tried]} (gym/warped-floor-from! rc name (forest-origins pad))
-        [fx fy fz]
-        (or floor (throw (ex-info "no floor in the warped forest" {:pad pad :at (vec tried)})))]
-    (cli/log "forest floor" [fx fy fz] "pad" pad)
-    (when (gym/wait-in! rc name dimension/nether)
-      (rcon/command! rc (str "clear " name))
-      (doseq [item kit] (rcon/command! rc (str "give " name " " item)))
-      (Thread/sleep (long fixture/settle-ms))
-      (standing-on [fx fz fy]))))
 
 (defn slot-index
   "The index racer i (from 0) lands with at the fortress: i mod slots, so a bot that replaces one
@@ -814,20 +364,21 @@
       (fn [rc]
         (let [online (fixture/wait-online! rc name fixture/online-timeout)
               _ (when online (deliver centre [(long (first online)) (long (nth online 2))]))
-              at (when online
-                   (rcon/command! rc (str "gamemode survival " name))
-                   (rcon/command! rc (team-join-command name))
-                   (cond (start/nether? begin)
-                         (let [k (slot-index i bots)]
-                           ((if (start/forest? begin) land-forest! land-fortress!)
-                            rc
-                            name
-                            (if landings (landing-of landings (or landing-offset 0) k) @centre)
-                            k
-                            (start/kit-commands begin)))
-                         landings
-                         (fixture/land-at! rc name (landing-of landings (or landing-offset 0) i))
-                         :else (land! rc ch name @centre i)))]
+              at
+              (when online
+                (rcon/command! rc (str "gamemode survival " name))
+                (rcon/command! rc (team-join-command name))
+                (cond (start/nether? begin)
+                      (let [k (slot-index i bots)]
+                        ((if (start/forest? begin) land/land-forest! land/land-fortress!)
+                         rc
+                         name
+                         (if landings (land/landing-of landings (or landing-offset 0) k) @centre)
+                         k
+                         (start/kit-commands begin)))
+                      landings
+                      (fixture/land-at! rc name (land/landing-of landings (or landing-offset 0) i))
+                      :else (land! rc ch name @centre i)))]
           (when at
             (rcon/command! rc
                            (spawn-command
@@ -1246,7 +797,7 @@
              :deadline (+ t0 (run-ms config))}]
     (cli/log "race:" bots "slots to" until "seed" seed "for" (quot (run-ms config) 60000) "min")
     (set-gamerules! server)
-    (when (start/nether? (:start server)) (prepare! server bots))
+    (when (start/nether? (:start server)) (land/prepare! server bots))
     (board! server live done)
     (sampler! server where live record-dir done)
     (let [slots (mapv #(slot! ctx %) (range bots))
