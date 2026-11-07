@@ -522,4 +522,10 @@
   "the ender dragon dead (issue #267): the crystals first as the crystals row breaks them, then a wait on the ground five blocks from the fountain, where the dragon lands to perch; once it has held within six of the fountain and under y 70 for ten ticks, struck with the best sword every 650 ms while its box is in reach, a breath cloud or fireball within four backed away from; done when the server says it died (its death event, its removal near the bot with no boss bar, or the credits). In the End only. An aside until the End (#266) is entered from a stronghold and the chain is raised to it"
   :goal/dimension "minecraft:the_end"
   :goal/done? :dragon-dead?
+  ;; the branches of dragon/toward-dragon, most urgent first; a fresh answer ranked above the running
+  ;; intent cuts it. :dragon/wear is least urgent: it is asked first but yields to every threat.
+  :goal/ranks [:dragon/escape-breath :dragon/crystals :dragon/after-blow :dragon/bed :dragon/recover
+               :dragon/perch-in-breath :dragon/shelter-to-stand :dragon/shelter-flight
+               :dragon/back-off-breath :dragon/bed-hold :dragon/perch-no-stand :dragon/out-of-bite
+               :dragon/perch-blocked :dragon/walk-to-stand :dragon/perch :dragon/wear]
   :goal/plan :dragon}]

@@ -380,6 +380,7 @@
         :kinds (s/coll-of keyword? :kind set?))) ; intents only an escape row may cut
 (s/def :goal/uncommitted (s/coll-of keyword? :kind set?)) ; kinds :goal/commits :all leaves cuttable
 (s/def :goal/parent (s/coll-of keyword? :kind set? :min-count 1)) ; rows whose play puts this satellite in play
+(s/def :goal/ranks (s/coll-of keyword? :kind vector?)) ; the row's plan branches (intent/why labels), most urgent first
 (s/def :goal/id keyword?)
 (s/def :goal/priority number?)
 (s/def ::goal
@@ -388,7 +389,7 @@
           [:goal/needs :goal/holds :goal/spares :goal/passage-ok? :goal/build :goal/act
            :goal/target? :goal/until :goal/doc :goal/superseded-by :goal/always? :goal/aside?
            :goal/trap :goal/plan :goal/blocks :goal/depth :goal/dimension :goal/anchors :goal/resets
-           :goal/parent :goal/commits :goal/uncommitted :goal/clocks :goal/stuck-after
+           :goal/parent :goal/ranks :goal/commits :goal/uncommitted :goal/clocks :goal/stuck-after
            :goal/facts-only? :goal/progress]))
 
 (s/def ::world

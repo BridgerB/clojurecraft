@@ -1162,6 +1162,14 @@
     {:intent/kind :back-off :intent/target eid}
     {:intent/kind :dragon-rest}))
 
+(defn ranked
+  "Intent i labelled (intent/why) with label, the branch of toward-dragon that chose it, whatever
+   an inner planner labelled it: the label is the intent's rank in the dragon row's :goal/ranks.
+   Nil and a wait pass through."
+  [label i]
+  (cond (and (map? i) (:intent/kind i)) (vary-meta i assoc :intent/why label)
+        :else i))
+
 (defn toward-dragon
   "The next intent toward the dragon dead: on the ground in a breath cloud itself (in-breath?)
    with a crystal standing, the shelter walk out of it (escape), first of all: gym chain-w11 runs
@@ -1206,37 +1214,42 @@
                (:player/on-ground? world true)
                (not (or (off-island? world) (on-pillar? world) (on-spike? world)))
                (escape world))
-          (shelter-walk (escape world))
+          (ranked :dragon/escape-breath (shelter-walk (escape world)))
           (or (off-island? world) (seq (crystals world)) (on-pillar? world) (on-spike? world))
-          (toward-crystals world)
-          (struck-by-dragon? world) (after-blow world)
-          bed-intent bed-intent
-          (< (:player/health world full-health) perch-line) (recover world)
-          (and breath eid (holds? world)) {:intent/kind :perch :intent/target eid}
+          (ranked :dragon/crystals (toward-crystals world))
+          (struck-by-dragon? world) (ranked :dragon/after-blow (after-blow world))
+          bed-intent (ranked :dragon/bed bed-intent)
+          (< (:player/health world full-health) perch-line) (ranked :dragon/recover (recover world))
+          (and breath eid (holds? world))
+          (ranked :dragon/perch-in-breath {:intent/kind :perch :intent/target eid})
           (and breath eid d (grounded? d) (or (in-basin? world) (not blocked?)) far?)
-          (shelter-walk (or (when-not (in-basin? world)
-                              (some->> (around d pos (physics/centre stand))
-                                       (ground-cell world)))
-                            stand))
-          (and breath flight) (shelter-walk flight)
-          breath (back-off-breath world breath)
+          (ranked :dragon/shelter-to-stand
+                  (shelter-walk (or (when-not (in-basin? world)
+                                      (some->> (around d pos (physics/centre stand))
+                                               (ground-cell world)))
+                                    stand)))
+          (and breath flight) (ranked :dragon/shelter-flight (shelter-walk flight))
+          breath (ranked :dragon/back-off-breath (back-off-breath world breath))
           (and eid d (beds/held world) (not (and (grounded? d) (perched? d))))
-          (if (< (from-fountain world) step-out-radius)
-            (out-of-the-bite world)
-            {:intent/kind :hold :intent/target eid})
+          (ranked :dragon/bed-hold
+                  (if (< (from-fountain world) step-out-radius)
+                    (out-of-the-bite world)
+                    {:intent/kind :hold :intent/target eid}))
           (and (nil? stand) eid (some? (ground world 0 0 sky)))
-          {:intent/kind :perch :intent/target eid}
+          (ranked :dragon/perch-no-stand {:intent/kind :perch :intent/target eid})
           (nil? stand) {:plan/wait :no-fountain}
-          (and eid blocked? d (in-bite? d pos) (not (scanning? d)) stand) (out-of-the-bite world)
+          (and eid blocked? d (in-bite? d pos) (not (scanning? d)) stand)
+          (ranked :dragon/out-of-bite (out-of-the-bite world))
           (and eid (or blocked? (and (scanning? d) (in-basin? world))))
-          {:intent/kind :perch :intent/target eid}
+          (ranked :dragon/perch-blocked {:intent/kind :perch :intent/target eid})
           far?
-          (standing-walk (or (when-not (in-basin? world)
-                               (some->> (around d pos (physics/centre stand))
-                                        (ground-cell world)))
-                             stand))
+          (ranked :dragon/walk-to-stand
+                  (standing-walk (or (when-not (in-basin? world)
+                                       (some->> (around d pos (physics/centre stand))
+                                                (ground-cell world)))
+                                     stand)))
           (nil? eid) {:plan/wait :no-dragon}
-          :else {:intent/kind :perch :intent/target eid})))
+          :else (ranked :dragon/perch {:intent/kind :perch :intent/target eid}))))
 
 ;; ---------------------------------------------------------------- a lull
 
@@ -1294,36 +1307,20 @@
     {:plan/wait :other-dimension}))
 
 (defmethod plan/interrupts? :dragon
-  ;; a :perch ends at once hurt under combat/retreat-health (recover takes over: never
-  ;; fight the dragon under that line); any running intent but a :back-off ends when a breath is near (breath-near) and the feet are
-  ;; down off the pillars, spikes and entry bridge: gym dragon-d runs 1 and 3 walked into a
-  ;; fireball's cloud and died in it, six a second, nothing else ending a walk; unless the intent
-  ;; is the walk from the breath to a cell out of its reach (shelter-walk, :intent/for :shelter)
-  ;; or the :perch held through it in the basin (holds?); and a walk from outside the basin whose
-  ;; destination is before the sitting dragon's head (before-head?) or whose straight way passes
-  ;; before it (bite-on-way?) while the feet are not already there (the walk out from under the
-  ;; head to a safe cell continues; gym dragon3-b run 2 had the scanning head turn onto both the
-  ;; feet and the waypoint ahead, and walked into the head)
+  ;; a walk from outside the basin whose destination is before the sitting dragon's head
+  ;; (before-head?) or whose straight way passes before it (bite-on-way?) while the feet are not
+  ;; already there: the walk out from under the head to a safe cell continues. Every other cut is
+  ;; a branch of toward-dragon ranked above the running intent's (the row's :goal/ranks).
   [world _ i]
   (let [[_ d] (dragon world)
         pos (:player/pos world)
         shelter? (and (= :walk (:intent/kind i)) (= :shelter (:intent/for i)))]
-    (or (and (= :perch (:intent/kind i))
-             (or (< (:player/health world full-health) perch-line) (struck-by-dragon? world)))
-        (and (not= :back-off (:intent/kind i))
-             (not shelter?)
-             (not (off-island? world))
-             (not (on-pillar? world))
-             (not (on-spike? world))
-             (some? (breath-near world))
-             (not (and (= :perch (:intent/kind i)) (holds? world))))
-        (and (= :walk (:intent/kind i))
-             (not shelter?)
-             (:intent/target i)
-             (not (in-basin? world))
-             (let [goal (physics/centre (:intent/target i))]
-               (or (before-head? d goal)
-                   (and (not (before-head? d pos)) (bite-on-way? d pos goal))))))))
+    (and (= :walk (:intent/kind i))
+         (not shelter?)
+         (:intent/target i)
+         (not (in-basin? world))
+         (let [goal (physics/centre (:intent/target i))]
+           (or (before-head? d goal) (and (not (before-head? d pos)) (bite-on-way? d pos goal)))))))
 
 (defmethod combat/answers :dragon
   ;; the dragon is the row's own: gym dragon2-a run 1's :defend fought the perched dragon at hand
@@ -1392,5 +1389,5 @@
 (defmethod plan/next-intent :dragon
   [world _ _]
   (if (= dimension/end (dimension/of world))
-    (or (wear-pumpkin world) (toward-dragon world))
+    (or (ranked :dragon/wear (wear-pumpkin world)) (toward-dragon world))
     {:plan/wait :other-dimension}))

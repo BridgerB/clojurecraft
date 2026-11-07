@@ -873,13 +873,30 @@
                                                         'clojurecraft.pocket/cannot-seal?)]
                     (cannot-seal? world c))))))
 
+(defn rank-of
+  "The rank of intent i in row goal's :goal/ranks: the position of its why label (intent/why-of)
+   in the table, lower is more urgent; a label the table does not list ranks last."
+  [goal i]
+  (let [ranks (:goal/ranks goal)
+        n (.indexOf ^java.util.List ranks (intent/why-of i))]
+    (if (neg? n) (count ranks) n)))
+
+(defn outranks?
+  "Does the fresh answer next of row goal rank strictly above (a lower number than) the running
+   intent i? Only a strictly more urgent branch of the row's plan cuts a running intent; an equal
+   one is the same commitment and a wait or nil never cuts. False for a row with no :goal/ranks."
+  [goal i next]
+  (boolean
+   (and (seq (:goal/ranks goal)) i (:intent/kind next) (< (rank-of goal next) (rank-of goal i)))))
+
 (defn plan-tick
   "One planning tick while :active. The goals are re-derived from the world every tick, even
    while an intent runs (docs/RICH-HICKEY.md: \"the planner runs every tick against the current
    value, so done is re-derived, regressions re-plan automatically\"): no target left means
    :done, whatever is running; a running intent that serves another target than the one chosen
-   now is preempted, as is one the chosen row's interrupts? cuts short, unless the row, planning again
-   without it, would start the same intent (same-choice?): that one keeps running. A :tunnel-to
+   now is preempted, as is one the chosen row's plan now answers with a branch ranked strictly
+   above it (outranks?, the row's :goal/ranks), or that its interrupts? cuts short unless the row,
+   planning again without it, would start the same intent (same-choice?). A :tunnel-to
    also keeps running when the replacement is a hollow pocket at the feet (hollow-pocket?): it
    ends at once and cutting the tunnel for it moves nothing. A defence
    (holds?) is neither preempted nor cut by another row but an escape: it runs to its own end.
@@ -895,13 +912,17 @@
         goal (when active? (choose world table))
         held (held? table i goal)
         preempt? (and i goal (:intent/goal i) (not= (:goal/id goal) (:intent/goal i)) (not held))
-        cut-world (when (and i goal (not preempt?) (not held) (interrupts? world goal i))
+        cuttable? (and i goal (not preempt?) (not held))
+        hooked? (and cuttable? (interrupts? world goal i))
+        cut-world (when (and cuttable? (or hooked? (seq (:goal/ranks goal))))
                     (abandon-intent world i :interrupted))
         replacement (when cut-world (next-intent cut-world goal table))
         cut? (and cut-world
-                  (not (same-choice? i replacement))
-                  (not (and (= :tunnel-to (:intent/kind i))
-                            (hollow-pocket? cut-world replacement))))
+                  (or (outranks? goal i replacement)
+                      (and hooked?
+                           (not (same-choice? i replacement))
+                           (not (and (= :tunnel-to (:intent/kind i))
+                                     (hollow-pocket? cut-world replacement))))))
         next (when (and goal (nil? i)) (next-intent world goal table))
         feet (when (:player/pos world) (intent/feet world))
         failed (:plan/failed world)

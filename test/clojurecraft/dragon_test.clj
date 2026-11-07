@@ -28,6 +28,18 @@
 
 (use-fixtures :once fx/instrumented)
 
+(defn as
+  "Intent i labelled with the toward-dragon branch it came from (the label is its rank)."
+  [label i]
+  (vary-meta i assoc :intent/why label))
+
+(defn cuts?
+  "Would the planner cut running intent i in world w: the dragon row's fresh answer, planned with
+   nothing running, ranks above it (plan/outranks?)?"
+  [w i]
+  (let [row (plan/row-of plan/goals :dragon)]
+    (plan/outranks? row i (plan/next-intent (dissoc w :plan/intent :plan/last) row plan/goals))))
+
 ;; ---------------------------------------------------------------- a spike on a floor
 
 (def obsidian (blocks/default-state :obsidian))
@@ -282,14 +294,12 @@
         "the cloud five off the way: the walk")
     (is (true? (dragon/breath-on-way? (w (cloud [7.5 64.0 4.9])) [12.5 64.0 0.5] [2.5 64.0 0.5]))
         "its reach, radius and margin, counts")
-    (is (plan/interrupts? (w (cloud [10.5 64.0 0.5])) {:goal/plan :dragon} {:intent/kind :walk})
+    (is (cuts? (w (cloud [10.5 64.0 0.5])) (as :dragon/walk-to-stand {:intent/kind :walk}))
         "a breath near ends a walk")
-    (is (not (plan/interrupts? (w (cloud [10.5 64.0 0.5]))
-                               {:goal/plan :dragon}
-                               {:intent/kind :back-off}))
+    (is (not (cuts? (w (cloud [10.5 64.0 0.5]))
+                    (as :dragon/back-off-breath {:intent/kind :back-off})))
         "never the back-off from it")
-    (is (not
-         (plan/interrupts? (w (cloud [7.5 64.0 9.5])) {:goal/plan :dragon} {:intent/kind :walk}))
+    (is (not (cuts? (w (cloud [7.5 64.0 9.5])) (as :dragon/walk-to-stand {:intent/kind :walk})))
         "none near: the walk goes on")))
 
 ;; ---------------------------------------------------------------- the sitting dragon's head
@@ -459,7 +469,7 @@
         perch #(:plan/intent (intent/run (round-fountain %1 %2)
                                          {:intent/kind :perch :intent/target dragon-eid}
                                          {:event/kind :tick :event/now 1000 :event/rand 0.5}))
-        cut? #(plan/interrupts? (round-fountain %1 %2) {:goal/plan :dragon} %3)]
+        cut? #(cuts? (round-fountain %1 %2) %3)]
     (testing "the landing dragon's head is where a sitting one's is"
       (is (dragon/grounded? (get landing dragon-eid)))
       (is (dragon/grounded? (get (sitting 270.0) dragon-eid)))
@@ -473,16 +483,23 @@
       (let [reaching (merge (attacking 270.0) (cloud [0.5 64.0 4.5] 1.0))]
         (is (= (dragon/shelter-walk [2 64 0]) (at [0.5 64.0 2.5] reaching))
             "the walk to the stand behind, out of its reach, never the back-off up the rim")
-        (is (not (cut? [0.5 64.0 2.5] reaching (dragon/shelter-walk [2 64 0])))
+        (is (not (cut? [0.5 64.0 2.5]
+                       reaching
+                       (as :dragon/shelter-to-stand (dragon/shelter-walk [2 64 0]))))
             "which the breath does not end")
-        (is (cut? [0.5 64.0 2.5] reaching {:intent/kind :walk :intent/target [0 64 3]})
+        (is (cut? [0.5 64.0 2.5]
+                  reaching
+                  (as :dragon/walk-to-stand {:intent/kind :walk :intent/target [0 64 3]}))
             "a walk to a cell in its reach ends"))
       (let [held (merge (attacking 270.0) (cloud [2.5 64.0 3.4] 1.5))]
         (is (= {:intent/kind :perch :intent/target dragon-eid} (at [2.5 64.0 0.5] held))
             "no stand out of its reach, the feet out of the breath itself: hold")
         (is (dragon/holds? (round-fountain [2.5 64.0 0.5] held)))
         (is (not (intent/done? (perch [2.5 64.0 0.5] held))) "the perch holds")
-        (is (not (cut? [2.5 64.0 0.5] held {:intent/kind :perch :intent/target dragon-eid})))
+        (is (not (cut? [2.5 64.0 0.5]
+                       held
+                       (as :dragon/perch-in-breath
+                           {:intent/kind :perch :intent/target dragon-eid}))))
         (let [fled (fn [pos es]
                      (let [w (round-fountain pos es)
                            {:intent/keys [kind for target]} (dragon/toward-dragon w)]
@@ -500,7 +517,7 @@
               "outside the basin: the same")
           (is (not (cut? [2.5 64.0 0.5]
                          (merge (attacking 270.0) (cloud [2.5 64.0 1.5] 1.5))
-                         (dragon/shelter-walk [4 64 -2])))
+                         (as :dragon/shelter-flight (dragon/shelter-walk [4 64 -2]))))
               "which the breath does not end"))))
     (testing "the scanning turn is held still through"
       (is (= {:intent/kind :perch :intent/target dragon-eid} (at [-1.5 64.0 0.5] (sitting 270.0)))
@@ -615,7 +632,7 @@
     (is (not= :perch (:intent/kind (dragon/toward-dragon (hurt 20 {0 steak})))))
     (is (not= :perch (:intent/kind (dragon/toward-dragon (hurt 20 {}))))
         "nothing to eat: shelter or the wait, still never the perch")
-    (is (plan/interrupts? (hurt 20 {}) {:goal/plan :dragon} {:intent/kind :perch})
+    (is (cuts? (hurt 20 {}) (as :dragon/perch {:intent/kind :perch}))
         "a running perch ends under the line")
     (let [perching
           (assoc (hurt 20 {}) :plan/intent {:intent/kind :perch :intent/target dragon-eid})]
@@ -999,8 +1016,7 @@
     (let [perching (assoc (at 14.0)
                           :plan/intent
                           {:intent/kind :perch :intent/target dragon-eid :intent/status :active})]
-      (is (plan/interrupts? perching {:goal/plan :dragon} {:intent/kind :perch})
-          "a perch running at 14 ends"))))
+      (is (cuts? perching (as :dragon/perch {:intent/kind :perch})) "a perch running at 14 ends"))))
 
 (deftest hurt-on-the-ground-the-crystals-wait-for-the-health
   ;; gym chain-w16 run 1 (plan run 40863839525): the seventh crystal struck from a pillar's top at
@@ -1066,7 +1082,7 @@
     (let [perching (assoc in-basin
                           :plan/intent
                           {:intent/kind :perch :intent/target dragon-eid :intent/status :active})]
-      (is (plan/interrupts? perching {:goal/plan :dragon} {:intent/kind :perch})
+      (is (cuts? perching (as :dragon/perch {:intent/kind :perch}))
           "a perch running at 17 ends on the blow"))))
 
 (deftest with-beds-held-the-bot-walls-lays-one-under-the-perched-head-and-uses-it
@@ -1193,7 +1209,7 @@
     (is (contains? #{:walk :back-off} (:intent/kind i)) "the step out of the bite")
     (testing "the intent it chose is not cut the next tick"
       (let [running (assoc w :plan/intent (assoc i :intent/status :active :intent/id 7))]
-        (is (not (plan/interrupts? running {:goal/plan :dragon} (:plan/intent running))))))))
+        (is (not (cuts? running (:plan/intent running))))))))
 
 (deftest with-beds-held-and-the-dragon-flying-the-bot-holds-out-of-reach
   ;; gym chain-w19 dragon-beds-real (plan run 40918096417): all three slain in 1m43s to 2m50s by
