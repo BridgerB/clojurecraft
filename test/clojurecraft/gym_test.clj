@@ -1,5 +1,6 @@
 (ns clojurecraft.gym-test
   (:require [clojure.edn :as edn]
+            [clojure.java.io :as io]
             [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
@@ -44,6 +45,36 @@
              (gym/go-event row [10.0 64.0 20.0])))
       (is (= (fixture/go-event "dragon" [10.0 64.0 20.0])
              (gym/go-event (gym/gym "dragon") [10.0 64.0 20.0]))))))
+
+(deftest the-registry-file-loads-and-every-builder-form-is-known
+  (let [raw (edn/read-string (slurp (io/resource "clojurecraft/gyms.edn")))
+        fields [:gym/prereqs :gym/setup :gym/summon :gym/truth]
+        form? #(and (vector? %) (keyword? (first %)))
+        forms (for [row raw k fields e (get row k) :when (form? e)] e)]
+    (is (= (count raw) (count gym/gyms)) "one row for each in the file")
+    (is (seq forms) "the file names its builders")
+    (is (every? #(contains? (methods gym/gym-setup) (first %)) forms) "each has a defmethod")
+    (is (not-any? form? (for [row gym/gyms k fields e (get row k)] e)) "none is left unexpanded")
+    (is (every? #(= gym/trial-ms (:gym/timeout-ms %)) gym/gyms) "the trial cap, unless a row says")
+    (is (every? #(and (keyword? (:gym/goal %)) (string? (:gym/until %))) gym/gyms))))
+
+(deftest a-row-is-its-builders-expanded-in-order
+  (let [blaze-7 (gym/gym "blaze-7")
+        live (gym/gym "pearls-1-live")
+        beds (gym/gym "dragon-beds")]
+    (is (= (into gym/iron-armour
+                 [gym/fire-resistance gym/no-fire (gym/slow-blaze-spawner [3 0 3])
+                  (gym/summon "blaze" [-2 1 -2] "{PersistenceRequired:1b}")])
+           (:gym/summon blaze-7))
+        "the armour, Fire Resistance, no fire, the slow spawner, one blaze")
+    (is (= gym/pearl-kit (:gym/prereqs live)))
+    (is (= gym/pearl-arena (:gym/setup live)))
+    (is (= (into [] (mapcat #(gym/endermen 1 %)) [[10 0 0] [-10 0 2] [0 0 10]]) (:gym/summon live)))
+    (is (= (into [gym/no-crystals] gym/invulnerable) (:gym/summon beds)))
+    (is (= [gym/no-crystals] (:gym/setup beds)))
+    (is (= (gym/rods-held 7) (first (:gym/truth blaze-7))))
+    (is (= (gym/block-count "minecraft:nether_portal" "cloned [1-9]")
+           (second (:gym/truth (gym/gym "portal")))))))
 
 (def ok-result {:ok true :reason :goal :stats {}})
 

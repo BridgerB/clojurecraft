@@ -289,505 +289,59 @@
    (piece-fill [7 3 9] [7 3 11] "end_portal_frame[facing=west]")
    (str "setblock " (piece [5 3 6]) " minecraft:spawner")])
 
+(defmulti gym-setup
+  "What a builder form of the registry ([:kind args...], gyms.edn) expands to: a vector of the
+   commands, kit items or truth maps it stands for. Keyed by the form's first keyword; a new
+   builder is a defmethod."
+  {:arglists '([kind & args])}
+  (fn [kind & _] kind))
+
+(defmethod gym-setup :summon [_ & args] [(apply summon args)])
+(defmethod gym-setup :no-ai-zombie [_ d] [(no-ai-zombie d)])
+(defmethod gym-setup :blaze-spawner [_ d] [(blaze-spawner d)])
+(defmethod gym-setup :slow-blaze-spawner [_ d] [(slow-blaze-spawner d)])
+(defmethod gym-setup :endermen [_ n d] (endermen n d))
+(defmethod gym-setup :no-ai-enderman [_ d] [(no-ai-enderman d)])
+(defmethod gym-setup :dragon [_] dragon)
+(defmethod gym-setup :crystals [_ ds] (crystals ds))
+(defmethod gym-setup :no-crystals [_] [no-crystals])
+(defmethod gym-setup :spike-cages [_] spike-cages)
+(defmethod gym-setup :spike-crystals [_] spike-crystals)
+(defmethod gym-setup :fire-resistance [_] [fire-resistance])
+(defmethod gym-setup :invulnerable [_] invulnerable)
+(defmethod gym-setup :iron-armour [_] iron-armour)
+(defmethod gym-setup :race-armour [_] race-armour)
+(defmethod gym-setup :no-fire [_] [no-fire])
+(defmethod gym-setup :rods-held [_ n] [(rods-held n)])
+(defmethod gym-setup :pearls-held [_ re] [(pearls-held re)])
+(defmethod gym-setup :block-count [_ block re] [(block-count block re)])
+(defmethod gym-setup :pearl-kit [_] pearl-kit)
+(defmethod gym-setup :portal-kit [_] portal-kit)
+(defmethod gym-setup :pearl-arena [_] pearl-arena)
+(defmethod gym-setup :portal-arena [_] portal-arena)
+(defmethod gym-setup :portal-room [_] portal-room)
+
+(defn expand
+  "entries with each builder form (a vector whose first element is a keyword) replaced by what
+   gym-setup makes of it, in place; any other entry (a string, a map) stays as it is."
+  [entries]
+  (into []
+        (mapcat (fn [e] (if (and (vector? e) (keyword? (first e))) (apply gym-setup e) [e])))
+        entries))
+
+(defn expand-row
+  "A registry row as gyms.edn writes it, with its builder forms expanded in :gym/prereqs,
+   :gym/setup, :gym/summon and :gym/truth, and :gym/timeout-ms trial-ms when it names none."
+  [row]
+  (reduce (fn [row k] (cond-> row (contains? row k) (update k expand)))
+          (merge {:gym/timeout-ms trial-ms} row)
+          [:gym/prereqs :gym/setup :gym/summon :gym/truth]))
+
 (def gyms
-  "The gym registry. Truth commands count items without removing any (`clear <name> <item> 0`
-   answers \"Found N matching item(s)...\"); {name} is the bot's name; patterns are strings so
-   the table stays EDN."
-  [{:gym/goal :wood
-    :gym/until "wood"
-    :gym/prereqs []
-    :gym/timeout-ms trial-ms
-    :gym/truth [{:truth/cmd "clear {name} #minecraft:logs 0" :truth/re "Found [1-9]"}]}
-   {:gym/goal :kit
-    :gym/until "table"
-    :gym/prereqs []
-    :gym/timeout-ms trial-ms
-    :gym/truth [{:truth/cmd "clear {name} minecraft:crafting_table 0" :truth/re "Found [1-9]"}
-                {:truth/cmd "clear {name} minecraft:stick 0" :truth/re "Found ([4-9]|[1-9][0-9])"}]}
-   {:gym/goal :pickaxe
-    :gym/until "pickaxe"
-    :gym/prereqs []
-    :gym/timeout-ms trial-ms
-    :gym/truth [{:truth/cmd "clear {name} minecraft:wooden_pickaxe 0" :truth/re "Found [1-9]"}]}
-   ;; the pickaxe is given, so the row measures stone, not the wood and crafting it already measures
-   {:gym/goal :cobblestone
-    :gym/until "cobblestone"
-    :gym/prereqs ["minecraft:wooden_pickaxe 1"]
-    :gym/timeout-ms trial-ms
-    :gym/truth [{:truth/cmd "clear {name} minecraft:cobblestone 0"
-                 :truth/re "Found ([3-9]|[1-9][0-9])"}
-                {:truth/cmd "clear {name} minecraft:wooden_pickaxe 0" :truth/re "Found [1-9]"}]}
-   ;; the wooden pickaxe, sticks and a table are given, so the row measures stone and the table craft
-   {:gym/goal :stone-pickaxe
-    :gym/until "stone-pickaxe"
-    :gym/prereqs ["minecraft:wooden_pickaxe 1" "minecraft:stick 2" "minecraft:crafting_table 1"]
-    :gym/timeout-ms trial-ms
-    :gym/truth [{:truth/cmd "clear {name} minecraft:stone_pickaxe 0" :truth/re "Found [1-9]"}]}
-   ;; The furnace: a placed block is not in the inventory, so the server's word is that the
-   ;; cobblestone was spent and no furnace is held; the bot's RESULT needs the placed block seen.
-   {:gym/goal :furnace
-    :gym/until "furnace"
-    :gym/prereqs ["minecraft:cobblestone 8" "minecraft:crafting_table 1"]
-    :gym/timeout-ms trial-ms
-    :gym/truth [{:truth/cmd "clear {name} minecraft:cobblestone 0" :truth/re "No items were found"}
-                {:truth/cmd "clear {name} minecraft:furnace 0" :truth/re "No items were found"}]}
-   {:gym/goal :ingots
-    :gym/until "ingots"
-    :gym/prereqs ["minecraft:furnace 1" "minecraft:raw_iron 4" "minecraft:coal 1"]
-    :gym/timeout-ms trial-ms
-    :gym/truth [{:truth/cmd "clear {name} minecraft:iron_ingot 0"
-                 :truth/re "Found ([4-9]|[1-9][0-9])"}]}
-   {:gym/goal :bucket
-    :gym/until "bucket"
-    :gym/prereqs ["minecraft:iron_ingot 3" "minecraft:crafting_table 1"]
-    :gym/timeout-ms trial-ms
-    :gym/truth [{:truth/cmd "clear {name} minecraft:bucket 0" :truth/re "Found [1-9]"}]}
-   {:gym/goal :water-bucket
-    :gym/until "water-bucket"
-    :gym/prereqs ["minecraft:bucket 1" "minecraft:stone_pickaxe 2"]
-    :gym/timeout-ms trial-ms
-    :gym/truth [{:truth/cmd "clear {name} minecraft:water_bucket 0" :truth/re "Found [1-9]"}]}
-   ;; a gravel is given, so the row measures digging it again for flint, not finding gravel
-   {:gym/goal :flint-and-steel
-    :gym/until "flint-and-steel"
-    :gym/prereqs ["minecraft:iron_ingot 1" "minecraft:gravel 1"]
-    :gym/timeout-ms trial-ms
-    :gym/truth [{:truth/cmd "clear {name} minecraft:flint_and_steel 0" :truth/re "Found [1-9]"}]}
-   ;; the whole stage from what #9 ends with, as the sim's end-to-end run starts. Forty minutes:
-   ;; down to y 16, iron, coal, gravel and the smelts there, then the stairs back up to water.
-   {:gym/goal :iron-kit
-    :gym/until "iron-kit"
-    :gym/prereqs ["minecraft:stone_pickaxe 1" "minecraft:crafting_table 1" "minecraft:cobblestone 8"
-                  "minecraft:oak_log 4"]
-    :gym/timeout-ms trial-ms
-    :gym/truth [{:truth/cmd "clear {name} minecraft:water_bucket 0" :truth/re "Found [1-9]"}
-                {:truth/cmd "clear {name} minecraft:flint_and_steel 0" :truth/re "Found [1-9]"}]}
-   {:gym/goal :cast-one
-    :gym/until "cast-one"
-    :gym/prereqs portal-kit
-    :gym/setup portal-arena
-    :gym/timeout-ms trial-ms
-    :gym/truth [(block-count "minecraft:obsidian" "cloned [1-9]")]}
-   {:gym/goal :portal
-    :gym/until "portal"
-    :gym/prereqs portal-kit
-    :gym/setup portal-arena
-    :gym/timeout-ms trial-ms
-    :gym/truth [(block-count "minecraft:obsidian" "cloned (1[0-9]|[2-9][0-9]) block")
-                (block-count "minecraft:nether_portal" "cloned [1-9]")]}
-   {:gym/goal :nether
-    :gym/until "nether"
-    :gym/prereqs portal-kit
-    :gym/setup portal-arena
-    :gym/timeout-ms trial-ms
-    :gym/truth [{:truth/cmd "data get entity {name} Dimension" :truth/re "the_nether"}]}
-   {:gym/goal :fortress
-    :gym/until "fortress"
-    :gym/land :nether-fortress
-    :gym/prereqs ["minecraft:iron_pickaxe 1" "minecraft:cobblestone 64"]
-    :gym/timeout-ms trial-ms
-    :gym/truth
-    [{:truth/cmd "execute as {name} at @s if dimension minecraft:the_nether"
-      :truth/re "Test passed"}
-     {:truth/cmd
-      "execute as {name} at @s run clone ~-6 ~-6 ~-6 ~6 ~6 ~6 ~-6 ~20 ~-6 filtered minecraft:nether_bricks"
-      :truth/re "cloned [1-9]"}]}
-   {:gym/goal :entities
-    :gym/until "entities"
-    :gym/prereqs []
-    :gym/setup
-    ["summon minecraft:pig {x} {y+2} {z} {NoAI:1b,Invulnerable:1b,PersistenceRequired:1b,Health:7.5f}"]
-    :gym/timeout-ms trial-ms
-    :gym/truth
-    [{:truth/cmd
-      "execute as {name} at @s run data get entity @e[type=minecraft:pig,limit=1,sort=nearest] Health"
-      :truth/re "entity data: {result}f"
-      :truth/result [:mobs :pig]}]}
-   {:gym/goal :arena-nether
-    :gym/until "arena-nether"
-    :gym/fixture? true
-    :gym/land :nether-arena
-    :gym/difficulty "normal"
-    :gym/prereqs ["minecraft:iron_sword 1" "minecraft:cooked_beef 8"]
-    :gym/summon [(no-ai-zombie [2 0 2])]
-    :gym/timeout-ms trial-ms
-    :gym/truth [{:truth/cmd "execute as {name} at @s if dimension minecraft:the_nether"
-                 :truth/re "Test passed"}
-                {:truth/cmd "clear {name} minecraft:iron_sword 0" :truth/re "Found 1"}
-                {:truth/cmd "execute as {name} at @s if block ~ ~-1 ~ minecraft:netherrack"
-                 :truth/re "Test passed"}
-                {:truth/cmd
-                 "execute as {name} at @s if entity @e[type=minecraft:zombie,distance=..6]"
-                 :truth/re "Test passed"}]}
-   {:gym/goal :arena-end
-    :gym/until "arena-end"
-    :gym/fixture? true
-    :gym/land :end
-    :gym/difficulty "normal"
-    :gym/prereqs ["minecraft:iron_sword 1" "minecraft:cooked_beef 8"]
-    :gym/summon (into dragon (crystals [[3 0 3]]))
-    :gym/timeout-ms trial-ms
-    :gym/truth
-    [{:truth/cmd "execute as {name} at @s if dimension minecraft:the_end" :truth/re "Test passed"}
-     {:truth/cmd "clear {name} minecraft:iron_sword 0" :truth/re "Found 1"}
-     {:truth/cmd "execute as {name} at @s if block ~ ~-1 ~ minecraft:end_stone"
-      :truth/re "Test passed"}
-     {:truth/cmd "execute as {name} at @s if entity @e[type=minecraft:end_crystal,distance=..8]"
-      :truth/re "Test passed"}
-     {:truth/cmd "execute in minecraft:the_end if entity @e[type=minecraft:ender_dragon]"
-      :truth/re "Test passed"}]}
-   {:gym/goal :shore
-    :gym/until "shore"
-    :gym/prereqs []
-    :gym/timeout-ms trial-ms
-    :gym/truth
-    [{:truth/cmd
-      "execute as {name} at @s unless block ~ ~ ~ minecraft:water unless block ~ ~1 ~ minecraft:water"
-      :truth/re "Test passed"} {:truth/cmd "data get entity {name} OnGround" :truth/re "1b"}]}
-   {:gym/goal :eat
-    :gym/until "eat"
-    :gym/land :hungry
-    :gym/prereqs ["minecraft:bread 4"]
-    :gym/timeout-ms trial-ms
-    :gym/truth [{:truth/cmd "data get entity {name} foodLevel" :truth/re "data: (1[4-9]|20)$"}
-                {:truth/cmd "clear {name} minecraft:bread 0" :truth/re "Found [1-3] |No items"}]}
-   {:gym/goal :armour
-    :gym/until "armour"
-    :gym/prereqs ["minecraft:flint_and_steel 1" "minecraft:water_bucket 1" "minecraft:bucket 1"
-                  "minecraft:crafting_table 1" "minecraft:iron_ingot 13"]
-    :gym/timeout-ms trial-ms
-    :gym/truth [{:truth/cmd "execute if items entity {name} armor.head minecraft:iron_helmet"
-                 :truth/re "Test passed"}
-                {:truth/cmd "execute if items entity {name} armor.chest minecraft:iron_chestplate"
-                 :truth/re "Test passed"}]}
-   ;; The attacks' spacing is read from the recording. This row and defend run at Normal: the gym
-   ;; server is peaceful by default and refuses to summon a monster there
-   {:gym/goal :attack
-    :gym/until "attack"
-    :gym/difficulty "normal"
-    :gym/prereqs ["minecraft:stone_sword 1"]
-    :gym/setup ["time set noon"
-                "summon minecraft:husk {x+3} {y} {z} {NoAI:1b,PersistenceRequired:1b}"]
-    :gym/timeout-ms trial-ms
-    :gym/truth
-    [{:truth/cmd
-      "execute positioned {x} {y} {z} unless entity @e[type=minecraft:husk,distance=..24]"
-      :truth/re "Test passed"}]}
-   ;; Not all three: the row is done when none is within 4, and in gym defend-259a the others
-   ;; wandered off while the first was fought. Judged at the landing, never as the bot: execute as
-   ;; the bot answered RCON with nothing in every trial of that run
-   {:gym/goal :defend
-    :gym/until "defend"
-    :gym/difficulty "normal"
-    :gym/prereqs ["minecraft:iron_sword 1"]
-    :gym/setup ["time set midnight"
-                "scoreboard objectives add zkills minecraft.killed:minecraft.zombie"
-                "item replace entity {name} armor.head with minecraft:iron_helmet"
-                "item replace entity {name} armor.chest with minecraft:iron_chestplate"
-                "item replace entity {name} armor.legs with minecraft:iron_leggings"
-                "item replace entity {name} armor.feet with minecraft:iron_boots"]
-    ;; summoned once the bot stands in the landing with its kit, then the settle.
-    :gym/summon ["summon minecraft:zombie {x+2} {y} {z} {PersistenceRequired:1b}"
-                 "summon minecraft:zombie {x-2} {y} {z+1} {PersistenceRequired:1b}"
-                 "summon minecraft:zombie {x} {y} {z-2} {PersistenceRequired:1b}"]
-    :gym/timeout-ms trial-ms
-    :gym/truth [{:truth/cmd "scoreboard players get {name} zkills" :truth/re "has [1-9]"}
-                {:truth/cmd "data get entity {name} Health" :truth/re "data: [1-9]"}]}
-   {:gym/goal :blaze-rods
-    :gym/name "blaze-1"
-    :gym/until "blaze-rods"
-    :gym/land :nether-arena
-    :gym/difficulty "normal"
-    :gym/prereqs ["minecraft:iron_sword 1" "minecraft:cooked_beef 8" "minecraft:blaze_rod 6"]
-    :gym/summon (into invulnerable
-                      [no-fire (blaze-spawner [3 0 3])
-                       (summon "blaze" [-2 1 -2] "{PersistenceRequired:1b}")])
-    :gym/timeout-ms trial-ms
-    :gym/truth [(rods-held 7)]}
-   ;; blaze-7: the same room, all seven rods from its blazes, the bot in iron armour and hurt by
-   ;; their fireballs, so the break-off under 10 health and the meal after it are played. Fire
-   ;; Resistance, as ruststeve's arena gave ("fire resistance only stops the burn"). The spawner is
-   ;; the slow one (slow-blaze-spawner): blaze-7c died to volleys of three blazes at once
-   {:gym/goal :blaze-rods
-    :gym/name "blaze-7"
-    :gym/until "blaze-rods"
-    :gym/land :nether-arena
-    :gym/difficulty "normal"
-    :gym/prereqs ["minecraft:iron_sword 1" "minecraft:cooked_beef 16"]
-    :gym/summon (into iron-armour
-                      [fire-resistance no-fire (slow-blaze-spawner [3 0 3])
-                       (summon "blaze" [-2 1 -2] "{PersistenceRequired:1b}")])
-    :gym/timeout-ms trial-ms
-    :gym/truth [(rods-held 7)]}
-   ;; blaze-fortress-fireproof: from the fortress row's pad 48 west of a located fortress, the
-   ;; spawner found in the chunks loaded round it, tunnelled to, camped by, seven rods from its
-   ;; blazes. It measures the FIGHT only, not the bot's survival: Fire Resistance (a fireball and
-   ;; the burning after it cost nothing, as blaze-7 has it) and four pieces of armour. Its passes
-   ;; are not evidence that a race bot lives there: main's two on 2026-10-29. The race rows below
-   ;; are the truth. Named blaze-fortress until then, and read as a pass for the race.
-   {:gym/goal :blaze-rods
-    :gym/name "blaze-fortress-fireproof"
-    :gym/until "blaze-rods"
-    :gym/land :nether-fortress
-    :gym/difficulty "normal"
-    :gym/prereqs ["minecraft:iron_pickaxe 1" "minecraft:cobblestone 64" "minecraft:iron_sword 1"
-                  "minecraft:cooked_beef 16"]
-    :gym/summon (conj iron-armour fire-resistance)
-    :gym/timeout-ms trial-ms
-    :gym/truth [(rods-held 7)]}
-   ;; blaze-fortress-race: the same landing with what the race bot brings (gear.clj), not what
-   ;; the gym is generous with: an iron sword, iron helmet, chestplate and leggings, sixteen
-   ;; cooked beef, no Fire Resistance. blaze-fortress-fireproof stays as the mechanics check
-   {:gym/goal :blaze-rods
-    :gym/name "blaze-fortress-race"
-    :gym/until "blaze-rods"
-    :gym/land :nether-fortress
-    :gym/difficulty "normal"
-    :gym/prereqs ["minecraft:iron_pickaxe 1" "minecraft:crafting_table 1" "minecraft:stick 8"
-                  "minecraft:cobblestone 64" "minecraft:iron_sword 1" "minecraft:cooked_beef 16"]
-    :gym/summon race-armour
-    :gym/timeout-ms trial-ms
-    :gym/truth [(rods-held 7)]}
-   ;; blaze-fortress-geared: the same landing with exactly what this branch's gear step makes
-   ;; (gear.clj) and its entry gate requires (fortress/fed-for-nether?, four foods): an iron sword,
-   ;; iron helmet, chestplate and leggings in the inventory for the :wear-armour row to put on, four
-   ;; cooked beef, no Fire Resistance. The honest test of the branch; blaze-fortress-race keeps the
-   ;; unarmoured kit it was judged with
-   {:gym/goal :blaze-rods
-    :gym/name "blaze-fortress-geared"
-    :gym/until "blaze-rods"
-    :gym/land :nether-fortress
-    :gym/difficulty "normal"
-    :gym/prereqs ["minecraft:iron_pickaxe 1" "minecraft:cobblestone 64" "minecraft:iron_sword 1"
-                  "minecraft:iron_helmet 1" "minecraft:iron_chestplate 1"
-                  "minecraft:iron_leggings 1" "minecraft:cooked_beef 4"]
-    :gym/timeout-ms trial-ms
-    :gym/truth [(rods-held 7)]}
-   ;; Five that never move or teleport (NoAI), each within the hunt's strike range of the landing,
-   ;; since a kill drops a pearl only one time in two: one pearl is then 31 trials in 32
-   {:gym/goal :ender-pearl
-    :gym/until "pearls-1"
-    :gym/land :nether-arena
-    :gym/difficulty "normal"
-    :gym/prereqs pearl-kit
-    :gym/summon (mapv no-ai-enderman [[2 0 0] [-2 0 0] [0 0 2] [0 0 -2] [2 0 2]])
-    :gym/timeout-ms trial-ms
-    :gym/truth [(pearls-held "[1-9][0-9]*")]}
-   ;; then live: three that fight back for 7 a hit at Normal, ten blocks off in a stone arena at
-   ;; midnight (pearl-arena), the bot in the kit's iron helmet and chestplate; a pearl held, the
-   ;; bot alive with health left
-   {:gym/goal :ender-pearl
-    :gym/until "pearls-1"
-    :gym/name "pearls-1-live"
-    :gym/difficulty "normal"
-    :gym/prereqs pearl-kit
-    :gym/setup pearl-arena
-    :gym/summon (into [] (mapcat #(endermen 1 %)) [[10 0 0] [-10 0 2] [0 0 10]])
-    :gym/timeout-ms trial-ms
-    :gym/truth [(pearls-held "[1-9][0-9]*")
-                {:truth/cmd "data get entity {name} Health" :truth/re "data: [1-9]"}]}
-   ;; the stage: twelve pearls from the endermen of the warped forest nearest the landing's
-   ;; Nether coordinates, where they spawn by themselves at Normal and nothing else hostile does
-   {:gym/goal :ender-pearls
-    :gym/until "pearls-12"
-    :gym/land :warped-forest
-    :gym/difficulty "normal"
-    :gym/prereqs (conj pearl-kit "minecraft:cooked_beef 32")
-    :gym/timeout-ms trial-ms
-    :gym/truth [(pearls-held "(1[2-9]|[2-9][0-9]|[1-9][0-9][0-9])")]}
-   {:gym/goal :ender-pearls
-    :gym/name "pearls-12-race"
-    :gym/until "pearls-12"
-    :gym/land :warped-forest
-    :gym/difficulty "normal"
-    :gym/prereqs (into pearl-kit
-                       ["minecraft:cooked_beef 32" "minecraft:cobblestone 64"
-                        "minecraft:netherrack 64"])
-    :gym/timeout-ms trial-ms
-    :gym/truth [(pearls-held "(1[2-9]|[2-9][0-9]|[1-9][0-9][0-9])")]}
-   {:gym/goal :ender-pearls
-    :gym/name "pearls-12-race-tools"
-    :gym/until "pearls-12"
-    :gym/land :warped-forest
-    :gym/difficulty "normal"
-    :gym/prereqs (into pearl-kit
-                       ["minecraft:cooked_beef 32" "minecraft:cobblestone 64"
-                        "minecraft:netherrack 64" "minecraft:crafting_table 1" "minecraft:stick 8"])
-    :gym/timeout-ms trial-ms
-    :gym/truth [(pearls-held "(1[2-9]|[2-9][0-9]|[1-9][0-9][0-9])")]}
-   ;; No fire resistance: the race's bot has none at this stage
-   {:gym/goal :ender-pearls
-    :gym/name "pearls-12-from-fortress"
-    :gym/until "pearls-12"
-    :gym/land :nether-fortress
-    :gym/difficulty "normal"
-    :gym/prereqs (into pearl-kit ["minecraft:cooked_beef 32" "minecraft:blaze_rod 7"])
-    :gym/timeout-ms trial-ms
-    :gym/truth [(pearls-held "(1[2-9]|[2-9][0-9]|[1-9][0-9][0-9])")]}
-   {:gym/goal :ender-pearls
-    :gym/name "pearls-12-from-fortress-open"
-    :gym/until "pearls-12"
-    :gym/land :nether-fortress-open
-    :gym/difficulty "normal"
-    :gym/prereqs (into pearl-kit ["minecraft:cooked_beef 32" "minecraft:blaze_rod 7"])
-    :gym/timeout-ms trial-ms
-    :gym/truth [(pearls-held "(1[2-9]|[2-9][0-9]|[1-9][0-9][0-9])")]}
-   ;; Nothing to fight or fetch, so the row measures the 2x2 crafts alone (six of blaze powder,
-   ;; twelve of eyes)
-   {:gym/goal :eyes-of-ender
-    :gym/until "eyes"
-    :gym/difficulty "normal"
-    :gym/prereqs ["minecraft:blaze_rod 7" "minecraft:ender_pearl 12"]
-    :gym/timeout-ms trial-ms
-    :gym/truth [{:truth/cmd "clear {name} minecraft:ender_eye 0"
-                 :truth/re "Found (1[2-9]|[2-9][0-9]) "}]}
-   {:gym/goal :eye-throw
-    :gym/until "throw"
-    :gym/difficulty "normal"
-    :gym/setup ["time set noon"]
-    :gym/prereqs ["minecraft:ender_eye 2"]
-    :gym/timeout-ms trial-ms
-    :gym/truth [{:truth/cmd
-                 "execute positioned {x} {y} {z} run locate structure minecraft:stronghold"
-                 :truth/re "\\[(-?\\d+), (?:~|-?\\d+), (-?\\d+)\\]"
-                 :truth/check :bearing
-                 :truth/result [:throws]}]}
-   ;; Eyes to spare for the throws a shatter costs; pickaxes for the tunnels where no walk goes; a
-   ;; sword, armour and food for the night the walks may run into at Normal
-   {:gym/goal :stronghold
-    :gym/until "stronghold"
-    :gym/land :near-stronghold
-    :gym/difficulty "normal"
-    :gym/prereqs ["minecraft:ender_eye 6" "minecraft:iron_sword 1" "minecraft:iron_pickaxe 3"
-                  "minecraft:iron_helmet 1" "minecraft:iron_chestplate 1"
-                  "minecraft:cooked_beef 16"]
-    :gym/timeout-ms trial-ms
-    :gym/truth [{:truth/cmd "execute if block {at} minecraft:end_portal_frame"
-                 :truth/re "Test passed"
-                 :truth/at [:frame]}]}
-   ;; then down to it: the same landing and kit, cobblestone for the tunnel's floors, judged by a
-   ;; frame at the cell the bot names and the bot within 7 of it (at the frame's corner), asked at
-   ;; the frame's coordinates, never as the bot: execute as the bot answered RCON with nothing in
-   ;; gym defend-259a
-   {:gym/goal :portal-room
-    :gym/until "portal-room"
-    :gym/land :near-stronghold
-    :gym/difficulty "normal"
-    :gym/prereqs ["minecraft:ender_eye 6" "minecraft:iron_sword 1" "minecraft:iron_pickaxe 3"
-                  "minecraft:iron_helmet 1" "minecraft:iron_chestplate 1" "minecraft:cooked_beef 16"
-                  "minecraft:cobblestone 64"]
-    :gym/timeout-ms trial-ms
-    :gym/truth [{:truth/cmd "execute if block {at} minecraft:end_portal_frame"
-                 :truth/re "Test passed"
-                 :truth/at [:frame]}
-                {:truth/cmd "execute positioned {at} if entity @a[name={name},distance=..7]"
-                 :truth/re "Test passed"
-                 :truth/at [:frame]}]}
-   {:gym/goal :end-portal
-    :gym/until "end-portal"
-    :gym/land :portal-room
-    :gym/difficulty "normal"
-    :gym/setup portal-room
-    :gym/prereqs ["minecraft:ender_eye 14"]
-    :gym/timeout-ms trial-ms
-    :gym/truth [{:truth/cmd "execute if block {at} minecraft:end_portal"
-                 :truth/re "Test passed"
-                 :truth/at [:portal]}]}
-   ;; then through it: the same room and kit, judged by the server finding the bot in the End
-   {:gym/goal :enter-end
-    :gym/until "enter-end"
-    :gym/land :portal-room
-    :gym/difficulty "normal"
-    :gym/setup portal-room
-    :gym/prereqs ["minecraft:ender_eye 14"]
-    :gym/timeout-ms trial-ms
-    :gym/truth [{:truth/cmd "execute as {name} at @s if dimension minecraft:the_end"
-                 :truth/re "Test passed"}]}
-   ;; The bot takes no harm (invulnerable): the End's fight makes a dragon of its own on the bot's
-   ;; arrival, after the summons, which no command here can keep away, and gym dragon-b's three runs
-   ;; died to its fireballs and its knocks off a pillar, the row measuring the dragon and not the
-   ;; crystals (the wall's worth is read off the recording: dragon-b run 1 struck its first crystal
-   ;; from behind it for 1 damage)
-   {:gym/goal :crystals
-    :gym/until "crystals"
-    :gym/land :end
-    :gym/difficulty "normal"
-    :gym/setup spike-cages
-    :gym/prereqs ["minecraft:cobblestone 64" "minecraft:cobblestone 64" "minecraft:iron_pickaxe 1"
-                  "minecraft:iron_sword 1" "minecraft:cooked_beef 16"]
-    :gym/summon (into spike-crystals invulnerable)
-    :gym/timeout-ms trial-ms
-    :gym/truth [{:truth/cmd
-                 "execute in minecraft:the_end unless entity @e[type=minecraft:end_crystal]"
-                 :truth/re "Test passed"}]}
-   ;; the crystals gone and the End fight's own dragon circling (the bot's arrival in the End starts
-   ;; the fight and spawns its dragon twenty ticks on), the bot in iron with a sword, cobblestone
-   ;; and a pickaxe for any crystal left; judged by no dragon left in the End
-   {:gym/goal :dragon
-    :gym/until "dragon"
-    :gym/land :end
-    :gym/difficulty "normal"
-    :gym/setup [no-crystals]
-    :gym/prereqs ["minecraft:iron_sword 1" "minecraft:iron_helmet 1" "minecraft:iron_chestplate 1"
-                  "minecraft:iron_leggings 1" "minecraft:iron_boots 1" "minecraft:cooked_beef 16"
-                  "minecraft:cobblestone 64" "minecraft:iron_pickaxe 1"
-                  "minecraft:carved_pumpkin 1"]
-    :gym/summon [no-crystals]
-    :gym/timeout-ms trial-ms
-    :gym/truth [{:truth/cmd
-                 "execute in minecraft:the_end unless entity @e[type=minecraft:ender_dragon]"
-                 :truth/re "Test passed"}]}
-   ;; the speedrunners' kill, measured: the dragon row with six beds and the bot invulnerable
-   ;; (Resistance V, Fire Resistance), so the damage a bed deals the perched dragon is read from the
-   ;; boss bar (boss-event update-health) before and after each, not the bot's survival; a bed
-   ;; explodes in the End and, in the open at 4.5 blocks, would kill the bot
-   {:gym/name "dragon-beds"
-    :gym/goal :dragon
-    :gym/until "dragon"
-    :gym/land :end
-    :gym/difficulty "normal"
-    :gym/setup [no-crystals]
-    :gym/prereqs ["minecraft:iron_sword 1" "minecraft:iron_helmet 1" "minecraft:iron_chestplate 1"
-                  "minecraft:iron_leggings 1" "minecraft:iron_boots 1" "minecraft:cooked_beef 16"
-                  "minecraft:cobblestone 64" "minecraft:iron_pickaxe 1" "minecraft:carved_pumpkin 1"
-                  "minecraft:white_bed 6"]
-    :gym/summon (into [no-crystals] invulnerable)
-    :gym/timeout-ms trial-ms
-    :gym/truth [{:truth/cmd
-                 "execute in minecraft:the_end unless entity @e[type=minecraft:ender_dragon]"
-                 :truth/re "Test passed"}]}
-   ;; the same without the Resistance: the bot walls itself from the bed's blast (bed-wall, two
-   ;; blocks, beds/expected-damage) and takes what is left; its health is the measure
-   {:gym/name "dragon-beds-real"
-    :gym/goal :dragon
-    :gym/until "dragon"
-    :gym/land :end
-    :gym/difficulty "normal"
-    :gym/setup [no-crystals]
-    :gym/prereqs ["minecraft:iron_sword 1" "minecraft:iron_helmet 1" "minecraft:iron_chestplate 1"
-                  "minecraft:iron_leggings 1" "minecraft:iron_boots 1" "minecraft:cooked_beef 16"
-                  "minecraft:cobblestone 64" "minecraft:iron_pickaxe 1" "minecraft:carved_pumpkin 1"
-                  "minecraft:white_bed 6"]
-    :gym/summon [no-crystals]
-    :gym/timeout-ms trial-ms
-    :gym/truth [{:truth/cmd
-                 "execute in minecraft:the_end unless entity @e[type=minecraft:ender_dragon]"
-                 :truth/re "Test passed"}]}
-   {:gym/name "chain"
-    :gym/goal :dragon
-    :gym/until "dragon"
-    :gym/goals [:eyes-of-ender :stronghold :portal-room :end-portal :enter-end :crystals :dragon]
-    :gym/land :near-stronghold
-    :gym/difficulty "normal"
-    :gym/prereqs ["minecraft:blaze_rod 7" "minecraft:ender_pearl 12" "minecraft:iron_sword 1"
-                  "minecraft:iron_pickaxe 4" "minecraft:iron_helmet 1" "minecraft:iron_chestplate 1"
-                  "minecraft:iron_leggings 1" "minecraft:iron_boots 1" "minecraft:cooked_beef 16"
-                  "minecraft:cobblestone 64" "minecraft:cobblestone 64" "minecraft:cobblestone 64"
-                  "minecraft:carved_pumpkin 1"]
-    :gym/timeout-ms trial-ms
-    :gym/truth [{:truth/cmd
-                 "execute in minecraft:the_end unless entity @e[type=minecraft:ender_dragon]"
-                 :truth/re "Test passed"}]}])
+  "The gym registry, resources/clojurecraft/gyms.edn with its builder forms expanded (expand-row):
+   which goal, the --until that runs it, what to give the bot first, how long it may take, and the
+   truth commands that must all pass. Plain data: printable and readable back."
+  (mapv expand-row (edn/read-string (slurp (io/resource "clojurecraft/gyms.edn")))))
 
 (def counted
   "Outcomes that say something about the goal; :harness and :disconnect do not."

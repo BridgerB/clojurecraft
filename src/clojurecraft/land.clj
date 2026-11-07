@@ -298,10 +298,7 @@
   "The Nether points [x z] a warped forest is located from for a landing at overworld x z,
    nearest first: the landing's eighth (the Nether's scale, so each landing has a forest of its
    own), then locate-offsets off it along each axis, for when the forest nearest gives no
-   floor. Set A's landing 19360,18752, a plan's run 2, located its nearest forest at [2420 64
-   2216] and found no floor in it three plans running (pearls-warped-e, pearls-warped3-a and
-   pearls-warped4-b, plan runs 39178856841, 39529384355 and 39596287510: a harness row each,
-   the bot reset to the overworld spawn with no kit and the trial counted for nothing)."
+   floor."
   [x z]
   (search-points-from (quot x 8) (quot z 8)))
 
@@ -804,7 +801,7 @@
   "Land the bot named name (racer i) at the fortress of its landing: the pad (pad-of the fortress the
    server locates, built by prepare! or here when it is new, build-pad!), its lava cleared again
    (lava-clear-command: lava flows back between landings), the bot teleported onto it; wait for the server to say it stands in the Nether, clear its inventory and give it kit
-   (\"minecraft:iron_sword 1\" ...: what a race bot carries to the fortress, ci/race.edn's
+   (\"minecraft:iron_sword 1\" ...: what a race bot carries to the fortress,
    start/kit-commands). Returns where it stands ([x y z], standing-on the pad), or nil when the dimension
    never came; a landing that cannot locate a fortress throws."
   [rc name landing i kit]
