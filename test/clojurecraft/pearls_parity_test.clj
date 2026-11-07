@@ -182,13 +182,28 @@
      (-> (ps/standing {8 (ps/mob :zombie [9.5 64.0 8.5])} void-under)
          (assoc :player/health 9.0)
          (assoc-in [:player/inventory 3] (ps/item :cobblestone 64)))]
-    ;; the burrow's end, an angry enderman near the mouth fought out and blacklisted, after
-    ;; lookouts: the lure
+    ;; the burrow's end, an angry enderman near the mouth that a fight failed on a moment ago
+    ;; (unfightable, not fought out), after lookouts: the lure
     ["lure"
      (-> (ps/burrowed [8.5 61.0 8.5] {7 (assoc (ps/enderman [11.5 64.0 8.5]) :entity/creepy? true)})
-         (with-fights 9)
          (ps/looked 7)
+         (memory/remember-intention {:intent/id 300 :intent/kind :fight :intent/target 7} :failed)
          (assoc :plan/blacklist #{7}))]
+    ;; outside a sealed nook (its route home gone), hurt, a zombie at hand, a gap behind the bot
+    ;; where backing away would step off, blocks to lay: back-off is pointless
+    ["gap-nook-zombie"
+     (-> (ps/wide (ps/standing
+                   {8 (ps/mob :zombie [14.5 64.0 8.5])}
+                   (merge nook-blocks
+                          {[9 64 8] ps/stone [9 65 8] ps/stone}
+                          (into {}
+                                (for [x [10 11] z (range 16) y (range 40 64)] [[x y z] ps/air])))))
+         (assoc :pearls/shelter [8 64 8]
+                :pearls/mouth [9 64 8]
+                :player/pos [12.5 64.0 8.5]
+                :player/health 9.0)
+         (assoc-in [:player/inventory 1] (ps/item :iron_pickaxe 1))
+         (assoc-in [:player/inventory 3] (ps/item :cobblestone 64)))]
     ;; a calm enderman standing in the stairs, the bot at the end, no lookouts yet
     ;; a ghast in sight with a calm enderman tracked and nothing to cover with, hurt a little
     ;; and fed: no cover walk, no block to lay, so the meal
