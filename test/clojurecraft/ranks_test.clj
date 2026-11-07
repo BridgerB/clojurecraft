@@ -7,10 +7,13 @@
 (defn row "The shipped row with :goal/id id." [id] (plan/row-of plan/goals id))
 
 (defn labels-in
-  "The distinct labels ns-name/<branch> that file passes to a (ranked ...) call."
+  "The distinct labels ns-name/<branch> that file passes to a (ranked ...) call, directly or as
+   the two arms of an (if test a b) in its first argument."
   [file ns-name]
-  (set (map second
-            (re-seq (re-pattern (str "\\(ranked (:" ns-name "/[a-z0-9?-]+)")) (slurp file)))))
+  (let [label (str ":" ns-name "/[a-z0-9?-]+")
+        call (re-pattern
+              (str "\\(ranked\\s+(?:\\(if\\s+\\S+\\s+(" label ")\\s+(" label ")\\)|(" label "))"))]
+    (set (mapcat #(remove nil? (rest %)) (re-seq call (slurp file))))))
 
 (deftest every-branch-the-dragon-plan-labels-is-ranked-and-every-rank-is-a-branch
   (let [used (set (map keyword

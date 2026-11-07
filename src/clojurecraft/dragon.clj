@@ -1252,11 +1252,11 @@
           (and eid (or blocked? (and (scanning? d) (in-basin? world))))
           (ranked :dragon/perch-blocked {:intent/kind :perch :intent/target eid})
           far?
-          (ranked :dragon/walk-to-stand
-                  (standing-walk (or (when-not (in-basin? world)
-                                       (some->> (around d pos (physics/centre stand))
-                                                (ground-cell world)))
-                                     stand)))
+          (let [round (when-not (in-basin? world)
+                        (some->> (around d pos (physics/centre stand))
+                                 (ground-cell world)))]
+            (ranked (if round :dragon/walk-around-head :dragon/walk-to-stand)
+                    (standing-walk (or round stand))))
           (nil? eid) {:plan/wait :no-dragon}
           :else (ranked :dragon/perch {:intent/kind :perch :intent/target eid}))))
 
@@ -1314,22 +1314,6 @@
   (if (= dimension/end (dimension/of world))
     (or (wear-pumpkin world) (toward-crystals world))
     {:plan/wait :other-dimension}))
-
-(defmethod plan/interrupts? :dragon
-  ;; a walk from outside the basin whose destination is before the sitting dragon's head
-  ;; (before-head?) or whose straight way passes before it (bite-on-way?) while the feet are not
-  ;; already there: the walk out from under the head to a safe cell continues. Every other cut is
-  ;; a branch of toward-dragon ranked above the running intent's (the row's :goal/ranks).
-  [world _ i]
-  (let [[_ d] (dragon world)
-        pos (:player/pos world)
-        shelter? (and (= :walk (:intent/kind i)) (= :shelter (:intent/for i)))]
-    (and (= :walk (:intent/kind i))
-         (not shelter?)
-         (:intent/target i)
-         (not (in-basin? world))
-         (let [goal (physics/centre (:intent/target i))]
-           (or (before-head? d goal) (and (not (before-head? d pos)) (bite-on-way? d pos goal)))))))
 
 (defmethod combat/answers :dragon
   ;; the dragon is the row's own: gym dragon2-a run 1's :defend fought the perched dragon at hand

@@ -491,5 +491,5 @@
                :dragon/recover :dragon/perch-in-breath :dragon/shelter-to-stand
                :dragon/shelter-flight :dragon/back-off-breath :dragon/bed-hold
                :dragon/perch-no-stand :dragon/out-of-bite :dragon/perch-blocked
-               :dragon/walk-to-stand :dragon/perch]
+               :dragon/walk-around-head :dragon/walk-to-stand :dragon/perch]
   :goal/plan :dragon}]

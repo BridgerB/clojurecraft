@@ -447,17 +447,14 @@
      (= (dragon/standing-walk [2 64 0]) (at [-1.5 64.0 0.5] (attacking 270.0)))
      "the head turned onto the feet in the basin: straight to the stand behind, low under it
          (gym dragon2-a runs 1 and 3 walked out up the rim into the neck)")
-    (is (plan/interrupts? (round-fountain [12.5 64.0 0.5] (sitting 90.0))
-                          {:goal/plan :dragon}
-                          {:intent/kind :walk :intent/target [-2 64 0]})
-        "a walk whose way goes under the head ends")
-    (is (not (plan/interrupts? (round-fountain [4.5 64.0 0.5] (sitting 90.0))
-                               {:goal/plan :dragon}
-                               {:intent/kind :walk :intent/target [4 64 5]}))
+    (is (cuts? (round-fountain [12.5 64.0 0.5] (sitting 90.0))
+               (as :dragon/walk-to-stand {:intent/kind :walk :intent/target [-2 64 0]}))
+        "a walk whose way goes under the head ends: the way round it ranks above it")
+    (is (not (cuts? (round-fountain [4.5 64.0 0.5] (sitting 90.0))
+                    (as :dragon/out-of-bite {:intent/kind :walk :intent/target [4 64 5]})))
         "never the walk out from under it")
-    (is (not (plan/interrupts? (round-fountain [-0.5 64.0 -1.5] (sitting 90.0))
-                               {:goal/plan :dragon}
-                               {:intent/kind :walk :intent/target [2 64 0]}))
+    (is (not (cuts? (round-fountain [-0.5 64.0 -1.5] (sitting 90.0))
+                    (as :dragon/walk-to-stand {:intent/kind :walk :intent/target [2 64 0]})))
         "nor a walk in the basin")))
 
 (deftest the-bot-keeps-the-basins-floor-while-the-dragon-sits-or-lands
