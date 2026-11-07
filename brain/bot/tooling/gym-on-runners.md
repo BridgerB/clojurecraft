@@ -5,7 +5,7 @@ type: reference
 tags: [bot, tooling, ci, gym]
 aliases: [gym.yml, world.yml, test.yml, wood.yml, clojure -M:gym, GYMRESULT, result.edn, landing set, landings.edn, truth command, outcome, Wilson, paired landings, CI]
 status: verified
-lastUpdated: 2026-10-22
+lastUpdated: 2026-11-07
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/gym.clj#def gyms
@@ -68,6 +68,10 @@ related:
 2. **world** (`world.yml`): restores the world cache for the set, or on a miss builds it with `bb prepare-world` (`bb/clojurecraft/worlds.clj`) and saves it. The key hashes `ci/gym.edn`, `bb/clojurecraft/server.clj`, `bb/clojurecraft/worlds.clj`, `landings.clj` and `fixture.clj`. A weekly run restores it to keep it from eviction.
 3. **trial** (one runner per run, up to 20 at once, `fail-fast: false`): restores the world with `fail-on-cache-miss` (trials never build terrain), starts the server, insists `forceload query` is empty, then `clojure -M:gym trial` (`gym/trial!`, the same trial a plan runs): the bot starts as its own JVM (`--events stdin --record`), `landing!` lands it (wait for the bot, the row's difficulty, survival, clear, teleport onto `landings[run]` or the row's start, then, once the server says the bot is in the row's dimension, the prerequisites and the row's summons) and its `:go` with `:go/at` goes down its stdin, and `judge!` waits for RESULT, runs every truth command while the bot holds, writes `result.edn` and prints one `GYMRESULT` line. A `:disconnect` is run once more on the same landing, under `trial/retry/`. The trial directory (recordings compressed with zstd) is uploaded with the server log and the forceload checks.
 4. **aggregate**: downloads every trial's artifact, `clojure -M:gym report` folds the `result.edn` files (a retried trial's retry, not its first attempt: `gym/located-in`) into markdown (per goal: pass k/n with a 95% Wilson interval, a row per run with its truth replies, the outcome and reason tallies), writes it to the run summary and comments it on the branch's open PR.
+
+## The registry and landing
+A gym row is data in `resources/clojurecraft/gyms.edn`: the goal, its prereqs, its setup, summons and truth commands, with builders named by a keyword where a row needs commands computed. `land.clj` is the landing both the gym and the race use over RCON: `land!` is an open multimethod that puts a row's bot where the row starts (a new kind of start is a defmethod), and the helpers under it build and stand the bot on a pad or arena.
+
 
 ## Judging
 `gym/gyms` is the registry, data like the goal table: goal, `--until`, prerequisites, timeout, and truth commands that count items without removing them (`clear <name> <item> 0` answers "Found N matching item(s)"). `gym/outcome` is one pure function: `:harness` when the landing failed, `:disconnect` when the bot never printed RESULT or lost its socket, `:death`, `:timeout`, `:pass` only when RESULT is ok and every truth passes, else `:fail`. The bot saying ok while the server disagrees is `:fail`, with the server's reply in the row. `:harness` and `:disconnect` are not counted.

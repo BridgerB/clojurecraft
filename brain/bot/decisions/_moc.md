@@ -28,6 +28,8 @@ related:
 - [[remembered-by-identity]] - the planner's costliest questions remembered by the world's parts (memo/by), a search reading each cell once, the overlay kept identical; the race profiles that asked for each.
 - [[one-planner]] - the recipe-only walk was removed once the needs planner covered it.
 - [[any-log-species]] - gather the nearest log of any kind; the next plan picks the planks recipe.
+- [[pearls-rule-table]] - the pearl hunt as rows of pearls-rules.edn read by one function over named facts, by phase; its history in pearls-history.edn.
+- [[threats-as-data]] - per-kind threat facts and the cover ladder in threats.edn, measures as defmethods, one shelter search.
 
 ## See also
 - [[bot/_moc|Bot pillar]]

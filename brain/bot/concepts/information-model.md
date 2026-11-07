@@ -5,7 +5,7 @@ type: explanation
 tags: [bot, concepts, state, spec]
 aliases: [attribute list, model.clj, model/attributes, what the bot knows, attribute meanings]
 status: verified
-lastUpdated: 2026-10-10
+lastUpdated: 2026-11-07
 verifiedAgainst: c559708
 sourceRefs:
   - src/clojurecraft/model.clj#def attributes
@@ -29,6 +29,9 @@ The essay's own grouping of what a bot knows: the bot and its connection (`bot/*
 - `every-key-a-running-bot-writes-is-in-the-model` walks every world, event and effect of a whole pickaxe run against the server model and collects every qualified key; any key the list lacks fails the test by name. Deleting the `:intent/next-swing` row fails it.
 - `every-attribute-in-the-model-has-a-spec` requires a spec for every row. Writing the list added specs for 58 attributes that had none; every instrumented test and generated run now checks them, since `s/keys` checks any registered key a map carries.
 - The second column is the meaning, the third says when the attribute exists; absent otherwise, never nil-filled ([[world-value]]).
+
+## What is not world information
+An executor's private attributes are its `scratch` map (`intent/scratch`, `window/scratch`): meaning and lifetime beside the code that reads them, not rows here, and `scratch_test` fails if another namespace uses one or if one is also a model row. The two shapes every position attribute shares (`vec3`, `block-pos`) are registered in the leaf namespace `clojurecraft.shapes`, so an executor can spec its own attributes before `clojurecraft.spec` loads.
 
 ## Gotchas
 - The key walk does not enter the DataScript value, so the `sight/*` fact attributes are listed by hand; a test asserts they are there.
