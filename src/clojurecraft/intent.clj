@@ -171,6 +171,24 @@
 
 ;; ---------------------------------------------------------------- intents composing intents
 
+(defn why-of
+  "The planner's branch that chose intent i (why), or nil: a label on the intent's metadata, so an
+   intent compares equal with or without one."
+  [i]
+  (:intent/why (meta i)))
+
+(defn why
+  "Intent i labelled with the planner's branch that chose it (label: a keyword, its function and
+   its test, e.g. :hunt/and-near?-hurt?-not-in?), unless i is already labelled (an inner planner
+   named its own branch) or is no intent (nil, a {:plan/wait ...}). The label rides on the map's
+   metadata: it is about the choice, not the intent, so it never changes what an intent equals, and
+   it follows the intent through every assoc. A reader of a run sees it as data where it is read:
+   the intention facts (:intention/why), the senses line, the ledger and the moment (the
+   observability plan, part B)."
+  [label i]
+  (cond (and (map? i) (:intent/kind i) (nil? (why-of i))) (vary-meta i assoc :intent/why label)
+        :else i))
+
 (defn feet
   "The cell the feet stand in: y a touch below the position, since physics jitter dips it
    just under the integer (ruststeve's (p.y - 0.5).floor())."

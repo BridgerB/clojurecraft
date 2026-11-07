@@ -82,4 +82,31 @@
     (is (not (botlogs/keep-recording? quiet)))
     (spit quiet "#:senses{:class #{:idle :open} :lines 1}\n{:t 1}\n")
     (is (botlogs/keep-recording? quiet) "an idle run ships its recording too")
+    (spit quiet "#:senses{:class #{:open} :lines 1}\n{:t 1}\n")
+    (is (botlogs/keep-recording? quiet {:ok false :reason :death}) "a failed run ships it")
+    (is (not (botlogs/keep-recording? quiet {:ok true})) "a won run does not")
     (is (= #{} (botlogs/senses-classes (str (fs/path dir "none.senses.edn")))))))
+
+(deftest a-case-tells-how-a-run-ended
+  ;; Clj_r10 (900395b lane 2 b1), written out: hoglin 1724 hit it nine times over 40 s while it held
+  ;; still in a pocket it could not seal, and it never swung back
+  (let [t0 1793989108107
+        hit (fn [s]
+              {:ev :hit :t (+ t0 (* 5000 s)) :type :mob_attack :by 1724 :by-kind :hoglin :hp 18.0})
+        es (vec (concat
+                 [{:ev :intent :t (- t0 1000) :kind :pocket-hold :why :pocket-bore/and-in?-hp-20-0}]
+                 (map hit (range 9))
+                 [{:ev :intent :t (+ t0 41000) :kind :eat :why :pocket-bore/and-in?-hp-20-0}
+                  {:ev :death :t (+ t0 46000)}]))
+        c (botlogs/case-of
+           {:run/bot "Clj_r10" :reason :death-hoglin :death-message "Clj_r10 was slain by Hoglin"}
+           es
+           "bb probe why T A s1-Clj_r10 1")]
+    (is (= "Clj_r10 was slain by Hoglin" (:killer c)))
+    (is (= 9 (:hits c)))
+    (is (= {:hoglin 9} (:hits-by c)))
+    (is (= 0 (:swings c)) "it never swung back")
+    (is (= :pocket-hold (get-in c [:first-hit :doing])) "first hit while holding still")
+    (is (= :eat (get-in c [:at-end :doing])))
+    (is (= [:death-hoglin :hoglin :eat :pocket-bore/and-in?-hp-20-0] (:signature c)))
+    (is (str/includes? (botlogs/case-text c) "9 hits taken"))))

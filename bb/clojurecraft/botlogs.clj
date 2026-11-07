@@ -165,9 +165,10 @@
    :tunnel-to :for :pearls, up to 9 s, one :stairs-down 30 s) waited on that. Or idle (waiting
    with nothing to do), which the digest cannot explain either: real-18 bots on 6b5d6fa ended
    :nothing-to-do 17 s after their tunnel out, the planner answering nothing, and only a replay
-   names the branch."
-  [sf]
-  (boolean (some #{:freeze :idle} (senses-classes sf))))
+   names the branch. With the run r, every run that failed ships it too (deaths above all): a death
+   is replayed, never guessed from the one-second lines (the observability plan, section F)."
+  ([sf] (keep-recording? sf nil))
+  ([sf r] (boolean (or (some #{:freeze :idle} (senses-classes sf)) (and r (not (:ok r)))))))
 
 (defn pack-recording!
   "Write recording rec to out as zstd (a plain .edn compressed, a .zst copied); true when written."
@@ -200,6 +201,113 @@
       (spit out (str (str/join "\n" (digest (line-seq rdr))) "\n"))
       true)))
 
+;; ---------------------------------------------------------------- the case: how a run ended, read for you
+
+(def case-window-ms 60000)             ; the last minute of a run a case tells: its final fight
+
+(defn read-events
+  "The events of a ledger file (senses/write-events!: a head line, then an event a line), or []."
+  [f]
+  (or (try (with-open [r (io/reader f)]
+             (mapv edn/read-string (rest (remove str/blank? (line-seq r)))))
+           (catch Exception _ nil))
+      []))
+
+(defn intent-at
+  "The newest :intent event of es at or before t, or nil: what the bot was doing then, and why."
+  [es t]
+  (last (filter #(and (= :intent (:ev %)) (<= (:t % 0) t)) es)))
+
+(defn case-of
+  "How run r ended, from its ledger es (the observability plan, part G): its ending, the killer (the
+   server's death line, else the last hit's attacker or damage type), the last case-window-ms of the
+   run (the final fight): its first hit (when, by what, the health then, and what the bot was doing
+   and why), what it was doing at the end, the hits taken by attacker, the swings sent and how many
+   landed (a hurt flash on a swung-at entity), and the replay command (replay, a string). A pure
+   function of values; the signature [ending killer doing why] is what a batch counts."
+  [r es replay]
+  (let [end (:t (peek es) 0)
+        w (filterv #(>= (:t % 0) (- end case-window-ms)) es)
+        hits (filterv #(= :hit (:ev %)) w)
+        first-hit (first hits)
+        last-hit (peek hits)
+        swung (set (keep #(when (= :swing (:ev %)) (:eid %)) w))
+        landed (count (filter #(and (= :hurt (:ev %)) (contains? swung (:eid %))) w))
+        doing-first (when first-hit (intent-at es (:t first-hit)))
+        doing-end (intent-at es end)
+        killer (or (:death-message r)
+                   (when last-hit (name (or (:by-kind last-hit) (:type last-hit))))
+                   "none")]
+    {:bot (:run/bot r)
+     :ending (:reason r)
+     :killer killer
+     :end end
+     :first-hit (when first-hit
+                  {:s-before-end (/ (- end (:t first-hit)) 1000.0)
+                   :type (:type first-hit)
+                   :by (:by-kind first-hit)
+                   :eid (:by first-hit)
+                   :hp (:hp first-hit)
+                   :doing (:kind doing-first)
+                   :why (:why doing-first)})
+     :at-end {:doing (:kind doing-end) :why (:why doing-end) :target (:target doing-end)}
+     :hits (count hits)
+     :hits-by (frequencies (map #(or (:by-kind %) (:type %)) hits))
+     :swings (count (filter #(= :swing (:ev %)) w))
+     :landed landed
+     :signature [(:reason r)
+                 (some-> last-hit
+                         (#(or (:by-kind %) (:type %)))) (:kind doing-end) (:why doing-end)]
+     :timeline w
+     :replay replay}))
+
+(defn event-text
+  "One ledger event as a timeline line, its time in seconds before end."
+  [end e]
+  (str (format "%7.1f " (/ (- (:t e 0) end) 1000.0)) (name (:ev e)) " " (pr-str (dissoc e :ev :t))))
+
+(defn case-text
+  "A case (case-of) as text a person or an agent reads in ten seconds."
+  [c]
+  (let [{:keys [bot ending killer first-hit at-end hits hits-by swings landed replay timeline end]}
+        c]
+    (str/join
+     "\n"
+     (concat
+      [(str "CASE " bot "  ending " ending "  killer " killer)
+       (if first-hit
+         (str "first hit of the last minute "
+              (:s-before-end first-hit)
+              " s before the end: "
+              (name (:type first-hit))
+              " by "
+              (or (some-> (:by first-hit)
+                          name)
+                  "-")
+              "#"
+              (:eid first-hit)
+              " at hp "
+              (:hp first-hit)
+              ", doing "
+              (:doing first-hit)
+              " (why "
+              (:why first-hit)
+              ")")
+         "no hit in the last minute")
+       (str "at the end: doing " (:doing at-end)
+            " (why " (:why at-end)
+            ") target " (:target at-end))
+       (str "last minute: "
+            hits
+            " hits taken "
+            (pr-str hits-by)
+            ", "
+            swings
+            " swings sent, "
+            landed
+            " landed") (str "replay: " replay) "timeline (seconds before the end):"]
+      (map #(str "  " (event-text end %)) timeline)))))
+
 (defn upload!
   "Digest every run of a batch that has a recording under data-dir (a real one) into dir, beside
    every run's senses file (real and sim), archive them with the batch's lines (lines-dir), and
@@ -216,23 +324,41 @@
                      runs)]
       (when (seq recs)
         (fs/create-dirs logs)
-        (doseq [[r rec sf] recs
-                :let [stem (if (:run/bot r)
-                             (str (:run/dir r "s") "-" (:run/bot r))
-                             (str/replace (fs/file-name sf) #"\.senses\.edn$" ""))]]
-          (when rec (digest-file! rec (str (fs/path logs (str stem ".log")))))
-          (when (and rec sf (keep-recording? sf))
-            (pack-recording! rec (str (fs/path logs (str stem ".edn.zst")))))
-          (when sf (fs/copy sf (fs/path logs (str stem ".senses.edn")) {:replace-existing true}))
-          (when-let [ef (events-file data-dir r)]
-            (fs/copy ef (fs/path logs (str stem ".events.edn")) {:replace-existing true}))
-          (doseq [ext [".moment.edn" ".ring.edn"]]
-            (when-let [mf (beside data-dir r ext)]
-              (fs/copy mf (fs/path logs (str stem ext)) {:replace-existing true}))))
-        (when (fs/exists? lines-dir) (fs/copy-tree lines-dir (fs/path logs "lines")))
         (let [name (asset run runner batch)
+              t (tag (str (java.time.Instant/now)))
               archive (str (fs/absolutize (fs/path dir name))) ; tar runs in the logs dir: a relative path would name a file under it
-              t (tag (str (java.time.Instant/now)))]
+              cases
+              (vec
+               (for [[r rec sf] recs
+                     :let [stem (if (:run/bot r)
+                                  (str (:run/dir r "s") "-" (:run/bot r))
+                                  (str/replace (fs/file-name sf) #"\.senses\.edn$" ""))
+                           ef (events-file data-dir r)]]
+                 (do
+                   (when rec (digest-file! rec (str (fs/path logs (str stem ".log")))))
+                   (when (and rec (or (and sf (keep-recording? sf r)) (and r (not (:ok r)))))
+                     (pack-recording! rec (str (fs/path logs (str stem ".edn.zst")))))
+                   (when sf
+                     (fs/copy sf (fs/path logs (str stem ".senses.edn")) {:replace-existing true}))
+                   (when ef
+                     (fs/copy ef (fs/path logs (str stem ".events.edn")) {:replace-existing true}))
+                   (doseq [ext [".moment.edn" ".ring.edn"]]
+                     (when-let [mf (beside data-dir r ext)]
+                       (fs/copy mf (fs/path logs (str stem ext)) {:replace-existing true})))
+                   ;; the case: how it ended, read for the reader (case-of), beside its evidence
+                   (let [es (if ef (read-events ef) [])]
+                     (when (seq es)
+                       (let [c (case-of
+                                r
+                                es
+                                (str "bb probe why " t " " name " " stem " " (:t (peek es) 0)))]
+                         (spit (str (fs/path logs (str stem ".case.edn")))
+                               (prn-str (dissoc c :timeline)))
+                         (spit (str (fs/path logs (str stem ".case.txt"))) (str (case-text c) "\n"))
+                         (dissoc c :timeline)))))))]
+          (spit (str (fs/path logs "cases.edn"))
+                (str/join (map prn-str (sort-by (comp str :signature) (remove nil? cases)))))
+          (when (fs/exists? lines-dir) (fs/copy-tree lines-dir (fs/path logs "lines")))
           (p/shell {:dir (str logs)} "tar" "-czf" archive ".")
           (p/shell
            {:continue true :out :string :err :string}

@@ -76,7 +76,8 @@
     (cond-> {:kind (:intent/kind i)}
       (:intent/target i) (assoc :target (:intent/target i))
       (:intent/for i) (assoc :for (:intent/for i))
-      (:intent/goal i) (assoc :goal (:intent/goal i)))))
+      (:intent/goal i) (assoc :goal (:intent/goal i))
+      (:intent/why (meta i)) (assoc :why (:intent/why (meta i))))))
 
 (defn of
   "One line of what the bot senses and decides in world, a flat map: the time, its body
@@ -195,8 +196,7 @@
         fb (:plan/failed before)
         fa (:plan/failed after)]
     (cond-> []
-      (and ia (not= (:intent/id ia) (:intent/id ib)))
-      (conj (assoc (intent-view ia) :ev :intent :why (:intent/why ia)))
+      (and ia (not= (:intent/id ia) (:intent/id ib))) (conj (assoc (intent-view ia) :ev :intent))
       (and fa (not= fa fb)) (conj (assoc (intent-view fa) :ev :failed :reason (:intent/reason fa)))
       (not= (:plan/waiting before) (:plan/waiting after))
       (conj {:ev :wait :wait (:plan/waiting after)})
