@@ -228,7 +228,7 @@
   (let [r (simrace/run bare 3 "nether" 300000)
         _ (is (= [:wood :no-log] (failure/signature r)) (pr-str (:reason r)))
         snap (kept-snapshot bare r)
-        path (str (System/getProperty "java.io.tmpdir") "/clojurecraft-snapshot-test.edn.gz")
+        path (fx/temp-path "clojurecraft-snapshot-test" ".edn.gz")
         _ (capture/write-world! path snap)
         back (capture/read-world path)
         played (simrace/judged back bare)]

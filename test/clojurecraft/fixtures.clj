@@ -58,3 +58,11 @@
   [from to]
   (for [t (range from to physics/tick-ms)] {:event/kind :tick :event/now t :event/rand 0.5}))
 (defn packet [p] {:event/kind :packet :event/packet p})
+
+(defn temp-path
+  "The path of a fresh, empty temp file named by prefix and suffix, removed when the JVM exits.
+   Unique per call, so tests that write a file never share one."
+  [prefix suffix]
+  (let [f (java.io.File/createTempFile prefix suffix)]
+    (.deleteOnExit f)
+    (.getPath f)))
