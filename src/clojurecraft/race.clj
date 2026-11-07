@@ -97,14 +97,10 @@
                dimension (str "y " (or y "?")) (str "deaths " deaths)])))
 
 (defn start-at
-  "When racer i (from 0) joins, ms after the race begins. With a ramp ({:ramp/start s :ramp/step n
-   :ramp/every-ms e}), the first s join at once and n more every e, so one runner measures the
-   load from s bots up; without, every racer joins at once. Within a batch, stagger-ms apart."
-  [{:race/keys [ramp stagger-ms]} i]
-  (let [{:ramp/keys [start step every-ms]} ramp]
-    (cond (or (nil? ramp) (< i start)) (* i stagger-ms)
-          :else
-          (+ (* every-ms (inc (quot (- i start) step))) (* stagger-ms (rem (- i start) step))))))
+  "When racer i (from 0) joins, ms after the race begins: stagger-ms apart, so fresh players do
+   not generate chunks at once."
+  [{:race/keys [stagger-ms]} i]
+  (* i stagger-ms))
 
 (defn backoff-ms
   "How long a slot waits before its next bot: none after a bot that played; after one that
@@ -136,11 +132,10 @@
   (max now (+ (or last 0) start-gap-ms)))
 
 (defn run-ms
-  "How long a race plays, ms: :race/deadline-ms (the capacity ramp's one deadline), else
-   :race/run-minutes (the churn's job, up to GitHub's cap), else :race/timeout-ms."
-  [{:race/keys [deadline-ms run-minutes timeout-ms]}]
-  (or deadline-ms
-      (some-> run-minutes
+  "How long a race plays, ms: :race/run-minutes (the churn's job, up to GitHub's cap), else
+   :race/timeout-ms."
+  [{:race/keys [run-minutes timeout-ms]}]
+  (or (some-> run-minutes
               (* 60000))
       timeout-ms))
 

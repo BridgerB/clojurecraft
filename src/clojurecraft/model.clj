@@ -863,7 +863,7 @@
    [:chunk/min-y "a column's lowest block y: -64 for 24 sections, 0 for 16 (the Nether, the End)"
     "every decoded column"]
    [:chunk/biomes
-    "a column's biome containers, one a section in order, as the wire holds them (64 cells of server biome registry ids); nothing in the bot reads them"
+    "a column's biome containers, one a section in order, as the wire holds them (64 cells of server biome registry ids); read by biome-at"
     "every decoded column"]])
 
 (def by-attribute
