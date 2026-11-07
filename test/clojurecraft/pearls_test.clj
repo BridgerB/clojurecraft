@@ -4468,3 +4468,15 @@
     (is (pearls/fortress-escaping? w))
     (is (nil? (pearls/fortress-tunnel-target failed)) "not the failed target again")
     (is (not (pearls/fortress-escaping? failed)) "the exit is over: the other movers apply")))
+
+(deftest a-far-end-a-walk-failed-toward-is-not-chosen-again
+  ;; The same bug as the exit's (issue #263, probes rh5-20 and rh5-33): a target that ignores
+  ;; :plan/blacklist is chosen again after it failed. A far end whose walk failed is left out.
+  (let [w (-> (wide (standing {}))
+              (assoc :player/dimension nether
+                     :player/inventory {0 (item :iron_sword 1) 1 (item :iron_pickaxe 1)}))
+        end (second (first (pearls/far-ends w 0 #{})))
+        failed (assoc w :plan/blacklist #{end})]
+    (is (some? end) "an open world has far ends")
+    (is (not-any? #(= end (second %)) (pearls/far-ends failed 0 #{}))
+        "the end a walk failed toward is not an end again")))

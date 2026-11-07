@@ -1943,7 +1943,7 @@
 (defn far-ends
   "Where each of the eight headings' routes (path/plan toward ground wander-reach out, from index
    start in headings) ends, as [status end gain] with gain the end's octile distance from the feet:
-   the ends roam-reach or more away and not in spent, nor within roam-reach of where one of the
+   the ends roam-reach or more away, not in spent or :plan/blacklist (a walk to it failed), nor within roam-reach of where one of the
    last explore-memory walks arrived (an end near one already walked to is not new ground: in sim
    R1/17 under the roof, probe 42374244659, the bot shuttled for forty minutes between the two ends of
    its own tunnels, [1013 120 -205] and [1015 120 -165], with a pickaxe at 131 digs unused),
@@ -1963,6 +1963,7 @@
                    :when (and to
                               (not= to feet)
                               (not (contains? spent to))
+                              (not (contains? (:plan/blacklist world #{}) to))
                               (not-any? #(< (path/octile to %) roam-reach) visited))]
                [(:path/status r) to (path/octile feet to)])
         far (filter #(>= (nth % 2) roam-reach) ends)]

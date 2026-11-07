@@ -8,11 +8,15 @@
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.pprint :as pp]
+            [clojurecraft.blocks :as blocks]
             [clojurecraft.capture :as capture]
+            [clojurecraft.fortress :as fortress]
+            [clojurecraft.intent :as intent]
             [clojurecraft.memory :as memory]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.senses :as senses]
             [clojurecraft.simrace :as simrace]
+            [clojurecraft.terrain :as terrain]
             [clojurecraft.why :as why]))
 
 (set! *warn-on-reflection* true)
@@ -52,4 +56,17 @@
              (pr-str (select-keys w
                                   [:plan/status :plan/attempts :plan/intent :plan/last
                                    :plan/blacklist :plan/boxed-at :plan/wait])))
+    (let [feet (intent/feet w)
+          target (or (:pearls/exit-target w) feet)]
+      (println "REFUSALS feet" (pr-str feet) "target" (pr-str target))
+      (doseq [m (fortress/moves feet target 0)]
+        (println "MOVE" (pr-str m)
+                 "opens"
+                 (pr-str (mapv (fn [c] [c
+                                        (some-> (terrain/block-at w c)
+                                                blocks/name-of)])
+                               (fortress/opens feet m)))
+                 "lava-beside" (pr-str (fortress/lava-beside w feet m))
+                 "safe?" (pr-str (fortress/safe? w feet m))
+                 "infested" (pr-str (fortress/infested? w (mapv + feet m))))))
     (shutdown-agents)))
