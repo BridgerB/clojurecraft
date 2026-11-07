@@ -366,8 +366,8 @@
                   :forest/pos pos
                   :forest/at 0
                   :forest/dimension ps/nether})
-        known (memory/remember-forest base (forest [30 0] [480 70 8]))
-        here (memory/remember-forest base (forest [0 0] [8 63 8]))]
+        known (fx/remember-forest base (forest [30 0] [480 70 8]))
+        here (fx/remember-forest base (forest [0 0] [8 63 8]))]
     (testing "none known: explores, as far as the loaded ground goes"
       (let [i (plan/next-intent base ps/row plan/goals)]
         (is (= [:walk :pearls] [(:intent/kind i) (:intent/for i)]) (pr-str i))

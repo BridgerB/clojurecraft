@@ -150,7 +150,7 @@
     (is (some #(= :move-player-pos-rot (:packet/name %)) (packets fx)))))
 
 (deftest gives-up-without-logs
-  (let [w (memory/forgotten (world-state [0.5 64.0 0.5]))
+  (let [w (fx/forgotten (world-state [0.5 64.0 0.5]))
         [w _] (run w (cons go (ticks 50 25000)))]
     (is (plan/failed? w))
     (is (= :no-log (:plan/reason w)))))
@@ -1457,7 +1457,7 @@
   ;; race 38680745815 runner 5 (issue #57): with 25 bots and two servers to a runner the
   ;; bot's loop got 9 ticks in 21 s, and the wait's wall clock failed the plan :no-log while
   ;; the water trap's 20 ticks and the hunt's next routable hop were still owed theirs
-  (let [w (memory/forgotten (world-state [0.5 64.0 0.5]))
+  (let [w (fx/forgotten (world-state [0.5 64.0 0.5]))
         [w0 _] (run w [go])
         at (fn [n]
              (first (run w0
