@@ -115,6 +115,9 @@
    [:vec
     [[:id :varint] [:base :f64]
      [:modifiers [:vec [[:mod-id :string] [:amount :f64] [:operation :varint]]]]]]]]
+ [:play :s2c :rotate-head] [[:entity-id :varint] [:head-yaw :i8]]
+ [:play :s2c :set-equipment] [[:entity-id :varint] [:equipment :equipment]]
+ [:play :s2c :projectile-power] [[:entity-id :varint] [:power :f64]]
  [:play :s2c :system-chat] [[:content :text] [:overlay :bool]]
  [:play :s2c :set-action-bar-text] [[:text :text]]
  [:play :s2c :set-title-text] [[:text :text]]

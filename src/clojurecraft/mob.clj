@@ -174,6 +174,14 @@
    :ender_dragon {:health 200.0 :box [16.0 8.0] :perched true :loot []}
    :end_crystal {:health 1.0 :box [2.0 2.0] :blast 6.0 :crystal true :loot []}})
 
+(def equipment
+  "{kind {slot item}} what a kind holds when the server shows it (set-equipment, slot names as
+   entity/equipment-slots): a skeleton's bow, a wither skeleton's stone sword, a piglin's
+   crossbow. A kind not here shows nothing."
+  {:skeleton {:mainhand :bow}
+   :wither_skeleton {:mainhand :stone_sword}
+   :piglin {:mainhand :crossbow}})
+
 (defn type-id
   "The entity type id of kind (entity-types.edn), as add-entity carries it."
   [kind]

@@ -344,3 +344,39 @@
       (is (= {:packet/name :boss-event :uuid bar :action 2}
              (p/decode :play :s2c (cut (frame 2 0.75) n)))
           (str "a float cut by " n " byte(s) is left out, never thrown over")))))
+
+(deftest creature-sight-packets-decode
+  ;; the observability plan, issue #263: where a mob looks, what it holds, a fireball's power
+  (testing "rotate-head: an id and the head yaw byte"
+    (is (= {:packet/name :rotate-head :entity-id 70 :head-yaw -64}
+           (p/decode :play
+                     :s2c
+                     (entity-frame :rotate-head
+                                   (fn [o] (b/write-varint o 70) (b/write-i8 o -64)))))))
+  (testing "set-equipment: entries until one has no more-bit, an empty slot is nil"
+    (let [stack (fn [o item]
+                  (b/write-varint o 1)
+                  (b/write-varint o item)
+                  (b/write-varint o 0)
+                  (b/write-varint o 0))]
+      (is (= {:packet/name :set-equipment
+              :entity-id 71
+              :equipment [[0 {:item 801 :count 1}] [5 {:item 802 :count 1}] [1 nil]]}
+             (p/decode :play
+                       :s2c
+                       (entity-frame :set-equipment
+                                     (fn [o]
+                                       (b/write-varint o 71)
+                                       (b/write-u8 o (bit-or 0 0x80))
+                                       (stack o 801)
+                                       (b/write-u8 o (bit-or 5 0x80))
+                                       (stack o 802)
+                                       (b/write-u8 o 1)
+                                       (b/write-varint o 0)))))
+          "mainhand, head, and an emptied offhand")))
+  (testing "projectile-power: an id and one double"
+    (is (= {:packet/name :projectile-power :entity-id 72 :power 0.1}
+           (p/decode :play
+                     :s2c
+                     (entity-frame :projectile-power
+                                   (fn [o] (b/write-varint o 72) (b/write-f64 o 0.1))))))))
