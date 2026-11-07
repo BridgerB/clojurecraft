@@ -31,6 +31,7 @@
             [clojure.math :as math]
             [clojure.string :as str]
             [clojurecraft.armour :as armour]
+            [clojurecraft.avoided :as avoided]
             [clojurecraft.blaze :as blaze]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.combat :as combat]
@@ -3047,7 +3048,7 @@
         [tid te] (threat world)
         [sid _] (struck-by world)
         swarmed? (swarmed? world)
-        cornered? (and near? eid (contains? (:plan/cornered world #{}) eid))
+        cornered? (and near? eid (avoided/noted? world :cornered eid))
         [bid _] (when at-end? (blocking world))
         [aid _] (when home (angry-near world))
         [quarry-id q] (quarry world)

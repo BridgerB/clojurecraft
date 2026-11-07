@@ -3,6 +3,7 @@
    height (so the drop lands where the bot can stand, not in a hole under the rest of the
    trunk), pick up the drop. The :gather act of the goal table (clojurecraft.make) runs this."
   (:require [clojure.math :as math]
+            [clojurecraft.avoided :as avoided]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
@@ -97,8 +98,8 @@
    and the plan failed :no-path before the hunt or the crossing had their turn."
   [world]
   (let [blacklist (:plan/blacklist world #{})
-        failures (:plan/trunk-failures world {})
-        unreached (:plan/unreached world #{})]
+        failures (avoided/all-of world :trunk-failures)
+        unreached (avoided/all-of world :unreached)]
     (fn [[x _ z :as pos]]
       (or (contains? blacklist pos)
           (>= (get failures [x z] 0) max-trunk-failures)
@@ -294,7 +295,7 @@
   (let [feet (intent/feet world)
         eye-y (physics/y-of (game/eye world))
         blacklist (:plan/blacklist world #{})
-        failures (:plan/trunk-failures world {})
+        failures (avoided/all-of world :trunk-failures)
         from-foot? (or (descended? world) (descended-valley? world) (tunneled? world))
         reach (if from-foot? foot-reach bridge-reach)]
     (when (and (or from-foot? (stairs/out? world feet))

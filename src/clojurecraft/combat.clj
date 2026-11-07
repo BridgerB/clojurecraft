@@ -21,6 +21,7 @@
   (:require [clojure.math :as math]
             [clojure.string :as str]
             [clojurecraft.armour :as armour]
+            [clojurecraft.avoided :as avoided]
             [clojurecraft.dimension :as dimension]
             [clojurecraft.eat :as eat]
             [clojurecraft.entity :as entity]
@@ -322,7 +323,7 @@
   "The world with entity eid kept in :plan/given-up at now: a fight's engage gave it up as
    unreachable (not strikable, no route), so no act picks it again for a while (given-up?)."
   [world eid]
-  (assoc-in world [:plan/given-up eid] (:time/now world)))
+  (avoided/mark world :given-up eid (:time/now world)))
 
 (defn given-up?
   "Was entity eid given up (given-up) less than give-up-ms ago, and is its aim still out of
@@ -331,7 +332,7 @@
    blocks below (hittable, never strikable, no route) ended done at once, the act picked
    the same target again the next tick, and the stage's own task never ran to its timeout."
   [world eid e]
-  (let [at (get (:plan/given-up world) eid)]
+  (let [at (avoided/mark-of world :given-up eid)]
     (boolean (and at (< (- (:time/now world) at) give-up-ms) (not (in-reach? world e))))))
 
 (defmethod fight-stage :engage
@@ -522,19 +523,20 @@
    #62, world R1/11) backed away at a third of a health from a zombie stuck in the rock three
    blocks off, seven thousand times."
   [world eid e]
-  (update-in world
-             [:plan/backed-off eid]
-             (fn [{:keys [pos times] :as seen}]
-               (if (and seen (<= (physics/distance pos (:entity/pos e)) shun-drift))
-                 (assoc seen :times (inc times))
-                 {:pos (:entity/pos e) :times 1}))))
+  (let [{:keys [pos times] :as seen} (avoided/mark-of world :backed-off eid)]
+    (avoided/mark world
+                  :backed-off
+                  eid
+                  (if (and seen (<= (physics/distance pos (:entity/pos e)) shun-drift))
+                    (assoc seen :times (inc times))
+                    {:pos (:entity/pos e) :times 1}))))
 
 (defn cornered
   "The world with entity eid kept in :plan/cornered: a back-off from it ended on its clock, or
    the way away was a drop no landing survives, the target still nearer than back-off-to, so
    there was nowhere to back off to."
   [world eid]
-  (update world :plan/cornered (fnil conj #{}) eid))
+  (avoided/note world :cornered eid))
 
 (def void-look 3)                     ; blocks along a retreat looked at for a drop no landing survives
 
@@ -666,7 +668,7 @@
    back-off after back-off from one that never moved, and the walk to the ore, the water or the
    stairs never finished. One that moves on is counted afresh."
   [world eid e base]
-  (let [{:keys [pos times]} (get-in world [:plan/backed-off eid])
+  (let [{:keys [pos times]} (avoided/mark-of world :backed-off eid)
         still? (and pos (<= (physics/distance pos (:entity/pos e)) shun-drift))]
     (cond (not still?) base
           (>= times given-up-after) (min base given-up-radius)
@@ -972,7 +974,7 @@
                 (= :creeper (entity/kind e))
                 hurt?
                 (and (contains? avoided (entity/kind e))
-                     (not (contains? (:plan/cornered world #{}) eid))
+                     (not (avoided/noted? world :cornered eid))
                      (or (< (:player/health world 20.0) avoided-health)
                          (< 1
                             (count (filter #(contains? avoided (entity/kind %))
@@ -982,8 +984,7 @@
             (= :silverfish (entity/kind e))
             (intent/why :defend/silverfish-entity-kind-e
                         {:intent/kind :fight :intent/target eid :intent/hold? true})
-            (or (contains? entity/neutral (entity/kind e))
-                (contains? (:plan/cornered world #{}) eid))
+            (or (contains? entity/neutral (entity/kind e)) (avoided/noted? world :cornered eid))
             (intent/why :defend/or-contains?-entity-neutral-entity-kind-e-contai
                         {:intent/kind :fight :intent/target eid :intent/to-the-end? true})
             :else (intent/why :defend/else {:intent/kind :fight :intent/target eid})))))

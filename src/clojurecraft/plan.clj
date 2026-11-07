@@ -12,6 +12,7 @@
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.math :as math]
+            [clojurecraft.avoided :as avoided]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.dimension :as dimension]
             [clojurecraft.entity :as entity]
@@ -299,9 +300,9 @@
       (assoc :plan/status (if at :landing :active)
              :plan/since (:time/now world)
              :plan/blacklist #{}
-             :plan/trunk-failures {}
              :plan/attempts 0
              :plan/unwalkable 0)
+      (avoided/forget :trunk-failures)
       (cond-> goals (assoc :plan/goals (set (map #(current-id table %) goals))))
       (cond-> at (assoc :plan/go-at at))
       (cond-> chain? (assoc :plan/chain? true :plan/reached #{}))
@@ -586,14 +587,13 @@
                 (update :plan/blacklist (fnil conj #{}) (:intent/target i)))
         (cond-> (and (contains? boxing-kinds (:intent/kind i)) (= :boxed (:intent/reason i)))
                 (-> (cond-> feet (update :plan/boxed-at (fnil conj #{}) feet))
-                    (update :plan/boxed-route (fnil into #{}) (:intent/visited i))))
+                    (avoided/note-all :boxed-route (:intent/visited i))))
         (cond-> (and unwalkable? (= :log (:intent/for i)))
-                (update :plan/unreached (fnil conj #{}) (:intent/target i)))
+                (avoided/note :unreached (:intent/target i)))
         (cond-> (or (:intent/trunk i)
                     (when (contains? crossing-kinds (:intent/kind i)) (:intent/target i)))
-                (update-in [:plan/trunk-failures
-                            (let [[x _ z] (or (:intent/trunk i) (:intent/target i))] [x z])]
-                           (fnil inc 0)))
+                (avoided/bump :trunk-failures
+                              (let [[x _ z] (or (:intent/trunk i) (:intent/target i))] [x z])))
         (cond-> (and feet (>= attempts max-attempts)) (update :plan/boxed-at (fnil conj #{}) feet))
         (assoc :plan/attempts attempts :plan/unwalkable unwalkable)
         (dissoc :plan/intent :plan/last)

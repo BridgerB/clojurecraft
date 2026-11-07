@@ -24,6 +24,7 @@
             [clojure.math :as math]
             [clojure.string :as str]
             [clojurecraft.armour :as armour]
+            [clojurecraft.avoided :as avoided]
             [clojurecraft.blaze :as blaze]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.capture :as capture]
@@ -346,7 +347,7 @@
      :intent (select-keys (:plan/intent world)
                           [:intent/kind :intent/why :intent/stage :intent/distance
                            :intent/to-the-end? :intent/target])
-     :cornered (count (:plan/cornered world #{}))
+     :cornered (count (avoided/all-of world :cornered))
      :fled (count (:plan/fled world {}))
      :near (into []
                  (take 3)

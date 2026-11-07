@@ -17,6 +17,7 @@
    placed only where the rock is missing. Positions are written for the bot working from +z
    (:south) and turned for the other facings."
   (:require [clojure.math :as math]
+            [clojurecraft.avoided :as avoided]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.chunk :as chunk]
             [clojurecraft.game :as game]
@@ -1755,7 +1756,7 @@
     ;; avoid retrying the same failed waypoint when the build recalculates its way out
     (-> world
         (assoc :player/controls {})
-        (update :plan/retreat-unreachable (fnil conj #{}) (:intent/target child))
+        (avoided/note :retreat-unreachable (:intent/target child))
         (intent/dissoc-intent :intent/child)
         (game/say "build: retreat waypoint failed, finding another"))
     (and child (lost-way? world i child))

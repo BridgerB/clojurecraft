@@ -10,6 +10,7 @@
    registers both acts and the :redig executor."
   (:require [clojure.math :as math]
             [clojure.string :as str]
+            [clojurecraft.avoided :as avoided]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.chunk :as chunk]
             [clojurecraft.dig :as dig]
@@ -294,7 +295,7 @@
    stairs-up ends :boxed away from the cell that died, and the next stairs-down began from there
    (issue #37, one-wide strips of floor over open air)."
   [world [x y z :as feet]]
-  (let [boxed (into (:plan/boxed-at world #{}) (:plan/boxed-route world))]
+  (let [boxed (into (:plan/boxed-at world #{}) (avoided/all-of world :boxed-route))]
     (boolean (or (contains? boxed feet)
                  (some (fn [[dx dz]] (contains? boxed [(+ x dx) y (+ z dz)])) stairs/directions)))))
 
@@ -474,7 +475,8 @@
     {:intent/kind :swim-out :intent/for :retreat}
     (let [feet (intent/feet world)
           boxed (into (:plan/boxed-at world #{})
-                      (concat (:plan/boxed-route world) (:plan/retreat-unreachable world)))
+                      (concat (avoided/all-of world :boxed-route)
+                              (avoided/all-of world :retreat-unreachable)))
           r
           (path/plan
            world
