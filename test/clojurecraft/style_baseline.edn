@@ -62,7 +62,7 @@
            "test/clojurecraft/style_test.clj" 1
            "test/clojurecraft/swim_test.clj" 15
            "test/clojurecraft/sword_test.clj" 1}
- :redefs {"test/clojurecraft/blaze_test.clj" 5
+ :redefs {"test/clojurecraft/blaze_test.clj" 2
           "test/clojurecraft/fixture_test.clj" 1
           "test/clojurecraft/gym_test.clj" 1
           "test/clojurecraft/pearls/move_test.clj" 5
