@@ -42,7 +42,7 @@ How many bots a runner carries is set by CPU (the capacity ramp, [[race]]): the 
 Each remembered answer is the function's answer for those inputs, so a run remembered and a run recomputed are the same run. `a-remembered-function-answers-as-the-function-does` holds it over call sequences that collide in the slots, with equal parts that are not the same object. `the-cells-of-a-world-answer-as-classify-does` holds `cells` to `classify` in any order, loaded or not. Nothing here reads a clock or the atom.
 
 ## Measured
-On the Mac, the bots' JVM went from 12.7% to 4.6% of the machine for the same ten-bot race after the memo, and to 4.3% after the chunk-load scans (confounded: the machine was busy). The runner measure is the capacity ramp (`capacity.yml`), not a laptop.
+On the Mac, the bots' JVM went from 12.7% to 4.6% of the machine for the same ten-bot race after the memo, and to 4.3% after the chunk-load scans (confounded: the machine was busy). The runner measure is a loaded race on a runner, not a laptop.
 
 ## What would change the answer
 A profile in which a remembered function's misses dominate. Then the key is too coarse: key it on the region it reads, not the whole part.

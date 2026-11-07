@@ -43,7 +43,6 @@ You never run a test locally; the PR's `unit / unit` runs them all in 2-4 minute
 | `gym.yml` | hand | N trials of one goal on real servers, judged by RESULT + truth commands | recordings and logs |
 | `world.yml`, `simworld.yml` | hand when a key changes | build a landing set's world / capture sim worlds and each set's Nether once | caches |
 | `pages.yml` | each report | builds the results site from main over `gh-pages`'s data, adds new gym runs, deploys | Pages |
-| `plan.yml`, `timer.yml`, `capacity.yml`, `full.yml` | hand or schedule | plan files, capacity study, one fresh-world attempt | their own |
 
 - A push does not judge snapshots; the PR's check does, or a probe with `--judge` before the PR.
 - A code merge to `main` cancels and restarts the rounds (they keep artifacts and run a last report).

@@ -68,16 +68,10 @@
            :task (apply clojure "-M:harness" *command-line-args*)}
   gym {:doc "The gym: plan, landings, trial, report (clojure -M:gym <command> ...)"
        :task (apply clojure "-M:gym" *command-line-args*)}
-  plan {:doc "A plan: plan, work, report, pull (clojure -M:plan <command> ...)"
-        :task (apply clojure "-M:plan" *command-line-args*)}
   server {:doc
           "A vanilla 26.1.2 server: bb server start|stop, set up by PORT RCON_PORT RCON_PASS WORLD"
           :requires ([clojurecraft.server :as server])
           :task (server/command! (first *command-line-args*) (server/env-opts))}
-  capacity {:doc
-            "The capacity experiment (capacity.yml): sample <out> <runner> | report <dir> [title]"
-            :requires ([clojurecraft.capacity :as capacity])
-            :task (apply capacity/-main *command-line-args*)}
   page
   {:doc
    "The results' data (issue #116): round <dir> <kind> <run> <commit> <at> | wall <dir> | publish <round.edn>"
@@ -100,10 +94,6 @@
   {:doc "Failed runs become issues, one per signature (simrace.yml, race.yml): report <dir> <title>"
    :requires ([clojurecraft.failures :as failures])
    :task (apply failures/-main *command-line-args*)}
-  board {:doc
-         "The bot-failure board (AGENTS.md section 3): todo | heal | move <n> <todo|progress|done>"
-         :requires ([clojurecraft.board :as board])
-         :task (apply board/-main *command-line-args*)}
   verify
   {:doc
    "A fix's whole check in one command: verify <n> judges the issue's snapshots on this tree, runs the suite without the forest property and bb check, and prints a verdict"

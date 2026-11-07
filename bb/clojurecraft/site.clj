@@ -6,11 +6,9 @@
      bb site build <pages-dir> <out-dir>    the site: index.html (the shell, with the road from
                                             goals.edn, ci/race.edn and ci/road.edn in it),
                                             site/app.js and site/style.css, the branch's data/
-     bb site gyms                           the gym runs (gym.yml) and the plan runs (plan.yml)
-                                            not yet on the branch, a line each in data/gyms.ndjson:
-                                            from gym summary artifacts, and from the reports plan
-                                            runs post on the roadmap issues (they outlive the
-                                            artifacts)
+     bb site gyms                           the gym runs (gym.yml) not yet on the branch, a
+                                            line each in data/gyms.ndjson, from gym summary
+                                            artifacts
      bb site agents <out-dir>               data/agents.json in the site: the bot-failure issues,
                                             from GitHub
 
@@ -30,7 +28,6 @@
 (def assets ["site/app.js" "site/style.css"]) ; copied beside index.html as they are
 (def gyms-file "data/gyms.ndjson")
 (def gyms-per-pass 60)                 ; gym runs a deploy reads at most: the first deploy fills the backlog over a few
-(def plans-per-pass 60)                ; plan runs a deploy reads at most, the same bound
 (def gym-runs-looked 300)              ; the newest gym.yml runs looked at for ones not yet on the branch
 
 ;; ---------------------------------------------------------------- the road
@@ -115,8 +112,7 @@
     (assoc :label (:label summary) :set (:set summary) :rows (trial-names (:label summary) dirs))))
 
 (defn stage-of
-  "The road stage a gym row is evidence for: gym-stage (road.edn's :road/gym-stage) by the plan's
-   experiment (its :exp/goal row), else by the goal the report headed, else the goal itself."
+  "The road stage a gym row is evidence for: gym-stage (road.edn's :road/gym-stage) by the row, else by the goal the report headed, else the goal itself."
   [gym-stage row goal]
   (or (gym-stage (str row)) (gym-stage (str goal)) (str goal)))
 
@@ -129,41 +125,6 @@
         (seq gyms) :no-pass
         built? :built
         :else :unbuilt))
-
-(defn plan-summary
-  "A plan run's report (plan.yml's summary.md, or the comment it posts on the plan's issue) as a
-   value: label, plan file, commit and run id from its heading, and each gym experiment's goals
-   with :row (the experiment) and :goal mapped to its road stage (stage-of); :gym keeps the
-   heading's own goal. Sim sections carry no pass line and are left out."
-  [gym-stage text]
-  (let [[_ label plan sha run] (re-find #"(?m)^## plan (\S+) \((\S+)\) at (\S+), run (\d+)" text)]
-    {:label label
-     :plan plan
-     :sha sha
-     :run (some-> run
-                  parse-long)
-     :goals (vec (for [[_ row body] (re-seq #"(?ms)^## (\S+) \(\S+\)\s*$(.*?)(?=^## |\z)" text)
-                       :when (not= "plan" row)
-                       :let [gs (:goals (gym-summary (str "## gym x on landing set y at z\n"
-                                                          body)))]
-                       g gs]
-                   (assoc g :row row :gym (:goal g) :goal (stage-of gym-stage row (:goal g)))))}))
-
-(defn plan-line
-  "A plan run as a data/gyms.ndjson line, the shape of a gym.yml run's (gym-line) so the road reads
-   both: run (gh's run JSON, or {:id :created_at ...}) and its plan-summary."
-  [run summary]
-  (cond-> {:run (:id run)
-           :at (:created_at run)
-           :branch (:head_branch run)
-           :sha (or (:head_sha run) (:sha summary))
-           :conclusion (:conclusion run)
-           :via "plan"
-           :goals (:goals summary [])}
-    (:label summary)
-    (assoc :label (:label summary)
-           :plan (:plan summary)
-           :rows (vec (sort (distinct (map :row (:goals summary))))))))
 
 (defn gyms-change
   "The change adding gym lines to data/gyms.ndjson (page/update-branch!): each line once, by run,
@@ -344,55 +305,6 @@
                           (when (fs/exists? md) (gym-summary (slurp md)))
                           (when (fs/exists? arts) (map fs/file-name (fs/list-dir arts)))))))))
 
-(defn plan-issues
-  "The issues the roadmap stages hang on (ci/road.edn), where plan runs post their reports."
-  [road-def]
-  (vec (sort (distinct (concat (vals (:road/issues road-def))
-                               (keep :issue (:road/unbuilt road-def)))))))
-
-(defn plan-reports
-  "The plan reports posted on issues (their comments, paged): {run id {:body :at}}, the reports
-   outliving the artifacts, which GitHub keeps three days."
-  [issues]
-  (into {}
-        (for [n issues
-              c (flatten (gh-json "api" "--paginate"
-                                  "--slurp"
-                                  (str "repos/" (page/repo) "/issues/" n "/comments?per_page=100")))
-              :let [run (some-> (re-find #"(?m)^## plan \S+ \(\S+\) at \S+, run (\d+)"
-                                         (str (:body c)))
-                                second
-                                parse-long)]
-              :when run]
-          [run {:body (:body c) :at (:created_at c)}])))
-
-(defn plan-run!
-  "A plan run's line from its report: the run's own date, branch and conclusion from GitHub when
-   it answers, else the comment's date."
-  [gym-stage run-id {:keys [body at]}]
-  (let [run (gh-json "api" (str "repos/" (page/repo) "/actions/runs/" run-id))]
-    (plan-line (or run {:id run-id :created_at at}) (plan-summary gym-stage body))))
-
-(defn plans!
-  "Add the plan runs whose reports are on the roadmap issues and not yet in data/gyms.ndjson,
-   plans-per-pass at most, oldest first (page/update-branch!)."
-  []
-  (page/fetch!)
-  (let [road-def (edn/read-string (slurp road-file))
-        known
-        (set (map :run
-                  (page/read-ndjson
-                   (:out (page/quiet! {} "git" "show" (str "origin/" page/branch ":" gyms-file))))))
-        todo (->> (plan-reports (plan-issues road-def))
-                  (remove (comp known key))
-                  (sort-by key)
-                  (take plans-per-pass))]
-    (println (count todo) "plan runs to add")
-    (when (seq todo)
-      (let [lines (mapv (fn [[id r]] (plan-run! (:road/gym-stage road-def) id r)) todo)]
-        (println
-         (page/update-branch! "gyms" (str "Plan runs: " (count lines)) #(gyms-change lines %)))))))
-
 (defn gyms!
   "Add the gym runs not yet in data/gyms.ndjson on the branch, gyms-per-pass at most, oldest
    first (page/update-branch!)."
@@ -429,7 +341,7 @@
   [& [cmd a b]]
   (case cmd
     "build" (build! a b)
-    "gyms" (do (gyms!) (plans!))
+    "gyms" (gyms!)
     "agents" (agents! a)
     (do (println "usage: bb site build <pages-dir> <out-dir> | gyms | agents <out-dir>")
         (System/exit 2))))
