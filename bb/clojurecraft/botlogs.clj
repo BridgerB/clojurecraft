@@ -218,6 +218,11 @@
   [es t]
   (last (filter #(and (= :intent (:ev %)) (<= (:t % 0) t)) es)))
 
+(defn choice-at
+  "The newest :choice event of es at or before t, or nil: which goal the planner served then, over which, and how it got there."
+  [es t]
+  (last (filter #(and (= :choice (:ev %)) (<= (:t % 0) t)) es)))
+
 (defn case-of
   "How run r ended, from its ledger es (the observability plan, part G): its ending, the killer (the
    server's death line, else the last hit's attacker or damage type), the last case-window-ms of the
@@ -235,6 +240,7 @@
         landed (count (filter #(and (= :hurt (:ev %)) (contains? swung (:eid %))) w))
         doing-first (when first-hit (intent-at es (:t first-hit)))
         doing-end (intent-at es end)
+        choice-end (choice-at es end)
         killer (or (:death-message r)
                    (when last-hit (name (or (:by-kind last-hit) (:type last-hit))))
                    "none")]
@@ -251,6 +257,11 @@
                    :doing (:kind doing-first)
                    :why (:why doing-first)})
      :at-end {:doing (:kind doing-end) :why (:why doing-end) :target (:target doing-end)}
+     :choice (when choice-end
+               {:goal (:goal choice-end)
+                :over (:over choice-end)
+                :how (:how choice-end)
+                :s-before-end (/ (- end (:t choice-end 0)) 1000.0)})
      :hits (count hits)
      :hits-by (frequencies (map #(or (:by-kind %) (:type %)) hits))
      :swings (count (filter #(= :swing (:ev %)) w))
@@ -269,7 +280,8 @@
 (defn case-text
   "A case (case-of) as text a person or an agent reads in ten seconds."
   [c]
-  (let [{:keys [bot ending killer first-hit at-end hits hits-by swings landed replay timeline end]}
+  (let [{:keys [bot ending killer first-hit at-end choice hits hits-by swings landed replay timeline
+                end]}
         c]
     (str/join
      "\n"
@@ -297,6 +309,18 @@
        (str "at the end: doing " (:doing at-end)
             " (why " (:why at-end)
             ") target " (:target at-end))
+       (if choice
+         (str "goal at the end: "
+              (:goal choice)
+              " over "
+              (:over choice)
+              " ("
+              (some-> (:how choice)
+                      name)
+              ", "
+              (:s-before-end choice)
+              " s before the end)")
+         "goal at the end: unknown")
        (str "last minute: "
             hits
             " hits taken "

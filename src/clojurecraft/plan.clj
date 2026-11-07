@@ -939,6 +939,7 @@
   (-> world
       (memory/remember-intention (assoc i :intent/reason reason) :abandoned)
       (mark-ended i)
+      (assoc-in [:plan/ended :ended/reason] reason)
       (assoc :player/controls {})
       (dissoc :plan/last) ; the next goal's planner must not continue a chain from it
       (cond-> (:window/open world)
@@ -1099,6 +1100,52 @@
           retrying? (wait world :retrying)
           :else (start-intent world (assoc next :intent/goal (:goal/id goal))))))
 
+(def choices-kept "Choices :plan/choices keeps, the newest." 20)
+
+(defn choice-how
+  "How the planner got from before to after, one of :start :preempted :interrupted :explore
+   :regroup :retreat :wait :retry :done :other-dimension, or nil when after is no new choice
+   (the same intent runs, the same wait goes on). Reads only the intent, the wait, the status and
+   the reason the last intent was abandoned for (:ended/reason, set by abandon-intent that tick).
+   :held and :leave are never named: a held defence and a leave-area walk change no attribute that
+   tells them from :run and :regroup."
+  [before after]
+  (let [ia (:plan/intent after)
+        wa (:plan/waiting after)
+        ended (:plan/ended after)
+        abandoned (when (and ended (not= ended (:plan/ended before))) (:ended/reason ended))]
+    (cond (and (= :done (:plan/status after)) (not= :done (:plan/status before))) :done
+          (and ia (not= (:intent/id ia) (:intent/id (:plan/intent before))))
+          (cond (= :preempted abandoned) :preempted
+                (= :interrupted abandoned) :interrupted
+                (#{:explore :regroup :retreat} (:intent/for ia)) (:intent/for ia)
+                :else :start)
+          (or ia (= wa (:plan/waiting before))) nil
+          (= :other-dimension wa) :other-dimension
+          (= :retrying wa) :retry
+          wa :wait)))
+
+(defn chose
+  "The world after, with the planner's choice recorded when it is a new one: :plan/choice
+   {:choice/goal id :choice/over the goal before :choice/how (choice-how) :choice/at ms}, set only
+   when the goal or the how differs from the last choice, and the newest choices-kept of them in
+   :plan/choices. The goal is the running intent's (:intent/goal), else the row choose picks, asked
+   only when choice-how names a change, so a tick with none costs a few keyword comparisons. Reads
+   no clock but :time/now. It decides nothing: the planner never reads it back."
+  [before after table]
+  (let [how (choice-how before after)
+        old (:plan/choice before)
+        goal (when how (or (:intent/goal (:plan/intent after)) (:goal/id (choose after table))))]
+    (if (or (nil? how) (and old (= goal (:choice/goal old)) (= how (:choice/how old))))
+      after
+      (let [c {:choice/goal goal
+               :choice/over (:choice/goal old)
+               :choice/how how
+               :choice/at (:time/now after 0)}]
+        (assoc after
+               :plan/choice c
+               :plan/choices (vec (take-last choices-kept (conj (:plan/choices before []) c))))))))
+
 (defn steered
   "The world after steer by the row of table the running intent serves (:intent/goal), or as it
    is with no intent running."
@@ -1120,7 +1167,8 @@
         (game/say "go"))
     :tick
     (case (:plan/status world)
-      :active (steered (plan-tick (watch world table event) event table) table)
+      :active
+      (let [w (watch world table event)] (steered (chose w (plan-tick w event table) table) table))
       :landing (landing-tick world)
       world)
     world))

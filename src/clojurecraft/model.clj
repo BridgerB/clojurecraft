@@ -437,6 +437,20 @@
    [:ended/at "ms the intent in :plan/ended ended at" "inside :plan/ended"]
    [:churn/n "times in a row the intent in :plan/churn started the tick after it ended"
     "inside :plan/churn"]
+   [:plan/choice
+    "{:choice/goal :choice/over :choice/how :choice/at} the planner's newest choice: the goal row now served, the one before it, how it got there (:start :preempted :interrupted :explore :regroup :retreat :wait :retry :done :other-dimension) and the ms; set only when the goal or the how changes; observation only (issue #263)"
+    "after the planner first chooses"]
+   [:plan/choices "the newest 20 :plan/choice values, oldest first"
+    "after the planner first chooses"]
+   [:choice/goal "id of the goal row the choice serves (nil when none is left)"
+    "inside :plan/choice"]
+   [:choice/over "id of the goal row the choice before served"
+    "inside :plan/choice, when there was one"]
+   [:choice/how "how the planner came to the choice" "inside :plan/choice"]
+   [:choice/at "ms the choice was made" "inside :plan/choice"]
+   [:ended/reason
+    "why the planner abandoned the intent in :plan/ended (:preempted :interrupted :goal-met)"
+    "inside :plan/ended, when abandoned"]
    [:plan/instant
     "{:intent/kind :intent/target :intent/for :instant/n :instant/at} of the choice whose intents end in their first tick with no progress (feet unchanged, no action packet), n of them in a row and the ms the last did: at plan/instant-limit the next such end counts as failed (:instant-churn, into :plan/failures) and logs `instant-churn <kind> <target> xN`"
     "after an intent ends in its first tick with no progress"]

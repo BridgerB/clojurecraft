@@ -189,7 +189,7 @@
 (defn intent-events
   "What changed in the plan between before and after: a new intent (:intent, with its kind,
    target, purpose, why and goal), a new failure (:failed, with its reason), a new wait (:wait),
-   a trap entered or left (:trap)."
+   a trap entered or left (:trap), a new planner choice (:choice, with its goal, the goal it was over and how)."
   [before after]
   (let [ib (:plan/intent before)
         ia (:plan/intent after)
@@ -200,7 +200,10 @@
       (and fa (not= fa fb)) (conj (assoc (intent-view fa) :ev :failed :reason (:intent/reason fa)))
       (not= (:plan/waiting before) (:plan/waiting after))
       (conj {:ev :wait :wait (:plan/waiting after)})
-      (not= (:plan/trap before) (:plan/trap after)) (conj {:ev :trap :trap (:plan/trap after)}))))
+      (not= (:plan/trap before) (:plan/trap after)) (conj {:ev :trap :trap (:plan/trap after)})
+      (not= (:plan/choice before) (:plan/choice after))
+      (conj (let [c (:plan/choice after)]
+              {:ev :choice :goal (:choice/goal c) :over (:choice/over c) :how (:choice/how c)})))))
 
 (defn body-events
   "What changed in the bot's own body and gear between before and after: a hit taken (:hit, the
@@ -276,7 +279,7 @@
 (def plan-keys
   "The plan's attributes a moment keeps whole."
   [:plan/status :plan/goals :plan/waiting :plan/failed :plan/ended :plan/last :plan/attempts
-   :plan/churn :plan/trap :plan/reached :plan/since])
+   :plan/churn :plan/trap :plan/reached :plan/since :plan/choice :plan/choices])
 
 (def stage-namespaces
   "The namespaces of the stages' own attributes a moment keeps whole: the hunt's, the pocket's, the

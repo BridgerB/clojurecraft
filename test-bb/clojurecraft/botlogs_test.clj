@@ -110,3 +110,15 @@
     (is (= :eat (get-in c [:at-end :doing])))
     (is (= [:death-hoglin :hoglin :eat :pocket-bore/and-in?-hp-20-0] (:signature c)))
     (is (str/includes? (botlogs/case-text c) "9 hits taken"))))
+
+(deftest a-case-names-the-goal-the-planner-served-at-the-end
+  (let [es [{:ev :choice :t 1000 :goal :blaze-rods :over nil :how :start}
+            {:ev :choice :t 8100 :goal :defend :over :blaze-rods :how :preempted}
+            {:ev :death :t 10000}]
+        c (botlogs/case-of {:run/bot "Clj_r1" :reason :death} es "replay")]
+    (is (= {:goal :defend :over :blaze-rods :how :preempted :s-before-end 1.9} (:choice c)))
+    (is (str/includes?
+         (botlogs/case-text c)
+         "goal at the end: :defend over :blaze-rods (preempted, 1.9 s before the end)"))
+    (is (str/includes? (botlogs/case-text (botlogs/case-of {:run/bot "x"} [] "r"))
+                       "goal at the end: unknown"))))
