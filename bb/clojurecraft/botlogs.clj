@@ -118,6 +118,16 @@
             (fs/path data-dir (or (:run/dir r) "") (str (:run/bot r) ".senses.edn")))]
     (when (fs/exists? f) (str f))))
 
+(defn beside
+  "A run's file of kind ext (\".moment.edn\", \".ring.edn\") beside its senses or its ledger, or
+   nil when absent: a sim run's sits beside the file :run/moment-file names, a real run's beside its
+   recording (<run/dir>/<bot><ext>)."
+  [data-dir r ext]
+  (let [f (if-let [p (:run/moment-file r)]
+            (fs/path (str/replace (str p) #"\.moment\.edn$" ext))
+            (fs/path data-dir (or (:run/dir r) "") (str (:run/bot r) ext)))]
+    (when (fs/exists? f) (str f))))
+
 (defn events-file
   "The ledger of a run (senses/ledger!, every change), or nil when absent: a sim run's names its file
    (:run/events-file), a real run's sits beside its senses (<run/dir>/<bot>.events.edn)."
@@ -217,10 +227,10 @@
           (when sf (fs/copy sf (fs/path logs (str stem ".senses.edn")) {:replace-existing true}))
           (when-let [ef (events-file data-dir r)]
             (fs/copy ef (fs/path logs (str stem ".events.edn")) {:replace-existing true}))
-          ;; the server's word on what stood round the bot where it ended (race/near-truth!)
-          (let [st (fs/path data-dir (or (:run/dir r) "") (str (:run/bot r) ".server.txt"))]
-            (when (fs/exists? st)
-              (fs/copy st (fs/path logs (str stem ".server.txt")) {:replace-existing true}))))
+          ;; the moment, the ring and the server's word on what stood round the ending (race/near-truth!)
+          (doseq [ext [".moment.edn" ".ring.edn" ".server.txt"]]
+            (when-let [mf (beside data-dir r ext)]
+              (fs/copy mf (fs/path logs (str stem ext)) {:replace-existing true}))))
         (when (fs/exists? lines-dir) (fs/copy-tree lines-dir (fs/path logs "lines")))
         (let [name (asset run runner batch)
               archive (str (fs/absolutize (fs/path dir name))) ; tar runs in the logs dir: a relative path would name a file under it
