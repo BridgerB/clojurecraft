@@ -1,16 +1,16 @@
 (ns clojurecraft.race
-  "A race (issue #17): many bots on one server, from where each lands to the race's target, the
-   server always full (issue #127): :race/bots slots, each starting a fresh bot the moment its bot
-   ends, for the job's length (run-ms), so no bot waits for another and a slow one plays as long
-   as it likes; a bot the job's end stops is cut (failure/cut), never a failure.
+  "A race: many bots on one server, from where each lands to the race's target, the server always
+   full: :race/bots slots, each starting a fresh bot the moment its bot ends, for the job's length
+   (run-ms), so no bot waits for another and a slow one plays as long as it likes; a bot the job's
+   end stops is cut (failure/cut), never a failure.
 
      clojure -M:race --config ci/race.edn --port 25565 --rcon-port 25575 --rcon-pass S \\
        [--record-dir data/race] [--commit sha] [--seed s] [--runner n] [--server k]
        [--landings cache/worlds/R1/landings.edn --landing-offset n] [--from spawn|fortress]
 
-   --from (else ci/race.edn's :race/from) is where each bot starts: spawn (a forest, every stage)
-   or fortress (the Nether, at the open pad beside its landing's fortress with :race/kit, playing
-   only the stages from the blaze rods: stages 17 and 18, issue #262).
+   --from (else ci/race.edn's :race/from) is where each bot starts: spawn (a forest, every stage) or
+   fortress (the Nether, at the open pad beside its landing's fortress with :race/kit, playing only
+   the stages from the blaze rods).
 
    --server names which of a runner's servers this race is on, when a runner carries more than
    one (:race/servers): each server is its own world, seed and race process, and its facts say
@@ -107,11 +107,10 @@
           (+ (* every-ms (inc (quot (- i start) step))) (* stagger-ms (rem (- i start) step))))))
 
 (defn backoff-ms
-  "How long a slot waits before its next bot: none after a bot that played; after one that
-   crashed or was cut off (failure/infra-reasons) within quick-ms, double the last wait (1 s the
-   first time), at most backoff-max-ms. A server that stopped or fails would otherwise have every
-   slot start bot after bot at once, each with its threads, until the machine can fork no more
-   (issue #145)."
+  "How long a slot waits before its next bot: none after a bot that played; after one that crashed
+   or was cut off (failure/infra-reasons) within quick-ms, double the last wait (1 s the first
+   time), at most backoff-max-ms. A server that stopped or fails would otherwise have every slot
+   start bot after bot at once, each with its threads, until the machine can fork no more."
   [wait life-ms {:keys [reason]}]
   (cond (and (< life-ms quick-ms) (or (= :crashed reason) (contains? failure/infra-reasons reason)))
         (min backoff-max-ms (max 1000 (* 2 wait)))
@@ -120,10 +119,9 @@
 (defn health
   "A server's health ({:race/unplayed :race/down?}) after one of its bots ended with RESULT r:
    :race/unplayed counts the bots in a row that never got into play (failure/unplayed?), and a bot
-   that played sets it back to 0; :race/down? turns true at dead-after of them and stays true
-   until a probe finds the server accepting again (recovered). Backing off alone still let a dead
-   server's 15 slots start one bot a minute each for three hours (race 39817745908: 2,864 runs
-   that never connected)."
+   that played sets it back to 0; :race/down? turns true at dead-after of them and stays true until
+   a probe finds the server accepting again (recovered). Backing off alone still let a dead server's
+   15 slots start one bot a minute each for three hours."
   [h r]
   (let [n (if (failure/unplayed? r) (inc (:race/unplayed h 0)) 0)]
     {:race/unplayed n :race/down? (boolean (or (:race/down? h) (>= n dead-after)))}))
@@ -309,14 +307,14 @@
 
 (def starts
   "The race's starts at a fortress, by :race/from name: the first target a bot starting there plays
-   (:checkpoint/goal) and what it carries beyond :race/kit (:checkpoint/kit, give commands' item counts).
-   \"fortress\" plays the blaze rods (issue #262) with the race kit: the stages before it are the
-   road to the fortress. \"rods\" is stage 18's checkpoint (LOOP.md section 1): the race kit and
-   the seven rods stage 17 yields, at the same pad, so the pearl hunt (issue #263) is played by
-   every bot that starts there, not only the 5 to 7% that win the blaze rods first (0ace52e: 184
-   of 2518 real bots). \"forest\" is the same kit and goal landed on a floor of the warped forest
-   nearest the fortress pad (land-forest!), the hunt practised from its own start (LOOP.md section
-   7.6): on 7c7e8dd 12 of 13 stalled bots never saw an enderman."
+   (:checkpoint/goal) and what it carries beyond :race/kit (:checkpoint/kit, give commands' item
+   counts). \"fortress\" plays the blaze rods with the race kit: the stages before it are the road
+   to the fortress. \"rods\" is stage 18's checkpoint (LOOP.md section 1): the race kit and the
+   seven rods stage 17 yields, at the same pad, so the pearl hunt is played by every bot that starts
+   there, not only the 5 to 7% that win the blaze rods first (0ace52e: 184 of 2518 real bots).
+   \"forest\" is the same kit and goal landed on a floor of the warped forest nearest the fortress
+   pad (land-forest!), the hunt practised from its own start (LOOP.md section 7.6): on 7c7e8dd 12 of
+   13 stalled bots never saw an enderman."
   {"fortress" {:checkpoint/goal :blaze-rods :checkpoint/kit []}
    "rods" {:checkpoint/goal :ender-pearls :checkpoint/kit ["minecraft:blaze_rod 7"]}
    "forest" {:checkpoint/goal :ender-pearls
@@ -367,11 +365,11 @@
   "racers")
 
 (def team-commands
-  "What a race asks of its server once beside the gamerule: the team of racers, friendly fire off.
-   A sword's sweep hits the players beside its target; at a spawner several bots stand together, the
-   one struck fought back (combat: the striker is answered), and 47 of 344 deaths of lanes 1 to 6
-   of race 9d15bd6 were a bot killed by a bot (\"was slain by Clj_r24\", 44 of the 83 \"other\"
-   deaths). A team with friendly fire off takes no damage from its own."
+  "What a race asks of its server once beside the gamerule: the team of racers, friendly fire off. A
+   sword's sweep hits the players beside its target; at a spawner several bots stand together, the
+   one struck fought back (combat: the striker is answered), and 47 of 344 deaths of lanes 1 to 6 of
+   race 9d15bd6 were a bot killed by a bot. A team with friendly fire off takes no damage from its
+   own."
   [(str "team add " team) (str "team modify " team " friendlyFire false")])
 
 (defn team-join-command
@@ -464,10 +462,10 @@
   (or (first (filter #(nil? (unsafe %)) candidates)) (first candidates)))
 
 (defn standing-on
-  "[x y z], where a bot stands on the pad [x z y]: the middle of its cell (the order a :go/at
-   has: gym/place! teleports to x.5 y z.5). Returned from the pad, never from a question to the
-   server: a landing that read a position nil handed the planner the pad's own [x z y], which is
-   not a place, and 30 s later the run ended :no-landing (race 41219596455, Clj_r10 and r11)."
+  "[x y z], where a bot stands on the pad [x z y]: the middle of its cell (the order a :go/at has:
+   gym/place! teleports to x.5 y z.5). Returned from the pad, never from a question to the server: a
+   landing that read a position nil handed the planner the pad's own [x z y], which is not a place,
+   and 30 s later the run ended :no-landing."
   [[x z y]]
   [(+ x 0.5) (double y) (+ z 0.5)])
 
@@ -523,8 +521,8 @@
   "The fortress for the landing [x z] (overworld coordinates; the Nether's are an eighth): one
    already located within fortress-near (nearby-fortress), else the nearest as the server locates
    it, remembered. A locate is a search in one tick of the server's thread, tens of seconds: asked
-   of fifteen bots at once it stopped the server's keepalives and every bot timed out (race
-   41218543330: 120 bots lost connection, `Can't keep up! Running 31317ms behind`)."
+   of fifteen bots at once it stopped the server's keepalives and every bot timed out. Running
+   31317ms behind`)."
   [rc [x z]]
   (let [here [(quot x 8) (quot z 8)]]
     (or (nearby-fortress @fortresses here)
@@ -595,9 +593,7 @@
   "Generate the Nether round the pad [x z y] to pad-view blocks with no bot on it: the square
    forceloaded and waited for (best effort, three waits of 30 s), then released. A bot teleported
    onto a pad whose surroundings were not generated made the server generate its whole view,
-   fortress structure included, in its thread: race 41229255270 (lane 3, #662) built the ten pads
-   in 13 s, the bots joined at 18:26:00 and were sent from 18:26:03, and the server was 32.5 s
-   behind at 18:26:50: 298 of its bots lost connection `Timed out`, 588 runs in 29 minutes."
+   fortress structure included, in its thread."
   [rc [x z _]]
   (let [square [(- x pad-view) (- z pad-view) (+ x pad-view) (+ z pad-view)]
         where (str/join " " square)]
@@ -608,16 +604,15 @@
          (finally
           (rcon/command! rc (gym/in-dimension dimension/nether (str "forceload remove " where)))))))
 
-(def lava-clear-radius 10) ; blocks round a pad on the plane cleared of lava: a Nether lava flow runs 8 (4 in the overworld), so 10 keeps a flow from beyond the cleared ring off the pad
+(def lava-clear-radius 10) ; blocks round a pad on the plane cleared of lava.
 
 (defn lava-clear-command
-  "The RCON fill that turns every lava block round the pad [x z y] into netherrack: lava-clear-radius
-   on the plane, from a block under the pad's floor to its roof. The pad is a box with a doorway
-   (gym/fortress-pad-open), built once and landed on by every bot of its slot, and a pad beside a
-   lava sea let the lava in: on f9c021c every lava death of race lane 2 (the stage-18 rods start,
-   landing set R2), 7 of 7, came 4 to 10 s after the teleport, hit by lava before the bot's :go
-   (bot-log archive 42187565555-r2-b1, s1 Clj_r17: lava at 1793954066679, :go at
-   1793954069831, dead at 1793954076879)."
+  "The RCON fill that turns every lava block round the pad [x z y] into netherrack:
+   lava-clear-radius on the plane, from a block under the pad's floor to its roof. The pad is a box
+   with a doorway (gym/fortress-pad-open), built once and landed on by every bot of its slot, and a
+   pad beside a lava sea let the lava in: on f9c021c every lava death of race lane 2 (the stage-18
+   rods start, landing set R2), 7 of 7, came 4 to 10 s after the teleport, hit by lava before the
+   bot's :go."
   [[x z y]]
   (gym/in-dimension dimension/nether
                     (str "fill "
@@ -629,10 +624,9 @@
 (defn build-pad!
   "Build the pad [x z y] (gym/fortress-pad-open) in the Nether with no bot: the square round it
    forceloaded and waited for, the commands, the forceload released. The first build of a Nether
-   region generates its chunks and a fortress's structure, seconds of the server's thread each:
-   done with a bot connected, the server fell 12 to 34 s behind and the bots timed out (race
-   41225389190: Clj_r10 lost connection 17:39:17, six more by 17:39:36, the first pad built at
-   17:39:00, 40 s after the bots joined). Remembered in pads-built."
+   region generates its chunks and a fortress's structure, seconds of the server's thread each: done
+   with a bot connected, the server fell 12 to 34 s behind and the bots timed out. Remembered in
+   pads-built."
   [rc [x z _ :as pad]]
   (when-not (contains? @pads-built pad)
     (let [where (str/join " " [(- x 2) (- z 2) (+ x 2) (+ z 2)])]
@@ -703,11 +697,10 @@
 
 (defn ground-y
   "The height of the first ground under the roof for a pad at [x z], from ground-top down to
-   ground-bottom: ground under the cell, air in it and the two over it, and ground under every
-   cell of ground-ring within ground-drop below it (a ledge is not ground, a slope is), or nil. The first version asked the ring at exactly the pad's floor: of 16 pads chosen in lane 2 of race f8b28e3, 15 fell back to y 72 after 333 and 192 `:no-ground` rejections. Race 9d15bd6, lane 7:
-   Clj_r04 and Clj_r08 stepped off a pad built at the fixed y 72 into a cavern and fell 37 blocks into
-   the lava sea (\"tried to swim in lava\" at y 31): no arrival by portal ever leaves a platform
-   with nothing round it."
+   ground-bottom: ground under the cell, air in it and the two over it, and ground under every cell
+   of ground-ring within ground-drop below it (a ledge is not ground, a slope is), or nil. The first
+   version asked the ring at exactly the pad's floor: of 16 pads chosen in lane 2 of race f8b28e3,
+   15 fell back to y 72 after 333 and 192 `:no-ground` rejections. Race 9d15bd6, lane 7."
   [rc [x z _]]
   (with-loaded rc
                [(- x 24) (- z 24) (+ x 24) (+ z 24)]
@@ -729,8 +722,7 @@
 
 (defn pad-unsafe
   "Why the pad is no landing, :bricks (inside the fortress's body) or :mobs (a danger-mob near), or
-   nil. Race 41224855928 and 41229255270: the first deaths of the bots at the fortress came 14 to
-   27 s after landing, blazes, hoglins and a wither skeleton."
+   nil."
   [rc pad]
   (cond (bricks-near? rc pad) :bricks
         (mobs-near? rc pad) :mobs))
@@ -844,16 +836,15 @@
 (defn slot-index
   "The index racer i (from 0) lands with at the fortress: i mod slots, so a bot that replaces one
    that ended takes the landing and the pad of its slot, which prepare! built, and no new Nether
-   region is generated while bots are connected. (Racer serials grow with every replacement:
-   lane 3 of race 41218543330 started 116 runs in 31 minutes.)"
+   region is generated while bots are connected. (Racer serials grow with every replacement)"
   [i slots]
   (if (pos? (or slots 0)) (mod i slots) i))
 
 (defn spawn-command
   "The RCON command that pins bot name's spawn at the cell of at ([x y z]) in the dimension dim:
    `execute in` it, because spawnpoint takes the dimension of the command's source, the server's
-   overworld: pinned without it, a bot that died at the fortress respawned in the overworld at
-   the Nether's coordinates (race 41219596455 onward)."
+   overworld: pinned without it, a bot that died at the fortress respawned in the overworld at the
+   Nether's coordinates."
   [name [x y z] dim]
   (str "execute in " dim
        " run spawnpoint " name
@@ -1020,11 +1011,11 @@
        (catch Exception e (str "near truth failed: " (ex-message e)))))
 
 (defn death-class
-  "The class of a server death line (\"Clj_r23 was slain by Blaze\"), a keyword: :blaze, :enderman,
-   :piglin (a piglin, zombified or brute), :hoglin, :wither (a wither skeleton), :ghast, :lava, :fire, :fall, else :other (also a nil
-   line). The mob is asked first: \"burned to a crisp while fighting Blaze\" is a blaze's, not
-   fire's. A death at a stage is filed by its class, so a blaze's and a lava's get different
-   issues and owners."
+  "The class of a server death line, a keyword: :blaze, :enderman, :piglin (a piglin, zombified or
+   brute), :hoglin, :wither (a wither skeleton), :ghast, :lava, :fire, :fall, else :other (also a
+   nil line). The mob is asked first: \"burned to a crisp while fighting Blaze\" is a blaze's, not
+   fire's. A death at a stage is filed by its class, so a blaze's and a lava's get different issues
+   and owners."
   [msg]
   (let [m (str msg)]
     (condp re-find m
@@ -1064,8 +1055,8 @@
 
 (defn serverlog-lines
   "The lines of the server log text (its newest serverlog-tail) that bear on bot name's ending: any
-   that names the bot (its join, its death line, its leaving, whole word: Clj_r1 is not Clj_r10)
-   and any that serverlog-notable matches, in order, as a vector. Pure over the text."
+   that names the bot (its join, its death line, its leaving, whole word) and any that
+   serverlog-notable matches, in order, as a vector. Pure over the text."
   [text name]
   (let [mine (re-pattern (str "\\b" (java.util.regex.Pattern/quote name) "\\b"))]
     (filterv #(or (re-find mine %) (re-find serverlog-notable %))
@@ -1181,7 +1172,7 @@
                  :error (ex-message e)
                  :until (:until server)
                  :plan (plan/summary @world*)}]
-          (println "RESULT" name (pr-str (marked r))) ; filed at the stage it crashed in (issue #152)
+          (println "RESULT" name (pr-str (marked r))) ; filed at the stage it crashed in
           (flush)
           {:name name :result r}))
       (finally ((:unwatch watcher) world*)
@@ -1256,12 +1247,11 @@
                     (long (backoff-ms wait (- (System/currentTimeMillis) t) (:result r)))))))))
 
 (defn -main
-  "Run the race ci/race.edn (or --config) describes on the server at --port, its RCON at
-   --rcon-port with --rcon-pass, for the job's length (run-ms): :race/bots slots, each refilled
-   with a fresh bot the moment its bot ends, so the server always carries its bots (issue #127);
-   the board, the sampler and the milestones watch whichever bots play now. A RESULT line per
-   bot as it ends, a RACE summary of every bot at the end, written to the record directory.
-   Exits 0 when any bot reached the target."
+  "Run the race ci/race.edn (or --config) describes on the server at --port, its RCON at --rcon-port
+   with --rcon-pass, for the job's length (run-ms): :race/bots slots, each refilled with a fresh bot
+   the moment its bot ends, so the server always carries its bots; the board, the sampler and the
+   milestones watch whichever bots play now. A RESULT line per bot as it ends, a RACE summary of
+   every bot at the end, written to the record directory. Exits 0 when any bot reached the target."
   [& args]
   (let [o (cli/options args)
         {:keys [config host port rcon-port rcon-pass record-dir commit seed landing-offset]
