@@ -38,6 +38,7 @@
             [clojurecraft.drops :as drops]
             [clojurecraft.eat :as eat]
             [clojurecraft.entity :as entity]
+            [clojurecraft.filler :as filler]
             [clojurecraft.forage :as forage]
             [clojurecraft.fortress :as fortress]
             [clojurecraft.game :as game]
@@ -52,7 +53,6 @@
             [clojurecraft.plan :as plan]
             [clojurecraft.pocket :as pocket]
             [clojurecraft.recipe :as recipe]
-            [clojurecraft.stairs :as stairs]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.window :as window]
             [datascript.core :as d]))
@@ -79,7 +79,7 @@
 (def rest-ms 90000)                   ; a rest with no health coming back this long fails :no-heal (the slow heal is one point every four seconds)
 (def fire-radius 4)                   ; cells from a spawner a fire is put out in: a fire lights its cells past 11, where a spawner's blaze no longer spawns
 (def corridor-reach 48.0)             ; bricks within this of the feet are walked or tunnelled to; farther is another fortress, not this leg
-(def corridor-nodes 800)              ; nodes one corridor walk may spend finding its route (the cover search's budget)
+(def corridor-nodes (path/budget :cover))              ; nodes one corridor walk may spend finding its route (the cover search's budget)
 
 (def rod (recipe/item-id :blaze_rod))
 (def spawner (blocks/default-state :spawner))
@@ -688,7 +688,7 @@
             (path/plan world
                        (path/feet-cell pos)
                        {:goal/kind :unseen :goal/pos c :goal/cells (vec cs) :goal/exclude recent}
-                       {:path/max-nodes 800}))
+                       {:path/max-nodes (path/budget :cover)}))
         to (last (:path/waypoints r))]
     (when (and r (= :found (:path/status r)) to (not= to (intent/feet world)))
       {:intent/kind :walk :intent/target to :intent/for :cover})))
@@ -1502,7 +1502,7 @@
   [world]
   (boolean (or (:player/on-fire? world) (reignited? world))))
 
-(def refuge-kinds
+(def refuge-answer-kinds
   "Intents that are the answer to a refuge: none of them is cut for one."
   #{:pocket :seal :unseal :pocket-hold :eat :fight :back-off :rest :dodge})
 
@@ -1586,7 +1586,7 @@
             target (when cell
                      (let [f (build/foundation world cell)]
                        (when (and f (not (place/inside-player? world f))) f)))
-            filler (stairs/filler world combat/wall-fill)]
+            filler (filler/pick world combat/wall-fill)]
         (when (and target filler (not (combat/wall-failed? world target)))
           {:intent/kind :place
            :intent/item filler
@@ -1853,11 +1853,11 @@
         (and (:intent/until i) (> (:time/now world 0) (:intent/until i)))
         (and (= :pocket-hold (:intent/kind i)) (= :seal (:intent/kind (hold-intent world))))
         (and (= :tunnel-to (:intent/kind i)) (some? (long-shot-cover world)))
-        (and (not (contains? refuge-kinds (:intent/kind i)))
+        (and (not (contains? refuge-answer-kinds (:intent/kind i)))
              (not= :fight (:intent/kind i))
              (not (rod-grab? world i))
              (sortie-over? world))
-        (and (not (contains? refuge-kinds (:intent/kind i)))
+        (and (not (contains? refuge-answer-kinds (:intent/kind i)))
              (not (and (rod-grab? world i) (grab-over-refuge? world)))
              (some? (refuge-now world (nearest-spawner world))))
         (and (not (hurt? world))

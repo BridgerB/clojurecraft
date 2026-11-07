@@ -19,6 +19,7 @@
   (:require [clojure.math :as math]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.chunk :as chunk]
+            [clojurecraft.filler :as filler]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
@@ -804,7 +805,7 @@
               [(+ x 0.5) (+ y physics/eye-height) (+ z 0.5)])]
     (<= (physics/distance eye (physics/centre pos)) intent/reach)))
 
-(def stand-max-nodes 400) ; expansions spent looking for a reachable local stand to work an op
+(def stand-max-nodes (path/budget :near)) ; expansions spent looking for a reachable local stand to work an op
 
 (defn stand-cell?
   "Could the feet stand in cell to work pos: not pos, the head not in pos, standable, and pos
@@ -1436,12 +1437,12 @@
   (and (= 1 (held-count world :bucket)) (held? world :water_bucket)))
 
 (defn seal-source
-  "The child that removes the water source at pos without a bucket: a filler block (stairs/filler)
+  "The child that removes the water source at pos without a bucket: a filler block (filler/pick)
    placed into it takes the source's place, to be dug out where a later op needs the cell open
    (the next cell's hole, the interior); nil when no filler is held or no solid neighbour holds
    the click (place/support)."
   [world pos]
-  (when-let [item (stairs/filler world 1)]
+  (when-let [item (filler/pick world 1)]
     (when (place/support world pos) {:intent/kind :place :intent/item item :intent/cell pos})))
 
 (defn spare-pour-op
@@ -1451,7 +1452,7 @@
    filler (last-bucket-scoop?). nil unless a filler is held and such a cell exists."
   [world {:intent/keys [origin facing]}]
   (let [at #(cell origin facing %)]
-    (when (stairs/filler world 1)
+    (when (filler/pick world 1)
       (some (fn [[dx dy :as c]]
               (let [[sx :as s] (stands c)
                     over (at [dx (inc dy) 0])]

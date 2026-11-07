@@ -26,7 +26,8 @@
             [clojurecraft.mob :as mob]
             [clojurecraft.packet :as p]
             [clojurecraft.path :as path]
-            [clojurecraft.pearls :as pearls]
+            [clojurecraft.pearls]
+            [clojurecraft.pearls.sense :as psense]
             [clojurecraft.physics :as physics]
             [clojurecraft.picks]
             [clojurecraft.place :as place]
@@ -1050,7 +1051,7 @@
   :args
   (s/cat :world (requires :world/entities)
          :eid int?))
-(s/fdef pearls/endermen
+(s/fdef psense/endermen
   :args
   (s/cat :world (requires :world/entities :player/pos)
          :radius (s/? number?)))
@@ -1136,7 +1137,7 @@
    `terrain/solid-fn `terrain/fluid-fn `memory/positions-now `memory/nearest-surface-water
    `memory/nearest-log `make/near `make/decide `wood/gather-next `wood/return-walk `place/spot
    `place/ashore `stone/redig-place `window/view `path/plan `path/classify `entity/hostiles
-   `entity/gone? `eat/food-held `drops/lying `blaze/blazes `pearls/endermen `stairs/down-safe?
+   `entity/gone? `eat/food-held `drops/lying `blaze/blazes `psense/endermen `stairs/down-safe?
    `stairs/down-lay `stone/retreat `build/safe-source? `build/scoop-blocked? `build/lit-entry
    `fortress/next-move `end-portal/next-op `dragon/best-approach `dragon/toward-crystals])
 (s/def :stats/deaths pos-int?)
