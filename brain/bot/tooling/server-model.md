@@ -5,7 +5,7 @@ type: reference
 tags: [bot, tooling, sim, tests]
 aliases: [sim.clj, fake server, socket-free test, sim/run]
 status: verified
-lastUpdated: 2026-10-22
+lastUpdated: 2026-11-07
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/sim.clj#defn init
@@ -53,6 +53,7 @@ sourceRefs:
   - test/clojurecraft/sim_test.clj#collects-one-log-against-the-model
   - test/clojurecraft/sim_test.clj#the-wood-goal-holds-in-generated-forests
   - test/clojurecraft/sim_test.clj#the-iron-kit-from-a-stone-pickaxe-and-its-recording-replays
+  - src/clojurecraft/sim.clj#defn connect!
 related:
   - "[[bot/tooling/_moc|Tooling]]"
   - "[[early-finish-aborts]]"
@@ -88,6 +89,9 @@ A block of one of `blocks/falling-types` looks under itself `fall-delay-ms` (two
 The model moves fluids as the server does (issue #125). The rules are `fluid.clj`, data and pure functions over a cell lookup, from vanilla's `FlowingFluid`, `WaterFluid`, `LavaFluid` and `LiquidBlock`: a fluid state is a map (`:fluid/kind :fluid/amount :fluid/source? :fluid/falling?`, the block's level is its legacy encoding, `state-of`, `block-state`); `kinds` holds each kind's drop-off, slope search, tick delay and whether two sources make a third, for the Overworld and the Nether. A cell's tick makes it what its neighbours feed it (`new-liquid`, `next-state`: a source stays, a flow is falling under its kind, else the most beside it less the drop-off, nothing at none, so a flow recedes block by block when its source is scooped) and then spreads (`spread`: down first into a cell holding no solid and no fluid; on the level only when it cannot go down, toward the open sides nearest a way down, `side-spread`, `slope-distance`; lava falling into water makes stone). Lava touched by water above or beside turns at once to obsidian when a source and cobblestone when a flow (`mix`). The model only schedules: every change goes through `set-cell`, whose `disturb` quenches at once and wakes every fluid at or round the cell to tick its kind's delay later (`wake-fluids`, `:sim/fluids` {cell due-ms}); `tick-fluids` ticks the due cells in position order, so a run replays. Ice or frosted ice broken over a solid or a fluid leaves a water source (`melts?`, the game's `IceBlock.playerDestroy` without silk touch), except in the Nether; it broke to air before, and a bot that dug the ice over its head from a frozen sea floated a block under the rim with no bank (issue #177). Not modelled: lava's random slow-down, fire.
 
 `state-of` reads `blocks/fluid`, including aquatic and waterlogged sources. Their fluid ticks preserve the block when its fluid is unchanged, while spreading the water it holds. Sim race 39007350790 runner 2 (issue #344, R3/4 seed 1) dug the sea bed beneath tall seagrass: the model recognized no source there, left the shaft dry and the rise jumped until `[:cast-one :no-escape]` three times. New changes now schedule that source. Older saved models lack `:sim/fluid-sources-ready?`; their first `tick-fluids` wakes fluids beside broken and placed cells once, retaining earlier pending deadlines, then marks the scheduler ready. The healthy shaft regression rises to dry land without a death; the issue's one-health snapshot instead recovers through deaths and respawn, then resumes crafting and building within its unchanged window.
+
+## How the model is split
+`sim.clj` holds the entry points (`step`, `run`, `connect!`) and composes the parts under `sim/`: `sim/world` (the constants, rolls and loot, columns and blocks, what the client is told), `sim/protocol` (login, chunks, movement, digging, drops, the player's life), `sim/window` (inventory, containers, click rules, crafting, the furnace), `sim/portal` (placement and the Nether portal), `sim/mobs` and `sim/spawns` (spawning, goals, the mob tick), `sim/end` (the End and the dragon fight's start). A rule belongs to the part that owns its state; a part never requires a part above it.
 
 ## Key files
 - `sim.clj`, `init` - takes `{:column bytes :spawn [x y z] :keep-alive-every ms :drop-clicks #{n} :drop-breaks #{n} :inventory {slot item} :respawn [x y z]}` (`:drop-breaks`: the FINISHes, by ordinal, the model answers with the ack alone and the block left standing, as a lagging server does with an early FINISH queued behind another; `finish-dig`); an `:inventory` slot is a named place (`[:hotbar 0]`, `[:main 3]`, read by `inventory/slot`) or a window-0 slot number, so a test says where an item is rather than which wire slot that is.

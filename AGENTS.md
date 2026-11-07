@@ -11,7 +11,7 @@ Once per session, before the first issue. A fix in the wrong style is a wrong fi
 1. **`docs/RICH-HICKEY.md`, in full.** The design brief. Every review asks first: does the fix follow it? Section 25 says what it means in this code.
 2. **`CLAUDE.md`, in full.** Style rules, one line per namespace, the commands, the workflows, the project words.
 3. **The brain, in part.** `brain/_index.md`, `brain/rules.md`, then `brain/bot/gotchas/` and `brain/bot/decisions/` (traps already paid for, choices already made). The rest on demand: `grep -rl "<namespace-or-function>" brain/` before touching a namespace. The brain holds decisions, gotchas and game facts; what a function does is its docstring.
-4. **The code you change, and what it calls.** Read the namespace you will edit and the registries it plugs into (`plan.clj` for goals and intents, `intent.clj` for executors, `model.clj` for attributes). Add `sim.clj` when a fix touches the server model. Do not read the rest in advance.
+4. **The code you change, and what it calls.** Read the namespace you will edit and the registries it plugs into (`plan.clj` for goals and intents, `intent.clj` for executors, `model.clj` for attributes). Add `sim.clj` and the `sim/` part that owns the rule when a fix touches the server model (`sim/world`, `protocol`, `window`, `portal`, `mobs`, `spawns`, `end`). The pearl hunt is rows in `resources/clojurecraft/pearls-rules.edn` read by `pearls/rules` over the facts of `pearls/facts`; what a bot does about a hostile is `threats.edn` and `threat.clj`; what it has learned not to retry is `avoided.clj`; where a race starts is `starts.edn` and `ci/lanes.edn`. Do not read the rest in advance.
 
 Then this file, Part I in full.
 

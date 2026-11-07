@@ -5,7 +5,7 @@ type: reference
 tags: [bot, plan, goals, intents]
 aliases: [planner, plan/step, intent/run, goal table, goals.edn, done-by, plan/act, blacklist, retries]
 status: verified
-lastUpdated: 2026-10-14
+lastUpdated: 2026-11-07
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/plan.clj#def goals
@@ -34,6 +34,10 @@ sourceRefs:
   - test/clojurecraft/plan_test.clj#done-is-re-derived-every-tick-even-mid-intent
   - test/clojurecraft/plan_test.clj#a-regressed-target-preempts-the-running-intent
   - src/clojurecraft/intent.clj#defmulti run
+  - src/clojurecraft/plan.clj#defn outranks?
+  - src/clojurecraft/plan.clj#defmulti interrupts?
+  - src/clojurecraft/intent.clj#defmulti still-wanted?
+  - src/clojurecraft/avoided.clj#defn noted?
 related:
   - "[[bot/plan/_moc|Plan]]"
   - "[[make-goals]]"
@@ -44,6 +48,11 @@ related:
 # Goals and intents
 
 The goal table is data in `resources/clojurecraft/goals.edn`: rows of `{:goal/id :goal/priority :goal/needs :goal/provides :goal/done? :goal/act}`. Keys of needs and provides are `:item/<name> n`, `:tag/<item-tag> n` and `:block/<name> :near`; a need may also be `:fuel/ticks n`, fuel that burns n game ticks ([[make-goals]]). Rows marked `:goal/target? true` are what a run is for (`:wood`, `:kit`, `:pickaxe`), each naming the `--until` value that selects it (`:goal/until`); the others are producers (gather a log, place a table). Recipes add one generated producer row each ([[make-goals]]).
+
+## Cutting a running intent
+A running intent ends in one of three ways, tried in this order by `plan-tick`. (1) It is no longer wanted: `intent/still-wanted?` answers per kind, so a stale walk or a spent dig ends without the row saying so. (2) The row's plan now answers with a branch of strictly higher rank: a row lists its branches by why label in `:goal/ranks` (goals.edn), `outranks?` compares the fresh answer with the running intent, and an equal rank is the same commitment, never a cut. (3) The row's `interrupts?` method says so. Only the :blaze-rods and :ender-pearls rows define `interrupts?`: each is a matrix of triggers against exemptions on what is running (a rod pick-up under way, a meal, the refuge's own intents), and an exemption is not an order, so the matrix stays code until the plan itself is ordered. A cut is dropped when the row, planning again without the intent, would start the same one (`same-choice?`).
+
+What the bot has learned not to try again (the blacklist, boxed cells, unreached logs, cornered entities) lives behind `clojurecraft.avoided`: a failure is noted under a kind, and a row asks `noted?` or `mark-of` and never reads a world attribute. The attributes an executor alone reads and writes are its `scratch` map, not world information; `scratch_test` holds that no other namespace uses one.
 
 ## Key files
 - `goals.edn` - the hand-written table; `plan.clj`, `goals` and `targets` load it.
