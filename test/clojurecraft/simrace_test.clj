@@ -545,7 +545,7 @@
            (let [path (simrace/write-truth! (io/file dir "senses") "T-1-9" threw)]
              (is (.exists (io/file path)))
              (is (.exists (io/file dir "senses" "T-1-9.truth-ring.edn"))))
-           (is (= "[{:t 1}]" (str/trim (get (simrace/truth-texts ended) ".truth-ring.edn")))))
+           (is (= "{:t 1}" (str/trim (get (simrace/truth-texts ended) ".truth-ring.edn")))))
          (finally (run! #(.delete ^java.io.File %) (reverse (file-seq dir)))))))
 (deftest a-checkpoint-run-has-a-cap-of-its-own
   (let [config {:simrace/checkpoint-max-minutes 60}

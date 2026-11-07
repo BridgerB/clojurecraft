@@ -851,11 +851,11 @@
     (is (= 3 (:t (first log)))))
   (let [s (-> (arena {} {} :normal night [])
               (assoc :sim/now 1000 :sim/health 20.0)
-              (sim/hurt 6.0 true :zombie 7)
+              (sim/hurt 6.0 true :zombie nil 7)
               (assoc :sim/now 1100)
-              (sim/hurt 4.0 true :zombie 7)
+              (sim/hurt 4.0 true :zombie nil 7)
               (assoc :sim/now 1200)
-              (sim/hurt 9.0 true :skeleton 8))]
+              (sim/hurt 9.0 true :skeleton nil 8))]
     (is
      (= [[:zombie 7 6.0] [:skeleton 8 3.0]] (map (juxt :cause :by :dealt) (:sim/hit-log s)))
      "a weaker blow inside the hurt window lands nothing and is not logged; a harder one lands its excess")))
