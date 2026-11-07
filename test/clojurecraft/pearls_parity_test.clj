@@ -2,7 +2,8 @@
   "The pearl hunt's rule table (pearls-rules.edn) chooses what the cond it replaced chose: the
    same intent and the same why label, over a grid of worlds built from the pearl tests' own
    canned states."
-  (:require [clojure.test :refer [deftest is]]
+  (:require [clojure.java.io :as io]
+            [clojure.test :refer [deftest is]]
             [clojurecraft.intent :as intent]
             [clojurecraft.pearls-legacy :as legacy]
             [clojurecraft.pearls-support :as ps]
@@ -77,8 +78,13 @@
         whys (into #{} (keep (comp second :cond)) results)]
     (is (empty? (map :label (take 5 differ))) "worlds where the table and the cond differ")
     (is (< 200 (count results)) "worlds compared")
-    (println "pearls parity:" (count results) "worlds," (count whys) "of 48 rules hit")
-    (println "rules not hit:" (sort (remove whys (map :rule/id rules/rules))))))
+    (when (.isDirectory (io/file "out"))
+      (spit "out/pearls-parity.edn"
+            (pr-str {:worlds (count results)
+                     :rules (count rules/rules)
+                     :hit (count whys)
+                     :not-hit (vec (sort (remove whys (map :rule/id rules/rules))))
+                     :differ (vec (map :label (take 20 differ)))})))))
 
 (deftest the-phase-of-a-hunt-is-the-first-not-done
   (is (= :set-up (rules/phase (ps/standing {}))))
