@@ -5,7 +5,8 @@
  :simrace/sets ["R1" "R2" "R3" "R4"] ; the race's landing sets (ci/gym.edn), captured by simworld.yml
  :simrace/until "pearls-12"          ; the target each run plays every step up to: the Nether, the fortress (issue #261), seven blaze rods from its spawner (#262), in each set's captured Nether (#353) with the model's fortress spawners (#495), then twelve ender pearls from the model's warped-forest endermen (#263: they spawn, #523, and teleport and walk round walls, #542), as the real race (#516)
  :simrace/max-minutes 330            ; simulated minutes a run may take: the real bots' horizon, a lane's job (#252); a run that finishes early stops early
- :simrace/budget-minutes 330         ; wall minutes a runner plays: 300 took 303 with setup (sim race 38515210080), inside the job's 355 of GitHub's 360
+ :simrace/checkpoint-max-minutes 60 ; simulated minutes a checkpoint run may take, a :bot-timeout beyond (simrace/cap-max-ms); the real checkpoint bots' :race/bot-minutes
+ :simrace/budget-minutes 330 ; wall minutes a runner plays: 300 took 303 with setup (sim race 38515210080), inside the job's 355 of GitHub's 360
  :simrace/from "fortress" ; each run starts in its set's captured Nether at the fortress with the real race's kit and plays only stages 17 and 18 (probe simfort-c 41217235280: R1/1 seeds 1-2 signed [:blaze-rods :timeout], a death respawns in the Nether with the kit); remove the line to start from spawn
  :simrace/checkpoint {:from "rods" :kind "sim-18" :lanes [1 2 3 4 5 6 7 8]} ; every lane plays stage 18 (the stuck stage, 2026-11-06), stage 18's checkpoint (LOOP.md section 1): these lanes start each run at its fortress with the kit and seven rods (simrace/starts "rods"), page kind sim-18; no sim run had reached a warped forest from the blaze rods (0 of 52)
  :simrace/heap-mb 11264}                ; the runner's 16 GB, less the system's share and the churn's 2 GB judge (issue #299)
