@@ -2,7 +2,7 @@
   "A fix's fixtures (issue #77): the failing moments a bot-failure issue lists, brought down into
    the repository for the pull request's check to judge (issue.yml, simrace --judge).
 
-     bb issue-check fetch <n>     the issue's snapshots into test/issues/<n>/
+     bb issue-check fetch <n>     the issue's snapshots into cache/issues/<n>/
 
    The issue is the data: bb failures writes each reproduction into the issue's comments as its
    snapshot's file name and where it is, a sim run's or a real one the model reproduces (issue
@@ -22,7 +22,7 @@
             [clojure.java.io :as io]
             [clojure.string :as str]))
 
-(def root "test/issues")
+(def root "cache/issues")
 (def max-snapshots 2) ; an issue's check judges two moments, from two worlds
 
 ;; ---------------------------------------------------------------- the issue as values
@@ -126,7 +126,7 @@
     (when (fs/exists? f) f)))
 
 (defn fetch!
-  "Bring issue n's snapshots into test/issues/<n>/ (see the namespace): the reproductions in its
+  "Bring issue n's snapshots into cache/issues/<n>/ (see the namespace): the reproductions in its
    comments newest first, then its body, at most max-snapshots, one a world, only those with a
    kept moment, each from its release (release-file!) or its artifact (each artifact downloaded
    once into a temporary directory). Prints what it took and why it passed over the rest."
@@ -181,6 +181,6 @@
     (println (count (fs/list-dir dest)) "snapshots under" (str dest))))
 
 (defn -main
-  "fetch <n>: the issue's snapshots into test/issues/<n>/."
+  "fetch <n>: the issue's snapshots into cache/issues/<n>/."
   [& [cmd a]]
   (case cmd "fetch" (fetch! (parse-long a))))
