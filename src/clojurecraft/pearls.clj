@@ -239,13 +239,11 @@
                       (> (physics/distance (:player/pos world) (:entity/pos e))
                          pparams/strike-range))))))
 
-(defmethod intent/still-wanted? :hunt/and-in?-fight-id [world i] (not (held-idle? world i)))
+(defmethod intent/still-wanted? :hunt/fight-from-burrow [world i] (not (held-idle? world i)))
 
-(defmethod intent/still-wanted? :hunt/and-not-hurt?-ce-not-unfightable?-world-ceid-ce
-  [world i]
-  (not (held-idle? world i)))
+(defmethod intent/still-wanted? :hunt/fight-coming-held [world i] (not (held-idle? world i)))
 
-(defmethod intent/still-wanted? :hunt/relocate-now
+(defmethod intent/still-wanted? :hunt/relocate
   ;; the relocation walk ends when the relocation does (arrived, far enough, or timed out)
   [world _]
   (some? (:pearls/relocate world)))

@@ -210,7 +210,7 @@
 
 (defn why
   "Intent i labelled with the planner's branch that chose it (label: a keyword, its function and
-   its test, e.g. :hunt/and-near?-hurt?-not-in?), unless i is already labelled (an inner planner
+   its test, e.g. :hunt/back-off-from-enderman), unless i is already labelled (an inner planner
    named its own branch) or is no intent (nil, a {:plan/wait ...}). The label rides on the map's
    metadata: it is about the choice, not the intent, so it never changes what an intent equals, and
    it follows the intent through every assoc. A reader of a run sees it as data where it is read:
