@@ -138,7 +138,11 @@
   "The payload of v as tag type t to out."
   [^DataOutputStream out t v]
   (case (long t)
-    1 (b/write-i8 out (if (boolean? v) (if v 1 0) v))
+    1
+    (b/write-i8 out
+                (cond (true? v) 1
+                      (false? v) 0
+                      :else v))
     3 (b/write-i32 out v)
     4 (b/write-i64 out v)
     6 (b/write-f64 out (double v))
