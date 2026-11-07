@@ -116,3 +116,19 @@
     (is (= :fireball (:type (first (:hits m)))))
     (is (seq (:slice m)) "the blocks round the feet")
     (is (nil? (senses/moment (dissoc w :player/pos))))))
+
+(deftest a-child-intent-is-an-event-with-its-why
+  (let [parent (fn [child]
+                 (cond-> {:intent/kind :tunnel-to :intent/id 3} child (assoc :intent/child child)))
+        child (with-meta {:intent/kind :dig :intent/target [1 2 3]} {:intent/why :child/tunnel-to})
+        before {:plan/intent (parent nil)}
+        after {:plan/intent (parent child)}
+        es (senses/intent-events before after)]
+    (is (= [{:ev :child :kind :dig :target [1 2 3] :why :child/tunnel-to :parent :tunnel-to}] es))
+    (is (empty? (senses/intent-events after after)) "the same child is not said twice")
+    (is (= [:dig]
+           (mapv :kind
+                 (senses/intent-events after
+                                       {:plan/intent (parent {:intent/kind :dig
+                                                              :intent/target [1 2 4]})})))
+        "a new target is a new child")))
