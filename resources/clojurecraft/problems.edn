@@ -93,8 +93,8 @@
   :problem/last-failure
   "The last failure was a collect that walked off a one-block stair rim into a cave lake; a collect now stops on such a rim and leaves the drop."
   :problem/sources ["docs/issues/05-dig-with-tools-stone-pickaxe.md"
-                    "brain/bot/plan/roadmap-issues.md" "brain/siblings/sib-dig-hardness.md"
-                    "brain/siblings/sib-dig-stop-timing.md" "brain/siblings/sib-held-slot-drift.md"
+                    "brain/siblings/sib-dig-hardness.md" "brain/siblings/sib-dig-stop-timing.md"
+                    "brain/siblings/sib-held-slot-drift.md"
                     "brain/siblings/sib-dig-down-safety.md"]}
  {:problem/stage :water-and-lava
   :problem/issue 5
@@ -123,9 +123,8 @@
   "The last failure was a bot under a frozen sea that dug the ice over its head and floated with no bank; the escape now takes the ice as a bank."
   :problem/seen [{:issue 5 :run "38659291345"} {:issue 5 :run "38844683780"}
                  {:issue 5 :run "38806318231"}]
-  :problem/sources ["docs/issues/06-water-and-lava-survival.md" "brain/bot/plan/roadmap-issues.md"
-                    "brain/siblings/sib-water-traps.md" "brain/siblings/sib-water-escape.md"
-                    "brain/siblings/sib-lava-safety.md"]}
+  :problem/sources ["docs/issues/06-water-and-lava-survival.md" "brain/siblings/sib-water-traps.md"
+                    "brain/siblings/sib-water-escape.md" "brain/siblings/sib-lava-safety.md"]}
  {:problem/stage :stone-pickaxe
   :problem/issue 6
   :problem/goals [:stone-pickaxe]
@@ -197,7 +196,7 @@
    {:issue 6 :run "38811426215"} {:issue 6 :run "38900840841"} {:issue 6 :run "39070976103"}
    {:issue 6 :run "39067023309"}]
   :problem/sources ["docs/issues/07-furnace-iron-bucket-flint-and-steel.md"
-                    "brain/bot/plan/roadmap-issues.md" "brain/siblings/sib-smelt-fuel-deadlock.md"
+                    "brain/siblings/sib-smelt-fuel-deadlock.md"
                     "brain/siblings/sib-bucket-water-find.md"]}
  {:problem/stage :portal
   :problem/issue 8
@@ -285,9 +284,8 @@
    {:issue 8 :run "38660819204"} {:issue 8 :run "38806318231"} {:issue 8 :run "38715231137"}
    {:issue 8 :run "38837004562"} {:issue 8 :run "38839665459"} {:issue 8 :run "38855091523"}
    {:issue 8 :run "38843557186"} {:issue 8 :run "38924530337"} {:issue 8 :run "39729340993"}]
-  :problem/sources ["docs/issues/08-portal-cast.md" "brain/bot/plan/roadmap-issues.md"
-                    "brain/siblings/sib-portal-mold.md" "brain/siblings/sib-steve-portal-cast.md"
-                    "brain/siblings/sib-lava-safety.md"]}
+  :problem/sources ["docs/issues/08-portal-cast.md" "brain/siblings/sib-portal-mold.md"
+                    "brain/siblings/sib-steve-portal-cast.md" "brain/siblings/sib-lava-safety.md"]}
  {:problem/stage :nether-and-fortress
   :problem/issue 11
   :problem/goals [:fortress :return-nether]
@@ -349,7 +347,7 @@
   :problem/seen [{:issue 11 :run "38999010135"} {:issue 11 :run "39095704051"}
                  {:issue 11 :run "39113082582"} {:issue 11 :run "39778484412"}
                  {:issue 11 :run "39846994607"} {:issue 11 :run "39845006016"}]
-  :problem/sources ["docs/issues/09-nether-and-fortress.md" "brain/bot/plan/roadmap-issues.md"
+  :problem/sources ["docs/issues/09-nether-and-fortress.md"
                     "brain/siblings/sib-dimension-change.md"]}
  {:problem/stage :survival
   :problem/issue 259
@@ -409,8 +407,8 @@
   "The last chain runs stopped at a flooded-cave shore over the stronghold frame, with no dry tunnel step and no stairs heading there."
   :problem/seen [{:issue 10 :run "40398622087"}]
   :problem/sources ["docs/issues/10-blazes-pearls-stronghold-end.md"
-                    "brain/bot/plan/roadmap-issues.md" "brain/siblings/sib-775-attack-packet.md"
-                    "brain/siblings/sib-blaze-combat.md" "brain/siblings/sib-end-and-dragon.md"]}
+                    "brain/siblings/sib-775-attack-packet.md" "brain/siblings/sib-blaze-combat.md"
+                    "brain/siblings/sib-end-and-dragon.md"]}
  {:problem/stage :blaze-rods
   :problem/issue 262
   :problem/goals [:blaze-rods]
@@ -462,8 +460,7 @@
    {:issue 262 :run "40819453662"} {:issue 262 :run "40843615614"} {:issue 262 :run "40822513815"}
    {:issue 262 :run "40798555286"} {:issue 262 :run "40798076188"} {:issue 262 :run "40640227015"}]
   :problem/sources ["docs/issues/10-blazes-pearls-stronghold-end.md"
-                    "brain/siblings/sib-blaze-combat.md" "brain/bot/plan/survival.md"
-                    "brain/bot/plan/collect-intent.md"]}
+                    "brain/siblings/sib-blaze-combat.md" "brain/bot/plan/collect-intent.md"]}
  {:problem/stage :sim-mobs-and-end
   :problem/issue 260
   :problem/goals []
@@ -537,7 +534,7 @@
    "The fixture claims for each bot, through the claims channel, and speaks to the bot only through its own bounded event queue"
    "Cells are 96 blocks square from where the first bot joins; the forest nearest a cell's middle is claimed by the cell it lies in"
    "keep_inventory on, as the siblings race; peaceful, as the full run"]
-  :problem/sources ["docs/RICH-HICKEY.md" "brain/bot/plan/roadmap-issues.md"]}
+  :problem/sources ["docs/RICH-HICKEY.md"]}
  {:problem/stage :ender-pearls
   :problem/issue 263
   :problem/goals [:ender-pearls :ender-pearl :spare-picks]
@@ -598,8 +595,7 @@
    {:issue 263 :run "40583923956"} {:issue 263 :run "40747177526"} {:issue 263 :run "40775811459"}
    {:issue 263 :run "40825468783"} {:issue 263 :run "40839050567"} {:issue 263 :run "40860669235"}
    {:issue 263 :run "40905321229"} {:issue 263 :run "41306509324"}]
-  :problem/sources ["docs/RICH-HICKEY.md" "brain/bot/plan/ender-pearls.md"
-                    "brain/bot/plan/survival.md"]}
+  :problem/sources ["docs/RICH-HICKEY.md"]}
  {:problem/stage :eyes-of-ender
   :problem/issue 264
   :problem/goals [:eyes-of-ender]
@@ -622,8 +618,7 @@
   :problem/last-failure
   "No failure recorded; the gym batch passed 6/6 with twelve eyes held 20 to 30 s after landing."
   :problem/seen [{:issue 264 :run "38920108562"}]
-  :problem/sources ["docs/RICH-HICKEY.md" "brain/bot/plan/eyes-of-ender.md"
-                    "brain/bot/crafting/make-goals.md"]}
+  :problem/sources ["docs/RICH-HICKEY.md" "brain/bot/crafting/make-goals.md"]}
  {:problem/stage :stronghold
   :problem/issue 265
   :problem/goals [:eye-throw :stronghold :portal-room]
@@ -660,7 +655,7 @@
    {:issue 265 :run "39138341075"} {:issue 265 :run "39152932850"} {:issue 265 :run "39158899900"}
    {:issue 265 :run "39161847521"} {:issue 265 :run "39178431697"}]
   :problem/sources ["docs/issues/10-blazes-pearls-stronghold-end.md"
-                    "brain/siblings/sib-end-and-dragon.md" "brain/bot/plan/stronghold.md"]}
+                    "brain/siblings/sib-end-and-dragon.md"]}
  {:problem/stage :end-portal
   :problem/issue 266
   :problem/goals [:end-portal :enter-end]
@@ -691,8 +686,7 @@
   "No failure recorded in the gym; the open question is the way to a real stronghold room, which is the stronghold stage's."
   :problem/seen [{:issue 266 :run "39132430055"}]
   :problem/sources ["docs/issues/10-blazes-pearls-stronghold-end.md"
-                    "brain/siblings/sib-end-and-dragon.md" "brain/bot/plan/end-portal.md"
-                    "brain/bot/plan/stronghold.md"]}
+                    "brain/siblings/sib-end-and-dragon.md"]}
  {:problem/stage :dragon
   :problem/issue 267
   :problem/goals [:crystals :dragon :heal]
@@ -735,8 +729,7 @@
                  {:issue 267 :run "39529601511"} {:issue 267 :run "39534976957"}
                  {:issue 267 :run "39543030347"} {:issue 267 :run "39593702551"}]
   :problem/sources ["docs/issues/10-blazes-pearls-stronghold-end.md"
-                    "brain/siblings/sib-end-and-dragon.md" "brain/bot/plan/dragon.md"
-                    "brain/bot/plan/end-portal.md"]}
+                    "brain/siblings/sib-end-and-dragon.md"]}
  {:problem/stage :real-snapshots
   :problem/issue 299
   :problem/goals []
