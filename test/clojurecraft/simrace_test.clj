@@ -478,3 +478,16 @@
         "the same salt, the same start")
     (is (= 0 (simrace/world-number {})) "no file, no number")
     (is (= 41 (simrace/world-number {:capture/file "cache/sim-worlds/R1/41.edn.gz"})))))
+
+(deftest a-run-ends-with-the-models-truth-round-the-player
+  ;; the observability plan, part E: what the model knew that the bot might not have seen
+  (let [t (simrace/truth {:sim/player-pos [0.0 64.0 0.0]
+                          :sim/health 18.0
+                          :sim/mobs {5 {:type :blaze :pos [3.0 64.0 0.0] :health 20.0 :angry? true}
+                                     6 {:type :ghast :pos [100.0 64.0 0.0] :health 10.0}}
+                          :sim/death-causes [:blaze]})]
+    (is (= [5] (mapv :eid (:mobs t))) "the far ghast is left out")
+    (is (= 3.0 (:d (first (:mobs t)))))
+    (is (:angry? (first (:mobs t))) "every fact the model keeps")
+    (is (= 18.0 (get-in t [:player :health])))
+    (is (= [:blaze] (:death-causes t)))))

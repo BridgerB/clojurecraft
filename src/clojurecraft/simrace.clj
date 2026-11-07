@@ -337,6 +337,28 @@
 
 (def overworld-sample-ms "Sim ms between the :sample TRACE lines in the overworld." 300000)
 
+(def truth-radius 32.0)                ; blocks round the player the model's mobs are told within (truth)
+
+(defn truth
+  "What the model knew round the player when a run ended, beside the bot's moment (the
+   observability plan, part E): its own mobs within truth-radius, nearest first, each with every
+   fact the model keeps (type, position, health, anger, its next attack, dead or not), the
+   player's position and health by the model's word, and the model's causes of death. What the
+   bot never tracked or never saw stands out against its moment."
+  [sim]
+  (let [p (:sim/player-pos sim)
+        near
+        (when p
+          (->> (:sim/mobs sim)
+               (keep (fn [[eid m]]
+                       (when-let [pos (:pos m)]
+                         (let [d (physics/distance p pos)] (when (<= d truth-radius) [d eid m])))))
+               (sort-by first)
+               (mapv (fn [[d eid m]] (assoc m :eid eid :d (/ (math/round (* 10.0 d)) 10.0))))))]
+    {:player {:pos p :health (:sim/health sim) :dimension (:sim/dimension sim)}
+     :mobs near
+     :death-causes (:sim/death-causes sim [])}))
+
 (defn lava-round
   "The lava cells the bot's world knows within two blocks of feet [x y z] (one under, two over),
    sorted: what a tick line shows beside the body."
@@ -548,6 +570,7 @@
             :run/events @ledger
             :run/ring @ring
             :run/final (senses/moment world)
+            :run/truth (truth sim)
             :run/ms (:time/now world)
             :run/violations (:sim/violations sim)
             :run/respawns (:sim/respawns sim 0)
@@ -900,11 +923,20 @@
                                        (str (world-seed-name w seed) ".moment.edn"))]
                         (io/make-parents f)
                         (spit f (prn-str (:run/final r)))
+                        (spit (io/file (.getParent f) (str (world-seed-name w seed) ".truth.edn"))
+                              (prn-str (:run/truth r)))
                         (spit (io/file (.getParent f) (str (world-seed-name w seed) ".ring.edn"))
                               (str/join (map prn-str (:run/ring r))))
                         (str f)))
-        r (cond->
-            (dissoc r :run/end :run/last :run/moments :run/senses :run/events :run/ring :run/final)
+        r (cond-> (dissoc r
+                   :run/end
+                   :run/last
+                   :run/moments
+                   :run/senses
+                   :run/events
+                   :run/ring
+                   :run/final
+                   :run/truth)
             path (assoc :run/snapshot path :run/moment (:moment m))
             senses-path (assoc :run/senses-file senses-path)
             events-path (assoc :run/events-file events-path)
