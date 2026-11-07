@@ -32,9 +32,8 @@
                   (not= :lily_pad (blocks/type-of support))))))
 
 (defn afloat?
-  "Is the body off the ground with water at the feet or in the cell under them: a swimmer at the
-   surface, or one bobbing against a bank it cannot climb (the swim's lift peaks a hair under the
-   bank's top, issue #45 R1-17-2), the eye in air throughout so the wet counter never runs."
+  "Is the body off the ground with water at the feet or in the cell under them, the eye in air
+   (a swimmer at the surface, or one bobbing against a bank it cannot climb)?"
   [world]
   (let [[x y z] (:player/pos world)
         [cx cy cz] [(long (math/floor x)) (long (math/floor y)) (long (math/floor z))]]
