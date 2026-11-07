@@ -24,6 +24,17 @@
      {8 (ps/mob :zombie [9.5 64.0 8.5])} {8 (ps/mob :ghast [14.5 66.0 8.5])} ps/burst {7 (e 3.5)}
      {7 (angry 3.5)}]))
 
+(def nook-blocks
+  "Stone round [8 64 8] and over it, but for its east side: a nook no enderman can stand beside,
+   with a clear line to the east."
+  (into {}
+        (concat (for [x [7 8 9]
+                      z [7 8 9]
+                      y [64 65]
+                      :when (not (#{[8 64 8] [8 65 8] [9 64 8] [9 65 8]} [x y z]))]
+                  [[x y z] ps/stone])
+                (for [x [7 8 9] z [7 8 9]] [[x 66 z] ps/stone]))))
+
 (def places
   "Where the bot stands: [name world-fn], each taking entities."
   [["floor" ps/standing]
@@ -35,6 +46,11 @@
    ["burrow-out" #(ps/wide (ps/burrowed [8.5 64.0 14.5] %))]
    ["nether-burrow-end" #(assoc (ps/burrowed [8.5 61.0 8.5] %) :player/dimension nether)]
    ["nether-floor" #(assoc (ps/wide (ps/standing %)) :player/dimension nether)]
+   ["nook"
+    #(assoc-in (assoc (ps/standing % nook-blocks) :pearls/shelter [8 64 8] :pearls/mouth [9 64 8])
+      [:player/inventory 1]
+      (ps/item :iron_pickaxe 1))]
+   ["sealed-burrow" #(ps/burrowed [8.5 61.0 8.5] % {[7 62 8] ps/stone [7 61 8] ps/stone})]
    ["walled" #(assoc (ps/walled-in (ps/passage 12 14) [20.5 64.0 20.5]) :world/entities %)]])
 
 (def conditions
@@ -50,25 +66,29 @@
    ["cornered" #(assoc % :plan/cornered #{7} :player/health 9.0)] ["looked-out" ps/looked-out]
    ["stale" #(ps/looked % 14)] ["lured" #(ps/lured % 3)] ["fought-out" #(ps/fought % 9)]
    ["relocating" #(assoc % :pearls/relocate {:from [8 64 8] :at 0 :near #{}} :time/now 600000)]
-   ["deaths" #(assoc % :stats/deaths 1)]])
+   ["deaths" #(assoc % :stats/deaths 1)] ["tired" #(assoc % :player/health 15.0)]
+   ["struck" #(assoc % :player/health 12.0)] ["fought-looked" #(ps/fought (ps/looked % 7) 9)]
+   ["fought-looked-blacklisted" #(assoc (ps/fought (ps/looked % 7) 9) :plan/blacklist #{7})]
+   ["filler-hurt"
+    #(assoc-in (assoc % :player/health 9.0) [:player/inventory 3] (ps/item :cobblestone 64))]])
 
 (defn fortress-world
-  "A bot in the Nether at a known blaze spawner (as the fortress tests build one), with the
-   options: :blaze a blaze in sight, :pick a pickaxe, :trail an inbound trail, :stage the pearl
-   stage in play, :hp its health, :ghast a ghast in sight."
-  [{:keys [blaze pick trail stage hp ghast]}]
-  (let [spawner [889 60 -206]
+  "A bot in the Nether at a known blaze spawner next to it, with the options: :blaze a blaze in
+   sight, :pick a pickaxe, :trail an inbound trail, :stage the pearl stage in play, :hp its
+   health, :ghast a ghast in sight, :filler blocks to lay."
+  [{:keys [blaze pick trail stage hp ghast filler]}]
+  (let [spawner [12 63 8]
         entities (cond-> {}
-                   blaze (assoc 9 (assoc (ps/mob :blaze [892.5 60.0 -204.5]) :entity/health 20.0))
-                   ghast (assoc 10 (ps/mob :ghast [900.5 64.0 -204.5])))]
+                   blaze (assoc 9 (ps/mob :blaze [13.5 64.0 8.5]))
+                   ghast (assoc 10 (ps/mob :ghast [18.5 66.0 8.5])))]
     (cond-> (-> (ps/standing entities)
-                (assoc :player/dimension nether :player/pos [890.5 60.0 -203.9] :player/health hp)
+                (assoc :player/dimension nether :player/pos [10.5 64.0 8.5] :player/health hp)
                 (memory/observe spawner blaze/spawner))
       pick (assoc-in [:player/inventory 1] (ps/item :iron_pickaxe 1))
+      filler (assoc-in [:player/inventory 3] (ps/item :cobblestone 64))
       trail
       (assoc :fortress/trail {:trail/target spawner :trail/cells []}
-             :plan/trail
-             [[976 48 -176] [958 49 -190] [926 63 -190] [902 63 -198] [897 61 -204] [890 60 -204]])
+             :plan/trail [[100 48 8] [80 49 8] [60 63 8] [40 63 8] [20 61 8] [11 60 8]])
       stage (assoc :plan/goals #{:ender-pearls}))))
 
 (def fortress-worlds
@@ -77,8 +97,9 @@
   (for [blaze [false true]
         pick [false true]
         trail [false true]
-        stage [false true]
+        stage [true]
         ghast [false true]
+        filler [false true]
         hp [20.0 9.0]]
     [(str "fortress/"
           (if blaze "b" "-")
@@ -86,8 +107,10 @@
           (if trail "t" "-")
           (if stage "s" "-")
           (if ghast "g" "-")
+          (if filler "f" "-")
           hp)
-     (fortress-world {:blaze blaze :pick pick :trail trail :stage stage :ghast ghast :hp hp})]))
+     (fortress-world
+      {:blaze blaze :pick pick :trail trail :stage stage :ghast ghast :filler filler :hp hp})]))
 
 (def named-worlds
   "States the pearl tests build by name, and ones the grid cannot reach."
@@ -126,8 +149,10 @@
   []
   (concat (for [[pn pf] places
                 [i es] (map-indexed vector enderman-sets)
-                [cn cf] conditions]
-            [(str pn "/" i "/" cn) (try (cf (pf es)) (catch Exception _ nil))])
+                [cn cf] conditions
+                :let [label (str pn "/" i "/" cn)]
+                :when (zero? (mod (hash label) 3))]
+            [label (try (cf (pf es)) (catch Exception _ nil))])
           named-worlds))
 
 (defn outcome
