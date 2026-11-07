@@ -103,14 +103,11 @@
           (some #(<= (physics/horizontal-distance pos %) unreached-radius) unreached)))))
 
 (defn log-walk
-  "A walk to the log of bottom nearest the feet, tagged as the gather chain. When even that log
-   is intent/pickup-rise or more over the feet, a trunk on a bank no jump climbs, the walk must
-   end where the drop will lie in the pickup box (:intent/pickup?: intent/walk-goal's :pickup
-   goal, within pickup-range of the log's cell), so a trunk reached only from the foot of the
-   bank has no route and is passed over. The forest property at FOREST_SEED 388575908371 (three
-   trees, one on a two-high mound, two on banks it climbs) dug the mound's trunk from the ground
-   three cells off, the drop came to rest on the mound top out of the box, the collect timed out
-   :not-picked-up, and a second log was dug for the first."
+  "A walk to the log of bottom nearest the feet, tagged as the gather chain. When even that log is
+   intent/pickup-rise or more over the feet, a trunk on a bank no jump climbs, the walk must end
+   where the drop will lie in the pickup box (:intent/pickup?: intent/walk-goal's :pickup goal,
+   within pickup-range of the log's cell), so a trunk reached only from the foot of the bank has no
+   route and is passed over."
   [world bottom]
   (let [target (trunk-target world bottom)
         feet-y (long (math/floor (physics/y-of (:player/pos world))))]
@@ -150,10 +147,10 @@
     (boolean (and l (= :stairs-down kind) (= :trees for) (intent/done? l)))))
 
 (defn perched?
-  "Under the open sky (terrain/under-sky?) and not out of the ground (stairs/out?), and not in a
-   pit (stairs/pit-rim): a pillar, a stair's lip or a ledge over a drop. A sky-lit mine and a
-   quarry are not: the one has rock over it, the other a wall every way, and both still climb
-   out. nil's false when the feet are boxed, where a climb already died."
+  "Under the open sky (terrain/under-sky?) and not out of the ground (stairs/out?), and not in a pit
+   (stairs/pit-rim): a pillar, a stair's lip or a ledge over a drop. A sky-lit mine and a quarry are
+   not: the one has rock over it, the other a wall every way, and both still climb out. nil's false
+   when the feet are boxed, where a climb already died."
   [world feet]
   (boolean (and (terrain/under-sky? world feet)
                 (not (stairs/out? world feet))
@@ -161,16 +158,12 @@
                 (not (contains? (:plan/boxed-at world #{}) feet)))))
 
 (defn trees-descend
-  "Out of the ground (stairs/out?), or perched on a pillar or a lip under the sky (perched?),
-   with a remembered trunk no walk reaches and the trunk below the eye by more than the near
-   band's twelve (continue-drop when the descent is already going, or from a perch): stairs down
-   toward it, one length (stone/stair-depth, never below the trunk's feet) at a time, the planner
-   looking again between. The way down from a height is a cut one: trees-climb's mirror. Only a
-   trunk within descend-reach on the plane, and never from a cell where a climb died :boxed.
-   Once a length is cut (descended?) the next goes on from its end, in the ground, toward a trunk
-   more than continue-drop under the eye. A descent goes on toward the trunk it began for
-   (:intent/trunk of the last length), not the nearest then, so a far descent never pre-empts a
-   tree within reach."
+  "Out of the ground (stairs/out?), or perched on a pillar or a lip under the sky (perched?), with a
+   remembered trunk no walk reaches and the trunk below the eye by more than the near band's twelve
+   (continue-drop when the descent is already going, or from a perch): stairs down toward it, one
+   length (stone/stair-depth, never below the trunk's feet) at a time, the planner looking again
+   between. The way down from a height is a cut one: trees-climb's mirror. Only a trunk within
+   descend-reach on the plane, and never from a cell where a climb died :boxed."
   [world trunks]
   (let [feet (intent/feet world)
         fy (physics/y-of feet)
@@ -238,19 +231,16 @@
 
 (defn trees-tunnel
   "Out of the ground (stairs/out?), or on from a run just tunnelled (tunneled?), with a standing
-   trunk no route reaches within bridge-reach on the plane and no more than twelve over or under
-   the eye, further than tunnel-reach from the feet: a level run through what walls it in
-   (:tunnel-to, fortress: a step at a time, leaves and all, dry, tunnel-steps of them before the
-   planner looks again), ending beside the trunk (tunnel-reach), where the walk to it has a route.
-   The run is given up, and the trunk with it, when a step is refused (:blocked fails the intent:
+   trunk no route reaches within bridge-reach on the plane and no more than twelve over or under the
+   eye, further than tunnel-reach from the feet: a level run through what walls it in (:tunnel-to,
+   fortress: a step at a time, leaves and all, dry, tunnel-steps of them before the planner looks
+   again), ending beside the trunk (tunnel-reach), where the walk to it has a route. The run is
+   given up, and the trunk with it, when a step is refused (:blocked fails the intent:
    plan/fail-intent blacklists the trunk and counts it against its column, two failures skip the
-   column), and ends without a new run once the feet are beside the trunk. Never across open
-   water (water-toward?: crossing is for that). Not skipped for a
-   failed walk's neighbourhood (:plan/unreached) as the far trunks are: that failure is this one,
-   a tree whose leaves no path crosses. Also from the foot of a descent toward the trees (a done
-   stairs-down for :trees or :valley, in the ground level with the trunk) and on from a run,
-   within foot-reach.
-   Never from a cell where a climb died :boxed."
+   column), and ends without a new run once the feet are beside the trunk. Never across open water
+   (water-toward?: crossing is for that). Not skipped for a failed walk's neighbourhood
+   (:plan/unreached) as the far trunks are: that failure is this one, a tree whose leaves no path
+   crosses."
   [world]
   (let [feet (intent/feet world)
         eye-y (physics/y-of (game/eye world))
@@ -326,15 +316,13 @@
        (take far-candidates)))
 
 (defn climb-out
-  "No trunk in the near band, and a standing trunk remembered further off: walk to the nearest one
-   a route reaches (intent/routable?), under the open sky or not. Not out of the ground
-   (stairs/out?: the open sky over the feet and a level step onto open ground beside them), with
-   none of those a route reaches: walk up the air already dug (intent/opening) and cut stairs only
-   when that mouth cannot be walked to (stairs/out? ends them; terrain/top-y is the top of the
-   world; stairs/climb-to cuts the climb in lengths the planner looks again between). Out of the
-   ground but not at the trees, a trunk remembered above the eye no walk reaches: stairs up
-   toward it (trees-climb). A pit under the open sky is not out, nor is the floor of a quarry with
-   a level step across it (stairs/pit-rim). nil when no trunk is remembered yet."
+  "No trunk in the near band, and a standing trunk remembered further off: walk to the nearest one a
+   route reaches (intent/routable?), under the open sky or not. Not out of the ground (stairs/out?:
+   the open sky over the feet and a level step onto open ground beside them), with none of those a
+   route reaches: walk up the air already dug (intent/opening) and cut stairs only when that mouth
+   cannot be walked to (stairs/out? ends them; terrain/top-y is the top of the world;
+   stairs/climb-to cuts the climb in lengths the planner looks again between). nil when no trunk is
+   remembered yet."
   [world]
   (let [feet (intent/feet world)
         trunks (far-trunks world)]
@@ -369,7 +357,7 @@
   "A walk to the nearest standing trunk in the near band (search-radius, no more than 12 above or
    below the eye: memory/nearest-log) that a route reaches, of the far-candidates nearest, or nil.
    Asked before it is chosen, as the mine asks of its ore (intent/routable?): a trunk no route
-   reaches is passed over, not walked at. With none, climb-out has the far trunks and the way up."
+   reaches is passed over, not walked at."
   [world]
   (let [eye (game/eye world)
         skip (skipped world)]
@@ -387,16 +375,13 @@
             (range far-candidates)))))
 
 (defn hunt
-  "Under the open sky with trunks remembered and no route to any: a walk toward the trees, the
-   way a water hunt goes out (scoop/hunt-targets: the ground hunt-distance out along eight
-   bearings, never nearer the landing than the feet are now), to the ground nearest the nearest
-   remembered log, the first of the three such a route reaches (scoop/first-walk), tagged
-   :intent/for :log-hunt. The chunks it loads are remembered as they arrive, so the next pass
-   finds the way round. With no log remembered within far-radius the hunt sets out all the same,
-   the targets in the water hunt's order. With logs remembered the hunt may also walk a hop back
-   toward the landing, ranked only by how near the trees it lands. nil underground, or with no
-   ground a route reaches. Never toward a log given up (skipped): the nearest of them changes with
-   every hop. With every remembered log given up the hunt sets out as with none."
+  "Under the open sky with trunks remembered and no route to any: a walk toward the trees, the way a
+   water hunt goes out (scoop/hunt-targets: the ground hunt-distance out along eight bearings, never
+   nearer the landing than the feet are now), to the ground nearest the nearest remembered log, the
+   first of the three such a route reaches (scoop/first-walk), tagged :intent/for :log-hunt. The
+   chunks it loads are remembered as they arrive, so the next pass finds the way round. With no log
+   remembered within far-radius the hunt sets out all the same, the targets in the water hunt's
+   order. nil underground, or with no ground a route reaches."
   [world]
   (let [logs (->> (memory/positions-now world blocks/log-states)
                   (memory/nearest-first (game/eye world) far-radius)
@@ -410,15 +395,15 @@
         (scoop/first-walk world :log-hunt (scoop/hunt-targets world))))))
 
 (defn into-water
-  "Boxed under water with no other way to the trees (the feet in :plan/boxed-at, where a climb
-   out was boxed): dig up into it, the lowest solid cell over the head
-   first (:intent/exposes-ok?: the dig lets the water in), when water lies within bed-reach over
-   the head and nothing between would fall on the bot (blocks/falls?), is lava, is not loaded or
-   is never dug; once nothing but air and water is over the head, a :swim-out for :rise up to the
-   water's top (:intent/to-y), then to the shore (swim/far-shore), ending on dry land in the open;
-   the water poured in is the trap too, and the escape it starts swims the same way. Only water
-   that is open at the top: air over it, or a lake's ice (stairs/lake-ice: the rise digs
-   its cap, swim/:swim-out); water under rock is a pocket with no way up. nil otherwise."
+  "Boxed under water with no other way to the trees (the feet in :plan/boxed-at, where a climb out
+   was boxed): dig up into it, the lowest solid cell over the head first (:intent/exposes-ok?: the
+   dig lets the water in), when water lies within bed-reach over the head and nothing between would
+   fall on the bot (blocks/falls?), is lava, is not loaded or is never dug; once nothing but air and
+   water is over the head, a :swim-out for :rise up to the water's top (:intent/to-y), then to the
+   shore (swim/far-shore), ending on dry land in the open; the water poured in is the trap too, and
+   the escape it starts swims the same way. Only water that is open at the top: air over it, or a
+   lake's ice (stairs/lake-ice: the rise digs its cap, swim/:swim-out); water under rock is a pocket
+   with no way up. nil otherwise."
   [world]
   (let [[x y z :as feet] (intent/feet world)
         cells (map (fn [dy] [x (+ y dy) z]) (range 2 (+ 2 bed-reach)))
@@ -488,9 +473,8 @@
           {:intent/kind :cross :intent/target trunk})))))
 
 (defn return-walk
-  "A complete walk back to a standing trunk with a larger bounded search, when local routes
-   and hunts fail. Only from open ground: a mine still climbs out first. A long detour can
-   exceed the local route budget even when its tree is nearby."
+  "A complete walk back to a standing trunk with a larger bounded search, when local routes and
+   hunts fail. Only from open ground: a mine still climbs out first."
   [world]
   (let [feet (intent/feet world)]
     (when (stairs/out? world feet)
@@ -508,11 +492,8 @@
                  (take far-candidates))))))
 
 (defn gather-next
-  "The next step of getting a log: continue the chain, or start toward the nearest remembered
-   trunk a route reaches (near-walk). Any goal that needs a log uses this. With none in the near
-   band a route reaches, climb out to the trees, or walk toward them (hunt), or boxed under water
-   dig up into it (into-water), or across open water swim for them (crossing), instead of
-   waiting :no-log. On open ground, return-walk tries a longer bounded route before waiting."
+  "The next step of getting a log: continue the chain, or start toward the nearest remembered trunk
+   a route reaches (near-walk). Any goal that needs a log uses this."
   [world]
   (or (continue-gather world)
       (near-walk world)
@@ -547,13 +528,12 @@
     (boolean (and l (= :stairs-down kind) (= :valley for) (intent/done? l)))))
 
 (defn valley
-  "The last resort before the wait: a length of stairs down toward the nearest trunk
-   (far-trunks, within descend-reach on the plane), stone/stair-depth deep whatever the trunk's
-   height, from a perch no walk, hunt or crossing leaves. Out of the ground (stairs/out?), and
-   never from a cell where a climb died :boxed; or on from the foot of a length just cut
-   (descended-valley?) while the foot is still in the ground, toward the trunk it began for, no
-   deeper than valley-floor under that trunk's bottom. Once down on open ground the trunk is above
-   the eye and trees-climb cuts the way up toward it. nil with no trunk in reach."
+  "The last resort before the wait: a length of stairs down toward the nearest trunk (far-trunks,
+   within descend-reach on the plane), stone/stair-depth deep whatever the trunk's height, from a
+   perch no walk, hunt or crossing leaves. Out of the ground (stairs/out?), and never from a cell
+   where a climb died :boxed; or on from the foot of a length just cut (descended-valley?) while the
+   foot is still in the ground, toward the trunk it began for, no deeper than valley-floor under
+   that trunk's bottom. nil with no trunk in reach."
   [world]
   (let [feet (intent/feet world)
         [_ fy _] feet

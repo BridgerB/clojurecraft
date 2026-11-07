@@ -456,12 +456,12 @@
         (apply str (prn-str {:ledger/events (count es) :ledger/dropped dropped}) (map prn-str es))))
 
 (defn senses!
-  "Watch world* and keep its last keep-lines lines (of), one every every-ms of world time,
-   computed on a thread of its own from a sliding buffer (a busy thread skips a sample, never
-   the loop). slowest is an atom the loop puts each event's ms in (main/apply-event!'s on-ms);
-   a line takes its max and resets it. Every ring-every-lines lines it keeps a moment too, the last
-   ring-keep of them (the ring: the minutes before an ending, for a stall that never fails).
-   Returns {:lines (fn [] lines) :ring (fn [] moments) :close (fn [])}."
+  "Watch world* and keep its last keep-lines lines (of), one every every-ms of world time, computed
+   on a thread of its own from a sliding buffer (a busy thread skips a sample, never the loop).
+   slowest is an atom the loop puts each event's ms in (main/apply-event!'s on-ms); a line takes its
+   max and resets it. Every ring-every-lines lines it keeps a moment too, the last ring-keep of them
+   (the ring: the minutes before an ending, for a stall that never fails). Returns {:lines (fn []
+   lines) :ring (fn [] moments) :close (fn [])}."
   [world* slowest]
   (let [ch (async/chan (async/sliding-buffer 1))
         lines (atom [])

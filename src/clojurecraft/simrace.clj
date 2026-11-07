@@ -326,8 +326,8 @@
       (assoc :reason (keyword (str "death-" (name (get death-classes cause :other))))))))
 
 (defn death-note
-  "Facts from the tick a run dies on: when, where, what it held, the intent it was in, and
-   the three nearest hostiles. Printed as a DEATH line. Not part of the run's result."
+  "Facts from the tick a run dies on: when, where, what it held, the intent it was in, and the three
+   nearest hostiles. Printed as a DEATH line. Not part of the run's result."
   [world world-set seed]
   (let [pos (:player/pos world)
         held (get (:player/inventory world) (:player/held-slot world 0))]
@@ -374,12 +374,11 @@
 (defn truth
   "What the model knew round the player at a moment, beside the bot's moment (the observability
    plan, part E): its own mobs within truth-radius, nearest first, each with every fact the model
-   keeps (type, position, health, anger, its next attack, dead or not), whether it has the player
-   as its target (:targets? sim/targets?) and what it dealt the player this life (:dealt), the
-   player's position and health by the model's word, the model's causes of death, and its own
-   cause for each blow (:hits, sim/hit-log: when, cause, the attacker's eid, what it dealt). What
-   the bot never tracked or never saw stands out against its moment. Only the mobs near the
-   player are read."
+   keeps (type, position, health, anger, its next attack, dead or not), whether it has the player as
+   its target (:targets? sim/targets?) and what it dealt the player this life (:dealt), the player's
+   position and health by the model's word, the model's causes of death, and its own cause for each
+   blow (:hits, sim/hit-log: when, cause, the attacker's eid, what it dealt). What the bot never
+   tracked or never saw stands out against its moment. Only the mobs near the player are read."
   [sim]
   (let [p (:sim/player-pos sim)
         dealt (dealt-by sim)
@@ -430,10 +429,10 @@
 
 (defn tick-note
   "The TICK line for world after a tick: when, the exact position, on the ground or not, the
-   controls held, the intent (kind, target, move, from, stage key) and its child (kind, target,
-   the next waypoint), and the lava round the feet (lava-round). Printed for every tick of the
-   window SIMRACE_TICKS names, so one sim run shows the tick a body crossed into lava. Not part
-   of the run's result, and never read by the bot."
+   controls held, the intent (kind, target, move, from, stage key) and its child (kind, target, the
+   next waypoint), and the lava round the feet (lava-round). Printed for every tick of the window
+   SIMRACE_TICKS names, so one sim run shows the tick a body crossed into lava. Not part of the
+   run's result, and never read by the bot."
   [world]
   (let [i (:plan/intent world)
         c (:intent/child i)
@@ -519,16 +518,7 @@
    :run/death-causes (the cause of each death: a mob's kind, :starve, :drown, :scheduled or
    :ender_dragon), :run/end (the world it stopped in), :run/last (the moment of the stopping tick)
    and :run/moments (the moments sim/play-from kept, every half minute, the last six minutes), from
-   which a failure's snapshot is chosen (dropped from the lines written). A run that starts at the
-   fortress ends at its first death (death-ended), as the real race's does. The two counters do not
-   change a decision. A death prints a DEATH line (death-note: the intent, the position, the nearest
-   hostiles) and a respawn prints a RESPAWN line. Neither line is part of the result. Its :go names
-   the landing (:go/at), as race/land-bot! does for a real bot: the plan's landing-relative choices
-   (the climb home from deep, a climb's level steps toward the landing, how far they may go) are the
-   real race's. The model runs at difficulty from a time of day the seed picks (day-time-of), as the
-   real servers do. Its portal leads to w's Nether (:capture/nether, with-nether) when w has one.
-   With food (0-20) the player's bar starts there instead of full (the lane's --food): a hungry
-   start, for the hunger rows (:eat, :hunt) that a lane from a full bar seldom reaches."
+   which a failure's snapshot is chosen (dropped from the lines written)."
   ([w seed until max-ms] (run w seed until max-ms nil))
   ([w seed until max-ms food]
    (let [opts {:host "sim" :port 0 :name "Clj_sim"}
@@ -649,13 +639,8 @@
 (def window-tail-ms 60000)            ; a failure's window runs this long past the stop it led to
 
 (defn decision
-  "When and why a failed run went wrong, from the world at its stop and its signature:
-   {:why :t}. A :timeout is a stall: no new stage for the run's last stall-window-ms. A wait
-   that ran out (the plan failed with the reason it was waiting on) went wrong when the wait
-   began, :plan/waiting-since. Anything else is an intent that failed max-attempts times in a
-   row: the first of those failures started when its intention's :started fact says (memory
-   intentions), so the choice that failed is caught, not the tick before the stop. A crash went
-   wrong at the tick that threw."
+  "When and why a failed run went wrong, from the world at its stop and its signature: {:why :t}. A
+   :timeout is a stall: no new stage for the run's last stall-window-ms."
   [world signature]
   (let [now (:time/now world)
         facts (memory/intentions world)
@@ -696,10 +681,7 @@
    packets in flight), so playing it on is the run itself. Also the captured world's file (its
    chunks and columns are not copied: the keys the bot held are, to reattach them, moment-of), the
    seed, the target, the code, the signature and :snapshot/moment, when and why and the window it is
-   judged over. The facts are d/serializable, since a DataScript value does not print as EDN.
-   Everything else prints as the recordings print (byte arrays as #clojurecraft/bytes). A world with
-   a captured Nether (with-nether) is named by its file too (:snapshot/nether-file), the model's
-   Nether kept without its columns, as the world is."
+   judged over."
   [w seed until commit signature {:keys [world sim moment] :as m}]
   (cond-> {:snapshot/file (:capture/file w)
            :snapshot/seed seed
@@ -733,7 +715,7 @@
 
 (defn stranded?
   "Is a snapshot's player in the overworld holding none of its columns after a death. Its view is
-   streamed again. A bot that never died (a moment before it has loaded) is not."
+   streamed again."
   [chunks world sim]
   (boolean (and (empty? chunks)
                 (pos? (:stats/deaths world 0))
@@ -744,11 +726,7 @@
    bot held reattached (decoded once, prepared), the model's columns too, the facts a DataScript
    value again, and what the next tick depends on. w is the captured world the snapshot names,
    prepared. A snapshot from before :snapshot/next plays on from its world's time with nothing
-   pending and the tick seed restarted; a plan with no landing gets the captured world's. With w's
-   captured Nether (:capture/nether), the model's Nether gets its columns back, and a moment past
-   the portal holds the Nether's columns, the bot's chunks among them, where one before it holds the
-   overworld's. The overworld set aside while the player is in another dimension (:sim/overworld,
-   sim/leave-overworld) gets w's columns back."
+   pending and the tick seed restarted; a plan with no landing gets the captured world's."
   [{:snapshot/keys [chunks world sim next]} w]
   (let [nether (:capture/nether w)
         here (if (and nether (= dimension/nether (:sim/dimension sim)))
@@ -794,7 +772,7 @@
   "The simulated ms a snapshot is judged over: its moment's window, or snapshot-budget-ms for a
    snapshot from before moments were kept; a stall's at least stall-judge-ms. A stall is kept from
    its run's last five minutes with no new stage, but a stage can take longer than that by rights
-   (iron mined and smelted). Kept snapshots carry five minutes; they are judged over fifteen."
+   (iron mined and smelted)."
   [snap]
   (let [w (get-in snap [:snapshot/moment :window-ms] snapshot-budget-ms)]
     (if (= :stall (get-in snap [:snapshot/moment :why])) (max w stall-judge-ms) w)))
@@ -809,16 +787,11 @@
      (:intention/reason f)]))
 
 (defn judged
-  "A snapshot played on from its moment over its window (window-of) and never longer, never from
-   the landing (docs/RICH-HICKEY.md: write the validation, run it against past results, never
-   re-run the system from spawn): until the plan is done or failed, or reaches the stage the
-   signature names, or the window ends. A moment from before the bot loaded still gets its :go
-   (go-of), as the run did. halt? (no arguments, default never) ends the play early too: the
-   caller's wall-clock budget, so a judge cannot outlast its job; a play it ended is :run/halted?.
-   The RESULT, marked (failure/mark), with :run/ms the time it ended at, :run/from the moment's
-   time, :run/story what the bot did between (story), and :run/scenes the bot's world at the
-   moment and where the play ended ({:start {:facts :slice} :end ...}, scene/facts and
-   scene/slice)."
+  "A snapshot played on from its moment over its window (window-of) and never longer, never from the
+   landing (docs/RICH-HICKEY.md: write the validation, run it against past results, never re-run the
+   system from spawn): until the plan is done or failed, or reaches the stage the signature names,
+   or the window ends. A moment from before the bot loaded still gets its :go (go-of), as the run
+   did. halt?"
   [snap w & [halt?]]
   (let [{:keys [world] :as m} (moment-of snap w)
         stage (stage-of snap)
@@ -850,10 +823,7 @@
 (defn recurs?
   "Does a snapshot's failure come back when it is judged (judged)? A stall recurs when the window
    ends with its stage still not reached and the plan not done; any other failure when the plan
-   fails again with the same signature. A plan still running at the end of a failure's window,
-   or failed otherwise, got past this moment. A play the wall-clock budget halted did not get
-   past it in that time: it recurs (the base code that is too slow to pass its own moment fails
-   it, and so does a fix that is)."
+   fails again with the same signature."
   [snap played]
   (cond (:run/halted? played) true
         (timeout-signature? snap)
@@ -871,11 +841,10 @@
   (some #(when (= stage (:goal/id %)) (:goal/until %)) plan/targets))
 
 (defn replay
-  "A snapshot's run again from its landing (run): the same captured world w and seed, to the
-   stage its signature stopped on (stage-until; the snapshot's own target when that names none),
-   at most max-ms of simulated time. For a probe that wants the whole road to a failure; never
-   the issue check, which judges the moment alone (judged). The RESULT, marked, without its
-   moments."
+  "A snapshot's run again from its landing (run): the same captured world w and seed, to the stage
+   its signature stopped on (stage-until; the snapshot's own target when that names none), at most
+   max-ms of simulated time. For a probe that wants the whole road to a failure; never the issue
+   check, which judges the moment alone (judged)."
   [snap w max-ms]
   (let [until (or (stage-until (first (:snapshot/signature snap))) (:snapshot/until snap))]
     (dissoc (failure/mark (run w (:snapshot/seed snap) until max-ms))
@@ -969,9 +938,8 @@
    line and appended to out as it ends, with what reproduces it (:run/file, :run/seed, :run/commit)
    and, when it failed, what bb failures reads (failure/mark) and a moment from before the choice
    that failed kept as a snapshot beside out. Also prints a GATE line: deaths by cause, minutes in
-   :back-off, and minutes to the kit, the stone pickaxe, the iron kit and the portal kit. Every
-   ended run, one that threw too, also writes its truth beside its senses (write-truth!,
-   :run/truth-file). Returns the run."
+   :back-off, and minutes to the kit, the stone pickaxe, the iron kit and the portal kit. Returns
+   the run."
   ([w seed until max-ms commit out food] (play! w seed until max-ms commit out food false))
   ([w seed until max-ms commit out food capped?]
    (let [r (try (capped (run w seed until max-ms food) capped?)
@@ -1207,22 +1175,13 @@
 
 (defn -main
   "Play the worlds under --worlds (directories, comma-separated; this runner's share of them with
-   --runner k --runners n) on --threads threads (the cores when absent): each world with seeds
-   from --seed (1) up, round the worlds, until --budget-minutes of wall time have passed (or
-   --seeds each when no budget is given). --world f plays one file. --runs f plays exactly the
-   runs an EDN file lists, [[world-file seed] ...] (an issue's reproductions). --food n starts
-   every run's bar at n instead of full (run), a hungry start for the hunger rows. Prints a SIMRUN
-   line per run and the SIMRACE tally; keeps every run in <out>/runs.edn and each failed run's
-   snapshot in <out>/snapshots. A portal leads to the set's captured Nether when there is one
-   (nether-file: cache/sim-nether/<set>.edn.gz beside cache/sim-worlds/<set>).
-   --judge f1,f2 judges snapshots as the issue check does (judge!), uninstrumented: a judge, not
-   a spec test. With --expect recur, it exits 1 unless every one recurs (the base code: the
-   moment must reproduce the failure); with --expect pass, unless none does (the fix).
-   --from-landing f replays a snapshot's run from its landing to its stage (from-landing!): a
-   probe's tool for the whole road, up to default-max-minutes, never the check's.
-   --from-recording f1,f2 turns real races' recordings into snapshots of their failures
-   (real/from-recordings!: --signature, --out, --name n1,n2, --seed, --round), each kept only when
-   it recurs."
+   --runner k --runners n) on --threads threads (the cores when absent): each world with seeds from
+   --seed (1) up, round the worlds, until --budget-minutes of wall time have passed (or --seeds each
+   when no budget is given). --world f plays one file. --runs f plays exactly the runs an EDN file
+   lists, [[world-file seed] ...] (an issue's reproductions). --food n starts every run's bar at n
+   instead of full (run), a hungry start for the hunger rows. Prints a SIMRUN line per run and the
+   SIMRACE tally; keeps every run in <out>/runs.edn and each failed run's snapshot in
+   <out>/snapshots."
   [& args]
   (let [o (cli/options args)]
     (cond (get o :judge)

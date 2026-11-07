@@ -102,11 +102,7 @@
 
 (defn read-lpvec3
   "An LpVec3, the game's low-precision vector (an entity's velocity in blocks a tick), as [x y z]. A
-   first byte of zero is the zero vector. Otherwise that byte, a second one and a u32 make 48 bits:
-   the scale's low two bits, a continuation bit (bit 2: a varint follows with the scale's higher
-   bits) and three 15-bit components at bits 3, 18 and 33, each in [-1, 1] times the scale. Read
-   from the 26.1.2 jar's net.minecraft.network.LpVec3.read; before 1.21.9 velocity was three shorts
-   in 1/8000 blocks."
+   first byte of zero is the zero vector."
   [^ByteBuffer b]
   (let [a (read-u8 b)]
     (cond (zero? a) [0.0 0.0 0.0]

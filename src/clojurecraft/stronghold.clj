@@ -381,9 +381,7 @@
   "A walk toward the far point [x z]: to a cell (stand-in) hop-reach blocks along the way, or nearer
    when the point is, that a route reaches (intent/routable?); straight on first, then turned by
    each of hop-turns, never to a cell a walk failed at (:plan/blacklist), and none that ends less
-   than hop-gain nearer the point. nil when none is, or when the feet are there already. A walk to
-   somewhere hundreds of blocks off is beyond a route's node budget, so it goes a hop at a time, the
-   planner choosing the next from where the last ended."
+   than hop-gain nearer the point. nil when none is, or when the feet are there already."
   [world [x z]]
   (let [[fx fy fz] (intent/feet world)
         v [(- x fx) (- z fz)]
@@ -611,9 +609,7 @@
 
 (defn tunnel-spent?
   "Did the last intent, a dry tunnel toward f, take every step it had without arriving, and end less
-   than tunnel-gain nearer f than it began (:intent/from-feet)? It went round and round. never steps
-   onto air), stepped level between two cells 32 times a tunnel for eighteen minutes to the timeout.
-   One that came nearer is the way on, not spent."
+   than tunnel-gain nearer f than it began (:intent/from-feet)? It went round and round."
   [world f]
   (let [l (:plan/last world)
         from (:intent/from-feet l)
@@ -631,7 +627,7 @@
 (defn safe-portal-move?
   "Does move from feet open no cell that is or borders lava, have no lava floor, and open no
    infested block? In the portal room the 3x3 pool under the frame is lava; stepping or digging into
-   it is a death. A stronghold's walls hold infested stone bricks."
+   it is a death."
   [world feet move]
   (let [cells (fortress/opens feet move)
         floor (fortress/plus (fortress/plus feet move) [0 -1 0])

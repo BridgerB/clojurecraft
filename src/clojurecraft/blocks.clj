@@ -47,10 +47,7 @@
 
 (def passable-types
   "Block definition types with no full-cube collision. The ground must never be here: grass_block's
-   type is :grass, short_grass's is :tall_grass. Powder snow is here: it has no collision for a
-   player without leather boots (the game's PowderSnowBlock), who sinks through it to the block
-   below. The end portal is here: a player falls into it (EndPortalBlock has no collision for
-   entities), which is how one goes to the End."
+   type is :grass, short_grass's is :tall_grass."
   #{:air :liquid :structure_void :light :bubble_column :flower :tall_flower :flower_bed :flower_pot
     :eyeblossom :wither_rose :bush :firefly_bush :sapling :bamboo_sapling :mangrove_propagule
     :tall_grass :double_plant :short_dry_grass :tall_dry_grass :dry_vegetation :leaf_litter
@@ -168,11 +165,7 @@
   (contains? replaceable-states id))
 
 (defn placeable-into?
-  "Does the server let a block take the place of state id: replaceable? (air, a grass), or a fluid?
-   The game's replaceable tag lists water and lava beside the plants: a block placed into a source
-   or a flow replaces it (the portal's pad is cast into the pond's edge). A bubble column is
-   replaceable too (the game's block properties say .replaceable()). The bot chooses its own spots
-   among replaceable? cells; this is the server's wider rule, the model's."
+  "Does the server let a block take the place of state id: replaceable? (air, a grass), or a fluid?"
   [id]
   (or (replaceable? id) (= :liquid (type-of id)) (= :bubble_column (type-of id))))
 
@@ -180,8 +173,7 @@
   "Does a block or item name end in _log (every species, stripped ones too), or is it a Nether
    fungus's stem or hyphae (warped or crimson, stripped ones too)? The game's item tag :logs lists
    the stems beside the logs and a stem crafts to planks as a log does, so the wood chain takes a
-   warped forest's trunks for the sticks and table of a new pickaxe where no tree grows. A pumpkin's
-   or melon's stem is a plant, never a log: the warped or crimson in the name is what says trunk."
+   warped forest's trunks for the sticks and table of a new pickaxe where no tree grows."
   [n]
   (let [s (name n)]
     (or (str/ends-with? s "_log")
@@ -273,8 +265,7 @@
 
 (defn fluid
   "{:fluid/kind :water|:lava :fluid/level 0-15} for a block state that is a fluid, nil for any
-   other. Level 0 is a source; 1-7 flow away from it; 8-15 are falling. A waterlogged block
-   is a water source."
+   other. Level 0 is a source; 1-7 flow away from it; 8-15 are falling."
   [id]
   (cond (nil? id) nil
         (contains? water-states id) {:fluid/kind :water :fluid/level (- id water-base)}

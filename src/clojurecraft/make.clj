@@ -158,16 +158,7 @@
   (or (= :stuck action) (contains? fetching-acts (:goal/act action))))
 
 (defn spare-worth?
-  "Is action worth doing to keep a spare tool? Not :stuck, and not a mine. A gather is worth it when
-   a log can be started now (gather-next returns an intent): a walk to a trunk, or the stairs up to
-   the trees, while a pickaxe is still held. A walk up the shaft already dug (:intent/for :opening)
-   is not: it reaches the sky, not a tree, and from that mouth the trunk may still have no route. A
-   gather that would wait :no-log is not either, which is the open sky with no tree remembered. Nor
-   is a swim across open water to the trees: a spare is not worth a lake. A climb out (:intent/for
-   :surface) is worth it once from a place, not again from below where a climb came out within the
-   window (stairs/surfaced-near?): it came out where the gather found nothing worth the spare, and
-   the mine went back down. A log taken after the climb ends its mark (plan/finish-intent): that
-   climb found trees, and the next is worth it."
+  "Is action worth doing to keep a spare tool? Not :stuck, and not a mine."
   [world action]
   (cond (or (nil? action) (= :stuck action) (= :mine (:goal/act action))) false
         (= :gather (:goal/act action))
@@ -187,9 +178,7 @@
 
 (defn resolve-spares
   "[counts action] for the tools a row keeps one more of than it holds (:goal/spares, beside
-   :goal/holds): planned when spare-worth? says the producer can be done. A mine is never one.
-   A gather is one only when a log can be started now. A worn tool is no spare (without-worn):
-   it breaks in the next tunnel, and a new one is made while the table and sticks are at hand."
+   :goal/holds): planned when spare-worth? says the producer can be done. A mine is never one."
   [world table counts row path]
   (reduce (fn [[c _] [k n]]
             (let [[_ a] (resolve-need world
@@ -230,9 +219,9 @@
 
 (defn craft-now
   "[counts row] when a craft row asked for n runs (n > 1) would first send the bot elsewhere
-   (action, a producer further down) but one run of it can be made from what is held: craft what
-   can be crafted now, then fetch the rest. nil otherwise. Only crafts: a smelt is batched on
-   purpose, one trip to the furnace for all the ore."
+   (action, a producer further down) but one run of it can be made from what is held: craft what can
+   be crafted now, then fetch the rest. nil otherwise. Only crafts: a smelt is batched on purpose,
+   one trip to the furnace for all the ore."
   [world table counts row n action path]
   (when (and (= :craft (:goal/act row)) (> n 1) (map? action) (not= action row))
     (let [[c a] (resolve-row world table counts row 1 path)] (when (= a row) [c a]))))
@@ -331,7 +320,7 @@
 
 (defn wood-covers?
   "Do the logs in counts, but log-reserve, make the planks that burn ticks? Then they are the fuel
-   to use before any coal is mined. The reserve is wood for a new pickaxe."
+   to use before any coal is mined."
   [counts ticks]
   (let [planks (long (math/ceil (/ ticks plank-ticks)))]
     (>= (- (recipe/have counts (recipe/tags :logs)) log-reserve)
@@ -415,9 +404,7 @@
    :load stage): open the remembered furnace within reach, or walk to it; once the window is open a
    :smelt of the batch's recipe empties the furnace into the inventory (its :settle) and loads
    whatever raw input is held again. nil with no batch, one older than batch-ttl, no furnace
-   remembered within table-search, or a smelt already running. The planner counts the inventory
-   only: a smelt interrupted after the load (a forage, a defence, a flee) had its iron in the
-   furnace and the inventory showed none, so the iron kit gym mined for more."
+   remembered within table-search, or a smelt already running."
   [world]
   (let [{:batch/keys [smelt at]} (:furnace/batch world)]
     (when (and smelt

@@ -98,8 +98,8 @@
 
 (defn start-at
   "When racer i (from 0) joins, ms after the race begins. With a ramp ({:ramp/start s :ramp/step n
-   :ramp/every-ms e}), the first s join at once and n more every e, so one runner measures the
-   load from s bots up; without, every racer joins at once. Within a batch, stagger-ms apart."
+   :ramp/every-ms e}), the first s join at once and n more every e, so one runner measures the load
+   from s bots up; without, every racer joins at once."
   [{:race/keys [ramp stagger-ms]} i]
   (let [{:ramp/keys [start step every-ms]} ramp]
     (cond (or (nil? ramp) (< i start)) (* i stagger-ms)
@@ -286,10 +286,7 @@
   "Land the bot named name on a cell of its own: down the spiral from centre, search-stride cells
    apart, the forest nearest each point (any forest kind) is claimed for it by the cell it lies in;
    the first granted is where it lands (fixture/land-at!). Returns where it stands, or nil when no
-   cell was granted or the landing failed. Racer offset starts that far down the spiral, so the
-   fortieth bot does not search the first bots' points again. Each search is a locate biome, which the server runs
-   in one tick: a race with plain forest searched 40 times per bot from points with none near,
-   one search took 60 s and the watchdog killed the server."
+   cell was granted or the landing failed."
   [rc ch name centre offset]
   (reduce (fn [_ cell]
             (let [forest (fixture/locate-biome! rc
@@ -368,8 +365,7 @@
   "What a race asks of its server once beside the gamerule: the team of racers, friendly fire off. A
    sword's sweep hits the players beside its target; at a spawner several bots stand together, the
    one struck fought back (combat: the striker is answered), and 47 of 344 deaths of lanes 1 to 6 of
-   race 9d15bd6 were a bot killed by a bot. A team with friendly fire off takes no damage from its
-   own."
+   race 9d15bd6 were a bot killed by a bot."
   [(str "team add " team) (str "team modify " team " friendlyFire false")])
 
 (defn team-join-command
@@ -521,8 +517,7 @@
   "The fortress for the landing [x z] (overworld coordinates; the Nether's are an eighth): one
    already located within fortress-near (nearby-fortress), else the nearest as the server locates
    it, remembered. A locate is a search in one tick of the server's thread, tens of seconds: asked
-   of fifteen bots at once it stopped the server's keepalives and every bot timed out. Running
-   31317ms behind`)."
+   of fifteen bots at once it stopped the server's keepalives and every bot timed out."
   [rc [x z]]
   (let [here [(quot x 8) (quot z 8)]]
     (or (nearby-fortress @fortresses here)
@@ -625,8 +620,7 @@
   "Build the pad [x z y] (gym/fortress-pad-open) in the Nether with no bot: the square round it
    forceloaded and waited for, the commands, the forceload released. The first build of a Nether
    region generates its chunks and a fortress's structure, seconds of the server's thread each: done
-   with a bot connected, the server fell 12 to 34 s behind and the bots timed out. Remembered in
-   pads-built."
+   with a bot connected, the server fell 12 to 34 s behind and the bots timed out."
   [rc [x z _ :as pad]]
   (when-not (contains? @pads-built pad)
     (let [where (str/join " " [(- x 2) (- z 2) (+ x 2) (+ z 2)])]
@@ -700,7 +694,7 @@
    ground-bottom: ground under the cell, air in it and the two over it, and ground under every cell
    of ground-ring within ground-drop below it (a ledge is not ground, a slope is), or nil. The first
    version asked the ring at exactly the pad's floor: of 16 pads chosen in lane 2 of race f8b28e3,
-   15 fell back to y 72 after 333 and 192 `:no-ground` rejections. Race 9d15bd6, lane 7."
+   15 fell back to y 72 after 333 and 192 `:no-ground` rejections."
   [rc [x z _]]
   (with-loaded rc
                [(- x 24) (- z 24) (+ x 24) (+ z 24)]
@@ -1014,8 +1008,7 @@
   "The class of a server death line, a keyword: :blaze, :enderman, :piglin (a piglin, zombified or
    brute), :hoglin, :wither (a wither skeleton), :ghast, :lava, :fire, :fall, else :other (also a
    nil line). The mob is asked first: \"burned to a crisp while fighting Blaze\" is a blaze's, not
-   fire's. A death at a stage is filed by its class, so a blaze's and a lava's get different issues
-   and owners."
+   fire's."
   [msg]
   (let [m (str msg)]
     (condp re-find m
@@ -1093,17 +1086,10 @@
   "One bot's whole life in a slot: the next serial's name (serials, an atom shared by the slots),
    its own atom and queue, on the board (live) and watched for milestones while it plays, landed on
    landing serial - 1 of the set (land-bot!), and played until its goal, its plan failing, a crash
-   or the job's end (deadline); a checkpoint lane's bot also stops at :race/bot-minutes (bot-cap-ms),
-   a :bot-timeout, filed (capped), where the job's end is a cut. Its RESULT line is printed as it ends, marked
-   cut (failure/cut) when the job's end stopped it. Its senses (senses/senses!: a line a second of
-   what it sensed and decided, and the loop's slowest event) are written beside its recording as
-   <name>.senses.edn the moment before its RESULT, so a batch that counts the RESULT has them,
-   and its ledger beside them (senses/ledger!: every change, its hits, swings, intents and the
-   entities round it) as <name>.events.edn, its mind at the end (senses/moment) as
-   <name>.moment.edn and the minutes before (the ring) as <name>.ring.edn, and the server log's
-   lines about it (serverlog-lines: its death line, a kick, a server that can't keep up) as
-   <name>.serverlog.txt.
-   Returns {:name :result :truth}."
+   or the job's end (deadline); a checkpoint lane's bot also stops at :race/bot-minutes
+   (bot-cap-ms), a :bot-timeout, filed (capped), where the job's end is a cut. Its RESULT line is
+   printed as it ends, marked cut (failure/cut) when the job's end stopped it. Returns {:name
+   :result :truth}."
   [{:keys [server ch centre serials live watcher prefix record-dir commit deadline config]}]
   (let [n (swap! serials inc)
         start (System/currentTimeMillis)
@@ -1224,11 +1210,11 @@
 
 (defn slot!
   "One bot slot, on a thread of its own: it joins at its place in the schedule (start-at), then
-   plays bot after bot (play-one!), the next the moment the last ends, or after backoff-ms when
-   the last never got to play, never sooner than its turn on the server's start clock
-   (start-turn!), until less than min-play-ms is left of the job. While the server is down
-   (health: dead-after bots in a row never got into play) it starts none and asks every
-   probe-every-ms whether the server accepts again. Returns a channel of its results."
+   plays bot after bot (play-one!), the next the moment the last ends, or after backoff-ms when the
+   last never got to play, never sooner than its turn on the server's start clock (start-turn!),
+   until less than min-play-ms is left of the job. While the server is down (health: dead-after bots
+   in a row never got into play) it starts none and asks every probe-every-ms whether the server
+   accepts again. Returns a channel of its results."
   [{:keys [config t0 deadline health*] :as ctx} i]
   (async/thread
    (Thread/sleep (long (max 0 (- (+ t0 (start-at config i)) (System/currentTimeMillis)))))
@@ -1251,7 +1237,7 @@
    with --rcon-pass, for the job's length (run-ms): :race/bots slots, each refilled with a fresh bot
    the moment its bot ends, so the server always carries its bots; the board, the sampler and the
    milestones watch whichever bots play now. A RESULT line per bot as it ends, a RACE summary of
-   every bot at the end, written to the record directory. Exits 0 when any bot reached the target."
+   every bot at the end, written to the record directory."
   [& args]
   (let [o (cli/options args)
         {:keys [config host port rcon-port rcon-pass record-dir commit seed landing-offset]

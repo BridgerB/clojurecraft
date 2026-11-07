@@ -73,10 +73,8 @@
           (:player/inventory world)))
 
 (defn payable
-  "The name of the best sword of made that the held items pay for and that is better than the
-   best serviceable sword, with a handle (handle?). Nil when none is. A worn sword is not
-   serviceable, so another of its rank is paid for before it breaks. A table is not asked:
-   wanted adds one, and a hunt whose sword is worn or gone asks the needs planner for this one."
+  "The name of the best sword of made that the held items pay for and that is better than the best
+   serviceable sword, with a handle (handle?). Nil when none is."
   [world]
   (let [c (armour/counts world)
         held (serviceable world)]

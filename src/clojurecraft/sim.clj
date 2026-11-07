@@ -346,10 +346,7 @@
    :pos :health}}), under the ids the client tracks them by, and the columns the client holds
    (:view, every one within :view-distance chunks of the player, a square as stream counts it).
    Nothing is sent: the client has it all already, but for the entities it tracks that this model
-   does not carry (:gone ids), told removed (remove-entities) with its first tick's packets. Every
-   column the model holds is taken as populated: the animals the real server placed are the mobs
-   given, so the model adds none. The keep-alive clock starts at :now, and with hunger what it last
-   told is what the client knows (sync-health tells only a change)."
+   does not carry (:gone ids), told removed (remove-entities) with its first tick's packets."
   [opts
    {:keys [now pos look on-ground? held state-id health saturation air player-eid placed items mobs
            view view-distance gone]}]
@@ -410,8 +407,7 @@
 (defn stream
   "The model as a server keeps a player's chunks: every column that came into view since the last
    look is sent, in one batch, and every one that left it is forgotten, as the player walks, is
-   teleported or respawns. Nearest first, so the column under the feet comes before the rest.
-   Nothing to do while the player stays in the column it was streamed from (:sim/view-at)."
+   teleported or respawns. Nearest first, so the column under the feet comes before the rest."
   [sim]
   (let [here (column-key (:sim/player-pos sim (:sim/spawn sim)))]
     (cond (= here (:sim/view-at sim)) sim
@@ -659,13 +655,11 @@
     (cond-> sim drop (spawn-item item-pos drop))))
 
 (defn finish-dig
-  "The client says it finished breaking pos: broken, with its drop, when it started breaking
-   that block at least the block's break time ago (break-ms), the block update before the ack
-   (observed live on 26.1.2); else the real server keeps breaking it by its own clock
-   (ServerPlayerGameMode's delayed destroy: :sim/delayed, finished by tick-delayed) and only
-   acks now. A FINISH for another block than the one being broken is acked and nothing else.
-   A FINISH whose ordinal is in :sim/drop-breaks gets the ack alone, the block left standing
-   and nothing said: what a lagging server does with an early FINISH queued behind another one."
+  "The client says it finished breaking pos: broken, with its drop, when it started breaking that
+   block at least the block's break time ago (break-ms), the block update before the ack (observed
+   live on 26.1.2); else the real server keeps breaking it by its own clock (ServerPlayerGameMode's
+   delayed destroy: :sim/delayed, finished by tick-delayed) and only acks now. A FINISH for another
+   block than the one being broken is acked and nothing else."
   [sim {:keys [pos sequence]}]
   (let [{:keys [at] dpos :pos} (:sim/dig sim)
         id (block-at sim pos)
@@ -956,10 +950,8 @@
 
 (defn sync-window
   "Answer a click the way vanilla does. The click's own changed-slots and cursor fields are the
-   client's prediction: the server records them as what the client believes, then sends only
-   what differs from that belief. We always predict no changed slots (so every changed slot is
-   sent) and an empty cursor (so the cursor is sent only when it is not empty). A stale state
-   id gets the full window instead. predicted-cursor is the cursor the client last claimed."
+   client's prediction: the server records them as what the client believes, then sends only what
+   differs from that belief."
   [sim kind before predicted-cursor stale?]
   (let [layout (inventory/layouts kind)
         slots (range (inventory/slot-count layout))
@@ -1962,14 +1954,8 @@
 
 (defn hurt
   "The model after the player takes amount of damage, exhausting? (a mob's hit, an arrow, a blast:
-   hunger/exhaustion :hurt; starving: not): within hurt-window-ms of the last hurt only a harder
-   one lands, for what it exceeds the last by (LivingEntity.hurtServer); health never under
-   zero. A dead player is not hurt; the client learns its health from sync-health or the
-   caller's tell-health. cause (a mob's kind, :starve, :drown) is kept in :sim/death-causes, and
-   told as player-combat-kill (how: the blow's kind, :fireball, :arrow, :wither, or nil), when
-   this blow is the one that reaches zero. Every blow that lands is also appended to
-   :sim/hit-log (hit-logged) with its cause, how, attacker (the mob eid that dealt it, or nil),
-   what it dealt and the health left."
+   hunger/exhaustion :hurt; starving: not): within hurt-window-ms of the last hurt only a harder one
+   lands, for what it exceeds the last by (LivingEntity.hurtServer); health never under zero."
   ([sim amount exhausting?] (hurt sim amount exhausting? :unknown nil nil))
   ([sim amount exhausting? cause] (hurt sim amount exhausting? cause nil nil))
   ([sim amount exhausting? cause how] (hurt sim amount exhausting? cause how nil))
@@ -2043,7 +2029,7 @@
   "Finish eating once the food's eating time (food/eating-ticks) has passed since its use-item: one
    of it gone from the slot, the food eaten (ate), told as the slot's update, entity-event status
    use-finished to the player, and set-health; counted in :sim/eaten. A slot that no longer holds
-   the food ends the eating with nothing eaten. A stew's bowl is not given back."
+   the food ends the eating with nothing eaten."
   [sim]
   (let [{:keys [slot item at]} (:sim/eating sim)
         n (recipe/item-name item)]
@@ -2326,7 +2312,7 @@
 (defn anger
   "The model with mob eid turned on the player (:angry?). An enderman shows it as the server does
    when it takes a target: its creepy flag set (entity/creepy-index, set-entity-data), the fact the
-   bot's hunt reads to know one is coming. Once only."
+   bot's hunt reads to know one is coming."
   [sim eid]
   (let [{:keys [type angry?]} (get-in sim [:sim/mobs eid])]
     (cond angry? sim
@@ -2489,12 +2475,9 @@
 
 (defn fly
   "Mob eid, a flier (a blaze), one tick of BlazeAttackGoal's movement (26.1.2
-   Blaze$BlazeAttackGoal.tick). Distance squared under 4 (inside :reach) and no line: it stays,
-   and it does not shoot. Inside :reach with a line: it closes on the feet and strike melees.
-   At :reach or beyond, inside follow, with a line: it stays and volley shoots. With no line,
-   and only after it has seen the player, it keeps closing for lost-sight ticks, then stays.
-   It does not fly at a player it has never seen, so a sealed pocket does not pull the
-   spawner's blazes out of the cap box."
+   Blaze$BlazeAttackGoal.tick). Distance squared under 4 (inside :reach) and no line: it stays, and
+   it does not shoot. With no line, and only after it has seen the player, it keeps closing for
+   lost-sight ticks, then stays."
   [sim eid]
   (let [{:keys [type pos seen? lost]} (get-in sim [:sim/mobs eid])
         k (mob/kinds type)
@@ -2657,10 +2640,9 @@
     (contains? blocks/lava-states (block-at sim (mapv #(long (math/floor (double %))) pos)))))
 
 (defn tick-lava
-  "One game tick of the player standing in lava (Entity.lavaHurt): fire/lava-damage, armour
-   takes none of it, and the player is set alight for fire/lava-ms. The hurt window lands the
-   four once a half-second; a swallowed one is not told. Runs after tick-burn, so the tick that
-   first steps in deals the four and not also that tick's burn. A dead player is left."
+  "One game tick of the player standing in lava (Entity.lavaHurt): fire/lava-damage, armour takes
+   none of it, and the player is set alight for fire/lava-ms. The hurt window lands the four once a
+   half-second; a swallowed one is not told."
   [sim]
   (cond (or (<= (:sim/health sim) 0.0) (not (in-lava? sim))) sim
         :else
@@ -2672,7 +2654,7 @@
 (defn tick-wither
   "One game tick of the wither a skeleton put on the player (mob/wither-tick): mob/wither-damage
    when one is due, armour takes none of it, told as a damage-event. The wither skeleton is the
-   cause, so a death by it classes as :wither. A dead player is left."
+   cause, so a death by it classes as :wither."
   [sim]
   (let [[after event] (mob/wither-tick (:sim/wither sim) (:sim/now sim))]
     (cond (<= (:sim/health sim) 0.0) (dissoc sim :sim/wither)
@@ -2751,12 +2733,11 @@
                :data eid}))))
 
 (defn volley
-  "Blaze eid's turn to shoot, as BlazeAttackGoal runs it: at least :reach out (distance squared
-   of 4; inside that, seen, it melees, and with no line it stays), within its range and a clear
-   line from its head to the player's eye, and its timer due, one step of its volley
-   (mob/volley-next): the charge flag raised for the charge, a fireball at each of the shots
-   after it, the flag lowered and the rest. Off the line nothing moves on; the timer waits. A
-   blaze within two blocks of a sealed bot has no line, so it does not fire."
+  "Blaze eid's turn to shoot, as BlazeAttackGoal runs it: at least :reach out (distance squared of
+   4; inside that, seen, it melees, and with no line it stays), within its range and a clear line
+   from its head to the player's eye, and its timer due, one step of its volley (mob/volley-next):
+   the charge flag raised for the charge, a fireball at each of the shots after it, the flag lowered
+   and the rest. Off the line nothing moves on; the timer waits."
   [sim eid]
   (let [{:keys [type pos shot-step shot-at]} (get-in sim [:sim/mobs eid])
         k (mob/kinds type)
@@ -2959,15 +2940,13 @@
                     (range n))))))
 
 (defn try-nether-spawn
-  "Every mob/spawn-every ticks in the Nether (wild-spawning?, under mob/hostile-cap), one try
-   at a warped forest's pack: a column rolled in the ring mob/spawn-near to mob/spawn-far round
-   the player as try-spawn rolls one, its spots within mob/spawn-band of the player's feet
-   (mob/nether-spots: warped nylium under the feet, an enderman's three cells free, any light),
-   one of them rolled, a kind rolled by weight (mob/warped-kinds) and a pack of
-   mob/enderman-pack walked out from it (spawn-pack). A column with no warped floor spawns
-   nothing: the Nether's other biomes' hostiles are not modelled. Every roll is a wild-roll,
-   so the overworld's night rule rolls as it did, and a fortress's spawners too until an
-   enderman spawns (its turns roll from mob-roll)."
+  "Every mob/spawn-every ticks in the Nether (wild-spawning?, under mob/hostile-cap), one try at a
+   warped forest's pack: a column rolled in the ring mob/spawn-near to mob/spawn-far round the
+   player as try-spawn rolls one, its spots within mob/spawn-band of the player's feet
+   (mob/nether-spots: warped nylium under the feet, an enderman's three cells free, any light), one
+   of them rolled, a kind rolled by weight (mob/warped-kinds) and a pack of mob/enderman-pack walked
+   out from it (spawn-pack). A column with no warped floor spawns nothing: the Nether's other
+   biomes' hostiles are not modelled."
   [sim]
   (let [player (:sim/player-pos sim)]
     (cond (not (and player
@@ -3035,8 +3014,8 @@
   (try-floor-spawn sim mob/fortress-spot? mob/fortress-kinds 1))
 
 (defn try-crimson-spawn
-  "Every mob/spawn-every ticks in the Nether, one hoglin on crimson nylium (mob/crimson-kinds).
-   A column with none spawns nothing. Piglins are not modelled."
+  "Every mob/spawn-every ticks in the Nether, one hoglin on crimson nylium (mob/crimson-kinds). A
+   column with none spawns nothing."
   [sim]
   (try-floor-spawn sim mob/crimson-spot? mob/crimson-kinds 1))
 
@@ -3064,9 +3043,7 @@
   "The model after the spawner at cell sp spawns: a batch rolled (mob/spawner-batch), cut to the
    room it has (mob/spawner-room). None when six of its kind already stand in the counting box:
    BaseSpawner.serverTick counts that class in AABB(pos, pos+1).inflate(spawnRange) and, at
-   maxNearbyEntities (6), calls delay and returns, skipping the rest of the attempt. Each try
-   takes five rolls of the mobs' stream, and a blaze is placed where one fits
-   (mob/spawner-spawns). The caller rolls the next delay either way."
+   maxNearbyEntities (6), calls delay and returns, skipping the rest of the attempt."
   [sim sp]
   (let [[sim rb] (mob-roll sim)
         tries (min (mob/spawner-batch rb) (mob/spawner-room (spawner-nearby sim sp)))
@@ -3554,17 +3531,11 @@
    (tick-from), until (stop? world) or max-ms of play. A moment is everything the next tick depends
    on: {:world :sim :pending :t :rand :went? :inflight}: the bot's world and the model's state, what
    the bot has sent and the model not yet taken (pending), the tick's time, the tick seed's state
-   (rand), whether go was sent, and the packets still in flight under :sim/lag-ticks. So playing on
-   from a moment is the run itself, packet for packet. Returns {:world :sim :before :last :moments}:
-   :last the moment of the stopping tick, :before its world and model, and, with every (simulated
-   ms; nil keeps none), :moments, the run's moments that far apart, the last moment-keep of them,
-   for a failure to be kept from before the choice that led to it (simrace/snapshot). A tick that
-   throws ends the play there with :crashed (the exception) and the world and model of the moment
-   before it, so a crash is kept and judged like any other failure. go is sent once the bot is
-   loaded, or never when nil. Each tick's :event/rand is 0.5, or, with a rand state, the next of a
-   pure generator (tick-rand), so runs of one world with different seeds are different runs, each
-   the same every time. With a tap (a function of the moment, called once a tick before it is
-   played, for an observer's atom: the truth ring), the tap sees every moment and changes none."
+   (rand), whether go was sent, and the packets still in flight under :sim/lag-ticks. Returns
+   {:world :sim :before :last :moments}: :last the moment of the stopping tick, :before its world
+   and model, and, with every (simulated ms; nil keeps none), :moments, the run's moments that far
+   apart, the last moment-keep of them, for a failure to be kept from before the choice that led to
+   it (simrace/snapshot)."
   ([bot-step m stop? max-ms go every] (play-from bot-step m stop? max-ms go every nil))
   ([bot-step m stop? max-ms go every tap]
    (let [lag (* physics/tick-ms (:sim/lag-ticks (:sim m) 0))
@@ -3627,9 +3598,9 @@
              tap))
 
 (defn run
-  "Run a bot reducer against the model from a fresh handshake, a tick (physics/tick-ms) at a
-   time, until (stop? world) or max-ms. Sends go (default {:event/kind :go}) once the bot is
-   loaded. Returns [world sim] (run+ for the moment before the stop too)."
+  "Run a bot reducer against the model from a fresh handshake, a tick (physics/tick-ms) at a time,
+   until (stop? world) or max-ms. Sends go (default {:event/kind :go}) once the bot is loaded.
+   Returns [world sim] (run+ for the moment before the stop too)."
   [bot-step world0 sim0 stop? max-ms & [go]]
   (let [{:keys [world sim]} (run+ bot-step world0 sim0 stop? max-ms go)] [world sim]))
 
@@ -3637,11 +3608,9 @@
 
 
 (defn connect!
-  "The model behind a channel pair shaped like conn/open!'s: {:in chan :out chan :close! fn}.
-   Packet maps the client puts on :out are stepped into the model; every physics/tick-ms of wall time
-   the model ticks; whatever it says for the client goes onto :in, in order. Both channels are
-   bounded, as conn's are. :in closes when the client closes :out or calls :close!, which the
-   loop reads as the socket closing."
+  "The model behind a channel pair shaped like conn/open!'s: {:in chan :out chan :close! fn}. Packet
+   maps the client puts on :out are stepped into the model; every physics/tick-ms of wall time the
+   model ticks; whatever it says for the client goes onto :in, in order."
   [sim0]
   (let [in (async/chan 1024)
         out (async/chan 256)

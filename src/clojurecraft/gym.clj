@@ -242,7 +242,7 @@
 (def no-fire
   "A :gym/summon entry: the blazes' fireballs set no blocks alight (SmallFireball places fire only
    when mob griefing is on). A fire lights the cells round it past 11, and a spawner's blaze spawns
-   only where the light is 11 or less. The bot itself still burns when hit."
+   only where the light is 11 or less."
   "gamerule mob_griefing false")
 
 (defn rods-held
@@ -271,12 +271,7 @@
    is cut in stone, the endermen stand ten blocks off, far enough to be provoked by a stare
    (pearls/stare-from) and never by accident, no sun or rain on them (either sends an enderman off),
    and no dark for a zombie to spawn in (a monster spawns only at block light 0). The sealed Nether
-   room is seven square. The wall: the lit square's light reaches ten blocks past its edge and no
-   farther, the dark beyond spawns zombies, skeletons and creepers at midnight, and they walked in,
-   over the row's 300 s, to the burrow's stairs. Walled, nothing walks in, no arrow has a line, and
-   the endermen, which teleport only in daylight or when hurt by what is not alive, stay on the lit
-   square. No roof: a surface landing teleports onto the highest motion-blocking block, which a
-   light block is not."
+   room is seven square."
   ["time set midnight" "weather clear"
    "fill {x-13} {y-8} {z-13} {x+13} {y+6} {z+13} minecraft:stone"
    "fill {x-12} {y} {z-12} {x+12} {y+6} {z+12} minecraft:air"
@@ -1100,9 +1095,8 @@
 ;;;; I/O: RCON, files, stdout ;;;;
 
 (defmulti land!
-  "Put the bot where row starts, given this run's landing [x z y] of the set: build the row's
-   arena and teleport it there. Returns the landing its truths are filled in with. Keyed by
-   :gym/land (:surface when absent); a new kind of start is a defmethod."
+  "Put the bot where row starts, given this run's landing [x z y] of the set: build the row's arena
+   and teleport it there. Returns the landing its truths are filled in with."
   {:arglists '([rc row name landing])}
   (fn [_rc row _name _landing] (:gym/land row :surface)))
 
@@ -1389,8 +1383,7 @@
    empty inventory), land it (land!: on this run's landing of the set, or where the row starts from
    it), and only once the server says it stands in the row's dimension give its prerequisites (kit)
    and summon what it meets (summons). Returns what happened: {:gym/landed? true :gym/landing
-   :gym/at :gym/started}, or {:gym/landed? false :gym/error ...}; never throws. A bot that never
-   reaches the dimension is a failed landing, never a kit given in the wrong world."
+   :gym/at :gym/started}, or {:gym/landed? false :gym/error ...}; never throws."
   [{:keys [goal run name host rcon-port rcon-pass landings]}]
   (let [row (gym goal)
         landing (landings/landing-for (landings/read-landings landings) (parse-long (str run)))
@@ -1420,12 +1413,11 @@
            {:gym/landed? false :gym/landing landing :gym/error (str e) :gym/started started}))))
 
 (defn tee-output!
-  "Read the bot process p's output as it is written, a whole line at a time: copy each to log
-   (for people and the artifacts) and deliver the value of the RESULT line to result (a promise),
-   or nil when the output ends without one. The bot's answer comes back through the pipe its
-   :go went down, never through a file another process is writing: polling the log, live
-   iron-kit run 19's judge read its 44 KB RESULT half written and failed the trial on the
-   reader's error. Runs on a thread of its own; returns it."
+  "Read the bot process p's output as it is written, a whole line at a time: copy each to log (for
+   people and the artifacts) and deliver the value of the RESULT line to result (a promise), or nil
+   when the output ends without one. The bot's answer comes back through the pipe its :go went down,
+   never through a file another process is writing: polling the log, live iron-kit run 19's judge
+   read its 44 KB RESULT half written and failed the trial on the reader's error."
   [^Process p log result]
   (doto (Thread. ^Runnable
                  (fn []
@@ -1577,9 +1569,9 @@
       tagged)))
 
 (defn trial!
-  "One trial: an attempt!, and when it lost its connection (which says nothing about the goal)
-   one more on the same landing, under dir/retry. A trial that throws leaves a :harness row,
-   never nothing. Returns the row that counts."
+  "One trial: an attempt!, and when it lost its connection (which says nothing about the goal) one
+   more on the same landing, under dir/retry. A trial that throws leaves a :harness row, never
+   nothing. Returns the row that counts."
   [{:keys [goal run dir tags] :as t}]
   (try
     (let [row (attempt! t)]

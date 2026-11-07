@@ -199,13 +199,13 @@
 
 (defn run-bot!
   "One bot's whole life: connect as name, fold the socket's packets, the clock's ticks and the
-   events put on events (a bounded channel: a fixture's :go) into its own world atom until the
-   goal holds, a planned run fails, the deadline passes or the socket closes; record it when
-   record names a file. Then (on-result result) while still connected, hold hold-ms for an
-   outside judge (giving RCON time to read truth inventory before the bot leaves), and close, whatever the run ends with (a throw too). world* is the bot's atom (one is made when none is given;
-   a watcher may be on it already). With no events channel and a plan, the run starts where it
-   stands as soon as it is loaded. Returns {:result r :world final}. Nothing is shared with
-   another bot: a race runs many of these, each its own atom and loop."
+   events put on events (a bounded channel: a fixture's :go) into its own world atom until the goal
+   holds, a planned run fails, the deadline passes or the socket closes; record it when record names
+   a file. Then (on-result result) while still connected, hold hold-ms for an outside judge (giving
+   RCON time to read truth inventory before the bot leaves), and close, whatever the run ends with
+   (a throw too). world* is the bot's atom (one is made when none is given; a watcher may be on it
+   already). With no events channel and a plan, the run starts where it stands as soon as it is
+   loaded. Returns {:result r :world final}."
   [{:keys [host port name until timeout-ms hold-ms record commit chain events on-result world*
            end-on-death? on-ms]
     :or {host "127.0.0.1" until "wood" timeout-ms 120000 hold-ms 0 on-result (fn [_])}}]
@@ -293,10 +293,9 @@
 
 (defn outcome
   "A RESULT as a replay is held to it: everything but the last intent (an executor's internals
-   caught mid-tick) and the position (where the last tick's physics happened to leave the
-   feet). A dig that gained a :confirm stage since the recording ends a tick later, and the
-   same run then stands a fraction of a block elsewhere when its goal is met. What the run
-   held, reached and reported is the outcome."
+   caught mid-tick) and the position (where the last tick's physics happened to leave the feet). A
+   dig that gained a :confirm stage since the recording ends a tick later, and the same run then
+   stands a fraction of a block elsewhere when its goal is met."
   [result]
   (-> result
       (update :plan dissoc :plan/last)

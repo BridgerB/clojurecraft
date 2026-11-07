@@ -70,9 +70,7 @@
    neighbours at its level or a block lower (the block at the head), or the cell under it with the
    head just below it (the block overhead), or, when it leaves a step down (step-down?), a
    horizontal neighbour a block up (the block in the floor beside the feet). From each the drop
-   comes to rest inside the pickup box, or in the hole the collect steps into. A block under the
-   feet never counts: its drop lies a block under them and nothing walks in after it. In a tunnel
-   two high, only the walls at the feet counted before the head and the ceiling did."
+   comes to rest inside the pickup box, or in the hole the collect steps into."
   [world [x y z :as pos]]
   (let [at (path/cells world)]
     (first (filter #(path/standable? at %)
@@ -121,13 +119,12 @@
                      (chunk/find-blocks (near-chunks chunks feet-chunk) #(contains? states %)))))))
 
 (defn exposed-near
-  "The blocks of states within search-radius of the eye and search-height of its height that
-   the bot can stand beside, not blacklisted, nearest first, fluid or no fluid beside them (see
+  "The blocks of states within search-radius of the eye and search-height of its height that the bot
+   can stand beside, not blacklisted, nearest first, fluid or no fluid beside them (see
    exposed-of-states). Read from the loaded terrain (the live view), not memory: stone is most of
-   the world and ore is in every chunk, and only what is exposed now is worth a route. The chunks
-   are scanned as they arrived, so each candidate is asked again through the overlay of block
-   updates and the bot's own breaks: a block just dug is air. Never one beside a lava trap still
-   in force (path/near-lava-trap?): the lava that caught the bot there is still coming down."
+   the world and ore is in every chunk, and only what is exposed now is worth a route. Never one
+   beside a lava trap still in force (path/near-lava-trap?): the lava that caught the bot there is
+   still coming down."
   [world states]
   (let [eye (game/eye world)
         ey (physics/y-of eye)]
@@ -172,7 +169,7 @@
    a solid neighbour to place against (place/support) and not given up (:plan/blacklist), a route
    reaches it once sealed (routable?), and a filler is held for all of them (stairs/filler, else
    planks). Once the water is a block the stone is exposed to the walk, dig and collect chain as any
-   other. Every wet cell is one a block takes the place of (blocks/placeable-into?)."
+   other."
   [world row]
   (let [eye (game/eye world)
         blacklist (:plan/blacklist world #{})
@@ -277,9 +274,7 @@
    height: a staircase, tunnel or deeper stair started there ends :boxed as the one beside it did. A
    corridor or strip with nothing to lay was cut again from the cell next to the last one that died,
    a cell a lap, for the whole window; from there the order falls through to the walk home, the
-   retreat and the climb. The cells a boxed climb crossed (:plan/boxed-route) count as boxed too:
-   the bot's own stairs-up ends :boxed away from the cell that died, and the next stairs-down began
-   from there."
+   retreat and the climb."
   [world [x y z :as feet]]
   (let [boxed (into (:plan/boxed-at world #{}) (:plan/boxed-route world))]
     (boolean (or (contains? boxed feet)
@@ -570,8 +565,7 @@
    :intent/pickup?), or cut stairs down toward them, or at the row's depth a tunnel
    (tunnel-heading), or deeper stairs when none can be cut, or a retreat when neither can, or a
    climb out when there is no way away either (climb); wait for the tool. Beside a lava trap still
-   in force (path/near-lava-trap?) the retreat comes before any stair or tunnel. So does a swim out
-   of water the feet are in."
+   in force (path/near-lava-trap?) the retreat comes before any stair or tunnel."
   [world row]
   (or (continue-mine world row)
       (intent/chain-next (:plan/last world) :filler filler-drops {})
@@ -702,9 +696,7 @@
    done before it began, a foothold (foothold) laid for the placement instead, and once that block
    is there the gravel goes on it (hold-top) rather than another stairs up. A cell a dig would let
    fluid into (intent/exposes-fluid?), and any the redig has already refused (:intent/refused), is
-   passed over. A floor that has a drop beside it but not past it is still a spot (place/spot's
-   along?): the strict spot refuses it and the stairs up that followed was done the same tick, for
-   the whole window."
+   passed over."
   [world item]
   (let [[fx fy fz] (intent/feet world)
         held-off (:intent/refused (:plan/intent world) #{})

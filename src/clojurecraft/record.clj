@@ -38,15 +38,10 @@
 ;;;; I/O: recording files ;;;;
 
 (defn tap!
-  "A recording as a channel tap: {:write (fn [event]) :effects (fn [effects]) :close (fn [])}.
-   Call :write before applying an event, :effects with what applying it produced, and :result
-   with the RESULT the run printed (the recording ends there); each puts
-   one value on a bounded channel and a thread of its own prints it, so the loop never does file
-   I/O. The recording is the source of truth, so a full channel blocks the loop rather than
-   dropping a line (unlike telemetry). Events are written as they came off the wire (see wire).
-   :close waits until every line is on disk. header, when not empty, is the first line: what the
-   run is beside its events, {:record/commit sha} the code that made it, since a recording replays
-   only with that code."
+  "A recording as a channel tap: {:write (fn [event]) :effects (fn [effects]) :close (fn [])}. Call
+   :write before applying an event, :effects with what applying it produced, and :result with the
+   RESULT the run printed (the recording ends there); each puts one value on a bounded channel and a
+   thread of its own prints it, so the loop never does file I/O."
   ([path] (tap! path {}))
   ([path header]
    (let [ch (async/chan tap-buffer)

@@ -465,8 +465,7 @@
 (defn in-reach?
   "Is a mob of kind at pos near enough to close on a player at target: on the plane within its
    :reach, the feet within 1.5 in height? A flier (BlazeAttackGoal: distance squared under 4) is
-   within :reach in space, feet to feet. That is where it hovers to strike. The hit itself is
-   can-strike?: the boxes have to meet, and the line has to be clear."
+   within :reach in space, feet to feet."
   [kind pos target]
   (let [k (kinds kind)]
     (if (:flies k)
@@ -488,10 +487,9 @@
          (<= ty (+ y h)))))
 
 (defn can-strike?
-  "May a flier at pos strike a player at target: the boxes touch (touches?) and nothing solid
-   stands between its head and the player's eye (sight?). Vanilla's melee is that pair
-   (MeleeAttackGoal meets the target's box, and Sensing.hasLineOfSight). A reach of two
-   through a sealed wall is not a hit."
+  "May a flier at pos strike a player at target: the boxes touch (touches?) and nothing solid stands
+   between its head and the player's eye (sight?). Vanilla's melee is that pair (MeleeAttackGoal
+   meets the target's box, and Sensing.hasLineOfSight)."
   [solid? kind pos target]
   (and (touches? kind pos target) (sight? solid? (head kind pos) (physics/eye target))))
 
@@ -666,9 +664,9 @@
   [[:enderman 1]])
 
 (def fortress-kinds
-  "The kinds a fortress's brick floor spawns, with their weights, beside the blaze spawner:
-   wither skeleton 8 and magma cube 3, the structure's spawn_overrides (fortress.json). Blazes
-   stay the spawner's. One mob a try, the model's rate, not the structure's minCount."
+  "The kinds a fortress's brick floor spawns, with their weights, beside the blaze spawner: wither
+   skeleton 8 and magma cube 3, the structure's spawn_overrides (fortress.json). Blazes stay the
+   spawner's."
   [[:wither_skeleton 8] [:magma_cube 3]])
 
 (def crimson-kinds
@@ -782,11 +780,10 @@
   (and (<= (abs (- x fx)) (+ 0.3 r)) (<= (- fy r) y (+ fy 1.8 r)) (<= (abs (- z fz)) (+ 0.3 r))))
 
 (def damage-source
-  "The damage-event source-type ids the server sends for what hurts the player, by what hurt:
-   as seen in race f8b28e3's recordings (26.1.2): a small fireball 14, a mob's melee 28, burning 31,
+  "The damage-event source-type ids the server sends for what hurts the player, by what hurt: as
+   seen in race f8b28e3's recordings (26.1.2): a small fireball 14, a mob's melee 28, burning 31,
    standing in fire 21, a fall 10, an arrow 0. Lava is 24, read from the registry order of an
-   earlier version and the lava hits in those recordings (the registry itself is still undecoded).
-   A cause not here is generic (18); a wither tick is :wither (48, registry.clj's table)."
+   earlier version and the lava hits in those recordings (the registry itself is still undecoded)."
   {:fireball 14 :mob_attack 28 :on_fire 31 :in_fire 21 :lava 24 :fall 10 :arrow 0 :wither 48})
 
 (def spawner-block
@@ -834,9 +831,8 @@
 
 (defn spawner-crowded?
   "Is a blaze at mob position m inside the box a spawner at cell [x y z] counts? Vanilla counts
-   entities of the spawned class whose box meets AABB(pos, pos+1).inflate(spawnRange): from
-   x - :near to x + :near + 1 on each axis, the cell's own span included. The feet stand in for
-   that box."
+   entities of the spawned class whose box meets AABB(pos, pos+1).inflate(spawnRange): from x -
+   :near to x + :near + 1 on each axis, the cell's own span included."
   [[x y z] [mx my mz]]
   (let [n (:near spawner)]
     (and (<= (- x n) mx (+ x n 1)) (<= (- y n) my (+ y n 1)) (<= (- z n) mz (+ z n 1)))))

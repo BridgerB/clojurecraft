@@ -156,8 +156,7 @@
 
 (defn touching-water?
   "Does the player's box at pos overlap any water, however little (touch-contract)? Vanilla's test
-   for being in water, since 1.13. The 0.4 rule of in-fluid? calls a body out of the water when
-   under 0.4 of it is in: the bank impulse and a jump are still the water's then."
+   for being in water, since 1.13."
   [fluid-at pos]
   (in-fluid? fluid-at :water touch-contract (aabb pos)))
 
@@ -228,9 +227,8 @@
 
 (defn step
   "One tick of movement. Reads :player/pos :player/vel :player/on-ground? :player/jump-ticks
-   :player/fall-distance and writes them back plus :player/horizontal-collision?,
-   :player/in-water?, :player/in-lava? and :player/eye-in-water?. Without a fluid oracle the
-   world is dry."
+   :player/fall-distance and writes them back plus :player/horizontal-collision?, :player/in-water?,
+   :player/in-lava? and :player/eye-in-water?. Without a fluid oracle the world is dry."
   ([solid? world controls] (step solid? no-fluid world controls))
   ([solid? fluid-at
     {:player/keys [pos vel on-ground? jump-ticks fall-distance]

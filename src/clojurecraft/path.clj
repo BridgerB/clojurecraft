@@ -125,11 +125,9 @@
           (bit-and y 0xFFF)))
 
 (defn cells
-  "The cells of w as a route sees them: a function of [x y z] to classify's answer. w is a world,
-   or such a function already, returned as it is, so every predicate below takes either. Of a
-   world whose bot stands on ice (on-ice?) the sheet is floor, so the bot can walk off it. Made
-   from a world, each cell is read through the terrain once and held for the life of the
-   function; it is made inside one question and never kept, so no two threads share it."
+  "The cells of w as a route sees them: a function of [x y z] to classify's answer. w is a world, or
+   such a function already, returned as it is, so every predicate below takes either. Of a world
+   whose bot stands on ice (on-ice?) the sheet is floor, so the bot can walk off it."
   [w]
   (cond (fn? w) w
         :else
@@ -281,8 +279,7 @@
 ;; ---------------------------------------------------------------- goals as data
 
 (defmulti goal-done?
-  "Is node where the goal wants the feet, in world? Open on :goal/kind. The goal is data, never
-   the world: a goal that asks about the terrain (:sky) reads the world it is given."
+  "Is node where the goal wants the feet, in world? Open on :goal/kind."
   {:arglists '([world goal node])}
   (fn [_world goal _node] (:goal/kind goal)))
 
@@ -422,11 +419,9 @@
 
 (defn search
   "A* from start over the world toward goal, spending at most max-nodes expansions. Returns
-   {:path/waypoints :path/cost :path/status}: :found when a node satisfies the goal, else
-   :partial (the budget ran out) or :none (the frontier did) with the route to the node that
-   came nearest by the heuristic. The waypoints omit the start. The open set is a sorted set of
-   [f g node], so ties break on the node itself and the search is deterministic. Its cells are
-   read once each (cells); the goal and the traps read the world."
+   {:path/waypoints :path/cost :path/status}: :found when a node satisfies the goal, else :partial
+   (the budget ran out) or :none (the frontier did) with the route to the node that came nearest by
+   the heuristic."
   [world start goal max-nodes]
   (let [at (cells world)
         h0 (heuristic goal start)
@@ -531,15 +526,9 @@
                      :else {:path/waypoints [] :path/cost 0.0 :path/status :none})))))
 
 (defn plan
-  "A route for the feet from the cell `from` toward goal: {:path/waypoints [[x y z] ...]
-   :path/cost n :path/status :found|:partial|:none :path/from start}. opts: {:path/max-nodes n} (default
-   default-max-nodes). Pure and deterministic: equal inputs, equal output. The search normally
-   begins at start-cell (from, or the standable cell beside it the player's box rests on).
-   Before borrowing a neighbouring start, a route may leave the actual supported, clear feet
-   cell if it reaches the goal; awkward floors remain forbidden as waypoints. With neither
-   departure nor a start-cell, the answer is :none with no waypoints.
-   A goal in an unloaded chunk comes back :partial or :none
-   toward it, which is the walker's cue to move and plan again."
+  "A route for the feet from the cell `from` toward goal: {:path/waypoints [[x y z] ...] :path/cost
+   n :path/status :found|:partial|:none :path/from start}. opts: {:path/max-nodes n} (default
+   default-max-nodes). Pure and deterministic: equal inputs, equal output."
   ([world from goal] (plan world from goal {}))
   ([world from goal {:path/keys [max-nodes] :or {max-nodes default-max-nodes}}]
    (plan-on (:world/chunks world)

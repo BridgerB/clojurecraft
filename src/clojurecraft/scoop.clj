@@ -413,8 +413,7 @@
 (defn climb
   "Out of the ground when the feet are deep under the landing (deep?) and the sky is not open over
    them: the way-up; nil when not underground. A bot that needs water deep in its mine sees none and
-   its hunt looks for ground near its own height, underground. The way it came down is often no way
-   back up. The siblings climbed out first too."
+   its hunt looks for ground near its own height, underground."
   [world]
   (when (and (deep? world)
              (not (terrain/under-sky? world (intent/feet world)))
@@ -447,7 +446,7 @@
   "A scoop of the nearest water source in reach, not blacklisted, that the eyes see into
    (centre-aim), what is over it notwithstanding, aimed there (:intent/aim, as the cast scoops its
    water from the side): deep under the landing, where no surface water is, the water of a flooded
-   pocket or a cave beside the feet. nil when none. It read no blacklist."
+   pocket or a cave beside the feet. nil when none."
   [world]
   (when (deep? world)
     (let [eye (game/eye world)]
@@ -489,7 +488,7 @@
    bed, the rock under the water bottom first (a dig that may let the water in, exposes-ok?, whose
    drop is not needed, drop-ok?), then scoop the source from below, aimed at the underside of its
    cell (:intent/aim): the bucket's ray passes the water falling in and takes the first source. nil
-   when there is no water over the head. A stowed tool is equipped first (stowed-breaker)."
+   when there is no water over the head."
   [world]
   (when (deep? world)
     (when-let [{:keys [source rock]} (overhead world)]
@@ -513,12 +512,7 @@
    higher than the feet (to-height?: the open sky on the way is not the bank), down toward it when
    lower, along the heading most toward it, to its height, and at its height a tunnel along that
    heading; each climb-stairs, stair-depth or tunnel-out-length at a time, so the planner looks
-   again between lengths. nil when no water is seen. Every hunt and walk had no route, and each
-   waited :no-water. The cut names the water it heads for (:intent/target): a cut that is :boxed
-   gives that water up (stairs/box) and the next look chooses other water, or none and a climb; so
-   does a tunnel that ends no nearer it than it began (:intent/from-feet, stairs/no-nearer?). With
-   radius, the pools remembered within it count (pool-radius by default; scoop-next asks
-   far-pool-radius last)."
+   again between lengths. nil when no water is seen."
   ([world] (to-bank world pool-radius))
   ([world radius]
    (let [fy (physics/y-of (intent/feet world))]
@@ -547,7 +541,7 @@
   "Out of the ground when the sky is not open over the feet, whatever the height: walk up the air
    already dug (intent/opening), else stairs cut up until out (stairs/out? ends them first;
    terrain/top-y is the top of the world), climb-stairs at a time (stairs/climb-to), so the planner
-   looks again between lengths. nil under the open sky. The last resort before waiting."
+   looks again between lengths. nil under the open sky."
   [world]
   (when-not (or (terrain/under-sky? world (intent/feet world)) (boxed-here? world))
     (or (intent/opening world)
@@ -572,10 +566,7 @@
    under the landing (pit-climb), or up or down to the bank of water seen that no route reaches
    (to-bank), or cut out of the ground (dig-out), or tunnel out of a pit (tunnel-out); else wait
    :no-water. The climbs out (climb, pit-climb) are for water not seen: with water seen they give
-   way to the cut toward its bank, which they would undo a stair at a time. A pool remembered beyond
-   pool-radius, level with or under the feet, is cut toward the same way (far-down: before the
-   climbs, which would undo its stairs, and one over the feet last, far), where there was only the
-   wait."
+   way to the cut toward its bank, which they would undo a stair at a time."
   [world]
   (let [srcs (sources world)
         src (first (filter #(and (in-reach? world %) (sees? world %)) srcs))
