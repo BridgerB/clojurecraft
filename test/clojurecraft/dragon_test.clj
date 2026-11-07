@@ -34,6 +34,15 @@
   [label i]
   (vary-meta i assoc :intent/why label))
 
+(defn planner-answer
+  "What the dragon row answers in world w as the bot meets it in the End, nothing running."
+  [w]
+  (plan/next-intent (-> w
+                        (assoc :player/dimension dimension/end)
+                        (dissoc :plan/intent :plan/last))
+                    (plan/row-of plan/goals :dragon)
+                    plan/goals))
+
 (defn cuts?
   "Would the planner cut running intent i in world w, as the bot meets it in the End: the dragon
    row's fresh answer (plan/next-intent), planned with nothing running, ranks above it
@@ -301,9 +310,10 @@
         "its reach, radius and margin, counts")
     (is (cuts? (w (cloud [10.5 64.0 0.5])) (as :dragon/walk-to-stand {:intent/kind :walk}))
         "a breath near ends a walk")
-    (is (not (cuts? (w (cloud [10.5 64.0 0.5]))
-                    (as :dragon/back-off-breath {:intent/kind :back-off})))
-        "never the back-off from it")
+    (let [near (w (cloud [10.5 64.0 0.5]))]
+      (is
+       (not (cuts? near (planner-answer near)))
+       "never the answer the planner gives itself: a back-off it chose is not cut by the same breath"))
     (is (not (cuts? (w (cloud [7.5 64.0 9.5])) (as :dragon/walk-to-stand {:intent/kind :walk})))
         "none near: the walk goes on")))
 
@@ -457,9 +467,9 @@
     (is (not (cuts? (round-fountain [4.5 64.0 0.5] (sitting 90.0))
                     (as :dragon/out-of-bite {:intent/kind :walk :intent/target [4 64 5]})))
         "never the walk out from under it")
-    (is (not (cuts? (round-fountain [-0.5 64.0 -1.5] (sitting 90.0))
-                    (as :dragon/walk-to-stand {:intent/kind :walk :intent/target [2 64 0]})))
-        "nor a walk in the basin")))
+    (let [basin (round-fountain [-0.5 64.0 -1.5] (sitting 90.0))]
+      (is (not (cuts? basin (planner-answer basin)))
+          "nor the walk the planner chose in the basin, by the answer that names itself"))))
 
 (deftest the-bot-keeps-the-basins-floor-while-the-dragon-sits-or-lands
   ;; every head death of gym dragon2-a and dragon2-b was a bot up on the basin's rim (a way
