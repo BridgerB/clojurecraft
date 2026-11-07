@@ -115,6 +115,13 @@ Asleep at the wheel means a tick that ends with nothing changed: "lanes still ru
   - **nothing-to-do 42.** 41 were the table pickup into a full bag (fixed in #727). On a3cbcc5, 10 of 29 rod bots still ended this way: the spare-picks row, chosen ahead of the hunt, can be pending with nothing to start.
   - **timeout 22.**
   - **Endermen:** seen by 23 bots, always 54–105 m away, never provoked. #726 chases them; not yet measured.
+- **Stage 18 from the checkpoint, 2026-11-07 (every lane, bots capped at 60 min and filed as `:bot-timeout`, #773):**
+  - **Throughput:** 9cedf7c ended 140 real-18 and 106 sim-18 runs (from 15 and 20 before the cap). No pearl yet.
+  - **The lookout stall, the top signature** (`[:bot-timeout nil :lookout :hunt/else]`, 86 of 246 on 9cedf7c, 49 of 140 on d3ce99b): the fortress tunnel-out target was re-derived every act and flipped between two cells, hundreds of `:tunnel-to` until the pickaxe wore out, then sealed with no route and nothing to dig with (probe 42357825200, sim R1/11 seed 1). Fixed by holding the target (#786). Open: about half the stalled bots still held a pickaxe; the roof (y 122) as a target.
+  - **Never near an enderman:** 72 of 107 capped real bots on 9cedf7c saw none within 32 blocks.
+  - **Dying while tunnelling out:** wither skeletons and hoglins hit the bot mid-tunnel and it never swung back (the hunt claims those kinds, so `:defend` left them). Fixed by #784 (fight at or above the danger line, avoided kinds only at 18 and alone, else cover).
+  - **Crashes:** 4 real bots on d3ce99b, a NullPointerException in the pillar climb (a click's send time read as a placement's). Fixed by #785.
+  - Measure all three on 59e528b and after.
 - **The sim:** no sim bot has reached a forest. The model does spawn warped-forest endermen (packs of 4). Sim stage-18 numbers mean nothing until the checkpoint start gets sim bots there.
 - **Closed ideas:** breaking the spawner (fix/263-break-spawner: 0 of 8 sim worlds broke it, and the one bot that tried died faster); seal-when-struck, yield-line, melee-crowd, crowd-hold, striker, fire-out and start-gate (#706 parts).
 - **Gym:** pearl rows have reached 12 pearls from a warped-forest start with two iron pickaxes. Race bots carry one stone pickaxe (#724 adds spares).
