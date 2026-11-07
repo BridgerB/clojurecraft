@@ -3486,6 +3486,13 @@
                (and (= :lookout (:intent/kind i)) (some? (first (threat world)))))
            (not (same-choice? i (plan/next-intent world goal plan/goals))))))
 
+(defmethod plan/fire-cover :pearls
+  ;; a ghast or blaze in sight, or one that was within shot-hold-ms (recently-shot?): the cover
+  ;; from it, never a retreat walk in the open. Stage 18 (b3bfbfd, b54f648, 59e528b): every death
+  ;; in the open to ghast or blaze fire came during a :walk :for :retreat, 18 of 18 (issue #263).
+  [world _]
+  (when (or (shot-at? world) (recently-shot? world)) (cover-from world)))
+
 (defmethod combat/answers :pearls
   ;; the hunt provokes endermen and fights them from its burrow; an angry one (entity/creepy?)
   ;; is a hostile the :defend row would otherwise walk out of the burrow after

@@ -3558,6 +3558,12 @@
         (is (not= :tunnel-to (:intent/kind i)) "does not start digging while under active fire")
         (is (contains? #{:place :dig :walk} (:intent/kind i))
             "places cover or moves out of sight")))
+    (testing "a retry's cover under fire is the hunt's cover-from, never a retreat walk"
+      (let [c (plan/fire-cover base row)]
+        (is (some? c))
+        (is (not= :retreat (:intent/for c)))
+        (is (nil? (plan/fire-cover (assoc base :world/entities {} :pearls/shot-at-ms nil) row))
+            "with nothing shooting there is none")))
     (testing "safe from active fire but hurt, the rod bot heals before tunneling out"
       (let [hurt-world (-> base
                            (dissoc :pearls/shot-at-ms :player/attacker)
