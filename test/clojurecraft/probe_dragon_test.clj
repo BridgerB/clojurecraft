@@ -6,18 +6,26 @@
             [clojurecraft.mob :as mob]))
 
 (defn show
-  "A line: label, the answer, its why."
+  "Append a line to out/answers.txt: label, the answer, its why, the breath, the escape cell."
   [label w]
   (let [a (dragon/toward-dragon w)]
-    (println "ANSWER"
-             label
-             (pr-str a)
-             (pr-str (:intent/why (meta a)))
-             "breath"
-             (pr-str (some-> (dragon/breath-near w)
-                             (select-keys [:entity/pos])))
-             "escape" (pr-str (dragon/escape w))
-             "in-basin" (dragon/in-basin? w))))
+    (.mkdirs (java.io.File. "out"))
+    (spit "out/answers.txt"
+          (str "ANSWER "
+               label
+               " "
+               (pr-str a)
+               " why "
+               (pr-str (:intent/why (meta a)))
+               " breath "
+               (pr-str (some-> (dragon/breath-near w)
+                               (select-keys [:entity/pos])))
+               " escape "
+               (pr-str (dragon/escape w))
+               " in-basin "
+               (dragon/in-basin? w)
+               "\n")
+          :append true)))
 
 (deftest answers
   (let [d {dt/dragon-eid {:entity/type (mob/type-id :ender_dragon) :entity/pos [0.5 90.0 0.5]}}
