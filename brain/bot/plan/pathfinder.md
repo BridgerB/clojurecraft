@@ -31,7 +31,7 @@ sourceRefs:
   - src/clojurecraft/path.clj#defmethod goal-done? :sky
   - src/clojurecraft/stairs.clj#defmethod path/goal-done? :surface
   - src/clojurecraft/stairs.clj#defmethod path/heuristic :surface
-  - src/clojurecraft/path.clj#def default-max-nodes 6000
+  - src/clojurecraft/path.clj#def default-max-nodes (budget :far)
   - src/clojurecraft/path.clj#defn trap-factor
   - test/clojurecraft/path_test.clj#a-cliff-is-descended-by-its-stair-never-by-the-six-block-drop
   - test/clojurecraft/path_test.clj#a-found-route-is-walked-by-the-physics-and-ends-in-the-goal

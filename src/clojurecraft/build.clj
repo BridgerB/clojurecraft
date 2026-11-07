@@ -805,7 +805,7 @@
               [(+ x 0.5) (+ y physics/eye-height) (+ z 0.5)])]
     (<= (physics/distance eye (physics/centre pos)) intent/reach)))
 
-(def stand-max-nodes 400) ; expansions spent looking for a reachable local stand to work an op
+(def stand-max-nodes (path/budget :near)) ; expansions spent looking for a reachable local stand to work an op
 
 (defn stand-cell?
   "Could the feet stand in cell to work pos: not pos, the head not in pos, standable, and pos

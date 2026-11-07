@@ -125,7 +125,7 @@
 (def avoid-ms 300000)                 ; ms after the watchdog fires that the place it fired at is avoided by the row's choices
 (def avoid-radius 16.0)               ; blocks from that place a cell counts as it
 (def explore-tries 4)                 ; trail cells tried farthest first, then as many nearest first, for a route
-(def explore-nodes 2000)              ; expansions each of those route searches may spend
+(def explore-nodes (path/budget :explore))              ; expansions each of those route searches may spend
 (def anchors
   "{:goal/plan #{attribute}}: the places a row holds on to (the pearl hunt's burrow, a blaze pocket),
    dropped when it has made no progress for stuck-ms, so it does not walk back to them."

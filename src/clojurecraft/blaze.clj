@@ -79,7 +79,7 @@
 (def rest-ms 90000)                   ; a rest with no health coming back this long fails :no-heal (the slow heal is one point every four seconds)
 (def fire-radius 4)                   ; cells from a spawner a fire is put out in: a fire lights its cells past 11, where a spawner's blaze no longer spawns
 (def corridor-reach 48.0)             ; bricks within this of the feet are walked or tunnelled to; farther is another fortress, not this leg
-(def corridor-nodes 800)              ; nodes one corridor walk may spend finding its route (the cover search's budget)
+(def corridor-nodes (path/budget :cover))              ; nodes one corridor walk may spend finding its route (the cover search's budget)
 
 (def rod (recipe/item-id :blaze_rod))
 (def spawner (blocks/default-state :spawner))
@@ -688,7 +688,7 @@
             (path/plan world
                        (path/feet-cell pos)
                        {:goal/kind :unseen :goal/pos c :goal/cells (vec cs) :goal/exclude recent}
-                       {:path/max-nodes 800}))
+                       {:path/max-nodes (path/budget :cover)}))
         to (last (:path/waypoints r))]
     (when (and r (= :found (:path/status r)) to (not= to (intent/feet world)))
       {:intent/kind :walk :intent/target to :intent/for :cover})))
