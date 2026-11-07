@@ -889,3 +889,22 @@
                                (map sound-name (said blinked :sound))))]
           (is (and (pos? n) (even? n))
               "where it left and where it landed, a pair for each jump"))))))
+(deftest a-mob-shows-its-gear-at-spawn-and-turns-its-head-toward-the-player
+  ;; issue #263: the model sends what the real server sends, so the bot senses the same in both
+  (let [sim (-> (sim/init {:columns (flat-world {})
+                           :spawn [0.5 64.0 0.5]
+                           :difficulty :normal
+                           :day-time night
+                           :seed 3})
+                (assoc :sim/phase :play :sim/player-pos [0.5 64.0 0.5] :sim/on-ground? true)
+                (sim/with-mobs [{:type :wither_skeleton :pos [6.5 64.0 0.5]}]))
+        [eid] (the-mob sim :wither_skeleton)
+        later (ticks sim 5)]
+    (is (= [{:packet/name :set-equipment
+             :entity-id eid
+             :equipment [[0 {:item (recipe/item-id :stone_sword) :count 1}]]}]
+           (said sim :set-equipment))
+        "its sword, told with its spawn")
+    (is (= [{:packet/name :rotate-head :entity-id eid :head-yaw 64}]
+           (filter #(= eid (:entity-id %)) (said later :rotate-head)))
+        "it looks along -x at the player, told once while the look holds")))

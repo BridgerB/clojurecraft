@@ -1257,6 +1257,20 @@
   [eid health]
   {:packet/name :set-entity-data :entity-id eid :metadata {entity/health-index (double health)}})
 
+(defn tell-gear
+  "The model having told the client what a mob of kind holds and wears (set-equipment, mob/equipment
+   with its slot indexes and item ids), as a server does when it adds the mob; unchanged for a kind
+   that shows nothing."
+  [sim eid kind]
+  (let [gear (mob/equipment kind)]
+    (cond-> sim
+      (seq gear)
+      (send {:packet/name :set-equipment
+             :entity-id eid
+             :equipment (mapv (fn [[slot item]] [(entity/equipment-slot-ids slot)
+                                                 {:item (recipe/item-id item) :count 1}])
+                              (sort-by (comp entity/equipment-slot-ids key) gear))}))))
+
 (defn retell-entities
   "The model with every mob and every item lying about told to the client again (add-entity, a
    mob's health after it), as a vanilla server does for a respawned player, whose client starts
@@ -1274,7 +1288,8 @@
                                     :x x
                                     :y y
                                     :z z})
-                             (send (health-data eid health)))))
+                             (send (health-data eid health))
+                             (tell-gear eid type))))
                      sim
                      (:sim/mobs sim))]
     (reduce (fn [sim [eid {[x y z] :pos}]]
@@ -2168,12 +2183,38 @@
       (assoc-in [:sim/mobs eid]
                 (cond-> {:type kind :pos pos :health health}
                   persistent? (assoc :persistent? true)
-                  yaw (assoc :yaw (double yaw))))
+                  yaw (assoc :yaw (double yaw) :head-byte (yaw-byte yaw))))
       (send
        (cond-> add
          yaw
          (assoc :vel [0.0 0.0 0.0] :pitch 0 :yaw (yaw-byte yaw) :head-yaw (yaw-byte yaw) :data 0)))
-      (send (health-data eid health)))))
+      (send (health-data eid health))
+      (tell-gear eid kind))))
+
+(def face-radius 24.0)                ; blocks within which a mob turns its head to the player (and the client is told)
+
+(defn face-player
+  "The model with mob eid's head turned toward the player (entity/yaw-toward as the game turns
+   it), told to the client as rotate-head when the byte it would send changed, as a server sends
+   a head turn; unchanged for a dead mob, a passive one, a crystal, the dragon (it flies its own
+   way), one beyond face-radius, or one already looking that way."
+  [sim eid]
+  (let [{:keys [type pos dead-at head-byte] :as m} (get-in sim [:sim/mobs eid])
+        k (mob/kinds type)
+        player (:sim/player-pos sim)
+        b (when (and m player) (yaw-byte (entity/yaw-toward pos player)))]
+    (cond (or (nil? b)
+              dead-at
+              (:passive k)
+              (:crystal k)
+              (:perched k)
+              (> (physics/distance pos player) face-radius)
+              (= b head-byte))
+          sim
+          :else
+          (-> sim
+              (assoc-in [:sim/mobs eid :head-byte] b)
+              (send {:packet/name :rotate-head :entity-id eid :head-yaw b})))))
 
 (defn with-mobs
   "The model with each of mobs ({:type kind :pos [x y z]}, as a fixture gives them, init's :mobs)
@@ -3222,7 +3263,9 @@
                         try-fortress-spawn
                         try-crimson-spawn
                         tick-spawners)]
-            (despawn (reduce act-mob sim (sort (keys (:sim/mobs sim)))))))))
+            (despawn (reduce (fn [sim eid] (face-player (act-mob sim eid) eid))
+                             sim
+                             (sort (keys (:sim/mobs sim)))))))))
 
 
 ;; ---------------------------------------------------------------- eyes, the portal and the End (issue #260)

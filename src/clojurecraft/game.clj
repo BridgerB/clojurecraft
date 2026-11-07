@@ -412,12 +412,13 @@
 (defmethod on-packet [:play :add-entity]
   ;; every entity, not only items (issue #258): mobs, players, projectiles, an eye of ender; its
   ;; velocity and yaw when the packet carries them (a recording from before the spec grew does not)
-  [w {:keys [entity-id type x y z vel yaw]}]
+  [w {:keys [entity-id type x y z vel yaw head-yaw]}]
   (assoc-in w
    [:world/entities entity-id]
    (cond-> {:entity/type type :entity/pos [x y z] :entity/seen-at (:time/now w)}
      vel (assoc :entity/vel vel)
-     yaw (assoc :entity/yaw (entity/angle yaw)))))
+     yaw (assoc :entity/yaw (entity/angle yaw))
+     head-yaw (assoc :entity/head-yaw (entity/angle head-yaw)))))
 (defn turn
   "w with tracked entity eid's yaw set to deg, when the packet said one (a recording from before
    the spec grew does not)."
@@ -449,11 +450,14 @@
                yaw (assoc :entity/yaw (double (relative flags 8 (:entity/yaw e 0.0) yaw))))))))
 (defmethod on-packet [:play :entity-event]
   ;; status 3 is a living entity's death: a fact before the body is removed; the dragon's is the
-  ;; run's win (issue #267)
+  ;; run's win (issue #267); every other status (a teleport's particles, eating, a hurt) is kept
+  ;; as the entity's newest few, :entity/statuses (issue #263)
   [w {:keys [entity-id status]}]
   (let [death? (= entity/death-status status)]
     (cond-> w
       death? (track entity-id assoc :entity/died-at (:time/now w))
+      (not death?)
+      (track entity-id update :entity/statuses entity/note-status status (:time/now w 0))
       (and death? (entity/dragon? (get-in w [:world/entities entity-id])))
       (assoc :world/dragon-dead? true))))
 (defn ignite

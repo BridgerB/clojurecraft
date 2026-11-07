@@ -229,6 +229,18 @@
    [:entity/radius
     "an area effect cloud's radius in blocks, from its metadata (index 8): a dragon's breath cloud grows from 3 to 7 over its life, and the bot keeps out of all of it (issue #267)"
     "inside :world/entities, an area effect cloud, once its metadata said"]
+   [:entity/head-yaw
+    "degrees where the entity's head looks as the server sends it (add-entity, rotate-head, eye.clj): an enderman facing the bot, a mob lining up a shot (issue #263)"
+    "inside :world/entities, once the server said one"]
+   [:entity/equipment
+    "{slot-name item-name} of what a creature holds and wears (set-equipment, eye.clj): :mainhand :offhand :feet :legs :chest :head :body :saddle; a wither skeleton's sword, a piglin's crossbow (issue #263)"
+    "inside :world/entities, once the server said what it holds"]
+   [:entity/power
+    "a fireball's acceleration power (projectile-power, eye.clj), the server's word for how hard it is pushed (issue #263)"
+    "inside :world/entities, a projectile, once the server said one"]
+   [:entity/statuses
+    "[[status ms] ...] the newest few entity-event statuses other than death (an enderman's teleport particles, eating, a hurt), kept by game.clj (issue #263)"
+    "inside :world/entities, after its first such event"]
    [:sight/pos "an observation's block position" "a fact in :world/facts"]
    [:sight/state "the state id observed there" "a fact in :world/facts"]
    [:sight/at "ms of the observation" "a fact in :world/facts"]
