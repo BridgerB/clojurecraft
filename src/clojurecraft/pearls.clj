@@ -2664,23 +2664,49 @@
            :intent/for :pearls}
           :else walk)))
 
-(defn heavy-near?
-  "Is a hostile of a heavy kind (heavy?) within the range it follows from (combat/can-reach-by? with
-   no time: its :follow), tracked now? A hoglin field, where the hunt walks through it."
-  [world]
-  (boolean (some (fn [[_ e]]
-                   (and (heavy? e)
-                        (<= (physics/distance (:player/pos world) (:entity/pos e))
-                            (get-in mob/kinds [(entity/kind e) :follow] combat/reach-follow))))
-                 (entity/hostiles world))))
+(defn segment-distance
+  "The distance in blocks from point p to the segment a-b ([x y z] each)."
+  [a b p]
+  (let [ab (mapv - b a)
+        ap (mapv - p a)
+        len2 (reduce + (map * ab ab))
+        t (if (zero? len2) 0.0 (max 0.0 (min 1.0 (/ (reduce + (map * ap ab)) (double len2)))))
+        q (mapv (fn [x d] (+ x (* t d))) a ab)]
+    (physics/distance q p)))
+
+(def heavy-look 64.0) ; blocks from the feet a heavy hostile is looked for on a route: past its tracking range, the walk starts out of reach and ends in it
+
+(defn heavy-on-route?
+  "Does the route of walk i from the feet pass within the follow range of a heavy hostile (heavy?, its
+   :follow in mob/kinds), tracked now? The route is planned once, only when a heavy hostile is tracked
+   within heavy-look, and its waypoints (the straight line when it has none) are taken a segment at a time
+   (segment-distance). Decided before the walk starts, not at the distance the bot stands from it now: sim
+   R1/17 seed 1 (probe rh6-R1-17, issue #263) walked 40 blocks at hoglins 24 to 32 blocks off, their follow
+   range 16, into four of them."
+  [world i]
+  (let [feet (intent/feet world)
+        heavies
+        (for [[_ e] (entity/hostiles world)
+              :when (and (heavy? e)
+                         (<= (physics/distance (:player/pos world) (:entity/pos e)) heavy-look))]
+          [(:entity/pos e) (get-in mob/kinds [(entity/kind e) :follow] combat/reach-follow)])]
+    (boolean (when (seq heavies)
+               (let [r (path/plan world
+                                  (path/feet-cell (:player/pos world))
+                                  (intent/goal-of i)
+                                  {:path/max-nodes vantage-nodes})
+                     pts (vec (cons feet (or (seq (:path/waypoints r)) [(:intent/target i)])))]
+                 (some (fn [[a b]]
+                         (some (fn [[hp follow]] (<= (segment-distance a b hp) follow)) heavies))
+                       (map vector pts (rest pts))))))))
 
 (defn tunnel-past-heavy
   "The intent i for the way to a forest, a :walk replaced by a sealed :tunnel-to to the same target
-   when a heavy hostile is near (heavy-near?) and a pickaxe is held: the hunt does not walk in the
-   open through hoglins. Sim R1/17 seed 1 (probe rh6-R1-17, issue #263) walked 40 blocks with four hoglins
-   in sight, was struck at 659.6 s and dead at 665.6. Any other intent, and a walk with none near, as it is."
+   when its route passes within a heavy hostile's follow range (heavy-on-route?) and a pickaxe is held:
+   the hunt does not walk in the open through hoglins. Any other intent, and a walk with a clear route, as
+   it is."
   [world i]
-  (if (and (= :walk (:intent/kind i)) (heavy-near? world) (pickaxe? world))
+  (if (and (= :walk (:intent/kind i)) (pickaxe? world) (heavy-on-route? world i))
     {:intent/kind :tunnel-to
      :intent/target (:intent/target i)
      :intent/reach 1.5

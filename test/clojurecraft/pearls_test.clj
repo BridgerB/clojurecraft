@@ -4381,17 +4381,24 @@
 
 (deftest a-walk-through-hoglins-is-a-tunnel
   ;; Logged state, sim R1/17 seed 1 (probe rh6-R1-17, issue #263): :walk [987 58 -288] :for :pearls
-  ;; with four hoglins 24 to 32 blocks off, struck at 659.6 s, dead at 665.6. With a heavy hostile near
-  ;; and a pickaxe held, the way is a sealed tunnel; with none near, or no pickaxe, the walk.
-  (let [walk {:intent/kind :walk :intent/target [40 64 8] :intent/for :pearls}
-        w (-> (standing {7 (mob :hoglin [28.5 64.0 8.5])} {})
+  ;; at hoglins 24 to 32 blocks off, their follow range 16: the bot's own distance said clear, the route
+  ;; ended in them. A route that passes within a heavy hostile's follow range, with a pickaxe held, is
+  ;; a sealed tunnel; a clear route, or no pickaxe, the walk.
+  (let [walk {:intent/kind :walk :intent/target [60 64 8] :intent/for :pearls}
+        w (-> (wide (standing {7 (mob :hoglin [56.5 64.0 14.5])} {}))
               (assoc :player/dimension nether)
               (assoc-in [:player/inventory 1] (item :iron_pickaxe 1)))
+        far (assoc w :world/entities {7 (mob :hoglin [8.5 64.0 60.5])})
         calm (assoc w :world/entities {})
         bare (update w :player/inventory dissoc 1)]
-    (is (pearls/heavy-near? w) "a hoglin 20 blocks off follows from there")
+    (is (> (physics/distance (:player/pos w) [56.5 64.0 14.5]) 40.0)
+        "the hoglin is far from the feet")
+    (is (pearls/heavy-on-route? w walk) "but the route to [60 64 8] ends in its follow range")
     (is (= :tunnel-to (:intent/kind (pearls/tunnel-past-heavy w walk))))
-    (is (= [40 64 8] (:intent/target (pearls/tunnel-past-heavy w walk))))
+    (is (= [60 64 8] (:intent/target (pearls/tunnel-past-heavy w walk))))
     (is (true? (:intent/seal-behind? (pearls/tunnel-past-heavy w walk))))
-    (is (= walk (pearls/tunnel-past-heavy calm walk)) "none near: the walk")
-    (is (= walk (pearls/tunnel-past-heavy bare walk)) "no pickaxe: the walk")))
+    (is (= walk (pearls/tunnel-past-heavy far walk)) "a hoglin 50 blocks off the route: the walk")
+    (is (= walk (pearls/tunnel-past-heavy calm walk)) "none tracked: the walk")
+    (is (= walk (pearls/tunnel-past-heavy bare walk)) "no pickaxe: the walk")
+    (is (< (pearls/segment-distance [0 0 0] [10 0 0] [5 3 0]) 3.01))
+    (is (> (pearls/segment-distance [0 0 0] [10 0 0] [20 0 0]) 9.99))))
