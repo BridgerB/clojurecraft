@@ -145,11 +145,9 @@
 
 (defn sources
   "[[slot k] ...]: the stacks of inventory (window slots, slot-of) that lay n items of the
-   ingredient set s, with what used already takes out of each: one stack that covers all n
-   when there is one (the lowest slot), else the lowest slots in turn until n are drawn, so
-   7 + 1 cobblestone make a furnace (race 38477665442 bot Clj_r02's pickup had started a
-   second stack, and the craft found no single stack of eight: :no-ingredient three times).
-   nil when the stacks do not hold n together."
+   ingredient set s, with what used already takes out of each: one stack that covers all n when
+   there is one (the lowest slot), else the lowest slots in turn until n are drawn, so 7 + 1
+   cobblestone make a furnace. nil when the stacks do not hold n together."
   [inventory slot-of used s n]
   (let [stacks (for [[slot {:keys [item count]}] (sort-by key inventory)
                      :let [left (- count (get used slot 0))]
