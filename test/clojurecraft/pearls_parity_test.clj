@@ -1,6 +1,6 @@
 (ns clojurecraft.pearls-parity-test
   "The pearl hunt's rule table (pearls-rules.edn) chooses what the cond it replaced chose: the
-   same intent and the same why label, over a grid of worlds built from the pearl tests' own
+   same intent (the table also labels it with the row's id, where the cond kept an inner planner's label), over a grid of worlds built from the pearl tests' own
    canned states."
   (:require [clojure.java.io :as io]
             [clojure.test :refer [deftest is]]
@@ -237,9 +237,15 @@
                          :table (outcome rules/decide w)
                          :cond (outcome legacy/legacy-hunt w)})
                       worlds)
-        differ (remove #(= (:table %) (:cond %)) results)
+        differ (remove #(= (first (:table %)) (first (:cond %))) results)
+        mislabelled (remove #(let [[i why] (:table %)]
+                               (or (not (map? i)) (= why (rules/row-of (:world %)))))
+                            results)
         whys (into #{} (map #(rules/row-of (:world %))) results)]
     (is (empty? (map :label (take 5 differ))) "worlds where the table and the cond differ")
+    (is
+     (empty? (map :label (take 5 mislabelled)))
+     "the table's intent carries the id of the row that chose it, whatever an inner planner labelled it")
     (is (< 200 (count results)) "worlds compared")
     (when (.isDirectory (io/file "out"))
       (spit "out/pearls-parity.edn"
