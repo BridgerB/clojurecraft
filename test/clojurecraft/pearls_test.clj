@@ -4346,3 +4346,21 @@
       (let [near (assoc w :player/pos [20.5 70.0 8.5])]
         (is (pearls/escape-near? near))
         (is (some? (pearls/fortress-tunnel-target near)))))))
+
+(deftest a-far-end-near-one-already-walked-to-is-not-new-ground
+  ;; Logged state, sim R1/17 (probe 42374244659, issue #263): under the roof, in the cavity of its own
+  ;; tunnels, relocate walked between the two ends [1013 120 -205] and [1015 120 -165] forty minutes,
+  ;; each within a block or two of the other's last arrival, a pickaxe at 131 digs unused. An end
+  ;; within roam-reach of where one of the last walks arrived is left out, so the explore finds none
+  ;; and the cage-break cuts a new way.
+  (let [w (-> (wide (standing {}))
+              (assoc :player/dimension nether
+                     :player/inventory {0 (item :iron_sword 1) 1 (item :iron_pickaxe 1)}))
+        ends (mapv second (pearls/far-ends w 0 #{}))
+        visited (vec (take pearls/explore-memory ends))
+        after (walked w (mapv #(update % 0 inc) visited))]
+    (is (>= (count ends) 2) "an open world has far ends")
+    (is (not-any? (fn [[_ to _]] (some #(< (path/octile to %) pearls/roam-reach) visited))
+                  (pearls/far-ends after 0 #{}))
+        "no end is left within roam-reach of a visited one")
+    (is (< (count (pearls/far-ends after 0 #{})) (count ends)) "the ends walked to are gone")))

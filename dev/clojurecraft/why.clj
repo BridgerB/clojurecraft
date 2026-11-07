@@ -86,7 +86,14 @@
                   :exit/held #(:pearls/exit-target w)
                   :exit/dir #(pearls/fortress-exit-dir w)
                   :exit/spawner #(blaze/nearest-spawner w)
-                  :exit/points #(count (pearls/fortress-points w))}]
+                  :exit/points #(count (pearls/fortress-points w))
+                  :relocate/walk #(pearls/relocate-walk w)
+                  :relocate/state #(:pearls/relocate w)
+                  :relocate/walk-dones #(mapv (juxt :intention/at :intention/target)
+                                              (memory/newest-dones w :walk 8))
+                  :relocate/endermen-128 #(count (pearls/endermen (dissoc w :plan/blacklist) 128.0))
+                  :relocate/last-intents #(mapv (juxt :intent/kind :intent/for :intent/target)
+                                                (take 4 (:plan/history w)))}]
        [k (safe f)]))))
 
 (defn -main
