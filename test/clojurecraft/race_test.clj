@@ -11,6 +11,7 @@
             [clojurecraft.failure :as failure]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
+            [clojurecraft.gym :as gym]
             [clojurecraft.main :as main]
             [clojurecraft.plan :as plan]
             [clojurecraft.race :as race]))
@@ -512,3 +513,39 @@
            (is (< (count t) 41)))
          (is (str/includes? (race/serverlog-text (str f) "Clj_r1") "was slain by Blaze"))
          (finally (.delete f)))))
+
+(deftest a-race-from-the-forest-checkpoint-plays-the-pearls-from-a-warped-forest
+  ;; LOOP.md section 7.6: the hunt practised from its own start; 12 of 13 stalled bots on 7c7e8dd
+  ;; never saw an enderman
+  (is (= [:ender-pearls] (race/from-goals "forest" "pearls-12")))
+  (is (race/fortress? "forest") "a Nether start with the fortress's pool and pads")
+  (is (race/forest? "forest"))
+  (is (race/forest? :forest))
+  (is (not (race/forest? "rods")))
+  (is (not (race/forest? nil)))
+  (is (= ["minecraft:blaze_rod 7" "minecraft:stone_pickaxe 1"]
+         (race/start-kit ["minecraft:stone_pickaxe 1"] "forest"))
+      "the same seven rods, then the kit")
+  (is (= 3600000
+         (race/bot-cap-ms {:race/bot-minutes 60 :race/checkpoint [{:from "rods"} {:from "forest"}]}
+                          "forest"))
+      "a forest bot has the cap too")
+  (is (= 3600000
+         (race/bot-cap-ms {:race/bot-minutes 60 :race/checkpoint [{:from "rods"} {:from "forest"}]}
+                          "rods")))
+  (is (nil? (race/bot-cap-ms {:race/bot-minutes 60
+                              :race/checkpoint [{:from "rods"} {:from "forest"}]}
+                             "fortress"))))
+
+(deftest the-forest-is-located-from-the-pad-then-from-farther-off
+  (let [origins (race/forest-origins [-100 200 70])]
+    (is (= [-100 200] (first origins)) "the pad's own point first")
+    (is (= (inc (* 4 (count gym/locate-offsets))) (count origins)))
+    (is (= [(+ -100 256) 200] (second origins)))
+    (is (= (gym/warped-origins 800 1600) (gym/search-points-from 100 200))
+        "the gym's origins are the same function of the Nether point"))
+  (testing "the located point is read from the server's reply"
+    (is (= [2420 64 2216]
+           (gym/located-pos
+            "The nearest minecraft:warped_forest is at [2420, 64, 2216] (310 blocks away)")))
+    (is (nil? (gym/located-pos "Could not find a biome of type minecraft:warped_forest")))))
