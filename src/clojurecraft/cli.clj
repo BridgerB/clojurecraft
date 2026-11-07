@@ -19,6 +19,22 @@
   (let [[flags words] (split-with (fn [[k _]] (str/starts-with? k "--")) (partition-all 2 args))]
     [(options (apply concat flags)) (apply concat words)]))
 
+(defn checkpoints
+  "The checkpoints a config's checkpoint value names, a vector of {:from :kind :lanes} maps: nil
+   for none, the one map of a config written before there were two (ci/race.edn's
+   :race/checkpoint {...}), or the vector of maps written since. The workflows read the same three
+   shapes (race.yml, simrace.yml)."
+  [c]
+  (cond (nil? c) []
+        (map? c) [c]
+        :else (vec c)))
+
+(defn checkpoint-for
+  "The checkpoint of c (see checkpoints) whose :lanes name lane, or nil: a lane belongs to at most
+   one, the first that names it."
+  [c lane]
+  (first (filter #(contains? (set (:lanes %)) lane) (checkpoints c))))
+
 ;;;; I/O: stderr and other processes ;;;;
 
 (defn log

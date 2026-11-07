@@ -146,10 +146,10 @@
 
 (defn bot-cap-ms
   "A checkpoint bot's own time limit, ms, from the config: :race/bot-minutes when the server's
-   start (from) is the :race/checkpoint's, so only the checkpoint lanes cap their bots; nil for
+   start (from) is one of the :race/checkpoint's (cli/checkpoints), so only the checkpoint lanes cap their bots; nil for
    any other lane (a bot there plays until it ends or the job does)."
   [config from]
-  (when (and from (= from (get-in config [:race/checkpoint :from])))
+  (when (and from (some #(= from (:from %)) (cli/checkpoints (:race/checkpoint config))))
     (some-> (:race/bot-minutes config)
             (* 60000))))
 
@@ -314,9 +314,14 @@
    road to the fortress. \"rods\" is stage 18's checkpoint (LOOP.md section 1): the race kit and
    the seven rods stage 17 yields, at the same pad, so the pearl hunt (issue #263) is played by
    every bot that starts there, not only the 5 to 7% that win the blaze rods first (0ace52e: 184
-   of 2518 real bots)."
+   of 2518 real bots). \"forest\" is the same kit and goal landed on a floor of the warped forest
+   nearest the fortress pad (land-forest!), the hunt practised from its own start (LOOP.md section
+   7.6): on 7c7e8dd 12 of 13 stalled bots never saw an enderman."
   {"fortress" {:checkpoint/goal :blaze-rods :checkpoint/kit []}
-   "rods" {:checkpoint/goal :ender-pearls :checkpoint/kit ["minecraft:blaze_rod 7"]}})
+   "rods" {:checkpoint/goal :ender-pearls :checkpoint/kit ["minecraft:blaze_rod 7"]}
+   "forest" {:checkpoint/goal :ender-pearls
+             :checkpoint/kit ["minecraft:blaze_rod 7"]
+             :checkpoint/at :forest}})
 
 (defn start-of
   "The start (starts) :race/from names, a string or a keyword, or nil for a start from spawn."
@@ -327,6 +332,11 @@
   "Does :race/from name a start at the fortress (starts)?"
   [from]
   (some? (start-of from)))
+
+(defn forest?
+  "Does :race/from name the start in the warped forest (starts, :checkpoint/at :forest)?"
+  [from]
+  (= :forest (:checkpoint/at (start-of from))))
 
 (defn start-kit
   "What a bot starting at from is given, in order: the start's own items (start-of) first, then the
@@ -802,6 +812,35 @@
       (Thread/sleep (long fixture/settle-ms))
       (standing-on pad))))
 
+(defn forest-origins
+  "The Nether points [x z] a bot's forest is located from, nearest first, for its fortress pad
+   [x z y]: the pad's own point, then gym/locate-offsets off it along each axis for when the
+   nearest forest gives no floor (gym/search-points-from)."
+  [[x z _]]
+  (gym/search-points-from x z))
+
+(defn land-forest!
+  "Land the bot named name (racer i) on a floor of the warped forest nearest its fortress pad: the
+   pad as land-fortress! chooses it (built by prepare! or here), the forest the server locates
+   from it, the bot spread onto a floor round that point (gym/warped-floor-from!: warped forest,
+   never a carved cave's air, each forest tried once, the next nearest when one gives no floor),
+   then its inventory cleared and kit given as at the fortress. Returns where it stands ([x y z],
+   standing-on the floor), or nil when the dimension never came; throws when no forest near gave
+   a floor."
+  [rc name landing i kit]
+  (let [fortress
+        (if (seq @fortress-pool) (fortress-for @fortress-pool i) (locate-fortress! rc landing))
+        pad (or (get @pads-chosen i) (choose-pad! rc fortress i nil))
+        {:keys [floor tried]} (gym/warped-floor-from! rc name (forest-origins pad))
+        [fx fy fz]
+        (or floor (throw (ex-info "no floor in the warped forest" {:pad pad :at (vec tried)})))]
+    (cli/log "forest floor" [fx fy fz] "pad" pad)
+    (when (gym/wait-in! rc name dimension/nether)
+      (rcon/command! rc (str "clear " name))
+      (doseq [item kit] (rcon/command! rc (str "give " name " " item)))
+      (Thread/sleep (long fixture/settle-ms))
+      (standing-on [fx fz fy]))))
+
 (defn slot-index
   "The index racer i (from 0) lands with at the fortress: i mod slots, so a bot that replaces one
    that ended takes the landing and the pad of its slot, which prepare! built, and no new Nether
@@ -843,7 +882,7 @@
                       (rcon/command! rc (team-join-command name))
                       (cond (fortress? from)
                             (let [k (slot-index i bots)]
-                              (land-fortress!
+                              ((if (forest? from) land-forest! land-fortress!)
                                rc
                                name
                                (if landings (landing-of landings (or landing-offset 0) k) @centre)
