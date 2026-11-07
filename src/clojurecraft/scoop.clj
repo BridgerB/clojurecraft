@@ -642,21 +642,22 @@
         bank (delay (to-bank world))
         far (delay (when-not @bank (to-bank world far-pool-radius)))
         far-down (delay (when-not (= :stairs-up (:intent/kind @far)) @far))]
-    (cond src {:intent/kind :scoop :intent/target src}
+    (cond src (intent/why :scoop/source-in-reach {:intent/kind :scoop :intent/target src})
           :else
-          (or (first-walk world :scoop srcs)
-              (ice-water world)
-              (first-walk world :scoop (pools-near world))
-              (seen-source world)
-              (from-below world)
-              (when-not (or @bank @far-down) (climb world))
-              (hunt world)
-              (when-not (or @bank @far-down) (pit-climb world))
-              @bank
-              @far-down
-              (dig-out world)
-              (tunnel-out world)
-              @far
+          (or (intent/why :scoop/walk-to-source (first-walk world :scoop srcs))
+              (intent/why :scoop/break-ice (ice-water world))
+              (intent/why :scoop/walk-to-remembered-pool
+                          (first-walk world :scoop (pools-near world)))
+              (intent/why :scoop/seen-source (seen-source world))
+              (intent/why :scoop/from-below (from-below world))
+              (when-not (or @bank @far-down) (intent/why :scoop/climb (climb world)))
+              (intent/why :scoop/hunt (hunt world))
+              (when-not (or @bank @far-down) (intent/why :scoop/pit-climb (pit-climb world)))
+              (intent/why :scoop/to-bank @bank)
+              (intent/why :scoop/far-down @far-down)
+              (intent/why :scoop/dig-out (dig-out world))
+              (intent/why :scoop/tunnel-out (tunnel-out world))
+              (intent/why :scoop/far @far)
               {:plan/wait :no-water}))))
 
 (defmethod plan/act :scoop [world _] (scoop-next world))

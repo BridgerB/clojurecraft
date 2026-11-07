@@ -353,16 +353,21 @@
   (let [k (fresh-kill world)
         [eid e] (when-not k (game world))]
     (cond k
-          {:intent/kind :collect
-           :intent/target (cell (:intent/target-pos k))
-           :intent/drops meats
-           :intent/for :hunt}
+          (intent/why :hunt-food/collect-kill
+                      {:intent/kind :collect
+                       :intent/target (cell (:intent/target-pos k))
+                       :intent/drops meats
+                       :intent/for :hunt})
           e
           (if (<= (physics/horizontal-distance (:player/pos world) (:entity/pos e)) strike-range)
-            (cond-> {:intent/kind :fight :intent/target eid :intent/for :hunt}
-              (= :hoglin (entity/kind e)) (assoc :intent/yield? true))
-            {:intent/kind :walk :intent/target (cell (:entity/pos e)) :intent/for :hunt})
-          (foraging? world) {:intent/kind :forage :intent/for :hunt})))
+            (intent/why :hunt-food/fight-animal
+                        (cond-> {:intent/kind :fight :intent/target eid :intent/for :hunt}
+                          (= :hoglin (entity/kind e)) (assoc :intent/yield? true)))
+            (intent/why
+             :hunt-food/walk-to-animal
+             {:intent/kind :walk :intent/target (cell (:entity/pos e)) :intent/for :hunt}))
+          (foraging? world)
+          (intent/why :hunt-food/forage {:intent/kind :forage :intent/for :hunt}))))
 
 (defmethod intent/run :forage
   ;; {:intent/kind :forage}: choose the next leg of the search, then walk it as a :walk (the

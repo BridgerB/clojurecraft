@@ -15,6 +15,14 @@ sourceRefs:
   - src/clojurecraft/packet.clj#defn read-equipment
   - bb/clojurecraft/botlogs.clj#defn sight-of
   - src/clojurecraft/game.clj#defn hit-of
+  - src/clojurecraft/nbt.clj#defn read-component
+  - src/clojurecraft/nbt.clj#defn write-component
+  - src/clojurecraft/text.clj#defn plain
+  - "src/clojurecraft/text.clj#A death message component as {:death/key"
+  - src/clojurecraft/text.clj#defn cause-component
+  - src/clojurecraft/chat.clj#defn death-line
+  - src/clojurecraft/said.clj#defn say
+  - src/clojurecraft/sim.clj#defn record-death
   - src/clojurecraft/registry.clj#defn damage-type
   - src/clojurecraft/senses.clj#defn events
   - src/clojurecraft/derived.clj#defn alight-cause
@@ -27,6 +35,8 @@ sourceRefs:
   - src/clojurecraft/senses.clj#defn senses!
   - "src/clojurecraft/intent.clj#Intent i labelled with the planner's branch that chose it"
   - src/clojurecraft/intent.clj#defn why-of
+  - src/clojurecraft/intent.clj#defn why-or-default
+  - src/clojurecraft/intent.clj#defn child-why
   - "src/clojurecraft/memory.clj#The fact for intent i reaching event"
   - src/clojurecraft/race.clj#defn near-truth!
   - src/clojurecraft/race.clj#defn play-one!
@@ -67,13 +77,19 @@ The bot's whole mind is one world value, so everything a reader needs about a ru
   - the newest four entity-event statuses other than death (`:entity/statuses`, kept in game.clj).
   The ledger notes a gear change (`:equip`) and a hostile or enderman turning to face the bot (`:facing`), within 24 blocks and only on change (`senses/sight-events`); the sim sends set-equipment on a mob's spawn (`mob/equipment`) and rotate-head as it turns (`sim/face-player`). A case file ends with a sight line from the last minute: the kinds that faced the bot and the main-hand gear of whatever hit it (`botlogs/sight-of`).
 
+- **chat.clj:** what the server says in words (the action bar, title and subtitle texts and a boss bar's name when it is added join the same window, each line naming its packet in `:chat/via`; `disguised-chat` is not decoded: its chat-type holder's layout is unconfirmed).
+  - `system-chat` lines (every player's death, the server's warnings) are kept in `:world/chat`, the last 20, each `{:at :text :key}`; the text is `text/plain` of the component, which `nbt/read-component` read from the wire (a `:text` field type; a malformed component reads as nil, never throws).
+  - `player-combat-kill` carries the bot's own death message: `:player/death-text` `{:at :text :key :killer}` (`text/death` splits the key and the killer; no English table is held, so a text reads as the translate key and its arguments, `death.attack.mob Clj_r05 entity.minecraft.blaze`), gone at the respawn.
+  - The ledger notes each new line as `:chat` and the text as `:death-text`, and the `:death` event carries it; the case file's killer is that text first, then the server log's line, then the last hit.
+  - The sim tells the same: `sim/record-death` sends `player-combat-kill` with `text/cause-component` (`death.attack.mob`, `.fireball`, `.arrow`, `.wither`, `.onFire`, `.lava`, `.inFire`, `.fall`, `.drown`) wherever the model records a death cause, which `nbt/write-component` lays down.
+
 ## What is kept, per run
 
 - **The ledger:** `senses/events` names every change between two worlds; `senses/ledger!` keeps them all, unsampled, and counts any it drops. Written to `<name>.events.edn`.
 - **Derived senses** (`derived/events`, folded into the ledger): `:alight` with its cause (the newest non-burning hit within two seconds, `derived/alight-cause`, else lava or fire at the feet, else `:unknown`) and `:out` for `:player/on-fire?`; `:item` with the delta for the pearls, rods, eyes, pickaxes, food, buckets and cobblestone (per 64 crossed); `:knock` for the server setting the bot's own motion (`:player/knock`) and `:corrected` for a teleport after it was loaded (`:player/corrected`); `:biome` with the server's registry id under the feet (`chunk/biome-at`, no name table exists); `:air` at each three seconds of breath lost. Path search effort is not told: `path/plan` is called from many executors and its result never reaches the world.
 - **The senses:** one line a second (`senses/of`), and the ring: a moment a minute for the last five (`senses/senses!`).
 - **The moment:** the whole mind at the ending (`senses/moment`): facts, the blocks round the feet, the intent chain, the plan, the stages' keys, entities near, hits, effects, armour, and the newest 40 intentions.
-- **Why:** the stuck stage's planners label each intent with the branch that chose it (`intent/why`, on metadata, so equality is unchanged); intention facts keep `:intention/why`.
+- **Why:** every running intent carries a why (`intent/why`, on metadata, so equality is unchanged): a planner that tags its branches gives the finer label (the stuck stage's do), else `plan/start-intent` labels it `:<goal>/<kind>` (`intent/why-or-default`), and a child an executor starts inherits its parent's (`intent/child-why`, in `run-child`); intention facts keep `:intention/why`.
 - **Server truth** (real): every entity within 32 blocks of the ending and the bot's own entity, whole (`race/near-truth!`), as `<name>.server.txt`.
 - **The recording** of every failed run (`botlogs/keep-recording?`).
 

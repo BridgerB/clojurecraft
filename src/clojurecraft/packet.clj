@@ -11,7 +11,8 @@
    {:packet/name :unknown ...}; nothing here throws on foreign data."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
-            [clojurecraft.bytes :as b]))
+            [clojurecraft.bytes :as b]
+            [clojurecraft.nbt :as nbt]))
 
 (set! *warn-on-reflection* true)
 
@@ -146,12 +147,15 @@
                           [:game-type :u8] [:previous-game-type :i8] [:debug? :bool] [:flat? :bool]]
    [:play :s2c :damage-event] [[:entity-id :varint] [:source-type :varint] [:source-cause :varint]
                                [:source-direct :varint]]
-   [:play :s2c :player-combat-kill] [[:player-id :varint]]
+   ;; the bot's own death: its id, then the death message, a text component (nbt.clj; the last field
+   ;; is the observability plan's, appended: the cause in the server's words)
+   [:play :s2c :player-combat-kill] [[:player-id :varint] [:message :text]]
    [:play :s2c :game-event] [[:event :u8] [:param :f32]]
    ;; a boss bar shown or taken away: its id and the operation; what follows each operation (the
    ;; name, an NBT component) is an unmodelled tail, but the health update's float (operation 2)
    ;; comes first and is read (ClientboundBossEventPacket, issue #267)
-   [:play :s2c :boss-event] [[:uuid :uuid] [:action :varint] [:health [:if :action 2 :f32]]]
+   [:play :s2c :boss-event] [[:uuid :uuid] [:action :varint] [:health [:if :action 2 :f32]]
+                             [:name [:if :action 0 :text]]]
    ;; what the bot hears of a fight beyond the damage-event (the observability plan, part A):
    ;; an entity's hurt flash (ClientboundHurtAnimationPacket: id, yaw), an entity's arm swing
    ;; (ClientboundAnimatePacket: id, action; 0 the main hand), the server's fight bracket
@@ -178,6 +182,15 @@
    [:play :s2c :rotate-head] [[:entity-id :varint] [:head-yaw :i8]]
    [:play :s2c :set-equipment] [[:entity-id :varint] [:equipment :equipment]]
    [:play :s2c :projectile-power] [[:entity-id :varint] [:power :f64]]
+   ;; a line the server says to the bot: a text component and whether it shows over the hotbar
+   ;; (ClientboundSystemChatPacket): the death of every player and the server's warnings
+   [:play :s2c :system-chat] [[:content :text] [:overlay :bool]]
+   ;; the other lines the server shows the bot, each one text component (ClientboundSetActionBarText,
+   ;; SetTitleText, SetSubtitleTextPacket); disguised-chat is not modelled: its chat-type holder's
+   ;; layout is unconfirmed here
+   [:play :s2c :set-action-bar-text] [[:text :text]]
+   [:play :s2c :set-title-text] [[:text :text]]
+   [:play :s2c :set-subtitle-text] [[:text :text]]
    ;; play, client → server
    [:play :c2s :keep-alive] [[:id :i64]]
    [:play :c2s :pong] [[:id :i32]]
@@ -420,6 +433,7 @@
            :write (fn [out ^bytes v] (b/write-varint out (alength v)) (b/write-bytes out v))
            :valid? bytes?}
    :rest {:read b/read-rest :write b/write-bytes :valid? bytes?}
+   :text {:read nbt/read-component :write nbt/write-component :valid? any?} ; a text component as network NBT (nbt.clj); nil when malformed
    :lpvec3 {:read b/read-lpvec3 :write b/write-lpvec3 :valid? vec3?}
    :metadata {:read read-metadata :valid? metadata?}
    :slot {:read read-slot :valid? slot?}

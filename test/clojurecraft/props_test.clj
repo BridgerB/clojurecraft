@@ -78,6 +78,7 @@
                                                             :count (gen/choose 1 64))]))
                       1
                       3)
+          :text (gen/one-of [gen/string (gen/map gen/string gen/string {:max-elements 3})])
           :hashed-slot
           (gen/one-of [(gen/return nil)
                        (gen/hash-map :item (gen/choose 0 2000) :count (gen/choose 1 64))])

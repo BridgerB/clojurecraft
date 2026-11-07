@@ -117,7 +117,7 @@
 (defmethod plan/next-intent :eat
   [world _ _]
   (when-let [n (and (hungry? world) (not (under-attack? world)) (food-held world))]
-    {:intent/kind :eat :intent/item n}))
+    (intent/why :eat/hungry-with-food-held {:intent/kind :eat :intent/item n})))
 
 (defn deadline
   "The ms past which an :eat of food n started now has failed: its eating time by the server's
