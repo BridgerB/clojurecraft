@@ -5,6 +5,7 @@
   (:require [clojure.java.io :as io]
             [clojure.test :refer [deftest is]]
             [clojurecraft.blaze :as blaze]
+            [clojurecraft.blocks :as blocks]
             [clojurecraft.intent :as intent]
             [clojurecraft.memory :as memory]
             [clojurecraft.pearls-legacy :as legacy]
@@ -112,6 +113,19 @@
      (fortress-world
       {:blaze blaze :pick pick :trail trail :stage stage :ghast ghast :filler filler :hp hp})]))
 
+(def water "Water's default state." (blocks/default-state :water))
+
+(def void-under
+  "Air under the whole column's floor from y 40 to 62: the floor is one block thick over a drop."
+  (into {} (for [x (range 16) z (range 16) y (range 40 63)] [[x y z] ps/air])))
+
+(defn nook-world
+  "A bot in the nook (nook-blocks) holding a pickaxe, with entities."
+  [entities]
+  (-> (ps/standing entities nook-blocks)
+      (assoc :pearls/shelter [8 64 8] :pearls/mouth [9 64 8])
+      (assoc-in [:player/inventory 1] (ps/item :iron_pickaxe 1))))
+
 (def named-worlds
   "States the pearl tests build by name, and ones the grid cannot reach."
   (concat
@@ -135,6 +149,38 @@
      (-> (ps/standing {7 (ps/enderman [11.5 64.0 8.5])})
          (assoc :player/health 9.0 :plan/cornered #{7})
          (assoc-in [:player/inventory 3] (ps/item :cobblestone 64)))]
+    ;; a nook with a clear line east: a ghast in sight, health 15 and food: the meal row
+    ["nook-ghast-fed"
+     (-> (nook-world {10 (ps/mob :ghast [18.5 66.0 8.5])})
+         (assoc :player/health 15.0 :player/food 12)
+         (assoc-in [:player/inventory 2] (ps/item :cooked_beef 8)))]
+    ;; the nook with a calm enderman to stare at, rested and not
+    ["nook-quarry" (nook-world {7 (ps/enderman [28.5 64.0 8.5])})]
+    ["nook-quarry-tired" (assoc (nook-world {7 (ps/enderman [28.5 64.0 8.5])}) :player/health 15.0)]
+    ;; stone only in the way of the stairs: water where the burrow's stairs would go, so a site
+    ;; beside the feet is walked to
+    ["water-by-feet"
+     (-> (ps/standing {7 (ps/enderman [20.5 64.0 8.5])}
+                      (into {} (for [c [[7 63 8] [7 62 8] [6 62 8] [5 62 8]]] [c water])))
+         (assoc-in [:player/inventory 1] (ps/item :iron_pickaxe 1)))]
+    ;; a one-block slab over a void with an angry enderman coming: no burrow, no site
+    ["void-slab-angry"
+     (-> (ps/standing {7 (assoc (ps/enderman [28.5 64.0 8.5]) :entity/creepy? true)} void-under)
+         (assoc-in [:player/inventory 1] (ps/item :iron_pickaxe 1)))]
+    ;; hurt on the slab with a zombie at hand and blocks to lay: backing off is pointless
+    ["void-slab-zombie"
+     (-> (ps/standing {8 (ps/mob :zombie [9.5 64.0 8.5])} void-under)
+         (assoc :player/health 9.0)
+         (assoc-in [:player/inventory 3] (ps/item :cobblestone 64)))]
+    ;; the burrow's end, an angry enderman near the mouth fought out and blacklisted, after
+    ;; lookouts: the lure
+    ["lure"
+     (-> (ps/burrowed [8.5 61.0 8.5] {7 (assoc (ps/enderman [11.5 64.0 8.5]) :entity/creepy? true)})
+         (ps/looked 7)
+         (ps/fought 9)
+         (assoc :plan/blacklist #{7}))]
+    ;; a calm enderman standing in the stairs, the bot at the end, no lookouts yet
+    ["stairs-blocker" (ps/burrowed [8.5 61.0 8.5] {7 (ps/enderman [4.5 63.0 8.5])})]
     ["hurt-threat-filler"
      (-> (ps/standing {8 (ps/mob :zombie [9.5 64.0 8.5])})
          (assoc :player/health 9.0)
