@@ -14,7 +14,8 @@
             [clojurecraft.land :as land]
             [clojurecraft.main :as main]
             [clojurecraft.plan :as plan]
-            [clojurecraft.race :as race]))
+            [clojurecraft.race :as race]
+            [clojurecraft.race-facts :as facts]))
 
 (def gen-request
   (gen/hash-map :claim/by (gen/elements ["Clj_r01" "Clj_r02" "Clj_r03" "Clj_r04"])
@@ -53,7 +54,7 @@
     (is (= [2 -1] (claims/cell-of [100 100] (claims/middle [100 100] [2 -1]))))))
 
 (deftest the-board-reads-a-world-value
-  (is (= "Clj_r01" (race/bot-name "Clj_r" 1)))
+  (is (= "Clj_r01" (facts/bot-name "Clj_r" 1)))
   (let [w (plan/begin (assoc (game/init fx/opts) :player/pos [0.5 70.0 0.5])
                       {:go/goals (plan/through "nether") :go/chain? true}
                       plan/goals)]
@@ -63,28 +64,28 @@
             :race/y 70
             :race/deaths 0
             :race/status :active}
-           (race/standing w)))
+           (facts/standing w)))
     (is (= "Clj_r01 :active at :wood reached 0 overworld y 70 deaths 0"
-           (race/board-line "Clj_r01" w)))))
+           (facts/board-line "Clj_r01" w)))))
 
 (deftest a-milestone-is-a-fact-of-what-was-reached
   ;; the observer diffs successive world values: what :plan/reached gained is what happened
   (let [before {:plan/reached #{:wood}}
         world {:plan/reached #{:wood :kit} :time/now 90000 :plan/since 30000}]
-    (is (= [:kit] (race/reached-new before world)))
-    (is (empty? (race/reached-new world world)) "nothing new, no fact")
+    (is (= [:kit] (facts/reached-new before world)))
+    (is (empty? (facts/reached-new world world)) "nothing new, no fact")
     (is (= {:milestone/runner 7
             :milestone/seed "race-1-7"
             :milestone/bot "Clj_r03"
             :milestone/goal :kit
             :milestone/at 90000
             :milestone/after-s 60}
-           (race/milestone {:runner 7 :seed "race-1-7"} "Clj_r03" world :kit)))
+           (facts/milestone {:runner 7 :seed "race-1-7"} "Clj_r03" world :kit)))
     (is (= 2
            (:milestone/server
-            (race/milestone {:runner 7 :server 2 :seed "race-1-7-2"} "Clj_r03" world :kit)))
+            (facts/milestone {:runner 7 :server 2 :seed "race-1-7-2"} "Clj_r03" world :kit)))
         "a runner with several servers says which")
-    (is (not (contains? (race/milestone {:runner 7 :server nil :seed "s"} "Clj_r03" world :kit)
+    (is (not (contains? (facts/milestone {:runner 7 :server nil :seed "s"} "Clj_r03" world :kit)
                         :milestone/server))
         "with one, the fact is as it was")))
 
@@ -100,19 +101,19 @@
 
 (deftest a-ramp-joins-bots-in-steps
   (let [cfg {:race/stagger-ms 3000 :race/ramp #:ramp{:start 10 :step 10 :every-ms 300000}}]
-    (is (= [0 3000 27000] (map #(race/start-at cfg %) [0 1 9]))
+    (is (= [0 3000 27000] (map #(facts/start-at cfg %) [0 1 9]))
         "the first ten together, a stagger apart")
-    (is (= [300000 303000 600000] (map #(race/start-at cfg %) [10 11 20]))
+    (is (= [300000 303000 600000] (map #(facts/start-at cfg %) [10 11 20]))
         "then ten more every five minutes")
-    (is (= 6000 (race/start-at {:race/stagger-ms 3000} 2)) "no ramp: a stagger apart")))
+    (is (= 6000 (facts/start-at {:race/stagger-ms 3000} 2)) "no ramp: a stagger apart")))
 
 (deftest the-servers-tick-times-are-read-from-its-answer
   (is
    (=
     {:avg 4.0 :p50 3.6 :p95 5.0 :p99 18.7}
-    (race/tick-times
+    (facts/tick-times
      "The game is running normallyTarget tick rate: 20.0 per second. Average time per tick: 4.0ms (Target: 50.0ms)Percentiles: P50: 3.6ms P95: 5.0ms P99: 18.7ms. Sample: 100")))
-  (is (= {} (race/tick-times nil))))
+  (is (= {} (facts/tick-times nil))))
 
 (deftest a-sample-is-the-race-at-one-moment
   (let [playing {:bot/phase :play
@@ -125,7 +126,7 @@
                 "b" (assoc playing :time/tick 300 :plan/reached #{:wood :kit})
                 "c" {:bot/phase :play :bot/disconnected "gone" :player/pos [0 64 0]}
                 "d" (assoc playing :time/tick 100 :plan/status :done)}
-        s (race/sample {:runner 3} worlds {"a" 100 "b" 100 "d" 100} 15000 {:p95 5.0} 900 1000)]
+        s (facts/sample {:runner 3} worlds {"a" 100 "b" 100 "d" 100} 15000 {:p95 5.0} 900 1000)]
     (is (= 4 (:sample/joined s)))
     (is (= 2 (:sample/playing s)))
     (is (= 1 (:sample/cut-off s)))
@@ -135,34 +136,36 @@
     (is (< 13.0 (:min (:sample/tick-rate s)) 14.0) "b fell behind: 200 ticks in 15 s")))
 
 (deftest the-summary-is-a-fold-of-results
-  (let [s (race/summary [{:name "a" :result {:ok true :reason :goal :plan {:plan/reached #{:wood}}}}
-                         {:name "b" :result {:ok false :reason :no-site}}
-                         {:name "c" :result {:ok false :reason :no-site}}])]
+  (let [s (facts/summary [{:name "a"
+                           :result {:ok true :reason :goal :plan {:plan/reached #{:wood}}}}
+                          {:name "b" :result {:ok false :reason :no-site}}
+                          {:name "c" :result {:ok false :reason :no-site}}])]
     (is (= 3 (:race/bots s)))
     (is (= 1 (:race/ok s)))
     (is (= {:goal 1 :no-site 2} (:race/reasons s)))
     (is (= ["a" "b" "c"] (map :name (:race/runs s))))))
 
 (deftest a-race-plays-for-its-deadline-else-its-minutes
-  (is (= 600000 (race/run-ms {:race/deadline-ms 600000 :race/run-minutes 330}))
+  (is (= 600000 (facts/run-ms {:race/deadline-ms 600000 :race/run-minutes 330}))
       "the capacity ramp's one deadline")
-  (is (= 19800000 (race/run-ms {:race/run-minutes 330 :race/timeout-ms 5})) "the churn's job")
-  (is (= 5 (race/run-ms {:race/timeout-ms 5}))))
+  (is (= 19800000 (facts/run-ms {:race/run-minutes 330 :race/timeout-ms 5})) "the churn's job")
+  (is (= 5 (facts/run-ms {:race/timeout-ms 5}))))
 
 (deftest a-bot-the-job-ends-is-cut-never-filed
   (let [r {:ok false :until "nether" :reason :timeout :plan {:plan/reached #{:wood}}}
-        m (race/marked r)]
+        m (facts/marked r)]
     (is (:run/cut? m))
     (is (:run/infra? m) "bb failures files no infrastructure stop")
     (is (:run/signature m) "the stage it was on is still kept")
-    (is (not (:run/cut? (race/marked (assoc r :reason :no-site)))) "a bot's own stop is a failure")
-    (is (= {:ok true :reason :goal} (race/marked {:ok true :reason :goal})) "a pass is unchanged")))
+    (is (not (:run/cut? (facts/marked (assoc r :reason :no-site)))) "a bot's own stop is a failure")
+    (is (= {:ok true :reason :goal} (facts/marked {:ok true :reason :goal}))
+        "a pass is unchanged")))
 
 (deftest a-bot-is-cut-by-its-cap-or-the-job-whichever-comes-first
-  (is (= 3600000 (race/bot-timeout-ms 20000000 1000 3600000)) "the cap, when it comes first")
-  (is (= 5000 (race/bot-timeout-ms 10000 5000 3600000)) "the job's end, when it does")
-  (is (= 1000 (race/bot-timeout-ms 100 5000 nil)) "at least a second")
-  (is (= 19000 (race/bot-timeout-ms 20000 1000 nil)) "no cap: the job's end"))
+  (is (= 3600000 (facts/bot-timeout-ms 20000000 1000 3600000)) "the cap, when it comes first")
+  (is (= 5000 (facts/bot-timeout-ms 10000 5000 3600000)) "the job's end, when it does")
+  (is (= 1000 (facts/bot-timeout-ms 100 5000 nil)) "at least a second")
+  (is (= 19000 (facts/bot-timeout-ms 20000 1000 nil)) "no cap: the job's end"))
 
 (deftest a-capped-bot-is-filed-and-the-jobs-end-is-cut
   (let [r {:ok false
@@ -170,25 +173,25 @@
            :reason :timeout
            :plan {:plan/status :running :plan/reached #{:wood}}}
         cap 3600000
-        own (race/marked (race/capped r 20000000 0 cap))
-        job (race/marked (race/capped r 3000000 0 cap))]
+        own (facts/marked (facts/capped r 20000000 0 cap))
+        job (facts/marked (facts/capped r 3000000 0 cap))]
     (is (= :bot-timeout (:reason own)))
     (is (not (:run/cut? own)) "its own cap is a failure of the stage")
     (is (not (:run/infra? own)) "bb failures files it")
     (is (= :bot-timeout (second (:run/signature own))))
     (is (:run/cut? job) "the job's end before the cap is still a cut")
     (is (= :timeout (:reason job)))
-    (is (= :timeout (:reason (race/capped r 20000000 0 nil))) "no cap, no change")))
+    (is (= :timeout (:reason (facts/capped r 20000000 0 nil))) "no cap, no change")))
 
 (deftest a-slot-backs-off-while-its-bots-never-play
-  (let [quick (dec race/quick-ms)]
-    (is (= 1000 (race/backoff-ms 0 quick {:reason :crashed})) "the server refused: wait a second")
-    (is (= 4000 (race/backoff-ms 2000 quick {:reason :closed})) "still gone: twice as long")
-    (is (= race/backoff-max-ms (race/backoff-ms 50000 quick {:reason :disconnected}))
+  (let [quick (dec facts/quick-ms)]
+    (is (= 1000 (facts/backoff-ms 0 quick {:reason :crashed})) "the server refused: wait a second")
+    (is (= 4000 (facts/backoff-ms 2000 quick {:reason :closed})) "still gone: twice as long")
+    (is (= facts/backoff-max-ms (facts/backoff-ms 50000 quick {:reason :disconnected}))
         "at most a minute")
-    (is (zero? (race/backoff-ms 8000 race/quick-ms {:reason :crashed}))
+    (is (zero? (facts/backoff-ms 8000 facts/quick-ms {:reason :crashed}))
         "a bot that played long enough")
-    (is (zero? (race/backoff-ms 8000 quick {:reason :no-site}))
+    (is (zero? (facts/backoff-ms 8000 quick {:reason :no-site}))
         "a bot's own stop is play, not a dead server")))
 
 (def refused
@@ -197,33 +200,34 @@
   {:ok false :reason :crashed :error "Connection refused (connect failed)" :until "x" :plan {}})
 
 (deftest a-bot-that-never-got-into-play-is-infrastructure
-  (let [m (race/marked refused)]
+  (let [m (facts/marked refused)]
     (is (:run/infra? m) "bb failures files it under infrastructure stops, never as an issue")
-    (is (= [:wood :crashed] (take 2 (:run/signature (race/marked (assoc refused :until "nether")))))
+    (is (= [:wood :crashed]
+           (take 2 (:run/signature (facts/marked (assoc refused :until "nether")))))
         "its signature is still kept"))
-  (is (:run/infra? (race/marked {:ok false :reason :closed :until "x"}))
+  (is (:run/infra? (facts/marked {:ok false :reason :closed :until "x"}))
       "connected, but closed before its :go: main leaves :plan out")
-  (is (not (:run/infra? (race/marked (assoc refused :plan {:plan/status :failed}))))
+  (is (not (:run/infra? (facts/marked (assoc refused :plan {:plan/status :failed}))))
       "a bot that crashed once it played is a failure of its play"))
 
 (deftest a-server-whose-bots-never-play-is-down-until-it-accepts
   (let [played {:ok false :reason :no-site :plan {:plan/status :failed}}
-        after (fn [rs] (reduce race/health race/recovered rs))]
+        after (fn [rs] (reduce facts/health facts/recovered rs))]
     (is (= {:race/unplayed 4 :race/down? false} (after (repeat 4 refused))))
-    (is (= {:race/unplayed race/dead-after :race/down? true}
-           (after (repeat race/dead-after refused)))
+    (is (= {:race/unplayed facts/dead-after :race/down? true}
+           (after (repeat facts/dead-after refused)))
         "dead-after in a row: down, and its slots start none")
     (is (= {:race/unplayed 0 :race/down? false} (after (concat (repeat 4 refused) [played])))
         "a bot that played resets the count")
-    (is (:race/down? (after (concat (repeat race/dead-after refused) [played])))
+    (is (:race/down? (after (concat (repeat facts/dead-after refused) [played])))
         "down stays down until a probe finds it accepting (recovered), whatever ends meanwhile")
     (is (= {:race/unplayed 0 :race/down? false} (after [{:ok true :reason :goal}])))))
 
 (deftest a-server-sees-at-most-one-new-bot-a-start-gap
-  (is (= 5000 (race/next-start 0 5000)) "long since the last start: now")
-  (is (= (+ 5000 race/start-gap-ms) (race/next-start 5000 5000)) "just started one: a gap on")
-  (is (= (+ 5000 (* 15 race/start-gap-ms))
-         (reduce (fn [last _] (race/next-start last 5000)) 5000 (range 15)))
+  (is (= 5000 (facts/next-start 0 5000)) "long since the last start: now")
+  (is (= (+ 5000 facts/start-gap-ms) (facts/next-start 5000 5000)) "just started one: a gap on")
+  (is (= (+ 5000 (* 15 facts/start-gap-ms))
+         (reduce (fn [last _] (facts/next-start last 5000)) 5000 (range 15)))
       "fifteen slots ending at once start one a gap apart"))
 
 (deftest a-pad-is-cleared-of-lava-round-it
@@ -266,9 +270,9 @@
   ;; spawnpoint takes the dimension of its source, the server's overworld: a bot that died at the
   ;; fortress respawned in the overworld
   (is (= "execute in minecraft:the_nether run spawnpoint Clj_r01 152 72 -160"
-         (race/spawn-command "Clj_r01" [152.5 72.0 -159.5] "minecraft:the_nether")))
+         (facts/spawn-command "Clj_r01" [152.5 72.0 -159.5] "minecraft:the_nether")))
   (is (= "execute in minecraft:overworld run spawnpoint Clj_r02 10 80 -4"
-         (race/spawn-command "Clj_r02" [10.5 80.0 -3.5] "minecraft:overworld"))))
+         (facts/spawn-command "Clj_r02" [10.5 80.0 -3.5] "minecraft:overworld"))))
 
 (deftest a-landing-near-a-located-fortress-is-not-searched-for-again
   ;; race 41218543330: fifteen bots at once asked the server to locate a fortress, a search in one
@@ -287,11 +291,11 @@
 (deftest a-replacement-bot-lands-on-its-slots-pad
   ;; a bot that ends is replaced by the next serial (r11, r12 ...): lane 3 of race 41218543330 started
   ;; 116 runs in 31 minutes; a landing by serial would generate a new Nether region each time
-  (is (= [0 1 9 0 1 9 5] (map #(race/slot-index % 10) [0 1 9 10 11 19 25])))
-  (is (= 7 (race/slot-index 7 nil)) "no slot count: as before")
+  (is (= [0 1 9 0 1 9 5] (map #(facts/slot-index % 10) [0 1 9 10 11 19 25])))
+  (is (= 7 (facts/slot-index 7 nil)) "no slot count: as before")
   (let [fortress [200 -160]]
-    (is (= (land/pad-of fortress (race/slot-index 3 10))
-           (land/pad-of fortress (race/slot-index 13 10)))
+    (is (= (land/pad-of fortress (facts/slot-index 3 10))
+           (land/pad-of fortress (facts/slot-index 13 10)))
         "the serial after a slot's bot lands on the same pad")))
 
 (deftest a-pad-is-pregenerated-within-one-forceload
@@ -341,7 +345,7 @@
          (finally (.delete f)))))
 
 (deftest a-death-line-has-a-class-and-the-signature-names-it
-  (are [line class] (= class (race/death-class line))
+  (are [line class] (= class (facts/death-class line))
    "Clj_r23 was slain by Blaze" :blaze
    "Clj_r23 was fireballed by Blaze" :blaze
    "Clj_r23 was burned to a crisp while fighting Blaze" :blaze
@@ -442,7 +446,7 @@
 
 (deftest the-server-is-asked-what-stood-round-an-ending
   ;; the observability plan, part E: the ground truth beside what the bot saw
-  (let [[near self] (race/near-commands "Clj_r10" [1559 66 64] "minecraft:the_nether")]
+  (let [[near self] (facts/near-commands "Clj_r10" [1559 66 64] "minecraft:the_nether")]
     (is (= (str
             "execute in minecraft:the_nether positioned 1559 66 64 as @e[distance=..32,type=!item,"
             "type=!experience_orb,type=!player,sort=nearest,limit=12] run data get entity @s")
@@ -467,13 +471,13 @@
        "[10:00:03] [Server thread/WARN]: Can't keep up! Is the server overloaded? Running 2301ms behind"
        "[10:00:05] [Server thread/INFO]: Clj_r1 was slain by Blaze"
        "[10:00:06] [Server thread/INFO]: Clj_r1 lost connection: Disconnected"]
-      (race/serverlog-lines log "Clj_r1"))
+      (facts/serverlog-lines log "Clj_r1"))
      "its own lines whole-word, the server's trouble, not Clj_r10's or Clj_r2's")
-    (is (= [] (race/serverlog-lines "" "Clj_r1")))
-    (is (= race/serverlog-tail
-           (count (race/serverlog-lines (str/join "\n"
-                                                  (repeat (* 2 race/serverlog-tail) "Clj_r1 x"))
-                                        "Clj_r1")))
+    (is (= [] (facts/serverlog-lines "" "Clj_r1")))
+    (is (= facts/serverlog-tail
+           (count (facts/serverlog-lines (str/join "\n"
+                                                   (repeat (* 2 facts/serverlog-tail) "Clj_r1 x"))
+                                         "Clj_r1")))
         "only the newest lines are read")
     (is (str/starts-with? (race/serverlog-text "no/such/latest.log" "Clj_r1") "no server log at"))
     (is (str/starts-with? (race/serverlog-text nil "Clj_r1") "no server log named"))))

@@ -49,7 +49,7 @@ sourceRefs:
   - src/clojurecraft/intent.clj#defn child-why
   - "src/clojurecraft/memory.clj#The fact for intent i reaching event"
   - src/clojurecraft/race.clj#defn near-truth!
-  - src/clojurecraft/race.clj#defn serverlog-lines
+  - src/clojurecraft/race_facts.clj#defn serverlog-lines
   - src/clojurecraft/sim.clj#defn hit-logged
   - "src/clojurecraft/simrace.clj#What the model knew round the player at a moment"
   - src/clojurecraft/simrace.clj#defn truth-ring-add

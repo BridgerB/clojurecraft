@@ -21,21 +21,21 @@ sourceRefs:
   - src/clojurecraft/lanes.clj#defn lane-of
   - src/clojurecraft/race.clj#defn play-one!
   - src/clojurecraft/race.clj#defn slot!
-  - src/clojurecraft/race.clj#defn run-ms
-  - src/clojurecraft/race.clj#defn backoff-ms
+  - src/clojurecraft/race_facts.clj#defn run-ms
+  - src/clojurecraft/race_facts.clj#defn backoff-ms
   - test/clojurecraft/race_test.clj#a-slot-backs-off-while-its-bots-never-play
-  - src/clojurecraft/race.clj#defn health
-  - src/clojurecraft/race.clj#defn next-start
+  - src/clojurecraft/race_facts.clj#defn health
+  - src/clojurecraft/race_facts.clj#defn next-start
   - src/clojurecraft/race.clj#defn probe!
   - src/clojurecraft/failure.clj#defn unplayed?
   - bb/clojurecraft/failures.clj#defn unplayed?
   - test/clojurecraft/race_test.clj#a-server-whose-bots-never-play-is-down-until-it-accepts
   - test/clojurecraft/race_test.clj#a-bot-that-never-got-into-play-is-infrastructure
   - test/clojurecraft/race_test.clj#a-server-sees-at-most-one-new-bot-a-start-gap
-  - src/clojurecraft/race.clj#defn marked
+  - src/clojurecraft/race_facts.clj#defn marked
   - src/clojurecraft/failure.clj#defn cut
   - src/clojurecraft/start.clj#defn cap-ms
-  - src/clojurecraft/race.clj#defn bot-timeout-ms
+  - src/clojurecraft/race_facts.clj#defn bot-timeout-ms
   - bb/clojurecraft/churn.clj#defn batch!
   - bb/clojurecraft/fleet.clj#defn decide
   - bb/clojurecraft/fleet.clj#defn victims
@@ -48,7 +48,7 @@ sourceRefs:
   - bb/clojurecraft/win.clj#defn winners
   - test/clojurecraft/race_test.clj#a-bot-the-job-ends-is-cut-never-filed
   - src/clojurecraft/race.clj#defn board!
-  - src/clojurecraft/race.clj#defn summary
+  - src/clojurecraft/race_facts.clj#defn summary
   - src/clojurecraft/fixture.clj#defn land-at!
   - src/clojurecraft/race.clj#defn milestones!
   - test/clojurecraft/race_test.clj#a-milestone-is-a-fact-of-what-was-reached
