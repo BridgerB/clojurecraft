@@ -6,8 +6,6 @@
  :stare-range 64.0
  ;; Never stare nearer: an angry enderman stared at within 4 blocks teleports away
  :stare-from 6.0
- ;; Blocks within which a stare can provoke an enderman (alias of stare-from for minimum provoke range)
- :provoke-range 6.0
  ;; Blocks from the burrow's end within which an enderman is provoked from outside the mouth
  :provoke-home-reach 3.0
  ;; Health under which no enderman is provoked from the mouth or anywhere (rests in burrow first)
@@ -27,10 +25,127 @@
  ;; Blocks from the feet within which an angry enderman keeps the bot where it is:
  ;; the burrow is not given up (stale?) and no relocation begins while one stands this near
  :hold-radius 16.0
- ;; Break line: health under which an open fight with a teleporter (enderman) breaks off (15.0),
- ;; and health to heal back up to before resuming an open fight after covering (19.0)
- :break-line [15.0 19.0]
+ ;; Health under which an open fight with a teleporter (enderman) breaks off
  :break-hp 15.0
+ ;; Health to heal back up to before an open fight resumes after covering
  :resume-hp 19.0
  ;; Health under which the hunt never fights, provokes or goes toward an enderman (combat/retreat-health)
- :danger-health 10.0}
+ :danger-health 10.0
+ ;; blocks from the feet an enderman is hunted within
+ :hunt-radius 32.0
+ ;; blocks from the feet a tracked enderman sighting is gone toward: the server shows them that far, and every first sighting of the 2026-11-05 rod bots was 54 to 105 blocks off, past hunt-radius, so none ever became a hunt
+ :sighting-radius 128.0
+ ;; failed goes toward one sighting after which it is given up (blacklisted) and the hunt goes on
+ :chase-max-fails 3
+ ;; ms a sighting chase may go on at most before it is given up, however it is failing
+ :chase-giveup-ms 300000
+ ;; ms the blaze refuge may hold a full-health rod bot after the rods before the sealed exit goes anyway, watcher or not: #723's protection is the first minutes at the spawner, not the whole run at a spawner that never stops spawning
+ :refuge-leave-ms 180000
+ ;; ms a :lookout stands turning before the plan looks again
+ :lookout-ms 5000
+ ;; degrees of yaw a :lookout turns a ms: a full turn in four seconds
+ :lookout-turn 0.09
+ ;; blocks a roam walks from the feet, at the least, to look round somewhere else
+ :roam-reach 16
+ ;; blocks nearer an enderman, by a route's measure, a walk toward one must bring the feet
+ :toward-gain 4
+ ;; ms after which a roam sets out a heading further round
+ :roam-turn-ms 10000
+ ;; blocks from the feet, height counted, within which an enderman is at hand (forage/strike-range: past a walk's reach)
+ :strike-range 4.5
+ ;; ms a provoke stares at most before the enderman says it has a target (creepy)
+ :stare-ms 3000
+ ;; stairs down a burrow cuts: from the third, the ground roofs a tunnel two high
+ :burrow-depth 3
+ ;; tunnel steps past the stairs: two keep the bot out of an enderman's reach from the last stair
+ :burrow-length 2
+ ;; blocks from the feet a burrow is still the hunt's shelter; farther, a new one is dug
+ :shelter-reach 16.0
+ ;; blocks below the feet the nearest enderman stands, at the least, before the hunt cuts stairs down toward it
+ :descend-drop 8
+ ;; blocks one flight of those stairs goes down before the hunt looks round again
+ :descend-step 8
+ ;; blocks from the feet an enderman far below is descended toward: the server shows them that far
+ :descend-radius 128.0
+ ;; level steps a tunnel toward an enderman no route reaches cuts before the hunt looks again
+ :bore-length 8
+ ;; cells on the plane round the feet a burrow site is looked for within, when none can be cut from the feet
+ :site-reach 6
+ ;; nearest endermen asked for a route, as the other acts ask
+ :candidates 3
+ ;; digs a pickaxe keeps for a burrow: a burrow's sixteen (burrow-steps) twice over, for one that turns or fails :no-shelter; with fewer left no stairs or tunnel is cut for anything else
+ :spare-digs 32
+ ;; blocks from the burrow's mouth an angry enderman keeps the bot in from: the enderman's own stare range (EndermanLookForPlayerGoal: within 16 an angry one stands while looked at and rushes when not; farther, one with a target teleports to it after 30 ticks, so one farther that has not come has lost its target); eight let a burrow go stale with one angry nine to sixteen off that would rush the bot stepping out. The wait within is bounded by the lure (lure?), where one that never comes held batch pearls-warped-d run 1 thirty-four minutes
+ :danger-radius 16.0
+ ;; blocks above or below the burrow's mouth an angry enderman keeps the bot in from: one seventeen below in another cave never comes (batch pearls-warped-c run 1's forty minutes); one five or six below on the slope beside the mouth comes the moment the bot steps out (batch pearls-warped6-a run 4, three times, the third its death)
+ :danger-rise 8
+ ;; lures (a walk out to the burrow's mouth and one back in) after which a blacklisted angry enderman near the mouth that has not come holds the burrow no longer
+ :lure-tries 3
+ ;; :fight intentions ended :done on one enderman, of the newest sixteen, after which it is fought no more for a rest (fought-out?)
+ :fight-tries 8
+ ;; fights on one enderman cut or failed within fight-giveup-ms, after which it is fought no more until it is in reach
+ :fight-giveups 3
+ ;; ms (ten minutes) over which those fights are counted
+ :fight-giveup-ms 600000
+ ;; ms after a fight on an enderman failed that it is not fought again until within the sword's reach
+ :fight-retry-ms 30000
+ ;; ms an angry enderman has not closed in before it is parked
+ :park-ms 60000
+ ;; blocks within which one is never parked: it is on the bot
+ :park-near 8.0
+ ;; blocks nearer than its best distance that count as closing in: a parked enderman jitters one or two blocks (pearl-fight-g job 3, enderman 75 at 9 to 11 blocks for 90 min)
+ :close-gain 2.0
+ ;; lookouts (five seconds each, a minute) stood with the burrow and nothing to do from it before it is given up for one cut beside the next enderman
+ :stale-lookouts 12
+ ;; lookouts (half a minute) stood in the burrow over an angry enderman near its mouth that has not come before the bot shows itself at the mouth to bring it
+ :lure-lookouts 6
+ ;; blocks on the plane (path/octile), at most, from the feet to an enderman stairs or a tunnel are cut toward: a flight is eight blocks and about twenty digs, so one farther off is walked toward first (toward); batch pearls-warped6-b's run 2 cut four flights toward ones 47 to 69 off, 10 to 14 below, and three of its tunnels toward ones 41 to 61 off, with its kill's pearl in hand
+ :cut-reach 32
+ ;; cells over it that nothing is cut below
+ :lava-margin 4
+ ;; cells on the plane from an enderman, at most, a vantage is looked for within (stare-from at the least): the nearer the stare, the surer it follows
+ :vantage-reach 10
+ ;; cells up or down from an enderman's feet a vantage may stand: one on the stairs is three below the ground, and is waited out
+ :vantage-rise 2
+ ;; vantages, nearest the feet first, a route is asked for before none is taken: the route is the costly test. At 8, and stare-site's route test without vantage-nodes, 3 endermen by 8 vantages at the full budget froze real-18 bots 19 to 53 s a tick and the server timed them out (4f317da lane 2, Clj_r01: profile probe 42327950512, 921 of 1219 samples in stare-site)
+ :vantage-tries 3
+ ;; cells on the plane from a calm enderman crowding a given-up burrow's mouth, at most, a new burrow is cut within: the nearer its mouth, the surer the stare from it follows
+ :crowd-reach 10
+ ;; blocks past stare-from that a new burrow's mouth stands from that enderman's head, at the least, so that the stare from it is not cut short as one that came near (:provoke)
+ :crowd-margin 1.0
+ ;; blocks of open air under a cell beside the feet that make the feet a brink no cut starts from
+ :brink-drop 3
+ ;; the highest a climb out of a pocket goes in the Nether: the roof is bedrock from y 123, and the forests and the endermen are on the floors under y 100
+ :nether-climb-ceiling 100
+ ;; lookouts (five seconds each, five minutes) stood with no walk taken since before the hunt goes elsewhere (wander)
+ :wander-lookouts 60
+ ;; walks ended whose targets all lie within loiter-radius of the feet: a hunt shuffling in one place
+ :loiter-walks 12
+ ;; blocks on the plane (path/octile) within which twelve walks' ends are one place
+ :loiter-radius 8
+ ;; blocks a wander looks for ground to walk to, on each of the headings
+ :wander-reach 64
+ ;; ms a held fight waits with its target past strike-range before the hunt plans again (combat/hold-timeout-ms is a minute)
+ :hold-patience-ms 12000
+ ;; health under which an enderman at hand has landed a hit (7 on Normal off 20): fought back, fought out or not
+ :struck-health 14.0
+ ;; blocks round the feet within which a standable cell out of a shooter's sight is looked for
+ :cover-reach 5
+ ;; ms after a ghast was last in sight that no walk goes elsewhere
+ :shot-hold-ms 10000
+ ;; the hit (mob/kinds :melee) at or under which a mob is fought at hand with no burrow: a zombie's 3, a spider's 2
+ :weak-melee 4.0
+ ;; walks arrived at lately that an explore sets out away from, and a far-end is not within roam-reach of
+ :explore-memory 6
+ ;; chunks round the feet's own within which the bot is in a warped forest
+ :forest-reach 2
+ ;; blocks ahead along the heading a bore targets: past the tunnel's reach (1.5), one step at a time replanned
+ :bore-reach 4
+ ;; blocks from the feet within which a held exit target is reached
+ :exit-reach 2.0
+ ;; blocks round an enderman within which the others count toward how thick the place is
+ :cluster-radius 24.0
+ ;; digs a held pickaxe may fall to before the hunt cuts the stems for its successor: twice spare-digs
+ :reserve-digs 64
+ ;; warped stems held that make a table, sticks and a pickaxe's planks
+ :reserve-stems 6}

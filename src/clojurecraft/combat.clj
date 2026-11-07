@@ -1,7 +1,7 @@
 (ns clojurecraft.combat
   "Fighting (issue #259): the :fight and :back-off executors, the swords, and the rows that use
    them: :defend (an always row at priority 0, after the escapes: a hostile within defend-radius
-   preempts any plan, a creeper within creeper-radius is backed away from, never fought) and the
+   preempts any plan, a creeper within its threats.edn radius is backed away from, never fought) and the
    gym's :attack (every hostile within attack-radius killed).
 
    775 split attacking out of interact: an attack is its own packet, the target's entity id alone
@@ -623,7 +623,6 @@
 (def over-feet 3.0)                   ; blocks a mob's feet may be over the bot's and be fought (its body, aim-height up, comes within reach)
 (def under-feet 2.0)                  ; blocks under the bot's feet a mob may be and be fought
 (def sight-step 0.25)                 ; blocks between the samples of a line of sight
-(def creeper-radius (get-in kinds [:creeper :radius])) ; a creeper this near is backed away from, never fought
 (def shun-after 2)                    ; back-offs from one creeper that has not moved (shun-drift) after which it is shunned
 (def shunned-radius 3.0)              ; a shunned creeper is a threat only this near (its fuse starts at the mob's :swell, 3)
 (def given-up-after 6)                ; back-offs from a creeper that never moved after which only one at the feet is a threat
@@ -774,7 +773,7 @@
 (defn threats
   "{eid entity} of the hostiles (entity/hostiles) the :defend row answers, plus whoever last
    struck (striker) while that strike is fresh: within defend-radius of the feet, a creeper
-   within creeper-radius, either less once shunned (reach); none the plan blacklisted (a ghost),
+   within the creeper's radius (threats.edn), either less once shunned (reach); none the plan blacklisted (a ghost),
    none of a kind a row in play answers itself (answered-kinds), only what can be fought from
    here (hittable?) and come to (approachable?: a mob in water two blocks below is seen but
    never strikable and no route reaches it, and a fight on it ends done at once, re-picked for
