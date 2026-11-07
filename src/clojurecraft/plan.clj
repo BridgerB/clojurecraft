@@ -142,6 +142,9 @@
   "{:goal/plan ms}: how long a row may go without progress before it is stuck, where it is not
    stuck-ms: a blaze camp can wait 14 to 16 min for its first blaze to be hurt."
   {:blaze-rods 1200000})
+(def retreat-reach
+  "Blocks from the feet within which a trail cell is a retreat: further is not a step back."
+  16)
 (def regroup-distance 8)              ; blocks from the feet a regroup walk goes back along the trail
 (def non-progress
   "What finishes without moving the run on: intents of these kinds or for these purposes are done
@@ -1056,7 +1059,10 @@
                        (or (identical-retry? next failed feet) (failed-before? world next feet)))
         danger? (or (:player/on-fire? world) (menaced? world))
         retreat-cell (when retrying?
-                       (some #(when-not (or (= % feet) (contains? (:plan/blacklist world #{}) %)) %)
+                       (some #(when-not (or (= % feet)
+                                            (contains? (:plan/blacklist world #{}) %)
+                                            (> (physics/distance % feet) retreat-reach))
+                                %)
                              (rseq (:plan/trail world []))))]
     (cond (not active?) world
           (and i (or (nil? goal) preempt? cut?) (not (can-abandon? world)))

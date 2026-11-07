@@ -72,6 +72,25 @@
         (is (= [0.0 0.0] (:player/look w2)))
         (is (= [:accept-teleportation :move-player-pos-rot] (names fx2)))))))
 
+(deftest a-far-teleport-drops-the-plan-trail
+  ;; Clj_r03 (59e528b): the trail held cells from before a checkpoint landing, 1,500 blocks off
+  (let [tp (fn [x]
+             (packet {:packet/name :player-position
+                      :teleport-id 5
+                      :x x
+                      :y 64.0
+                      :z 0.0
+                      :dx 0.0
+                      :dy 0.0
+                      :dz 0.0
+                      :yaw 0.0
+                      :pitch 0.0
+                      :flags 0}))
+        w (assoc (first (run (in-play) [(tp 0.5)])) :plan/trail [[0 64 0]])]
+    (is (= [[0 64 0]] (:plan/trail (first (run w [(tp 5.5)])))) "a step keeps it")
+    (is (nil? (:plan/trail (first (run w [(tp 1500.5)])))) "a landing far off drops it")
+    (is (nil? (:plan/trail (game/die w))) "a death drops it")))
+
 (deftest keep-alive-and-friends
   (let [[_ fx] (run (in-play)
                     [(packet {:packet/name :keep-alive :id 99}) (packet {:packet/name :ping :id 4})
