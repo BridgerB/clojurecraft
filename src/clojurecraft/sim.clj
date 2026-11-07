@@ -41,7 +41,8 @@
             [clojurecraft.mob :as mob]
             [clojurecraft.packet :as packet]
             [clojurecraft.physics :as physics]
-            [clojurecraft.recipe :as recipe]))
+            [clojurecraft.recipe :as recipe]
+            [clojurecraft.text :as text]))
 
 (set! *warn-on-reflection* true)
 
@@ -435,7 +436,9 @@
 (defmethod on-packet [:handshake :intention] [sim _] (assoc sim :sim/phase :login))
 (defmethod on-packet [:login :hello]
   [sim {:keys [username uuid]}]
-  (send sim {:packet/name :login-finished :uuid uuid :username username}))
+  (-> sim
+      (assoc :sim/username username)
+      (send {:packet/name :login-finished :uuid uuid :username username})))
 (defmethod on-packet [:login :login-acknowledged]
   [sim _]
   (-> sim
@@ -1899,15 +1902,29 @@
 
 (def hurt-window-ms 500)              ; after a hurt, only a harder one lands, for its excess (LivingEntity's invulnerableTime above 10 of its 20 ticks)
 
+(defn record-death
+  "The model with a death by cause (a mob's kind, :on_fire, :lava, :starve, :drown, :scheduled)
+   noted in :sim/death-causes and told to the client as player-combat-kill, the player's id and the
+   death message component the server sends for it (text/cause-component; how is the blow's own
+   kind, :fireball, :arrow or :wither, or nil)."
+  [sim cause how]
+  (-> sim
+      (update :sim/death-causes (fnil conj []) cause)
+      (send {:packet/name :player-combat-kill
+             :player-id (player-eid-of sim)
+             :message (text/cause-component (:sim/username sim "Player") cause how)})))
+
 (defn hurt
   "The model after the player takes amount of damage, exhausting? (a mob's hit, an arrow, a blast:
    hunger/exhaustion :hurt; starving: not): within hurt-window-ms of the last hurt only a harder
    one lands, for what it exceeds the last by (LivingEntity.hurtServer); health never under
    zero. A dead player is not hurt; the client learns its health from sync-health or the
-   caller's tell-health. cause (a mob's kind, :starve, :drown) is kept in :sim/death-causes when
+   caller's tell-health. cause (a mob's kind, :starve, :drown) is kept in :sim/death-causes, and
+   told as player-combat-kill (how: the blow's kind, :fireball, :arrow, :wither, or nil), when
    this blow is the one that reaches zero."
   ([sim amount exhausting?] (hurt sim amount exhausting? :unknown))
-  ([sim amount exhausting? cause]
+  ([sim amount exhausting? cause] (hurt sim amount exhausting? cause nil))
+  ([sim amount exhausting? cause how]
    (let [{:keys [at last]} (:sim/hurt sim)
          window? (and at (< (- (:sim/now sim) at) hurt-window-ms))
          dealt (if window? (- amount last) amount)]
@@ -1917,7 +1934,7 @@
              (-> sim
                  (assoc :sim/health health
                         :sim/hurt {:at (if window? at (:sim/now sim)) :last amount})
-                 (cond-> (<= health 0.0) (update :sim/death-causes (fnil conj []) cause)
+                 (cond-> (<= health 0.0) (record-death cause how)
                          exhausting? (add-exhaustion (hunger/exhaustion :hurt)))))))))
 
 (defn heal
@@ -1995,7 +2012,7 @@
     (cond (or (nil? at) (< (:sim/now sim) at)) sim
           :else
           (-> sim
-              (cond-> (pos? (:sim/health sim)) (update :sim/death-causes (fnil conj []) :scheduled))
+              (cond-> (pos? (:sim/health sim)) (record-death :scheduled nil))
               (assoc :sim/health 0.0)
               (dissoc :sim/kill-at)
               tell-health))))
@@ -2013,7 +2030,7 @@
                    (pos? (:sim/health sim)))
         health (if hurt? (max 0.0 (- (:sim/health sim) drown-damage)) (:sim/health sim))]
     (cond-> (assoc sim :sim/air air :sim/health health)
-      (and hurt? (<= health 0.0)) (update :sim/death-causes (fnil conj []) :drown)
+      (and hurt? (<= health 0.0)) (record-death :drown nil)
       hurt? tell-health)))
 
 (defn keep-alive
@@ -2576,7 +2593,7 @@
           :else
           (cond-> (if after (assoc sim :sim/wither after) (dissoc sim :sim/wither))
             (= :hurt event)
-            (-> (hurt mob/wither-damage false :wither_skeleton)
+            (-> (hurt mob/wither-damage false :wither_skeleton :wither)
                 (tell-damage :wither nil))))))
 
 (defn strike
@@ -2690,7 +2707,10 @@
           :else
           (-> sim
               (assoc-in [:sim/mobs eid :attack-at] (+ now (* (:every k) physics/tick-ms)))
-              (hurt (armoured sim (mob/scaled (:shoot k) (:sim/difficulty sim))) true type)
+              (hurt (armoured sim (mob/scaled (:shoot k) (:sim/difficulty sim)))
+                    true
+                    type
+                    (:projectile k))
               (tell-damage (or (:projectile k) type) eid)
               (cond-> (:ignites k) (ignite-player (:ignites k)))))))
 
@@ -3118,32 +3138,33 @@
    the blaze's :ignites and tells the damage; one that meets a block or is older than its life is
    gone, told to the client."
   [sim]
-  (reduce (fn [sim [fid {:keys [pos dir owner born kind]}]]
-            (let [[what at] (fireball-path sim pos dir)
-                  k (mob/kinds kind)
-                  old? (>= (- (:sim/now sim) born) (* (:life mob/fireball) physics/tick-ms))
-                  gone (fn [sim]
-                         (-> sim
-                             (update :sim/fireballs dissoc fid)
-                             (send {:packet/name :remove-entities :ids [fid]})))]
-              (cond (= :hit what)
-                    (->
-                      sim
-                      gone
-                      (hurt (armoured sim (mob/scaled (:shoot k) (:sim/difficulty sim))) true kind)
-                      (tell-damage :fireball owner fid)
-                      (ignite-player (:ignites k)))
-                    (= :wall what)
-                    (-> sim
-                        gone
-                        (set-fire (mob/cell-of at)))
-                    old? (gone sim)
-                    :else
-                    (-> sim
-                        (tell-move fid pos at)
-                        (assoc-in [:sim/fireballs fid :pos] at)))))
-          sim
-          (sort-by key (:sim/fireballs sim))))
+  (reduce
+   (fn [sim [fid {:keys [pos dir owner born kind]}]]
+     (let [[what at] (fireball-path sim pos dir)
+           k (mob/kinds kind)
+           old? (>= (- (:sim/now sim) born) (* (:life mob/fireball) physics/tick-ms))
+           gone (fn [sim]
+                  (-> sim
+                      (update :sim/fireballs dissoc fid)
+                      (send {:packet/name :remove-entities :ids [fid]})))]
+       (cond
+         (= :hit what)
+         (-> sim
+             gone
+             (hurt (armoured sim (mob/scaled (:shoot k) (:sim/difficulty sim))) true kind :fireball)
+             (tell-damage :fireball owner fid)
+             (ignite-player (:ignites k)))
+         (= :wall what)
+         (-> sim
+             gone
+             (set-fire (mob/cell-of at)))
+         old? (gone sim)
+         :else
+         (-> sim
+             (tell-move fid pos at)
+             (assoc-in [:sim/fireballs fid :pos] at)))))
+   sim
+   (sort-by key (:sim/fireballs sim))))
 
 (defn tick-mobs
   "One game tick of the mobs: the day moves on (:sim/day-time), chunks coming near get their

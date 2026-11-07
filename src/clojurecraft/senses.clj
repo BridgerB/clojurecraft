@@ -202,11 +202,18 @@
       (conj {:ev :wait :wait (:plan/waiting after)})
       (not= (:plan/trap before) (:plan/trap after)) (conj {:ev :trap :trap (:plan/trap after)}))))
 
+(defn new-lines
+  "The lines of chat after that chat before did not hold, in order: what the server said between two
+   worlds (the kept window slides, so a line is new by its absence, not its position)."
+  [before after]
+  (remove (set before) after))
+
 (defn body-events
   "What changed in the bot's own body and gear between before and after: a hit taken (:hit, the
    newest of :player/hits: type, attacker and kind, health before), health or food (:hp), armour
    (:armor), effects (:effects), the fight bracket (:combat), the dimension (:dim), a death and a
-   respawn."
+   respawn, and what the server said (:chat, each new line; :death-text, the bot's own death
+   message) with the death carrying it."
   [before after]
   (let [hb (:player/hits before)
         ha (:player/hits after)]
@@ -223,7 +230,12 @@
       (conj {:ev :combat :in? (boolean (:player/in-combat? after))})
       (not= (:player/dimension before) (:player/dimension after))
       (conj {:ev :dim :dim (:player/dimension after)})
-      (and (:player/dead? after) (not (:player/dead? before))) (conj {:ev :death})
+      (and (:player/dead? after) (not (:player/dead? before)))
+      (conj (merge {:ev :death} (:player/death-text after)))
+      (and (:player/death-text after) (not= (:player/death-text before) (:player/death-text after)))
+      (conj (assoc (:player/death-text after) :ev :death-text))
+      (not= (:world/chat before) (:world/chat after))
+      (into (map #(assoc % :ev :chat) (new-lines (:world/chat before) (:world/chat after))))
       (and (:player/dead? before) (not (:player/dead? after))) (conj {:ev :respawn}))))
 
 (defn sent-events

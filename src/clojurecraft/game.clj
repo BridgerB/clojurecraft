@@ -242,7 +242,7 @@
   ;; that follows places it
   (-> w
       inventory/fresh-menus
-      (dissoc :player/dead?)
+      (dissoc :player/dead? :player/death-text)
       (change-dimension (:dimension p))
       (assoc :world/entities {}
              :player/vel [0.0 0.0 0.0]

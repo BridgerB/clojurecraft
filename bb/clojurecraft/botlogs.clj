@@ -220,7 +220,7 @@
 
 (defn case-of
   "How run r ended, from its ledger es (the observability plan, part G): its ending, the killer (the
-   server's death line, else the last hit's attacker or damage type), the last case-window-ms of the
+   death text the bot heard, else the server log's death line, else the last hit's attacker or damage type), the last case-window-ms of the
    run (the final fight): its first hit (when, by what, the health then, and what the bot was doing
    and why), what it was doing at the end, the hits taken by attacker, the swings sent and how many
    landed (a hurt flash on a swung-at entity), and the replay command (replay, a string). A pure
@@ -235,7 +235,9 @@
         landed (count (filter #(and (= :hurt (:ev %)) (contains? swung (:eid %))) w))
         doing-first (when first-hit (intent-at es (:t first-hit)))
         doing-end (intent-at es end)
-        killer (or (:death-message r)
+        heard (last (filter #(and (contains? #{:death :death-text} (:ev %)) (:text %)) es))
+        killer (or (:text heard)
+                   (:death-message r)
                    (when last-hit (name (or (:by-kind last-hit) (:type last-hit))))
                    "none")]
     {:bot (:run/bot r)
