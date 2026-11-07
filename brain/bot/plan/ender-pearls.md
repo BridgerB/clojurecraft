@@ -37,6 +37,10 @@ sourceRefs:
   - src/clojurecraft/combat.clj#defn kill-ms
   - test/clojurecraft/combat_test.clj#a-fight-is-taken-only-when-it-is-winnable
   - test/clojurecraft/pearls_test.clj#a-walk-through-hoglins-is-a-tunnel
+  - src/clojurecraft/pearls.clj#defn heading-target
+  - src/clojurecraft/pearls.clj#defn reach-heading "The sealed :tunnel-to along
+  - src/clojurecraft/pearls.clj#defn reach-heading-hold
+  - test/clojurecraft/pearls_test.clj#a-caged-bot-with-no-forest-known-tunnels-one-held-heading
   - src/clojurecraft/pearls.clj#defn far-ends
   - test/clojurecraft/pearls_test.clj#a-far-end-near-one-already-walked-to-is-not-new-ground
   - src/clojurecraft/pearls.clj#defn exit-anchors
@@ -295,6 +299,8 @@ Leaving the fortress (issue #263): after blaze rods, the hunt leaves the fortres
 Far-ends skip ground already walked to (issue #263, sim R1/17 probe 42374244659): cut off in the cavity of its own tunnels under the roof (y 120, no forest, no enderman), `relocate-walk` and `explore` took the far end of its own tunnels as new ground and walked between [1013 120 -205] and [1015 120 -165] for forty minutes with a pickaxe at 131 digs unused, because a walk is never nil there and the cage-break cuts come after it. `far-ends` now drops an end within `roam-reach` of where one of the last `explore-memory` walks arrived, so in a closed network the walk is nil and `tunnel-out` cuts a new way. The climb to that roof is `climb-out` (stairs up to `roof-cap` 120 from a pocket no walk leaves), not fixed here.
 
 Exit leaves the spawner (issue #263, batch 59e528b, sim R1/17 probe 42370534718): the tunnel-out stayed "near" while any of the 9642 fortress bricks known was within 48 blocks, so it ran 110 blocks out (60 from the spawner), climbed to the roof, came back 100 blocks and spent nine pickaxes and all wood. `exit-anchors` is the known spawners (every fortress point only when none is known), `escape-near?` measures against them, and `fresh-tunnel-target` and `fortress-exit-horizontal` use them; `near-fortress?` is unchanged for its other callers.
+
+Held reach heading (issue #263, probes stall-R1-1, stall-R2-12, stall-R2-21 on 7c7e8dd): every captured Nether has warped forests but the nearest is a median 168 to 485 blocks from the fortress start, and a bot caged in its own tunnels had `explore` nil, `far-ends` [], and ended 12 to 233 blocks from its start after an hour. With no forest known and `explore` finding no end, `travel` now falls to `reach-heading`: a sealed `:tunnel-to` 64 blocks ahead on the heading `reach-heading-hold` keeps as `:pearls/heading` (away from the fortress by `fortress-exit-dir`, y held to 40-90 and over `lava-floor`), turned a quarter when its target is blacklisted, picked again after 300 blocks, dropped when a forest is known or at a death.
 
 Held exit target (issue #263, sim d3ce99b R1-24-1, 620 `:tunnel-to` intents in an hour): the tunnel-out target is bore-reach ahead of the feet and a blocked step turns the bore round, so re-derived each act it flipped between two targets four blocks apart and wore the pickaxe out; stage 18 bots then stood in `:hunt/else` lookouts sealed in with no pickaxe (R1-11-1 on 9cedf7c: 553 `:tunnel-to`, pocket at y 122). `fortress-exit-hold` keeps the target as `:pearls/exit-target` and `held-exit-target` returns it until the feet are within `exit-reach` of it or it is blacklisted; only then `fresh-tunnel-target` derives a new one.
 
