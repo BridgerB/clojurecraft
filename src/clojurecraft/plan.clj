@@ -322,8 +322,8 @@
              :plan/since (:time/now world)
              :plan/attempts 0
              :plan/unwalkable 0)
-      (avoided/forget :blacklist)
-      (avoided/forget :trunk-failures)
+      (avoided/clear :blacklist)
+      (avoided/clear :trunk-failures)
       (cond-> goals (assoc :plan/goals (set (map #(current-id table %) goals))))
       (cond-> at (assoc :plan/go-at at))
       (cond-> chain? (assoc :plan/chain? true :plan/reached #{}))
@@ -364,7 +364,7 @@
    (:intent/plan) when it has one, so a target an executor gained while running is not part of it.
    Absent keys stay absent. Two intents are the same choice when their choice-keys are equal."
   [i]
-  (select-keys (or (:intent/plan i) i) choice-keys))
+  (into {} (filter (comp some? val)) (select-keys (or (:intent/plan i) i) choice-keys)))
 
 (defn mark-ended
   "The world with :plan/ended set to the choice-key of intent i and the

@@ -70,6 +70,11 @@
   (update-in world [(attribute kind) subject] (fnil inc 0)))
 
 (defn forget
-  "The world with nothing noted under kind."
+  "The world without the attribute of kind: nothing noted, and no key (all-of still answers empty)."
+  [world kind]
+  (dissoc world (attribute kind)))
+
+(defn clear
+  "The world with kind present and empty: #{} for a :set kind, {} for a :map kind."
   [world kind]
   (assoc world (attribute kind) (empty-of kind)))

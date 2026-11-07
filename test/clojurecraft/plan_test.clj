@@ -1874,7 +1874,7 @@
   [id]
   (select-keys (first (filter #(= id (:goal/id %)) plan/goals))
                [:goal/anchors :goal/resets :goal/clocks :goal/stuck-after :goal/facts-only?
-                :goal/progress]))
+                :goal/progress :goal/commits :goal/uncommitted]))
 
 (def pearls-table
   [(merge (watchdog-fields :ender-pearls)
