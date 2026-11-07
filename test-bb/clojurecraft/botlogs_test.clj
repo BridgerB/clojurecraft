@@ -111,6 +111,25 @@
     (is (= [:death-hoglin :hoglin :eat :pocket-bore/and-in?-hp-20-0] (:signature c)))
     (is (str/includes? (botlogs/case-text c) "9 hits taken"))))
 
+(deftest a-case-names-what-lit-the-bot-and-the-items-it-moved
+  (let [t0 1793989108107
+        es [{:ev :item :t t0 :item :blaze_rod :n 3 :have 3}
+            {:ev :alight :t (+ t0 10000) :cause :unknown}
+            {:ev :hit :t (+ t0 10500) :type :fireball :by 7 :by-kind :blaze :hp 20.0}
+            {:ev :item :t (+ t0 20000) :item :blaze_rod :n -3 :have 0}
+            {:ev :item :t (+ t0 21000) :item :ender_pearl :n 2 :have 2}
+            {:ev :death :t (+ t0 30000)}]
+        c (botlogs/case-of {:run/bot "Clj_x" :reason :death} es "replay")
+        text (botlogs/case-text c)]
+    (is (= {:cause :fireball :by :blaze :s-before-end 20.0} (:cause-of-fire c))
+        "an ignition with no cause takes the hit beside it")
+    (is (= {:ender_pearl 2} (:items c)) "rods gained and lost cancel; the pearls stay")
+    (is (str/includes? text "cause of fire 20.0 s before the end: fireball by blaze"))
+    (is (str/includes? text "items in the last minute: {:ender_pearl 2}")))
+  (let [c (botlogs/case-of {:run/bot "Clj_x" :reason :death} [{:ev :death :t 1}] "replay")]
+    (is (nil? (:cause-of-fire c)))
+    (is (str/includes? (botlogs/case-text c) "never caught fire"))))
+
 (deftest unknown-packets-are-named-and-the-deliberate-dropped
   (let [names (botlogs/packet-names {:play {:s2c {:sound 117 :rotate-head 83 :system-chat 121}}
                                      :configuration {:s2c {:registry-data 7}}})

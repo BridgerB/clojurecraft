@@ -434,3 +434,26 @@
                              (assoc :player/dimension "minecraft:the_end")
                              (assoc-in [:player/inventory inventory/head-slot] pumpkin)))))
         "the End with the pumpkin on: as the server set it")))
+
+(deftest the-server-moving-the-bot-is-kept
+  (let [w (-> (game/init fx/opts)
+              (assoc :bot/phase :play
+                     :time/now 500
+                     :player/entity-id 7
+                     :player/pos [1.0 64.0 1.0]
+                     :player/loaded? true))
+        [w2 _] (run w
+                    [(packet {:packet/name :set-entity-motion :entity-id 7 :vel [0.5 0.25 0.0]})
+                     (packet {:packet/name :player-position
+                              :teleport-id 9
+                              :x 4.0
+                              :y 64.0
+                              :z 5.0
+                              :dx 0.0
+                              :dy 0.0
+                              :dz 0.0
+                              :yaw 0.0
+                              :pitch 0.0
+                              :flags 0})])]
+    (is (= {:vel [0.5 0.25 0.0] :at 500} (:player/knock w2)) "its own motion, not an entity's")
+    (is (= {:d 5.0 :at 500} (:player/corrected w2)) "3-4-5 from where it stood")))
