@@ -11,7 +11,7 @@
         :task (apply clojure "-M:test" *command-line-args*)}
   test:bb
   {:doc "The Babashka tooling's tests (test-bb/): the evidence, the results' writers and the site"
-   :extra-paths ["test-bb"]
+   :extra-paths ["test-bb" "src"]
    :requires ([clojure.test :as ct]
               [clojurecraft.blind-test]
               [clojurecraft.botlogs-test]
@@ -19,6 +19,7 @@
               [clojurecraft.copilot-test]
               [clojurecraft.evidence-test]
               [clojurecraft.fleet-test]
+              [clojurecraft.lanes-test]
               [clojurecraft.page-test]
               [clojurecraft.site-test]
               [clojurecraft.verify-test])
@@ -28,6 +29,7 @@
                                                   'clojurecraft.copilot-test
                                                   'clojurecraft.evidence-test
                                                   'clojurecraft.fleet-test
+                                                  'clojurecraft.lanes-test
                                                   'clojurecraft.page-test
                                                   'clojurecraft.site-test
                                                   'clojurecraft.verify-test)]
@@ -128,6 +130,11 @@
    "A code question on a runner (probe.yml): run <label> <command> [worlds] for the pushed branch | log <id>"
    :requires ([clojurecraft.probe-run :as probe-run])
    :task (apply probe-run/-main *command-line-args*)}
+  lane {:doc
+        "A lane's start and page kind from ci/lanes.edn, as workflow outputs: lane <real|sim> <n>"
+        :extra-paths ["src"]
+        :requires ([clojurecraft.lanes :as lanes])
+        :task (apply lanes/-main *command-line-args*)}
   fleet
   {:doc
    "The runners kept full of race and sim-race lanes, given back to any waiting job (fleet.yml): run | look"

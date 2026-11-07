@@ -6,11 +6,12 @@
 
      clojure -M:race --config ci/race.edn --port 25565 --rcon-port 25575 --rcon-pass S \\
        [--record-dir data/race] [--commit sha] [--seed s] [--runner n] [--server k]
-       [--landings cache/worlds/R1/landings.edn --landing-offset n] [--from spawn|fortress]
+       [--landings cache/worlds/R1/landings.edn --landing-offset n] [--start id]
 
-   --from (else ci/race.edn's :race/from) is where each bot starts: spawn (a forest, every stage) or
-   fortress (the Nether, at the open pad beside its landing's fortress with :race/kit, playing only
-   the stages from the blaze rods).
+   --start is where each bot starts, an id in resources/clojurecraft/starts.edn (clojurecraft.start):
+   spawn, or a start in the Nether at the open pad beside its landing's fortress or in the warped
+   forest nearest it, with the start's kit, playing only the stages from its goal. Without it, the
+   table's default.
 
    --server names which of a runner's servers this race is on, when a runner carries more than
    one (:race/servers): each server is its own world, seed and race process, and its facts say
@@ -47,7 +48,8 @@
             [clojurecraft.main :as main]
             [clojurecraft.plan :as plan]
             [clojurecraft.rcon :as rcon]
-            [clojurecraft.senses :as senses]))
+            [clojurecraft.senses :as senses]
+            [clojurecraft.start :as start]))
 
 (set! *warn-on-reflection* true)
 
@@ -141,15 +143,6 @@
       (some-> run-minutes
               (* 60000))
       timeout-ms))
-
-(defn bot-cap-ms
-  "A checkpoint bot's own time limit, ms, from the config: :race/bot-minutes when the server's
-   start (from) is one of the :race/checkpoint's (cli/checkpoints), so only the checkpoint lanes cap their bots; nil for
-   any other lane (a bot there plays until it ends or the job does)."
-  [config from]
-  (when (and from (some #(= from (:from %)) (cli/checkpoints (:race/checkpoint config))))
-    (some-> (:race/bot-minutes config)
-            (* 60000))))
 
 (defn bot-timeout-ms
   "How long a bot may play, ms, started at now: until the job's deadline, or its own cap (ms, nil
@@ -304,54 +297,6 @@
                     :else nil)))
           nil
           (take claim-tries (drop offset (claims/spiral)))))
-
-(def starts
-  "The race's starts at a fortress, by :race/from name: the first target a bot starting there plays
-   (:checkpoint/goal) and what it carries beyond :race/kit (:checkpoint/kit, give commands' item
-   counts). \"fortress\" plays the blaze rods with the race kit: the stages before it are the road
-   to the fortress. \"rods\" is stage 18's checkpoint (LOOP.md section 1): the race kit and the
-   seven rods stage 17 yields, at the same pad, so the pearl hunt is played by every bot that starts
-   there, not only the 5 to 7% that win the blaze rods first (0ace52e: 184 of 2518 real bots).
-   \"forest\" is the same kit and goal landed on a floor of the warped forest nearest the fortress
-   pad (land-forest!), the hunt practised from its own start (LOOP.md section 7.6): on 7c7e8dd 12 of
-   13 stalled bots never saw an enderman."
-  {"fortress" {:checkpoint/goal :blaze-rods :checkpoint/kit []}
-   "rods" {:checkpoint/goal :ender-pearls :checkpoint/kit ["minecraft:blaze_rod 7"]}
-   "forest" {:checkpoint/goal :ender-pearls
-             :checkpoint/kit ["minecraft:blaze_rod 7"]
-             :checkpoint/at :forest}})
-
-(defn start-of
-  "The start (starts) :race/from names, a string or a keyword, or nil for a start from spawn."
-  [from]
-  (when from (starts (name from))))
-
-(defn fortress?
-  "Does :race/from name a start at the fortress (starts)?"
-  [from]
-  (some? (start-of from)))
-
-(defn forest?
-  "Does :race/from name the start in the warped forest (starts, :checkpoint/at :forest)?"
-  [from]
-  (= :forest (:checkpoint/at (start-of from))))
-
-(defn start-kit
-  "What a bot starting at from is given, in order: the start's own items (start-of) first, then the
-   race kit. The race kit fills all 36 slots, and give drops what has no slot at the feet, so the
-   start's items go in first and the kit's last stack is what is left out, never the rods."
-  [kit from]
-  (into (vec (:checkpoint/kit (start-of from))) kit))
-
-(defn from-goals
-  "The targets a race to until plays when it starts at (:race/from) from: the whole chain to until
-   from spawn (nil or :spawn), else the chain from its start's first stage (starts :checkpoint/goal) on, so the
-   run is only stages 17 and 18 (blaze rods, ender pearls) and its failures are filed at those."
-  [from until]
-  (let [chain (plan/through until)]
-    (if-let [goal (:checkpoint/goal (start-of from))]
-      (vec (drop-while #(not= goal %) chain))
-      chain)))
 
 (defn landing-of
   "The [x z] racer i (from 0) lands on in a landing set ([[x z y] ...]), offset into it: the
@@ -785,7 +730,7 @@
    server locates, built by prepare! or here when it is new, build-pad!), its lava cleared again
    (lava-clear-command: lava flows back between landings), the bot teleported onto it; wait for the server to say it stands in the Nether, clear its inventory and give it kit
    (\"minecraft:iron_sword 1\" ...: what a race bot carries to the fortress, ci/race.edn's
-   :race/kit). Returns where it stands ([x y z], standing-on the pad), or nil when the dimension
+   start/kit-commands). Returns where it stands ([x y z], standing-on the pad), or nil when the dimension
    never came; a landing that cannot locate a fortress throws."
   [rc name landing i kit]
   (let [fortress
@@ -858,39 +803,42 @@
    cell claimed for it round the race's centre, which the first bot online decides), pin its spawn
    there, and put its :go (every step up to until, milestones on, :go/at where it landed) on its
    queue. A bot whose landing fails starts where it stands."
-  [{:keys [host rcon-port rcon-pass until landings landing-offset from kit bots]} ch centre name
+  [{:keys [host rcon-port rcon-pass until landings landing-offset bots] begin :start} ch centre name
    queue i]
   (async/thread
-   (try (rcon/with-rcon
-         host
-         rcon-port
-         rcon-pass
-         (fn [rc]
-           (let [online (fixture/wait-online! rc name fixture/online-timeout)
-                 _ (when online (deliver centre [(long (first online)) (long (nth online 2))]))
-                 at (when online
-                      (rcon/command! rc (str "gamemode survival " name))
-                      (rcon/command! rc (team-join-command name))
-                      (cond (fortress? from)
-                            (let [k (slot-index i bots)]
-                              ((if (forest? from) land-forest! land-fortress!)
-                               rc
-                               name
-                               (if landings (landing-of landings (or landing-offset 0) k) @centre)
-                               k
-                               kit))
-                            landings
-                            (fixture/land-at! rc name (landing-of landings (or landing-offset 0) i))
-                            :else (land! rc ch name @centre i)))]
-             (when at
-               (rcon/command!
-                rc
-                (spawn-command name at (if (fortress? from) dimension/nether dimension/overworld))))
-             (cli/log name "landed at" at)
-             (async/>!! queue
-                        (cond-> {:event/kind :go :go/goals (from-goals from until) :go/chain? true}
-                          at (assoc :go/at at))))))
-        (catch Exception e (cli/log name "landing failed:" e)))))
+   (try
+     (rcon/with-rcon
+      host
+      rcon-port
+      rcon-pass
+      (fn [rc]
+        (let [online (fixture/wait-online! rc name fixture/online-timeout)
+              _ (when online (deliver centre [(long (first online)) (long (nth online 2))]))
+              at (when online
+                   (rcon/command! rc (str "gamemode survival " name))
+                   (rcon/command! rc (team-join-command name))
+                   (cond (start/nether? begin)
+                         (let [k (slot-index i bots)]
+                           ((if (start/forest? begin) land-forest! land-fortress!)
+                            rc
+                            name
+                            (if landings (landing-of landings (or landing-offset 0) k) @centre)
+                            k
+                            (start/kit-commands begin)))
+                         landings
+                         (fixture/land-at! rc name (landing-of landings (or landing-offset 0) i))
+                         :else (land! rc ch name @centre i)))]
+          (when at
+            (rcon/command! rc
+                           (spawn-command
+                            name
+                            at
+                            (if (start/nether? begin) dimension/nether dimension/overworld))))
+          (cli/log name "landed at" at)
+          (async/>!! queue
+                     (cond-> {:event/kind :go :go/goals (start/goals begin until) :go/chain? true}
+                       at (assoc :go/at at))))))
+     (catch Exception e (cli/log name "landing failed:" e)))))
 
 (defn board!
   "The board, on a thread of its own: every board-every-ms until done (a promise) is delivered,
@@ -1093,7 +1041,7 @@
   "One bot's whole life in a slot: the next serial's name (serials, an atom shared by the slots),
    its own atom and queue, on the board (live) and watched for milestones while it plays, landed on
    landing serial - 1 of the set (land-bot!), and played until its goal, its plan failing, a crash
-   or the job's end (deadline); a checkpoint lane's bot also stops at :race/bot-minutes (bot-cap-ms),
+   or the job's end (deadline); a bot whose start has a cap (start/cap-ms) also stops at it,
    a :bot-timeout, filed (capped), where the job's end is a cut. Its RESULT line is printed as it ends, marked
    cut (failure/cut) when the job's end stopped it. Its senses (senses/senses!: a line a second of
    what it sensed and decided, and the loop's slowest event) are written beside its recording as
@@ -1104,10 +1052,10 @@
    lines about it (serverlog-lines: its death line, a kick, a server that can't keep up) as
    <name>.serverlog.txt.
    Returns {:name :result :truth}."
-  [{:keys [server ch centre serials live watcher prefix record-dir commit deadline config]}]
+  [{:keys [server ch centre serials live watcher prefix record-dir commit deadline]}]
   (let [n (swap! serials inc)
         start (System/currentTimeMillis)
-        cap (bot-cap-ms config (:from server))
+        cap (start/cap-ms (:start server))
         name (bot-name prefix n)
         queue (async/chan events-buffer)
         world* (atom (game/init {:host (:host server) :port (:port server) :name name}))
@@ -1137,7 +1085,7 @@
               :name name
               :until (:until server)
               :chain true
-              :end-on-death? (fortress? (:from server))
+              :end-on-death? (start/nether? (:start server))
               :timeout-ms (bot-timeout-ms deadline start cap)
               :record (str (io/file record-dir (str name ".edn")))
               :commit commit
@@ -1268,10 +1216,10 @@
                         :rcon-port (Long/parseLong rcon-port)
                         :rcon-pass rcon-pass
                         :until until
-                        :from (or (get o :from) (:race/from config))
+                        :start (or (start/start-of (get o :start))
+                                   (throw (ex-info "no such start" {:start (get o :start)})))
                         :bots bots
-                        :server-log (str "work/world-" (or which 1) "/logs/latest.log")
-                        :kit (start-kit (:race/kit config) (or (get o :from) (:race/from config)))}
+                        :server-log (str "work/world-" (or which 1) "/logs/latest.log")}
                  landings-file
                  (assoc :landings (landings/read-landings landings-file)
                         :landing-offset (parse-long (or landing-offset "0"))))
@@ -1298,7 +1246,7 @@
              :deadline (+ t0 (run-ms config))}]
     (cli/log "race:" bots "slots to" until "seed" seed "for" (quot (run-ms config) 60000) "min")
     (set-gamerules! server)
-    (when (fortress? (:from server)) (prepare! server bots))
+    (when (start/nether? (:start server)) (prepare! server bots))
     (board! server live done)
     (sampler! server where live record-dir done)
     (let [slots (mapv #(slot! ctx %) (range bots))

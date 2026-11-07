@@ -44,6 +44,7 @@
             [clojurecraft.scene :as scene]
             [clojurecraft.senses :as senses]
             [clojurecraft.sim :as sim]
+            [clojurecraft.start :as start]
             [clojurecraft.sword :as sword]
             [clojurecraft.terrain :as terrain]
             [datascript.core :as d]))
@@ -109,45 +110,6 @@
   (assoc w :capture/nether nether :capture/nether-file (str file)))
 
 ;; ---------------------------------------------------------------- a start at a fortress
-
-(def fortress-kit-default
-  "What a bot brings to a fortress in the real race, as {item count} (ci/race.edn's :race/kit, from the
-   lane audits): a stone pickaxe, an iron sword and three pieces of iron armour in the bag (the
-   :wear-armour row puts them on), a table, sticks, flint and steel, both buckets, coal, cooked food and
-   junk stone and loot, all thirty-six slots. ci/simrace.edn's :simrace/kit
-   replaces it as one line."
-  {:stone_pickaxe 1
-   :iron_sword 1
-   :iron_helmet 1
-   :iron_chestplate 1
-   :iron_leggings 1
-   :cooked_beef 16
-   :crafting_table 1
-   :stick 12
-   :flint_and_steel 1
-   :bucket 1
-   :water_bucket 1
-   :coal 4
-   :stone_sword 1
-   :cobblestone 256
-   :netherrack 64
-   :diorite 128
-   :granite 64
-   :andesite 64
-   :cobbled_deepslate 64
-   :dirt 64
-   :gravel 16
-   :raw_copper 12
-   :lapis_lazuli 11
-   :leather 6
-   :bone 2
-   :string 3
-   :oak_planks 1
-   :flint 1
-   :sand 16
-   :golden_boots 1
-   :spruce_planks 1
-   :white_wool 2})
 
 (def stack-size 64)
 
@@ -253,27 +215,6 @@
                  start)]
      (if start (assoc w :capture/fortress (assoc start :inventory (kit->inventory kit))) w))))
 
-(def starts
-  "The sim race's starts at a fortress, by :simrace/from name, as the real race's (race/starts):
-   the first target a run plays (:checkpoint/goal) and what it carries beyond the kit (:checkpoint/kit, {item
-   count}). \"rods\" is stage 18's checkpoint (LOOP.md section 1): seven rods in hand, so every run
-   plays the pearl hunt; no sim run had reached a warped forest from the blaze rods (0 of 52). The
-   kit fills the 36 slots in name order (kit->inventory), so the rods take a slot and the kit's
-   last-named stack is the one left out."
-  {"fortress" {:checkpoint/goal :blaze-rods :checkpoint/kit {}}
-   "rods" {:checkpoint/goal :ender-pearls :checkpoint/kit {:blaze_rod 7}}
-   "forest" {:checkpoint/goal :ender-pearls :checkpoint/kit {:blaze_rod 7} :checkpoint/at :forest}})
-
-(defn fortress-goals
-  "The goal ids a run that starts at a fortress plays to until: the chain's own, the stages from
-   goal up (their priority at least goal's row's; the blaze rods by default), nothing before: a bot
-   there has gone through them, and a failure before goal is not the run's to file."
-  ([until] (fortress-goals until :blaze-rods))
-  ([until goal]
-   (let [row (fn [id] (first (filter #(= id (:goal/id %)) plan/goals)))
-         from (:goal/priority (row goal))]
-     (filterv #(>= (:goal/priority (row %) 0) from) (plan/through until)))))
-
 (defn spawn-of
   "Where a run starts: at its fortress when it has one (with-fortress), else on the landing ([x z y],
    its surface) at the column's centre."
@@ -282,11 +223,11 @@
 
 (defn go-of
   "The :go a run of w to until is given once its bot is loaded: the chain to until (from the blaze
-   rods when the run starts at a fortress, fortress-goals) and the start (:go/at)."
+   rods when the run starts at a fortress, start/goals-from) and the start (:go/at)."
   [w until]
   {:event/kind :go
    :go/goals (if-let [f (:capture/fortress w)]
-               (fortress-goals until (:checkpoint/goal f :blaze-rods))
+               (start/goals-from (:checkpoint/goal f :blaze-rods) until)
                (plan/through until))
    :go/chain? true
    :go/at (spawn-of w)})
@@ -949,14 +890,10 @@
        (str (io/file dir (str stem ".truth.edn")))
        (catch Exception e (println "truth not written:" (ex-message e)) nil)))
 (defn cap-max-ms
-  "The simulated ms a checkpoint run may take, [ms capped?]: the checkpoint's own cap
-   (:simrace/checkpoint-max-minutes of config) when the run starts at a checkpoint (from names a
-   start) and the cap is under max-ms, else [max-ms false]."
-  [config from max-ms]
-  (let [cap (when (starts from)
-              (some-> (:simrace/checkpoint-max-minutes config)
-                      (* 60000)))]
-    (if (and cap (< cap max-ms)) [cap true] [max-ms false])))
+  "The simulated ms a run from start may take, [ms capped?]: the start's own cap (start/cap-ms)
+   when it has one and it is under max-ms, else [max-ms false]."
+  [start max-ms]
+  (let [cap (start/cap-ms start)] (if (and cap (< cap max-ms)) [cap true] [max-ms false])))
 
 (defn capped
   "A RESULT r of a run its own cap stopped (capped?) rather than the lane's horizon: a :timeout
@@ -1134,15 +1071,15 @@
         budget (get o :budget-minutes)
         food (some-> (get o :food)
                      Long/parseLong)
-        config (let [f (io/file "ci/simrace.edn")] (when (.exists f) (edn/read-string (slurp f))))
-        from (or (get o :from) (:simrace/from config))
-        kit (or (:simrace/kit config) fortress-kit-default)
+        begin (or (start/start-of (get o :start))
+                  (throw (ex-info "no such start" {:start (get o :start)})))
+        kit (start/kit-map begin)
         given (some-> (get o :runs)
                       slurp
                       edn/read-string)
         until (or until default-until)
         [max-ms capped?]
-        (cap-max-ms config from (* 60000 (Long/parseLong (or minutes (str default-max-minutes)))))
+        (cap-max-ms begin (* 60000 (Long/parseLong (or minutes (str default-max-minutes)))))
         first-seed (Long/parseLong (or seed "1"))
         files (cond given (mapv io/file (distinct (map first given)))
                     world [(io/file world)]
@@ -1162,16 +1099,15 @@
                          nether (nether-of path)]
                      (cond-> w
                        nether (with-nether nether path)
-                       (and nether (starts from))
-                       (-> (with-fortress (merge-with + kit (:checkpoint/kit (starts from)))
-                                          (:checkpoint/at (starts from)))
+                       (and nether (start/nether? begin))
+                       (-> (with-fortress kit (when (start/forest? begin) :forest))
                            (as-> w'
                              (cond-> w'
                                (:capture/fortress w')
                                (assoc-in [:capture/fortress :checkpoint/goal]
-                                (:checkpoint/goal (starts from)))))))))
+                                (:start/goal begin))))))))
                  files)
-        ws (if (starts from)
+        ws (if (start/nether? begin)
              (let [with (filterv :capture/fortress ws)]
                (cli/log "from fortress:"
                         (count with)
@@ -1218,6 +1154,8 @@
    --judge f1,f2 judges snapshots as the issue check does (judge!), uninstrumented: a judge, not
    a spec test. With --expect recur, it exits 1 unless every one recurs (the base code: the
    moment must reproduce the failure); with --expect pass, unless none does (the fix).
+   --start id is where each run begins, an id in resources/clojurecraft/starts.edn (clojurecraft.start;
+   the table's default without it).
    --from-landing f replays a snapshot's run from its landing to its stage (from-landing!): a
    probe's tool for the whole road, up to default-max-minutes, never the check's.
    --from-recording f1,f2 turns real races' recordings into snapshots of their failures

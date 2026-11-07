@@ -158,11 +158,7 @@
     (is (not (:run/cut? (race/marked (assoc r :reason :no-site)))) "a bot's own stop is a failure")
     (is (= {:ok true :reason :goal} (race/marked {:ok true :reason :goal})) "a pass is unchanged")))
 
-(deftest a-checkpoint-bot-has-a-cap-of-its-own
-  (is (= 3600000 (race/bot-cap-ms {:race/bot-minutes 60 :race/checkpoint {:from "rods"}} "rods")))
-  (is (nil? (race/bot-cap-ms {:race/bot-minutes 60 :race/checkpoint {:from "rods"}} "fortress"))
-      "only the checkpoint lanes cap")
-  (is (nil? (race/bot-cap-ms {:race/checkpoint {:from "rods"}} "rods")) "no key, no cap")
+(deftest a-bot-is-cut-by-its-cap-or-the-job-whichever-comes-first
   (is (= 3600000 (race/bot-timeout-ms 20000000 1000 3600000)) "the cap, when it comes first")
   (is (= 5000 (race/bot-timeout-ms 10000 5000 3600000)) "the job's end, when it does")
   (is (= 1000 (race/bot-timeout-ms 100 5000 nil)) "at least a second")
@@ -230,34 +226,11 @@
          (reduce (fn [last _] (race/next-start last 5000)) 5000 (range 15)))
       "fifteen slots ending at once start one a gap apart"))
 
-(deftest a-race-from-the-fortress-plays-only-the-stages-from-the-blaze-rods
-  ;; issue #262: stages 17 and 18 alone, each bot landed in the Nether at its landing's fortress
-  (let [chain (plan/through "pearls-12")
-        from (race/from-goals "fortress" "pearls-12")]
-    (is (= chain (race/from-goals nil "pearls-12")) "no :race/from: every stage, as before")
-    (is (= chain (race/from-goals "spawn" "pearls-12")))
-    (is (= [:blaze-rods :ender-pearls] from) "the blaze rods, then the pearls")
-    (is (= from (race/from-goals :fortress "pearls-12")))
-    (is (race/fortress? "fortress"))
-    (is (not (race/fortress? "spawn")))))
-
 (deftest a-pad-is-cleared-of-lava-round-it
   ;; f9c021c race lane 2: 7 of 7 lava deaths 4 to 10 s after the teleport, lava in the pad
   (is (= (str "execute in minecraft:the_nether run fill 1030 51 422 1050 55 442"
               " minecraft:netherrack replace minecraft:lava")
          (race/lava-clear-command [1040 432 52]))))
-
-(deftest a-race-from-the-rods-checkpoint-plays-only-the-pearls
-  ;; LOOP.md section 1: stage 18's checkpoint, the race kit and seven rods at the same pad, so the
-  ;; pearl hunt is played by every bot, not only the 5 to 7% that win the blaze rods first
-  (is (= [:ender-pearls] (race/from-goals "rods" "pearls-12")) "the pearls alone")
-  (is (= [:ender-pearls] (race/from-goals :rods "pearls-12")))
-  (is (race/fortress? "rods") "landed at the fortress pad, as the fortress start")
-  (is (= ["minecraft:blaze_rod 7" "minecraft:stone_pickaxe 1"]
-         (race/start-kit ["minecraft:stone_pickaxe 1"] "rods"))
-      "the seven rods first, then the race kit: the kit fills every slot")
-  (is (= ["minecraft:stone_pickaxe 1"] (race/start-kit ["minecraft:stone_pickaxe 1"] "fortress")))
-  (is (= ["minecraft:stone_pickaxe 1"] (race/start-kit ["minecraft:stone_pickaxe 1"] nil))))
 
 (deftest a-failure-of-a-fortress-race-is-filed-at-its-own-stages
   ;; a run that played only blaze-rods and ender-pearls: nothing reached, it failed at the blaze
@@ -513,29 +486,6 @@
            (is (< (count t) 41)))
          (is (str/includes? (race/serverlog-text (str f) "Clj_r1") "was slain by Blaze"))
          (finally (.delete f)))))
-
-(deftest a-race-from-the-forest-checkpoint-plays-the-pearls-from-a-warped-forest
-  ;; LOOP.md section 7.6: the hunt practised from its own start; 12 of 13 stalled bots on 7c7e8dd
-  ;; never saw an enderman
-  (is (= [:ender-pearls] (race/from-goals "forest" "pearls-12")))
-  (is (race/fortress? "forest") "a Nether start with the fortress's pool and pads")
-  (is (race/forest? "forest"))
-  (is (race/forest? :forest))
-  (is (not (race/forest? "rods")))
-  (is (not (race/forest? nil)))
-  (is (= ["minecraft:blaze_rod 7" "minecraft:stone_pickaxe 1"]
-         (race/start-kit ["minecraft:stone_pickaxe 1"] "forest"))
-      "the same seven rods, then the kit")
-  (is (= 3600000
-         (race/bot-cap-ms {:race/bot-minutes 60 :race/checkpoint [{:from "rods"} {:from "forest"}]}
-                          "forest"))
-      "a forest bot has the cap too")
-  (is (= 3600000
-         (race/bot-cap-ms {:race/bot-minutes 60 :race/checkpoint [{:from "rods"} {:from "forest"}]}
-                          "rods")))
-  (is (nil? (race/bot-cap-ms {:race/bot-minutes 60
-                              :race/checkpoint [{:from "rods"} {:from "forest"}]}
-                             "fortress"))))
 
 (deftest the-forest-is-located-from-the-pad-then-from-farther-off
   (let [origins (race/forest-origins [-100 200 70])]
