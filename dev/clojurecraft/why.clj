@@ -12,6 +12,7 @@
   (:require [clojure.pprint :as pp]
             [clojurecraft.game :as game]
             [clojurecraft.main :as main]
+            [clojurecraft.memory :as memory]
             [clojurecraft.pearls :as pearls]
             [clojurecraft.plan :as plan]
             [clojurecraft.record :as record]
@@ -36,20 +37,39 @@
   [w]
   (let [safe (fn [f] (try (f) (catch Exception e (str "THROWS " (ex-message e)))))
         row (plan/choose w plan/goals)]
-    (into (sorted-map)
-          (for [[k f] {:choose #(:goal/id row)
-                       :choose-next #(plan/next-intent w row plan/goals)
-                       :menaced? #(pearls/menaced? w)
-                       :shelter #(pearls/shelter w)
-                       :hunt #(pearls/hunt w)
-                       :pearl-fallback #(pearls/pearl-fallback w)
-                       :pocket-bore #(pearls/pocket-bore w)
-                       :blaze-refuge #(pearls/blaze-refuge w)
-                       :fortress-escaping? #(pearls/fortress-escaping? w)
-                       :angry-tracked? #(pearls/angry-tracked? w pearls/hold-radius)
-                       :perched? #(pearls/perched? w)
-                       :reserve-toss #(window/reserve-toss w)}]
-            [k (safe f)]))))
+    (into
+     (sorted-map)
+     (for [[k f] {:choose #(:goal/id row)
+                  :choose-next #(plan/next-intent w row plan/goals)
+                  :menaced? #(pearls/menaced? w)
+                  :shelter #(pearls/shelter w)
+                  :hunt #(pearls/hunt w)
+                  :pearl-fallback #(pearls/pearl-fallback w)
+                  :pocket-bore #(pearls/pocket-bore w)
+                  :blaze-refuge #(pearls/blaze-refuge w)
+                  :fortress-escaping? #(pearls/fortress-escaping? w)
+                  :angry-tracked? #(pearls/angry-tracked? w pearls/hold-radius)
+                  :perched? #(pearls/perched? w)
+                  :reserve-toss #(window/reserve-toss w)
+                  :travel/in-forest? #(pearls/in-forest? w)
+                  :travel/nearest-forest #(pearls/nearest-forest w)
+                  :travel/warped-chunks #(count (memory/warped-chunks w))
+                  :travel/travel #(pearls/travel w)
+                  :travel/explore #(pearls/explore w)
+                  :travel/far-ends #(vec (pearls/far-ends w 0 (memory/arrived w)))
+                  :travel/far-ends-unspent #(vec (pearls/far-ends w 0 #{}))
+                  :travel/arrived #(count (memory/arrived w))
+                  :travel/pickaxe? #(pearls/pickaxe? w)
+                  :travel/can-tunnel-out? #(pearls/can-tunnel-out? w)
+                  :travel/near-fortress? #(pearls/near-fortress? w)
+                  :travel/swarmed? #(pearls/swarmed? w)
+                  :travel/recently-shot? #(pearls/recently-shot? w)
+                  :travel/endermen-seek #(count (pearls/endermen w pearls/seek-radius))
+                  :travel/wandering? #(pearls/wandering? w)
+                  :travel/wander #(pearls/wander w)
+                  :travel/caged? #(pearls/travel-caged? w)
+                  :travel/blacklist #(:plan/blacklist w)}]
+       [k (safe f)]))))
 
 (defn -main
   "Print the moment and the planner's answers at at-ms of the recording at path."
