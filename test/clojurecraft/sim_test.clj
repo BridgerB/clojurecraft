@@ -2714,7 +2714,7 @@
     (is (empty? (:sim/violations sim)))))
 
 (deftest the-iron-kit-from-a-stone-pickaxe-and-its-recording-replays
-  (let [path (str (System/getProperty "java.io.tmpdir") "/clojurecraft-iron-kit.edn")
+  (let [path (fx/temp-path "clojurecraft-iron-kit" ".edn")
         tap (record/tap! path)
         [w sim] (sim/run (recording step tap)
                          (game/init fx/opts)
@@ -3092,7 +3092,7 @@
             {:event/kind :go :go/goals goals})))
 
 (deftest the-portal-from-a-kit-and-its-recording-replays
-  (let [path (str (System/getProperty "java.io.tmpdir") "/clojurecraft-portal.edn")
+  (let [path (fx/temp-path "clojurecraft-portal" ".edn")
         tap (record/tap! path)
         [w sim] (nether-run (recording step tap) {})]
     ((:close tap))
@@ -3253,7 +3253,7 @@
            {:event/kind :go :go/goals [:fortress]}))
 
 (deftest the-fortress-from-a-nether-landing-and-its-recording-replays
-  (let [path (str (System/getProperty "java.io.tmpdir") "/clojurecraft-fortress.edn")
+  (let [path (fx/temp-path "clojurecraft-fortress" ".edn")
         tap (record/tap! path)
         [w sim] (fortress-run (recording step tap))]
     ((:close tap))
