@@ -167,7 +167,10 @@
   (is (= 19000 (race/bot-timeout-ms 20000 1000 nil)) "no cap: the job's end"))
 
 (deftest a-capped-bot-is-filed-and-the-jobs-end-is-cut
-  (let [r {:ok false :until "pearls-12" :reason :timeout :plan {:plan/reached #{:wood}}}
+  (let [r {:ok false
+           :until "pearls-12"
+           :reason :timeout
+           :plan {:plan/status :running :plan/reached #{:wood}}}
         cap 3600000
         own (race/marked (race/capped r 20000000 0 cap))
         job (race/marked (race/capped r 3000000 0 cap))]
