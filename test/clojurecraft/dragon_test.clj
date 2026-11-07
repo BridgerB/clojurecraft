@@ -167,6 +167,29 @@
         "clear of it, the block in against the top of the one under")
     (is (= 90.0 (second (get-in clear [:player/controls :control/look]))) "looking straight down")))
 
+(deftest a-re-equip-mid-climb-leaves-no-send-time-without-a-sequence
+  ;; issue #263, real races d3ce99b and 9cedf7c: the climb had kept its feet cell (:intent/under),
+  ;; the block left the hand, the re-equip's window click stamped :intent/sent-at, and with no
+  ;; placement sent there was no :intent/sequence: (>= last-ack nil) threw in the climb
+  (let [w (-> (standing {} [8.5 64.0 8.5] cobblestone {})
+              (assoc :plan/intent
+                     {:intent/kind :pillar
+                      :intent/item :cobblestone
+                      :intent/top 66
+                      :intent/stage :climb
+                      :intent/under [8 64 8]
+                      :intent/sent-at 1500
+                      :intent/since 1000
+                      :intent/status :active}))
+        fixed (dragon/equipped w)
+        i (:plan/intent fixed)]
+    (is (not (contains? i :intent/sent-at)) "a click's time is not a block put")
+    (is (map? (:plan/intent (dragon/climb fixed i))) "the climb goes on, no throw")
+    (testing "a placement in flight keeps its time: it has a sequence"
+      (let [sent (-> w
+                     (assoc-in [:plan/intent :intent/sequence] 7))]
+        (is (= 1500 (:intent/sent-at (:plan/intent (dragon/equipped sent)))))))))
+
 ;; ---------------------------------------------------------------- the win
 
 (def dragon-eid 40)
