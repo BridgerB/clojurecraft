@@ -2607,6 +2607,65 @@
           t (assoc world :pearls/exit-target t)
           :else (dissoc world :pearls/exit-target))))
 
+(def heading-leg 64) ; blocks ahead on the held heading that a reach-heading tunnel aims at
+(def heading-span 300.0) ; blocks along a heading, at most, before it is picked again
+(def heading-min-y 40) ; the heading's tunnels stay in y 40 to 90: over the lava sea, under the roof
+(def heading-max-y 90)
+
+(defn heading-target
+  "The [x y z] cell heading-leg blocks ahead of the feet along the held heading's :dir, at the feet's
+   own y held to heading-min-y to heading-max-y (and over lava-floor), or nil with no heading held."
+  [world]
+  (when-let [{[dx dz] :dir} (:pearls/heading world)]
+    (let [[fx fy fz] (intent/feet world)]
+      [(+ fx (* heading-leg dx))
+       (long (max (max heading-min-y (lava-floor world)) (min heading-max-y fy)))
+       (+ fz (* heading-leg dz))])))
+
+(defn reach-heading
+  "The sealed :tunnel-to along the held heading (:pearls/heading) toward heading-target: a long
+   leg, the same heading at every act, for a bot in the Nether with no forest known that explore
+   finds no end for. Nil with no heading held. In sim R2/21 (probe stall-R2-21, 42383622038) it
+   stood caged with 131 digs and no forest, 170 to 485 blocks from the nearest."
+  [world]
+  (when-let [t (heading-target world)]
+    {:intent/kind :tunnel-to
+     :intent/target t
+     :intent/reach 1.5
+     :intent/steps fortress/steps-per-tunnel
+     :intent/seal-behind? true
+     :intent/for :pearls}))
+
+(defn reach-heading-hold
+  "The world with :pearls/heading {:dir [dx dz] :from feet :turns n} held while the bot is in the
+   Nether with no warped forest known: picked once, away from the fortress (fortress-exit-dir,
+   rounded to the nearer axis), kept at every act; turned a quarter when its target is blacklisted
+   (a leg blocked), and picked again from the feet after heading-span blocks along it. Dropped
+   once a forest is known or off the Nether. The world as it was otherwise."
+  [world]
+  (let [nether? (= dimension/nether (dimension/of world))
+        h (:pearls/heading world)
+        feet (intent/feet world)
+        [x _ z] feet
+        pick (fn []
+               (let [[ex ez] (fortress-exit-dir world)]
+                 {:dir (if (>= (abs ex) (abs ez)) [(if (neg? ex) -1 1) 0] [0 (if (neg? ez) -1 1)])
+                  :from feet
+                  :turns 0}))]
+    (cond (or (not nether?) (seq (memory/warped-chunks world))) (dissoc world :pearls/heading)
+          (or (nil? h)
+              (> (math/sqrt (+ (math/pow (- x (first (:from h))) 2.0)
+                               (math/pow (- z (last (:from h))) 2.0)))
+                 heading-span))
+          (assoc world :pearls/heading (pick))
+          (contains? (:plan/blacklist world #{}) (heading-target world))
+          (assoc world
+                 :pearls/heading
+                 (-> h
+                     (update :dir (fn [[dx dz]] [(- dz) dx]))
+                     (update :turns inc)))
+          :else world)))
+
 (defn fortress-exit-log
   "The world with one log line when the fortress exit choice is made or changed."
   [world]
@@ -2674,14 +2733,14 @@
           (and (fortress-escaping? world) (not (can-tunnel-out? world)))
           (if-let [pos (nearest-forest world)]
             (forest-way world (room-waypoint world (update pos 1 inc)))
-            (explore world))
+            (or (explore world) (reach-heading world)))
           :else
           (if-let [pos (nearest-forest world)]
             (forest-way world
                         (if (near-fortress? world)
                           (room-waypoint world (update pos 1 inc))
                           (update pos 1 inc)))
-            (explore world)))))
+            (or (explore world) (reach-heading world))))))
 
 (defn travel-caged?
   "Is the bot in the Nether, in no warped forest, with no enderman tracked, and no walk to or toward
@@ -3386,7 +3445,8 @@
                                                                             (uncovered-log
                                                                              (fortress-exit-log
                                                                               (fortress-exit-hold
-                                                                               world))))))))
+                                                                               (reach-heading-hold
+                                                                                world)))))))))
                 (shot-at? world) (assoc :pearls/shot-at-ms (:time/now world 0))
                 (sealed-full? world) (assoc :pearls/refuge-done true))]
     (cond (or (nil? look)

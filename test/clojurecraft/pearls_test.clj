@@ -4378,3 +4378,44 @@
                   (pearls/far-ends after 0 #{}))
         "no end is left within roam-reach of a visited one")
     (is (< (count (pearls/far-ends after 0 #{})) (count ends)) "the ends walked to are gone")))
+
+(deftest a-caged-bot-with-no-forest-known-tunnels-one-held-heading
+  ;; Logged state, sim R2/21 (probe stall-R2-21, 42383622038, issue #263): caged at [-106 59 462] with
+  ;; 131 digs, no forest known (the nearest 170 to 485 blocks off), explore nil: lookouts to the cap,
+  ;; 106 blocks from where it began. It holds one heading and tunnels long legs along it.
+  (let [netherrack (blocks/default-state :netherrack)
+        rock (into {} (for [x (range 0 16) y (range 50 70) z (range 0 16)] [[x y z] netherrack]))
+        w (-> (standing {} rock)
+              (assoc :player/dimension nether :player/pos [8.5 60.0 8.5])
+              (assoc-in [:player/inventory 1] (item :iron_pickaxe 1))
+              (memory/observe [2 60 2] blaze/spawner))
+        held (pearls/reach-heading-hold w)
+        h (:pearls/heading held)
+        i (pearls/reach-heading held)
+        moved (pearls/reach-heading-hold (assoc held :player/pos [8.5 60.0 20.5]))]
+    (is (some? h) "a heading is picked")
+    (is (= [1 0] (:dir h)) "away from the spawner at [2 60 2]")
+    (is (= :tunnel-to (:intent/kind i)))
+    (is (>= (- (first (:intent/target i)) 8) pearls/heading-leg) "a long leg along the heading")
+    (is (<= pearls/heading-min-y (second (:intent/target i)) pearls/heading-max-y))
+    (is (= h (:pearls/heading moved)) "the same heading at the next act, from other feet")
+    (testing "a blocked leg turns a quarter and goes on"
+      (let [blocked (assoc held :plan/blacklist #{(:intent/target i)})
+            turned (:pearls/heading (pearls/reach-heading-hold blocked))]
+        (is (= [0 1] (:dir turned)))
+        (is (= 1 (:turns turned)))))
+    (testing "picked again after heading-span blocks"
+      (is (= [(+ 8 400) 60 8]
+             (:from (:pearls/heading (pearls/reach-heading-hold
+                                      (assoc held :player/pos [(+ 408.5) 60.0 8.5])))))))
+    (testing "dropped once a forest is known, and at a death"
+      (is (not (contains? (pearls/reach-heading-hold (memory/remember-forest
+                                                      held
+                                                      {:forest/chunk [60 60]
+                                                       :forest/kind :warped
+                                                       :forest/count 20
+                                                       :forest/pos [960 60 960]
+                                                       :forest/at 0
+                                                       :forest/dimension nether}))
+                          :pearls/heading)))
+      (is (not (contains? (game/die held) :pearls/heading))))))
