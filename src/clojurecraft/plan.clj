@@ -370,17 +370,26 @@
 
 (def churn-log-every "Repeats of one intent between two `churn` log lines." 20)
 
-(defn identity-of
-  "The kind, and the target and :intent/for when the intent has them, of intent i: what makes two
-   intents the same one for churn detection. Absent keys stay absent (an attribute is never nil)."
+(def choice-keys
+  "The keys of a planned intent that make it this intent and not another: what it is (kind,
+   purpose), what it works on (item, recipe, target, cell) and how far (to-y). A deadline, the goal
+   it serves and a start time are left out because they move on every planning without making
+   another choice."
+  [:intent/kind :intent/for :intent/item :intent/recipe :intent/target :intent/cell :intent/to-y
+   :intent/top])
+
+(defn choice-key
+  "The identity of intent i as a choice: its choice-keys, read from the form it was planned in
+   (:intent/plan) when it has one, so a target an executor gained while running is not part of it.
+   Absent keys stay absent. Two intents are the same choice when their choice-keys are equal."
   [i]
-  (select-keys i [:intent/kind :intent/target :intent/for]))
+  (select-keys (or (:intent/plan i) i) choice-keys))
 
 (defn mark-ended
-  "The world with :plan/ended set to the identity of intent i (kind, target, purpose) and the
+  "The world with :plan/ended set to the choice-key of intent i and the
    ms it ended at: what start-intent compares the next intent with (churn-count)."
   [world i]
-  (assoc world :plan/ended (assoc (identity-of i) :ended/at (:time/now world 0))))
+  (assoc world :plan/ended (assoc (choice-key i) :ended/at (:time/now world 0))))
 
 (defn churn-count
   "How many times in a row the planner has started the same intent (kind, target and :intent/for)
@@ -391,10 +400,7 @@
    issue #615). Observation only: nothing reads it back."
   [world i]
   (let [e (:plan/ended world)
-        same? (fn [m]
-                (and (= (:intent/kind m) (:intent/kind i))
-                     (= (:intent/target m) (:intent/target i))
-                     (= (:intent/for m) (:intent/for i))))
+        same? (fn [m] (= (select-keys m choice-keys) (choice-key i)))
         repeat? (and e (same? e) (<= (- (:time/now world 0) (:ended/at e)) physics/tick-ms))]
     (cond (not repeat?) 0
           (same? (:plan/churn world)) (inc (:churn/n (:plan/churn world)))
@@ -405,7 +411,7 @@
    every churn-log-every repeats, a `churn <kind> <target> xN` line."
   [world i]
   (let [n (churn-count world i)]
-    (cond-> (assoc world :plan/churn (assoc (identity-of i) :churn/n n))
+    (cond-> (assoc world :plan/churn (assoc (choice-key i) :churn/n n))
       (and (pos? n) (zero? (mod n churn-log-every)))
       (game/say (str "churn " (:intent/kind i) " " (:intent/target i) " x" n)))))
 
@@ -453,15 +459,12 @@
                   (not (acted? world))))))
 
 (defn instant-count
-  "How many no-progress instant ends of intent i's choice (identity-of) in a row, i's end
+  "How many no-progress instant ends of intent i's choice (choice-key) in a row, i's end
    included: one more than :plan/instant counted when i is that choice and its last instant end
    was within instant-window-ms, else 1."
   [world i]
   (let [p (:plan/instant world)
-        same? (and p
-                   (= (:intent/kind p) (:intent/kind i))
-                   (= (:intent/target p) (:intent/target i))
-                   (= (:intent/for p) (:intent/for i)))
+        same? (and p (= (select-keys p choice-keys) (choice-key i)))
         fresh? (and same? (<= (- (:time/now world 0) (:instant/at p)) instant-window-ms))]
     (if fresh? (inc (:instant/n p)) 1)))
 
@@ -507,29 +510,12 @@
          (take explore-tries)
          (some #(when (routable? world %) %)))))
 
-(def choice-keys
-  "The keys of a planned intent that make it this intent and not another: what it is (kind,
-   purpose), what it works on (item, recipe, target, cell) and how far (to-y). Everything else a
-   row plans is left out because it moves on every planning without making another choice: a
-   deadline (:intent/until, now plus a few seconds: blaze-race-z8 job 5, run 41214675186, planned
-   one :place with 1793461559332, then ...482, then ...632), the goal it serves, a start time. The
-   target of an intent whose executor sets one (a :place) is the planned one, nil, never the one
-   it has gained running."
-  [:intent/kind :intent/for :intent/item :intent/recipe :intent/target :intent/cell :intent/to-y
-   :intent/top])
-
 (def failure-memory-ms 30000)            ; ms a failed choice is remembered
 (def failure-limit 16)                ; failed choices remembered
 (def area-memory-ms 300000)           ; ms a :blocked failure counts toward its area: 5 min
 (def area-radius 6.0)                 ; blocks on the plane that make an area
 (def area-blocked-after 3)            ; :blocked failures of one kind in an area after which the row is made to leave it
 (def blocked-after 3)                 ; failures of one choice within failure-memory-ms after which it is refused wherever the bot stands
-
-(defn choice-of
-  "The identity of intent i as a choice: its choice-keys, from the form it was planned in
-   (:intent/plan) when it has one."
-  [i]
-  (select-keys (or (:intent/plan i) i) choice-keys))
 
 (defn fresh-failures
   "The failures of :plan/failures within failure-memory-ms of now."
@@ -554,7 +540,7 @@
          :plan/failures
          (vec (take-last failure-limit
                          (conj (recent-failures world)
-                               {:choice (choice-of i)
+                               {:choice (choice-key i)
                                 :kind (:intent/kind i)
                                 :reason (:intent/reason i)
                                 :feet feet
@@ -565,7 +551,7 @@
    times within it from anywhere? A target-less intent (a :pillar, which fail-intent could not
    blacklist by target) is refused the same way."
   [world next feet]
-  (let [c (select-keys next choice-keys)
+  (let [c (choice-key next)
         fs (filter #(= c (:choice %)) (fresh-failures world))]
     (boolean (and next
                   (not (:plan/wait next))
@@ -656,7 +642,7 @@
                       (dissoc :plan/surfaced))
               (cond-> n
                       (assoc :plan/instant
-                             (assoc (identity-of i) :instant/n n :instant/at (:time/now world 0))))
+                             (assoc (choice-key i) :instant/n n :instant/at (:time/now world 0))))
               (cond-> (not n) (dissoc :plan/instant))
               (dissoc :plan/intent :plan/began)))))
 
@@ -933,17 +919,13 @@
       (game/say (str "intent " (:intent/kind i) " " (or (:intent/target i) (:intent/recipe i)))))))
 
 (defn identical-retry?
-  "Is next an identical repeat of the intent that just failed from feet: same kind, target, height or recipe?"
+  "Is next the same choice (choice-key) as the intent that just failed from feet?"
   [next failed feet]
   (and next
        failed
        feet
        (= feet (:intent/from-feet failed))
-       (= (:intent/kind next) (:intent/kind failed))
-       (= (:intent/target next) (:intent/target failed))
-       (= (:intent/to-y next) (:intent/to-y failed))
-       (= (:intent/recipe next) (:intent/recipe failed))
-       (= (:intent/item next) (:intent/item failed))))
+       (= (choice-key next) (choice-key failed))))
 
 (defn abandon-intent
   "Drop the running intent i before it ended, for reason (:goal-met, :preempted, :interrupted): remember it
@@ -1006,14 +988,7 @@
    never the same as what the row planned again. Blaze-race-z8 job 5 (run 41214675186) cut and
    restarted one :place 97 times in 14 s every 150 ms while burning, and died with 18 hp spent."
   [i next]
-  (boolean (and i
-                next
-                (not (:plan/wait next))
-                (if-let [planned (:intent/plan i)]
-                  (= (select-keys planned choice-keys) (select-keys next choice-keys))
-                  (and (= (:intent/kind i) (:intent/kind next))
-                       (= (:intent/target i) (:intent/target next))
-                       (= (:intent/for i) (:intent/for next)))))))
+  (boolean (and i next (not (:plan/wait next)) (= (choice-key i) (choice-key next)))))
 
 (defn hollow-pocket?
   "Is next a :pocket at the feet that cannot be sealed (pocket/cannot-seal?)? Steer drops such a
