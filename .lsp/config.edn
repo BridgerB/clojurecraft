@@ -3,8 +3,9 @@
 {;; a public var nothing calls is dead code: raised from info so the hook and CI refuse it
  :linters {:clojure-lsp/unused-public-var {:level :warning}}
  ;; clean-ns sorts the :require and :import entries and :refer lists, and drops unused ones. The
- ;; layout is zprint's: entries stay on the :require line, and the classes inside one package
- ;; import are left as written, since clean-ns would split a long one and zprint pack it back.
- :clean {:ns-inner-blocks-indentation :same-line
+ ;; layout is zprint's (:keep): zprint hangs a short :require on its line and drops a long one below
+ ;; it, and clean-ns forcing either fought the other, so a ns could not grow past 47 requires (main's,
+ ;; 2026-11-07); the classes inside one package import are left as written for the same reason.
+ :clean {:ns-inner-blocks-indentation :keep
          :sort
          {:ns true :require true :import true :import-classes nil :refer {:max-line-length 100}}}}
