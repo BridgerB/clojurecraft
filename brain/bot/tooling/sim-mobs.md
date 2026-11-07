@@ -21,8 +21,8 @@ sourceRefs:
   - src/clojurecraft/mob.clj#defn nether-spot?
   - src/clojurecraft/mob.clj#defn pack-step
   - src/clojurecraft/sim/mobs.clj#defn wild-roll
-  - src/clojurecraft/sim/mobs.clj#defn try-nether-spawn
-  - src/clojurecraft/sim/mobs.clj#defn spawn-pack
+  - src/clojurecraft/sim/spawns.clj#defn try-nether-spawn
+  - src/clojurecraft/sim/spawns.clj#defn spawn-pack
   - src/clojurecraft/mob.clj#defn route
   - src/clojurecraft/mob.clj#defn moves
   - src/clojurecraft/mob.clj#defn toward-aim
@@ -46,17 +46,17 @@ sourceRefs:
   - src/clojurecraft/sim/mobs.clj#defn with-mobs
   - src/clojurecraft/sim/protocol.clj#defn retell-entities
   - test/clojurecraft/sim_test.clj#a-respawned-bot-is-told-the-mobs-about-it-again
-  - src/clojurecraft/sim/mobs.clj#defn tick-mobs
-  - src/clojurecraft/sim/mobs.clj#defn try-spawn
+  - src/clojurecraft/sim/spawns.clj#defn tick-mobs
+  - src/clojurecraft/sim/spawns.clj#defn try-spawn
   - src/clojurecraft/mob.clj#defn spawner-awake?
   - src/clojurecraft/mob.clj#defn spawner-spawns
-  - src/clojurecraft/sim/mobs.clj#defn tick-spawners
-  - src/clojurecraft/sim/mobs.clj#defn spawn-batch
+  - src/clojurecraft/sim/spawns.clj#defn tick-spawners
+  - src/clojurecraft/sim/spawns.clj#defn spawn-batch
   - test/clojurecraft/mob_test.clj#a-spawner-near-the-player-makes-blazes-within-eight-hundred-ticks
   - test/clojurecraft/sim_test.clj#the-seventh-rod-from-a-spawner-in-the-models-nether
   - src/clojurecraft/sim/mobs.clj#defn hurt-mob
   - src/clojurecraft/sim/mobs.clj#defmethod on-packet [:play :attack]
-  - src/clojurecraft/sim/mobs.clj#defn populate-column
+  - src/clojurecraft/sim/spawns.clj#defn populate-column
   - src/clojurecraft/sim/mobs.clj#defn mob-roll
   - src/clojurecraft/simrace.clj#defn day-time-of
   - test/clojurecraft/mob_test.clj#an-iron-sword-kills-a-zombie-in-four-hits-and-it-drops-and-goes

@@ -88,7 +88,8 @@ src/clojurecraft/sim/world.clj    the model's floor: constants, rolls, blocks, w
 src/clojurecraft/sim/window.clj   the player's inventory, containers, the click rules, the furnace
 src/clojurecraft/sim/protocol.clj login, chunks, movement, digging, using items, the player's life (hurt, hunger, pickup)
 src/clojurecraft/sim/portal.clj   placing blocks, the Nether portal and the arrival
-src/clojurecraft/sim/mobs.clj     spawning, goals and attacks of every mob, the dragon's perch
+src/clojurecraft/sim/mobs.clj     goals and attacks of every mob, the dragon's perch
+src/clojurecraft/sim/spawns.clj   the night rule's and the Nether's spawns, despawn, populate, tick-mobs
 src/clojurecraft/sim/end.clj      eyes of ender, the End portal, the arrival on the main island
 src/clojurecraft/fluid.clj    water and lava as the server moves them: levels, flow, spread, mixing, as data and pure rules
 src/clojurecraft/hunger.clj   hunger as the server keeps it: exhaustion, saturation, regeneration, starvation, eating, as data and pure rules
