@@ -51,11 +51,7 @@
 (def falling-reach 16)                ; gravel or sand stacked over a cell that a fluid on top is looked for through
 
 (defn fluid-over-falling?
-  "Is there water or lava over or beside gravel or sand stacked straight over pos: opening pos
-   lets the stack fall and the fluid follow it down. Gym batch iron-a4 run 1 tunnelled under a
-   riverbed, the gravel over a cell it cut fell into it, and the river came down the tunnel.
-   Sim race 39113082582 (issue #339, R3/33) opened gravel beside lava higher up the stack, flooding
-   the fortress tunnel until no escape footing remained."
+  "Is there water or lava over or beside gravel or sand stacked straight over pos: opening pos lets the stack fall and the fluid follow it down."
   [world [x y z]]
   (let [over (map (fn [dy] [x (+ y dy) z]) (range 1 (inc falling-reach)))
         stack (take-while #(some-> (terrain/block-at world %)
@@ -66,13 +62,7 @@
                    stack))))
 
 (defn bed-over-fluid?
-  "Is a horizontal neighbour of pos gravel or sand resting, through any stack of such under it,
-   on water or lava? Breaking pos updates its neighbours (vanilla's neighbour update), so that
-   bed drops into the fluid, and what lies over and beside it follows into the cut. Race
-   38842339863 runner 4 (issue #37) bot Clj_r26 cut stairs down a gravel beach between a lake
-   and a cave lake under the gravel at y 55-59: the dig beside a gravel column standing on the
-   cave's water dropped the beach into it, the lake poured into the pit, and the bot stood with
-   water over its head and beside every next cell, every stair :unsafe and the climb :boxed."
+  "Is a horizontal neighbour of pos gravel or sand resting, through any stack of such under it, on water or lava? Breaking pos updates its neighbours (vanilla's neighbour update), so that bed drops into the fluid, and what lies over and beside it follows into the cut."
   [world [x y z]]
   (boolean (some (fn [[dx dz]]
                    (let [[nx _ nz :as n] [(+ x dx) y (+ z dz)]]
@@ -259,32 +249,11 @@
 ;; ---------------------------------------------------------------- walk
 
 (def standing-walks
-  "The purposes of a walk that ends standing in its target cell, not near it: a build's stand
-   (#8: a pour is aimed from it), the pearl hunt's burrow (:shelter, issue #263), a hiding place
-   out of a blaze's sight (:cover, issue #262: a cell within reach of the eye but round a corner
-   hides only once stood in) and a fight's stand round a wall (:fight, issue #262: a walk near
-   the target ended in reach of it through the wall, where it started), and a retreat's new
-   ground (:retreat: a short way out of a boxed pocket must leave that pocket), and the surface over
-   stone no route reaches (:over-stone, issue #342: a walk that ended near it ended again at once, and
-   the mine planned it again every tick) and the neighbour cell that stands, from feet resting on
-   a rim over a gap (:footing, issue #105: a walk that ended near it ended on the rim) and a drop
-   lying in a pit under the floor (:rod, issue #500: only the feet in its cell are in the pickup
-   box) and the cell out of a fire (:fire-out, blaze-race-k race 1: a walk to a cell two off, in
-   reach of the eye, ended in its first tick standing in the fire, ×190 in 9.5 s, 30 in_fire hits)
-   and the blaze nook (:nook, issue #262: blaze/at-nook? counts only the exact cell, so a walk
-   that ended within reach beside it was chosen again every tick and failed :instant-churn;
-   Clj_r98, Clj_r56 and Clj_r62 of the 2026-11-04 races carry that failure at the spawner)."
+  "The purposes of a walk that ends standing in its target cell, not near it, because a cell next to it does not do: a build's stand (:build), the pearl hunt's burrow (:shelter), a hiding place out of a blaze's sight (:cover), a fight's stand round a wall (:fight), a retreat's new ground (:retreat), the surface over stone no route reaches (:over-stone), the neighbour cell that stands from feet on a rim over a gap (:footing), a drop in a pit under the floor (:rod, only the feet in its cell are in the pickup box), the cell out of a fire (:fire-out) and the blaze nook (:nook, which counts only the exact cell)."
   #{:build :shelter :cover :fight :retreat :over-stone :footing :rod :fire-out :nook})
 
 (defn walk-goal
-  "Where a walk's route may end: for a block mined from beside (:intent/pickup?), any cell
-   within pickup-range of it whose feet are where the drop lands in reach (path's :pickup goal:
-   the block at or up to pickup-rise above them; no single cell beside it, which a wall may
-   close off), and with :intent/step-down? a straight neighbour a block up too (the block in the
-   floor beside the feet, path's :goal/step-down?); for water to scoop, its bank (arrived?: path's :pickup goal at the cell over the
-   source, rise 1); for a build's stand or the pearl hunt's burrow (:intent/for :shelter, issue #263:
-   a step short of it is where an enderman reaches the bot) or a retreat's new ground, that cell
-   itself; else anywhere within goal-range."
+  "Where a walk's route may end: for a block mined from beside (:intent/pickup?), any cell within pickup-range of it whose feet are where the drop lands in reach (path's :pickup goal: the block at or up to pickup-rise above them), and with :intent/step-down? a straight neighbour a block up too; for water to scoop, its bank (path's :pickup goal at the cell over the source, rise 1); for a purpose in standing-walks, that cell itself; else anywhere within goal-range."
   [{:intent/keys [target for pickup? step-down?]}]
   (cond pickup?
         (cond->
@@ -337,15 +306,7 @@
                  :else true)))))
 
 (defn routable?
-  "Is there a way to walk intent i's goal from the feet: the planner's route is :found, or
-   :partial toward a target in a chunk not loaded yet (the walk plans again as chunks arrive).
-   Toward a target in a chunk not loaded, a :none route with waypoints is progress too: the search
-   ran out of loaded terrain, not of ways (gym batch solid-b1 run 1's own tunnel home ran to the
-   edge of what was loaded). Not :none toward a loaded target, nor :partial toward a target in
-   loaded terrain, the budget spent on it: walks to such targets failed :no-path again and
-   again. Uses :intent/max-nodes when given, as route! does. An act asks before it chooses a
-   target, so one with no way to it is passed over, not
-   walked at: three such walks in a row ended live runs among ore and water in caves."
+  "Is there a way to walk intent i's goal from the feet: the planner's route is :found, or :partial toward a target in a chunk not loaded yet (the walk plans again as chunks arrive). Toward a target in a chunk not loaded, a :none route with waypoints is progress too: the search ran out of loaded terrain, not of ways. Not :none toward a loaded target, nor :partial toward a target in loaded terrain, the budget spent on it. Uses :intent/max-nodes when given, as route! does. An act asks before it chooses a target, so one with no way to it is passed over, not walked at."
   [world {:intent/keys [target max-nodes] :as i}]
   (let [{:path/keys [status waypoints]} (path/plan world
                                                    (path/feet-cell (:player/pos world))
@@ -384,15 +345,7 @@
           :else (update (toward world centre 0.0) :control/jump? #(or % (and up? near?))))))
 
 (defn opening
-  "A walk out to the surface, or nil. The way already dug is open air: :surface climbs it
-   before filling a mine and the walk follows that to the mouth. nil when the feet are already
-   out, and nil when no way out is reached. Full run 4528031 had cut its stair down to
-   the iron at y 17, then cut a new one up through stone; the only pickaxe broke at y 49 and
-   three :no-pickaxe failures ended the plan. Sim race 39007353160 (issue #349, world R4/2)
-   climbed eight stairs out of a pit, then walked back down to its open sky, every eleven seconds:
-   the mouth must be out of the ground (stairs/out?), not merely under the sky. Never a mouth in
-   :plan/blacklist, where a walk to it that failed :no-path left it: sim snapshot
-   real-5-s2-Clj_r08 (issue #54) walked at the same mouth every twelve seconds for the window."
+  "A walk out to the surface, or nil. The way already dug is open air: :surface climbs it before filling a mine and the walk follows that to the mouth. nil when the feet are already out, and nil when no way out is reached. The mouth must be out of the ground (stairs/out?), not merely under the sky, and never a mouth in :plan/blacklist, where a walk to it that failed :no-path left it."
   [world]
   (let [feet (feet world)
         goal {:goal/kind :surface}]
@@ -422,11 +375,7 @@
                   :intent/best-tick (:time/tick world))))
 
 (defn route-stale?
-  "Should the walk plan again: a waypoint still ahead can no longer be stood on (a chunk that
-   arrived or a block that changed broke the route), no waypoint was reached for stuck-ticks,
-   or the route ended short of the target (:partial or :none) and every waypoint is behind. A
-   chunk arriving is not by itself a reason: six arrived in the first seconds of a gym run and
-   spent all six plans before the bot had walked a step, though every plan found the same route."
+  "Should the walk plan again: a waypoint still ahead can no longer be stood on (a chunk that arrived or a block that changed broke the route), no waypoint was reached for stuck-ticks, or the route ended short of the target (:partial or :none) and every waypoint is behind. A chunk arriving is not by itself a reason."
   [world {:intent/keys [waypoints at best-tick route]}]
   (let [ahead (drop at waypoints)]
     (or (some #(not (path/standable? world %)) ahead)
@@ -434,12 +383,7 @@
         (and (empty? ahead) (not= :found route)))))
 
 (defn walk-deadline
-  "The ticks a walk may take: walk-timeout-ticks, and waypoint-ticks more for each waypoint of the
-   route it walks, so a long route up a mountain is not cut short of its end. Sim world R2/19 seed
-   12 (issue #87's second round, 5f1542d against 090ef14): the walks to three pools across a
-   snowy mountain had routes of 123 and 175 waypoints; the first was at waypoint 116, a block a
-   half second all the way, when its sixty seconds ran out, and three such :stuck walks ended the
-   plan at the water bucket."
+  "The ticks a walk may take: walk-timeout-ticks, and waypoint-ticks more for each waypoint of the route it walks, so a long route is not cut short of its end."
   [{:intent/keys [waypoints]}]
   (+ walk-timeout-ticks (* waypoint-ticks (count waypoints))))
 
@@ -498,10 +442,7 @@
   (into {} (filter (fn [[s _]] (inventory/hotbar? s)) (:player/inventory world))))
 
 (defn stowed-tool
-  "[slot item-id] of the tool to dig block id with when it is only in the main inventory, nil
-   when the hotbar holds one or none is held. A dig chooses from the hotbar, and with the hotbar
-   full of what mining picked up, a crafted pickaxe lands in the main inventory: gym batch
-   iron-a3 runs 1 and 3 held a stone pickaxe there and stopped for want of one."
+  "[slot item-id] of the tool to dig block id with when it is only in the main inventory, nil when the hotbar holds one or none is held. A dig chooses from the hotbar, and a crafted pickaxe lands in the main inventory when the hotbar is full."
   [world id]
   (when-not (dig/best-tool id (hotbar world) (penalties world))
     (when-let [[slot _ :as t] (dig/best-tool id (:player/inventory world) (penalties world))]
@@ -532,12 +473,7 @@
       [slot item])))
 
 (defn breaking-tool
-  "[slot item-id] a dig of block id holds (choose-tool), or for a dig whose drop is not wanted
-   (drop-ok?) of a block no held tool harvests, the fastest of its kind in the hotbar (breaker),
-   else the hand, [0 nil]: the cell is what such a dig is for. :needs-tool otherwise, as
-   choose-tool. Sim race 38806318231 (issue #70, 1065 runs in 197 rounds): the cast's room and
-   way met deepslate redstone ore and iron ore the held pickaxe could not harvest, and every such
-   dig failed :needs-tool, three times."
+  "[slot item-id] a dig of block id holds (choose-tool), or for a dig whose drop is not wanted (drop-ok?) of a block no held tool harvests, the fastest of its kind in the hotbar (breaker), else the hand, [0 nil]: the cell is what such a dig is for. :needs-tool otherwise, as choose-tool."
   [world id drop-ok?]
   (let [t (choose-tool world id)]
     (if (and drop-ok? (= :needs-tool t))
@@ -545,12 +481,7 @@
       t)))
 
 (defn stowed-breaker
-  "[slot item-id] of the tool a dig of block id whose drop is not wanted should first put in hand
-   from the main inventory: stowed-tool's, or when no held tool harvests the block and the hotbar
-   has none of its kind, the fastest of its kind (breaker) stowed there; nil when the hotbar holds
-   it already or there is none. A broken pickaxe leaves its spare in the main inventory: sim race
-   38806318231 (issue #70) dug the cast's way at y 29 by hand, nine seconds a stone, with a stone
-   pickaxe in slot 35, and failed on iron ore :needs-tool."
+  "[slot item-id] of the tool a dig of block id whose drop is not wanted should first put in hand from the main inventory: stowed-tool's, or when no held tool harvests the block and the hotbar has none of its kind, the fastest of its kind (breaker) stowed there; nil when the hotbar holds it already or there is none."
   [world id]
   (or (stowed-tool world id)
       (when (and (= :needs-tool (choose-tool world id))
@@ -559,12 +490,7 @@
           (when-not (inventory/hotbar? slot) t)))))
 
 (defn open?
-  "Is block state id nothing a dig breaks, the cell already open: air, water or lava
-   (path/classify-id)? Anything else is broken, solid or not: an awkward block (a wall, a slab,
-   pointed dripstone) is in a route's way and a clear digs it (build/diggable?), a plant stops a
-   bucket's ray (build/sight-block). Sim race 38665691522 world R3/43 (issue #91): the cast's way
-   to its landing at y 24 dug the awkward block over the feet, and the dig, taking anything not
-   solid for open, failed :target-gone and failed the build."
+  "Is block state id nothing a dig breaks, the cell already open: air, water or lava (path/classify-id)? Anything else is broken, solid or not: an awkward block (a wall, a slab, pointed dripstone) is in a route's way and a clear digs it (build/diggable?), a plant stops a bucket's ray (build/sight-block)."
   [id]
   (or (blocks/air? id) (contains? #{:water :lava} (path/classify-id id))))
 
@@ -625,15 +551,7 @@
               (assoc-intent :intent/still (if (still? world) (inc still) 0))))))
 
 (defn finish-due
-  "The ms at which a dig may be finished now: the earlier of its :intent/finish-at, set at the
-   start from the penalties then, and what the penalties in force now allow (the block's state
-   and the tool it began with, dig-time and finish-delay from its start). The server weighs a
-   FINISH by the block's destroy progress at the moment it arrives (ServerPlayerGameMode: the
-   ticks since the start times that progress, 70% needed), so a dig begun with the eyes under
-   water and finished at the surface needs only the surface's time. Sim race 39598424082
-   (issue #344, world R1/3) began a granite dig by hand as the body rose out of a flooded
-   shaft, with the eyes still under water: 187 s, 25 times the hand's pace, and the escape's
-   120 s ran out while the body floated with its eyes in air, where the same dig was 37 s."
+  "The ms at which a dig may be finished now: the earlier of its :intent/finish-at, set at the start from the penalties then, and what the penalties in force now allow (the block's state and the tool it began with, dig-time and finish-delay from its start). The server weighs a FINISH by the block's destroy progress at the moment it arrives (70% needed), so a dig begun with the eyes under water and finished at the surface needs only the surface's time."
   [world {:intent/keys [state tool started finish-at]}]
   (min finish-at
        (+ started (finish-delay (dig-time state tool (penalties world)) (slowdown world)))))
@@ -664,17 +582,11 @@
           :else world)))
 
 (defmethod dig-stage :confirm
-  ;; the server breaks the block and sends its block update before the ack of FINISH (observed
-  ;; live on 26.1.2, and the vanilla client's own prediction relies on it): the cell open is the
-  ;; break. A loaded server acks first and breaks seconds later, by its own clock (vanilla's
-  ;; delayed destroy; issue #64), so the ack with the block still standing is waited on; the
-  ;; block still standing when confirm-ticks run out after it is the server's word that it did
-  ;; not break it: a FINISH it found early and queued behind another one still pending, which
-  ;; it then dropped, or a refusal it answered with the block put back. Race 38477665442,
-  ;; runner 9 (issues #59, #66): with 25 bots on one server the acks came 200-300 ms late and
-  ;; the breaks later still; the ack alone had the stairs believe their cells open, walk into
-  ;; rock the server still had there, and be put back by it ten times a second until the step
-  ;; timed out, :stair-not-taken three times
+  ;; the server breaks the block and sends its block update before the ack of FINISH (the vanilla
+  ;; client's own prediction relies on it): the cell open is the break. A loaded server acks first
+  ;; and breaks later, by its own clock, so an ack with the block still standing is waited on; the
+  ;; block still standing when confirm-ticks run out after it is the server's word that it did not
+  ;; break it (a FINISH it found early and dropped, or a refusal it answered with the block put back)
   [world {:intent/keys [target state sequence confirm-left]}]
   (let [at-target (terrain/block-at world target)
         acked (>= (:stats/last-ack world -1) sequence)]
@@ -716,8 +628,7 @@
 ;; ---------------------------------------------------------------- collect
 
 (defn nearest-item
-  "The tracked item entity nearest the point near, within 6 blocks, or nil. Only items: every
-   entity is tracked since issue #258, and a pig beside the drop is not the drop."
+  "The tracked item entity nearest the point near, within 6 blocks, or nil. Only items: every entity is tracked, and a pig beside the drop is not the drop."
   [world near]
   (->> (:world/entities world)
        vals
@@ -761,13 +672,7 @@
                    spots))))
 
 (defn leaf-under
-  "The leaf block the player stands on, when goal, a point, lies in its column more than
-   leaf-drop below the feet: a drop dug out of a trunk from the top of the canopy rests under
-   the leaves the bot stands on, out of the pickup box and in no wall ahead (blocker). nil
-   otherwise. Sim world R1/4 (issues #186, #370): the bot dug the top log of a two-log oak from
-   the leaves over it, the log fell into the hole under its feet, and the collect waited out its
-   ten seconds :not-picked-up. A bot on a leaf beside the hole, its box over the edge,
-   is not this: collect centres over a drop below the feet (centre-tolerance) to fall in."
+  "The leaf block the player stands on, when goal, a point, lies in its column more than leaf-drop below the feet: a drop dug out of a trunk from the top of the canopy rests under the leaves the bot stands on, out of the pickup box and in no wall ahead (blocker). nil otherwise. A bot on a leaf beside the hole, its box over the edge, is not this: collect centres over a drop below the feet (centre-tolerance) to fall in."
   [world goal]
   (let [[px py pz] (:player/pos world)
         [gx gy gz] goal
@@ -817,14 +722,7 @@
                      (> (abs uz) 0.1) (conj [0.0 (* w (math/signum uz))]))))))
 
 (defn ledge-ahead?
-  "Would a step toward goal take the body over a drop: the cell ledge-look ahead on the plane (not
-   the feet's own) open, with no floor under it nor within path/max-fall below that (path/landing),
-   or the body on the rim of a floor whose own cell has none, about to step off it
-   (straddling-ahead?)? Gym batch iron-a9 run 3's collect walked after a drop at a ravine's edge at
-   y -7 and the bot fell from a high place. Race 39110733219 runner 1 bot Clj_r15 (issue #65)
-   dug stone at the wall of a cave lake, stood on the rim of its stair's last floor with its feet
-   cell open, and the collect walked after the drop off it into the lake three blocks down, where
-   the nearest bank was a pocket it could not climb out of."
+  "Would a step toward goal take the body over a drop: the cell ledge-look ahead on the plane (not the feet's own) open, with no floor under it nor within path/max-fall below that (path/landing), or the body on the rim of a floor whose own cell has none, about to step off it (straddling-ahead?)?"
   [world goal]
   (let [[px _ pz] (:player/pos world)
         [gx _ gz] goal
