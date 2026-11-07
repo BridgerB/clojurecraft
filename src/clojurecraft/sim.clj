@@ -41,7 +41,8 @@
             [clojurecraft.mob :as mob]
             [clojurecraft.packet :as packet]
             [clojurecraft.physics :as physics]
-            [clojurecraft.recipe :as recipe]))
+            [clojurecraft.recipe :as recipe]
+            [clojurecraft.registry :as registry]))
 
 (set! *warn-on-reflection* true)
 
@@ -305,6 +306,39 @@
            :sim/sent-health [max-health (or food food/max-food) false])))
 
 (defn send "Queue pkt for the client in :sim/out." [sim pkt] (update sim :sim/out conj pkt))
+
+(def hostile-source 5)                  ; SoundSource.HOSTILE, the category a monster's sounds are sent in
+
+(defn tell-sound
+  "The model having told the client sound (a key of the registry's sounds, :entity.enderman.stare)
+   played at point [x y z] as the server does: a sound packet, the registry id and the position in
+   eighths of a block, hostile category, volume and pitch 1. Nothing for a name the registry lacks."
+  [sim sound [x y z]]
+  (let [id (get registry/sound-ids sound)
+        q #(math/round (* 8.0 (double %)))]
+    (cond (nil? id) sim
+          :else
+          (send sim
+                {:packet/name :sound
+                 :sound {:id id}
+                 :source hostile-source
+                 :x (q x)
+                 :y (q y)
+                 :z (q z)
+                 :volume 1.0
+                 :pitch 1.0
+                 :seed 0}))))
+
+(defn tell-level-event
+  "The model having told the client level event type (1018 a blaze's shot) at the block under point
+   [x y z] as the server does (level-event, not global, data 0)."
+  [sim type [x y z]]
+  (send sim
+        {:packet/name :level-event
+         :type type
+         :pos (mapv #(long (math/floor (double %))) [x y z])
+         :data 0
+         :global false}))
 
 (defn joined
   "A server already in play with a player it never saw join (issue #299: a real race's moment,
@@ -2233,9 +2267,10 @@
           :else
           (cond-> (assoc-in sim [:sim/mobs eid :angry?] true)
             (= :enderman type)
-            (send {:packet/name :set-entity-data
-                   :entity-id eid
-                   :metadata {entity/creepy-index true}})))))
+            (-> (send {:packet/name :set-entity-data
+                       :entity-id eid
+                       :metadata {entity/creepy-index true}})
+                (tell-sound :entity.enderman.stare (:pos (get-in sim [:sim/mobs eid]))))))))
 
 (defn hurt-mob
   "The model after mob eid takes amount of damage, by-player? when the player dealt it: within
@@ -2460,7 +2495,9 @@
     (cond (nil? to) [sim false]
           :else
           [(-> sim
+               (tell-sound :entity.enderman.teleport (get-in sim [:sim/mobs eid :pos]))
                (move-mob eid to)
+               (tell-sound :entity.enderman.teleport to)
                (update-in [:sim/mobs eid] dissoc :route)) true])))
 
 (defn blink
@@ -2631,6 +2668,7 @@
         (assoc :sim/next-eid (inc fid))
         (assoc-in [:sim/fireballs fid]
                   {:pos from :dir dir :owner eid :born (:sim/now sim) :kind type})
+        (tell-level-event 1018 pos)
         (send {:packet/name :add-entity
                :entity-id fid
                :uuid nil

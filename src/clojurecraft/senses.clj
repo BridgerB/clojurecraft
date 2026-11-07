@@ -79,6 +79,15 @@
       (:intent/goal i) (assoc :goal (:intent/goal i))
       (:intent/why (meta i)) (assoc :why (:intent/why (meta i))))))
 
+(defn heard-since
+  "The names of the sounds and level events heard in the last every-ms of world time (the interval
+   a line stands for), in order: what a line says it heard since the last one."
+  [world]
+  (let [t (:time/now world 0)
+        recent (fn [xs k] (for [x xs :when (> (:at x 0) (- t every-ms))] (get x k)))]
+    (vec (concat (recent (:world/sounds world) :sound)
+                 (recent (:world/level-events world) :event)))))
+
 (defn of
   "One line of what the bot senses and decides in world, a flat map: the time, its body
    (position, dimension, health, food, fire, trap), what it holds that the stages count (rods,
@@ -104,6 +113,7 @@
              (counted-near world projectile-radius #(contains? projectile-kinds (entity/kind %)))
              :endermen (counted-near world 128.0 #(= :enderman (entity/kind %)))}
       (:player/on-fire? world) (assoc :fire? true)
+      (seq (heard-since world)) (assoc :sounds (heard-since world))
       (:plan/trap world) (assoc :trap (:plan/trap world))
       (:plan/intent world) (assoc :intent (intent-view (:plan/intent world)))
       (:plan/waiting world) (assoc :waiting (:plan/waiting world))
@@ -242,10 +252,46 @@
       :player-action {:ev :dig :status (:status packet) :pos (:pos packet)}
       :use-item-on {:ev :place :pos (:pos packet)})))
 
+(def heard-near 16.0)                  ; blocks within which every sound and level event is noted; farther only the loud ones (loud-sound?, level events but a block broken)
+(def loud-sound #"shoot|warn|stare|scream|teleport|angry|death")
+
+(defn loud-sound?
+  "Is sound name one a fight is told by (a shot, a warning, an enderman's stare, scream or
+   teleport, anger, a death): noted from anywhere the bot hears it, not only within heard-near?"
+  [sound]
+  (boolean (re-find loud-sound (name sound))))
+
+(defn fresh
+  "The entries of after that are not in before, as a multiset in order: the new ones of a bounded
+   vector the handlers append to, two equal entries counted twice."
+  [before after]
+  (first (reduce (fn [[out left] x]
+                   (if (pos? (get left x 0)) [out (update left x dec)] [(conj out x) left]))
+                 [[] (frequencies before)]
+                 after)))
+
+(defn heard-events
+  "What the bot heard between before and after (ear.clj): each new sound (:sound, its name and
+   distance from the feet) and level event (:level-event, its name and distance), the ones within
+   heard-near, and the loud ones from farther (a block broken is only noted near): ambient noise
+   from far would flood the ledger, a shot never."
+  [before after]
+  (let [me (:player/pos after)
+        d (fn [pos] (when (and me pos) (r1 (physics/distance me pos))))
+        near (fn [x] (or (nil? x) (<= x heard-near)))]
+    (concat (for [s (fresh (:world/sounds before) (:world/sounds after))
+                  :let [dist (d (:pos s))]
+                  :when (or (near dist) (loud-sound? (:sound s)))]
+              (cond-> {:ev :sound :sound (:sound s) :d dist} (:eid s) (assoc :eid (:eid s))))
+            (for [e (fresh (:world/level-events before) (:world/level-events after))
+                  :let [dist (d (:pos e))]
+                  :when (or (near dist) (not= :block-broken (:event e)))]
+              {:ev :level-event :event (:event e) :d dist}))))
+
 (defn events
   "Every change between two successive worlds a reader of a run wants, in order, each a map with
    :ev and :t (after's time): the plan's (intent-events), the body's (body-events), what the bot
-   sent (sent-events) and the entities near it (entity-events). A pure function of the two values:
+   sent (sent-events), the entities near it (entity-events) and what it heard (heard-events). A pure function of the two values:
    the ledger observer folds it over every write of the atom, so nothing is sampled away (the
    observability plan, part C: the digest, done in-process, named and the same in the sim)."
   [before after]
@@ -255,7 +301,8 @@
             (concat (intent-events before after)
                     (body-events before after)
                     (sent-events after)
-                    (entity-events before after))))))
+                    (entity-events before after)
+                    (heard-events before after))))))
 
 ;; ---------------------------------------------------------------- the moment: the whole mind at an ending
 

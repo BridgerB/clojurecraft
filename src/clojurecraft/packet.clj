@@ -171,6 +171,16 @@
      [:vec
       [[:id :varint] [:base :f64]
        [:modifiers [:vec [[:mod-id :string] [:amount :f64] [:operation :varint]]]]]]]]
+   ;; what the bot hears (the observability plan, hearing): a sound at a point (the position in
+   ;; 1/8 blocks), a sound on an entity, and a level event (a ghast's warning, a blaze's shot, a
+   ;; block broken: type, block position, data, whether every player hears it); the sound is a
+   ;; holder, a registry id or inline (ClientboundSoundPacket, ClientboundSoundEntityPacket,
+   ;; ClientboundLevelEventPacket)
+   [:play :s2c :sound] [[:sound :sound-holder] [:source :varint] [:x :i32] [:y :i32] [:z :i32]
+                        [:volume :f32] [:pitch :f32] [:seed :i64]]
+   [:play :s2c :sound-entity] [[:sound :sound-holder] [:source :varint] [:entity-id :varint]
+                               [:volume :f32] [:pitch :f32] [:seed :i64]]
+   [:play :s2c :level-event] [[:type :i32] [:pos :position] [:data :i32] [:global :bool]]
    ;; play, client → server
    [:play :c2s :keep-alive] [[:id :i64]]
    [:play :c2s :pong] [[:id :i32]]
@@ -369,6 +379,34 @@
   [x]
   (or (nil? x) (and (map? x) (int? (:item x)) (int? (:count x)))))
 
+(defn read-sound-holder
+  "A sound event as the game sends it (Holder<SoundEvent> in a stream codec): a varint that is the
+   registry id plus one gives {:id registry-id}; zero is followed by the event inline, an
+   identifier string and an optional fixed range (a bool, then an f32 when true) and gives
+   {:name identifier} with :range when it has one."
+  [buf]
+  (let [n (b/read-varint buf)]
+    (cond (pos? n) {:id (dec n)}
+          :else
+          (let [id (b/read-string buf)]
+            (cond-> {:name id} (b/read-bool buf) (assoc :range (b/read-f32 buf)))))))
+
+(defn write-sound-holder
+  "A sound holder (read-sound-holder) as the game writes it: {:id i} as the varint i+1, {:name n}
+   as zero, the identifier and the range option."
+  [out {:keys [id name range]}]
+  (cond id (b/write-varint out (inc id))
+        :else
+        (do (b/write-varint out 0)
+            (b/write-string out name)
+            (b/write-bool out (some? range))
+            (when range (b/write-f32 out range)))))
+
+(defn sound-holder?
+  "Is x a decoded sound holder: {:id registry-id} or {:name identifier} (with an optional number :range)?"
+  [x]
+  (and (map? x) (or (int? (:id x)) (string? (:name x)))))
+
 (def wire-types
   "Every primitive wire type the specs use: how to read one from a buffer, how to write one to a
    stream, and what a value of it must be (with the wire's own range). :slot and :metadata are
@@ -401,6 +439,7 @@
    :lpvec3 {:read b/read-lpvec3 :write b/write-lpvec3 :valid? vec3?}
    :metadata {:read read-metadata :valid? metadata?}
    :slot {:read read-slot :valid? slot?}
+   :sound-holder {:read read-sound-holder :write write-sound-holder :valid? sound-holder?}
    :hashed-slot {:read read-hashed-slot :write write-hashed-slot :valid? slot?}})
 
 (defn type-fn

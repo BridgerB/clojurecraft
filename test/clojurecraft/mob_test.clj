@@ -13,6 +13,7 @@
             [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
+            [clojurecraft.registry :as registry]
             [clojurecraft.sim :as sim]
             [clojurecraft.world :as world]))
 
@@ -858,3 +859,33 @@
                                             (let [dh (- (+ 65.4 (* t dy)) 64.9)] (* dh dh))))]]
                (< miss 0.45))]
     (is (< 0.15 (/ (count (filter true? near)) (count near)) 0.35))))
+
+(deftest a-blaze-shot-is-heard-as-level-event-1018-and-a-stare-as-a-sound
+  ;; the observability plan, hearing: the model tells what the server does, so the bot hears the same
+  (let [sim (arena {} {} :normal night [{:type :blaze :pos [9.5 65.0 0.5]}])
+        later (ticks sim 70)
+        shots (count (filter #(= sim/fireball-type (:type %)) (said later :add-entity)))
+        events (said later :level-event)
+        sound-name #(registry/sound-name (:sound %))]
+    (is (pos? shots))
+    (is (= shots (count events)) "one level event to a fireball")
+    (is (every? #(and (= 1018 (:type %)) (= [9 65 0] (:pos %)) (not (:global %))) events)
+        "at the blaze's block")
+    (testing "an enderman that turns on the player says so, and its teleport is heard at both ends"
+      (let [esim (arena {} {} nil night [{:type :enderman :pos [6.5 64.0 0.5]}])
+            [yaw pitch] (physics/look-at (physics/eye [0.5 64.0 0.5])
+                                         (mob/head :enderman [6.5 64.0 0.5]))
+            stared (-> esim
+                       (sends {:packet/name :move-player-rot :yaw yaw :pitch pitch :flags 1})
+                       (ticks 3))
+            [far _] (angry-enderman {} [3.5 64.0 0.5])
+            [fyaw fpitch] (physics/look-at (physics/eye [0.5 64.0 0.5])
+                                           (mob/head :enderman [3.5 64.0 0.5]))
+            blinked (-> far
+                        (sends {:packet/name :move-player-rot :yaw fyaw :pitch fpitch :flags 1})
+                        (ticks 20))]
+        (is (some #{:entity.enderman.stare} (map sound-name (said stared :sound))))
+        (let [n (count (filter #{:entity.enderman.teleport}
+                               (map sound-name (said blinked :sound))))]
+          (is (and (pos? n) (even? n))
+              "where it left and where it landed, a pair for each jump"))))))

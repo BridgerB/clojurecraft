@@ -29,6 +29,7 @@
             [clojurecraft.conn :as conn]
             [clojurecraft.dragon]
             [clojurecraft.drops]
+            [clojurecraft.ear]
             [clojurecraft.eat]
             [clojurecraft.end-portal :as end-portal]
             [clojurecraft.entity :as entity]
