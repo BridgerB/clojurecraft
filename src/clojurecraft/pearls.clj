@@ -2359,12 +2359,14 @@
 
 (defn fortress-tunnel-target
   "The [x y z] target for the sealed fortress tunnel-out: the one held (held-exit-target) until
-   reached or failed, else fresh-tunnel-target. A fresh target is bore-reach ahead of the feet
+   reached or failed, else fresh-tunnel-target; nil once the fresh one is nil (clear of the
+   fortress), however long a target has been held. A fresh target is bore-reach ahead of the feet
    and a blocked step turns the bore round, so re-derived each act it flipped between two
    targets four blocks apart for an hour of :tunnel-to, wearing the pickaxe out (sim
    d3ce99b R1-24-1: [-188 78 163] and [-188 78 160], 620 :tunnel-to intents, no pearl)."
   [world]
-  (when (seq (fortress-points world)) (or (held-exit-target world) (fresh-tunnel-target world))))
+  (when (seq (fortress-points world))
+    (when-let [fresh (fresh-tunnel-target world)] (or (held-exit-target world) fresh))))
 
 (defn fortress-escaping?
   "Is the bot leaving the fortress via sealed tunnel-out: inside/near the fortress,
