@@ -92,10 +92,8 @@
 (defn skipped
   "The logs not to choose: blacklisted positions, every log in a trunk column that has failed
    max-trunk-failures times, and every log within unreached-radius of a place a log walk
-   failed :no-path toward (:plan/unreached). A grove across water no route crosses is one failure, not
-   one for each of its trunks: real race 39042120284 bot Clj_r14 (issue #75) stood on a shore with
-   the trees two hundred blocks off across the sea, tried twelve trunks of one grove a walk each,
-   and the plan failed :no-path before the hunt or the crossing had their turn."
+   failed :no-path toward (:plan/unreached). A grove across water no route crosses is one
+   failure, not one for each of its trunks."
   [world]
   (let [blacklist (avoided/all-of world :blacklist)
         failures (avoided/all-of world :trunk-failures)
@@ -129,15 +127,7 @@
 (defn trees-climb
   "Out of the ground (stairs/out?) with a remembered trunk no walk reaches and the trunk above
   the eye: stairs up toward it, to-height only (the open sky over the feet is not the trees),
-  in lengths the planner looks again between. Being out is not being at the trees: race
-  38674091115 runner 4 (issue #87) left the iron mine at the mouth of its shaft under the open
-  sky at y 70 with 999 trunks remembered and the nearest thirty blocks above on the mountain;
-  the near band stops twelve over the eye, no walk climbs the cliff, the hunt's targets stop
-  sixteen over the eye and never come nearer the landing, and the climb would not cut because
-  out? said out, so the plan waited :no-log with the trees in reach of a staircase. Only a
-  trunk within search-radius on the plane: sim race 38811417241 runner 2 (issue #87, world R3/4)
-  stood on a sand island with the nearest trunks a hundred blocks off across a lake, one five
-  over the eye, and cut stairs up on the island toward it until one was not taken."
+  in lengths the planner looks again between. Only a trunk within search-radius on the plane."
   [world trunks]
   (let [feet (intent/feet world)]
     (when (and (stairs/out? world feet) (not (contains? (avoided/all-of world :boxed-at) feet)))
@@ -179,28 +169,9 @@
    looking again between. The way down from a height is a cut one: trees-climb's mirror. Only a
    trunk within descend-reach on the plane, and never from a cell where a climb died :boxed.
    Once a length is cut (descended?) the next goes on from its end, in the ground, toward a trunk
-   more than continue-drop under the eye: out? is true only at the
-   mouth, and from the length's foot the walk up the air already dug (intent/opening) took the
-   bot back to it, every seven seconds, to cut the same length again. A perch is the same trap
-   one stair up: sim race 39934917165 (issue #89, world R1/23) finished a descent at the trunk's
-   own height, walked the opening, and the lip was not out, so the next choice was stairs up to
-   the top of the world. The filler ran out at y 95 and the stairs down back were :boxed.
-   Real race Clj_r07 (the same issue) was already in the shaft: each length's rim was the stair's
-   own block a few above the feet, so it was a pit, and the climb went on to y 124. Under the sky
-   with that rim and the trunk more than twelve under the eye, the next length is down.
-   Sim race 39593219246
-   (issue #135, world R4/4) went up and down five blocks of its own stairs for fifteen minutes
-   with the trunks forty below and the food at zero. Real race
-   (issue #57, snapshot real-4-s2-Clj_r07): bot Clj_r07 cut stairs up out of a stone pocket
-   to the top of a mountain at y 238 with 844 trunks remembered, the nearest fifty-six below
-   and sixty across; the near band stops forty-eight out and twelve down, the hunt's two
-   targets were ledges no route reached, and the plan waited :no-log until it failed. Sim
-   world R4/22 (issue #108): on a snow mountain at y 180 with no pickaxe, the nearest trunks a
-   hundred and twenty across and a hundred and thirty-five below, past the old ninety-six, and
-   the plan failed :no-log. A descent goes on toward the trunk it began for
-   (:intent/trunk of the last length), not the nearest then: two trunks either side of the shaft
-   turned the heading north and south at each length, and after the near trees' bridge and
-   tunnel, so a far descent never pre-empts a tree within reach (sim world R1/4, issue #370)."
+   more than continue-drop under the eye. A descent goes on toward the trunk it began for
+   (:intent/trunk of the last length), not the nearest then, so a far descent never pre-empts a
+   tree within reach."
   [world trunks]
   (let [feet (intent/feet world)
         fy (physics/y-of feet)
@@ -211,7 +182,7 @@
                    perched?
                    (stairs/out? world feet)
                    ;; a rim a stair above the feet is the block the climb just laid, not ground to
-                   ;; get out to. the trunk well below is the way down (issue #89, real-6)
+                   ;; get out to. the trunk well below is the way down
                    (and (terrain/under-sky? world feet) (some? (stairs/pit-rim world feet))))
                (not (contains? (avoided/all-of world :boxed-at) feet)))
       (when-let [[_ ty _ :as trunk]
@@ -239,10 +210,7 @@
    bridge-reach on the plane, no more than bridge-rise over the feet or under (and the feet less
    than bridge-rise over its bottom: the climb is bounded, it goes up twice at most), no open
    water on the way (water-toward?: crossing is for that), never from a cell where a climb died
-   :boxed. Sim worlds R3/45 (issues #87 and #108, seeds 1 and 3): the bot climbed out of its pit
-   on a pillar of its own cobblestone and stood eight blocks from the only trunk in reach, on a
-   hill across two blocks of air the path search does not bridge, and the open sky, the trunk
-   below the eye, said there was nothing to cut: the plan waited :no-log."
+   :boxed."
   [world trunks]
   (let [[fx fy fz :as feet] (intent/feet world)
         eye-y (physics/y-of (game/eye world))]
@@ -280,16 +248,9 @@
    column), and ends without a new run once the feet are beside the trunk. Never across open
    water (water-toward?: crossing is for that). Not skipped for a
    failed walk's neighbourhood (:plan/unreached) as the far trunks are: that failure is this one,
-   a tree whose leaves no path crosses. Sim world R1/4 (issues #370, #186) stood on its own
-   stairs at y 79, six blocks from a two-log oak whose leaves walled it in and four under the
-   feet, and world real-2/1 (issue #87) at y 110 on a snow mountain nine blocks from a spruce's
-   bottom in its leaves: no walk reached either, a staircase down toward them ended two blocks
-   short, bridge and descent took the bot up and down in turn, and the plan waited :no-log.
-   Also from the foot of a descent toward the trees (a done stairs-down for :trees or :valley, in
-   the ground level with the trunk) and on from a run, within foot-reach: sim snapshot R2-43-1
-   (issue #135) cut stairs down to the trunk's height fifteen blocks off inside a hill, where
-   out? is false, so climb-out cut stairs up to the top of the world, walked back down and
-   cut the same descent again, for the whole window.
+   a tree whose leaves no path crosses. Also from the foot of a descent toward the trees (a done
+   stairs-down for :trees or :valley, in the ground level with the trunk) and on from a run,
+   within foot-reach.
    Never from a cell where a climb died :boxed."
   [world]
   (let [feet (intent/feet world)
@@ -328,10 +289,7 @@
 
 (defn opening-up
   "intent/opening, the walk up the air already dug, unless its mouth lies below the feet
-   (mouth-below?): that is the way down, and the staircase cut up from here goes on instead. Sim
-   world R2/16 (issue #87): the bot cut stairs up from its mouth at y 83 toward the trees on a
-   cliff to y 99, a ledge that is not out of the ground, and the opening walked it back down to
-   the mouth, where the climb began again, every twenty seconds until the plan waited :no-log."
+   (mouth-below?): that is the way down, and the staircase cut up from here goes on instead."
   [world]
   (let [o (intent/opening world)]
     (when (and o (not (mouth-below? (intent/feet world) (:intent/target o)))) o)))
@@ -376,21 +334,8 @@
    when that mouth cannot be walked to (stairs/out? ends them; terrain/top-y is the top of the
    world; stairs/climb-to cuts the climb in lengths the planner looks again between). Out of the
    ground but not at the trees, a trunk remembered above the eye no walk reaches: stairs up
-   toward it (trees-climb), where the old guard stopped at the sky and the plan waited :no-log.
-   A pit under
-   the open sky is not out: race 38477665442's stone mines dug the bot two deep beside a cliff
-   (Clj_r20), into a notch under an overhang by a pond (Clj_r09), onto a ledge of its own quarry
-   (Clj_r01) and onto a lakeshore under a cliff (Clj_r12); every trunk was up the wall no jump
-   climbs, twelve walks failed :no-path, and the sky over the feet said there was nothing to cut.
-   Nor is the floor of a quarry with a level step across it (stairs/pit-rim): race 38515209959
-   (issues #102, #103) and the sim race in worlds R3/36 and R3/32 stood at the bottom of the
-   quarry the stone mine had dug round their feet, its stairs eaten by the digs, with the trees
-   seven blocks off and no route to any; the sky over the feet and a step across the floor said
-   out, the hunt had no route either, and each waited :no-log for the table's log.
-   nil when no trunk is remembered yet. Full run 29ef069 cut a stair at spawn before any tree was
-   remembered, failed :stair-not-taken, and the plan then waited :no-log. Full run 4528031
-   remembered the trees, found no route through the mine, and cut a new stair; the only pickaxe
-   broke."
+   toward it (trees-climb). A pit under the open sky is not out, nor is the floor of a quarry with
+   a level step across it (stairs/pit-rim). nil when no trunk is remembered yet."
   [world]
   (let [feet (intent/feet world)
         trunks (far-trunks world)]
@@ -404,11 +349,11 @@
           (when-not (or (stairs/out? world feet) (contains? (avoided/all-of world :boxed-at) feet))
             (or (when (:player/in-water? world) (crossing world))
                 ;; a perch under the sky goes down toward a trunk at or below the feet. stairs
-                ;; up to the top of the world from here spends the filler and boxes (issue #89)
+                ;; up to the top of the world from here spends the filler and boxes
                 (when (perched? world feet)
                   (or (trees-descend world trunks) (perch-down world trunks)))
                 ;; the shaft's rim climbs with the stair. once the sky is open and the trunk is
-                ;; more than the near band under the eye, go down (issue #89, real-6)
+                ;; more than the near band under the eye, go down
                 (when (and (terrain/under-sky? world feet) (stairs/pit-rim world feet))
                   (trees-descend world trunks))
                 (opening-up world)
@@ -425,11 +370,7 @@
   "A walk to the nearest standing trunk in the near band (search-radius, no more than 12 above or
    below the eye: memory/nearest-log) that a route reaches, of the far-candidates nearest, or nil.
    Asked before it is chosen, as the mine asks of its ore (intent/routable?): a trunk no route
-   reaches is passed over, not walked at. It was walked at: in sim race 38395033917 (world R3/24,
-   108 runs) the bot stood at the bottom of two staircases that met, the second having dug out the
-   riser of the first, with no way up at all; every walk to a trunk in the band failed :no-path
-   the tick it started, blacklisted that trunk, and the next was tried, twelve times, until the
-   plan failed (issue #75). With none, climb-out has the far trunks and the way up."
+   reaches is passed over, not walked at. With none, climb-out has the far trunks and the way up."
   [world]
   (let [eye (game/eye world)
         skip (skipped world)]
@@ -453,21 +394,10 @@
    remembered log, the first of the three such a route reaches (scoop/first-walk), tagged
    :intent/for :log-hunt. The chunks it loads are remembered as they arrive, so the next pass
    finds the way round. With no log remembered within far-radius the hunt sets out all the same,
-   the targets in the water hunt's order: race 38665691517 runner 1 (issue #57) landed slots
-   Clj_r08, Clj_r14 and Clj_r15 where no standing trunk was in reach, routes led out on three
-   bearings, and each waited :no-log at its landing round after round. With logs remembered the
-   hunt may also walk a hop back toward the landing, ranked only by how near the trees it lands:
-   race 38680745815 runner 5 (issue #57) bot Clj_r10 hunted a hop away from its landing before
-   any trunk was remembered, and with the valley's trunks then known below it, every bearing
-   back toward them was refused as nearer the landing and the one bearing left had no route.
-   nil underground, or with no ground a route reaches. Race 38477665442 bots Clj_r14 and Clj_r20 landed on a lake's shore with the forest
-   across the water: every trunk was in the near band and no route reached one, and each waited
-   :no-log until the plan failed (issue #57). Bot Clj_r15 came up out of its mine for the wood
-   of a spare pickaxe with the trees a hundred blocks off, past the pathfinder's budget, and
-   waited the same way (issue #87). Never toward a log given up (skipped): the nearest of them
-   changed with every hop, and the bot walked between two places forty-three blocks apart, each
-   beside a tree it had given up, for the rest of the window (sim world R1/4, issue #370).
-   With every remembered log given up the hunt sets out as with none."
+   the targets in the water hunt's order. With logs remembered the hunt may also walk a hop back
+   toward the landing, ranked only by how near the trees it lands. nil underground, or with no
+   ground a route reaches. Never toward a log given up (skipped): the nearest of them changes with
+   every hop. With every remembered log given up the hunt sets out as with none."
   [world]
   (let [logs (->> (memory/positions-now world blocks/log-states)
                   (memory/nearest-first (game/eye world) far-radius)
@@ -489,12 +419,7 @@
    water's top (:intent/to-y), then to the shore (swim/far-shore), ending on dry land in the open;
    the water poured in is the trap too, and the escape it starts swims the same way. Only water
    that is open at the top: air over it, or a lake's ice (stairs/lake-ice: the rise digs
-   its cap, swim/:swim-out, issue #71's frozen sea); water under rock is a pocket with no way up (sim world R3/13, issue #71: a tunnel at y 16
-   dug up into an aquifer seven deep under stone, and the water followed the bot along its
-   tunnel). Sim race 38806318231 runner 1 and 38811426215 runner 8 (issue #89, worlds
-   R4/30, R4/21 and R1/32 at 76010d2, 146 runs) had bots mine under the sea floor until the last
-   pickaxe broke: for a new one they needed a log, every climb out was :boxed under the water,
-   no route led home, and each waited :no-log. nil otherwise."
+   its cap, swim/:swim-out); water under rock is a pocket with no way up. nil otherwise."
   [world]
   (let [[x y z :as feet] (intent/feet world)
         cells (map (fn [dy] [x (+ y dy) z]) (range 2 (+ 2 bed-reach)))
@@ -550,10 +475,7 @@
    a route reaches), and the nearest remembered standing trunk across open water
    (water-toward?): a :cross toward it, swimming the water (swim's :cross), so the gather goes
    on from the far side; a crossing that lands short (an inlet waded) is followed by the next.
-   Sim race 38811417241 runner 2 (issue #87, world R3/4): the stone pickaxe broke on the stairs,
-   a new one wanted a log, and the bot stood on a sand island at its landing with every trunk a
-   hundred blocks off across a lake; routes ended at the island's shore, all eight hunt
-   bearings forty out were water, and the plan waited :no-log until it failed. nil otherwise."
+   nil otherwise."
   [world]
   (let [feet (intent/feet world)
         eye (game/eye world)]
@@ -609,13 +531,7 @@
    under the landing (scoop/pit-climb), else from a cell under rock where a climb out died :boxed
    (scoop/boxed-here?) a retreat to new rock (stone/retreat), else the climb the mine ends in
    (stone/climb: stairs up, which seal the water beside them and lay their steps from carried
-   filler); nil when none. Sim race 38843552659 (issue #186): world R1/18 stood at y 6 on a
-   ravine's floor sixty under its landing, the sky open and no hunt target in its band, and world
-   R4/39 under rock at y 47 where its climb out had died :boxed, and both waited :no-log with
-   trees remembered sixty blocks off. A real race (issue #89, snapshot real-3-s2-Clj_r32) smelted
-   its iron at y 16 in a cell a stair down had died :boxed in, with the nearest trunk past the near
-   band; the retreat gave a walk at the moment of the snapshot and none by the time the wait ran
-   out, and the plan waited :no-log out beside a stone pickaxe."
+   filler); nil when none."
   [world]
   (when-not (:player/in-water? world)
     (or (scoop/pit-climb world)
@@ -636,14 +552,9 @@
    (far-trunks, within descend-reach on the plane), stone/stair-depth deep whatever the trunk's
    height, from a perch no walk, hunt or crossing leaves. Out of the ground (stairs/out?), and
    never from a cell where a climb died :boxed; or on from the foot of a length just cut
-   (descended-valley?) while the foot is still in the ground, toward the trunk it began for, no deeper
-   than valley-floor under that trunk's bottom: from the foot the walk up the stairs just cut
-   (intent/opening) took the bot back to the perch, every few seconds, to cut the same length
-   again (sim snapshot real-2-s2-Clj_r15, issue #186, played on). That snapshot stood on the
-   top of an ice spike with the nearest trunk thirty-five blocks off at its own height across a
-   valley no route crosses: the trunk is no lower than the eye, so trees-descend never cut, and
-   nothing else applied. Once down on open ground the trunk is above the eye and trees-climb
-   cuts the way up toward it; each leg closes on the trunk. nil with no trunk in reach."
+   (descended-valley?) while the foot is still in the ground, toward the trunk it began for, no
+   deeper than valley-floor under that trunk's bottom. Once down on open ground the trunk is above
+   the eye and trees-climb cuts the way up toward it. nil with no trunk in reach."
   [world]
   (let [feet (intent/feet world)
         [_ fy _] feet
