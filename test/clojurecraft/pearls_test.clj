@@ -4203,3 +4203,22 @@
       (is (nil? (pearls/stare-site w e)) "no route: no site"))
     (is (<= 1 (count @asked) pearls/vantage-tries) "at most vantage-tries route tests")
     (is (every? #(= pearls/vantage-nodes %) @asked) "each within vantage-nodes")))
+
+(deftest the-way-to-a-forest-no-walk-reaches-is-a-sealed-tunnel
+  ;; real-18 Clj_r09 (4f317da lane 8): boxed in, eleven walks to one forest in four seconds, each
+  ;; failed :no-path, and the run ended :no-path
+  (let [w (assoc-in (standing {}) [:player/inventory 1] (item :iron_pickaxe 1))]
+    (with-redefs [intent/routable? (constantly false)]
+      (is (= {:intent/kind :tunnel-to
+              :intent/target [40 64 40]
+              :intent/reach 1.5
+              :intent/seal-behind? true
+              :intent/for :pearls}
+             (pearls/forest-way w [40 64 40]))
+          "no route, a pickaxe: tunnel")
+      (is (= :walk (:intent/kind (pearls/forest-way (standing {}) [40 64 40])))
+          "no pickaxe: the walk as before"))
+    (with-redefs [intent/routable? (constantly true)]
+      (is (= {:intent/kind :walk :intent/target [40 64 40] :intent/for :pearls}
+             (pearls/forest-way w [40 64 40]))
+          "a route: the walk"))))
