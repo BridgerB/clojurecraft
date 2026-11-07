@@ -11,7 +11,7 @@ related:
 
 # Siblings pillar
 
-Lessons from steve (`/Users/bridger/Developer/mc/upstream/steve`, c28028b) and ruststeve (`/Users/bridger/Developer/mc/upstream/ruststeve`, bc575e3), each note verified by opening its sibling anchors. The deep corpus is the ten roadmap drafts in `docs/issues/` ([[roadmap-issues]]).
+Lessons from steve (`/Users/bridger/Developer/mc/upstream/steve`, c28028b) and ruststeve (`/Users/bridger/Developer/mc/upstream/ruststeve`, bc575e3), each note verified by opening its sibling anchors. The deep corpus is the ten roadmap drafts in `docs/issues/` (`roadmap-issues`).
 
 ## Correspondence
 - [[sib-steve-steps-to-goals]] - steve's 31 steps mapped to our goals and intents, or to the issue that will cover them.

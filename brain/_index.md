@@ -17,4 +17,4 @@ Read this first, pick a pillar, follow the links. New here? See [[operating-manu
 
 ## Elsewhere
 - `docs/RICH-HICKEY.md` - the design essay the code follows.
-- `docs/issues/` and GitHub issues #2-#11 - the roadmap, one research-backed issue per step; [[roadmap-issues]] maps numbers to drafts.
+- `docs/issues/` and GitHub issues #2-#11 - the roadmap, one research-backed issue per step; `roadmap-issues` maps numbers to drafts.

@@ -8,11 +8,10 @@ This page is short on purpose: agents load it into every turn. The rest of the m
 
 Once per session, before the first issue. A fix in the wrong style is a wrong fix here even when the tests pass.
 
-1. **The tree.** `tree -a --dirsfirst -I '.git|.cpcache|.clj-kondo|.lsp|.nix|.direnv|node_modules|cache|data|out|target|issues|recordings|churn-batches'` (without `tree`: `nix shell nixpkgs#tree -c tree ...`). About 360 lines; read it all. `src/clojurecraft/` is the bot, `test/clojurecraft/` its tests, `brain/` the notes, `resources/clojurecraft/` the goal table, problem statements and generated tables, `bb/clojurecraft/` and `.github/workflows/` the tooling (not yours to change).
-2. **`docs/RICH-HICKEY.md`, in full.** The design brief and the most important document here. Every review asks first: does the fix follow it? Section 25 says what it means in this code.
-3. **`CLAUDE.md`, in full.** Style rules, one line per namespace, the commands, the workflows, the project's words.
-4. **The brain, in part.** `brain/` is about 150 verified notes pinned to the source. Read `brain/_index.md`, `brain/rules.md`, `brain/bot/_moc.md`, then every note under `brain/bot/plan/` (the planner and every intent: most fixes land here), `brain/bot/gotchas/` (traps already paid for) and `brain/bot/tooling/` (how the evidence you will read is made). The rest (`concepts/`, `decisions/`, `world/`, `protocol/`, `runtime/`, `crafting/`, `brain/game/`, `brain/siblings/`) on demand: before touching a namespace, read its note (`grep -rl '<namespace-or-function>' brain/`).
-5. **Ten source files, in full, top to bottom:** `game.clj` (the protocol reducer, `game/step`, `on-packet`), `plan.clj` (the planner, the goal table, `done-by`/`act`/`next-intent`, waits and attempts), `intent.clj` (intents run a tick at a time, walk/dig/collect, children), `model.clj` (every attribute), `memory.clj` (facts with time, Datalog), `terrain.clj` (`block-at`, `solid-fn`), `physics.clj`, `blocks.clj` (`solid?`, `log?`, `name-of`), `stairs.clj` (an executor of child digs: the kind most fixes change), `build.clj` (a build plan as data). Add `sim.clj` when a fix touches the server model.
+1. **`docs/RICH-HICKEY.md`, in full.** The design brief. Every review asks first: does the fix follow it? Section 25 says what it means in this code.
+2. **`CLAUDE.md`, in full.** Style rules, one line per namespace, the commands, the workflows, the project words.
+3. **The brain, in part.** `brain/_index.md`, `brain/rules.md`, then `brain/bot/gotchas/` and `brain/bot/decisions/` (traps already paid for, choices already made). The rest on demand: `grep -rl "<namespace-or-function>" brain/` before touching a namespace. The brain holds decisions, gotchas and game facts; what a function does is its docstring.
+4. **The code you change, and what it calls.** Read the namespace you will edit and the registries it plugs into (`plan.clj` for goals and intents, `intent.clj` for executors, `model.clj` for attributes). Add `sim.clj` when a fix touches the server model. Do not read the rest in advance.
 
 Then this file, Part I in full, and Part II's sections 19 to 22 once.
 
