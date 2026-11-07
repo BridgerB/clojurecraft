@@ -333,7 +333,7 @@
 (defn block-states
   "{name-kw [[property [value ...]] ...]} for every block with properties, from
    reports/blocks.json, in the report's order: a state's id counts through them with the last
-   property fastest (the viewer derives a state's properties from it)."
+   property fastest."
   [reports]
   (let [j (json/read-str (slurp (io/file reports "blocks.json")))]
     (into (sorted-map)

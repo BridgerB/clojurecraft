@@ -1,11 +1,7 @@
 (ns clojurecraft.issues-test
-  "The snapshots a fix's check judges (issue #77), kept under test/issues/<n>/ (bb issue-check
-   fetch): only what can be held of them without playing one. Judging is not a test here: the
-   pull request's check (issue.yml) judges the issues it names with `clojure -M:simrace --judge`,
-   uninstrumented, on the base code (each moment must reproduce its failure) and on the PR's
-   (none may), each over its window from a moment kept before the choice that failed
-   (simrace/judged). Older issues are not judged again on every pull request: the races are the
-   regression guard, and the filer reopens an issue whose failure comes back on newer code."
+  "The snapshots a pull request adds under test/issues/<n>/: only what can be held of them
+   without playing one (their size and their count). Judging is not a test here: issue.yml and
+   `bb probe` play them with `clojure -M:simrace --judge` (simrace/judged)."
   (:require [clojure.java.io :as io]
             [clojure.string :as str]
             [clojure.test :refer [deftest is]]))

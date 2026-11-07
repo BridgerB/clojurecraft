@@ -1,7 +1,7 @@
 // The results page's script (bb site, issue #116). It reads the data the publishers keep on the
 // gh-pages branch (data/summary.json first, a day's file when the history opens it, gyms.ndjson,
-// agents.json) and the orchestrator's state live, and draws four tabs: the road from spawn to the
-// dragon, the trends over days, the whole history by day, and the agents' work. Charts are inline
+// agents.json, the bot-failure issues the road lists) and draws three tabs: the road from spawn to the
+// dragon, the trends over days, and the whole history by day. Charts are inline
 // SVG drawn here at the width they get; every mark has its numbers on hover or tap. No library.
 (function () {
   'use strict';
@@ -21,7 +21,7 @@
   var KEY_MILESTONES = ['iron-kit', 'portal-kit', 'portal', 'nether', 'fortress'].filter(function (m) { return CHAIN.indexOf(m) >= 0; });
 
   var S = {
-    summary: null, gyms: null, agents: null, orch: null, days: {}, failed: {},
+    summary: null, gyms: null, agents: null, days: {}, failed: {},
     tab: 'road', range: '2', trendKind: 'real', trendRange: '30', timeRange: '7',
     open: {}, hist: { day: null, kind: 'all', commit: '', reach: '', page: 0, open: null },
     prPage: 0, logAll: false
@@ -709,99 +709,9 @@
     return h;
   }
 
-  // ---------------------------------------------------------------- the Agents tab
-
-  var WORDS = { assign: 'assigned to Copilot', reassign: 'assigned again (the session never started)', ready: 'marked ready for review', release: 'released runs held for approval', nudge: 'asked Copilot to go on', merge: 'merged', review: 'left for a person (it changes CI)', stuck: 'left for a person (asked eight times)', wait: 'waiting', leave: 'left alone' };
-  var CHECKS = { green: 'green', red: 'red', pending: 'running', approval: 'held for approval' };
-
-  function renderAgents(host) {
-    var h = '<p class="lede">The orchestrator (the copilot workflow, once a minute) gives the bot-failure issues to Copilot’s bot-fixer agent one at a time, releases its held runs, marks finished drafts ready, merges what is green and asks it to go on when a check is red. Fixer sessions work the issues a person names (fix/* branches). Live state first, then the history.</p>';
-    h += '<div id="ag-live">' + orchBlock() + '</div>';
-    h += '<h2>History</h2>' + (S.agents ? agentsHistory() : '<p class="muted">' + (S.failed.agents ? 'The agents’ report (data/agents.json) could not be loaded.' : 'Loading…') + '</p>');
-    host.innerHTML = h;
-    var c = document.getElementById('a-issues'); if (c) issuesChart(c, 21);
-    var b = document.getElementById('a-stages');
-    if (b) {
-      var open = S.agents.issues.filter(function (i) { return i.state === 'open'; });
-      var items = STAGES.filter(function (s) { return open.some(function (i) { return i.stage === s.id; }); }).map(function (s) {
-        var mine = open.filter(function (i) { return i.stage === s.id; });
-        return { label: s.id, value: mine.length, color: phaseVar(s.phase), tip: tipRows(s.id + ': ' + mine.length + ' open', mine.map(function (i) { return ['#' + i.n, i.reason || '', '']; })) };
-      });
-      if (items.length) barList(b, items); else b.innerHTML = '<p class="muted">No open bot-failure issue.</p>';
-    }
-  }
-
-  function orchBlock() {
-    var st = S.orch;
-    if (!st) return '<p class="muted">' + (S.failed.orch ? 'No orchestrator state yet (orchestrator.json on gh-pages).' : 'Reading the orchestrator’s state…') + '</p>';
-    var at = new Date(st.at), fresh = Date.now() - at < 15 * 60000;
-    var held = st.issues.filter(function (i) { return i.copilot; }), queue = st.issues.filter(function (i) { return !i.copilot; });
-    var h = '<p><span class="dot' + (fresh ? ' on' : '') + '"></span><b>Orchestrator</b>: last pass ' + esc(ago(st.at)) + ' (' + esc(fmtTime.format(at)) + '); ' + st.issues.length + ' open bot-failure issues, Copilot on ' + held.length + ' of at most ' + st.cap + ' at once.' + (fresh ? '' : ' <b class="error">It has not reported for 15 minutes: check the copilot workflow.</b>') + '</p>';
-    h += '<div class="split"><div class="card"><h3>Working now</h3><div class="scroll"><table><thead><tr><th>issue</th><th>pull request</th><th>checks</th><th>session</th><th class="r">asks</th><th>this minute</th></tr></thead><tbody>' +
-      (held.map(function (i) {
-        var m = st.moves.filter(function (x) { return x.issue === i.number; })[0] || {};
-        return '<tr><td>' + issueLink(i.number) + '<div class="muted">' + esc(i.title) + '</div></td><td>' + (i.pr ? prLink(i.pr) : '') + '</td><td>' + (i.pr ? esc(CHECKS[i.checks] || i.checks || '') : '') + (i.draft ? ' (draft)' : '') + '</td><td>' + (i.session ? '<span class="dot on"></span>running' : 'ended') + '</td><td class="r num">' + (i.nudges || 0) + '/8</td><td>' + esc(WORDS[m.move] || m.move || '') + (m.why ? ' (' + esc(m.why) + ')' : '') + (i.quiet ? ' <b>quiet for 2 h</b>' : '') + '</td></tr>';
-      }).join('') || '<tr><td colspan="6" class="muted">Nothing held right now.</td></tr>') + '</tbody></table></div></div>';
-    h += '<div class="card"><h3>Waiting <span class="muted">(' + queue.length + ', oldest first: the order it takes them)</span></h3><div class="scroll"><table><tbody>' +
-      (queue.map(function (i) {
-        var off = (i.labels || []).filter(function (l) { return /no-agent|agent-stuck|needs-review/.test(l); });
-        return '<tr><td>' + issueLink(i.number) + '</td><td>' + esc(i.title) + '</td><td class="muted">' + esc(off.join(', ')) + '</td></tr>';
-      }).join('') || '<tr><td class="muted">Empty.</td></tr>') + '</tbody></table></div></div></div>';
-    var log = st.log.slice().reverse(), shown = S.logAll ? log : log.slice(0, 15);
-    h += '<div class="card" style="margin-top:1rem"><h3>What it did</h3><div class="scroll"><table><thead><tr><th>when</th><th>issue</th><th>action</th><th></th><th>why</th></tr></thead><tbody>' +
-      (shown.map(function (e) { return '<tr><td class="time">' + when(e.at) + '</td><td>' + issueLink(e.issue) + '</td><td>' + esc(WORDS[e.move] || e.move) + '</td><td>' + (e.pr ? prLink(e.pr) : '') + '</td><td class="muted">' + esc(e.why || '') + '</td></tr>'; }).join('') || '<tr><td colspan="5" class="muted">Nothing yet.</td></tr>') +
-      '</tbody></table></div>' + (log.length > 15 ? '<div class="pager"><button class="ghost" data-act="log">' + (S.logAll ? 'Show the newest 15' : 'Show all ' + log.length) + '</button></div>' : '') + '</div>';
-    return h;
-  }
-
-  function agentsHistory() {
-    var A = S.agents, now = Date.now(), week = now - 7 * 86400000;
-    var open = A.issues.filter(function (i) { return i.state === 'open'; });
-    var closed7 = A.issues.filter(function (i) { return i.closed && new Date(i.closed) >= week; });
-    var fixed7 = closed7.filter(function (i) { return i.why === 'completed'; }).length;
-    var merged = A.prs.filter(function (p) { return p.merged; });
-    var merged7 = merged.filter(function (p) { return new Date(p.merged) >= week; });
-    var byIssue = {}; A.issues.forEach(function (i) { byIssue[i.n] = i; });
-    var fixTimes = [], fixTimes7 = [];
-    merged.forEach(function (p) {
-      p.fixes.forEach(function (n) {
-        var i = byIssue[n]; if (!i) return;
-        var h = (new Date(p.merged) - new Date(i.opened)) / 3600000; if (h < 0) return;
-        fixTimes.push(h); if (new Date(p.merged) >= week) fixTimes7.push(h);
-      });
-    });
-    var person = open.filter(function (i) { return (i.labels || []).some(function (l) { return /agent-stuck|needs-review|no-agent/.test(l); }); });
-    var hrs = function (x) { return x == null ? '—' : x < 48 ? x.toFixed(1) + ' h' : (x / 24).toFixed(1) + ' d'; };
-    var who = function (list, w) { return list.filter(function (p) { return p.by === w; }).length; };
-    var h = '<div class="tiles">';
-    h += '<div class="tile"><div class="label">Open bot-failure issues</div><div class="value">' + open.length + '</div><div class="foot">' + A.issues.length + ' filed in all; ' + person.length + ' wait for a person</div></div>';
-    h += '<div class="tile"><div class="label">Closed in the last 7 days</div><div class="value">' + closed7.length + '</div><div class="foot">' + fixed7 + ' fixed, ' + (closed7.length - fixed7) + ' closed with no reproducible snapshot</div></div>';
-    h += '<div class="tile"><div class="label">Fix pull requests merged</div><div class="value">' + merged.length + ' <small>' + merged7.length + ' this week</small></div><div class="foot">Copilot ' + who(merged, 'copilot') + ', fixer sessions ' + who(merged, 'fixer') + ', others ' + who(merged, 'person') + '</div></div>';
-    h += '<div class="tile"><div class="label">Time to fix (issue filed → fix merged)</div><div class="value">' + hrs(median(fixTimes7)) + ' <small>median, 7 days</small></div><div class="foot">all time ' + hrs(median(fixTimes)) + ' over ' + fixTimes.length + ' fixes</div></div>';
-    h += '</div>';
-    h += '<div class="charts" style="margin-top:1rem"><div class="chart"><h3>Issues opened and closed</h3><p class="sub">Bot-failure issues a day, the last 21 UTC days.</p><div id="a-issues"></div></div>' +
-      '<div class="chart"><h3>Open issues by stage</h3><p class="sub">Where the open bot-failure issues stop the bot, in road order.</p><div id="a-stages"></div></div></div>';
-    if (person.length) {
-      h += '<h2>Waiting for a person</h2><div class="scroll"><table><thead><tr><th>issue</th><th>failure</th><th>labels</th><th>opened</th></tr></thead><tbody>' + person.map(function (i) {
-        return '<tr><td>' + issueLink(i.n) + '</td><td>' + esc(i.title) + '</td><td>' + esc((i.labels || []).filter(function (l) { return l !== 'bot-failure'; }).join(', ')) + '</td><td class="time">' + when(i.opened) + '</td></tr>';
-      }).join('') + '</tbody></table></div>';
-    }
-    var prs = A.prs.slice().sort(function (a, b) { return b.n - a.n; }), per = 20, pages = Math.max(1, Math.ceil(prs.length / per));
-    if (S.prPage >= pages) S.prPage = pages - 1;
-    h += '<h2>Fix pull requests</h2><p class="lede">Every pull request that closes a bot-failure issue, and every one Copilot opened, newest first.</p><div class="scroll"><table><thead><tr><th>pull request</th><th>fixes</th><th>by</th><th>state</th><th>opened</th><th class="r">open for</th></tr></thead><tbody>' +
-      prs.slice(S.prPage * per, S.prPage * per + per).map(function (p) {
-        var end = p.merged || p.closed;
-        return '<tr><td>' + prLink(p.n) + ' <span class="ink2">' + esc(p.title) + '</span></td><td>' + (p.fixes.map(function (n) { return issueLink(n); }).join(' ') || '<span class="muted">—</span>') + '</td><td>' + esc(p.by) + '</td>' +
-          '<td><span class="tag ' + esc(p.merged ? 'merged' : p.state) + '">' + esc(p.merged ? 'merged' : p.state + (p.draft ? ' (draft)' : '')) + '</span></td><td class="time">' + when(p.opened) + '</td><td class="r num">' + (end ? hrs((new Date(end) - new Date(p.opened)) / 3600000) : '<span class="muted">open</span>') + '</td></tr>';
-      }).join('') + '</tbody></table></div>';
-    h += '<div class="pager"><span class="muted">' + prs.length + ' pull requests' + (pages > 1 ? ', page ' + (S.prPage + 1) + ' of ' + pages : '') + ' · as of ' + when(A.updated) + '</span>' +
-      (pages > 1 ? '<button class="ghost" data-pr="' + (S.prPage - 1) + '" ' + (S.prPage ? '' : 'disabled') + '>Newer</button><button class="ghost" data-pr="' + (S.prPage + 1) + '" ' + (S.prPage < pages - 1 ? '' : 'disabled') + '>Older</button>' : '') + '</div>';
-    return h;
-  }
-
   // ---------------------------------------------------------------- the frame: tabs, events, loading
 
-  var RENDER = { road: renderRoad, trends: renderTrends, history: renderHistory, agents: renderAgents };
+  var RENDER = { road: renderRoad, trends: renderTrends, history: renderHistory };
   function route() {
     var hash = (location.hash || '#road').slice(1).split('/');
     S.tab = RENDER[hash[0]] ? hash[0] : 'road';
@@ -894,6 +804,5 @@
   loaded('summary', getJSON('data/summary.json', true));
   loaded('gyms', getText('data/gyms.ndjson').then(ndjson));
   loaded('agents', getJSON('data/agents.json', true));
-  loaded('orch', getJSON('https://raw.githubusercontent.com/' + repo + '/gh-pages/orchestrator.json?t=' + Date.now(), true).catch(function () { return getJSON('orchestrator.json', true); }));
   live();
 })();
