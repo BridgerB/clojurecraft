@@ -486,10 +486,11 @@
   :goal/doc "the ender dragon dead"
   :goal/dimension "minecraft:the_end"
   :goal/done? :dragon-dead?
-  ;; the branches of dragon/toward-dragon, most urgent first; a fresh answer ranked above the running
-  ;; intent cuts it. :dragon/wear is least urgent: it is asked first but yields to every threat.
-  :goal/ranks [:dragon/escape-breath :dragon/crystals :dragon/after-blow :dragon/bed :dragon/recover
-               :dragon/perch-in-breath :dragon/shelter-to-stand :dragon/shelter-flight
-               :dragon/back-off-breath :dragon/bed-hold :dragon/perch-no-stand :dragon/out-of-bite
-               :dragon/perch-blocked :dragon/walk-to-stand :dragon/perch :dragon/wear]
+  ;; the branches of the dragon plan in the order it asks them, most urgent first; a fresh answer
+  ;; ranked above the running intent cuts it
+  :goal/ranks [:dragon/wear :dragon/escape-breath :dragon/crystals :dragon/after-blow :dragon/bed
+               :dragon/recover :dragon/perch-in-breath :dragon/shelter-to-stand
+               :dragon/shelter-flight :dragon/back-off-breath :dragon/bed-hold
+               :dragon/perch-no-stand :dragon/out-of-bite :dragon/perch-blocked
+               :dragon/walk-to-stand :dragon/perch]
   :goal/plan :dragon}]
