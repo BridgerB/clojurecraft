@@ -8,7 +8,8 @@
    are hostile, which is nearest, whether one is gone. Items, mobs and other players are all
    entities; a reader that wants one kind asks for it (kind, living?, item?). Issue #258: the
    world held item drops only, and combat, blazes, endermen and the dragon need every entity."
-  (:require [clojurecraft.blocks :as blocks]
+  (:require [clojure.math :as math]
+            [clojurecraft.blocks :as blocks]
             [clojurecraft.physics :as physics]))
 
 (set! *warn-on-reflection* true)
@@ -186,3 +187,49 @@
                   (empty? (:world/boss-bars world))
                   pos
                   (<= (physics/distance pos (:entity/pos e)) dragon-seen-radius)))))
+
+;; ---------------------------------------------------------------- what a creature shows: its head, its gear, its statuses
+
+(def stare-degrees 12.0)               ; degrees the head may be off the line to the bot for the mob to count as looking at it
+(def statuses-kept 4)                  ; the newest entity-event statuses an entity keeps (:entity/statuses)
+(def equipment-slots
+  "The set-equipment slot index → name, as the game numbers EquipmentSlot on the wire."
+  {0 :mainhand 1 :offhand 2 :feet 3 :legs 4 :chest 5 :head 6 :body 7 :saddle})
+
+(defn note-status
+  "The statuses vector with [status at] added, the newest statuses-kept kept; statuses may be nil."
+  [statuses status at]
+  (vec (take-last statuses-kept (conj (or statuses []) [status at]))))
+
+(defn yaw-toward
+  "Degrees of the yaw a mob at from would need to face point to on the plane, as the game turns
+   it: 0 looks along +z, 90 along -x (look = (-sin yaw, cos yaw)). 0.0 for the same point."
+  [[fx _ fz] [tx _ tz]]
+  (math/to-degrees (math/atan2 (- fx tx) (- tz fz))))
+
+(defn angle-between
+  "The smaller turn between two yaws in degrees, 0 to 180."
+  [a b]
+  (let [d (mod (abs (- (double a) (double b))) 360.0)] (if (> d 180.0) (- 360.0 d) d)))
+
+(defn facing-bot?
+  "Is entity e's head yaw (:entity/head-yaw, degrees) within within degrees of the line from it to
+   the bot standing at bot-pos, on the plane? False when the head yaw or the position is not
+   known or the two stand on one spot. Pure; observation only, nothing decides by it."
+  [e bot-pos within]
+  (boolean (and (:entity/head-yaw e)
+                (:entity/pos e)
+                bot-pos
+                (> (physics/horizontal-distance (:entity/pos e) bot-pos) 1e-6)
+                (<= (angle-between (:entity/head-yaw e) (yaw-toward (:entity/pos e) bot-pos))
+                    within))))
+
+(defn stares?
+  "Is e an enderman whose head faces the bot standing at bot-pos within stare-degrees: the pearl
+   hunt's other side of the stare (issue #263). Observation only, not wired into any decision."
+  [e bot-pos]
+  (and (= :enderman (kind e)) (facing-bot? e bot-pos stare-degrees)))
+
+(def equipment-slot-ids
+  "The set-equipment slot name → index, the inverse of equipment-slots."
+  (into {} (map (fn [[i n]] [n i])) equipment-slots))

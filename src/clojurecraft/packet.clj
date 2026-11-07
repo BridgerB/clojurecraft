@@ -171,6 +171,13 @@
      [:vec
       [[:id :varint] [:base :f64]
        [:modifiers [:vec [[:mod-id :string] [:amount :f64] [:operation :varint]]]]]]]]
+   ;; where a mob's head looks, in 1/256 turns (ClientboundRotateHeadPacket: varint id, a byte);
+   ;; what it holds and wears, each entry a slot byte (0x80 set when another follows) and a slot
+   ;; (ClientboundSetEquipmentPacket, read-equipment); a fireball's acceleration power, one double
+   ;; (ClientboundProjectilePowerPacket); the observability plan, issue #263
+   [:play :s2c :rotate-head] [[:entity-id :varint] [:head-yaw :i8]]
+   [:play :s2c :set-equipment] [[:entity-id :varint] [:equipment :equipment]]
+   [:play :s2c :projectile-power] [[:entity-id :varint] [:power :f64]]
    ;; play, client → server
    [:play :c2s :keep-alive] [[:id :i64]]
    [:play :c2s :pong] [[:id :i32]]
@@ -308,7 +315,22 @@
               (do (dotimes [_ removed] (b/read-varint buf))
                   (cond-> {:item item :count n} (seq comps) (assoc :components comps))))))))
 
-(def metadata-end 255)                ; the index that ends an entity's metadata (the game's EOF_MARKER)
+(def more-bit 0x80)                   ; a set-equipment entry's slot byte has it set when another entry follows
+
+(defn read-equipment
+  "A set-equipment packet's entries as [[slot item] ...], slot 0-7 (0 main hand, 1 off hand, 2 feet,
+   3 legs, 4 chest, 5 head, 6 body, 7 saddle) and item a read-slot value (nil for an empty hand):
+   each entry is a slot byte, with more-bit set when another follows, then the slot. A slot whose
+   components could not be stepped over ends the frame, as it ends any."
+  [buf]
+  (loop [acc []]
+    (let [b (b/read-u8 buf)
+          item (read-slot buf)
+          acc (conj acc [(bit-and b 0x7f) item])]
+      (cond (or (:components? item) (zero? (bit-and b more-bit))) acc
+            :else (recur acc)))))
+
+(def metadata-end 255)               ; the index that ends an entity's metadata (the game's EOF_MARKER)
 
 (def metadata-readers
   "How the metadata values the bot steps over are written, by serializer id: the game's
@@ -401,6 +423,8 @@
    :lpvec3 {:read b/read-lpvec3 :write b/write-lpvec3 :valid? vec3?}
    :metadata {:read read-metadata :valid? metadata?}
    :slot {:read read-slot :valid? slot?}
+   :equipment {:read read-equipment
+               :valid? #(and (vector? %) (every? (fn [[i v]] (and (int-in? 0 127 i) (slot? v))) %))}
    :hashed-slot {:read read-hashed-slot :write write-hashed-slot :valid? slot?}})
 
 (defn type-fn

@@ -186,6 +186,36 @@
                   :when (and o (:entity/creepy? e) (not (:entity/creepy? o)))]
               (assoc (view eid e) :ev :angry)))))
 
+(def sight-radius 24.0)                ; blocks from the feet a creature's gear change or turn to face the bot is noted within
+
+(defn sight-events
+  "What the bot saw of the creatures within sight-radius change between before and after, only on a
+   change: a creature's gear (:equip, with :equipment {slot item}: a wither skeleton's sword, a
+   piglin's crossbow) and a hostile (or an enderman, hostile only once angered) whose head turns
+   to face the bot (:facing, entity/facing-bot? within entity/stare-degrees, from not facing it)."
+  [before after]
+  (let [b (near-entities before)
+        pos (:player/pos after)
+        view (fn [eid e]
+               {:eid eid :kind (entity/kind e) :d (r1 (physics/distance pos (:entity/pos e)))})
+        gear #(or (:entity/equipment %) {})
+        facing? (fn [world e]
+                  (and (or (entity/hostile? e) (= :enderman (entity/kind e)))
+                       (entity/facing-bot? e (:player/pos world) entity/stare-degrees)))]
+    (concat (for [[eid e] (near-entities after)
+                  :let [o (get b eid)]
+                  :when (and o
+                             (<= (physics/distance pos (:entity/pos e)) sight-radius)
+                             (not= (gear o) (gear e)))]
+              (assoc (view eid e) :ev :equip :equipment (gear e)))
+            (for [[eid e] (near-entities after)
+                  :let [o (get b eid)]
+                  :when (and o
+                             (<= (physics/distance pos (:entity/pos e)) sight-radius)
+                             (facing? after e)
+                             (not (facing? before o)))]
+              (assoc (view eid e) :ev :facing)))))
+
 (defn intent-events
   "What changed in the plan between before and after: a new intent (:intent, with its kind,
    target, purpose, why and goal), a new failure (:failed, with its reason), a new wait (:wait),
@@ -255,7 +285,8 @@
             (concat (intent-events before after)
                     (body-events before after)
                     (sent-events after)
-                    (entity-events before after))))))
+                    (entity-events before after)
+                    (sight-events before after))))))
 
 ;; ---------------------------------------------------------------- the moment: the whole mind at an ending
 

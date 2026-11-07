@@ -32,6 +32,7 @@
             [clojurecraft.eat]
             [clojurecraft.end-portal :as end-portal]
             [clojurecraft.entity :as entity]
+            [clojurecraft.eye]
             [clojurecraft.eyes]
             [clojurecraft.fortress]
             [clojurecraft.game :as game]

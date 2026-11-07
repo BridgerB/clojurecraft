@@ -9,6 +9,10 @@ lastUpdated: 2026-11-06
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/hear.clj#defn attributes-of
+  - src/clojurecraft/eye.clj#defn equipment-of
+  - src/clojurecraft/entity.clj#defn facing-bot?
+  - src/clojurecraft/senses.clj#defn sight-events
+  - src/clojurecraft/packet.clj#defn read-equipment
   - src/clojurecraft/game.clj#defn hit-of
   - src/clojurecraft/registry.clj#defn damage-type
   - src/clojurecraft/senses.clj#defn events
@@ -46,6 +50,12 @@ The bot's whole mind is one world value, so everything a reader needs about a ru
   - the fight bracket (`:player/in-combat?`);
   - effects (`:player/effects`);
   - attributes (`:player/armor`, `:player/max-health`: the server's word on worn armour).
+- **eye.clj:** what a creature shows beyond its place and health:
+  - where its head looks (`:entity/head-yaw`, from rotate-head and add-entity; `entity/facing-bot?` asks whether it faces the bot, `entity/stares?` is that for an enderman, observation only);
+  - what it holds and wears (`:entity/equipment {slot item-name}`, from set-equipment, read by `packet/read-equipment`);
+  - a fireball's acceleration power (`:entity/power`, projectile-power);
+  - the newest four entity-event statuses other than death (`:entity/statuses`, kept in game.clj).
+  The ledger notes a gear change (`:equip`) and a hostile or enderman turning to face the bot (`:facing`), within 24 blocks and only on change (`senses/sight-events`); the sim sends set-equipment on a mob's spawn (`mob/equipment`) and rotate-head as it turns (`sim/face-player`).
 
 ## What is kept, per run
 
