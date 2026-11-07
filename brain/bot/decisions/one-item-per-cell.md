@@ -10,7 +10,6 @@ verifiedAgainst: 5c7d6c1
 sourceRefs:
   - src/clojurecraft/recipe.clj#defn lay-from
   - src/clojurecraft/craft.clj#defmethod stage :verify
-  - "docs/issues/01-crafting-as-data.md#Rule: the take is a shift-click (mode 1) so the cursor is never loaded; the sim asserts the cursor is empty whenever container-close is emitted."
 related:
   - "[[bot/decisions/_moc|Decisions]]"
   - "[[recipe-clicks]]"

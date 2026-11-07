@@ -35,7 +35,7 @@ related:
 Our AABB is the same 0.6 by 1.8 ([[land-physics]]); `:stairs-down` (issue #9) checks every cell a stair opens or exposes against the world value before any dig, never digs the support, and counts a stair only when `:player/pos` went down (`stairs-down`).
 
 ## Limits
-steve's `digDownVertical` (land before each dig, the 5× off-ground penalty) is cited by docs/issues/05 but was not opened here.
+steve's `digDownVertical` (land before each dig, the 5× off-ground penalty) is cited by issue #9 but was not opened here.
 
 ## See also
 - [[sib-dig-hardness]]

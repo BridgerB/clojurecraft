@@ -10,7 +10,6 @@ verifiedAgainst: 5c7d6c1
 sourceRefs:
   - src/clojurecraft/recipe.clj#defn clicks
   - src/clojurecraft/packet.clj#[:play :c2s :container-click]
-  - "docs/issues/01-crafting-as-data.md#Proposed: ship manual clicks now, keep :recipe/id stable, and accrete :intent/via :recipe-book once recipe-book-add is decoded, with the sim modelling both."
   - resources/clojurecraft/packets.edn#:place-recipe 39
 related:
   - "[[bot/decisions/_moc|Decisions]]"
