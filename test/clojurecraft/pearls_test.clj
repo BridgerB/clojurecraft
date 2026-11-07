@@ -4170,3 +4170,17 @@
            (pearls/hunt w))
         "the block under the feet dug first")
     (is (not (pearls/perched? (standing {}))) "on the ground: not perched")))
+
+(deftest the-hunt-says-which-branch-chose-its-intent
+  ;; the observability plan, part B: every intent the stuck stage's planners choose carries the
+  ;; branch that chose it (intent/why-of), and its intention fact keeps it (:intention/why)
+  (let [angry (assoc (enderman [8.5 64.0 18.5]) :entity/creepy? true)
+        w (-> (standing {7 angry})
+              (assoc-in [:player/inventory 1] (item :iron_pickaxe 1))
+              (assoc :plan/blacklist #{7}))
+        i (pearls/hunt w)]
+    (is (= {:intent/kind :lookout :intent/for :pearls} i) "the intent itself is as before")
+    (is (keyword? (intent/why-of i)))
+    (is (= "hunt" (namespace (intent/why-of i))))
+    (is (= (intent/why-of i)
+           (:intention/why (memory/intention (assoc i :intent/id 3) :started 0))))))

@@ -118,6 +118,16 @@
             (fs/path data-dir (or (:run/dir r) "") (str (:run/bot r) ".senses.edn")))]
     (when (fs/exists? f) (str f))))
 
+(defn beside
+  "A run's file of kind ext (\".moment.edn\", \".ring.edn\") beside its senses or its ledger, or
+   nil when absent: a sim run's sits beside the file :run/moment-file names, a real run's beside its
+   recording (<run/dir>/<bot><ext>)."
+  [data-dir r ext]
+  (let [f (if-let [p (:run/moment-file r)]
+            (fs/path (str/replace (str p) #"\.moment\.edn$" ext))
+            (fs/path data-dir (or (:run/dir r) "") (str (:run/bot r) ext)))]
+    (when (fs/exists? f) (str f))))
+
 (defn events-file
   "The ledger of a run (senses/ledger!, every change), or nil when absent: a sim run's names its file
    (:run/events-file), a real run's sits beside its senses (<run/dir>/<bot>.events.edn)."
@@ -332,6 +342,9 @@
                      (fs/copy sf (fs/path logs (str stem ".senses.edn")) {:replace-existing true}))
                    (when ef
                      (fs/copy ef (fs/path logs (str stem ".events.edn")) {:replace-existing true}))
+                   (doseq [ext [".moment.edn" ".ring.edn"]]
+                     (when-let [mf (beside data-dir r ext)]
+                       (fs/copy mf (fs/path logs (str stem ext)) {:replace-existing true})))
                    ;; the case: how it ended, read for the reader (case-of), beside its evidence
                    (let [es (if ef (read-events ef) [])]
                      (when (seq es)

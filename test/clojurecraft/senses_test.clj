@@ -76,7 +76,8 @@
                    :player/health 13.3
                    :player/hits [{:at t :type :mob_attack :hp 17.3 :by 42615 :by-kind :blaze}]
                    :plan/intent
-                   {:intent/kind :fight :intent/target 42615 :intent/id 7 :intent/why :struck-back})
+                   (with-meta {:intent/kind :fight :intent/target 42615 :intent/id 7}
+                              {:intent/why :struck-back}))
             (assoc-in [:world/entities 42615 :entity/hurt-at] t)
             (assoc-in [:world/entities 9] {:entity/type blaze-type :entity/pos [10.5 64.0 8.5]})
             (assoc :bot/effects
@@ -93,3 +94,25 @@
     (is (= 42615 (:eid (first (:hurt by)))) "and it landed")
     (is (= 9 (:eid (first (:appear by)))) "a second blaze came near")
     (is (empty? (senses/events before before)) "nothing changed: nothing noted")))
+
+(deftest a-moment-holds-the-whole-mind-at-an-ending
+  ;; the observability plan, part D: what a death's reader needs in one value
+  (let [w (-> (nether)
+              (assoc :player/hits [{:at 1 :type :fireball :hp 20.0 :by 42615 :by-kind :blaze}]
+                     :player/armor 14.0
+                     :pocket/site {:pocket/cell [8 64 8]}
+                     :plan/status :active
+                     :plan/intent
+                     {:intent/kind :pocket
+                      :intent/why :refuge
+                      :intent/child {:intent/kind :place :intent/target [9 64 8]}}))
+        m (senses/moment w)]
+    (is (= [:pocket :place] (mapv :intent/kind (:intents m))) "the intent and its child")
+    (is (= :refuge (:intent/why (first (:intents m)))))
+    (is (= :blaze (get-in m [:entities 42615 :kind])))
+    (is (= 6.1 (get-in m [:entities 42615 :d])))
+    (is (= {:pocket/site {:pocket/cell [8 64 8]}} (select-keys (:stage m) [:pocket/site])))
+    (is (= 14.0 (:armor m)))
+    (is (= :fireball (:type (first (:hits m)))))
+    (is (seq (:slice m)) "the blocks round the feet")
+    (is (nil? (senses/moment (dissoc w :player/pos))))))
