@@ -87,11 +87,8 @@
       (assoc-in [:world/unconfirmed pos] (:time/now world))))
 
 (defn forget-stale
-  "Drop every guess (predict) the server has not answered for unconfirmed-ms by now: the
-   overlay entry goes, so the chunk's block is in view again. Race 38477665442 bot Clj_r19
-   dug the stone under its next stair, the server acked and never broke it, the bot's
-   physics fell through the guessed air while the server put it back on the stone every
-   tick, and its next dig waited to be still for the rest of the run."
+  "Drop every guess (predict) the server has not answered for unconfirmed-ms by now: the overlay
+   entry goes, so the chunk's block is in view again."
   [world now]
   (let [stale (for [[pos at] (:world/unconfirmed world) :when (> (- now at) unconfirmed-ms)] pos)]
     (cond (empty? stale) world

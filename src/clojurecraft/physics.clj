@@ -155,10 +155,9 @@
 (defn no-fluid "A fluid oracle for a dry world." [_ _ _] nil)
 
 (defn touching-water?
-  "Does the player's box at pos overlap any water, however little (touch-contract)? Vanilla's
-   test for being in water, since 1.13. The 0.4 rule of in-fluid? calls a body out of the water
-   when under 0.4 of it is in: the bank impulse and a jump are still the water's then (issue #464:
-   lifted to 0.1 under a one-block ledge, the body left the water and fell back)."
+  "Does the player's box at pos overlap any water, however little (touch-contract)? Vanilla's test
+   for being in water, since 1.13. The 0.4 rule of in-fluid? calls a body out of the water when
+   under 0.4 of it is in: the bank impulse and a jump are still the water's then."
   [fluid-at pos]
   (in-fluid? fluid-at :water touch-contract (aabb pos)))
 
