@@ -15,6 +15,8 @@
             [clojurecraft.recipe :as recipe]
             [clojurecraft.registry :as registry]
             [clojurecraft.sim :as sim]
+            [clojurecraft.sim.mobs :as sim-mobs]
+            [clojurecraft.sim.protocol :as sim-protocol]
             [clojurecraft.world :as world]))
 
 (use-fixtures :once fx/instrumented)
@@ -139,7 +141,7 @@
          {:column (world/column-bytes blocks) :spawn [0.5 64.0 0.5] :inventory inv :day-time day}
          difficulty (assoc :difficulty difficulty)))
       (assoc :sim/phase :play :sim/player-pos [0.5 64.0 0.5] :sim/on-ground? true)
-      (sim/with-mobs mobs)))
+      (sim-mobs/with-mobs mobs)))
 
 (defn ticks
   "The model after n game ticks, 50 ms apart."
@@ -199,8 +201,9 @@
   (let [worn {[:armour 0] {:item (recipe/item-id :iron_helmet) :count 1}
               [:armour 1] {:item (recipe/item-id :iron_chestplate) :count 1}}
         sim (arena {} worn nil night [{:type :zombie :pos [2.5 64.0 0.5]}])]
-    (is (close? 5.74 (sim/armoured sim 7.0)) "the model reads what window 0's armour slots hold")
-    (is (= 7.0 (sim/armoured (arena {} {} nil night []) 7.0)))
+    (is (close? 5.74 (sim-mobs/armoured sim 7.0))
+        "the model reads what window 0's armour slots hold")
+    (is (= 7.0 (sim-mobs/armoured (arena {} {} nil night []) 7.0)))
     (is (close? (- 20.0 (mob/absorbed 3.0 8 0.0)) (:sim/health (ticks sim 15)))
         "a zombie's first hit, through the iron")))
 
@@ -313,7 +316,7 @@
                            :day-time 1000
                            :seed 3})
                 (assoc :sim/phase :play :sim/player-pos [0.5 64.0 0.5] :sim/on-ground? true)
-                (sim/with-mobs [{:type :enderman :pos pos}]))
+                (sim-mobs/with-mobs [{:type :enderman :pos pos}]))
         [eid] (the-mob sim :enderman)]
     [(assoc-in sim [:sim/mobs eid :angry?] true) eid]))
 
@@ -348,7 +351,7 @@
 
 (deftest an-angry-enderman-walks-round-a-wall-to-the-player
   ;; vanilla's enderman paths round a wall; the model's searches a route once its straight walk
-  ;; stops (sim/trail, mob/route). A wall three high from z -3 to 3 at x 4 (every chunk's)
+  ;; stops (sim-mobs/trail, mob/route). A wall three high from z -3 to 3 at x 4 (every chunk's)
   (let [wall (into {} (for [lz (concat (range 0 4) (range 13 16)) y (range 64 67)] [[4 y lz] 1]))
         [sim eid] (angry-enderman wall [8.5 64.0 0.5])
         later (ticks sim 200)]
@@ -546,7 +549,7 @@
     (is (seq wood))))
 
 (deftest the-overworld-spends-no-roll-of-the-nethers-stream
-  ;; the Nether's spawns roll from their own stream (sim/wild-roll), so the overworld's night
+  ;; the Nether's spawns roll from their own stream (sim-mobs/wild-roll), so the overworld's night
   ;; rule rolls as it did before it: a seed's run is the same with the Nether's rule or without
   (let [sim0 (-> (sim/init {:columns (flat-world {})
                             :spawn nether-spawn
@@ -558,7 +561,7 @@
         sim (last states)]
     (is (seq (:sim/mobs sim)) "the night rule spawned")
     (is (= (:sim/wild-rng sim0) (:sim/wild-rng sim)) "and the Nether's stream never rolled")
-    (is (every? #(identical? % (sim/try-nether-spawn %)) states)
+    (is (every? #(identical? % (sim-mobs/try-nether-spawn %)) states)
         "the Nether's rule leaves every overworld tick as it was")))
 
 ;; ---------------------------------------------------------------- blaze spawners
@@ -762,7 +765,7 @@
         sim (-> (in-pocket feet [])
                 (assoc-in [:sim/fireballs 90] {:pos from :dir dir :owner 91 :born 0 :kind :blaze}))
         later (ticks sim 20)]
-    (is (= :wall (first (sim/fireball-path sim from dir))) "the cobble stops it")
+    (is (= :wall (first (sim-mobs/fireball-path sim from dir))) "the cobble stops it")
     (is (= 20.0 (:sim/health later)) "nothing through the wall")
     (is (nil? (:sim/fire later)) "and it does not catch")
     (is (empty? (:sim/fireballs later)))
@@ -786,7 +789,7 @@
     (if (> i n)
       at
       (let [sim (ticks sim 1)
-            now (count (filter #(= sim/fireball-type (:type %)) (said sim :add-entity)))]
+            now (count (filter #(= sim-mobs/fireball-type (:type %)) (said sim :add-entity)))]
         (recur sim (inc i) now (into at (repeat (- now seen) i)))))))
 
 (deftest a-blaze-with-a-line-charges-then-fires-three-fireballs-six-ticks-apart
@@ -823,7 +826,7 @@
 
 (deftest a-fireball-flies-0-55-a-tick-hits-the-player-s-box-and-stops-at-a-wall
   (let [path (fn [sim from]
-               (sim/fireball-path sim from (mob/aim from [0.5 64.9 0.5] 0.5 0.5 0.5 0.5)))
+               (sim-mobs/fireball-path sim from (mob/aim from [0.5 64.9 0.5] 0.5 0.5 0.5 0.5)))
         open (arena {} {} :normal night [])
         walled (arena wall {} :normal night [])]
     (is (= :hit (first (path open [1.2 65.2 0.5]))) "inside the box's reach this tick")
@@ -847,16 +850,18 @@
         "the model's own account of the blow: its cause, who dealt it, how much")))
 
 (deftest the-hit-log-keeps-the-newest-blows-and-skips-the-ones-the-window-swallowed
-  (let [log (reduce (fn [l i] (sim/hit-logged l {:t i})) nil (range (+ sim/hit-log-keep 3)))]
-    (is (= sim/hit-log-keep (count log)))
+  (let [log (reduce (fn [l i] (sim-protocol/hit-logged l {:t i}))
+                    nil
+                    (range (+ sim-protocol/hit-log-keep 3)))]
+    (is (= sim-protocol/hit-log-keep (count log)))
     (is (= 3 (:t (first log)))))
   (let [s (-> (arena {} {} :normal night [])
               (assoc :sim/now 1000 :sim/health 20.0)
-              (sim/hurt 6.0 true :zombie nil 7)
+              (sim-protocol/hurt 6.0 true :zombie nil 7)
               (assoc :sim/now 1100)
-              (sim/hurt 4.0 true :zombie nil 7)
+              (sim-protocol/hurt 4.0 true :zombie nil 7)
               (assoc :sim/now 1200)
-              (sim/hurt 9.0 true :skeleton nil 8))]
+              (sim-protocol/hurt 9.0 true :skeleton nil 8))]
     (is
      (= [[:zombie 7 6.0] [:skeleton 8 3.0]] (map (juxt :cause :by :dealt) (:sim/hit-log s)))
      "a weaker blow inside the hurt window lands nothing and is not logged; a harder one lands its excess")))
@@ -882,7 +887,7 @@
   ;; the observability plan, hearing: the model tells what the server does, so the bot hears the same
   (let [sim (arena {} {} :normal night [{:type :blaze :pos [9.5 65.0 0.5]}])
         later (ticks sim 70)
-        shots (count (filter #(= sim/fireball-type (:type %)) (said later :add-entity)))
+        shots (count (filter #(= sim-mobs/fireball-type (:type %)) (said later :add-entity)))
         events (said later :level-event)
         sound-name #(registry/sound-name (:sound %))]
     (is (pos? shots))
@@ -915,7 +920,7 @@
                            :day-time night
                            :seed 3})
                 (assoc :sim/phase :play :sim/player-pos [0.5 64.0 0.5] :sim/on-ground? true)
-                (sim/with-mobs [{:type :wither_skeleton :pos [6.5 64.0 0.5]}]))
+                (sim-mobs/with-mobs [{:type :wither_skeleton :pos [6.5 64.0 0.5]}]))
         [eid] (the-mob sim :wither_skeleton)
         later (ticks sim 5)]
     (is (= [{:packet/name :set-equipment

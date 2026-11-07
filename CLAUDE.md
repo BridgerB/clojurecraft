@@ -72,7 +72,13 @@ src/clojurecraft/model.clj    the information model: every attribute, its meanin
 src/clojurecraft/spec.clj     specs for attributes, events, effects, intents, packets; fdefs on the reducers
 src/clojurecraft/record.clj   the recording: a channel tap, reading it back, replay and verify
 src/clojurecraft/replay.clj   clojure -M:replay: fold a recording with no server, print RESULT
-src/clojurecraft/sim.clj      pure server model for socket-free end-to-end runs; holds a whole world of columns
+src/clojurecraft/sim.clj      pure server model for socket-free end-to-end runs; holds a whole world of columns: init, the tick (tick-steps), step, run, connect!
+src/clojurecraft/sim/world.clj    the model's floor: constants, rolls, blocks, what it tells, fluids and falls; the on-packet table
+src/clojurecraft/sim/window.clj   the player's inventory, containers, the click rules, the furnace
+src/clojurecraft/sim/protocol.clj login, chunks, movement, digging, using items, the player's life (hurt, hunger, pickup)
+src/clojurecraft/sim/portal.clj   placing blocks, the Nether portal and the arrival
+src/clojurecraft/sim/mobs.clj     spawning, goals and attacks of every mob, the dragon's perch
+src/clojurecraft/sim/end.clj      eyes of ender, the End portal, the arrival on the main island
 src/clojurecraft/fluid.clj    water and lava as the server moves them: levels, flow, spread, mixing, as data and pure rules
 src/clojurecraft/hunger.clj   hunger as the server keeps it: exhaustion, saturation, regeneration, starvation, eating, as data and pure rules
 src/clojurecraft/mob.clj      mobs as the server runs them, for the model: kinds as data, spawning, walking, hitting, shooting, blasting, loot

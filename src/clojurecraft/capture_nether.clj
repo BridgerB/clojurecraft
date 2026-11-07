@@ -7,7 +7,7 @@
        --landings cache/worlds/R1/landings.edn --set R1 --out cache/sim-nether/R1.edn.gz [--margin 32]
 
    The model takes this region as its :sim/nether (simrace/sim-nether), stands the player where the
-   server would place the linked portal (sim/arrival) and streams the columns round it as a server
+   server would place the linked portal (sim-portal/arrival) and streams the columns round it as a server
    does.
 
    How it is taken: capture.clj's client (main's loop and reducer, settle! and its stops' spacing)
@@ -37,7 +37,7 @@
             [clojurecraft.landings :as landings]
             [clojurecraft.main :as main]
             [clojurecraft.rcon :as rcon]
-            [clojurecraft.sim :as sim]))
+            [clojurecraft.sim.portal :as sim-portal]))
 
 (set! *warn-on-reflection* true)
 
@@ -49,10 +49,10 @@
 ;; ---------------------------------------------------------------- what to take
 
 (defn nether-point
-  "The Nether block column [x z] a portal on landing [x z _] leads to (sim/exit-point: the
+  "The Nether block column [x z] a portal on landing [x z _] leads to (sim-portal/exit-point: the
    overworld's coordinates over 8)."
   [[x z _]]
-  (let [[nx _ nz] (sim/exit-point [x 0 z])] [nx nz]))
+  (let [[nx _ nz] (sim-portal/exit-point [x 0 z])] [nx nz]))
 
 (defn region
   "The chunk square [cx0 cz0 cx1 cz1] holding every landing's nether-point, margin chunks wider

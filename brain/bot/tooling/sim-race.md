@@ -46,8 +46,8 @@ sourceRefs:
   - bb/clojurecraft/churn.clj#defn upload!
   - bb/clojurecraft/issue_check.clj#defn sources
   - bb/clojurecraft/issue_check.clj#defn release-file!
-  - "src/clojurecraft/sim.clj#The model as a server keeps a player's chunks"
-  - src/clojurecraft/sim.clj#defn column-of
+  - "src/clojurecraft/sim/protocol.clj#The model as a server keeps a player's chunks"
+  - src/clojurecraft/sim/world.clj#defn column-of
   - src/clojurecraft/sim.clj#defn tick-rand
   - test/clojurecraft/capture_test.clj#the-stops-see-every-column-of-the-square
   - test/clojurecraft/simrace_test.clj#a-run-walks-into-the-next-column-for-its-log
@@ -59,7 +59,7 @@ sourceRefs:
   - src/clojurecraft/simrace.clj#defn nether-file
   - src/clojurecraft/simrace.clj#defn sim-nether
   - src/clojurecraft/simrace.clj#defn moment-of
-  - src/clojurecraft/sim.clj#defn arrival
+  - src/clojurecraft/sim/portal.clj#defn arrival
   - .github/workflows/simworld.yml#nether:
   - test/clojurecraft/capture_nether_test.clj#the-region-holds-every-nether-point-and-the-margin
   - test/clojurecraft/simrace_test.clj#a-moment-past-the-portal-holds-the-captured-nether

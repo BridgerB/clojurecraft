@@ -822,7 +822,7 @@
 (s/def :sim/rng int?)
 (s/def :sim/furnaces (s/map-of ::block-pos map?))
 (s/def :sim/falls (s/map-of ::block-pos int?))
-(s/def :sim/fluids (s/map-of ::block-pos int?)) ; a fluid cell → when its next tick is due, ms (sim/wake-fluids)
+(s/def :sim/fluids (s/map-of ::block-pos int?)) ; a fluid cell → when its next tick is due, ms (sim-world/wake-fluids)
 (s/def :sim/fluid-sources-ready? boolean?)
 (s/def :sim/dimension string?)
 (s/def :sim/portal-since int?)
@@ -831,7 +831,7 @@
   (s/and (s/keys :opt-un
                  [:sim.nether/at :sim.nether/column :sim.nether/columns :sim.nether/decoded
                   :sim.nether/view-distance])
-         ;; whole columns may leave :at out: the arrival is then the portal's (sim/arrival, #353)
+         ;; whole columns may leave :at out: the arrival is then the portal's (sim-portal/arrival, #353)
          #(or (:columns %) (and (:column %) (:at %)))))
 (s/def :sim.nether/column bytes?)
 (s/def :sim.nether/columns (s/map-of ::column-key bytes?))
@@ -885,7 +885,7 @@
 (s/def :sim.hit/by (s/nilable int?))
 (s/def :sim.hit/dealt number?)
 (s/def :sim.hit/health number?)
-(s/def :sim/hit-log ; the model's own cause for each blow that landed on the player (sim/hit-logged)
+(s/def :sim/hit-log ; the model's own cause for each blow that landed on the player (sim-protocol/hit-logged)
   (s/coll-of (s/keys :req-un
                      [:sim.hit/t :sim.hit/life :sim.hit/cause :sim.hit/dealt :sim.hit/health]
                      :opt-un [:sim.hit/by])
@@ -893,7 +893,7 @@
 (s/def :sim.wither/until int?)
 (s/def :sim.wither/next int?)
 (s/def :sim/wither (s/keys :req-un [:sim.wither/until :sim.wither/next])) ; a wither skeleton's wither: when it ends, when it next hurts
-;; mobs in the model (issue #260): each one's kind, place, health and clocks (mob.clj, sim/tick-mobs)
+;; mobs in the model (issue #260): each one's kind, place, health and clocks (mob.clj, sim-mobs/tick-mobs)
 (s/def :sim.mob/type (set (keys mob/kinds)))
 (s/def :sim.mob/pos ::vec3)
 (s/def :sim.mob/health (s/double-in :min 0.0 :NaN? false :infinite? false))
@@ -905,9 +905,9 @@
 (s/def :sim.mob/angry? boolean?)               ; a neutral one has turned on the player
 (s/def :sim.mob/persistent? boolean?)          ; never despawned: a fixture's, an animal
 (s/def :sim.mob/yaw double?)                   ; its body's yaw in degrees, told at add-entity: the dragon's says where its head is
-(s/def :sim.mob/route (s/coll-of (s/tuple int? int? int?) :kind vector? :min-count 1)) ; the cells it walks round a wall (sim/trail, issue #263)
+(s/def :sim.mob/route (s/coll-of (s/tuple int? int? int?) :kind vector? :min-count 1)) ; the cells it walks round a wall (sim-mobs/trail, issue #263)
 (s/def :sim.mob/route-at int?)                 ; when it last searched a route
-(s/def :sim.mob/far-ticks nat-int?)            ; ticks an angry enderman has stood far from its target (sim/blink)
+(s/def :sim.mob/far-ticks nat-int?)            ; ticks an angry enderman has stood far from its target (sim-mobs/blink)
 (s/def ::sim-mob
   (s/keys :req-un [:sim.mob/type :sim.mob/pos :sim.mob/health]
           :opt-un
@@ -916,8 +916,8 @@
            :sim.mob/far-ticks]))
 (s/def :sim/mobs (s/map-of int? ::sim-mob))
 (s/def :sim/fixture-mobs (s/coll-of (s/keys :req-un [:sim.mob/type :sim.mob/pos]) :kind vector?))
-(s/def :sim/mob-rng int?)                      ; the mobs' own roll stream (sim/mob-roll)
-(s/def :sim/wild-rng int?)                     ; the Nether's own spawns' roll stream (sim/wild-roll, issue #263)
+(s/def :sim/mob-rng int?)                      ; the mobs' own roll stream (sim-mobs/mob-roll)
+(s/def :sim/wild-rng int?)                     ; the Nether's own spawns' roll stream (sim-mobs/wild-roll, issue #263)
 (s/def :sim/day-time int?)                     ; game ticks into the days, night from 13000 of each 24000
 (s/def :sim/populated (s/coll-of (s/tuple int? int?) :kind set?)) ; chunks whose animals were placed
 (s/def :sim/populated-at (s/tuple int? int?))  ; the column the player was in when they last were

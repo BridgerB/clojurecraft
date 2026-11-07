@@ -6,6 +6,7 @@
             [clojurecraft.blocks :as blocks]
             [clojurecraft.fluid :as fluid]
             [clojurecraft.sim :as sim]
+            [clojurecraft.sim.world :as sim-world]
             [clojurecraft.world :as world]))
 
 (defn sim-over
@@ -21,14 +22,14 @@
 (defn put
   "The model with state set at p, as a pour or a dig sets a cell."
   [sim p state]
-  (sim/set-cell sim p state))
+  (sim-world/set-cell sim p state))
 
-(defn fluid-at "The fluid state at p." [sim p] (fluid/state-of (sim/block-at sim p)))
+(defn fluid-at "The fluid state at p." [sim p] (fluid/state-of (sim-world/block-at sim p)))
 (defn amount-at
   "How much of kind is at p, 0 for none."
   [sim p kind]
   (let [fs (fluid-at sim p)] (if (= kind (:fluid/kind fs)) (:fluid/amount fs) 0)))
-(defn name-at "The name of the block at p." [sim p] (blocks/name-of (sim/block-at sim p)))
+(defn name-at "The name of the block at p." [sim p] (blocks/name-of (sim-world/block-at sim p)))
 
 (deftest every-water-and-lava-state-round-trips
   (doseq [id (concat blocks/water-states blocks/lava-states)]
@@ -43,7 +44,7 @@
                   (put [8 62 8] blocks/air)
                   (after 1000))]
       (is (= (fluid/source :water) (fluid/state-of state)) (str plant))
-      (is (= state (sim/block-at sim [8 63 8])) "a fluid tick preserves its source's block")
+      (is (= state (sim-world/block-at sim [8 63 8])) "a fluid tick preserves its source's block")
       (is (:fluid/falling? (fluid-at sim [8 62 8])) "the source flows into the shaft"))))
 
 (deftest saved-models-wake-previously-unrecognized-sources-once
@@ -51,17 +52,17 @@
         old (-> (sim-over {[8 63 8] plant})
                 (assoc :sim/broken #{[8 62 8]})
                 (dissoc :sim/fluid-sources-ready?))
-        ready (sim/tick-fluids old)
+        ready (sim-world/tick-fluids old)
         due (get-in ready [:sim/fluids [8 63 8]])
-        again (sim/tick-fluids (assoc ready :sim/now 50))
-        drained (sim/tick-fluids (assoc ready :sim/fluids {} :sim/now 50))
+        again (sim-world/tick-fluids (assoc ready :sim/now 50))
+        drained (sim-world/tick-fluids (assoc ready :sim/fluids {} :sim/now 50))
         sim (after ready 1000)]
     (is (true? (:sim/fluid-sources-ready? ready)))
     (is (= 250 due))
     (is (= due (get-in again [:sim/fluids [8 63 8]])) "the pending tick is not postponed")
     (is (empty? (:sim/fluids drained)) "changed cells are not woken again after initialization")
     (is (:fluid/falling? (fluid-at sim [8 62 8])) "the old moment's dry shaft fills too")
-    (is (= plant (sim/block-at sim [8 63 8])))))
+    (is (= plant (sim-world/block-at sim [8 63 8])))))
 
 (deftest water-spreads-seven-blocks-on-a-floor
   (let [sim (after (put (sim-over {}) [8 64 8] blocks/water-base) 3000)]
@@ -77,8 +78,8 @@
                 (after 3000)
                 (put [8 64 8] blocks/air)
                 (after 6000))]
-    (is (every? #(= blocks/air (sim/block-at sim [% 64 8])) (range 0 16)))
-    (is (every? #(= blocks/air (sim/block-at sim [8 64 %])) (range 0 16)))))
+    (is (every? #(= blocks/air (sim-world/block-at sim [% 64 8])) (range 0 16)))
+    (is (every? #(= blocks/air (sim-world/block-at sim [8 64 %])) (range 0 16)))))
 
 (deftest water-falls-down-a-shaft-and-spreads-where-it-lands
   (let [shaft (into {} (for [y (range 59 64)] [[8 y 8] blocks/air]))
@@ -97,7 +98,7 @@
 (deftest a-flow-goes-toward-the-nearest-way-down
   (let [sim (after (put (sim-over {[10 63 8] blocks/air}) [8 64 8] blocks/water-base) 300)]
     (is (= 7 (amount-at sim [9 64 8] :water)) "toward the hole two blocks east")
-    (is (every? #(= blocks/air (sim/block-at sim %)) [[7 64 8] [8 64 9] [8 64 7]])
+    (is (every? #(= blocks/air (sim-world/block-at sim %)) [[7 64 8] [8 64 9] [8 64 7]])
         "and only that way")))
 
 (deftest two-sources-beside-a-flow-make-it-a-source
@@ -122,7 +123,7 @@
 (deftest lava-in-a-hole-cut-into-the-rock-stays-there
   (let [sim (after (put (sim-over {[8 63 8] blocks/air}) [8 63 8] blocks/lava-base) 6000)]
     (is (:fluid/source? (fluid-at sim [8 63 8])))
-    (is (every? #(= blocks/air (sim/block-at sim %)) [[8 64 8] [9 64 8] [7 64 8]])
+    (is (every? #(= blocks/air (sim-world/block-at sim %)) [[8 64 8] [9 64 8] [7 64 8]])
         "the rock holds it")))
 
 (deftest water-directly-above-a-lava-source-makes-obsidian

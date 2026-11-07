@@ -13,8 +13,8 @@ sourceRefs:
   - src/clojurecraft/ear.clj#defn level-event-name
   - src/clojurecraft/registry.clj#defn sound-name
   - src/clojurecraft/senses.clj#defn heard-events
-  - src/clojurecraft/sim.clj#defn tell-sound
-  - src/clojurecraft/sim.clj#defn tell-level-event
+  - src/clojurecraft/sim/world.clj#defn tell-sound
+  - src/clojurecraft/sim/world.clj#defn tell-level-event
   - src/clojurecraft/eye.clj#defn equipment-of
   - src/clojurecraft/entity.clj#defn facing-bot?
   - src/clojurecraft/senses.clj#defn sight-events
@@ -28,7 +28,7 @@ sourceRefs:
   - src/clojurecraft/text.clj#defn cause-component
   - src/clojurecraft/chat.clj#defn death-line
   - src/clojurecraft/said.clj#defn say
-  - src/clojurecraft/sim.clj#defn record-death
+  - src/clojurecraft/sim/protocol.clj#defn record-death
   - src/clojurecraft/registry.clj#defn damage-type
   - src/clojurecraft/senses.clj#defn events
   - src/clojurecraft/derived.clj#defn alight-cause
@@ -50,7 +50,7 @@ sourceRefs:
   - "src/clojurecraft/memory.clj#The fact for intent i reaching event"
   - src/clojurecraft/race.clj#defn near-truth!
   - src/clojurecraft/race_facts.clj#defn serverlog-lines
-  - src/clojurecraft/sim.clj#defn hit-logged
+  - src/clojurecraft/sim/protocol.clj#defn hit-logged
   - "src/clojurecraft/simrace.clj#What the model knew round the player at a moment"
   - src/clojurecraft/simrace.clj#defn truth-ring-add
   - src/clojurecraft/simrace.clj#defn truth-texts

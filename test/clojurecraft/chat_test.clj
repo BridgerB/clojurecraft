@@ -12,7 +12,8 @@
             [clojurecraft.nbt :as nbt]
             [clojurecraft.packet :as p]
             [clojurecraft.senses :as senses]
-            [clojurecraft.sim :as sim]
+            [clojurecraft.sim.protocol :as sim-protocol]
+            [clojurecraft.sim.world :as sim-world]
             [clojurecraft.text :as text])
   (:import [java.io DataOutputStream]))
 
@@ -281,11 +282,12 @@
         [kill :as kills] (m/said dead :player-combat-kill)]
     (is (= 1 (count kills)))
     (is (= {"translate" "death.attack.lava" "with" [{"text" "Clj_r05"}]} (:message kill)))
-    (is (= (sim/player-eid-of dead) (:player-id kill)))
+    (is (= (sim-world/player-eid-of dead) (:player-id kill)))
     (is (= 1 (count (m/said (m/ticks dead 5) :player-combat-kill))) "told once, not every tick")))
 
 (deftest the-model-tells-a-mobs-blow-and-a-fireballs
-  (let [hit (fn [cause how] (m/said (sim/hurt (arena {}) 5.0 true cause how) :player-combat-kill))]
+  (let [hit (fn [cause how]
+              (m/said (sim-protocol/hurt (arena {}) 5.0 true cause how) :player-combat-kill))]
     (is (= [(text/cause-component "Clj_r05" :zombie nil)] (map :message (hit :zombie nil))))
     (is (= "death.attack.mob" (get (first (map :message (hit :zombie nil))) "translate")))
     (is (= "death.attack.fireball" (get (first (map :message (hit :blaze :fireball))) "translate")))
@@ -293,11 +295,12 @@
            (get (first (map :message (hit :wither_skeleton :wither))) "translate")))))
 
 (deftest a-blow-that-leaves-the-player-alive-tells-no-death
-  (is (empty? (m/said (sim/hurt (assoc (arena {}) :sim/health 20.0) 5.0 true :zombie)
+  (is (empty? (m/said (sim-protocol/hurt (assoc (arena {}) :sim/health 20.0) 5.0 true :zombie)
                       :player-combat-kill))))
 
 (deftest the-models-death-packet-survives-the-wire
-  (let [pkt (first (m/said (sim/hurt (arena {}) 5.0 true :blaze :fireball) :player-combat-kill))
+  (let [pkt (first (m/said (sim-protocol/hurt (arena {}) 5.0 true :blaze :fireball)
+                           :player-combat-kill))
         frame (b/with-out (fn [out]
                             (b/write-varint out (get-in p/ids [:play :s2c :player-combat-kill]))
                             (p/write-fields out (p/specs [:play :s2c :player-combat-kill]) pkt)))

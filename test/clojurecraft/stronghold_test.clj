@@ -17,6 +17,7 @@
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.sim :as sim]
+            [clojurecraft.sim.world :as sim-world]
             [clojurecraft.stronghold :as stronghold]
             [clojurecraft.world :as world]))
 
@@ -634,7 +635,7 @@
                          {:event/kind :go :go/goals [:portal-room]})]
     (is (plan/done? w) (pr-str (plan/summary w)))
     (is (< (second (:player/pos w)) 48.0) "down by the frame")
-    (is (= frame (sim/block-at sim [8 40 8])) "the frame never dug")
+    (is (= frame (sim-world/block-at sim [8 40 8])) "the frame never dug")
     (is (empty? (:sim/violations sim)))))
 
 (defn hill-top
@@ -703,8 +704,8 @@
         over-slope (for [lx (range 9 16) y (range (inc (hill-top lx)) 81)] [lx y 8])]
     (is (plan/done? w) (pr-str (plan/summary w)))
     (is (< (second (:player/pos w)) 48.0) "down by the frame")
-    (is (= frame (sim/block-at sim [40 40 8])) "the frame never dug")
-    (is (not-any? #(= cobblestone (sim/block-at sim %)) over-slope) "no bridge into the air")
+    (is (= frame (sim-world/block-at sim [40 40 8])) "the frame never dug")
+    (is (not-any? #(= cobblestone (sim-world/block-at sim %)) over-slope) "no bridge into the air")
     (is (empty? (:sim/violations sim)))))
 
 (deftest a-hop-must-end-nearer-the-far-point

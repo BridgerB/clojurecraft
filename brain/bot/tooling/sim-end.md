@@ -13,11 +13,11 @@ sourceRefs:
   - src/clojurecraft/end.clj#defn platform
   - src/clojurecraft/end.clj#def spikes
   - src/clojurecraft/end.clj#defn eye-target
-  - src/clojurecraft/sim.clj#defmethod use-held :eye
-  - src/clojurecraft/sim.clj#defn tick-eyes
-  - src/clojurecraft/sim.clj#defn frame-takes-eye
-  - src/clojurecraft/sim.clj#defn arrive-end
-  - src/clojurecraft/sim.clj#defn perch
+  - src/clojurecraft/sim/end.clj#defmethod use-held :eye
+  - src/clojurecraft/sim/end.clj#defn tick-eyes
+  - src/clojurecraft/sim/portal.clj#defn frame-takes-eye
+  - src/clojurecraft/sim/end.clj#defn arrive-end
+  - src/clojurecraft/sim/mobs.clj#defn perch
   - test/clojurecraft/end_test.clj#a-thrown-eye-flies-toward-the-stronghold-and-drops-or-shatters
   - test/clojurecraft/end_test.clj#twelve-eyes-in-twelve-frames-light-the-portal
   - test/clojurecraft/end_test.clj#stepping-into-the-portal-arrives-on-the-platform-with-the-dragon-and-its-crystals

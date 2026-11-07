@@ -44,6 +44,8 @@
             [clojurecraft.scene :as scene]
             [clojurecraft.senses :as senses]
             [clojurecraft.sim :as sim]
+            [clojurecraft.sim.mobs :as sim-mobs]
+            [clojurecraft.sim.protocol :as sim-protocol]
             [clojurecraft.start :as start]
             [clojurecraft.sword :as sword]
             [clojurecraft.terrain :as terrain]
@@ -97,7 +99,7 @@
    decoded once for every run of its set to share, streamed nether-view chunks round the player
    (a captured overworld goes to the client whole; a set's whole Nether at once would show the
    bot fortresses no server showed it), and no :at, so a run arrives where the server would link
-   its portal (sim/arrival)."
+   its portal (sim-portal/arrival)."
   [n]
   {:columns (:nether/columns n)
    :decoded (into {} (map (fn [[k bytes]] [k (chunk/decode bytes)])) (:nether/columns n))
@@ -304,7 +306,7 @@
 
 (defn dealt-by
   "What each mob dealt the player in the player's current life, {eid damage}, from the model's hit
-   log (sim/hurt): the model's own account of who hurt it, over the hits with an attacker."
+   log (sim-protocol/hurt): the model's own account of who hurt it, over the hits with an attacker."
   [sim]
   (let [life (:sim/respawns sim 0)]
     (reduce (fn [acc {:keys [by dealt] l :life}]
@@ -316,7 +318,7 @@
   "What the model knew round the player at a moment, beside the bot's moment (the observability
    plan, part E): its own mobs within truth-radius, nearest first, each with every fact the model
    keeps (type, position, health, anger, its next attack, dead or not), whether it has the player
-   as its target (:targets? sim/targets?) and what it dealt the player this life (:dealt), the
+   as its target (:targets? sim-mobs/targets?) and what it dealt the player this life (:dealt), the
    player's position and health by the model's word, the model's causes of death, and its own
    cause for each blow (:hits, sim/hit-log: when, cause, the attacker's eid, what it dealt). What
    the bot never tracked or never saw stands out against its moment. Only the mobs near the
@@ -335,7 +337,7 @@
                             (assoc m
                                    :eid eid
                                    :d (/ (math/round (* 10.0 d)) 10.0)
-                                   :targets? (boolean (sim/targets? sim m))
+                                   :targets? (boolean (sim-mobs/targets? sim m))
                                    :dealt (get dealt eid 0.0))))))]
     {:t (:sim/now sim)
      :player {:pos p :health (:sim/health sim) :dimension (:sim/dimension sim)}
@@ -689,7 +691,7 @@
    captured Nether (:capture/nether), the model's Nether gets its columns back, and a moment past
    the portal holds the Nether's columns, the bot's chunks among them, where one before it holds the
    overworld's. The overworld set aside while the player is in another dimension (:sim/overworld,
-   sim/leave-overworld) gets w's columns back."
+   sim-protocol/leave-overworld) gets w's columns back."
   [{:snapshot/keys [chunks world sim next]} w]
   (let [nether (:capture/nether w)
         here (if (and nether (= dimension/nether (:sim/dimension sim)))
@@ -710,7 +712,7 @@
                    (stranded? chunks world sim)
                    (-> (assoc :sim/view #{})
                        (dissoc :sim/view-at)
-                       sim/stream))})))
+                       sim-protocol/stream))})))
 
 (defn own-world
   "The world a self-contained snapshot is played in, prepared: the columns it carries and its
