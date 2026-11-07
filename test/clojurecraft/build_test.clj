@@ -9,8 +9,8 @@
             [clojurecraft.blocks :as blocks]
             [clojurecraft.build :as build]
             [clojurecraft.fixtures :as fx]
+            [clojurecraft.forage :as forage]
             [clojurecraft.game :as game]
-            [clojurecraft.hunt :as hunt]
             [clojurecraft.intent :as intent]
             [clojurecraft.memory :as memory]
             [clojurecraft.path :as path]
@@ -219,12 +219,12 @@
                        :plan/chain? true
                        :plan/reached #{:portal-kit :gear :nether}
                        :plan/since 0
-                       :time/now (+ 1000 hunt/forage-ms 100000)
+                       :time/now (+ 1000 forage/forage-ms 100000)
                        :hunt/forage
                        {:forage/since 1000 :forage/leg 3 :forage/phase :return :forage/life 0}))
         return-row (first (filter #(= :return-nether (:goal/id %)) plan/goals))
         i (plan/next-intent lit return-row plan/goals)]
-    (is (hunt/search-spent? lit) "the hunt has searched and found nothing")
+    (is (forage/search-spent? lit) "the hunt has searched and found nothing")
     (is (nil? (:plan/wait i)) "no wait at all: it ends the plan")
     (is (= :build (:intent/kind i)) "the way back is the build's step")))
 
