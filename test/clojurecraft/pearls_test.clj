@@ -4480,3 +4480,48 @@
     (is (some? end) "an open world has far ends")
     (is (not-any? #(= end (second %)) (pearls/far-ends failed 0 #{}))
         "the end a walk failed toward is not an end again")))
+
+(deftest a-held-target-the-feet-do-not-near-is-given-up
+  ;; One rule for every held target (progress-table), from the stalls it ends: the exit that failed
+  ;; :blocked every 30 s for forty minutes (sim R1/17, probes rh5-20 and rh5-33), the heading's leg,
+  ;; the forest tunnel that stood still at [-96 65 466] (R2/21, wide-br-R2-21) and the relocation
+  ;; shuttling between two cells. Not nearer by :blocks within :ms: the intent fails :no-progress.
+  (let [base (-> (standing {} {})
+                 (assoc :player/dimension nether :time/now 0))
+        running
+        (fn [w kind for target]
+          (assoc w
+                 :plan/intent
+                 {:intent/kind kind :intent/for for :intent/target target :intent/status :active}))
+        kinds {:exit (-> (running base :tunnel-to :pearls [8 64 -60])
+                         (assoc :pearls/exit-target [8 64 -60]))
+               :heading (-> (running base :tunnel-to :pearls [8 64 -60])
+                            (assoc :pearls/heading
+                                   {:dir [0 -1] :from [8 64 8] :target [8 64 -60] :turns 0}))
+               :forest (running base :tunnel-to :pearls [8 64 -60])
+               :relocate (running base :walk :relocate [8 64 -60])}
+        later (fn [w ms] (assoc w :time/now ms))]
+    (doseq [[kind w] kinds
+            :let [rule (pearls/progress-table kind)
+                  started (pearls/watch-progress w)
+                  waiting (pearls/watch-progress (later started (dec (:ms rule))))
+                  given-up (pearls/watch-progress (later started (:ms rule)))
+                  nearer (pearls/watch-progress (-> (later started (dec (:ms rule)))
+                                                    (assoc :player/pos
+                                                           [8.5 64.0 (- 8.5 (:blocks rule) 1.0)])))
+                  then-waiting (pearls/watch-progress (later nearer
+                                                             (+ (dec (:ms rule)) (:ms rule) -1)))]]
+      (testing (name kind)
+        (is (= kind (pearls/held-class started (:plan/intent started))) "the class of the target")
+        (is (= :active (:intent/status (:plan/intent waiting))) "within the time: kept")
+        (is (= :failed (:intent/status (:plan/intent given-up))) "not nearer in the time: failed")
+        (is (= :no-progress (:intent/reason (:plan/intent given-up))))
+        (is (not (contains? given-up :pearls/watch)))
+        (is (= :active (:intent/status (:plan/intent nearer)))
+            "nearer by the blocks: the clock restarts")
+        (is (= :active (:intent/status (:plan/intent then-waiting)))
+            "and a full time again is allowed")))
+    (is (not (contains? (pearls/watch-progress
+                         (assoc base :plan/intent {:intent/kind :lookout :intent/status :active}))
+                        :pearls/watch))
+        "no held target running: nothing watched")))

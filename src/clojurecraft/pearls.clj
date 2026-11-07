@@ -2685,6 +2685,58 @@
           (assoc-in world [:pearls/heading :target] (leg-from world feet (:dir h)))
           :else world)))
 
+(def progress-table
+  "{class {:blocks n :ms m}}: how much nearer a held target must bring the feet within m ms, or
+   it is given up (watch-progress). One table for every held target: the fortress exit, the heading's
+   leg, the tunnel to a forest, the relocation's walk."
+  {:exit {:blocks 6.0 :ms 180000}
+   :heading {:blocks 6.0 :ms 180000}
+   :forest {:blocks 6.0 :ms 240000}
+   :relocate {:blocks 6.0 :ms 240000}})
+
+(defn held-class
+  "Which held target (progress-table) the running intent i goes to, or nil: :exit (the held exit
+   target), :heading (the heading's leg target), :relocate (a relocation's walk), :forest (any other
+   tunnel of the hunt)."
+  [world i]
+  (let [t (:intent/target i)]
+    (cond (nil? t) nil
+          (= t (:pearls/exit-target world)) :exit
+          (= t (heading-target world)) :heading
+          (and (= :walk (:intent/kind i)) (= :relocate (:intent/for i))) :relocate
+          (and (= :tunnel-to (:intent/kind i)) (= :pearls (:intent/for i))) :forest
+          :else nil)))
+
+(defn watch-progress
+  "The world with :pearls/watch {:target :best :at} kept for the running intent's held target
+   (held-class): the nearest the feet have been to it and when. When the feet have not come
+   (:blocks progress-table) nearer than that in :ms, the intent fails :no-progress and the planner
+   blacklists its target, so the next mover takes over. The same rule for the exit that failed
+   :blocked every thirty seconds for forty minutes (sim R1/17, probes rh5-20 and rh5-33), the exit
+   and heading targets that flipped, and the forest tunnel that stood still (R2/21). The world as
+   it was with no held target running."
+  [world]
+  (let [i (:plan/intent world)
+        cls (when (= :active (:intent/status i)) (held-class world i))
+        t (:intent/target i)
+        now (:time/now world 0)
+        w (:pearls/watch world)
+        rule (progress-table cls)]
+    (cond (nil? cls) (dissoc world :pearls/watch)
+          (not= t (:target w))
+          (assoc world
+                 :pearls/watch
+                 {:target t :best (physics/distance (intent/feet world) t) :at now})
+          :else
+          (let [d (physics/distance (intent/feet world) t)]
+            (cond (<= d (- (:best w) (:blocks rule)))
+                  (assoc world :pearls/watch {:target t :best d :at now})
+                  (>= (- now (:at w)) (:ms rule))
+                  (-> world
+                      (intent/fail :no-progress)
+                      (dissoc :pearls/watch))
+                  :else world)))))
+
 (defn fortress-exit-log
   "The world with one log line when the fortress exit choice is made or changed."
   [world]
@@ -3464,8 +3516,9 @@
                                                                             (uncovered-log
                                                                              (fortress-exit-log
                                                                               (fortress-exit-hold
-                                                                               (reach-heading-hold
-                                                                                world)))))))))
+                                                                               (watch-progress
+                                                                                (reach-heading-hold
+                                                                                 world))))))))))
                 (shot-at? world) (assoc :pearls/shot-at-ms (:time/now world 0))
                 (sealed-full? world) (assoc :pearls/refuge-done true))]
     (cond (or (nil? look)

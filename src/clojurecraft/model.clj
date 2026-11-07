@@ -372,6 +372,9 @@
    [:pearls/heading
     "the long heading a bot with no forest known tunnels along: {:dir [dx dz] :from feet :target leg-target :turns n}, the target held until the feet are within 3 of it, turned a quarter when it is blacklisted, dropped once a forest is known or at a death"
     "pearls/reach-heading-hold"]
+   [:pearls/watch
+    "the running held target and the nearest the feet have been to it: {:target [x y z] :best blocks :at ms}; the intent fails :no-progress when it is not nearer by the progress-table in time"
+    "pearls/watch-progress"]
    [:pearls/exit-target
     "the fortress tunnel-out target held until reached or failed, so the bore does not flip between targets as the feet move: [x y z], dropped once clear"
     "pearls/fortress-exit-hold"]

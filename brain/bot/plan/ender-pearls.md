@@ -31,6 +31,9 @@ sourceRefs:
   - src/clojurecraft/pearls.clj#defn tunnel-answer
   - test/clojurecraft/pearls_test.clj#a-bot-hit-while-it-bores-out-of-the-fortress-answers-the-wither-skeleton
   - src/clojurecraft/pearls.clj#defn fortress-tunnel-target
+  - src/clojurecraft/pearls.clj#defn watch-progress
+  - src/clojurecraft/pearls.clj#defn held-class
+  - test/clojurecraft/pearls_test.clj#a-held-target-the-feet-do-not-near-is-given-up
   - src/clojurecraft/pearls.clj#defn heading-target
   - src/clojurecraft/pearls.clj#defn reach-heading "The sealed :tunnel-to along
   - src/clojurecraft/pearls.clj#defn reach-heading-hold
@@ -295,6 +298,8 @@ Far-ends skip ground already walked to (issue #263, sim R1/17 probe 42374244659)
 Exit leaves the spawner (issue #263, batch 59e528b, sim R1/17 probe 42370534718): the tunnel-out stayed "near" while any of the 9642 fortress bricks known was within 48 blocks, so it ran 110 blocks out (60 from the spawner), climbed to the roof, came back 100 blocks and spent nine pickaxes and all wood. `exit-anchors` is the known spawners (every fortress point only when none is known), `escape-near?` measures against them, and `fresh-tunnel-target` and `fortress-exit-horizontal` use them; `near-fortress?` is unchanged for its other callers.
 
 Held reach heading (issue #263, probes stall-R1-1, stall-R2-12, stall-R2-21 on 7c7e8dd): every captured Nether has warped forests but the nearest is a median 168 to 485 blocks from the fortress start, and a bot caged in its own tunnels had `explore` nil, `far-ends` [], and ended 12 to 233 blocks from its start after an hour. With no forest known and `explore` finding no end, `travel` now falls to `reach-heading`: a sealed `:tunnel-to` 64 blocks ahead on the heading `reach-heading-hold` keeps as `:pearls/heading` (away from the fortress by `fortress-exit-dir`, y held to 40-90 and over `lava-floor`), turned a quarter when its target is blacklisted, picked again after 300 blocks, dropped when a forest is known or at a death.
+
+One rule for every held target (issue #263): the exit that failed :blocked every thirty seconds for forty minutes (sim R1/17, probes rh5-20 and rh5-33), the heading leg, the forest tunnel that stood still (R2/21) and the relocation walk are the same disease, a held target the feet do not near. `watch-progress` keeps `:pearls/watch` {:target :best :at} for the running intent's target (`held-class`: :exit, :heading, :forest, :relocate); when the feet are not `:blocks` nearer than their best in `:ms` (`progress-table`, one data table), the intent fails :no-progress, the planner blacklists the target and the next mover takes over.
 
 Held exit target (issue #263, sim d3ce99b R1-24-1, 620 `:tunnel-to` intents in an hour): the tunnel-out target is bore-reach ahead of the feet and a blocked step turns the bore round, so re-derived each act it flipped between two targets four blocks apart and wore the pickaxe out; stage 18 bots then stood in `:hunt/else` lookouts sealed in with no pickaxe (R1-11-1 on 9cedf7c: 553 `:tunnel-to`, pocket at y 122). `fortress-exit-hold` keeps the target as `:pearls/exit-target` and `held-exit-target` returns it until the feet are within `exit-reach` of it or it is blacklisted; only then `fresh-tunnel-target` derives a new one.
 
