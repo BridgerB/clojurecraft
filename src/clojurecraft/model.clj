@@ -53,24 +53,6 @@
     "after the first escape"] [:trap/pos "the column [x z] a trap began in" "inside :world/traps"]
    [:trap/kind "what the trap was, :water or :lava" "inside :world/traps"]
    [:trap/at "ms the trap cleared" "inside :world/traps"]
-   [:intent/bank "the cell a :swim-out swims to, chosen once" "while a :swim-out has one"]
-   [:intent/wet? "a :wade or a :cross has had the body in water at some point"
-    "while a :wade or a :cross runs"]
-   [:intent/from-dist "how far on the plane a :cross started from its trunk" "while a :cross runs"]
-   [:intent/water "the water cell a :wade enters from its bank (:intent/target)"
-    "while a :wade has an entry"]
-   [:intent/dig-when-down "the cell a :swim-out or :cross will dig once it has sunk to the floor"
-    "while a :swim-out sinks"]
-   [:intent/no-lay
-    "a :swim-out whose block laid for a bank was refused: it notches the wall instead"
-    "after a refused lay"]
-   [:intent/dug
-    "ticks the child digs a :swim-out has finished took, added to its escape time (swim/dug-credit)"
-    "after a :swim-out's first finished dig"]
-   [:intent/next-search "the tick a :swim-out with no bank yet looks for one again"
-    "while a :swim-out rises with no bank"]
-   [:intent/shore "the point at the water's surface a :swim-out with no bank swims toward"
-    "while a :swim-out with no bank sees dry ground out to swim/shore-reach"]
    [:intent/exposes-ok?
     "a :dig that may open a cell beside water or lava (an escape digs beside the water it is in)"
     "on an escape's child dig"]
@@ -80,12 +62,6 @@
    [:intent/passage-ok?
     "a :place that may put its block in a passage, since it is dug again at once (a gravel for flint)"
     "on a redig's child place"]
-   [:intent/retreated?
-    "a :place that has walked off to fresh rock once (place/fresh-rock) and fails :no-spot next"
-    "on a :place after its walk to fresh rock"]
-   [:intent/niche
-    "the cell a :place chose to cut out of the wall for its block (place/niche): once empty it is the spot, even where a route could run through it (powder snow over it)"
-    "on a :place from the tick it starts cutting its niche"]
    [:player/air "breath left, 0-300 ticks: an estimate, down 1 under water, up 4 out"
     "after the first physics tick"]
    [:player/dead? "health reached zero; cleared by the server's respawn" "while dead"]
@@ -507,17 +483,6 @@
     "executor: :walk :dig :collect :craft :place :open-container :stairs-down :stairs-up :tunnel :tunnel-to :smelt :redig :scoop :equip :build :pour :use-on :await :toss :eat :wear :fight :back-off :provoke :burrow :lookout :throw-eye :end-portal :portal-home :ambush :pillar :dig-down :strike :perch :hold :dragon-rest :camp :collect-drops :cross :flee :forage :rest :swim-out :wade :dodge :pocket :pocket-hold :seal :unseal"
     "every intent"] [:intent/status ":active, :done or :failed" "every intent"]
    [:intent/top "feet height a :pillar climbs to (issue #267)" "a :pillar intent"]
-   [:intent/under
-    "the feet cell a :pillar's jump left, which its block fills once the body is clear of it"
-    "a :pillar, between a jump and its block"]
-   [:intent/refusals "placements under the feet the server answered with the cell still empty"
-    "a :pillar, after one"]
-   [:intent/perched
-    "ticks in a row the dragon has held within dragon/perch-radius of the fountain under dragon/perch-below, perched (issue #267)"
-    "a :perch intent"]
-   [:intent/enter?
-    "does the :end-portal intent step into the portal once every frame is eyed (the :enter-end row's) or stop at the lit portal (the :end-portal row's) (issue #266)"
-    "an :end-portal intent"]
    [:intent/plan
     "the intent as the row planned it, before the executor added fields (a :place's :intent/target): what plan/same-choice? compares a fresh plan with"
     "every started intent"]
@@ -543,14 +508,6 @@
     "a :mine walk to a block that leaves a step down"]
    [:intent/cell "the cell a :place puts its block in, given (a build's), not chosen"
     "a build's :place"]
-   [:intent/click-face "the face of the clicked block a placement clicks, toward the cell it fills"
-    ":place, once it has a spot"]
-   [:intent/build "which plan a :build works: :cast-one, :portal or :nether" ":build"]
-   [:intent/origin "a build's frame origin [bx by bz]" ":build"]
-   [:intent/facing "the side of the frame a build works from: :south :north :east :west" ":build"]
-   [:intent/access
-    "a build's lava height over its room's floor, which its access steps climb to (build/station)"
-    ":build"]
    [:intent/op "the plan op a :build or a :tunnel-to step works now; a new op drops the child"
     ":build, :tunnel-to"]
    [:intent/aim
@@ -582,15 +539,6 @@
     "a :tunnel-to that may floor a level step across a cavern (fortress/bridge-over-void?): the spiral's leg has stalled (issue #338)"
     "a :tunnel-to with a search whose leg has stalled"]
    [:intent/taken "steps a :tunnel-to has taken" ":tunnel-to, after its first step"]
-   [:intent/tunnel-visited
-    "the feet cells this tunnel-to has started steps from; fresh steps and short floored turns precede a retreat"
-    ":tunnel-to, after choosing its first step"]
-   [:intent/retreats
-    "retreats in a row a :tunnel-to has stepped, into cells it already stood in (fortress/retreat?); a fresh step resets it, and more than fortress/retreats-allowed fail the tunnel :blocked (issue #338)"
-    ":tunnel-to, after choosing its first step"]
-   [:intent/airborne
-    "ticks a :tunnel-to has waited for feet in the air to land before choosing a step (fortress/air-grace); absent while it has not waited"
-    ":tunnel-to, with the feet off the ground and no step chosen"]
    [:intent/move "the step a :tunnel-to is taking, [dx dy dz], chosen when it starts"
     ":tunnel-to, during a step"]
    [:intent/from-feet
@@ -607,11 +555,9 @@
    [:intent/since "ms the stage began" "staged intents"]
    [:intent/started "ms the intent began" "walk and dig"]
    [:intent/still "ticks the bot has been still" "settling intents"]
-   [:intent/face "block face it acts on" "dig"]
    [:intent/next-swing "ms of the next arm swing, or of a :fight's next attack" "dig, fight"]
    [:intent/target-pos "where a :fight last saw its target; a hunt picks the drop up there"
     "fight, while its target is seen"]
-   [:intent/spawner "the remembered spawner a :camp waits by for its blazes (issue #262)" "camp"]
    [:intent/site "the pocket (a :pocket/site map) a :pocket digs out and walks into (issue #262)"
     "pocket"]
    [:intent/prepare?
@@ -646,15 +592,6 @@
     "after a :pocket fell back"]
    [:intent/heal-to "the health a :hold in the pocket stays until, the fire out (issue #262)"
     "hold"]
-   [:intent/blazes
-    "the blazes within fight range when a :camp began, or watching when a :rest began; a new one ends it"
-    "camp, rest"]
-   [:intent/health
-    "the health when a :camp or a :rest began; a fall under it ends it, since nothing else ends a running intent (issue #262)"
-    "camp, rest"]
-   [:intent/until
-    "ms (:time/now) after which the running intent is cut for the row's next choice: set by the blaze row's long-shot wall (3 s), whose :place waited 17 s under fire in blaze-race-z7 landing 2"
-    "a :place from blaze/long-shot-cover"]
    [:intent/hold?
     "a :fight that never walks: it waits for the target to come, never presses after it and never breaks off (the pearl hunt's burrow, issue #263)"
     "a :fight from the hunt's burrow"]
@@ -664,25 +601,6 @@
    [:intent/yield?
     "a :fight that ends (done) under retreat-health instead of walking away: its row plans the retreat itself (blaze-rods' cover, issue #262)"
     "a :fight the blaze-rods row starts"]
-   [:intent/mouth "where a :burrow began: the stairs go down from it"
-    ":burrow, from its first tick"]
-   [:intent/eye-from "where the eye a :throw-eye follows was first seen [x y z]"
-    ":throw-eye, once its eye is seen"]
-   [:intent/eye-pos "where the eye a :throw-eye follows was last seen [x y z]; it drops there"
-    ":throw-eye, once its eye is seen"]
-   [:intent/gone-at "ms the server removed the eye a :throw-eye follows; its drop may come after"
-    ":throw-eye, once its eye is removed"]
-   [:intent/swings
-    "attacks a :fight has sent in reach of its target; combat/max-swings make it a ghost"
-    "fight, after its first attack"] [:intent/finish-at "ms after which FINISH may be sent" "dig"]
-   [:intent/slot "hotbar slot the dig holds its tool in (0 for the hand)" "dig, from START"]
-   [:intent/tool "item id of the tool the dig holds, nil for the hand" "dig, from START"]
-   [:intent/dig-ms "ms the server needs to break the target with that tool" "dig, from START"]
-   [:intent/state
-    "the target's state id at START; the cell still in it when the ack of FINISH comes means the server did not break it"
-    "dig, from START"]
-   [:intent/confirm-left "ticks left to wait for the server's word after FINISH"
-    "dig, :confirm stage"]
    [:intent/to-y "feet height at or below which the staircase is done" "stairs-down"]
    [:intent/tall
     "cells high the body a stair down is cut for (stairs/tall-stair-cells): each stair opens the new feet and that many over them, four for an enderman's three (issue #263)"
@@ -697,67 +615,31 @@
     "a :stairs-up that ends only at :intent/to-y: the open sky over a pit's floor is not out"
     "a climb out of a pit under the sky"]
    [:intent/dir "[dx dz] heading the next stair is cut toward" "stairs-down, once planned"]
-   [:intent/turns "quarter turns taken after refused stairs; four fail :boxed"
-    "stairs-down, after a refusal"]
    [:intent/rejections
     "digs of the current stair (or level step, or a build's op) the server did not do, each dug again; stairs/max-rejections fail :rejected"
     "stairs-down or a build, after a child dig rejected"]
    [:intent/body-refusals
     "placements of the running intent the server refused with the bot's own body in the cell, each tried again from a new stand; place/max-body-refusals fail it :rejected (issue #615)"
     "a build or stairs-up, after a placement refused for the body"]
-   [:intent/cells
-    "the cells the current stair opens, top first: three, or four for a stair cut for a taller body (:intent/tall)"
-    "stairs-down, while a stair is cut"]
-   [:intent/level-cells
-    "the two cells a level step opens, head then feet, when every stair down was refused"
-    "stairs-down, during a level step"]
-   [:intent/bore
-    "the rock cells over the head a climb out from under a lake digs through, bottom first, before it rises up the shaft (stairs/bore-cells)"
-    "a stairs-up in its :bore stage, with no pickaxe held"]
-   [:intent/lay
-    "the cells a block is laid in, in order, before a stair or level step is cut: a floor and its holder (a holder under the block under the feet, then the floor under the new feet) for a stair down, a missing step for a stair up, or the water cells beside a stair up (a seal, at most the four neighbours of each of three cells)"
-    "a staircase, while cells are laid"]
-   [:intent/level-steps
-    "level steps this staircase (past stairs/max-level-steps it fails :boxed) or tunnel (done at its length) has taken"
-    "stairs-down and tunnel, after a level step"]
    [:intent/length "level steps a tunnel cuts" "tunnel"]
-   [:intent/side "the side a tunnel steps to, keeping its heading, where the heading is refused"
-    "tunnel, once one is taken"]
-   [:intent/level-dir
-    "the way the staircase's last level step went; the next keeps it while allowed"
-    "stairs-down and stairs-up, after a level step"]
    [:intent/visited
     "the feet cells a staircase's level steps and ducks have stood on; a step or stair onto one comes after every other way (stairs/step-aside)"
     "stairs-down and stairs-up, after a level step"]
-   [:intent/rise
-    "which way the feet go for the stair being cut when it is not the staircase's own: -1 for a climb's stair down under water (stairs/duck)"
-    "stairs-up, from a duck until its stair is taken"]
    [:intent/child
     "the child intent run in the intent's place by its own executor (stairs: the :dig cutting one cell; redig: the place, dig or collect it is on)"
     "stairs-down, while digging; redig; place, while digging a niche"]
-   [:intent/started-y "feet height when the current stair began; a step is judged by going below it"
-    "stairs-down, per stair"]
-   [:intent/started-tick "tick the current stair or its step began" "stairs-down, per stair"]
    [:intent/best-dist "closest it has come to the target" "walk, collect, a :fight's approach"]
    [:intent/best-tick "tick of the last progress" "walk, collect, a :fight's approach"]
    [:intent/waypoints "the route's feet cells still to walk, from clojurecraft.path"
     "walk, once planned"]
    [:intent/route "how the route ended: :found, :partial (budget spent) or :none (no way on)"
-    "walk, once planned"] [:intent/at "index of the next waypoint" "walk, once planned"]
-   [:intent/replans "routes planned for this walk; more than intent/max-replans fails :no-path"
     "walk, once planned"]
    [:intent/max-nodes "node expansion budget for this walk's route checks and replans"
     "walk, when a longer search is needed"]
-   [:intent/planned-chunks
-    "chunk columns loaded when the route was made (kept for the record; a new chunk no longer replans by itself)"
-    "walk, once planned"]
    [:intent/drops
     "the item ids a collect is for: one more of any of them than it began with ends it"
     "collect, redig"]
-   [:intent/drops-before "items of :intent/drops held when collecting began" "collect"]
    [:intent/blocked-by "leaf block over the drop" "collect, when the drop is covered"]
-   [:intent/clears "leaf blocks cleared for this drop" "a collect resumed after clearing"]
-   [:intent/resume "the intent to run after clearing a blocker" "a dig that clears a blocker"]
    [:intent/recipe "recipe id to craft" "craft"] [:intent/window ":inventory or :table" "craft"]
    [:intent/clicks "clicks still to send" "craft, :click stage; smelt, :load stage"]
    [:intent/result "result item id" "craft, smelt"]
@@ -767,32 +649,18 @@
     "craft, smelt, scoop, collect-drops"]
    [:intent/smelt "furnace recipe id to cook (smelting.edn)" "smelt"]
    [:intent/count "how many of the input the batch cooks" "smelt"]
-   [:intent/lost "clicks the server lost in this intent; the intent resumed from its slots"
-    "craft, smelt, place, equip, scoop, pour, after a lost click"]
    [:intent/resync "the next click is a resync: the cursor after a lost click is unknown"
     "craft, smelt, place, equip, scoop, pour, from a lost click until the resync is sent"]
-   [:intent/cook-by
-    "ms by which the batch must be cooked; past it the cook stage fails once the furnace stops cooking"
-    "smelt, :cook stage, once the furnace is loaded"]
    [:intent/awaiting "state id a click waits on" "after a click"]
    [:intent/awaiting-window "window id that click went to" "after a click"]
    [:intent/sent-at "ms a click or placement was sent" "after sending"]
    [:intent/item "item to place, put in the hand, eat or wear, or to pick up off the ground"
     "place, redig, equip, eat, wear, collect-drops"]
-   [:intent/food-before "the food level when an :eat sent its use-item; a higher one is the meal"
-    "eat, :eating stage"]
-   [:intent/eat-by "ms past which an :eat whose food has not risen fails :not-eaten"
-    "eat, :eating stage"] [:intent/against "block the placement is against" "place"]
    [:intent/refused
     "cells the server refused a placement into with nothing in them (a body stood there); the next spot is another, place/max-refusals of them fail :rejected"
     "place, after such a refusal"]
-   [:intent/nudges
-    "ticks a placement into a given cell has walked toward the middle of the feet's cell, the body clipping the cell's edge (place/nudge-off); place/max-nudges of them, then the server is asked anyway"
-    "place into a given cell the body clips"]
    [:intent/sequence "sequence number of the placement, or of the bucket's use"
     "place and scoop, after sending"]
-   [:intent/tries "scoops sent at this source; the last of scoop/max-tries fails :no-scoop"
-    "scoop, after a scoop went unanswered"]
    ;; ---- events: everything the reducer is given
    [:event/kind ":start :packet :tick :go :closed" "every event"]
    [:event/now "wall-clock ms of a tick" "tick"]

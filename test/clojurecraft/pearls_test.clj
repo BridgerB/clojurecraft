@@ -990,7 +990,7 @@
         watched (plan/watch w plan/goals {:event/rand 0.5})]
     (testing
       "the watchdog counts the burrow as held, not stuck: watch is restamped, unstuck not incremented"
-      (is (plan/held? w ps/row))
+      (is (plan/held-goal? w ps/row))
       (is (= 0 (:plan/unstuck watched 0)))
       (is (nil? (:plan/explore watched)))
       (is (= (:time/now w) (:at (:plan/watch watched))))

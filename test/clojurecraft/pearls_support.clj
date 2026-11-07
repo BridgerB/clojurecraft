@@ -10,6 +10,7 @@
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.sim :as sim]
+            [clojurecraft.sim.mobs :as sim-mobs]
             [clojurecraft.world :as world]))
 
 (def step (game/compose game/step plan/step))
@@ -224,10 +225,11 @@
 
 (defn pearl-seed
   "The first seed whose model drops the enderman's pearl: the loot is the first roll of the
-   mobs' own stream (sim/mob-roll) when nothing spawns or despawns, one in two."
+   mobs' own stream (sim-mobs/mob-roll) when nothing spawns or despawns, one in two."
   []
   (first (filter #(pos? (mob/loot-count [:ender_pearl 0 1]
-                                        (second (sim/mob-roll (sim/init (assoc arena :seed %))))))
+                                        (second (sim-mobs/mob-roll (sim/init
+                                                                    (assoc arena :seed %))))))
                  (range 64))))
 
 (defn wide

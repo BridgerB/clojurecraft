@@ -21,8 +21,11 @@ water, it carves one: a notch two high in the nearest wall just over the float l
    :flee is the lava half: the nearest standable cell with no lava beside or under it, walked to
    with forward and jump; the planner ends it the moment the trap clears."
   (:require [clojure.math :as math]
+            [clojure.spec.alpha :as s]
+            [clojurecraft.avoided :as avoided]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.chunk :as chunk]
+            [clojurecraft.filler :as filler]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.memory :as memory]
@@ -30,11 +33,50 @@ water, it carves one: a notch two high in the nearest wall just over the float l
             [clojurecraft.physics :as physics]
             [clojurecraft.place :as place]
             [clojurecraft.plan :as plan]
+            [clojurecraft.shapes]
             [clojurecraft.stairs :as stairs]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.trap :as trap]))
 
 (set! *warn-on-reflection* true)
+
+;; read by name (ns-resolve) in scratch_test and model_test, so the unused-var lint excludes it
+(def scratch
+  "The intent attributes only this namespace's executor reads and writes: {attribute {:doc meaning
+   :when lifetime}}. They are not world information, so they are not in clojurecraft.model;
+   scratch_test holds that no other namespace uses one."
+  {:intent/bank {:doc "the cell a :swim-out swims to, chosen once"
+                 :when "while a :swim-out has one"}
+   :intent/wet? {:doc "a :wade or a :cross has had the body in water at some point"
+                 :when "while a :wade or a :cross runs"}
+   :intent/from-dist {:doc "how far on the plane a :cross started from its trunk"
+                      :when "while a :cross runs"}
+   :intent/water {:doc "the water cell a :wade enters from its bank (:intent/target)"
+                  :when "while a :wade has an entry"}
+   :intent/dig-when-down {:doc
+                          "the cell a :swim-out or :cross will dig once it has sunk to the floor"
+                          :when "while a :swim-out sinks"}
+   :intent/no-lay
+   {:doc "a :swim-out whose block laid for a bank was refused: it notches the wall instead"
+    :when "after a refused lay"}
+   :intent/dug
+   {:doc
+    "ticks the child digs a :swim-out has finished took, added to its escape time (swim/dug-credit)"
+    :when "after a :swim-out's first finished dig"}
+   :intent/next-search {:doc "the tick a :swim-out with no bank yet looks for one again"
+                        :when "while a :swim-out rises with no bank"}
+   :intent/shore {:doc "the point at the water's surface a :swim-out with no bank swims toward"
+                  :when "while a :swim-out with no bank sees dry ground out to swim/shore-reach"}})
+
+(s/def :intent/bank :clojurecraft.spec/block-pos)
+(s/def :intent/wet? boolean?)
+(s/def :intent/from-dist number?)
+(s/def :intent/water :clojurecraft.spec/block-pos)
+(s/def :intent/dig-when-down :clojurecraft.spec/block-pos)
+(s/def :intent/no-lay boolean?)
+(s/def :intent/dug nat-int?)
+(s/def :intent/next-search int?)
+(s/def :intent/shore :clojurecraft.spec/block-pos)
 
 (def bank-radius 16)                  ; how far on the plane a bank is looked for
 (def bank-rise 1)                     ; a bank at most this far above the highest feet level afloat (steve's landing set W)
@@ -312,7 +354,7 @@ water, it carves one: a notch two high in the nearest wall just over the float l
    was refused (no-lay) or no cell does."
   [world feet surface no-lay]
   (when-not no-lay
-    (when-let [item (stairs/filler world 1)]
+    (when-let [item (filler/pick world 1)]
       (when-let [cell (bank-block world feet surface)] [cell item]))))
 
 (defn start-lay
@@ -510,15 +552,16 @@ water, it carves one: a notch two high in the nearest wall just over the float l
             deep? (and rise?
                        (< (second feet)
                           (- (or to-y (inc (float-top world feet surface))) rise-clear)))
-            b (cond deep? nil
-                    rise?
-                    (banks world feet surface (:plan/blacklist world #{}) #(in-the-open? world %))
-                    :else (banks world feet surface (:plan/blacklist world #{})))
+            b (cond
+                deep? nil
+                rise?
+                (banks world feet surface (avoided/all-of world :blacklist) #(in-the-open? world %))
+                :else (banks world feet surface (avoided/all-of world :blacklist)))
             cap (when-not b
                   (let [c (obstacle world feet nil)] (when (or (not rise?) (iced? world c)) c)))
             laid (when-not (or b cap rise?) (lift-bank world feet surface no-lay))
             toward (when-not (or b cap laid rise? no-lay)
-                     (when (stairs/filler world 1) (wall-toward world feet surface)))
+                     (when (filler/pick world 1) (wall-toward world feet surface)))
             wall (when-not (or b cap laid toward rise?) (notch world feet surface))]
         (cond b
               (-> world
@@ -552,7 +595,7 @@ water, it carves one: a notch two high in the nearest wall just over the float l
       (> (- tick best-tick) stuck-ticks)
       (let [cell (obstacle world feet bank)
             laid (when-not cell (lift-bank world feet surface no-lay))
-            blocked (when (and (nil? cell) (nil? laid) (not no-lay) (stairs/filler world 1))
+            blocked (when (and (nil? cell) (nil? laid) (not no-lay) (filler/pick world 1))
                       (occupied-bank world feet surface))
             ;; under a roof a block cannot be laid (bank-block wants the open sky), so a bank the
             ;; lift cannot reach is made the notch's way instead: carve a stand at the body's own
@@ -789,7 +832,7 @@ water, it carves one: a notch two high in the nearest wall just over the float l
          (filter (fn [[_ [_ y _]]] (>= y (- ey wade-below))))
          (filter (fn [[_ pos]] (<= (physics/distance eye (physics/centre pos)) wade-radius)))
          (sort-by (fn [[_ pos]] (physics/distance eye (physics/centre pos))))
-         (some (fn [[key _]] (first (entries world key feet (:plan/blacklist world #{}))))))))
+         (some (fn [[key _]] (first (entries world key feet (avoided/all-of world :blacklist))))))))
 
 (defn beyond
   "Where the wade heads: the water cell's centre until the body has been in water, then a point

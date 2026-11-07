@@ -27,7 +27,8 @@
    (only a projectile or a non-living source moves it). So the stare is from range only, and the
    fight's look is combat/aim, its legs, never its head. Water hurts it and it teleports out of
    rain and water: the trap rows already keep the bot from fighting while it stands in water."
-  (:require [clojurecraft.combat :as combat]
+  (:require [clojurecraft.avoided :as avoided]
+            [clojurecraft.combat :as combat]
             [clojurecraft.entity :as entity]
             [clojurecraft.fortress-exit :as fexit]
             [clojurecraft.game :as game]
@@ -88,7 +89,7 @@
         solid? (psense/sight-fn world)]
     (if (some (fn [[_ e]]
                 (and (not (entity/creepy? e)) (mob/stared? solid? eye look (:entity/pos e))))
-              (psense/endermen (dissoc world :plan/blacklist) pparams/stare-range))
+              (psense/endermen (avoided/forget world :blacklist) pparams/stare-range))
       [(first look) 90.0]
       look)))
 
@@ -137,7 +138,7 @@
   (into #{}
         (keep (fn [[eid e]]
                 (when (<= (physics/distance pos (:entity/pos e)) pparams/cluster-radius) eid)))
-        (psense/endermen (dissoc world :plan/blacklist) 128.0)))
+        (psense/endermen (avoided/forget world :blacklist) 128.0)))
 
 (defn relocation
   "The world with the relocation (:pearls/relocate {:from feet :at ms :near ids}) begun when no
@@ -158,7 +159,8 @@
                    (and (>= moved (/ pparams/relocate-dist 2))
                         (seq (remove (:near r) (near-ids world (:player/pos world)))))))
           (-> world
-              (dissoc :pearls/relocate :pearls/shelter :pearls/mouth :plan/blacklist)
+              (dissoc :pearls/relocate :pearls/shelter :pearls/mouth)
+              (avoided/forget :blacklist)
               (assoc-in [:pearls/gain :at] now))
           (and (nil? r)
                g

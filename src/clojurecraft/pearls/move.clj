@@ -1,6 +1,7 @@
 (ns clojurecraft.pearls.move
   "The pearl hunt's movers: roam, wander, explore, travel to a forest, relocate, and the cuts out of a pocket that no walk leaves."
-  (:require [clojurecraft.blaze :as blaze]
+  (:require [clojurecraft.avoided :as avoided]
+            [clojurecraft.blaze :as blaze]
             [clojurecraft.combat :as combat]
             [clojurecraft.dimension :as dimension]
             [clojurecraft.entity :as entity]
@@ -146,7 +147,8 @@
   [world ms]
   (let [pos (:player/pos world)
         fy (physics/y-of (path/feet-cell pos))]
-    (when (and (pupkeep/spare? world) (not (contains? (:plan/boxed-at world) (intent/feet world))))
+    (when (and (pupkeep/spare? world)
+               (not (contains? (avoided/all-of world :boxed-at) (intent/feet world))))
       (->> ms
            (sort-by (fn [[_ e]] (physics/distance pos (:entity/pos e))))
            (take pparams/candidates)
@@ -176,7 +178,7 @@
   (let [pos (:player/pos world)
         fy (physics/y-of (path/feet-cell pos))]
     (when (and (pupkeep/spare? world)
-               (not (contains? (:plan/boxed-at world) (intent/feet world)))
+               (not (contains? (avoided/all-of world :boxed-at) (intent/feet world)))
                (not-any? (fn [[_ e]] (pplace/level? world e)) ms))
       (->> ms
            (sort-by (fn [[_ e]] (physics/distance pos (:entity/pos e))))
@@ -205,7 +207,7 @@
         [_ e] (entity/nearest ms pos)]
     (when (and e
                (pupkeep/spare? world)
-               (not (contains? (:plan/boxed-at world) feet))
+               (not (contains? (avoided/all-of world :boxed-at) feet))
                (< (abs (- (physics/y-of (:entity/pos e)) (physics/y-of feet))) pparams/descend-drop)
                (pplace/within-cut-reach? world e)
                (>= (path/octile feet (combat/cell (:entity/pos e))) pparams/bore-length))
@@ -241,7 +243,7 @@
         [_ e] (entity/nearest (psense/endermen world pparams/descend-radius) pos)]
     (when (and e
                (pupkeep/spare? world)
-               (not (contains? (:plan/boxed-at world) (intent/feet world))))
+               (not (contains? (avoided/all-of world :boxed-at) (intent/feet world))))
       (let [c (combat/cell (:entity/pos e))
             i {:intent/kind :walk :intent/target c :intent/for :pearls}
             to (or (last (:path/waypoints (path/plan world feet (intent/goal-of i) {}))) feet)
@@ -312,7 +314,7 @@
    past a burrow's (spare?), or a staircase boxed from these feet (:plan/boxed-at)."
   [world]
   (let [feet (intent/feet world)]
-    (when (and (pupkeep/spare? world) (not (contains? (:plan/boxed-at world) feet)))
+    (when (and (pupkeep/spare? world) (not (contains? (avoided/all-of world :boxed-at) feet)))
       (when-let [dir (when (< (physics/y-of feet) (dec (roof-cap world (physics/y-of feet))))
                        (climb-heading world feet))]
         {:intent/kind :stairs-up
@@ -333,7 +335,7 @@
         n (pplace/floored-length world feet dir pparams/bore-length)]
     (when (and (= dimension/nether (dimension/of world))
                (pupkeep/spare? world)
-               (not (contains? (:plan/boxed-at world) feet))
+               (not (contains? (avoided/all-of world :boxed-at) feet))
                (pos? n)
                (pplace/solid-cut? world :tunnel feet dir n))
       {:intent/kind :tunnel :intent/dir dir :intent/length n :intent/for :pearls})))
@@ -350,7 +352,7 @@
   [world]
   (let [feet (intent/feet world)
         mouth (:pearls/mouth world)]
-    (when (and mouth (pupkeep/spare? world) (not (contains? (:plan/boxed-at world) feet)))
+    (when (and mouth (pupkeep/spare? world) (not (contains? (avoided/all-of world :boxed-at) feet)))
       (let [[fx _ fz] feet
             [mx _ mz] mouth
             dx (- fx mx)
@@ -499,8 +501,8 @@
    failed, plan/fail-intent). A walk is tried once before it is known to fail: a fence between
    the bot and its mouth is walked at first, and given up after."
   [world target]
-  (when (and target (not (contains? (:plan/blacklist world #{}) target)))
-    {:intent/kind :walk :intent/target target :intent/for :shelter}))
+  (when (and target (not (contains? (avoided/all-of world :blacklist) target)))
+    (combat/shelter-walk target)))
 
 (defn uncage
   "A walk down to the burrow's end (:pearls/shelter) when the bot stands at a brink (brink?) and
@@ -525,7 +527,7 @@
    (dig-out, tunnel-out, climb-out, uncage) from a pocket nothing walks out of."
   [world]
   (let [pos (:player/pos world)
-        all (psense/endermen (dissoc world :plan/blacklist) 128.0)
+        all (psense/endermen (avoided/forget world :blacklist) 128.0)
         far (into {}
                   (filter (fn [[_ e]]
                             (>= (physics/distance pos (:entity/pos e)) pparams/relocate-dist)))
@@ -587,7 +589,7 @@
   [world e]
   (let [feet (intent/feet world)
         eye (game/eye world)
-        bl (:plan/blacklist world #{})
+        bl (avoided/all-of world :blacklist)
         spent (memory/arrived world)
         [ex ey ez] (combat/cell (:entity/pos e))]
     (->> (for [dx (range -16 17) dz (range -16 17) dy (range -3 4)] [(+ ex dx) (+ ey dy) (+ ez dz)])
@@ -663,6 +665,6 @@
         c2 (:pearls/chase world)]
     (if (and c2 (distant-gave-up? world (:eid c2)))
       (-> world
-          (update :plan/blacklist (fnil conj #{}) (:eid c2))
+          (avoided/note :blacklist (:eid c2))
           (dissoc :pearls/chase))
       world)))

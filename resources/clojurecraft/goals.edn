@@ -9,6 +9,12 @@
 ;; looking for them (:goal/depth, unbounded when absent); what it collects is their loot table's.
 ;; Targets (:goal/target? true) are what a run is for; --until <:goal/until> puts one in play. Producers are
 ;; how a need is met; recipes add one generated producer row each (clojurecraft.make/craft-rows).
+;; A row names how the stuck watchdog treats it: :goal/progress (terms the watchdog compares, see
+;; plan/progress-term; absent: items held and stages reached), :goal/facts-only? (walking and
+;; tunnelling are no progress), :goal/stuck-after (ms before it is stuck, else plan/stuck-ms),
+;; :goal/commits (:all or the intent kinds of the row only an escape row may cut; :goal/uncommitted
+;; takes kinds out of :all), :goal/anchors (attributes forgotten when stuck), :goal/resets (attribute values it starts over
+;; with) and :goal/clocks (paths inside attributes restarted at now).
 ;; A row is never edited into a different meaning or deleted: to fix one, add the fixed row under
 ;; a new id (moving :goal/until to it) and mark the old one :goal/superseded-by <new id>. It stays
 ;; here so a recording whose :go names it still replays; the planner follows the chain.
@@ -37,6 +43,8 @@
   :goal/until "defend"
   :goal/doc "answer a hostile mob within 4 blocks"
   :goal/done? :safe?
+  :goal/commits :all
+  :goal/uncommitted #{:fight}
   :goal/plan :defend}
  {:goal/id :wood
   :goal/priority 1
@@ -354,6 +362,11 @@
   :goal/doc "seven blaze rods, six for twelve eyes of ender and one spare"
   :goal/dimension "minecraft:the_nether"
   :goal/done? :rods-held?
+  :goal/anchors #{:pocket/prepared-at :pocket/seal-failed-at :pocket/site :sortie/since}
+  :goal/stuck-after 1200000
+  :goal/commits #{:fight :pocket :pocket-hold :seal :unseal}
+  :goal/facts-only? true
+  :goal/progress [[:held :blaze_rod] [:done :fight] [:seen :spawner]]
   :goal/plan :blaze-rods}
  {:goal/id :spare-picks
   :goal/priority 18
@@ -371,6 +384,13 @@
   :goal/doc "twelve ender pearls, from endermen hunted with the sword, never bartered"
   :goal/provides {:item/ender_pearl 12}
   :goal/done? :provided?
+  :goal/anchors #{:pearls/exit-target :pearls/mouth :pearls/relocate :pearls/shelter :plan/boxed-at
+                  :plan/given-up}
+  :goal/resets {:plan/blacklist #{}}
+  :goal/clocks [[:pearls/gain :at]]
+  :goal/commits #{:pocket :pocket-hold :seal :unseal}
+  :goal/facts-only? true
+  :goal/progress [[:held :ender_pearl] [:done :provoke] [:done :fight] [:reached]]
   :goal/plan :pearls}
  {:goal/id :ender-pearl
   :goal/priority 19
@@ -380,6 +400,13 @@
   :goal/doc "one ender pearl from a hunted enderman"
   :goal/provides {:item/ender_pearl 1}
   :goal/done? :provided?
+  :goal/anchors #{:pearls/exit-target :pearls/mouth :pearls/relocate :pearls/shelter :plan/boxed-at
+                  :plan/given-up}
+  :goal/resets {:plan/blacklist #{}}
+  :goal/clocks [[:pearls/gain :at]]
+  :goal/commits #{:pocket :pocket-hold :seal :unseal}
+  :goal/facts-only? true
+  :goal/progress [[:held :ender_pearl] [:done :provoke] [:done :fight] [:reached]]
   :goal/plan :pearls}
  {:goal/id :eyes-of-ender
   :goal/priority 20
@@ -434,6 +461,13 @@
   :goal/doc "the End entered"
   :goal/done? :in-end?
   :goal/plan :enter-end}
+ {:goal/id :eye-frame
+  :goal/priority 23.5
+  :goal/parent #{:end-portal :enter-end}
+  :goal/doc "an eye of ender into a frame within reach of a stand"
+  :goal/dimension "minecraft:overworld"
+  :goal/done? :no-eye-in-reach?
+  :goal/plan :eye-frame}
  {:goal/id :crystals
   :goal/priority 26
   :goal/target? true
@@ -451,4 +485,11 @@
   :goal/doc "the ender dragon dead"
   :goal/dimension "minecraft:the_end"
   :goal/done? :dragon-dead?
+  ;; the branches of the dragon plan in the order it asks them, most urgent first; a fresh answer
+  ;; ranked above the running intent cuts it
+  :goal/ranks [:dragon/wear :dragon/escape-breath :dragon/crystals :dragon/after-blow :dragon/bed
+               :dragon/recover :dragon/perch-in-breath :dragon/shelter-to-stand
+               :dragon/shelter-flight :dragon/back-off-breath :dragon/bed-hold
+               :dragon/perch-no-stand :dragon/out-of-bite :dragon/perch-blocked
+               :dragon/walk-around-head :dragon/walk-to-stand :dragon/perch]
   :goal/plan :dragon}]

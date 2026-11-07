@@ -29,6 +29,8 @@
    (memory/landmark-kinds), however deep it lies. Every long walk goes in hops a route reaches
    (hop), as the pearl hunt's roam does."
   (:require [clojure.math :as math]
+            [clojure.spec.alpha :as s]
+            [clojurecraft.avoided :as avoided]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.drops :as drops]
             [clojurecraft.fortress :as fortress]
@@ -42,12 +44,30 @@
             [clojurecraft.place :as place]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
+            [clojurecraft.shapes]
             [clojurecraft.stairs :as stairs]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.window :as window]
             [clojurecraft.wood :as wood]))
 
 (set! *warn-on-reflection* true)
+
+;; read by name (ns-resolve) in scratch_test and model_test, so the unused-var lint excludes it
+(def scratch
+  "The intent attributes only this namespace's executor reads and writes: {attribute {:doc meaning
+   :when lifetime}}. They are not world information, so they are not in clojurecraft.model;
+   scratch_test holds that no other namespace uses one."
+  {:intent/eye-from {:doc "where the eye a :throw-eye follows was first seen [x y z]"
+                     :when ":throw-eye, once its eye is seen"}
+   :intent/eye-pos {:doc "where the eye a :throw-eye follows was last seen [x y z]; it drops there"
+                    :when ":throw-eye, once its eye is seen"}
+   :intent/gone-at {:doc
+                    "ms the server removed the eye a :throw-eye follows; its drop may come after"
+                    :when ":throw-eye, once its eye is removed"}})
+
+(s/def :intent/eye-from :clojurecraft.spec/vec3)
+(s/def :intent/eye-pos :clojurecraft.spec/vec3)
+(s/def :intent/gone-at int?)
 
 (def eye :ender_eye)                  ; the item thrown
 (def eye-type (blocks/entity-types :eye_of_ender)) ; the entity a thrown eye becomes (50)
@@ -400,8 +420,8 @@
                 (when (and i
                            (not= c [fx fy fz])
                            (progress? [fx fy fz] c [x z] hop-gain)
-                           (not (contains? (:plan/blacklist world #{}) c))
-                           (intent/routable? world (assoc i :intent/max-nodes 400)))
+                           (not (contains? (avoided/all-of world :blacklist) c))
+                           (intent/routable? world (assoc i :intent/max-nodes (path/budget :near))))
                   i)))
             hop-turns))))
 
@@ -451,7 +471,9 @@
         c (when d (mapv #(long (math/floor %)) (:entity/pos d)))]
     (when (and c
                (<= (abs (- (physics/y-of c) (physics/y-of (intent/feet world)))) pickup-rise)
-               (intent/routable? world {:intent/kind :walk :intent/target c :intent/max-nodes 400}))
+               (intent/routable?
+                world
+                {:intent/kind :walk :intent/target c :intent/max-nodes (path/budget :near)}))
       {:intent/kind :collect-drops :intent/item eye :intent/target c :intent/for :stronghold})))
 
 
@@ -536,10 +558,11 @@
                    (let [c (stand-in world cx cz fy)]
                      (when (and c
                                 (dry-cell? world c)
-                                (not (contains? (:plan/blacklist world #{}) c))
-                                (intent/routable?
-                                 world
-                                 {:intent/kind :walk :intent/target c :intent/max-nodes 400}))
+                                (not (contains? (avoided/all-of world :blacklist) c))
+                                (intent/routable? world
+                                                  {:intent/kind :walk
+                                                   :intent/target c
+                                                   :intent/max-nodes (path/budget :near)}))
                        c))))))))
 
 (defn far-start
@@ -549,13 +572,15 @@
    (:plan/blacklist); nil when none is. Its way is a swim (swim's :cross), no route."
   [world]
   (let [[fx fy fz] (intent/feet world)]
-    (some (fn [[d k]]
-            (let [a (* k (/ math/PI 4))
-                  x (long (math/floor (+ fx 0.5 (* d (math/cos a)))))
-                  z (long (math/floor (+ fz 0.5 (* d (math/sin a)))))
-                  c (when (stairs/dry-top? world [x z]) (stand-in world x z fy))]
-              (when (and c (dry-cell? world c) (not (contains? (:plan/blacklist world #{}) c))) c)))
-          (for [d (range (inc start-reach) (inc far-reach)) k (range 8)] [d k]))))
+    (some
+     (fn [[d k]]
+       (let [a (* k (/ math/PI 4))
+             x (long (math/floor (+ fx 0.5 (* d (math/cos a)))))
+             z (long (math/floor (+ fz 0.5 (* d (math/sin a)))))
+             c (when (stairs/dry-top? world [x z]) (stand-in world x z fy))]
+         (when (and c (dry-cell? world c) (not (contains? (avoided/all-of world :blacklist) c)))
+           c)))
+     (for [d (range (inc start-reach) (inc far-reach)) k (range 8)] [d k]))))
 
 (defn walked-ground
   "Where the newest walk that arrived ended (memory/last-done), ground the bot stood on, when it is
@@ -592,8 +617,8 @@
                     i (when c {:intent/kind :walk :intent/target c :intent/for :stronghold})]
                 (when (and i
                            (<= cy (- fy downhill-drop))
-                           (not (contains? (:plan/blacklist world #{}) c))
-                           (intent/routable? world (assoc i :intent/max-nodes 400)))
+                           (not (contains? (avoided/all-of world :blacklist) c))
+                           (intent/routable? world (assoc i :intent/max-nodes (path/budget :near))))
                   i)))
             (for [r downhill-reaches turn hop-turns] [r turn])))))
 
@@ -692,7 +717,7 @@
   [world [_ y _ :as f]]
   (let [[_ fy _ :as feet] (intent/feet world)
         high? (> fy (+ y deep))
-        boxed? (contains? (:plan/boxed-at world #{}) feet)
+        boxed? (contains? (avoided/all-of world :boxed-at) feet)
         start (when (and high?
                          (not (:player/in-water? world))
                          (terrain/under-sky? world feet)
@@ -711,16 +736,17 @@
         retreats
         (when needed?
           (->> (rseq (:plan/trail world []))
-               (remove #(or (contains? (:plan/boxed-at world #{}) %)
-                            (contains? (:plan/blacklist world #{}) %)))
+               (remove #(or (contains? (avoided/all-of world :boxed-at) %)
+                            (contains? (avoided/all-of world :blacklist) %)))
                (filter #(<= (physics/horizontal-distance (:player/pos world) (physics/centre %))
                             retreat-reach))
                (sort-by #(physics/horizontal-distance (:player/pos world) (physics/centre %)))
                (take retreat-tries)))
         walkable (some #(when (or (not (terrain/chunk-loaded? world %))
-                                  (intent/routable?
-                                   world
-                                   {:intent/kind :walk :intent/target % :intent/max-nodes 400}))
+                                  (intent/routable? world
+                                                    {:intent/kind :walk
+                                                     :intent/target %
+                                                     :intent/max-nodes (path/budget :near)}))
                           %)
                        retreats)]
     (cond (:player/in-water? world) {:intent/kind :swim-out :intent/for :retreat}

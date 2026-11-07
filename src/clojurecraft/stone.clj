@@ -10,9 +10,11 @@
    registers both acts and the :redig executor."
   (:require [clojure.math :as math]
             [clojure.string :as str]
+            [clojurecraft.avoided :as avoided]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.chunk :as chunk]
             [clojurecraft.dig :as dig]
+            [clojurecraft.filler :as filler]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.memo :as memo]
@@ -135,7 +137,7 @@
                         (:world/blocks world)
                         (feet-chunk world)
                         states
-                        (:plan/blacklist world #{})
+                        (avoided/all-of world :blacklist)
                         (long (math/ceil (- ey search-height)))
                         (long (math/floor (+ ey search-height))))
          (remove #(path/near-lava-trap? world %))
@@ -170,18 +172,18 @@
    refuses only for that water, or nil: the stone has one to three water cells beside it (six
    neighbours; no lava, no gravel or sand over a fluid), each within the place reach of the eye with
    a solid neighbour to place against (place/support) and not given up (:plan/blacklist), a route
-   reaches it once sealed (routable?), and a filler is held for all of them (stairs/filler, else
+   reaches it once sealed (routable?), and a filler is held for all of them (filler/pick, else
    planks). Once the water is a block the stone is exposed to the walk, dig and collect chain as any
    other. Every wet cell is one a block takes the place of (blocks/placeable-into?)."
   [world row]
   (let [eye (game/eye world)
-        blacklist (:plan/blacklist world #{})
+        blacklist (avoided/all-of world :blacklist)
         reachable? (fn [w] (<= (physics/distance eye (physics/centre w)) place/place-reach))]
     (some
      (fn [c]
        (let [wet (vec (for [d six-around :let [n (mapv + c d)] :when (terrain/fluid-at world n)] n))
              item (when (and (seq wet) (every? #(placeable-cell? world %) wet))
-                    (or (stairs/filler world (count wet)) (planks-held world (count wet))))
+                    (or (filler/pick world (count wet)) (planks-held world (count wet))))
              target (first wet)]
          (when (and item
                     (<= (count wet) 3)
@@ -242,11 +244,11 @@
   "A walk to the nearest block of filler-states-for that a route reaches and its dig exposes no
    fluid to (exposed-of-states), tagged :filler for the chain that digs it and picks it up, or nil:
    only once a staircase died :boxed here or before (:plan/boxed-at) and less than filler-want
-   filler is carried (stairs/carried-filler). A staircase refused for the water beside it is sealed
+   filler is carried (filler/carried). A staircase refused for the water beside it is sealed
    from what is carried, and the lake shores it was refused on gave the bots two dirt to seal with:
    the dirt they stood on was filler."
   [world]
-  (when (and (seq (:plan/boxed-at world)) (< (stairs/carried-filler world) filler-want))
+  (when (and (seq (avoided/all-of world :boxed-at)) (< (filler/carried world) filler-want))
     (->> (exposed-of-states world (filler-states-for world))
          (take max-candidates)
          (map #(walk-to world % :filler))
@@ -255,9 +257,9 @@
 
 (defn log-planks
   "A :craft of a held log into its planks in the inventory's grid, or nil: only once a staircase
-   died :boxed (:plan/boxed-at), with less than filler-want filler carried (stairs/carried-filler),
-   no planks held (stairs/planks-of) and a log whose planks recipe is known. Planks are the last
-   thing a floor is laid from (stairs/filler), and a log is four of them."
+   died :boxed (:plan/boxed-at), with less than filler-want filler carried (filler/carried),
+   no planks held (filler/planks-of) and a log whose planks recipe is known. Planks are the last
+   thing a floor is laid from (filler/pick), and a log is four of them."
   [world]
   (let [held (recipe/counts (:player/inventory world))
         recipe-id (some (fn [[item c]]
@@ -266,9 +268,9 @@
                               (keyword (str (subs n 0 (- (count n) 4)) "_planks")))))
                         held)]
     (when (and recipe-id
-               (seq (:plan/boxed-at world))
-               (< (stairs/carried-filler world) filler-want)
-               (nil? (stairs/planks-of held 1))
+               (seq (avoided/all-of world :boxed-at))
+               (< (filler/carried world) filler-want)
+               (nil? (filler/planks-of held 1))
                (recipe/by-id recipe-id))
       {:intent/kind :craft :intent/recipe recipe-id :intent/window :inventory})))
 
@@ -281,7 +283,7 @@
    the bot's own stairs-up ends :boxed away from the cell that died, and the next stairs-down began
    from there."
   [world [x y z :as feet]]
-  (let [boxed (into (:plan/boxed-at world #{}) (:plan/boxed-route world))]
+  (let [boxed (into (avoided/all-of world :boxed-at) (avoided/all-of world :boxed-route))]
     (boolean (or (contains? boxed feet)
                  (some (fn [[dx dz]] (contains? boxed [(+ x dx) y (+ z dz)])) stairs/directions)))))
 
@@ -339,7 +341,7 @@
                       distinct)]
     (when-not (some #(under-surface? feet %) surfaces)
       (->> surfaces
-           (remove (fn [c] (some #(near? c %) (:plan/boxed-at world #{}))))
+           (remove (fn [c] (some #(near? c %) (avoided/all-of world :boxed-at))))
            (map (fn [c] {:intent/kind :walk :intent/target c :intent/for :over-stone}))
            (filter #(intent/routable? world %))
            first))))
@@ -428,8 +430,9 @@
   (if (:player/in-water? world)
     {:intent/kind :swim-out :intent/for :retreat}
     (let [feet (intent/feet world)
-          boxed (into (:plan/boxed-at world #{})
-                      (concat (:plan/boxed-route world) (:plan/retreat-unreachable world)))
+          boxed (into (avoided/all-of world :boxed-at)
+                      (concat (avoided/all-of world :boxed-route)
+                              (avoided/all-of world :retreat-unreachable)))
           r
           (path/plan
            world
@@ -468,7 +471,7 @@
   [world]
   (let [feet (intent/feet world)]
     (when-let [[hx hy hz] (:plan/go-at world)]
-      (when (and (contains? (:plan/boxed-at world #{}) feet)
+      (when (and (contains? (avoided/all-of world :boxed-at) feet)
                  (islet? world)
                  (terrain/under-sky? world feet))
         {:intent/kind :cross
@@ -515,7 +518,8 @@
   (when-let [[hx hy hz] (and (path/on-ice? world) (:plan/go-at world))]
     (let [target [(long (math/floor hx)) (long (math/floor hy)) (long (math/floor hz))]
           walk {:intent/kind :walk :intent/target target :intent/for :off-ice}]
-      (when (and (not (contains? (:plan/blacklist world #{}) target)) (intent/routable? world walk))
+      (when (and (not (contains? (avoided/all-of world :blacklist) target))
+                 (intent/routable? world walk))
         walk))))
 
 (def fall-wait-ticks 20)              ; planner ticks the mine waits for feet over a gap to fall before it plans anyway
@@ -645,12 +649,12 @@
                 (:player/in-water? world))))
 
 (defn foothold
-  "The child :place of a filler block (stairs/filler) into a cell under the feet's level, one of the
+  "The child :place of a filler block (filler/pick) into a cell under the feet's level, one of the
    four beside the feet column or the one under it, that a click can reach (place/support) and that
    is no part of the player, so that the cell over it is a spot for a block to be placed and dug
    again; nil when no filler is held or no such cell is there."
   [world]
-  (when-let [item (stairs/filler world 1)]
+  (when-let [item (filler/pick world 1)]
     (let [[fx fy fz] (intent/feet world)
           eye (game/eye world)
           cell (first (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1] [0 0]]

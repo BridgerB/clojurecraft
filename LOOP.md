@@ -128,9 +128,9 @@ Asleep at the wheel means a tick that ends with nothing changed: "lanes still ru
 
 ## 6. Runners: all 20 on the stuck stage
 
-- **The races:** race.yml (real) and simrace.yml (sim) start bots at the current race start (`:race/from`, now `"fortress"`) and play to `:race/until` (now `pearls-12`). Every lane of each kind starts at the stuck stage's checkpoint (`:race/checkpoint` and `:simrace/checkpoint`, lanes 1 to 8).
+- **The races:** race.yml (real) and simrace.yml (sim) start each lane's bots at its start (`ci/lanes.edn`; the starts are `resources/clojurecraft/starts.edn`) and play to `:race/until` (now `pearls-12`). Every lane of each kind starts at the stuck stage's checkpoint (lanes 1 to 8).
 - **Fleet:** ci/fleet.edn keeps at least 6 real lanes and 2 sim lanes. It dispatches only while no other job waits, so the gym must not keep a queue. A merge replaces lanes after 120 minutes; docs-only merges replace nothing.
-- **Checkpoint bots are capped.** A real checkpoint bot stops after `:race/bot-minutes` (60) and a sim run after `:simrace/checkpoint-max-minutes` (60 simulated): a `:bot-timeout`, filed as stage 18's failure (no 12 pearls in the time) with its case file. Before, a real bot played until it died or the job cut it unfiled (7 batches of real-18 lanes ended 15 runs, sim-18 20), so the stage got too few measured attempts. The job's own end is still a cut.
+- **Checkpoint bots are capped.** A real checkpoint bot stops after its start's `:start/cap-min` (60) and a sim run after the same (simulated): a `:bot-timeout`, filed as stage 18's failure (no 12 pearls in the time) with its case file. Before, a real bot played until it died or the job cut it unfiled (7 batches of real-18 lanes ended 15 runs, sim-18 20), so the stage got too few measured attempts. The job's own end is still a cut.
 - **Nothing else holds a runner.** Each tick, check `gh run list --status in_progress`: every run must serve the stuck stage.
 
 ## 7. ML principles (Bridger, 2026-10-31; from ~/Developer/ML.md)

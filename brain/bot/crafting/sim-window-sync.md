@@ -8,9 +8,9 @@ status: verified
 lastUpdated: 2026-10-11
 verifiedAgainst: HEAD
 sourceRefs:
-  - src/clojurecraft/sim.clj#defn sync-window
-  - src/clojurecraft/sim.clj#defmethod on-packet [:play :container-click]
-  - src/clojurecraft/sim.clj#defn give
+  - src/clojurecraft/sim/window.clj#defn sync-window
+  - src/clojurecraft/sim/window.clj#defmethod on-packet [:play :container-click]
+  - src/clojurecraft/sim/window.clj#defn give
   - src/clojurecraft/inventory.clj#defn slot-count
   - src/clojurecraft/packet.clj#775 clicks carry the client's prediction as hashed slots
 related:

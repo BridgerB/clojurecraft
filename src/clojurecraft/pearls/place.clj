@@ -1,6 +1,8 @@
 (ns clojurecraft.pearls.place
   "The burrow and the shelter geometry: where an enderman cannot reach the bot, the sites for one, and the intents that cut it, provoke from it and wait in it."
-  (:require [clojurecraft.blocks :as blocks]
+  (:require [clojure.spec.alpha :as s]
+            [clojurecraft.avoided :as avoided]
+            [clojurecraft.blocks :as blocks]
             [clojurecraft.combat :as combat]
             [clojurecraft.dimension :as dimension]
             [clojurecraft.entity :as entity]
@@ -12,11 +14,22 @@
             [clojurecraft.pearls.params :as pparams]
             [clojurecraft.pearls.sense :as psense]
             [clojurecraft.physics :as physics]
+            [clojurecraft.shapes]
             [clojurecraft.stairs :as stairs]
             [clojurecraft.stone :as stone]
             [clojurecraft.terrain :as terrain]))
 
 (set! *warn-on-reflection* true)
+
+;; read by name (ns-resolve) in scratch_test and model_test, so the unused-var lint excludes it
+(def scratch
+  "The intent attributes only this namespace's executor reads and writes: {attribute {:doc meaning
+   :when lifetime}}. They are not world information, so they are not in clojurecraft.model;
+   scratch_test holds that no other namespace uses one."
+  {:intent/mouth {:doc "where a :burrow began: the stairs go down from it"
+                  :when ":burrow, from its first tick"}})
+
+(s/def :intent/mouth :clojurecraft.spec/block-pos)
 
 (defmethod intent/run :provoke
   ;; {:intent/kind :provoke :intent/target eid}: a stare at its head until the server says it has
@@ -192,7 +205,7 @@
    (some, not a chunked filter): it is the costly test."
   [world dir]
   (let [[x y z :as feet] (intent/feet world)
-        bl (:plan/blacklist world #{})]
+        bl (avoided/all-of world :blacklist)]
     (->> (for [dx (range (- pparams/site-reach) (inc pparams/site-reach))
                dz (range (- pparams/site-reach) (inc pparams/site-reach))
                dy [0 1 -1]]
@@ -268,7 +281,7 @@
   "[eid entity] of the nearest calm enderman (not entity/creepy?) crowding the burrow's mouth
    (crowd) that is not blacklisted (one that would not provoke is no reason to move), or nil."
   [world]
-  (let [bl (:plan/blacklist world #{})]
+  (let [bl (avoided/all-of world :blacklist)]
     (entity/nearest (into {}
                           (remove (fn [[eid e]] (or (contains? bl eid) (entity/creepy? e))))
                           (psense/crowd world))
@@ -286,7 +299,7 @@
   [world e]
   (let [feet (intent/feet world)
         eye (game/eye world)
-        bl (:plan/blacklist world #{})
+        bl (avoided/all-of world :blacklist)
         [ex ey ez] (combat/cell (:entity/pos e))
         from (fn [c] (assoc world :player/pos (psense/feet-at c)))]
     (->> (for [dx (range (- pparams/crowd-reach) (inc pparams/crowd-reach))

@@ -2,7 +2,8 @@
   "What the pearl hunt's rules ask of the world: a table from a fact key to a function of the
    fact getter and the world. A fact is computed at most once per call, and only when a rule's
    condition or builder names it (context)."
-  (:require [clojurecraft.blaze :as blaze]
+  (:require [clojurecraft.avoided :as avoided]
+            [clojurecraft.blaze :as blaze]
             [clojurecraft.combat :as combat]
             [clojurecraft.dimension :as dimension]
             [clojurecraft.entity :as entity]
@@ -47,9 +48,10 @@
    :near? (fn [f _]
             (let [e (f :e)]
               (and e (<= (physics/distance (f :pos) (:entity/pos e)) pparams/strike-range))))
-   :angry?
-   (fn [f w]
-     (and (f :near?) (entity/creepy? (f :e)) (not (contains? (:plan/blacklist w #{}) (f :eid)))))
+   :angry? (fn [f w]
+             (and (f :near?)
+                  (entity/creepy? (f :e))
+                  (not (contains? (avoided/all-of w :blacklist) (f :eid)))))
    :in-reach? (fn [f w]
                 (and (f :near?)
                      (<= (physics/distance (game/eye w) (combat/aim (f :e))) combat/attack-reach)))
@@ -66,7 +68,7 @@
    :struck-by (fn [_ w] (psense/struck-by w))
    :sid (fn [f _] (first (f :struck-by)))
    :swarmed? (fn [_ w] (psense/swarmed? w))
-   :cornered? (fn [f w] (and (f :near?) (f :eid) (contains? (:plan/cornered w #{}) (f :eid))))
+   :cornered? (fn [f w] (and (f :near?) (f :eid) (avoided/noted? w :cornered (f :eid))))
    :blocking (fn [f w] (when (f :at-end?) (psense/blocking w)))
    :bid (fn [f _] (first (f :blocking)))
    :angry-near (fn [f w] (when (f :home) (psense/angry-near w)))
@@ -78,7 +80,7 @@
    :coming? (fn [_ w] (psense/coming? w))
    :qid (fn [f _] (when-not (f :coming?) (f :quarry-id)))
    :ghost? (fn [f w]
-             (and (f :near?) (not (f :angry?)) (contains? (:plan/blacklist w #{}) (f :eid))))
+             (and (f :near?) (not (f :angry?)) (contains? (avoided/all-of w :blacklist) (f :eid))))
    :m (fn [_ w] (second (psense/menace w)))
    :dir (fn [f w]
           (when (and (nil? (f :home))
@@ -190,7 +192,7 @@
                               (or (entity/creepy? (f :e))
                                   (and (not (pupkeep/pickaxe? w))
                                        (not (pupkeep/worn-out? w))
-                                       (not (contains? (:plan/blacklist w #{}) (f :eid))))))
+                                       (not (contains? (avoided/all-of w :blacklist) (f :eid))))))
    :hurt-or-blocked (fn [f _] (or (f :hurt?) (and (f :in?) (f :bid))))
    :lured-out? (fn [_ w] (psense/lured-out? w))
    :lure? (fn [_ w] (psense/lure? w))

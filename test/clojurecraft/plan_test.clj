@@ -1667,6 +1667,11 @@
 
 ;;; FLIP-FLOP: a defence runs to its end whichever row is chosen meanwhile
 
+(defn table-with
+  "The shipped goal table with goal last: the rows an intent in flight belongs to, and the chosen row."
+  [goal]
+  (vec (concat plan/goals [goal])))
+
 (defn chosen-over
   "The world after one plan-tick with row goal chosen over a running intent i (numbered 1, its
    :intent/goal as given, controls held forward) when next-intent answers next; the walk itself
@@ -1678,7 +1683,7 @@
     (with-redefs [plan/choose (constantly goal)
                   plan/next-intent (constantly next)
                   intent/run (fn [world _ _] world)]
-      (plan/plan-tick w {:event/kind :tick :event/now 50 :event/rand 0.5} [goal]))))
+      (plan/plan-tick w {:event/kind :tick :event/now 50 :event/rand 0.5} (table-with goal)))))
 
 (def pearls-row {:goal/id :ender-pearls :goal/done? :never :goal/plan :flip-test})
 (def defend-row {:goal/id :defend :goal/done? :never :goal/plan :flip-test})
@@ -1727,12 +1732,20 @@
         "an escape row preempts a defence")))
 
 (deftest held-says-what-it-keeps
-  (is (plan/held? {:intent/kind :back-off :intent/goal :defend} pearls-row))
-  (is (plan/held? {:intent/kind :seal :intent/goal :blaze-rods} defend-row))
-  (is (not (plan/held? {:intent/kind :seal :intent/goal :blaze-rods} {:goal/id :blaze-rods}))
+  (is (plan/held? plan/goals {:intent/kind :back-off :intent/goal :defend} pearls-row))
+  (is (plan/held? plan/goals {:intent/kind :seal :intent/goal :blaze-rods} defend-row))
+  (is (not
+       (plan/held? plan/goals {:intent/kind :seal :intent/goal :blaze-rods} {:goal/id :blaze-rods}))
       "its own row")
-  (is (not (plan/held? nil pearls-row)))
-  (is (not (plan/held? {:intent/kind :back-off :intent/goal :defend} nil))))
+  (is (not (plan/held? plan/goals {:intent/kind :fight :intent/goal :defend} pearls-row))
+      "a defend fight ends by its own break-off")
+  (is (plan/held? plan/goals {:intent/kind :fight :intent/goal :blaze-rods} defend-row))
+  (is (not (plan/held? plan/goals
+                       {:intent/kind :back-off :intent/goal :defend}
+                       {:goal/id :swim :goal/trap :water}))
+      "an escape row cuts a defence")
+  (is (not (plan/held? plan/goals nil pearls-row)))
+  (is (not (plan/held? plan/goals {:intent/kind :back-off :intent/goal :defend} nil))))
 
 ;;; RETRY: three failures in a row start over; only a stalled run ends
 
@@ -1856,8 +1869,20 @@
 
 ;;; STUCK: no progress for stuck-ms sends the bot elsewhere
 
+(defn watchdog-fields
+  "The shipped row's fields the stuck watchdog reads (progress, anchors, resets, clocks, stuck-after)."
+  [id]
+  (select-keys (first (filter #(= id (:goal/id %)) plan/goals))
+               [:goal/anchors :goal/resets :goal/clocks :goal/stuck-after :goal/facts-only?
+                :goal/progress :goal/commits :goal/uncommitted]))
+
 (def pearls-table
-  [{:goal/id :ender-pearls :goal/target? true :goal/done? :never :goal/plan :pearls}])
+  [(merge (watchdog-fields :ender-pearls)
+          {:goal/id :ender-pearls :goal/target? true :goal/done? :never :goal/plan :pearls})])
+
+(def blaze-table
+  [(merge (watchdog-fields :blaze-rods)
+          {:goal/id :blaze-rods :goal/target? true :goal/done? :never :goal/plan :blaze-rods})])
 
 (def walker-table [{:goal/id :walker :goal/target? true :goal/done? :never :goal/plan :flip-test}])
 
@@ -1935,8 +1960,6 @@
   ;; blaze-race-z job 1 (run 41173997255) tunnelled 106 min (473 :tunnel-to) round a ring 67 blocks
   ;; across, digging netherrack every leg: items held changed, rods, fights and spawners never
   (let [event {:event/kind :tick :event/now 0 :event/rand 0.75}
-        blaze-table
-        [{:goal/id :blaze-rods :goal/target? true :goal/done? :never :goal/plan :blaze-rods}]
         start
         (-> (frozen-world 0)
             (assoc
@@ -1995,8 +2018,6 @@
   ;; blaze-rods: a camp can wait 14 to 16 min for its first blaze to be hurt; a :pocket, :seal or
   ;; :pocket-hold running is not dropped, however long
   (let [event {:event/kind :tick :event/now 0 :event/rand 0.25}
-        blaze-table
-        [{:goal/id :blaze-rods :goal/target? true :goal/done? :never :goal/plan :blaze-rods}]
         at (fn [ms i]
              (let [w (-> (frozen-world ms)
                          (assoc :plan/intent
@@ -2538,9 +2559,10 @@
     (with-redefs [plan/choose (constantly goal)
                   plan/next-intent (constantly next)
                   intent/run (fn [world _ _] world)]
-      (plan/chose w
-                  (plan/plan-tick w {:event/kind :tick :event/now 50 :event/rand 0.5} [goal])
-                  [goal]))))
+      (plan/chose
+       w
+       (plan/plan-tick w {:event/kind :tick :event/now 50 :event/rand 0.5} (table-with goal))
+       (table-with goal)))))
 
 (deftest a-row-that-preempts-is-recorded-with-the-row-it-was-over
   (let [w (choice-over {:intent/kind :walk :intent/target [1 64 1] :intent/goal :blaze-rods}

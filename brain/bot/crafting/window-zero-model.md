@@ -15,7 +15,7 @@ sourceRefs:
   - src/clojurecraft/inventory.clj#defn slot-in
   - src/clojurecraft/inventory.clj#def main-then-hotbar
   - src/clojurecraft/inventory.clj#defn hotbar?
-  - src/clojurecraft/sim.clj#defn held-slot
+  - src/clojurecraft/sim/world.clj#defn held-slot
   - src/clojurecraft/game.clj#defmethod on-packet [:play :container-set-content]
   - src/clojurecraft/game.clj#defmethod on-packet [:play :set-held-slot]
   - test/clojurecraft/game_test.clj#the-crafting-grid-is-never-invisible

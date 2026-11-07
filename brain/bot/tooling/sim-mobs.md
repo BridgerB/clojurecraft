@@ -8,29 +8,29 @@ status: verified
 lastUpdated: 2026-10-22
 verifiedAgainst: HEAD
 sourceRefs:
-  - src/clojurecraft/sim.clj#defn volley
-  - src/clojurecraft/sim.clj#defn tick-fireballs
-  - src/clojurecraft/sim.clj#defn fly
+  - src/clojurecraft/sim/mobs.clj#defn volley
+  - src/clojurecraft/sim/mobs.clj#defn tick-fireballs
+  - src/clojurecraft/sim/mobs.clj#defn fly
   - src/clojurecraft/mob.clj#defn volley-next
   - test/clojurecraft/blaze_parity_test.clj#the-volley-matches-the-recorded-cycle-and-shot-gap
   - src/clojurecraft/fire.clj#defn tick
-  - src/clojurecraft/sim.clj#defn tick-burn
+  - src/clojurecraft/sim/mobs.clj#defn tick-burn
   - test/clojurecraft/fire_test.clj#a-fireball-burns-five-seconds-one-health-a-second
   - src/clojurecraft/mob.clj#def kinds
   - src/clojurecraft/mob.clj#def warped-kinds
   - src/clojurecraft/mob.clj#defn nether-spot?
   - src/clojurecraft/mob.clj#defn pack-step
-  - src/clojurecraft/sim.clj#defn wild-roll
-  - src/clojurecraft/sim.clj#defn try-nether-spawn
-  - src/clojurecraft/sim.clj#defn spawn-pack
+  - src/clojurecraft/sim/mobs.clj#defn wild-roll
+  - src/clojurecraft/sim/spawns.clj#defn try-nether-spawn
+  - src/clojurecraft/sim/spawns.clj#defn spawn-pack
   - src/clojurecraft/mob.clj#defn route
   - src/clojurecraft/mob.clj#defn moves
   - src/clojurecraft/mob.clj#defn toward-aim
   - src/clojurecraft/mob.clj#defn away-aim
   - src/clojurecraft/mob.clj#defn landing
-  - src/clojurecraft/sim.clj#defn trail
-  - src/clojurecraft/sim.clj#defn blink
-  - src/clojurecraft/sim.clj#defn teleport-mob
+  - src/clojurecraft/sim/mobs.clj#defn trail
+  - src/clojurecraft/sim/mobs.clj#defn blink
+  - src/clojurecraft/sim/mobs.clj#defn teleport-mob
   - test/clojurecraft/mob_test.clj#an-angry-enderman-far-off-teleports-toward-the-player
   - test/clojurecraft/mob_test.clj#an-angry-enderman-walks-round-a-wall-to-the-player
   - test/clojurecraft/mob_test.clj#a-warped-forest-spawns-packs-of-endermen-by-day-and-netherrack-spawns-nothing
@@ -41,23 +41,23 @@ sourceRefs:
   - src/clojurecraft/mob.clj#defn spawn-spots
   - src/clojurecraft/mob.clj#defn stared?
   - src/clojurecraft/mob.clj#defn absorbed
-  - src/clojurecraft/sim.clj#defn armoured
+  - src/clojurecraft/sim/mobs.clj#defn armoured
   - test/clojurecraft/mob_test.clj#armour-takes-its-share-of-a-mobs-hit
-  - src/clojurecraft/sim.clj#defn with-mobs
-  - src/clojurecraft/sim.clj#defn retell-entities
+  - src/clojurecraft/sim/mobs.clj#defn with-mobs
+  - src/clojurecraft/sim/protocol.clj#defn retell-entities
   - test/clojurecraft/sim_test.clj#a-respawned-bot-is-told-the-mobs-about-it-again
-  - src/clojurecraft/sim.clj#defn tick-mobs
-  - src/clojurecraft/sim.clj#defn try-spawn
+  - src/clojurecraft/sim/spawns.clj#defn tick-mobs
+  - src/clojurecraft/sim/spawns.clj#defn try-spawn
   - src/clojurecraft/mob.clj#defn spawner-awake?
   - src/clojurecraft/mob.clj#defn spawner-spawns
-  - src/clojurecraft/sim.clj#defn tick-spawners
-  - src/clojurecraft/sim.clj#defn spawn-batch
+  - src/clojurecraft/sim/spawns.clj#defn tick-spawners
+  - src/clojurecraft/sim/spawns.clj#defn spawn-batch
   - test/clojurecraft/mob_test.clj#a-spawner-near-the-player-makes-blazes-within-eight-hundred-ticks
   - test/clojurecraft/sim_test.clj#the-seventh-rod-from-a-spawner-in-the-models-nether
-  - src/clojurecraft/sim.clj#defn hurt-mob
-  - src/clojurecraft/sim.clj#defmethod on-packet [:play :attack]
-  - src/clojurecraft/sim.clj#defn populate-column
-  - src/clojurecraft/sim.clj#defn mob-roll
+  - src/clojurecraft/sim/mobs.clj#defn hurt-mob
+  - src/clojurecraft/sim/mobs.clj#defmethod on-packet [:play :attack]
+  - src/clojurecraft/sim/spawns.clj#defn populate-column
+  - src/clojurecraft/sim/mobs.clj#defn mob-roll
   - src/clojurecraft/simrace.clj#defn day-time-of
   - test/clojurecraft/mob_test.clj#an-iron-sword-kills-a-zombie-in-four-hits-and-it-drops-and-goes
   - test/clojurecraft/mob_test.clj#a-creeper-swells-for-a-second-and-a-half-and-blasts

@@ -8,11 +8,11 @@
 ;; cancelled and replaced once they have run :fleet/stale-after-minutes (a merge restarts the
 ;; rounds, but not every half hour).
 {:fleet/cap 20                 ; GitHub Free's concurrent jobs on standard hosted runners
- :fleet/floor {:real 6 :sim 2} ; lanes never given back: the rounds always make progress; six real ones, as a real bot needs ~42 min to the fortress and hours to blaze rods, and lanes above the floor were given back to gym jobs after 2 to 41 min (9 of 13 on 69f1b2ac8, 2026-10-30)
- :fleet/max {:real 8 :sim 8}   ; lanes 1..8 a kind: ci/race.edn's runners and ci/simrace.edn's shares
- :fleet/every-s 60             ; seconds between looks: about four API calls each, inside GITHUB_TOKEN's 1,000 an hour
+ :fleet/floor {:real 6 :sim 2} ; lanes never given back, so the rounds always make progress; a real bot needs most of an hour to reach the fortress
+ :fleet/max {:real 8 :sim 8}   ; lanes 1..8 a kind, as ci/race.edn and ci/simrace.edn
+ :fleet/every-s 60             ; seconds between looks: about four API calls each, inside GITHUB_TOKEN's hourly limit
  :fleet/minutes 340            ; then the job hands over to the next fleet run (GitHub's 6 h job cap)
  :fleet/patience-s 90 ; a job queued less than this is not yet a reason to give a lane back (pages deploys, bursts)
  :fleet/dispatch-grace-s 180 ; a dispatched lane not yet listed still counts this long
- :fleet/cooldown-s 1200 ; after a lane is given back for need, no lane above the floor for this long: lanes dispatched into a gap and cancelled 3 to 20 minutes later reported nothing (2026-10-28, 20 real and 12 sim)
- :fleet/stale-after-minutes 120} ; a lane on replaced code runs this long first: a real run needs about 30 minutes to the Nether, and merges came every 30 (2026-10-17)
+ :fleet/cooldown-s 1200 ; after a lane is given back for need, no lane above the floor for this long: a lane cancelled soon after it starts reports nothing
+ :fleet/stale-after-minutes 120} ; a lane on replaced code runs this long first: a real run needs about 30 minutes to reach the Nether

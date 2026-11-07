@@ -3,6 +3,8 @@
    height (so the drop lands where the bot can stand, not in a hole under the rest of the
    trunk), pick up the drop. The :gather act of the goal table (clojurecraft.make) runs this."
   (:require [clojure.math :as math]
+            [clojure.spec.alpha :as s]
+            [clojurecraft.avoided :as avoided]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
@@ -16,6 +18,19 @@
 
 (set! *warn-on-reflection* true)
 
+;; read by name (ns-resolve) in scratch_test and model_test, so the unused-var lint excludes it
+(def scratch
+  "The intent attributes only this namespace's executor reads and writes: {attribute {:doc meaning
+   :when lifetime}}. They are not world information, so they are not in clojurecraft.model;
+   scratch_test holds that no other namespace uses one."
+  {:intent/clears {:doc "leaf blocks cleared for this drop"
+                   :when "a collect resumed after clearing"}
+   :intent/resume {:doc "the intent to run after clearing a blocker"
+                   :when "a dig that clears a blocker"}})
+
+(s/def :intent/clears nat-int?)
+(s/def :intent/resume (s/keys :req [:intent/kind]))
+
 (def search-radius 48)                ; blocks from the eye searched for a remembered log
 (def far-radius 256)                  ; a trunk remembered on the way in, past the near band
 (def far-candidates 3)                ; routes planned on the way back to the surface
@@ -25,7 +40,7 @@
 (def cross-reach 48)                  ; blocks along the way to a trunk a crossing looks for open water
 (def surface-span 16)                 ; how far under the eye a column's top is looked for (and 8 over)
 (def bed-reach 4)                     ; cells over the head a dig up into water overhead looks through
-(def return-max-nodes 120000)         ; expansions for a complete way back to trees when local routes and hunts fail
+(def return-max-nodes (path/budget :return))         ; expansions for a complete way back to trees when local routes and hunts fail
 (def bridge-reach 12)                 ; blocks on the plane to a trunk no route reaches that a staircase is cut toward
 (def bridge-rise 3)                   ; blocks the trunk's bottom may lie over or under the feet for that staircase
 (def bridge-climb 2)                  ; stairs up that staircase cuts before the planner looks again
@@ -94,9 +109,9 @@
    failed :no-path toward (:plan/unreached). A grove across water no route crosses is one
    failure, not one for each of its trunks."
   [world]
-  (let [blacklist (:plan/blacklist world #{})
-        failures (:plan/trunk-failures world {})
-        unreached (:plan/unreached world #{})]
+  (let [blacklist (avoided/all-of world :blacklist)
+        failures (avoided/all-of world :trunk-failures)
+        unreached (avoided/all-of world :unreached)]
     (fn [[x _ z :as pos]]
       (or (contains? blacklist pos)
           (>= (get failures [x z] 0) max-trunk-failures)
@@ -129,7 +144,7 @@
   in lengths the planner looks again between. Only a trunk within search-radius on the plane."
   [world trunks]
   (let [feet (intent/feet world)]
-    (when (and (stairs/out? world feet) (not (contains? (:plan/boxed-at world #{}) feet)))
+    (when (and (stairs/out? world feet) (not (contains? (avoided/all-of world :boxed-at) feet)))
       (when-let [above (first (filter (fn [[tx ty tz]]
                                         (and (< (physics/y-of (game/eye world)) ty)
                                              (<= (physics/horizontal-distance (:player/pos world)
@@ -158,7 +173,7 @@
   (boolean (and (terrain/under-sky? world feet)
                 (not (stairs/out? world feet))
                 (nil? (stairs/pit-rim world feet))
-                (not (contains? (:plan/boxed-at world #{}) feet)))))
+                (not (contains? (avoided/all-of world :boxed-at) feet)))))
 
 (defn trees-descend
   "Out of the ground (stairs/out?), or perched on a pillar or a lip under the sky (perched?),
@@ -183,7 +198,7 @@
                    ;; a rim a stair above the feet is the block the climb just laid, not ground to
                    ;; get out to. the trunk well below is the way down
                    (and (terrain/under-sky? world feet) (some? (stairs/pit-rim world feet))))
-               (not (contains? (:plan/boxed-at world #{}) feet)))
+               (not (contains? (avoided/all-of world :boxed-at) feet)))
       (when-let [[_ ty _ :as trunk]
                  (let [near (filter (fn [[tx ty tz]]
                                       (and (> (- (physics/y-of (game/eye world)) ty) drop-over)
@@ -213,7 +228,7 @@
   [world trunks]
   (let [[fx fy fz :as feet] (intent/feet world)
         eye-y (physics/y-of (game/eye world))]
-    (when (and (stairs/out? world feet) (not (contains? (:plan/boxed-at world #{}) feet)))
+    (when (and (stairs/out? world feet) (not (contains? (avoided/all-of world :boxed-at) feet)))
       (when-let [[tx _ tz] (first (filter (fn [[tx ty tz :as trunk]]
                                             (let [d (physics/horizontal-distance [fx 0 fz]
                                                                                  [tx 0 tz])]
@@ -254,12 +269,12 @@
   [world]
   (let [feet (intent/feet world)
         eye-y (physics/y-of (game/eye world))
-        blacklist (:plan/blacklist world #{})
-        failures (:plan/trunk-failures world {})
+        blacklist (avoided/all-of world :blacklist)
+        failures (avoided/all-of world :trunk-failures)
         from-foot? (or (descended? world) (descended-valley? world) (tunneled? world))
         reach (if from-foot? foot-reach bridge-reach)]
     (when (and (or from-foot? (stairs/out? world feet))
-               (not (contains? (:plan/boxed-at world #{}) feet)))
+               (not (contains? (avoided/all-of world :boxed-at) feet)))
       (when-let [trunk (->> (memory/positions-now world blocks/log-states)
                             (memory/nearest-first (game/eye world) reach)
                             (remove (fn [[x _ z :as p]]
@@ -345,7 +360,7 @@
           (when (descended? world) (trees-descend world trunks))
           (when (or (tunneled? world) (descended? world) (descended-valley? world))
             (trees-tunnel world))
-          (when-not (or (stairs/out? world feet) (contains? (:plan/boxed-at world #{}) feet))
+          (when-not (or (stairs/out? world feet) (contains? (avoided/all-of world :boxed-at) feet))
             (or (when (:player/in-water? world) (crossing world))
                 ;; a perch under the sky goes down toward a trunk at or below the feet. stairs
                 ;; up to the top of the world from here spends the filler and boxes
@@ -436,7 +451,7 @@
         open? (or (nil? roof)
                   (not (blocks/solid? roof))
                   (contains? stairs/lake-ice (blocks/name-of roof)))]
-    (cond (not (and (contains? (:plan/boxed-at world #{}) feet)
+    (cond (not (and (contains? (avoided/all-of world :boxed-at) feet)
                     (seq more)
                     open?
                     (every? some? ids)
@@ -559,7 +574,7 @@
         [_ fy _] feet
         continuing? (descended-valley? world)]
     (when (and (if continuing? (not (stairs/out? world feet)) (stairs/out? world feet))
-               (not (contains? (:plan/boxed-at world #{}) feet)))
+               (not (contains? (avoided/all-of world :boxed-at) feet)))
       (when-let [[_ ty _ :as trunk]
                  (let [near (filter (fn [[tx _ tz]]
                                       (<= (physics/horizontal-distance (:player/pos world)

@@ -10,6 +10,7 @@
    failure). A drop says what it holds in its metadata (entity/metadata-facts, :entity/item); one
    that has not said yet may hold it. No packet: the server hands a drop over on contact."
   (:require [clojure.math :as math]
+            [clojurecraft.avoided :as avoided]
             [clojurecraft.entity :as entity]
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
@@ -32,7 +33,7 @@
   "{eid entity} of the dropped items that may hold the item id (holds?) within radius of the
    point at, none of them blacklisted."
   [world id at radius]
-  (let [bl (:plan/blacklist world #{})]
+  (let [bl (avoided/all-of world :blacklist)]
     (into {}
           (filter (fn [[eid e]]
                     (and (holds? e id)

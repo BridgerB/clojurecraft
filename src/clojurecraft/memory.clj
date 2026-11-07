@@ -77,30 +77,16 @@
   #{:crafting_table :furnace})
 
 (def landmark-kinds
-  "Blocks that say where something is: a fortress (its bricks, fences and stairs), a lit portal,
-   the way back (issue #11), and an end portal frame, the stronghold's portal room (issue #265:
-   the room is found in the chunk data as its chunk loads, however deep), and the lit end
-   portal, the way to the End (issue #266: the :end-portal goal is done when one is on record).
-   Only blocks a forest never generates, so watching them changes nothing a forest run
-   remembers (obsidian and spawners do: the wood recording's 1098 sightings became 1121); a
-   frame is only ever in a stronghold."
+  "Blocks that say where something is: a fortress (its bricks, fences and stairs), a lit portal, the way back, an end portal frame (the stronghold's portal room, found in the chunk data as its chunk loads, however deep) and the lit end portal (the :end-portal goal is done when one is on record). Only blocks a forest never generates, so watching them changes nothing a forest run remembers; a frame is only ever in a stronghold."
   #{:nether_bricks :nether_brick_fence :nether_brick_stairs :nether_portal :end_portal_frame
     :end_portal})
 
 (def nether-landmark-kinds
-  "Blocks that say where something is only in the Nether: a spawner there is a fortress's, a blaze
-   spawner (issue #262: the rods come from it), or a bastion's rare magma cube one. In the
-   overworld a spawner is a dungeon's or a mineshaft's, and watching it there would change what
-   a forest run remembers (landmark-kinds: the wood recording's sightings)."
+  "Blocks that say where something is only in the Nether: a spawner there is a fortress's (the rods come from it) or a bastion's rare magma cube one. In the overworld a spawner is a dungeon's or a mineshaft's, and watching it there would change what a forest run remembers (landmark-kinds)."
   #{:spawner})
 
 (defn watched?
-  "Does seeing this state start a record? Logs, the placed-kinds and the landmark-kinds: things
-   rare enough to remember after their chunk is gone. Stone is not: ten chunks hold 120,000 of it, and
-   recording them made every chunk load and every planner tick take seconds (gym batch
-   cobble-a1, 2026-10-10: eleven of twelve bots timed out). What is exposed now is the
-   terrain's question, not memory's. Seen in the dimension dim, the nether-landmark-kinds too
-   when it is the Nether."
+  "Does seeing this state start a record? Logs, the placed-kinds and the landmark-kinds: things rare enough to remember after their chunk is gone. Stone is not: ten chunks hold 120,000 of it, and recording them would make every chunk load and every planner tick slow. What is exposed now is the terrain's question, not memory's. Seen in the dimension dim, the nether-landmark-kinds too when it is the Nether."
   ([id]
    (or (blocks/log? id)
        (let [n (blocks/name-of id)] (or (contains? placed-kinds n) (contains? landmark-kinds n)))))
@@ -471,10 +457,7 @@
          (mapv #(into {} (d/touch (d/entity db %)))))))
 
 (defn failed-within?
-  "Did an intention of kind k fail (the :failed fact; with reason, that :intention/reason) within ms of
-   now? plan/start-intent forgets :plan/failed with every new intent, so a row that must not choose
-   what just failed again asks the story: blaze-race-z9 job 3 chose :pillar 166 times in 28 s
-   (:boxed, one every 150 ms) because the nook's :dig between two pillars cleared :plan/failed."
+  "Did an intention of kind k fail (the :failed fact; with reason, that :intention/reason) within ms of now? plan/start-intent forgets :plan/failed with every new intent, so a row that must not choose what just failed again asks the story."
   ([world k ms] (failed-within? world k nil ms))
   ([world k reason ms]
    (let [since (- (:time/now world 0) ms)]
@@ -573,10 +556,7 @@
       0))
 
 (defn arrived
-  "The set of targets of every walk that arrived (the :done facts of :walk intentions): the
-   cells the bot has already walked to. A walk back to one changes nothing the first did not
-   (pearls/toward: gym batch pearls-warped3-a, plan run 39529384355, walked between the ends of
-   two routes for twenty-five minutes)."
+  "The set of targets of every walk that arrived (the :done facts of :walk intentions): the cells the bot has already walked to. A walk back to one changes nothing the first did not."
   [world]
   (set (d/q '[:find [?t ...] :where [?e :intention/kind :walk] [?e :intention/event :done]
               [?e :intention/target ?t]]

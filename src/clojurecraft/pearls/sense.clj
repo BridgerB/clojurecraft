@@ -2,6 +2,7 @@
   "What the pearl hunt perceives: endermen, who is angry or menaced, shooters, and the state it keeps about them."
   (:require [clojure.math :as math]
             [clojurecraft.armour :as armour]
+            [clojurecraft.avoided :as avoided]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.combat :as combat]
             [clojurecraft.drops :as drops]
@@ -26,7 +27,7 @@
   ([world] (endermen world pparams/hunt-radius))
   ([world radius]
    (let [pos (:player/pos world)
-         bl (:plan/blacklist world #{})]
+         bl (avoided/all-of world :blacklist)]
      (into {}
            (filter (fn [[eid e]]
                      (and (= :enderman (entity/kind e))
@@ -44,7 +45,7 @@
   (let [pos (:player/pos world)
         [_ e :as near] (entity/nearest (endermen world) pos)]
     (cond (and e (<= (physics/distance pos (:entity/pos e)) pparams/strike-range)) near
-          :else (entity/nearest (endermen (dissoc world :plan/blacklist)) pos))))
+          :else (entity/nearest (endermen (avoided/forget world :blacklist)) pos))))
 
 (defn crowd
   "{eid entity} of the endermen standing within strike-range of the burrow's mouth
@@ -57,7 +58,7 @@
                      physics/centre)]
     (into {}
           (filter (fn [[_ e]] (<= (physics/distance m (:entity/pos e)) pparams/strike-range)))
-          (endermen (dissoc world :plan/blacklist)))
+          (endermen (avoided/forget world :blacklist)))
     {}))
 
 (defn crowded?
@@ -81,7 +82,7 @@
                                         (and (< (physics/y-of c) (physics/y-of mouth))
                                              (not= c end)
                                              (<= (physics/distance c end) pparams/burrow-span)))))
-                            (endermen (dissoc world :plan/blacklist)))
+                            (endermen (avoided/forget world :blacklist)))
                       (:player/pos world)))))
 
 ; ms one fought out is left, as combat leaves one its engage gave up on (combat/given-up?)
@@ -139,18 +140,19 @@
   [world]
   (when-let [m (:pearls/mouth world)]
     (let [c (physics/centre m)]
-      (entity/nearest
-       (into
-        {}
-        (filter (fn [[eid e]]
-                  (let [p (:entity/pos e)]
-                    (and (entity/creepy? e)
-                         (not (fought-out? world eid))
-                         (not (and (lured-out? world) (unfightable? world eid e)))
-                         (<= (physics/distance c p) pparams/danger-radius)
-                         (<= (abs (- (physics/y-of p) (physics/y-of c))) pparams/danger-rise)))))
-        (endermen (if (lured-out? world) world (dissoc world :plan/blacklist)) pparams/stare-range))
-       (:player/pos world)))))
+      (entity/nearest (into
+                       {}
+                       (filter (fn [[eid e]]
+                                 (let [p (:entity/pos e)]
+                                   (and (entity/creepy? e)
+                                        (not (fought-out? world eid))
+                                        (not (and (lured-out? world) (unfightable? world eid e)))
+                                        (<= (physics/distance c p) pparams/danger-radius)
+                                        (<= (abs (- (physics/y-of p) (physics/y-of c)))
+                                            pparams/danger-rise)))))
+                       (endermen (if (lured-out? world) world (avoided/forget world :blacklist))
+                                 pparams/stare-range))
+                      (:player/pos world)))))
 
 (defn menaced?
   "Does an angry enderman (entity/creepy?), blacklisted or not, stand within danger-radius of the
@@ -163,7 +165,7 @@
                        (and (entity/creepy? e)
                             (<= (physics/distance p q) pparams/danger-radius)
                             (<= (abs (- (physics/y-of q) (physics/y-of p))) pparams/danger-rise))))
-                   (endermen (dissoc world :plan/blacklist) pparams/stare-range)))))
+                   (endermen (avoided/forget world :blacklist) pparams/stare-range)))))
 
 (defn track-angry
   "The world with :pearls/angry updated: for each angry enderman (entity/creepy?) within stare-range
@@ -177,7 +179,7 @@
         old (:pearls/angry world {})
         angry (into {}
                     (filter (comp entity/creepy? val))
-                    (endermen (dissoc world :plan/blacklist) pparams/stare-range))]
+                    (endermen (avoided/forget world :blacklist) pparams/stare-range))]
     (assoc world
            :pearls/angry
            (into {}
@@ -211,7 +213,7 @@
                             (<= (physics/distance p q) pparams/danger-radius)
                             (<= (abs (- (physics/y-of q) (physics/y-of p))) pparams/danger-rise)
                             (not (parked? world eid q)))))
-                   (endermen (dissoc world :plan/blacklist) pparams/stare-range)))))
+                   (endermen (avoided/forget world :blacklist) pparams/stare-range)))))
 
 (defn menace
   "[eid entity] of the nearest angry enderman (entity/creepy?) within park-near (8) blocks and
@@ -227,7 +229,7 @@
                                            (<= (physics/distance p q) pparams/park-near)
                                            (<= (abs (- (physics/y-of q) (physics/y-of p)))
                                                pparams/danger-rise)))))
-                          (endermen (dissoc world :plan/blacklist) pparams/stare-range))
+                          (endermen (avoided/forget world :blacklist) pparams/stare-range))
                     p)))
 
 (defn lure?
@@ -250,7 +252,7 @@
   [world]
   (let [[bid] (blocking world)]
     (boolean (and bid
-                  (contains? (:plan/blacklist world #{}) bid)
+                  (contains? (avoided/all-of world :blacklist) bid)
                   (>= (or (memory/done-since world :lookout :burrow) 0) pparams/stale-lookouts)))))
 
 (defn stale?
@@ -276,7 +278,7 @@
    at a time."
   [world]
   (let [pos (:player/pos world)
-        bl (:plan/blacklist world #{})]
+        bl (avoided/all-of world :blacklist)]
     (entity/nearest (into {}
                           (filter (fn [[eid e]]
                                     (and (not (contains? bl eid))
@@ -317,7 +319,8 @@
           d (physics/distance (physics/centre c) (:entity/pos e))
           goal (if (map? to) to {:goal/kind :block :goal/pos c})]
       (or (> d pparams/danger-radius)
-          (= :found (:path/status (path/plan world ec goal {:path/max-nodes 300})))))))
+          (= :found
+             (:path/status (path/plan world ec goal {:path/max-nodes (path/budget :reach)})))))))
 
 (defn quarry
   "[eid entity] of the enderman a stare is for: the nearest within stare-range not yet coming
@@ -392,7 +395,7 @@
    radius of the feet and danger-rise of their height?"
   [world radius]
   (let [p (:player/pos world)
-        bl (if (lured-out? world) world (dissoc world :plan/blacklist))]
+        bl (if (lured-out? world) world (avoided/forget world :blacklist))]
     (boolean (some (fn [[eid e]]
                      (let [q (:entity/pos e)]
                        (and (entity/creepy? e)
@@ -413,7 +416,7 @@
                        (and (entity/creepy? e)
                             (<= (physics/distance p q) radius)
                             (<= (abs (- (physics/y-of q) (physics/y-of p))) pparams/danger-rise))))
-                   (endermen (dissoc world :plan/blacklist) pparams/stare-range)))))
+                   (endermen (avoided/forget world :blacklist) pparams/stare-range)))))
 
 ;; ---------------------------------------------------------------- the plan
 (defn at-site?
@@ -438,7 +441,7 @@
                                            (<= (physics/distance pos (:entity/pos e))
                                                pparams/strike-range)
                                            (combat/in-reach? world e))))
-                            (endermen (dissoc world :plan/blacklist) pparams/strike-range))
+                            (endermen (avoided/forget world :blacklist) pparams/strike-range))
                       pos))))
 
 (defn swarm
@@ -567,7 +570,7 @@
                      (and (entity/creepy? e)
                           (not (fought-out? world eid))
                           (<= (physics/distance p (:entity/pos e)) pparams/strike-range)))
-                   (endermen (dissoc world :plan/blacklist) pparams/stare-range)))))
+                   (endermen (avoided/forget world :blacklist) pparams/stare-range)))))
 
 (defn in-forest?
   "Is a warped forest chunk known (memory/warped-chunks) within forest-reach chunks of the feet's
@@ -585,7 +588,7 @@
    cell above it is not in :plan/blacklist (a walk to it failed), or nil."
   [world]
   (let [feet (intent/feet world)
-        bl (:plan/blacklist world #{})]
+        bl (avoided/all-of world :blacklist)]
     (->> (memory/warped-chunks world)
          (map :forest/pos)
          (remove #(contains? bl (update % 1 inc)))

@@ -9,16 +9,16 @@ lastUpdated: 2026-10-22
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/sim.clj#defn init
-  - src/clojurecraft/sim.clj#defn try-nether-spawn
+  - src/clojurecraft/sim/spawns.clj#defn try-nether-spawn
   - src/clojurecraft/sim.clj#defn joined
   - "src/clojurecraft/sim.clj#Returns [world sim] (run+ for the moment before the stop too)"
   - src/clojurecraft/sim.clj#defn connect!
-  - src/clojurecraft/sim.clj#defn loot
-  - src/clojurecraft/sim.clj#defn poured
-  - src/clojurecraft/sim.clj#defn quench
-  - src/clojurecraft/sim.clj#defn wake-fluids
-  - src/clojurecraft/sim.clj#defn tick-fluids
-  - src/clojurecraft/sim.clj#defn fluid-tick
+  - src/clojurecraft/sim/world.clj#defn loot
+  - src/clojurecraft/sim/world.clj#defn poured
+  - src/clojurecraft/sim/world.clj#defn quench
+  - src/clojurecraft/sim/world.clj#defn wake-fluids
+  - src/clojurecraft/sim/world.clj#defn tick-fluids
+  - src/clojurecraft/sim/world.clj#defn fluid-tick
   - src/clojurecraft/fluid.clj#defn state-of
   - test/clojurecraft/fluid_test.clj#aquatic-sources-fill-an-opened-shaft-without-erasing-the-plant
   - test/clojurecraft/fluid_test.clj#saved-models-wake-previously-unrecognized-sources-once
@@ -28,28 +28,28 @@ sourceRefs:
   - src/clojurecraft/fluid.clj#defn mix
   - test/clojurecraft/fluid_test.clj#water-spreads-seven-blocks-on-a-floor
   - test/clojurecraft/fluid_test.clj#water-directly-above-a-lava-source-makes-obsidian
-  - src/clojurecraft/sim.clj#defn light
-  - src/clojurecraft/sim.clj#defn through-portal
-  - src/clojurecraft/sim.clj#defn stream-from
-  - src/clojurecraft/sim.clj#defn exit-point
-  - src/clojurecraft/sim.clj#defn exit-spot
-  - src/clojurecraft/sim.clj#defn portal-space?
+  - src/clojurecraft/sim/portal.clj#defn light
+  - src/clojurecraft/sim/portal.clj#defn through-portal
+  - src/clojurecraft/sim/protocol.clj#defn stream-from
+  - src/clojurecraft/sim/portal.clj#defn exit-point
+  - src/clojurecraft/sim/portal.clj#defn exit-spot
+  - src/clojurecraft/sim/portal.clj#defn portal-space?
   - test/clojurecraft/sim_test.clj#a-nether-arrival-needs-room-for-the-portal-not-an-isolated-foothold
-  - src/clojurecraft/sim.clj#defn platform
-  - "src/clojurecraft/sim.clj#With no :at, the player stands where"
+  - src/clojurecraft/sim/portal.clj#defn platform
+  - "src/clojurecraft/sim/portal.clj#With no :at, the player stands where"
   - test/clojurecraft/sim_test.clj#the-arrival-is-the-standing-cell-nearest-the-exit-point
   - test/clojurecraft/sim_test.clj#standing-in-the-portal-four-seconds-goes-to-the-nether
   - test/clojurecraft/sim_test.clj#streamed-chunks-include-the-blocks-the-server-now-holds
   - test/clojurecraft/sim_test.clj#a-portal-transition-does-not-put-the-client-back-in-undug-rock
   - test/clojurecraft/sim_test.clj#water-poured-into-the-bowl-turns-the-lava-under-it-to-obsidian
-  - src/clojurecraft/sim.clj#defn roll
-  - src/clojurecraft/sim.clj#defn tick-falls
-  - src/clojurecraft/sim.clj#defn fall-tick
+  - src/clojurecraft/sim/world.clj#defn roll
+  - src/clojurecraft/sim/world.clj#defn tick-falls
+  - src/clojurecraft/sim/world.clj#defn fall-tick
   - test/clojurecraft/sim_test.clj#gravel-over-a-broken-block-falls-into-it
-  - src/clojurecraft/sim.clj#defn melts?
+  - src/clojurecraft/sim/protocol.clj#defn melts?
   - "test/clojurecraft/sim_test.clj#main's-own-loop-against-the-model-through-channels"
-  - src/clojurecraft/sim.clj#def dig-ms
-  - src/clojurecraft/sim.clj#defn finish-dig
+  - src/clojurecraft/sim/world.clj#def dig-ms
+  - src/clojurecraft/sim/protocol.clj#defn finish-dig
   - test/clojurecraft/sim_test.clj#collects-one-log-against-the-model
   - test/clojurecraft/sim_test.clj#the-wood-goal-holds-in-generated-forests
   - test/clojurecraft/sim_test.clj#the-iron-kit-from-a-stone-pickaxe-and-its-recording-replays

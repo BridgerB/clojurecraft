@@ -14,6 +14,7 @@
    Requiring this namespace registers the :needs planner, the :provided? predicate and the
    :gather, :place, :craft and :smelt acts."
   (:require [clojure.math :as math]
+            [clojurecraft.avoided :as avoided]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.craft]
             [clojurecraft.game :as game]
@@ -133,7 +134,7 @@
   (when (contains? memory/placed-kinds block)
     (memory/nearest-of (game/eye world)
                        table-search
-                       (remove (or (:plan/blacklist world) #{})
+                       (remove (or (avoided/all-of world :blacklist) #{})
                                (memory/positions-now world (blocks/states-of block))))))
 
 ;; ---------------------------------------------------------------- the planner

@@ -31,6 +31,7 @@
             [clojurecraft.physics :as physics]
             [clojurecraft.record :as record]
             [clojurecraft.sim :as sim]
+            [clojurecraft.sim.world :as sim-world]
             [clojurecraft.simrace :as simrace]
             [clojurecraft.terrain :as terrain]
             [datascript.core :as d]))
@@ -106,7 +107,7 @@
 ;; ---------------------------------------------------------------- the server at a moment, from the bot's world
 
 (defn worn
-  "An item as the model wears it (sim/wear counts :durability down): a tool the server said is
+  "An item as the model wears it (sim-world/wear counts :durability down): a tool the server said is
    damaged (its :damage component) has that much less than its maximum left."
   [{:keys [item components] :as it}]
   (let [tool (blocks/tool item)
@@ -179,7 +180,7 @@
 
 (defn reach
   "How many chunks round here the bot holds columns: the farthest held column on either axis, at
-   least 1; the model streams by it as the real server streamed them (sim/stream)."
+   least 1; the model streams by it as the real server streamed them (sim-protocol/stream)."
   [held [hx hz]]
   (reduce max 1 (map (fn [[x z]] (max (abs (- x hx)) (abs (- z hz)))) held)))
 
@@ -198,18 +199,19 @@
    bot's own ids and the rest of what the bot tracks told gone, in the bot's dimension at
    difficulty, the time of day guessed (day-time-of), rolling from seed, a death respawning on the
    landing (the real spawn is not in the recording); and, given one, the Nether a portal leads to
-   (nether: the real one, sim/arrive)."
+   (nether: the real one, sim-portal/arrive)."
   [{:keys [world columns]} {:keys [seed difficulty nether]}]
   (let [pos (mapv double (:player/pos world))
         [x _ z] (cell-of pos)
         cols (capture/within columns [x z] radius)
         held (:world/chunks world)
-        decoded (into {} (map (fn [[k bytes]] [k (or (get held k) (sim/decode-once bytes))])) cols)
+        decoded
+        (into {} (map (fn [[k bytes]] [k (or (get held k) (sim-world/decode-once bytes))])) cols)
         mobs (mobs-of world)
         items (items-of world)
         [lx lz ly] (landing-of world)
         landing [(+ lx 0.5) (double ly) (+ lz 0.5)]
-        here (sim/column-key pos)]
+        here (sim-world/column-key pos)]
     (sim/joined
      (cond-> {:columns cols
               :decoded decoded
@@ -229,15 +231,15 @@
       :on-ground? (:player/on-ground? world)
       :held (:player/held-slot world 0)
       :state-id (:window/state-id world 0)
-      :health (double (:player/health world sim/max-health))
+      :health (double (:player/health world sim-world/max-health))
       :saturation (some-> (:player/saturation world)
                           double)
-      :air (:player/air world sim/max-air)
+      :air (:player/air world sim-world/max-air)
       :player-eid (:player/entity-id world)
       :placed (into {}
                     (filter (fn [[p _]]
                               (and (terrain/confirmed? world p)
-                                   (contains? cols (sim/column-key p)))))
+                                   (contains? cols (sim-world/column-key p)))))
                     (:world/blocks world))
       :items items
       :mobs mobs
@@ -276,7 +278,7 @@
     round (assoc :snapshot/round round)))
 
 (defn nether-of
-  "The real Nether a moment's portal leads to, {:columns :at} as sim/arrive takes it, when the
+  "The real Nether a moment's portal leads to, {:columns :at} as sim-portal/arrive takes it, when the
    moment is in the overworld and the run ended in the Nether: the Nether columns the recording
    holds by its end within radius chunks of where the bot last arrived there (:nether-at), and that
    place. nil otherwise."

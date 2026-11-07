@@ -17,6 +17,7 @@
             [clojurecraft.recipe :as recipe]
             [clojurecraft.sim :as sim]
             [clojurecraft.simrace :as simrace]
+            [clojurecraft.start :as start]
             [clojurecraft.wood]
             [clojurecraft.world :as world]
             [datascript.core :as d]))
@@ -228,7 +229,7 @@
   (let [r (simrace/run bare 3 "nether" 300000)
         _ (is (= [:wood :no-log] (failure/signature r)) (pr-str (:reason r)))
         snap (kept-snapshot bare r)
-        path (str (System/getProperty "java.io.tmpdir") "/clojurecraft-snapshot-test.edn.gz")
+        path (fx/temp-path "clojurecraft-snapshot-test" ".edn.gz")
         _ (capture/write-world! path snap)
         back (capture/read-world path)
         played (simrace/judged back bare)]
@@ -409,11 +410,12 @@
     (is (= [64 64 2] (map #(:count (get inv [:hotbar %])) [0 1 2])) "a count over a stack is split")
     (is (= (recipe/item-id :iron_helmet) (:item (get inv [:hotbar 3])))
         "armour is carried, not worn")
-    (is (= 36 (count (simrace/kit->inventory simrace/fortress-kit-default)))
+    (is (= 36 (count (simrace/kit->inventory (start/kit-map (start/start-of :fortress)))))
         "every slot full, as the real bots arrive")
     (is (= inv (simrace/kit->inventory {:iron_helmet 1 :iron_pickaxe 1 :cobblestone 130}))
         "the same kit, the same inventory")
-    (is (every? (comp pos? :count) (vals (simrace/kit->inventory simrace/fortress-kit-default))))))
+    (is (every? (comp pos? :count)
+                (vals (simrace/kit->inventory (start/kit-map (start/start-of :fortress))))))))
 
 (deftest a-run-may-start-at-the-fortress-spawner-nearest-its-landing
   ;; the model's fortress spawners (issue #495) are the cells holding a spawner block; the start is
@@ -428,7 +430,7 @@
 
 (deftest a-fortress-start-plays-from-the-blaze-rods
   ;; failures before the rods are not the run's to file: its goals are the stages from them up
-  (is (= [:blaze-rods :ender-pearls] (simrace/fortress-goals "pearls-12")))
+  (is (= [:blaze-rods :ender-pearls] (start/goals-from :blaze-rods "pearls-12")))
   (let [w (simrace/with-fortress
            (assoc two-columns :capture/nether {:decoded nether-decoded :columns {}})
            {:iron_sword 1})
@@ -443,11 +445,11 @@
 (deftest a-rods-start-plays-only-the-pearls
   ;; LOOP.md section 1: stage 18's checkpoint in the sim, seven rods in hand at the fortress start;
   ;; no sim run had reached a warped forest from the blaze rods (0 of 52)
-  (is (= [:ender-pearls] (simrace/fortress-goals "pearls-12" :ender-pearls)))
-  (is (= {:checkpoint/goal :ender-pearls :checkpoint/kit {:blaze_rod 7}} (simrace/starts "rods")))
+  (is (= [:ender-pearls] (start/goals-from :ender-pearls "pearls-12")))
+  (is (= {:blaze_rod 7} (select-keys (start/kit-map (start/start-of :rods)) [:blaze_rod])))
   (let [w (-> (simrace/with-fortress
                (assoc two-columns :capture/nether {:decoded nether-decoded :columns {}})
-               (merge-with + {:iron_sword 1} (:checkpoint/kit (simrace/starts "rods"))))
+               (merge-with + {:iron_sword 1} {:blaze_rod 7}))
               (assoc-in [:capture/fortress :checkpoint/goal] :ender-pearls))]
     (is (= [:ender-pearls] (:go/goals (simrace/go-of w "pearls-12"))) "the pearls alone")
     (is (some #(= (recipe/item-id :blaze_rod) (:item %))
@@ -549,12 +551,13 @@
            (is (= "{:t 1}" (str/trim (get (simrace/truth-texts ended) ".truth-ring.edn")))))
          (finally (run! #(.delete ^java.io.File %) (reverse (file-seq dir)))))))
 (deftest a-checkpoint-run-has-a-cap-of-its-own
-  (let [config {:simrace/checkpoint-max-minutes 60}
+  (let [rods (start/start-of :rods)
         horizon (* 330 60000)]
-    (is (= [3600000 true] (simrace/cap-max-ms config "rods" horizon)))
-    (is (= [horizon false] (simrace/cap-max-ms config nil horizon)) "a plain run keeps the horizon")
-    (is (= [horizon false] (simrace/cap-max-ms {} "rods" horizon)) "no key, no cap")
-    (is (= [60000 false] (simrace/cap-max-ms config "rods" 60000)) "never beyond the horizon")
+    (is (= [3600000 true] (simrace/cap-max-ms rods horizon)))
+    (is (= [horizon false] (simrace/cap-max-ms (start/start-of :fortress) horizon))
+        "a start with no cap keeps the horizon")
+    (is (= [horizon false] (simrace/cap-max-ms nil horizon)) "no start, no cap")
+    (is (= [60000 false] (simrace/cap-max-ms rods 60000)) "never beyond the horizon")
     (is (= :bot-timeout (:reason (simrace/capped {:ok false :reason :timeout} true))))
     (is (= :timeout (:reason (simrace/capped {:ok false :reason :timeout} false))))
     (is (= :crashed (:reason (simrace/capped {:ok false :reason :crashed} true))))

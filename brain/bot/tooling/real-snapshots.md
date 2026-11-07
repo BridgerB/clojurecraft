@@ -15,12 +15,12 @@ sourceRefs:
   - src/clojurecraft/real.clj#defn convert
   - src/clojurecraft/real.clj#defn nether-of
   - src/clojurecraft/real.clj#defn from-recordings!
-  - "src/clojurecraft/sim.clj#is that whole Nether instead, decoded once on arrival"
+  - "src/clojurecraft/sim/portal.clj#is that whole Nether instead, decoded once on arrival"
   - test/clojurecraft/real_test.clj#a-portal-at-the-moment-leads-to-the-real-nether
   - src/clojurecraft/real.clj#defn gap
   - src/clojurecraft/real.clj#defn from-recording!
   - src/clojurecraft/sim.clj#defn joined
-  - src/clojurecraft/sim.clj#defn player-eid-of
+  - src/clojurecraft/sim/world.clj#defn player-eid-of
   - src/clojurecraft/simrace.clj#defn own-world
   - src/clojurecraft/simrace.clj#defn world-for!
   - src/clojurecraft/record.clj#defn reduce-entries

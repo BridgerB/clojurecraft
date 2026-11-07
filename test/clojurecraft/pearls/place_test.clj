@@ -2,6 +2,7 @@
   "The burrow and the shelter geometry, and the intents that cut it and wait in it."
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [clojurecraft.blocks :as blocks]
+            [clojurecraft.filler :as filler]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
@@ -151,7 +152,7 @@
                           plan/goals))
      "a fence two high between the bot and its burrow, one to provoke over it: to the mouth
          first, as run 1 should have (the walk fails, and the provoke waits)")
-    (is (= :netherrack (stairs/filler {:player/inventory {0 (ps/item :netherrack 3)}} 2))
+    (is (= :netherrack (filler/pick {:player/inventory {0 (ps/item :netherrack 3)}} 2))
         "a Nether descent lays its floors from what it digs")))
 
 (deftest a-burrow-site-is-one-a-walk-reaches-and-none-a-walk-failed-toward

@@ -1,0 +1,31 @@
+;; Where and with what a bot begins. One table for the real race (race.clj) and the sim race
+;; (simrace.clj), read through clojurecraft.start. A start is
+;;   :start/id      its name on the command line (--start) and in ci/lanes.edn
+;;   :start/place   :overworld (a forest of its landing), :fortress (the Nether, the open pad beside
+;;                  its landing's fortress) or :warped-forest (the warped forest nearest that pad)
+;;   :start/goal    the first target it plays, the chain from there to --until; nil plays the whole
+;;                  chain from the wood
+;;   :start/kit     what it carries beyond :starts/base-kit, [[item count] ...]
+;;   :start/cap-min minutes a bot may play before it is filed a :bot-timeout; absent for no cap
+;; A start in the Nether also carries :starts/base-kit; the start's own items are given first, so a
+;; kit that overfills the 36 slots loses its last stack, never the rods.
+{:starts/default :fortress
+ :starts/base-kit [[:stone_pickaxe 1] [:iron_sword 1] [:iron_helmet 1] [:iron_chestplate 1]
+                   [:iron_leggings 1] [:cooked_beef 16] [:crafting_table 1] [:stick 12]
+                   [:flint_and_steel 1] [:bucket 1] [:water_bucket 1] [:coal 4] [:stone_sword 1]
+                   [:cobblestone 256] [:netherrack 64] [:diorite 128] [:granite 64] [:andesite 64]
+                   [:cobbled_deepslate 64] [:dirt 64] [:gravel 16] [:raw_copper 12]
+                   [:lapis_lazuli 11] [:leather 6] [:bone 2] [:string 3] [:oak_planks 1] [:flint 1]
+                   [:sand 16] [:golden_boots 1] [:spruce_planks 1] [:white_wool 2]]
+ :starts [{:start/id :spawn :start/place :overworld :start/goal nil :start/kit []}
+          {:start/id :fortress :start/place :fortress :start/goal :blaze-rods :start/kit []}
+          {:start/id :rods
+           :start/place :fortress
+           :start/goal :ender-pearls
+           :start/kit [[:blaze_rod 7]]
+           :start/cap-min 60}
+          {:start/id :forest
+           :start/place :warped-forest
+           :start/goal :ender-pearls
+           :start/kit [[:blaze_rod 7]]
+           :start/cap-min 60}]}

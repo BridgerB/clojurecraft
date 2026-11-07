@@ -1,6 +1,7 @@
 (ns clojurecraft.fortress-exit
   "The bot's exit from the blaze fortress into the pearl hunt: the sealed tunnel out, the pocket bore, the blaze refuge and the answer to a strike on the way."
   (:require [clojure.math :as math]
+            [clojurecraft.avoided :as avoided]
             [clojurecraft.blaze :as blaze]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.combat :as combat]
@@ -251,7 +252,7 @@
   [world]
   (let [feet (intent/feet world)
         [_ fy _] feet
-        bl (:plan/blacklist world #{})]
+        bl (avoided/all-of world :blacklist)]
     (when-let [[dx dz] (pocket-bore-heading world)]
       (let [along (fn [[hx hz]] [(+ (first feet) (* pparams/bore-reach hx)) fy
                                  (+ (last feet) (* pparams/bore-reach hz))])
@@ -276,7 +277,7 @@
             ;; ends it :done without a step, and the same cell is chosen again;
             ;; a blacklisted cell (#719's guard, fail-intent) is passed over the same way
             target-c (some #(when (and (>= (physics/distance feet %) 2.0)
-                                       (not (contains? (:plan/blacklist world #{}) %)))
+                                       (not (contains? (avoided/all-of world :blacklist) %)))
                               %)
                            remaining)]
         (when target-c
@@ -361,7 +362,7 @@
   (let [held (:pearls/exit-target world)]
     (when (and held
                (>= (physics/distance (intent/feet world) held) pparams/exit-reach)
-               (not (contains? (:plan/blacklist world #{}) held)))
+               (not (contains? (avoided/all-of world :blacklist) held)))
       held)))
 
 (defn fortress-tunnel-target

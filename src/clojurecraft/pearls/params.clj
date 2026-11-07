@@ -3,6 +3,7 @@
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojurecraft.combat :as combat]
+            [clojurecraft.path :as path]
             [clojurecraft.stairs :as stairs]))
 
 (set! *warn-on-reflection* true)
@@ -124,7 +125,7 @@
 
 (def vantage-tries (:vantage-tries thresholds))
 
-(def vantage-nodes (:vantage-nodes thresholds))
+(def vantage-nodes (path/budget :vantage))
 
 (def provoke-home-reach (:provoke-home-reach thresholds))
 

@@ -18,6 +18,8 @@
    an unanswered scoop is tried again, and the last try fails :no-scoop, which blacklists the
    source. Nothing is remembered that the inventory can tell."
   (:require [clojure.math :as math]
+            [clojure.spec.alpha :as s]
+            [clojurecraft.avoided :as avoided]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.chunk :as chunk]
             [clojurecraft.game :as game]
@@ -36,6 +38,16 @@
             [clojurecraft.window :as window]))
 
 (set! *warn-on-reflection* true)
+
+;; read by name (ns-resolve) in scratch_test and model_test, so the unused-var lint excludes it
+(def scratch
+  "The intent attributes only this namespace's executor reads and writes: {attribute {:doc meaning
+   :when lifetime}}. They are not world information, so they are not in clojurecraft.model;
+   scratch_test holds that no other namespace uses one."
+  {:intent/tries {:doc "scoops sent at this source; the last of scoop/max-tries fails :no-scoop"
+                  :when "scoop, after a scoop went unanswered"}})
+
+(s/def :intent/tries pos-int?)
 
 (def search-radius 24)                ; blocks from the eye searched for water in the loaded terrain
 (def pool-radius 96)                  ; blocks from the eye a remembered pool is walked to from
@@ -189,7 +201,7 @@
    Asked of the terrain through the overlay, so a source just scooped is air."
   [world]
   (let [eye (game/eye world)
-        blacklist (:plan/blacklist world #{})]
+        blacklist (avoided/all-of world :blacklist)]
     (memory/nearest-first
      eye
      search-radius
@@ -242,7 +254,7 @@
   ([world] (pools-near world pool-radius))
   ([world radius]
    (let [eye (game/eye world)
-         blacklist (:plan/blacklist world #{})]
+         blacklist (avoided/all-of world :blacklist)]
      (memory/nearest-first
       eye
       radius
@@ -289,7 +301,7 @@
                                      (long (math/floor (+ pz (* dz hunt-distance))))]
                                     ey)))
                     (filter #(terrain/under-sky? world %))
-                    (remove (:plan/blacklist world #{})))
+                    (remove (avoided/all-of world :blacklist)))
          {outward true inward false} (group-by out? found)]
      (concat (sort-by second outward) (when homeward? (sort-by second inward))))))
 
@@ -314,7 +326,7 @@
    after each failure, forty times and more, the landing itself the target."
   [world for targets]
   (->> (stable-first world for targets)
-       (remove (:plan/blacklist world #{}))
+       (remove (avoided/all-of world :blacklist))
        (map (fn [t] {:intent/kind :walk :intent/target t :intent/for for}))
        (remove #(intent/arrived? world
                                  %
@@ -331,7 +343,7 @@
    (melts?) under the open sky (terrain/under-sky?: a lake's own sheet, not ice in a cave), not
    blacklisted, nearest first, at most ice-looked of them."
   [world]
-  (let [blacklist (:plan/blacklist world #{})]
+  (let [blacklist (avoided/all-of world :blacklist)]
     (->> (memory/nearest-first (game/eye world)
                                search-radius
                                (->> (chunk/find-blocks (stone/near-chunks (:world/chunks world)
@@ -395,7 +407,7 @@
   "Did a climb out die :boxed standing where the feet are (:plan/boxed-at, stairs/box)? A climb
    from there is cut no more."
   [world]
-  (contains? (:plan/boxed-at world #{}) (intent/feet world)))
+  (contains? (avoided/all-of world :boxed-at) (intent/feet world)))
 
 (defn way-up
   "The way back up to the landing (:plan/go-at): a walk to it when a route reaches it, else a
@@ -454,7 +466,7 @@
       (->> (chunk/find-blocks (stone/near-chunks (:world/chunks world) (stone/feet-chunk world))
                               #{blocks/water-base})
            (map (fn [[x y z _]] [x y z]))
-           (remove (:plan/blacklist world #{}))
+           (remove (avoided/all-of world :blacklist))
            (filter #(and (in-reach? world %) (source? world % :water)))
            (sort-by #(physics/distance eye (physics/centre %)))
            (keep (fn [src]
@@ -477,7 +489,7 @@
                                more))]
     (when (and src
                (source? world src :water)
-               (not (contains? (:plan/blacklist world #{}) src))
+               (not (contains? (avoided/all-of world :blacklist) src))
                (<= (count rock) bed-depth)
                (in-reach? world src)
                (not-any? #(contains? intent/never-dug (blocks/name-of (terrain/block-at world %)))

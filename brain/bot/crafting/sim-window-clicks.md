@@ -8,16 +8,16 @@ status: verified
 lastUpdated: 2026-10-15
 verifiedAgainst: HEAD
 sourceRefs:
-  - src/clojurecraft/sim.clj#defmulti click-view
-  - src/clojurecraft/sim.clj#defn click-kind
-  - src/clojurecraft/sim.clj#defmethod click-view :throw
-  - src/clojurecraft/sim.clj#defn stack-size
+  - src/clojurecraft/sim/window.clj#defmulti click-view
+  - src/clojurecraft/sim/window.clj#defn click-kind
+  - src/clojurecraft/sim/window.clj#defmethod click-view :throw
+  - src/clojurecraft/sim/world.clj#defn stack-size
   - test/clojurecraft/sim_test.clj#tools-never-stack-and-wear-one-at-a-time
   - src/clojurecraft/inventory.clj#def layouts
-  - src/clojurecraft/sim.clj#defn result-of
-  - src/clojurecraft/sim.clj#defn insert
-  - src/clojurecraft/sim.clj#defn view-of
-  - src/clojurecraft/sim.clj#defn accepts?
+  - src/clojurecraft/sim/window.clj#defn result-of
+  - src/clojurecraft/sim/window.clj#defn insert
+  - src/clojurecraft/sim/window.clj#defn view-of
+  - src/clojurecraft/sim/window.clj#defn accepts?
   - src/clojurecraft/inventory.clj#defn own-slots
 related:
   - "[[bot/crafting/_moc|Crafting]]"

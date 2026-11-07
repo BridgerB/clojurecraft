@@ -1,6 +1,7 @@
 (ns clojurecraft.pearls.upkeep
   "The pearl hunt's kit upkeep: the sword and the pickaxe made again, and the reserve of digs and stems."
   (:require [clojure.string :as str]
+            [clojurecraft.avoided :as avoided]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.combat :as combat]
             [clojurecraft.intent :as intent]
@@ -163,7 +164,7 @@
         ;; a remembered table no route reaches is replaced by a new one, not walked at: the walk
         ;; to it is no craft, and the hunt in a rock pocket would stand still
         i (if (and (= :walk (:intent/kind first-i)) (not (intent/routable? world first-i)))
-            (decide (update world :plan/blacklist (fnil conj #{}) (:intent/target first-i)))
+            (decide (avoided/note world :blacklist (:intent/target first-i)))
             first-i)]
     (when (and (:intent/kind i)
                (not (and (log-counted? world) (= :log (:intent/for i))))

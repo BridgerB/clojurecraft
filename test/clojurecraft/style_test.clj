@@ -1,6 +1,7 @@
 (ns clojurecraft.style-test
   "RICH-HICKEY.md style rules that a test can hold."
-  (:require [clojure.java.io :as io]
+  (:require [clojure.edn]
+            [clojure.java.io :as io]
             [clojure.string :as str]
             [clojure.test :refer [deftest is]]
             [clojure.walk :as walk]))
@@ -51,3 +52,53 @@
   (is (= []
          (vec (concat (without-reflection-warnings "src/clojurecraft")
                       (without-reflection-warnings "dev/clojurecraft"))))))
+
+;;; Incident history and global redefinition: held by a ratchet. A file may hold no more such
+;;; lines than style_baseline.edn records for it (none when it is not listed); the baseline only
+;;; ever shrinks, as the history moves to problems.edn's :problem/seen and the issues, and as
+;;; with-redefs gives way to arguments and rows of a test's own.
+
+(def history-pattern
+  "A line that names a run, race, probe or batch by id, or a numbered race round of a kind the
+   issues keep: the story belongs on the issue, the data in problems.edn."
+  #"(plan run|race|probe|run|job|jobs) \d{8,}|blaze-race-|pearls-warped|\b(?:batch|gym batch) [a-z][a-z0-9]*-[a-z0-9-]*")
+
+(def redefs-pattern
+  "A line using with-redefs, which rebinds a var for the whole JVM."
+  #"with-redefs")
+
+(defn clj-files
+  "Every .clj file under the dirs, as paths."
+  [dirs]
+  (for [d dirs f (file-seq (io/file d)) :when (str/ends-with? (str f) ".clj")] (str f)))
+
+(defn line-counts
+  "{path n} for each .clj file under dirs with n lines matching pattern (n > 0)."
+  [dirs pattern]
+  (into (sorted-map)
+        (for [f (clj-files dirs)
+              :let [n (with-open [r (io/reader f)]
+                        (count (filter #(re-find pattern %) (line-seq r))))]
+              :when (pos? n)]
+          [f n])))
+
+(def baseline (clojure.edn/read-string (slurp "test/clojurecraft/style_baseline.edn")))
+
+(defn grown
+  "[path found allowed] for each file whose count of lines matching pattern is above its allowance."
+  [dirs pattern allowed]
+  (for [[f n] (line-counts dirs pattern)
+        :let [limit (get allowed f 0)]
+        :when (> n limit)]
+    [f n limit]))
+
+(deftest no-new-incident-history-in-src-or-test
+  (is (= []
+         (vec (grown ["src/clojurecraft" "dev/clojurecraft" "test/clojurecraft"]
+                     history-pattern
+                     (:history baseline))))
+      "a run id or batch name in a comment: put it in problems.edn :problem/seen or the issue"))
+
+(deftest no-new-with-redefs-in-tests
+  (is (= [] (vec (grown ["test/clojurecraft"] redefs-pattern (:redefs baseline))))
+      "pass the dependency as an argument, or give the test a row of its own plan key"))

@@ -14,7 +14,8 @@
    (32 ticks for most) with no further word from the client, then sends set-health with the new
    food. A deadline of the food's eating time (food/eating-ticks, stretched by the server's
    slowdown, intent/slowdown) plus answer-ms fails it :not-eaten."
-  (:require [clojurecraft.dimension :as dimension]
+  (:require [clojure.spec.alpha :as s]
+            [clojurecraft.dimension :as dimension]
             [clojurecraft.food :as food]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
@@ -26,6 +27,20 @@
             [clojurecraft.window :as window]))
 
 (set! *warn-on-reflection* true)
+
+;; read by name (ns-resolve) in scratch_test and model_test, so the unused-var lint excludes it
+(def scratch
+  "The intent attributes only this namespace's executor reads and writes: {attribute {:doc meaning
+   :when lifetime}}. They are not world information, so they are not in clojurecraft.model;
+   scratch_test holds that no other namespace uses one."
+  {:intent/food-before {:doc
+                        "the food level when an :eat sent its use-item; a higher one is the meal"
+                        :when "eat, :eating stage"}
+   :intent/eat-by {:doc "ms past which an :eat whose food has not risen fails :not-eaten"
+                   :when "eat, :eating stage"}})
+
+(s/def :intent/food-before int?)
+(s/def :intent/eat-by number?)
 
 (def hungry-below 14)                 ; food under this is hunger to answer: six short of full, four below where natural healing stops (18)
 (def portal-fed 18)                   ; food under this is eaten once the portal kit is held, in the overworld: health comes back in the Nether only from food 18 (hunger/heal-level), which has no game
