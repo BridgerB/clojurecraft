@@ -1,8 +1,8 @@
 (ns clojurecraft.drops
-  "Picking up what lies on the ground (issue #262): the :collect-drops executor, :collect made
-   general. :collect walks after a dug block's drop until one more log (or one of :intent/drops)
-   is held, and fails :not-picked-up when none comes; a kill's loot is not a block's drop: a blaze
-   drops a rod one time in two, so a collect that waited for one would fail every other kill.
+  "Picking up what lies on the ground: the :collect-drops executor, :collect made general. :collect
+   walks after a dug block's drop until one more log (or one of :intent/drops) is held, and fails
+   :not-picked-up when none comes; a kill's loot is not a block's drop: a blaze drops a rod one time
+   in two, so a collect that waited for one would fail every other kill.
 
    {:intent/kind :collect-drops :intent/item name :intent/target cell} walks onto the nearest
    dropped item within drop-radius of the cell that holds the item, and is done when one more of
@@ -43,19 +43,14 @@
 (def pickup-fall 0.5)                 ; blocks under the feet the server's pickup box reaches (inflated 0.5 vertically)
 
 (defn under-reach?
-  "Does drop e lie too far under the feet for the pickup box: a block's depth under the bot's
-   floor, where standing over it picks nothing up? Sim race 39712220957 (issue #500, world R1/18):
-   a tunnel's digs lay in pits under the bot's path, and a :collect-drops stood over each, within
-   underfoot of it, until it failed :not-picked-up."
+  "Does drop e lie too far under the feet for the pickup box: a block's depth under the bot's floor,
+   where standing over it picks nothing up?"
   [world e]
   (<= (- (physics/y-of (:entity/pos e)) (physics/y-of (:player/pos world))) (- pickup-fall)))
 
 (defn over-void?
-  "Does drop e hang over a drop it cannot be fetched from: its cell open, nothing to stand on
-   under it and no landing within path/max-fall below (path/landing)? Sim snapshot R4-31-1 (issue
-   #502): a blaze's rod fell over the edge of a fortress's bridge, the collect walked after it,
-   stepped down the rim, and its momentum, with the intent already done, carried the bot off the
-   bridge into the lava sea forty blocks down. A rod there is lost; the bot is not."
+  "Does drop e hang over a drop it cannot be fetched from: its cell open, nothing to stand on under
+   it and no landing within path/max-fall below (path/landing)? A rod there is lost; the bot is not."
   [world e]
   (let [cell (mapv #(long (math/floor %)) (:entity/pos e))]
     (and (= :clear (path/classify world cell))
