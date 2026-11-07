@@ -69,9 +69,9 @@ jobs:
                    (println (str "bots=" (:race/bots r)))
                    (println (str "server-heap=" (:race/server-heap-mb r)))
                    (println (str "bot-heap=" (:race/bot-heap-mb r)))
-                   (let [c (:race/checkpoint r) lane (parse-long "${{ inputs.lane }}") on? (contains? (set (:lanes c)) lane)]
-                     (println (str "from=" (if on? (:from c) "")))
-                     (println (str "kind=" (if on? (:kind c) "real")))))' >> "$GITHUB_OUTPUT"
+                   (let [cs (let [c (:race/checkpoint r)] (cond (nil? c) [] (map? c) [c] :else c)) lane (parse-long "${{ inputs.lane }}") c (first (filter (fn [c] (contains? (set (:lanes c)) lane)) cs))]
+                     (println (str "from=" (if c (:from c) "")))
+                     (println (str "kind=" (if c (:kind c) "real")))))' >> "$GITHUB_OUTPUT"
           cat "$GITHUB_OUTPUT"
 
   race:
