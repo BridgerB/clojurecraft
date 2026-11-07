@@ -197,10 +197,9 @@
 (def max-stack 64)                    ; items per slot
 
 (defn stack-size
-  "How many of item one slot holds: one for a tool (blocks/tool: the game's tools never stack,
-   each wears on its own), max-stack for anything else. With every item stacking to 64, a spare
-   pickaxe went into the slot of the one in use, and the dig that broke one emptied the slot of
-   both (issue #36: the sim's runs lost their spare at the moment it was needed)."
+  "How many of item one slot holds: one for a tool (blocks/tool: the game's tools never stack, each
+   wears on its own), max-stack for anything else. With every item stacking to 64, a spare pickaxe
+   went into the slot of the one in use, and the dig that broke one emptied the slot of both."
   [item]
   (if (blocks/tool item) 1 max-stack))
 (def max-air 300)                     ; a full breath, as the game's
@@ -211,40 +210,35 @@
 (def drop-rise 0.25)                  ; how far over the bottom of a broken block its drop appears
 
 (defn init
-  "A fresh server before the handshake, from {:columns {[cx cz] bytes} :spawn [x y z]} (a world:
-   its chunk columns as a real server sent them, a capture of one; or {:column bytes}, the world
-   of the one column [0 0]), with optional :decoded {[cx cz] column} (the same columns decoded,
-   once, when the world was read, so the runs of one world share them); the whole world goes to
-   the client at login and stays, unless the
-   optional :view-distance r streams the columns within r chunks as the player moves, as a
-   server does. Then the optional
-   :keep-alive-every ms, :drop-clicks #{ordinal}, :drop-breaks #{ordinal}, :inventory {slot item}
-   (a slot is a named place, [:hotbar 0] as inventory/slot reads it, or a window-0 slot
-   number), :lag-ticks,
-   :slow-breaks f (blocks take f times their time to break by the server's clock, a loaded
-   server's: a FINISH at the client's time is acked but the break comes later, full-ms),
-   :still-blazes? true (the model's blazes hover where they stand, as before they flew: for the tests that
-   pin the bot's own cover and fight, not the blaze's flight), :respawn-in dimension (the dimension a new life begins in when the player dies there, as a
-   spawn the server holds for it does: the Nether for a race that starts at a fortress; absent, a death
-   anywhere but the overworld ends in the overworld), :respawn [x y z] (where a new life begins; the spawn when absent, as a gym landing may differ
-   from the world spawn), :seed (where the loot rolls start, 0 when absent), :tick-seed (where
-   a run's tick randomness starts; 0.5 every tick when absent), :kill-at ms (the
-   player dies then, a fault as an input: a death mid-task), :dimension (the dimension the
-   player joins in, the overworld when absent: a run that starts in the Nether is a gym's tp
-   there), :food (the hunger bar the player joins with, told at login; absent, no food is
-   modelled and none is told), :nether {:column bytes :at [x y z]} (the Nether a portal leads to: its one column
-   and where the player arrives; :columns {[cx cz] bytes} in place of :column, a whole Nether,
-   with optional :decoded, the same columns decoded once, :view-distance r, the chunks streamed
-   round the player there, and :at, absent for where the server would link the portal: arrive) and :difficulty (:peaceful, :easy, :normal or :hard, as the
-   server's setting: hunger drains the bar, a full one when :food is absent, and heals and
-   starves by it, issue #260; absent, nothing drains the bar, as before, so a snapshot from then
-   plays the same; given, the day turns from :day-time (game ticks, 0 when absent), hostiles
-   spawn at night and in the dark, and animals stand on newly loaded chunks), and :mobs
-   [{:type kind :pos [x y z]}] (a fixture's mobs, mob/kinds, sent at login and never despawned),
-   :stronghold [x y z] (where a thrown eye flies toward; absent, an eye is not thrown) and :end
-   {:columns {[cx cz] bytes} :dragon [x y z] :dragon-yaw deg :crystals [[x y z] ...]} (the End
-   an end portal leads to: its columns, a void when absent, where the dragon perches, the
-   fountain's top when absent, the way it faces, its head harmless when absent, and its
+  "A fresh server before the handshake, from {:columns {[cx cz] bytes} :spawn [x y z]} (a world: its
+   chunk columns as a real server sent them, a capture of one; or {:column bytes}, the world of the
+   one column [0 0]), with optional :decoded {[cx cz] column} (the same columns decoded, once, when
+   the world was read, so the runs of one world share them); the whole world goes to the client at
+   login and stays, unless the optional :view-distance r streams the columns within r chunks as the
+   player moves, as a server does. Then the optional :keep-alive-every ms, :drop-clicks #{ordinal},
+   :drop-breaks #{ordinal}, :inventory {slot item} (a slot is a named place, [:hotbar 0] as
+   inventory/slot reads it, or a window-0 slot number), :lag-ticks, :slow-breaks f (blocks take f
+   times their time to break by the server's clock, a loaded server's: a FINISH at the client's time
+   is acked but the break comes later, full-ms), :still-blazes? true (the model's blazes hover where
+   they stand, as before they flew: for the tests that pin the bot's own cover and fight, not the
+   blaze's flight), :respawn-in dimension (the dimension a new life begins in when the player dies
+   there, as a spawn the server holds for it does: the Nether for a race that starts at a fortress;
+   absent, a death anywhere but the overworld ends in the overworld), :respawn [x y z] (where a new
+   life begins; the spawn when absent, as a gym landing may differ from the world spawn), :seed
+   (where the loot rolls start, 0 when absent), :tick-seed (where a run's tick randomness starts;
+   0.5 every tick when absent), :kill-at ms (the player dies then, a fault as an input: a death
+   mid-task), :dimension (the dimension the player joins in, the overworld when absent: a run that
+   starts in the Nether is a gym's tp there), :food (the hunger bar the player joins with, told at
+   login; absent, no food is modelled and none is told), :nether {:column bytes :at [x y z]} (the
+   Nether a portal leads to: its one column and where the player arrives; :columns {[cx cz] bytes}
+   in place of :column, a whole Nether, with optional :decoded, the same columns decoded once,
+   :view-distance r, the chunks streamed round the player there, and :at, absent for where the
+   server would link the portal: arrive) and :difficulty (:peaceful, :easy, :normal or :hard, as the
+   server's setting), and :mobs [{:type kind :pos [x y z]}] (a fixture's mobs, mob/kinds, sent at
+   login and never despawned), :stronghold [x y z] (where a thrown eye flies toward; absent, an eye
+   is not thrown) and :end {:columns {[cx cz] bytes} :dragon [x y z] :dragon-yaw deg :crystals [[x y
+   z] ...]} (the End an end portal leads to: its columns, a void when absent, where the dragon
+   perches, the fountain's top when absent, the way it faces, its head harmless when absent, and its
    crystals, one on every spike when absent)."
   [{:keys [column columns decoded view-distance spawn keep-alive-every drop-clicks drop-breaks
            inventory lag-ticks slow-breaks respawn respawn-in seed tick-seed kill-at dimension
@@ -342,21 +336,20 @@
          :global false}))
 
 (defn joined
-  "A server already in play with a player it never saw join (issue #299: a real race's moment,
-   real/model): init's world from opts (:columns and :decoded the columns it holds, :spawn,
-   :respawn, :seed, :tick-seed, :difficulty, :day-time, :dimension, :food, :inventory as
-   window-0 slots), then what the real server held at that moment, given as data in play: the
-   time (:now, ms, the bot's clock), the player's :pos, :look, :on-ground?, :held hotbar place,
-   window 0's :state-id, :health, :saturation and :air, its entity id (:player-eid), the blocks
-   changed since their columns were sent (:placed {pos state}), the items lying about (:items
-   {eid {:pos :item}}, ready to pick up) and the mobs (:mobs {eid {:type :pos :health}}), under
-   the ids the client tracks them by, and the columns the client holds (:view, every one within
-   :view-distance chunks of the player, a square as stream counts it). Nothing is sent: the
-   client has it all already, but for the entities it tracks that this model does not carry
-   (:gone ids), told removed (remove-entities) with its first tick's packets. Every column the
-   model holds is taken as populated: the animals the real server placed are the mobs given, so
-   the model adds none. The keep-alive clock starts at :now, and with hunger what it last told
-   is what the client knows (sync-health tells only a change)."
+  "A server already in play with a player it never saw join: init's world from opts (:columns and
+   :decoded the columns it holds, :spawn, :respawn, :seed, :tick-seed, :difficulty, :day-time,
+   :dimension, :food, :inventory as window-0 slots), then what the real server held at that moment,
+   given as data in play: the time (:now, ms, the bot's clock), the player's :pos, :look,
+   :on-ground?, :held hotbar place, window 0's :state-id, :health, :saturation and :air, its entity
+   id (:player-eid), the blocks changed since their columns were sent (:placed {pos state}), the
+   items lying about (:items {eid {:pos :item}}, ready to pick up) and the mobs (:mobs {eid {:type
+   :pos :health}}), under the ids the client tracks them by, and the columns the client holds
+   (:view, every one within :view-distance chunks of the player, a square as stream counts it).
+   Nothing is sent: the client has it all already, but for the entities it tracks that this model
+   does not carry (:gone ids), told removed (remove-entities) with its first tick's packets. Every
+   column the model holds is taken as populated: the animals the real server placed are the mobs
+   given, so the model adds none. The keep-alive clock starts at :now, and with hunger what it last
+   told is what the client knows (sync-health tells only a change)."
   [opts
    {:keys [now pos look on-ground? held state-id health saturation air player-eid placed items mobs
            view view-distance gone]}]
@@ -425,10 +418,8 @@
           :else (stream-from sim here))))
 
 (defn stream-from
-  "stream's work for a player in column here: send what came into view, forget what left it.
-   Fresh columns carry their changed blocks after the captured bytes, before the batch ends.
-   Sim race 38999010135 (issue #328): the portal dropped the client's overlay, and the original
-   column put its dug room back in deepslate, failing the first fortress tunnel :no-stand."
+  "stream's work for a player in column here: send what came into view, forget what left it. Fresh
+   columns carry their changed blocks after the captured bytes, before the batch ends."
   [sim here]
   (let [now (in-view sim)
         sent (:sim/view sim)
@@ -504,9 +495,9 @@
    :flat? false})
 
 (defn health
-  "The set-health packet that tells the client the player's health and food as the model holds
-   them: :sim/food, or a full bar when no food is modelled, and the saturation hunger keeps
-   (:sim/saturation, issue #260), the start's 5 when it keeps none."
+  "The set-health packet that tells the client the player's health and food as the model holds them:
+   :sim/food, or a full bar when no food is modelled, and the saturation hunger keeps, the start's 5
+   when it keeps none."
   [sim]
   {:packet/name :set-health
    :health (:sim/health sim)
@@ -608,13 +599,9 @@
   #{:ice :frosted_ice})
 
 (defn melts?
-  "Does breaking block id at pos leave a water source, as the game's IceBlock.playerDestroy does
-   for ice broken without silk touch (the bot never holds it) over a block that blocks motion or
-   a fluid, outside the Nether, where the water evaporates? Before it, ice broke to air here: sim
-   race 38806318231 world R2/43 (issue #177, 83 runs) came up under a frozen sea, dug the ice
-   over its head from the water, and floated a block under the hole's rim, the ice two over the
-   water's top and no bank in the impulse's lift, until its escape timed out three times; on a
-   server the hole fills, the water's top is a block higher and the ice round it is the bank."
+  "Does breaking block id at pos leave a water source, as the game's IceBlock.playerDestroy does for
+   ice broken without silk touch (the bot never holds it) over a block that blocks motion or a
+   fluid, outside the Nether, where the water evaporates? Before it, ice broke to air here."
   [sim [x y z] id]
   (let [below (block-at sim [x (dec y) z])]
     (boolean (and (melting-ice (blocks/name-of id))
@@ -624,9 +611,9 @@
                               blocks/solid?))))))
 
 (defn item-data
-  "The set-entity-data that tells the client item entity eid what it holds (stack {:item id
-   :count n}), the packet a vanilla server sends with the add-entity of a drop: without it the
-   client does not know a cobblestone from a crafting table (issue #263)."
+  "The set-entity-data that tells the client item entity eid what it holds (stack {:item id :count
+   n}), the packet a vanilla server sends with the add-entity of a drop: without it the client does
+   not know a cobblestone from a crafting table."
   [eid stack]
   {:packet/name :set-entity-data
    :entity-id eid
@@ -684,7 +671,7 @@
         id (block-at sim pos)
         held (held-item sim)
         slot (held-slot sim)
-        n (:sim/breaks sim 0) ; a snapshot's model from before the counter (issue #77's, saved at 7239df5) counts from zero
+        n (:sim/breaks sim 0) ; a snapshot's model from before the counter counts from zero
         sim (update sim :sim/breaks (fnil inc 0))
         ack {:packet/name :block-changed-ack :sequence sequence}]
     (cond (contains? (:sim/drop-breaks sim) n)
@@ -1282,11 +1269,9 @@
                               (sort-by (comp entity/equipment-slot-ids key) gear))}))))
 
 (defn retell-entities
-  "The model with every mob and every item lying about told to the client again (add-entity, a
-   mob's health after it), as a vanilla server does for a respawned player, whose client starts
-   a new life knowing no entity. Sim race 38900840841 (issue #62): a bot that died and respawned
-   never saw the zombie and spider that followed it down the stair, so :defend never fought them
-   and it died on the same stair again and again."
+  "The model with every mob and every item lying about told to the client again (add-entity, a mob's
+   health after it), as a vanilla server does for a respawned player, whose client starts a new life
+   knowing no entity."
   [sim]
   (let [told (reduce (fn [sim [eid {:keys [type pos health]}]]
                        (let [[x y z] pos]
@@ -1332,10 +1317,7 @@
 (defn return-overworld
   "The model with the overworld back as leave-overworld set it aside: its columns, its placed and
    broken blocks, its view distance, and none of the other dimension's items, mobs, fluids or
-   falling blocks, which the client dropped. Unchanged with no overworld set aside. Sim race
-   39723238841 (issue #504): a death in the Nether respawned the player in the overworld's
-   dimension over the Nether's columns, which hold nothing at the spawn, so the bot stood in
-   unloaded chunks on stairs-down for hours."
+   falling blocks, which the client dropped. Unchanged with no overworld set aside."
   [sim]
   (if-let [overworld (:sim/overworld sim)]
     (-> (apply dissoc sim :sim/overworld overworld-keys)
@@ -1346,9 +1328,8 @@
 
 (defmethod on-packet [:play :client-command]
   [sim {:keys [action]}]
-  ;; a dead player asking to respawn gets a new life at spawn, full health and breath, a fresh
-  ;; bar with hunger (issue #260), eating nothing, no old container, then the teleport that
-  ;; places it; issue #323's furnace survived here and refused every window-0 swap after death
+  ;; a dead player asking to respawn gets a new life at spawn, full health and breath, a fresh bar
+  ;; with hunger, eating nothing, no old container, then the teleport that places it.
   (if (and (= action (packet/value :client-command :perform-respawn)) (<= (:sim/health sim) 0.0))
     (let [[x y z] (:sim/respawn sim)
           here (:sim/dimension sim dimension/overworld)
@@ -1383,7 +1364,7 @@
           stream))
     sim))
 
-;; ---------------------------------------------------------------- fire and portals (issue #8)
+;; ---------------------------------------------------------------- fire and portals
 
 (def portal-ms 4000)                  ; a survival player in a portal this long changes dimension (80 game ticks)
 (def nether
@@ -1464,9 +1445,9 @@
     (boolean (and floor feet head (blocks/solid? floor) (blocks/air? feet) (blocks/air? head)))))
 
 (defn portal-space?
-  "Can a linked portal's frame fit at feet in either horizontal axis: four solid floor cells
-   with four air cells over each, as PortalForcer.canHostFrame checks? A single standing? cell
-   is not enough: issue #286's arrival was gravel suspended over the lava sea."
+  "Can a linked portal's frame fit at feet in either horizontal axis: four solid floor cells with
+   four air cells over each, as PortalForcer.canHostFrame checks? A single standing? cell is not
+   enough."
   [at [x y z :as feet]]
   (boolean (and (standing? at feet)
                 (some (fn [[dx dz]]
@@ -1523,15 +1504,14 @@
     {:at [(+ x 0.5) (double y) (+ z 0.5)] :placed placed}))
 
 (defn arrive
-  "The model in the Nether: with a :sim/nether, its column becomes the world (the overworld's
-   placed and broken blocks were the other dimension's) and the player stands at its :at; without
-   one, the same column where the player stood (a one-column model of the portal alone). A
-   :sim/nether with :columns ({[cx cz] bytes}, a real Nether as a real race's recording holds it,
-   issue #299, or a race set's captured Nether, issue #353) is that whole Nether instead, decoded
-   once on arrival unless it comes :decoded, and the overworld's items, mobs, fluids and falling
-   blocks stay behind, as the client drops their entities. With no :at, the player stands where
-   the server would place the portal linked to the one it stood in (arrival); with a
-   :view-distance, the Nether's columns stream round it as a server's do, never all at once."
+  "The model in the Nether: with a :sim/nether, its column becomes the world (the overworld's placed
+   and broken blocks were the other dimension's) and the player stands at its :at; without one, the
+   same column where the player stood (a one-column model of the portal alone). A :sim/nether with
+   :columns is that whole Nether instead, decoded once on arrival unless it comes :decoded, and the
+   overworld's items, mobs, fluids and falling blocks stay behind, as the client drops their
+   entities. With no :at, the player stands where the server would place the portal linked to the
+   one it stood in (arrival); with a :view-distance, the Nether's columns stream round it as a
+   server's do, never all at once."
   [sim]
   (let [{:keys [column columns decoded at view-distance]} (:sim/nether sim)]
     (cond columns
@@ -1600,11 +1580,9 @@
 (defn place
   "use-item-on that is not on a container: place the held block item at pos + face when the
    destination is one a block may take the place of (blocks/placeable-into?: air, a grass or a
-   fluid, as the server's replaceable tag says; a flower refuses it), the clicked block is
-   solid and the block would not overlap the player; else tell the client the destination's
-   real state. Either way, then the ack. Sim race 38515210080 (issue #44, 198 runs): the first
-   op of the portal's pad placed cobblestone into a water cell at the pond's edge, which a real
-   server takes and the model refused, three times, :rejected."
+   fluid, as the server's replaceable tag says; a flower refuses it), the clicked block is solid and
+   the block would not overlap the player; else tell the client the destination's real state. Either
+   way, then the ack."
   [sim pos face ack]
   (let [dest (mapv + pos (faces face))
         slot (held-slot sim)
@@ -1763,9 +1741,8 @@
         (sync-window :inventory before (:sim/cursor sim) false))))
 
 (defn eats?
-  "Does a use-item with item (an id) held start eating it: food is modelled (:sim/food), the item
-   is food (food/nutrition), and the bar is not full or the food is one eaten anyway
-   (food/always-edible, issue #260)?"
+  "Does a use-item with item (an id) held start eating it: food is modelled (:sim/food), the item is
+   food (food/nutrition), and the bar is not full or the food is one eaten anyway?"
   [sim item]
   (let [f (:sim/food sim)
         n (recipe/item-name item)]
@@ -1876,10 +1853,9 @@
             (fluid/spread #(block-at sim %) pos (ultrawarm? sim)))))
 
 (defn tick-fluids
-  "One game tick of fluids: every cell whose tick is due, in position order so a run replays,
-   ticks (fluid-tick). Older saved models first wake fluids beside changed cells: their
-   scheduler did not recognize aquatic sources. Sim race 39007350790 (issue #344, R3/4) dug
-   beneath tall seagrass, leaving an unscheduled source over a dry shaft until :no-escape."
+  "One game tick of fluids: every cell whose tick is due, in position order so a run replays, ticks
+   (fluid-tick). Older saved models first wake fluids beside changed cells: their scheduler did not
+   recognize aquatic sources."
   [sim]
   (let [sim (if (:sim/fluid-sources-ready? sim)
               sim
@@ -2148,7 +2124,7 @@
             sim
             (:sim/items sim))))
 
-;; ---------------------------------------------------------------- mobs (issue #260)
+;; ---------------------------------------------------------------- mobs
 
 (def unswell 7.0)                     ; a lit creeper's fuse goes out with the player farther than this (SwellGoal)
 (def populate-radius 3)               ; chunks round the player that have had their animals placed
@@ -2163,10 +2139,10 @@
 
 (defn wild-roll
   "[sim' r]: the next roll of the Nether's own spawns' stream, r in [0, 1), from :sim/wild-rng
-   (started at :seed mixed with wild-salt, or from the loot's :sim/rng for a model kept before
-   it), never from the mobs' :sim/mob-rng, so a try that finds no warped floor costs the mobs'
-   stream nothing and a Nether run that meets no warped forest rolls its fortress's spawners
-   as before (issue #263). The endermen it spawns act and despawn by mob-roll, as every mob."
+   (started at :seed mixed with wild-salt, or from the loot's :sim/rng for a model kept before it),
+   never from the mobs' :sim/mob-rng, so a try that finds no warped floor costs the mobs' stream
+   nothing and a Nether run that meets no warped forest rolls its fortress's spawners as before. The
+   endermen it spawns act and despawn by mob-roll, as every mob."
   [sim]
   (let [[{r :sim/rng} x] (roll {:sim/rng (:sim/wild-rng sim (bit-xor (:sim/rng sim) wild-salt))})]
     [(assoc sim :sim/wild-rng r) x]))
@@ -2302,10 +2278,9 @@
           (:loot (mob/kinds kind))))
 
 (defn armoured
-  "What is left of a mob's hit of amount on the player once the armour it wears in window 0's
-   four armour slots takes its share (mob/absorbed over the pieces' summed points and
-   toughness, mob/armour-points). Issue #263: with no armour in the model, an enderman's 7 a
-   second beat every sword before the fight's 10-health break-off, armour or not."
+  "What is left of a mob's hit of amount on the player once the armour it wears in window 0's four
+   armour slots takes its share (mob/absorbed over the pieces' summed points and toughness,
+   mob/armour-points)."
   [sim amount]
   (let [[points toughness]
         (reduce (fn [[p t] n]
@@ -2349,9 +2324,9 @@
               (cond-> by-player? (drop-loot type pos))))))
 
 (defn anger
-  "The model with mob eid turned on the player (:angry?). An enderman shows it as the server
-   does when it takes a target: its creepy flag set (entity/creepy-index, set-entity-data), the
-   fact the bot's hunt reads to know one is coming (issue #263). Once only."
+  "The model with mob eid turned on the player (:angry?). An enderman shows it as the server does
+   when it takes a target: its creepy flag set (entity/creepy-index, set-entity-data), the fact the
+   bot's hunt reads to know one is coming. Once only."
   [sim eid]
   (let [{:keys [type angry?]} (get-in sim [:sim/mobs eid])]
     (cond angry? sim
@@ -3304,7 +3279,7 @@
                              (sort (keys (:sim/mobs sim)))))))))
 
 
-;; ---------------------------------------------------------------- eyes, the portal and the End (issue #260)
+;; ---------------------------------------------------------------- eyes, the portal and the End
 
 (def eye-type (get blocks/entity-types :eye_of_ender)) ; add-entity's type for a thrown eye
 (def eye-body 0.9)                    ; an eye leaves from the middle of the thrower's body (EnderEyeItem: getY(0.5))
@@ -3576,22 +3551,20 @@
 
 (defn play-from
   "Play a bot reducer against the model on from a moment m, a tick (physics/tick-ms) at a time
-   (tick-from), until (stop? world) or max-ms of play. A moment is everything the next tick
-   depends on: {:world :sim :pending :t :rand :went? :inflight}: the bot's world and the model's
-   state, what the bot has sent and the model not yet taken (pending), the tick's time, the tick
-   seed's state (rand), whether go was sent, and the packets still in flight under
-   :sim/lag-ticks. So playing on from a moment is the run itself, packet for packet. Returns
-   {:world :sim :before :last :moments}: :last the moment of the stopping tick, :before its world
-   and model, and, with every (simulated ms; nil keeps none), :moments, the run's moments that
-   far apart, the last moment-keep of them, for a failure to be kept from before the choice that
-   led to it (simrace/snapshot). A tick that throws ends the play there with :crashed (the
-   exception) and the world and model of the moment before it, so a crash is kept and judged
-   like any other failure (issue #152: a crash used to leave no moment and no stage). go is sent
-   once the bot is loaded, or never when nil. Each tick's :event/rand is 0.5, or, with a rand
-   state, the next of a pure generator (tick-rand), so runs of one world with different seeds
-   are different runs, each the same every time. With a tap (a function of the moment, called
-   once a tick before it is played, for an observer's atom: the truth ring), the tap sees every
-   moment and changes none."
+   (tick-from), until (stop? world) or max-ms of play. A moment is everything the next tick depends
+   on: {:world :sim :pending :t :rand :went? :inflight}: the bot's world and the model's state, what
+   the bot has sent and the model not yet taken (pending), the tick's time, the tick seed's state
+   (rand), whether go was sent, and the packets still in flight under :sim/lag-ticks. So playing on
+   from a moment is the run itself, packet for packet. Returns {:world :sim :before :last :moments}:
+   :last the moment of the stopping tick, :before its world and model, and, with every (simulated
+   ms; nil keeps none), :moments, the run's moments that far apart, the last moment-keep of them,
+   for a failure to be kept from before the choice that led to it (simrace/snapshot). A tick that
+   throws ends the play there with :crashed (the exception) and the world and model of the moment
+   before it, so a crash is kept and judged like any other failure. go is sent once the bot is
+   loaded, or never when nil. Each tick's :event/rand is 0.5, or, with a rand state, the next of a
+   pure generator (tick-rand), so runs of one world with different seeds are different runs, each
+   the same every time. With a tap (a function of the moment, called once a tick before it is
+   played, for an observer's atom: the truth ring), the tap sees every moment and changes none."
   ([bot-step m stop? max-ms go every] (play-from bot-step m stop? max-ms go every nil))
   ([bot-step m stop? max-ms go every tap]
    (let [lag (* physics/tick-ms (:sim/lag-ticks (:sim m) 0))

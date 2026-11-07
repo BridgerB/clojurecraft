@@ -1,23 +1,22 @@
 (ns clojurecraft.swim
-  "Getting out of water and away from lava (issue #5).
+  "Getting out of water and away from lava.
 
    Requiring this namespace registers the escape goals' rules: a goal is done when the planner's
    trap (trap/trapped-tick) is not of its kind, its next intent is :swim-out or :flee, and the
    two executors are defmethods of intent/run.
 
-   :swim-out picks one bank and keeps it (the siblings re-picked every tick and swam in circles):
-   the nearest cell the feet could stand in, within bank-radius on the plane and from bank-drop
-   below the water's surface to bank-rise above it, chosen from the loaded terrain. It holds
-   forward and jump toward it; the physics' out-of-liquid impulse fires when the body presses
-   into the bank with free space above, which is the only real lift out of water. When no
-   progress is made for stuck-ticks it digs what is in the way as a child :dig intent (a lid
-   over the head first, a wall at head height, a cap when there is no bank at all), the dig
-   penalties for the eyes in water and being off the ground slowing it as vanilla does. It never
-   digs the block at feet height ahead: that is the bank the impulse needs to collide with. When
-   the only water cell a block would make a bank of intersects the player's box, it backs off
-   the bank and lays once the box has left that cell, instead of failing :stuck (issue #351). With
-   no bank at all and no cap, a flooded cave whose rock walls rise straight from the water, it
-   carves one: a notch two high in the nearest wall just over the float level (issue #73).
+:swim-out picks one bank and keeps it (the siblings re-picked every tick and swam in circles): the
+nearest cell the feet could stand in, within bank-radius on the plane and from bank-drop below the
+water's surface to bank-rise above it, chosen from the loaded terrain. It holds forward and jump
+toward it; the physics' out-of-liquid impulse fires when the body presses into the bank with free
+space above, which is the only real lift out of water. When no progress is made for stuck-ticks it
+digs what is in the way as a child :dig intent (a lid over the head first, a wall at head height, a
+cap when there is no bank at all), the dig penalties for the eyes in water and being off the ground
+slowing it as vanilla does. It never digs the block at feet height ahead: that is the bank the
+impulse needs to collide with. When the only water cell a block would make a bank of intersects the
+player's box, it backs off the bank and lays once the box has left that cell, instead of failing
+:stuck. With no bank at all and no cap, a flooded cave whose rock walls rise straight from the
+water, it carves one: a notch two high in the nearest wall just over the float level.
 
    :flee is the lava half: the nearest standable cell with no lava beside or under it, walked to
    with forward and jump; the planner ends it the moment the trap clears."
@@ -37,7 +36,7 @@
 
 (set! *warn-on-reflection* true)
 
-(def bank-radius 16)                  ; how far on the plane a bank is looked for (gym shore-w1 run 6: none within 12 from mid-sea)
+(def bank-radius 16)                  ; how far on the plane a bank is looked for
 (def bank-rise 1)                     ; a bank at most this far above the highest feet level afloat (steve's landing set W)
 (def bank-drop 3)                     ; or this far below it: a roofed pool's air pocket is sideways and down
 (def float-depth 1.03)                ; feet below an open surface when afloat with jump held (vanilla's equilibrium)
@@ -66,8 +65,7 @@
 
 (defn diggable-cell?
   "Is the cell a solid block a dig can take: not ore above every held pickaxe's tier
-   (stairs/too-hard?), which a dig refuses :needs-tool? A real race's bot Clj_r10 (issue #163), in a flooded shaft at 2 health with no pickaxe, chose iron ore for its notch three times, each
-   dig refused, and the escape ended the plan."
+   (stairs/too-hard?), which a dig refuses :needs-tool?"
   [world cell]
   (and (solid-cell? world cell) (not (stairs/too-hard? world cell))))
 
@@ -92,15 +90,11 @@
    (if (solid-cell? world [x surface z]) (- surface physics/height) (- surface float-depth))))
 
 (defn bank?
-  "Could the feet rest in cell once out of the water: a cell they could stand in
-   (path/standable?), or one over a lake's ice (stairs/lake-ice) with the body and the head clear.
-   Neither body cell may contain fluid: a passable water plant is not dry land.
-   A route never stands on ice (path/awkward-types: the physics does not slide), but the impulse
-   lifts the body onto it as onto any solid, and on it the bot is on dry land (trap/dry-land?).
-   Sim race 38806318231 world R2/43 (issue #177, 83 runs): the bot came up under a frozen sea,
-   dug the ice over its head and floated in the hole, the ice round it a block over the water's
-   top, and with no other bank within sixteen it pressed toward a far shore under the ice until
-   its escape timed out, three times, :no-escape."
+  "Could the feet rest in cell once out of the water: a cell they could stand in (path/standable?),
+   or one over a lake's ice (stairs/lake-ice) with the body and the head clear. Neither body cell
+   may contain fluid: a passable water plant is not dry land. A route never stands on ice
+   (path/awkward-types: the physics does not slide), but the impulse lifts the body onto it as onto
+   any solid, and on it the bot is on dry land (trap/dry-land?)."
   [world [x y z :as cell]]
   (and (or (path/standable? world cell)
            (boolean (and (some-> (terrain/block-at world [x (dec y) z])
@@ -112,14 +106,11 @@
        (not (terrain/fluid-kind world [x (inc y) z]))))
 
 (defn banks
-  "Cells the feet could stand in, nearest first, within bank-radius of feet on the plane and
-   between bank-drop under the float-top and bank-rise over it (a ledge higher than that is
-   out of the impulse's lift); blacklist removes cells that failed. Under the open sky (the feet
-   with nothing over them but water and air, terrain/under-sky?), only banks in the open
-   (in-the-open?): a pocket under the rock beside the water, or a ledge under it, is no way out
-   of the sea over it. Issue #89 (sim race 38811426215 runner 8, worlds R4/21 and R1/32): a bot that dug up into the sea from its tunnel
-   under the sea floor swam back into the tunnel's dry end, the trap cleared, and it climbed and
-   dug again, until its run's time ran out."
+  "Cells the feet could stand in, nearest first, within bank-radius of feet on the plane and between
+   bank-drop under the float-top and bank-rise over it (a ledge higher than that is out of the
+   impulse's lift); blacklist removes cells that failed. Under the open sky (the feet with nothing
+   over them but water and air, terrain/under-sky?), only banks in the open (in-the-open?): a pocket
+   under the rock beside the water, or a ledge under it, is no way out of the sea over it."
   ([world feet surface blacklist]
    (banks world
           feet
@@ -154,17 +145,12 @@
              blocks/type-of)))
 
 (defn obstacle
-  "The cell to dig when the swim makes no progress: a lid over the head, else the cell ahead at
-   head height, else the cell ahead at feet height when the bank is no higher than the feet (a
-   wall between them, not a bank to climb), else the cell above the head ahead (clearance for
-   the lift onto a bank), else the cell over the head (the cap of a roofed pool);
-   both axes, their corner and the body's edges are checked.
-   Never the cell ahead at feet height under a higher bank, which is the step the impulse
-   needs to collide with. nil when none of them is solid. Race 38805758078 runner 1 (issues
-   #156, #157) bot Clj_r44, in a flooded tunnel at y 16, had its bank two blocks off at its own
-   height with a block between at the feet; the swim dug the ceiling over its head again and
-   again, then nothing was named and it failed :stuck. Race 38999008545 bot Clj_r06 (issue #156)
-   reached a step with air above it but packed ice one higher, which stopped the lift."
+  "The cell to dig when the swim makes no progress: a lid over the head, else the cell ahead at head
+   height, else the cell ahead at feet height when the bank is no higher than the feet (a wall
+   between them, not a bank to climb), else the cell above the head ahead (clearance for the lift
+   onto a bank), else the cell over the head (the cap of a roofed pool); both axes, their corner and
+   the body's edges are checked. Never the cell ahead at feet height under a higher bank, which is
+   the step the impulse needs to collide with. nil when none of them is solid."
   [world [x y z :as feet] bank]
   (let [over [x (+ y 2) z]
         [x0 _ z0 x1 _ z1] (physics/aabb (get world :player/pos (physics/centre feet)))
@@ -197,16 +183,13 @@
                    stairs/lake-ice)))
 
 (defn notch
-  "With no bank in reach, the cell to dig toward one: a notch in the nearest wall, two cells
-   over a solid at the float-top level (the floor the impulse lifts onto, as a pond's bank is
-   one over the water's top), within notch-radius of feet on the plane and a dig's reach of
-   the current eye; the lower cell while it is solid, then the upper. nil with no wall in reach
-   (issue #73: an aquifer's rock walls rise straight from the water, so no cell within sixteen
-   was standable and the escape rose until it timed out), and nil under a roof on the water
-   (the surface cell solid): a capped well is left through its cap, which the escape digs once
-   it has risen to it, and a notch cut there from the floor opened the well's own wall under the
-   cap and drowned the bot (sim-test a-capped-well-is-dug-out-through-its-cap-with-the-pickaxe,
-   red since #113, issue #116)."
+  "With no bank in reach, the cell to dig toward one: a notch in the nearest wall, two cells over a
+   solid at the float-top level (the floor the impulse lifts onto, as a pond's bank is one over the
+   water's top), within notch-radius of feet on the plane and a dig's reach of the current eye; the
+   lower cell while it is solid, then the upper. nil with no wall in reach, and nil under a roof on
+   the water (the surface cell solid): a capped well is left through its cap, which the escape digs
+   once it has risen to it, and a notch cut there from the floor opened the well's own wall under
+   the cap and drowned the bot."
   [world [fx _ fz :as feet] surface]
   (let [top (float-top world feet surface)
         eye (game/eye world)
@@ -276,10 +259,7 @@
    water meets), and over it two cells of open air with nothing wet or roofed over them
    (in-the-open?), so the block is a bank the lift reaches (bank-rise 1) and the body stands on.
    Nearest first. nil when none. A notch cut into a wall under the sky is never a bank (banks keeps
-   only the open ones), so a sea that meets a cliff is left by a block, not a hole: race
-   39109674329 runner 4 bot Clj_r16 (issue #92) swam 73 blocks to a cliff three blocks over the
-   water with 489 cobblestone and no pickaxe, dug a notch in it by hand (75 s a block under water)
-   and was :no-escape three times in six minutes."
+   only the open ones), so a sea that meets a cliff is left by a block, not a hole."
   [world feet surface]
   (first (bank-cells world feet surface notch-radius place/place-reach)))
 
@@ -294,11 +274,7 @@
 
 (defn wall-toward
   "With no bank-block in reach, the nearest cell of one within approach-radius on the plane out of
-   the place reach (bank-cells), for the swim to head for until it is in reach; nil when none.
-   Sim race 39550831606 (issue #92, world R4/9): the sea met a cliff that leaned over the water
-   along the bot's reach, the cells under the lean were no bank, the open ones lay a block past
-   the place reach, and the escape dug a notch in the wall by hand, 37 s a block, until it timed
-   out, three times."
+   the place reach (bank-cells), for the swim to head for until it is in reach; nil when none."
   [world feet surface]
   (first (bank-cells world feet surface approach-radius ##Inf)))
 
@@ -364,15 +340,13 @@
     (start-dig world cell why)))
 
 (defn dig-afloat
-  "One tick of the child dig, with jump held when the water's surface is open: the dig looks
-   and swings but holds nothing else, and a body on the floor for the length of a dig under
-   water drowns (issue #73: the notch's first cell took the air). Afloat under an open surface
-   the eye is in air and the dig is no slower than from the floor (off the ground is the same
-   five times as the eye under water); under a roof (a capped well) the floor is where the
-   dig is from and jump is held off, unless the floor is out of the dig's reach (the ice a rise
-   under a frozen lake digs, ten over the sea floor: sim race 39088700340 bot Clj_r02, issue #71,
-   sank three blocks during each dig of 4.7 s and dug a new hole each time until it drowned):
-   there jump is held, and the body stays against the roof."
+  "One tick of the child dig, with jump held when the water's surface is open: the dig looks and
+   swings but holds nothing else, and a body on the floor for the length of a dig under water
+   drowns. Afloat under an open surface the eye is in air and the dig is no slower than from the
+   floor (off the ground is the same five times as the eye under water); under a roof (a capped
+   well) the floor is where the dig is from and jump is held off, unless the floor is out of the
+   dig's reach (the ice a rise under a frozen lake digs, ten over the sea floor): there jump is
+   held, and the body stays against the roof."
   [world event]
   (let [world (intent/run-child world event)
         [x _ z :as feet] (intent/feet world)]
@@ -384,24 +358,19 @@
       (update :player/controls assoc :control/jump? true))))
 
 (defn dug-credit
-  "The :intent/dug a :swim-out has after its child dig finished: dug, plus the ticks the dig
-   took (from its start to now), at most dig-credit-ticks in all. A dig is progress toward the
-   bank, not time lost afloat, and by hand it is slow: sim race 39598424082 (issue #344, world
-   R4/16) swam fifty blocks to a cliff with no pickaxe, dug a notch in it at 37 s a block, and
-   its 120 s ran out between the second and the third cell, three times."
+  "The :intent/dug a :swim-out has after its child dig finished: dug, plus the ticks the dig took
+   (from its start to now), at most dig-credit-ticks in all. A dig is progress toward the bank, not
+   time lost afloat, and by hand it is slow."
   [world dug {:intent/keys [started]}]
   (min dig-credit-ticks
        (+ (or dug 0)
           (max 0 (quot (- (:time/now world) (or started (:time/now world))) physics/tick-ms)))))
 
 (defn flooded?
-  "Has the bank a swim-out keeps been flooded since it was picked: is it no longer a cell the
-   feet could stand in (bank?), water now in it or over its floor? Reached, it holds
-   the body in water: the trap never clears, no step brings it nearer, and stuck-ticks later
-   the swim-out digs over its head and fails :stuck. Race 38805758078 runner 1 bot Clj_r44
-   (issue #157) and race 38709226128 runner 8 bot Clj_r31 (issue #156), replayed in probe
-   38830884734: in a flooded tunnel the bank picked a block off was reached at distance 0 with
-   water flowed into it, and the escape failed :stuck there, the third failure of the plan."
+  "Has the bank a swim-out keeps been flooded since it was picked: is it no longer a cell the feet
+   could stand in (bank?), water now in it or over its floor? Reached, it holds the body in water:
+   the trap never clears, no step brings it nearer, and stuck-ticks later the swim-out digs over its
+   head and fails :stuck."
   [world bank]
   (not (bank? world bank)))
 
@@ -409,13 +378,10 @@
 (def shore-depth 4)                   ; and cells under it the look goes on to find the ground
 
 (defn shore-ground?
-  "Is column [x z] ground at the water's surface: scanning down from shore-clearance over surface
-   to shore-depth under it, the first cell that is water or solid is solid and not a lake's ice;
-   false when it is water, or when the column is not loaded. Not the top of the column
-   (stairs/dry-top?): a block high over the sea made every column under it ground. Sim race
-   39550831606 runner 4 (issue #177, world R4/1): a row of cobblestone at y 105 over the sea made
-   the sea out to y 62 the 'shore' of the swim, and the escape swam to the middle of the sea
-   and floated there."
+  "Is column [x z] ground at the water's surface: scanning down from shore-clearance over surface to
+   shore-depth under it, the first cell that is water or solid is solid and not a lake's ice; false
+   when it is water, or when the column is not loaded. Not the top of the column (stairs/dry-top?):
+   a block high over the sea made every column under it ground."
   [world [x z] surface]
   (true? (first (keep (fn [y]
                         (let [cell [x y z]]
@@ -427,18 +393,11 @@
 (defn far-shore
   "With no bank in reach and the water open to the sky over the feet: the nearest column, along
    eight bearings from bank-radius out to shore-reach, whose top at the water's surface is dry
-   ground (shore-ground?), as the point at the water's surface to swim toward. Each pass
-   that looks for a bank looks again, so the bank found near the shore takes over. Before it, an
-   escape at sea rose to the surface and floated there until it timed out: sim race
-   38811426215 runner 8 (issue #89, worlds R4/21 and R1/32 at 76010d2) had bots under the sea floor
-   with land 33 and 40 blocks off, the only way out up through the water. With none, the point
-   over the landing (:plan/go-at), which is land: world R4/30's bot stood under the sea 180
-   blocks from it, no shore within reach. nil with neither. The shore chosen before (kept, the
-   swim-out's :intent/shore) is kept while its column is dry ground still: sim race 39550831606
-   runner 4 (issue #177, world R4/1) floated sixteen blocks from a shore on each side, and the
-   first bearing at that distance changed with the cell the feet were in, so each stroke west
-   made the east shore the nearer and each stroke east the west: it dithered about one cell
-   for the escape's 120 s, three times, :no-escape."
+   ground (shore-ground?), as the point at the water's surface to swim toward. Each pass that looks
+   for a bank looks again, so the bank found near the shore takes over. Before it, an escape at sea
+   rose to the surface and floated there until it timed out. With none, the point over the landing
+   (:plan/go-at), which is land. nil with neither. The shore chosen before (kept, the swim-out's
+   :intent/shore) is kept while its column is dry ground still."
   ([world feet surface] (far-shore world feet surface nil))
   ([world [fx _ fz] surface kept]
    (or (when (and kept (shore-ground? world [(first kept) (nth kept 2)] surface)) kept)
@@ -458,11 +417,9 @@
          [(long (math/floor hx)) surface (long (math/floor hz))]))))
 
 (defn shore-controls
-  "Rising with jump held: while the feet are more than two under top (the water's top), drawn to
-   the centre of their column when off it by more than centre-slack, so a body in a shaft one
-   wide rises clear of its rim; nearer the top, toward shore (far-shore) when there is one.
-   Issue #89 (world R1/32): a rise begun 0.3 off its shaft's centre caught the sea floor's edge
-   with its head and drowned there."
+  "Rising with jump held: while the feet are more than two under top (the water's top), drawn to the
+   centre of their column when off it by more than centre-slack, so a body in a shaft one wide rises
+   clear of its rim; nearer the top, toward shore (far-shore) when there is one."
   [world shore top]
   (let [[px _ pz] (:player/pos world)
         [fx fy fz] (intent/feet world)
@@ -475,13 +432,11 @@
           :else {:control/jump? true})))
 
 (defn swim-controls
-  "Toward the bank's centre: in the water, forward with jump held (the swim-up and, pressed
-   into the bank, the impulse); out of it, a plain walk, and on dry land nothing at all, so the
-   planner can see the land held still (a bot that kept jumping on the bank never counted as
-   out). A bank below the feet (a dry pocket under a thin sheet of water, the floor of a
-   flooded room) is sunk to, not swum over: jump is let go so the body drops onto it. Sim
-   race 40014095820 (issue #222, world R1/2) and the real snapshot real-1-s1-Clj_r02 bobbed
-   at the surface over such a bank three blocks down and failed :stuck three times."
+  "Toward the bank's centre: in the water, forward with jump held (the swim-up and, pressed into the
+   bank, the impulse); out of it, a plain walk, and on dry land nothing at all, so the planner can
+   see the land held still (a bot that kept jumping on the bank never counted as out). A bank below
+   the feet (a dry pocket under a thin sheet of water, the floor of a flooded room) is sunk to, not
+   swum over: jump is let go so the body drops onto it."
   [world bank]
   (cond (trap/dry-land? world) {}
         (:player/in-water? world)
@@ -599,19 +554,19 @@
             laid (when-not cell (lift-bank world feet surface no-lay))
             blocked (when (and (nil? cell) (nil? laid) (not no-lay) (stairs/filler world 1))
                       (occupied-bank world feet surface))
-            ;; under a roof a block cannot be laid (bank-block wants the open sky), so a bank
-            ;; the lift cannot reach is made the notch's way instead: carve a stand at the
-            ;; body's own level and let the next search pick it (issue #222, world R1/2)
+            ;; under a roof a block cannot be laid (bank-block wants the open sky), so a bank the
+            ;; lift cannot reach is made the notch's way instead: carve a stand at the body's own
+            ;; level and let the next search pick it
             carve
             (when (and (nil? cell) (nil? laid) (nil? blocked) (not (terrain/under-sky? world feet)))
               (notch world feet surface))
             stall (- tick best-tick)]
         (cond cell (dig-or-sink world feet cell "stuck")
               ;; nothing to dig and the lift peaks under the bank's top: a block laid into the water
-              ;; beside the feet is a step the walk climbs from (issue #45 R1-17-2)
+              ;; beside the feet is a step the walk climbs from
               laid (start-lay world laid "lift short of the bank")
-              ;; the only such cell intersects the body, so a placement would be refused: drift
-              ;; back off the bank until the cell is free, then the same check lays (issue #351)
+              ;; the only such cell intersects the body, so a placement would be refused: drift back
+              ;; off the bank until the cell is free, then the same check lays
               (and blocked (<= stall (+ stuck-ticks backoff-ticks)))
               (-> world
                   (assoc :player/controls (off-bank world bank))
@@ -632,17 +587,12 @@
                                :intent/best-tick best-tick)))))
 
 (defmethod intent/run :cross
-  ;; over open water toward a remembered trunk across it (wood/crossing): straight at it, on
-  ;; land jumping only when blocked, in the water with jump held, so the body swims at the
-  ;; surface with the eye in air and the trap never calls the escape back to the near bank;
-  ;; done on dry land once it has been in the water and come cross-gain nearer the trunk, so a
-  ;; wade along the near shore is not the far side. Stuck in the water (a far bank too high
-  ;; for the swim's lift), a child :swim-out for :retreat takes it to the nearest bank and the
-  ;; crossing ends on dry land: sim race 38844589684 runner 6 (issue #57, world R1/30 seed 4,
-  ;; probe 38853120299) swam forty blocks, stuck eight short against the far bank, and failed
-  ;; :stuck three times between other intents before a climb and an escape got it out
-  ;; A solid wall is cleared by child digs before retreating: race 39060308623 bot Clj_r14
-  ;; (issue #156) met packed ice beside its starting bank and never crossed it.
+  ;; over open water toward a remembered trunk across it (wood/crossing): straight at it, on land
+  ;; jumping only when blocked, in the water with jump held, so the body swims at the surface with
+  ;; the eye in air and the trap never calls the escape back to the near bank; done on dry land once
+  ;; it has been in the water and come cross-gain nearer the trunk, so a wade along the near shore
+  ;; is not the far side. Stuck in the water (a far bank too high for the swim's lift), a child
+  ;; :swim-out for :retreat takes it to the nearest bank and the crossing ends on dry land.
   [world {:intent/keys [target started wet? from-dist best-dist best-tick child dig-when-down]}
    event]
   (let [tick (:time/tick world)
@@ -720,10 +670,8 @@
   "The nearest cell within flee-radius of feet, at most one up or down, the feet could stand in,
    those out of the lava first (lava-free?: none in it, over it or under it), then those with no
    lava beside them (lava-beside?); a cell the flow covers only when there is no other; nil when
-   none is standable. A cell the flowing lava covers is standable to a route, and a
-   flee to it ends still in the lava: sim race 38844683780 runner 7 (issue #230, world R2/9)
-   smelted in a pocket at y 38 when lava from a source ten over flowed in, fled to a cell the
-   flow covered, and timed out :no-footing, three times."
+   none is standable. A cell the flowing lava covers is standable to a route, and a flee to it ends
+   still in the lava."
   [world [fx fy fz :as feet]]
   (->> (for [dx (range (- flee-radius) (inc flee-radius))
              dz (range (- flee-radius) (inc flee-radius))
@@ -737,12 +685,10 @@
        first))
 
 (defn flee-controls
-  "The controls a flee holds toward target: forward with jump while in the lava or against a
-   step, forward alone out of it, nothing once centred in the target, so the body lands and the
-   trap clears on dry land (trap/dry-land? held dry-ticks-to-clear). Jump held over dry ground
-   bounces the body off it every tick, and the trap never clears: sim races 38844683780 runner
-   7 and 38843557186 runner 3 (issues #230 and #231, worlds R2/9 and R1/3) came out of the lava
-   onto the footing and bounced on it until flee-timeout-ticks failed them :no-footing."
+  "The controls a flee holds toward target: forward with jump while in the lava or against a step,
+   forward alone out of it, nothing once centred in the target, so the body lands and the trap
+   clears on dry land (trap/dry-land? held dry-ticks-to-clear). Jump held over dry ground bounces
+   the body off it every tick, and the trap never clears."
   [world target]
   (cond (intent/centred? world target) {}
         (or (:player/in-lava? world) (:player/horizontal-collision? world))
@@ -764,12 +710,9 @@
             (-> world
                 (intent/assoc-intent :intent/target cell)
                 (game/say (str "flee: to " cell)))
-            ;; no footing from where the body is now: it may have sunk past the level the
-            ;; footing stands at (footing looks one up or down), so rise in the lava and
-            ;; look again next tick; only the timeout gives up. Sim race 40023362147
-            ;; (issue #231, world R1/3): the body fell into the lava under its tunnel,
-            ;; sank a cell below the tunnel's floor, and three flees failed :no-footing
-            ;; in three ticks without moving.
+            ;; no footing from where the body is now: it may have sunk past the level the footing
+            ;; stands at (footing looks one up or down), so rise in the lava and look again next
+            ;; tick; only the timeout gives up.
             (assoc world :player/controls {:control/jump? true}))
           :else (assoc world :player/controls (flee-controls world target)))))
 
@@ -790,9 +733,8 @@
 (def wade-timeout-ticks 2400)         ; 120 s to find water and get the eye under it
 
 (defn water-source?
-  "Is the cell the top of a pool at least two deep: a water source with water under it and
-   none over it (steve's landing set W: swimmable water 2+ deep; a one-deep puddle walked
-   across on foot was gym shore-w5 run 1)."
+  "Is the cell the top of a pool at least two deep: a water source with water under it and none over
+   it (steve's landing set W: swimmable water 2+ deep)."
   [world [x y z :as cell]]
   (and (= :water (terrain/fluid-kind world cell))
        (blocks/source? (terrain/block-at world cell))
@@ -816,11 +758,11 @@
       (and (shallow? world cell) (= :clear (path/classify world [x (inc y) z])))))
 
 (defn entries
-  "Where the bot could walk into the water of chunk key: [bank water] pairs, the bank a cell
-   the feet can stand in or wade through (wadeable?) beside a deep source of the column no more
-   than wade-below under the feet (cave water under a beach is not the sea: gym shore-w2 runs 1, 3, 5, 7), nearest
-   the feet first; blacklist removes banks a wade failed to reach (shore-w3 run 5: the nearest
-   bank lay under a cliff and was chosen three times)."
+  "Where the bot could walk into the water of chunk key: [bank water] pairs, the bank a cell the
+   feet can stand in or wade through (wadeable?) beside a deep source of the column no more than
+   wade-below under the feet (cave water under a beach is not the sea), nearest the feet first;
+   blacklist removes banks a wade failed to reach (shore-w3 run 5: the nearest bank lay under a
+   cliff and was chosen three times)."
   [world key [_ fy _ :as feet] blacklist]
   (let [column (get-in world [:world/chunks key])
         sources (for [[x y z] (chunk/find-blocks {key column} blocks/fluid)
@@ -850,11 +792,10 @@
          (some (fn [[key _]] (first (entries world key feet (:plan/blacklist world #{}))))))))
 
 (defn beyond
-  "Where the wade heads: the water cell's centre until the body has been in water, then a
-   point wade-beyond blocks ahead of pos on the plane in the direction from bank to water, so
-   a shallow shelf is crossed into depth however wide it is. Heading past the water before
-   reaching it walked a bot that came at the bank from the far side away from the sea for two
-   minutes (gym shore-w5 run 9)."
+  "Where the wade heads: the water cell's centre until the body has been in water, then a point
+   wade-beyond blocks ahead of pos on the plane in the direction from bank to water, so a shallow
+   shelf is crossed into depth however wide it is. Heading past the water before reaching it walked
+   a bot that came at the bank from the far side away from the sea for two minutes."
   [[bx _ bz] [wx wy wz :as water] [px _ pz] wet?]
   (let [dx (- wx bx)
         dz (- wz bz)]
@@ -872,8 +813,8 @@
           (-> world
               (assoc :player/controls {})
               (intent/fail :no-water))
-          ;; was in the water and walked out the far side on land: a puddle, not a pool (gym
-          ;; shore-w4 run 9); the bank is blacklisted by the failure and the next entry is tried
+          ;; was in the water and walked out the far side on land: a puddle, not a pool; the bank is
+          ;; blacklisted by the failure and the next entry is tried
           (and wet? (not (:player/in-water? world)) (:player/on-ground? world) (nil? child))
           (-> world
               (assoc :player/controls {})
@@ -895,12 +836,11 @@
               (assoc :player/controls {})
               (intent/fail (:intent/reason child)))
           child (intent/run-child world event)
-          ;; on the bank: straight in and on past the entry, jumping only when blocked with the
-          ;; feet on the ground (a seabed step, shore-w4 runs 1 and 6), never afloat (a jump there
-          ;; is a swim-up that keeps the eye in air against a wall), so it sinks as it deepens and
-          ;; the planner's trap takes over
-          ;; afloat and pressed against something: stop pushing and sink (pressing into a bank
-          ;; fires the out-of-liquid impulse, which kept the eye in air for good)
+          ;; on the bank: straight in and on past the entry, jumping only when blocked with the feet
+          ;; on the ground, never afloat (a jump there is a swim-up that keeps the eye in air
+          ;; against a wall), so it sinks as it deepens and the planner's trap takes over afloat and
+          ;; pressed against something: stop pushing and sink (pressing into a bank fires the
+          ;; out-of-liquid impulse, which kept the eye in air for good)
           (and (:player/in-water? world)
                (:player/horizontal-collision? world)
                (not (:player/on-ground? world)))
@@ -920,9 +860,8 @@
 (defmethod plan/next-intent :wade
   [world _ _]
   ;; already under the water (a landing in the sea): wait, the trap and the escape are a second
-  ;; away, and a wade that fails three routes first would end the plan (gym shore-w2 runs 6, 9);
-  ;; otherwise a wade needs a way into water it remembers, and with none it waits, as a gather
-  ;; with no tree does
+  ;; away, and a wade that fails three routes first would end the plan; otherwise a wade needs a way
+  ;; into water it remembers, and with none it waits, as a gather with no tree does
   (cond (:player/eye-in-water? world) {:plan/wait :in-water}
         (entry world (intent/feet world)) {:intent/kind :wade}
         :else {:plan/wait :no-water}))

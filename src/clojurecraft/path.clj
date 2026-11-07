@@ -1,5 +1,5 @@
 (ns clojurecraft.path
-  "A route over the block grid as a pure function of the world value (issue #4).
+  "A route over the block grid as a pure function of the world value.
 
    (plan world from goal opts) → {:path/waypoints [[x y z] ...] :path/cost n :path/status s}
 
@@ -41,7 +41,7 @@
    (blocks/partial-shapes, but for those no taller than blocks/flat-shape, a carpet, which the
    physics stands on and steps onto): a route treats them as
    neither floor nor clear. Not powder snow: no collision for a player, it is clear (blocks/
-   passable-types), and a route goes through it to the floor below (issue #87)."
+   passable-types), and a route goes through it to the floor below."
   #{:slab :stair :fence :wall :fence_gate :trapdoor :door :iron_bars :stained_glass_pane :chain
     :lantern :snow_layer :farmland :dirt_path :cactus :magma :sweet_berry_bush :bed :candle
     :candle_cake :cake :skull :wall_skull :player_head :player_wall_head :wither_skull
@@ -61,28 +61,20 @@
    collision shape at all (SnowLayerBlock's shape for one layer is empty), the physics passes
    through it (blocks/passable-types), so a route walks through it like air, the feet in its
    cell on the block under it. Deeper layers collide as the game says, (layers - 1) / 8, which
-   the physics cannot simulate: they stay :awkward with their type. Race 38477665442 landed 39
-   bots on snowy ground, every cell round them under this one layer; the feet cell was not
-   standable, start-cell found nothing beside it, every plan was :none and twelve walks failed
-   :no-path in a second (issue #38)."
+   the physics cannot simulate: they stay :awkward with their type."
   (blocks/default-state :snow))
 
 (def stood-on
   "Block definition types and block names a route stands on though the game gives them no full
-   cube (issue #266), since the physics' oracle (blocks/solid?) takes each for one and
-   intent/feet reads the feet's cell a half block up: a stairs block, half a block or a whole
-   one under the feet, climbed a block at a time like a step (the stronghold's portal room is
-   reached up three); an end portal frame, 13/16 high; and the end portal, which has no
-   collision at all but takes the body to the End the moment the feet are in its cell
-   (sim/through-end-portal), so a route may end on it as on a floor and the body never falls
-   through."
+   cube: a stairs block, an end portal frame (13/16 high), and the end portal, which has no
+   collision but takes the body to the End once the feet are in its cell, so a route may end on
+   it as on a floor."
   #{:stair :end_portal_frame :end_portal})
 
 (defn classify-id
   "What a block state means to a route: :water, :lava, :awkward (a shape the physics cannot
-   simulate, or fire: a cell that burns the body is neither floor nor clear, so no route goes
-   through it: blaze-race-g and -i, in_fire up to 26 hits a run), :solid (a full cube, or one of stood-on), or :clear (passable, not a liquid; one
-   layer of snow is). nil → :unknown."
+   simulate, or fire, which burns the body), :solid (a full cube, or one of stood-on), or :clear
+   (passable, not a liquid; one layer of snow is). nil → :unknown."
   [id]
   (cond (nil? id) :unknown
         (contains? blocks/water-states id) :water
@@ -111,9 +103,7 @@
   "Do the feet stand on a sheet of ice: is one of the two blocks under the feet's cell (a touch
    under the position, as intent/feet reads it) ice, the second for a floor laid over the sheet?
    Or, with nothing solid under the feet's cell, is the block under one of its four neighbours
-   ice: the body rests on the rim of a hole dug in the sheet (issue #105, sim race 39550841573,
-   R2/32 seed 3: the bot dug the ice under its feet to scoop the lake and lay on the sheet's
-   edge, where no route stepped onto the sheet to walk off it). false with no position."
+   ice: the body rests on the rim of a hole dug in the sheet. false with no position."
   [world]
   (boolean (when-let [[x y z] (:player/pos world)]
              (let [cx (long (math/floor x))
@@ -137,14 +127,9 @@
 (defn cells
   "The cells of w as a route sees them: a function of [x y z] to classify's answer. w is a world,
    or such a function already, returned as it is, so every predicate below takes either. Of a
-   world whose bot stands on ice (on-ice?) the sheet is floor: a route never steps onto ice from
-   land, but a bot a swim out put on one (issue #71) must be able to walk off it. Made from a
-   world, each cell is read through the terrain once and its answer held for the life of
-   the function: one search or one scan asks about the same few thousand cells hundreds of
-   thousands of times (a race's profile: the route search a fifth of all the bots' CPU, nearly
-   all of it reading cells it had read). It answers about one world value, so what it holds is
-   what that value says; it is made inside one question and never kept, so no two threads share
-   it."
+   world whose bot stands on ice (on-ice?) the sheet is floor, so the bot can walk off it. Made
+   from a world, each cell is read through the terrain once and held for the life of the
+   function; it is made inside one question and never kept, so no two threads share it."
   [w]
   (cond (fn? w) w
         :else
@@ -338,9 +323,7 @@
   (max 0.0 (- range (flat-distance node pos))))
 
 (defmethod goal-done? :afar
-  ;; :away on the plane alone: a staircase climbed or descended gets no farther (the pearl
-  ;; hunt's roam, gym batch pearls-warped2-a run 3, walked its own staircase up and down for
-  ;; thirty minutes, each flight far by the height)
+  ;; :away on the plane alone: a staircase climbed or descended gets no farther
   [_ {:goal/keys [pos range]} node]
   (> (octile node pos) range))
 (defmethod heuristic :afar [{:goal/keys [pos range]} node] (max 0.0 (- range (octile node pos))))
@@ -351,10 +334,7 @@
   (terrain/under-sky? world node))
 (defmethod heuristic :sky
   ;; Higher is closer to an opening, and weighted past what a jump costs, so the air already dug
-  ;; is climbed before a mine is filled. Not admissible: any way out will do. Full run 4528031
-  ;; stood at y 17 in the iron mine, a stair already cut down behind it, and the search toward a
-  ;; tree 140 blocks off spent its budget in the tunnels; a new stair was cut and the only
-  ;; pickaxe broke.
+  ;; is climbed before a mine is filled. Not admissible: any way out will do.
   [_ [_ y _]]
   (* sky-weight (max 0 (- terrain/top-y (long y)))))
 
@@ -407,10 +387,8 @@
 
 (def wary-extra
   "Blocks whose cell, or whose floor, a route would rather go round, to the move cost added for
-   entering a cell of them: a crimson forest's ground and growth, where hoglins and piglins stand
-   (gym plan run 41134469333, pearls-travel-b jobs 1 and 2: both died crossing to a warped forest,
-   a hoglin and a piglin). Modest, so a route still crosses one when there is no other way, and
-   the detour that beats it is a few cells."
+   entering a cell of them: a crimson forest's ground and growth, where hoglins and piglins stand.
+   Modest, so a route still crosses one when there is no other way."
   {:crimson_nylium 1.0 :crimson_fungus 1.0 :crimson_roots 1.0 :nether_wart_block 1.0})
 
 (def wary-states
@@ -431,10 +409,7 @@
 (defn near-lava-trap?
   "Is cell within lava-trap-reach on the plane of a lava trap still in force (:world/traps,
    :trap/kind :lava, younger than trap-ttl)? Lava that caught the bot once is still flowing
-   there. Sim race 38844683780 (issue #230, world R2/9): lava falling from ten blocks up caught
-   the bot smelting at y 38; it fled to the next cell, the mine chose the iron ore two blocks
-   off, under the same flow, and the lava caught it again and again until the flee found no
-   footing."
+   there."
   [world [x _ z]]
   (let [now (:time/now world 0)]
     (boolean (some (fn [{:trap/keys [pos at kind]}]
@@ -513,10 +488,8 @@
 (defn start-cell
   "Where a search from the feet at cell from begins: from itself when it is standable, else a
    standable cell the body rests on (rests), else the
-   nearest standable cell within one block on the plane and one up or down. A player whose feet
-   sit on a block edge floors into the neighbouring column, which on a hillside is inside the
-   hill (recorded by the gym at landing 21280,18720: the feet at x 21281.0 on a stone edge, the
-   cell they floor into solid, every plan :none); the box rests on the cell beside it. nil when
+   nearest standable cell within one block on the plane and one up or down (feet on a block
+   edge floor into the neighbouring column; the box rests on the cell beside it). nil when
    nothing near can be stood on. world is a world or its cells."
   ([world from] (start-cell world from nil))
   ([world [x y z :as from] under-box]
