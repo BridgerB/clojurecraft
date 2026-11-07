@@ -6,10 +6,10 @@
             [clojurecraft.blocks :as blocks]
             [clojurecraft.eat :as eat]
             [clojurecraft.fixtures :as fx]
+            [clojurecraft.forage :as forage]
             [clojurecraft.fortress :as fortress]
             [clojurecraft.game :as game]
             [clojurecraft.gear :as gear]
-            [clojurecraft.hunt :as hunt]
             [clojurecraft.memory :as memory]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
@@ -191,7 +191,7 @@
                                plan/goals))))
     (testing "the search spent: the way back, food or none (never the wait that ended 3 of 7 runs)"
       (let [spent {:plan/since 0
-                   :time/now (+ 1000 hunt/forage-ms 100000)
+                   :time/now (+ 1000 forage/forage-ms 100000)
                    :hunt/forage
                    {:forage/since 1000 :forage/leg 3 :forage/phase :return :forage/life 0}}
             go (fn [w] (plan/next-intent (merge w spent) (row :return-nether) plan/goals))]

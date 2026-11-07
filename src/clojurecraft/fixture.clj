@@ -1,9 +1,6 @@
 (ns clojurecraft.fixture
-  "What every fixture asks the server, over RCON, and the one thing it tells the bot. The forest
-   harness (clojure -M:harness), the gym's land and judge, the landing-set builder and a plan
-   are all fixtures: each waits for a player, loads columns, teleports onto a surface, judges a
-   landing by the server's own answers, and hands the bot a :go event. The pure half reads the
-   server's replies; the I/O half sends the commands."
+  "What every fixture asks the server, over RCON, and the one thing it tells the bot. The pure half
+   reads the server's replies; the I/O half sends the commands."
   (:require [clojure.string :as str]
             [clojurecraft.cli :as cli]
             [clojurecraft.plan :as plan]
@@ -29,7 +26,7 @@
    canopy (it skips leaves but not a trunk top), and inside stone (the heightmap was not ready)."
   [[:water "if block ~ ~ ~ minecraft:water"] [:water "if block ~ ~-1 ~ minecraft:water"]
    [:water "if block ~ ~1 ~ minecraft:water"]
-   ;; the heightmap stops on sea plants, which are water to the physics (gym shore-w1 run 6 landed on one)
+   ;; the heightmap stops on sea plants, which are water to the physics
    [:water "if block ~ ~ ~ #minecraft:underwater_bonemeals"]
    [:water "if block ~ ~-1 ~ #minecraft:underwater_bonemeals"]
    [:lava "if block ~ ~-1 ~ minecraft:lava"] [:tree "if block ~ ~-1 ~ #minecraft:logs"]

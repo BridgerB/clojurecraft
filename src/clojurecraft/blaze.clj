@@ -39,10 +39,10 @@
             [clojurecraft.eat :as eat]
             [clojurecraft.entity :as entity]
             [clojurecraft.filler :as filler]
+            [clojurecraft.forage :as forage]
             [clojurecraft.fortress :as fortress]
             [clojurecraft.game :as game]
             [clojurecraft.hunger :as hunger]
-            [clojurecraft.hunt :as hunt]
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
             [clojurecraft.make :as make]
@@ -138,7 +138,7 @@
   "The walk onto the cell drop e lies in: the feet there are in the pickup box of a drop in a pit
    under the floor (:intent/for :rod ends standing in the cell)."
   [e]
-  {:intent/kind :walk :intent/target (hunt/cell (:entity/pos e)) :intent/for :rod})
+  {:intent/kind :walk :intent/target (forage/cell (:entity/pos e)) :intent/for :rod})
 
 (defn fetchable?
   "Can the bot pick drop e up: its cell is not solid (a drop a block was placed over, no
@@ -152,7 +152,7 @@
   [world e]
   (and (not (drops/over-void? world e))
        (not (intent/ledge-ahead? world (:entity/pos e)))
-       (not (some-> (terrain/block-at world (hunt/cell (:entity/pos e)))
+       (not (some-> (terrain/block-at world (forage/cell (:entity/pos e)))
                     blocks/solid?))
        (or (not (drops/under-reach? world e)) (intent/routable? world (fetch-walk e)))))
 
@@ -166,7 +166,7 @@
   (let [bl (:plan/blacklist world #{})
         pos (:player/pos world)]
     (->> (drops/lying world rod pos drops/drop-radius)
-         (remove (fn [[_ e]] (contains? bl (hunt/cell (:entity/pos e)))))
+         (remove (fn [[_ e]] (contains? bl (forage/cell (:entity/pos e)))))
          (sort-by (fn [[_ e]] (physics/distance pos (:entity/pos e))))
          (take candidates)
          (some (fn [[_ e :as ee]] (when (fetchable? world e) ee))))))
@@ -373,7 +373,7 @@
       {:intent/kind :craft :intent/recipe (:recipe/id r) :intent/window :inventory})))
 
 (defn food-lying
-  "[eid entity] of the nearest edible drop within hunt/hunt-radius that the eye can see
+  "[eid entity] of the nearest edible drop within forage/hunt-radius that the eye can see
    (combat/clear?), that can be picked up (fetchable?), or nil."
   [world]
   (let [pos (:player/pos world)
@@ -385,8 +385,8 @@
                         (not (entity/dead? e))
                         (contains? food-drop-ids (:entity/item e))
                         (not (contains? bl eid))
-                        (not (contains? bl (hunt/cell (:entity/pos e))))
-                        (<= (physics/distance pos (:entity/pos e)) hunt/hunt-radius)
+                        (not (contains? bl (forage/cell (:entity/pos e))))
+                        (<= (physics/distance pos (:entity/pos e)) forage/hunt-radius)
                         (combat/clear? world eye (:entity/pos e)))))
          (sort-by (fn [[_ e]] (physics/distance pos (:entity/pos e))))
          (some (fn [[_ e :as ee]] (when (fetchable? world e) ee))))))
@@ -396,21 +396,21 @@
    :collect-drops of what it holds."
   [world e]
   (let [n (recipe/item-name (:entity/item e))
-        cell (hunt/cell (:entity/pos e))]
+        cell (forage/cell (:entity/pos e))]
     (if (drops/under-reach? world e)
       {:intent/kind :walk :intent/target cell :intent/for :food}
       {:intent/kind :collect-drops :intent/item n :intent/target cell})))
 
 (defn hoglin-intent
-  "A walk or a yielding fight of the nearest hoglin hunt/game would take, or nil. hunt/game
+  "A walk or a yielding fight of the nearest hoglin forage/game would take, or nil. forage/game
    already refuses one under combat/retreat-health: a hoglin hits back, and 9.3 is under 10
    (issue #577), so it is not approached. The fight yields, so a hit under that line ends it."
   [world]
-  (when-let [[eid e] (hunt/game world)]
+  (when-let [[eid e] (forage/game world)]
     (when (= :hoglin (entity/kind e))
-      (if (<= (physics/horizontal-distance (:player/pos world) (:entity/pos e)) hunt/strike-range)
+      (if (<= (physics/horizontal-distance (:player/pos world) (:entity/pos e)) forage/strike-range)
         {:intent/kind :fight :intent/target eid :intent/for :hunt :intent/yield? true}
-        {:intent/kind :walk :intent/target (hunt/cell (:entity/pos e)) :intent/for :hunt}))))
+        {:intent/kind :walk :intent/target (forage/cell (:entity/pos e)) :intent/for :hunt}))))
 
 (def crimson-ground #{:crimson_nylium}) ; the floor a hoglin is found on
 (def food-sight 16)                     ; blocks of crimson ground crossed to find a hoglin, only at or above retreat-health
@@ -443,7 +443,7 @@
    from what is held, or (only at or above combat/retreat-health) a nearby hoglin or the crimson
    ground one lives on. nil when none of that can be had. The hunt row itself does not run in
    the Nether at food 17 (eat/hungry? is food under 14, and provisioning? is the overworld), so
-   this asks hunt/game directly."
+   this asks forage/game directly."
   [world]
   (or (when-let [[_ e] (food-lying world)] (food-intent world e))
       (craft-meal world)
@@ -493,8 +493,8 @@
   "The intent to go home through the portal for food, or nil when no portal is on record: asked
    of a bot hurt under combat/retreat-health that cannot heal (heals? false) with nothing to take
    in the Nether (provisions). Sim R1/17 reached the blazes at 9.3 health, food 17, nothing edible,
-   and no fight is allowed there; the overworld has animals (hunt/provisioning? stocks
-   hunt/provision-wanted again with the portal kit held) and the :return-nether row brings it back."
+   and no fight is allowed there; the overworld has animals (forage/provisioning? stocks
+   forage/provision-wanted again with the portal kit held) and the :return-nether row brings it back."
   [world]
   (when (home-portal world) {:intent/kind :portal-home}))
 
@@ -503,12 +503,12 @@
 (defn stocking
   "The food to take before the stage starts, or nil: fewer than food-reserve edible items held,
    no blaze watching, and a source at hand (an edible drop in sight, a meal craftable from what
-   is held, a hoglin hunt/game would take, which it refuses under combat/retreat-health). Never
+   is held, a hoglin forage/game would take, which it refuses under combat/retreat-health). Never
    a search for crimson ground: the stage is not held up for a forest that may not be near.
    Sim R1/17 reached the blazes at 9.3 health with food 17 and nothing edible, where nothing
    heals and no fight is allowed (follow-up 1:15 AM)."
   [world]
-  (when (and (< (hunt/edible-held world) food-reserve) (empty? (watchers world)))
+  (when (and (< (forage/edible-held world) food-reserve) (empty? (watchers world)))
     (or (when-let [[_ e] (food-lying world)] (food-intent world e))
         (craft-meal world)
         (hoglin-intent world))))
@@ -679,7 +679,7 @@
   [world es]
   (let [pos (:player/pos world)
         recent (into #{} (map :intention/target) (memory/newest-dones world :walk 2))
-        [c & cs] (map #(if (vector? %) % (hunt/cell (:entity/pos %)))
+        [c & cs] (map #(if (vector? %) % (forage/cell (:entity/pos %)))
                       (sort-by #(if (vector? %)
                                   (physics/distance pos (physics/centre %))
                                   (physics/distance pos (:entity/pos %)))
@@ -712,7 +712,7 @@
   (let [blazes (remove vector? threats)]
     (when-let [n (and sp (seq blazes) (not (churning? world)) (nook world sp))]
       (when (and (not= n (intent/feet world))
-                 (every? (fn [e] (unseen-from? world n (hunt/cell (:entity/pos e)))) blazes))
+                 (every? (fn [e] (unseen-from? world n (forage/cell (:entity/pos e)))) blazes))
         {:intent/kind :walk
          :intent/target n
          :intent/for :cover
@@ -1269,7 +1269,7 @@
                    (and (= :blaze (entity/kind e))
                         (not (entity/dead? e))
                         (<= (physics/distance (physics/centre c) (:entity/pos e)) cover-range)
-                        (not (unseen-from? world c (hunt/cell (:entity/pos e))))))
+                        (not (unseen-from? world c (forage/cell (:entity/pos e))))))
                  (vals (:world/entities world)))))
 
 (defn sees-a-blaze?
@@ -1618,7 +1618,7 @@
     (fetch-walk e)
     {:intent/kind :collect-drops
      :intent/item :blaze_rod
-     :intent/target (hunt/cell (:entity/pos e))}))
+     :intent/target (forage/cell (:entity/pos e))}))
 
 (defn refuge-now
   "What the bot does for its refuge now, or nil: the hold, seal or unseal in the pocket (hold-intent),
@@ -1964,7 +1964,7 @@
       (intent/why :blaze/lying
                   {:intent/kind :collect-drops
                    :intent/item :blaze_rod
-                   :intent/target (hunt/cell (:entity/pos lying))})
+                   :intent/target (forage/cell (:entity/pos lying))})
       (and (not (hurt? world)) beid)
       (intent/why :blaze/and-not-hurt?-world-beid
                   {:intent/kind :fight :intent/target beid :intent/yield? true})

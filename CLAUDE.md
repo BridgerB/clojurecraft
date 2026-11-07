@@ -6,7 +6,7 @@ clojurecraft: a from-scratch Minecraft Java Edition bot in Clojure whose purpose
 
 ## The brain
 
-`brain/` is the verified knowledge base (method: `/Users/bridger/Developer/BRAIN.md`). Read `brain/_index.md` first, then one MOC, then the few notes a question needs; never dump it. Every verified note cites `path#symbol` anchors at a pinned commit. When a change touches a subsystem, update its note in the same change and run `clojure -M:brain` (four invariants at zero: broken, ambiguous, orphans, unresolved sourceRefs). Sibling-research notes are `draft` until someone opens their anchors.
+`brain/` is the verified knowledge base (method: `/Users/bridger/Developer/BRAIN.md`). Read `brain/_index.md` first, then one MOC, then the few notes a question needs; never dump it. Every verified note cites `path#symbol` anchors at a pinned commit. A change edits the brain only when it makes a design decision or finds a gotcha (a note under `decisions/` or `gotchas/`) or a game fact; what a function does is its docstring, and what a stage found is its `problems.edn` row and issue. Run `clojure -M:brain` (four invariants at zero: broken, ambiguous, orphans, unresolved sourceRefs). Sibling-research notes are `draft` until someone opens their anchors.
 
 ## Style (the point of the project)
 
@@ -48,7 +48,7 @@ src/clojurecraft/stone.clj    the :mine act: a row's blocks (stone, ore, gravel)
 src/clojurecraft/swim.clj     the escape goals' rules and executors: :swim-out, :flee, and :wade (the shore trial)
 src/clojurecraft/eat.clj      the :eat always row and executor: hungry under 14 with safe food held, one use-item, done when the server's food rises
 src/clojurecraft/combat.clj   the 775 attack: :fight (650 ms apart, a ghost after 25 swings, break off under 10 health), :back-off, the :defend always row and the gym's :attack
-src/clojurecraft/hunt.clj     the food producer: hungry with nothing to eat, walk to the nearest cow, pig, sheep or rabbit, fight it, collect the meat
+src/clojurecraft/forage.clj     the food producer: hungry with nothing to eat, walk to the nearest cow, pig, sheep or rabbit, fight it, collect the meat
 src/clojurecraft/pearls.clj   ender pearls by hunting endermen: provoke by a stare from range, fight at the legs, the pearl picked up where it fell
 src/clojurecraft/eyes.clj     eyes of ender: the needs planner through the 2x2 craft rows, a wait that names the short stage (:no-pearls, :no-rods)
 src/clojurecraft/sword.clj    the :sword always row: the best sword the held items make without a trip, never from a log

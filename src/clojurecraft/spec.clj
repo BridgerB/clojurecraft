@@ -15,10 +15,10 @@
             [clojurecraft.end-portal :as end-portal]
             [clojurecraft.entity :as entity]
             [clojurecraft.eyes]
+            [clojurecraft.forage]
             [clojurecraft.fortress :as fortress]
             [clojurecraft.game :as game]
             [clojurecraft.gear]
-            [clojurecraft.hunt]
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
             [clojurecraft.make :as make]
@@ -799,14 +799,18 @@
 (s/def :problem/needs (s/coll-of ::text :kind vector? :min-count 1))
 (s/def :problem/risks (s/coll-of ::text :kind vector? :min-count 1))
 (s/def :problem/done ::text)
-(s/def :problem/last-failure ::text)
+(s/def :problem/last-failure ::text) ; one sentence; the longer account is the stage's issue
+(s/def :seen/issue pos-int?)
+(s/def :seen/run ::text)
+(s/def :problem/seen ; runs that showed the stage fail, newest last; the text is on the issue
+  (s/coll-of (s/keys :req-un [:seen/run] :opt-un [:seen/issue]) :kind vector?))
 (s/def :problem/sources (s/coll-of ::text :kind vector? :min-count 1))
 (s/def :problem/decisions (s/coll-of ::text :kind vector? :min-count 1)) ; the open questions answered before the code
 (s/def ::problem
   (s/keys :req
           [:problem/stage :problem/statement :problem/needs :problem/risks :problem/done
            :problem/last-failure :problem/sources]
-          :opt [:problem/issue :problem/goals :problem/decisions]))
+          :opt [:problem/issue :problem/goals :problem/decisions :problem/seen]))
 (s/def :intent/goal keyword?)
 
 ;; the server model (sim): a reducer too, so it is specced and instrumented like the bot's

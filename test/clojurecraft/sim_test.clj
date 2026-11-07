@@ -15,9 +15,9 @@
             [clojurecraft.entity :as entity]
             [clojurecraft.eyes]
             [clojurecraft.fixtures :as fx]
+            [clojurecraft.forage :as forage]
             [clojurecraft.fortress :as fortress]
             [clojurecraft.game :as game]
-            [clojurecraft.hunt :as hunt]
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
             [clojurecraft.main :as main]
@@ -2676,19 +2676,20 @@
 
 (deftest ^:eftest/synchronized an-interrupted-smelt-is-gone-back-to-not-mined-for-again
   ;; issue #686 (PR #689): the iron kit gym with the forage let to cut into a smelt
-  ;; (hunt/foraging? true once the cook has begun, as before the guard of #673): four raw iron
+  ;; (forage/foraging? true once the cook has begun, as before the guard of #673): four raw iron
   ;; are left in the furnace and the inventory shows none. The planner goes back for them.
   ;; with-redefs is JVM-global. eftest runs the suite in parallel, so this mark makes
   ;; runner/run-split run the test alone, before the rest, and the redef cannot reach the
   ;; iron-kit replay beside it.
   (let [cut (atom false)
-        foraging? hunt/foraging?
-        [w sim] (with-redefs [hunt/foraging? (fn [w]
-                                               (if (and (not @cut)
-                                                        (= :smelt (:intent/kind (:plan/intent w)))
-                                                        (= :cook (:intent/stage (:plan/intent w))))
-                                                 (reset! cut true)
-                                                 (foraging? w)))]
+        foraging? forage/foraging?
+        [w sim] (with-redefs [forage/foraging? (fn [w]
+                                                 (if (and (not @cut)
+                                                          (= :smelt (:intent/kind (:plan/intent w)))
+                                                          (= :cook
+                                                             (:intent/stage (:plan/intent w))))
+                                                   (reset! cut true)
+                                                   (foraging? w)))]
                   (sim/run step
                            (game/init fx/opts)
                            (sim/init {:column (world/column-bytes kit-column)

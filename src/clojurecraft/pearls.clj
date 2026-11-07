@@ -38,6 +38,7 @@
             [clojurecraft.drops :as drops]
             [clojurecraft.entity :as entity]
             [clojurecraft.filler :as filler]
+            [clojurecraft.forage :as forage]
             [clojurecraft.fortress :as fortress]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
@@ -61,8 +62,8 @@
 (def pearl :ender_pearl)               ; the item a kill may drop
 
 (def thresholds
-  "Tuning parameters and thresholds for the hunt, read from resources/clojurecraft/hunt.edn."
-  (edn/read-string (slurp (io/resource "clojurecraft/hunt.edn"))))
+  "Tuning parameters and thresholds for the hunt, read from resources/clojurecraft/pearls.edn."
+  (edn/read-string (slurp (io/resource "clojurecraft/pearls.edn"))))
 
 (def hunt-radius 32.0)                ; blocks from the feet an enderman is hunted within
 (def sighting-radius 128.0)           ; blocks from the feet a tracked enderman sighting is gone toward: the server shows them that far, and every first sighting of the 2026-11-05 rod bots was 54 to 105 blocks off, past hunt-radius, so none ever became a hunt
@@ -77,7 +78,7 @@
 (def roam-turn-ms 10000)              ; ms after which a roam sets out a heading further round
 (def headings ; the eight ways a roam may go, a quarter turn of each other in pairs
   [[1 0] [1 1] [0 1] [-1 1] [-1 0] [-1 -1] [0 -1] [1 -1]])
-(def strike-range 4.5)                ; blocks from the feet, height counted, within which an enderman is at hand (hunt/strike-range: past a walk's reach)
+(def strike-range 4.5)                ; blocks from the feet, height counted, within which an enderman is at hand (forage/strike-range: past a walk's reach)
 (def stare-range (:stare-range thresholds)) ; blocks to the head within which a provoke stares, with a clear line: the enderman's follow range
 (def stare-from (:stare-from thresholds)) ; never stare nearer: an angry enderman stared at within 4 teleports away
 (def provoke-range (or (:provoke-range thresholds) stare-from)) ; blocks within which a stare can provoke an enderman
@@ -93,8 +94,6 @@
 (def site-reach 6)                    ; cells on the plane round the feet a burrow site is looked for within, when none can be cut from the feet
 (def candidates 3)                    ; nearest endermen asked for a route, as the other acts ask
 (def spare-digs 32)                   ; digs a pickaxe keeps for a burrow: a burrow's sixteen (burrow-steps) twice over, for one that turns or fails :no-shelter; with fewer left no stairs or tunnel is cut for anything else
-
-(defn cell "The block cell a point is in." [p] (mapv #(long (math/floor %)) p))
 
 ;; ---------------------------------------------------------------- the quarry
 
@@ -166,7 +165,7 @@
     (when (and end mouth)
       (entity/nearest (into {}
                             (filter (fn [[_ e]]
-                                      (let [c (cell (:entity/pos e))]
+                                      (let [c (combat/cell (:entity/pos e))]
                                         (and (< (physics/y-of c) (physics/y-of mouth))
                                              (not= c end)
                                              (<= (physics/distance c end) burrow-span)))))
@@ -461,7 +460,7 @@
   (if-not to
     true
     (let [c (if (map? to) (:goal/pos to) to)
-          ec (cell (:entity/pos e))
+          ec (combat/cell (:entity/pos e))
           d (physics/distance (physics/centre c) (:entity/pos e))
           goal (if (map? to) to {:goal/kind :block :goal/pos c})]
       (or (> d danger-radius)
@@ -600,7 +599,7 @@
          (sort-by (fn [[_ e]] (physics/distance pos (:entity/pos e))))
          (take candidates)
          (some (fn [[_ e :as ee]]
-                 (let [c (cell (:entity/pos e))]
+                 (let [c (combat/cell (:entity/pos e))]
                    (when (and (> (physics/distance eye (physics/centre c)) intent/reach)
                               (intent/routable? world {:intent/kind :walk :intent/target c}))
                      ee)))))))
@@ -633,7 +632,7 @@
          (sort-by (fn [[_ e]] (physics/distance pos (:entity/pos e))))
          (take candidates)
          (some (fn [[_ e]]
-                 (let [c (cell (:entity/pos e))
+                 (let [c (combat/cell (:entity/pos e))
                        i {:intent/kind :walk :intent/target c :intent/for :pearls}
                        to (last (:path/waypoints (path/plan world feet (intent/goal-of i) {})))]
                    (when (and to
@@ -675,19 +674,6 @@
                                      blocks/name-of))
               c))
           cells)))
-
-(defn fresh-kill
-  "The hunt's kill whose drop may still be picked up: the last intent, when it is a :fight for
-   :pearls that ended done, with where its target was last seen, and the target is gone (dead or
-   removed): a fight broken off under 10 health is done too, its enderman alive, and is no kill.
-   nil otherwise."
-  [world]
-  (let [l (:plan/last world)]
-    (when (and (= :fight (:intent/kind l))
-               (= :pearls (:intent/for l))
-               (:intent/target-pos l)
-               (entity/gone? world (:intent/target l)))
-      l)))
 
 (defn drop-of
   "[eid entity] of a pearl lying round where kill k last saw its target (drops/nearest: within
@@ -736,7 +722,7 @@
 
 ;; ---------------------------------------------------------------- the burrow
 
-(defn solid-at?
+(defn solid-or-unloaded?
   "Is cell c solid, or not loaded (what the bot does not know is not a place to stand in)?"
   [world c]
   (let [id (terrain/block-at world c)] (or (nil? id) (blocks/solid? id))))
@@ -745,8 +731,8 @@
   "Could an enderman stand with its feet in cell [x y z]: a solid floor under it and the three
    cells it fills (mob/tall: 2.9 high) open?"
   [world [x y z]]
-  (and (solid-at? world [x (dec y) z])
-       (not-any? #(solid-at? world [x (+ y %) z]) (range (mob/tall :enderman)))))
+  (and (solid-or-unloaded? world [x (dec y) z])
+       (not-any? #(solid-or-unloaded? world [x (+ y %) z]) (range (mob/tall :enderman)))))
 
 (defn shelter?
   "Can the bot standing with its feet in cell [x y z] not be hit by an enderman: its feet and head
@@ -757,8 +743,8 @@
    reach; one cell off it always can. Gym batch pearls-263a (plan run 38892130785): five of five
    live trials died fighting in the open in iron, the enderman landing 5.74 a second."
   [world [x y z]]
-  (and (not (solid-at? world [x y z]))
-       (not (solid-at? world [x (inc y) z]))
+  (and (not (solid-or-unloaded? world [x y z]))
+       (not (solid-or-unloaded? world [x (inc y) z]))
        (not-any? #(stand? world %)
                  (for [dx [-1 0 1] dz [-1 0 1] dy [-2 -1 0 1]] [(+ x dx) (+ y dy) (+ z dz)]))))
 
@@ -891,7 +877,7 @@
 (defn level?
   "Does enderman e stand on the bot's level: less than descend-drop above or below the feet?"
   [world e]
-  (< (abs (- (physics/y-of (cell (:entity/pos e)))
+  (< (abs (- (physics/y-of (combat/cell (:entity/pos e)))
              (physics/y-of (path/feet-cell (:player/pos world)))))
      descend-drop))
 
@@ -899,7 +885,7 @@
   "Does enderman e stand within cut-reach of the feet on the plane (path/octile), near enough
    for stairs or a tunnel to be cut toward it?"
   [world e]
-  (<= (path/octile (path/feet-cell (:player/pos world)) (cell (:entity/pos e))) cut-reach))
+  (<= (path/octile (path/feet-cell (:player/pos world)) (combat/cell (:entity/pos e))) cut-reach))
 
 (def lava-sea-top 32)                   ; the Nether's lava fills every cell up to this height
 (def lava-margin 4)                    ; cells over it that nothing is cut below
@@ -941,7 +927,7 @@
            (sort-by (fn [[_ e]] (physics/distance pos (:entity/pos e))))
            (take candidates)
            (some (fn [[_ e]]
-                   (let [drop (- fy (physics/y-of (cell (:entity/pos e))))
+                   (let [drop (- fy (physics/y-of (combat/cell (:entity/pos e))))
                          to-y (max (- fy (min drop descend-step)) (lava-floor world))]
                      (when (and (>= drop descend-drop) (within-cut-reach? world e) (< to-y fy))
                        {:intent/kind :stairs-down
@@ -979,7 +965,7 @@
            (sort-by (fn [[_ e]] (physics/distance pos (:entity/pos e))))
            (take candidates)
            (some (fn [[_ e]]
-                   (let [rise (- (physics/y-of (cell (:entity/pos e))) fy)]
+                   (let [rise (- (physics/y-of (combat/cell (:entity/pos e))) fy)]
                      (when (and (>= rise descend-drop) (within-cut-reach? world e))
                        {:intent/kind :stairs-up
                         :intent/to-y (+ fy (min rise descend-step))
@@ -1115,7 +1101,7 @@
                                       :intent/for :shelter
                                       :intent/max-nodes vantage-nodes}))
         cells (fn [e]
-                (let [[ex ey ez :as ec] (cell (:entity/pos e))]
+                (let [[ex ey ez :as ec] (combat/cell (:entity/pos e))]
                   (for [dx (range (- vantage-reach) (inc vantage-reach))
                         dz (range (- vantage-reach) (inc vantage-reach))
                         dy (range (- vantage-rise) (inc vantage-rise))
@@ -1172,7 +1158,7 @@
   (let [feet (intent/feet world)
         eye (game/eye world)
         bl (:plan/blacklist world #{})
-        [ex ey ez] (cell (:entity/pos e))
+        [ex ey ez] (combat/cell (:entity/pos e))
         from (fn [c] (assoc world :player/pos (feet-at c)))]
     (->> (for [dx (range (- crowd-reach) (inc crowd-reach))
                dz (range (- crowd-reach) (inc crowd-reach))
@@ -1242,8 +1228,8 @@
      (let [steps (take n
                        (iterate (fn [cells] (stairs/level-cells (last cells) dir))
                                 (stairs/level-cells feet dir)))]
-       (boolean (some (fn [cells] (some #(solid-at? world %) cells)) steps)))
-     (boolean (some #(solid-at? world %) ((first-cut kind) feet dir))))))
+       (boolean (some (fn [cells] (some #(solid-or-unloaded? world %) cells)) steps)))
+     (boolean (some #(solid-or-unloaded? world %) ((first-cut kind) feet dir))))))
 
 (defn bore
   "A tunnel (:tunnel, stairs.clj: level steps, turning where one is refused) the straight way
@@ -1272,7 +1258,7 @@
                (not (contains? (:plan/boxed-at world) feet))
                (< (abs (- (physics/y-of (:entity/pos e)) (physics/y-of feet))) descend-drop)
                (within-cut-reach? world e)
-               (>= (path/octile feet (cell (:entity/pos e))) bore-length))
+               (>= (path/octile feet (combat/cell (:entity/pos e))) bore-length))
       (let [dir (mapv - (away world e))
             n (floored-length world feet dir bore-length)]
         (when (and (pos? n) (solid-cut? world :tunnel feet dir n))
@@ -1280,13 +1266,13 @@
 
 (defn cheapest-heading
   "The heading of the four straight ones (stairs/directions) whose first cut of kind (:stairs-up,
-   :stairs-down or :tunnel) from feet opens the fewest solid cells (solid-at?), toward first among
+   :stairs-down or :tunnel) from feet opens the fewest solid cells (solid-or-unloaded?), toward first among
    equals. Where the rock is already cut a stair costs no digs, and a step a later cut took out is
    laid (stairs/up-lay): gym batch pearls-warped8-a (plan run 39731473452, probe 39778589970) run
    2's second flight down took the floor of its first flight's third stair, and the way back up
    lay two stairs north, open, one block to lay and no dig."
   [world kind feet toward]
-  (first (sort-by (fn [h] (count (filter #(solid-at? world %) ((first-cut kind) feet h))))
+  (first (sort-by (fn [h] (count (filter #(solid-or-unloaded? world %) ((first-cut kind) feet h))))
                   (cons toward (remove #{toward} stairs/directions)))))
 
 (def brink-drop 3)                    ; blocks of open air under a cell beside the feet that make the feet a brink no cut starts from
@@ -1301,7 +1287,8 @@
   (boolean (some (fn [[dx dz]]
                    (let [cx (+ x dx)
                          cz (+ z dz)]
-                     (not-any? #(solid-at? world [cx (- y %) cz]) (range 0 (inc brink-drop)))))
+                     (not-any? #(solid-or-unloaded? world [cx (- y %) cz])
+                               (range 0 (inc brink-drop)))))
                  (for [dx [-1 0 1] dz [-1 0 1] :when (not= [0 0] [dx dz])] [dx dz]))))
 
 (defn dig-out
@@ -1325,7 +1312,7 @@
         feet (path/feet-cell pos)
         [_ e] (entity/nearest (endermen world descend-radius) pos)]
     (when (and e (spare? world) (not (contains? (:plan/boxed-at world) (intent/feet world))))
-      (let [c (cell (:entity/pos e))
+      (let [c (combat/cell (:entity/pos e))
             i {:intent/kind :walk :intent/target c :intent/for :pearls}
             to (or (last (:path/waypoints (path/plan world feet (intent/goal-of i) {}))) feet)
             rise (- (physics/y-of c) (physics/y-of feet))
@@ -1366,7 +1353,9 @@
    blocks (solid-cut?) and whose stair step does not step onto an open brink (brink?). Sorted
    by cheapest first."
   [world feet]
-  (let [ways (sort-by (fn [h] (count (filter #(solid-at? world %) ((first-cut :stairs-up) feet h))))
+  (let [ways (sort-by (fn [h]
+                        (count (filter #(solid-or-unloaded? world %)
+                                       ((first-cut :stairs-up) feet h))))
                       stairs/directions)]
     (some (fn [[dx dz :as h]]
             (let [step [(+ (first feet) dx) (inc (second feet)) (+ (last feet) dz)]]
@@ -1459,7 +1448,7 @@
   ;; reason
   [world {:intent/keys [stage dir mouth] :as i} event]
   (let [mouth (or mouth (intent/feet world))
-        roof (first (filter #(solid-at? world %) (mouth-cells mouth)))
+        roof (first (filter #(solid-or-unloaded? world %) (mouth-cells mouth)))
         i (assoc i :intent/mouth mouth :intent/stage (or stage (if roof :roof :down)))
         world (assoc world :plan/intent i)]
     (case (:intent/stage i)
@@ -1582,7 +1571,7 @@
   (when-let [item (filler/for world 2)]
     (some (fn [dy]
             (when-let [c (cell-toward world to dy)]
-              (when-not (solid-at? world c)
+              (when-not (solid-or-unloaded? world c)
                 {:intent/kind :place
                  :intent/item item
                  :intent/cell c
@@ -1597,7 +1586,7 @@
   (when-not (intent/routable? world {:intent/kind :walk :intent/target mouth :intent/for :shelter})
     (some (fn [dy]
             (let [c (cell-toward world (physics/centre mouth) dy)]
-              (when (and c (solid-at? world c))
+              (when (and c (solid-or-unloaded? world c))
                 {:intent/kind :dig :intent/target c :intent/for :pearls})))
           [1 0])))
 
@@ -1829,10 +1818,10 @@
         own #{[fx fy fz] [fx (inc fy) fz]}]
     (when (pos? d)
       (some (fn [t]
-              (let [c (cell (mapv (fn [a b] (+ a (* t (/ (- b a) d)))) eye aim))]
+              (let [c (combat/cell (mapv (fn [a b] (+ a (* t (/ (- b a) d)))) eye aim))]
                 (when (and (not (own c))
-                           (not (solid-at? world c))
-                           (some #(solid-at? world (mapv + c %)) neighbours))
+                           (not (solid-or-unloaded? world c))
+                           (some #(solid-or-unloaded? world (mapv + c %)) neighbours))
                   c)))
             (range 1.0 (min 6.0 d) 0.5)))))
 
@@ -1845,9 +1834,9 @@
     (some (fn [[dx dz]]
             (let [c [(+ fx dx) fy (+ fz dz)]
                   eye [(+ (first c) 0.5) (+ fy 1.62) (+ (last c) 0.5)]]
-              (when (and (solid-at? world [(first c) (dec fy) (last c)])
-                         (not (solid-at? world c))
-                         (not (solid-at? world [(first c) (inc fy) (last c)]))
+              (when (and (solid-or-unloaded? world [(first c) (dec fy) (last c)])
+                         (not (solid-or-unloaded? world c))
+                         (not (solid-or-unloaded? world [(first c) (inc fy) (last c)]))
                          (not (combat/clear? world eye (combat/aim e))))
                 c)))
           [[1 0] [-1 0] [0 1] [0 -1]])))
@@ -1866,7 +1855,7 @@
                     [0 (long (math/signum dz))])]
       (some (fn [dy]
               (let [c [(+ fx hx) (+ fy dy) (+ fz hz)]]
-                (when (solid-at? world c)
+                (when (solid-or-unloaded? world c)
                   {:intent/kind :dig :intent/target c :intent/for :pearls})))
             [0 1]))))
 
@@ -2247,10 +2236,10 @@
                          (mapcat (fn [[ox oy oz]] [(update c 0 + ox) (update c 1 + oy)
                                                    (update c 2 + oz)])
                           [[1 0 0] [-1 0 0] [0 0 1] [0 0 -1]])))]
-    (boolean (and (every? #(pocket/solid-at? world %) cells)
-                  (pocket/solid-at? world (update to 1 dec))
-                  (pocket/solid-at? world (update to 1 + 2))
-                  (every? #(pocket/solid-at? world %) (mapcat others cells))
+    (boolean (and (every? #(pocket/solid-loaded? world %) cells)
+                  (pocket/solid-loaded? world (update to 1 dec))
+                  (pocket/solid-loaded? world (update to 1 + 2))
+                  (every? #(pocket/solid-loaded? world %) (mapcat others cells))
                   (not-any? #(= :lava
                                 (some-> (terrain/block-at world %)
                                         blocks/name-of))
@@ -2786,7 +2775,7 @@
         ms (into {} (take candidates ranked))
         w (or (when (seq ms)
                 (if-let [[_ e] (routable world ms)]
-                  {:intent/kind :walk :intent/target (cell (:entity/pos e))}
+                  {:intent/kind :walk :intent/target (combat/cell (:entity/pos e))}
                   (toward world ms)))
               (explore world)
               (wander world)
@@ -2835,7 +2824,7 @@
         eye (game/eye world)
         bl (:plan/blacklist world #{})
         spent (memory/arrived world)
-        [ex ey ez] (cell (:entity/pos e))]
+        [ex ey ez] (combat/cell (:entity/pos e))]
     (->> (for [dx (range -16 17) dz (range -16 17) dy (range -3 4)] [(+ ex dx) (+ ey dy) (+ ez dz)])
          (filter (fn [c]
                    (let [d (physics/distance (physics/centre c) (:entity/pos e))]
@@ -2876,10 +2865,10 @@
             (when-let [i (toward world {eid e})] (tag i))
             (when (and (pickaxe? world)
                        (level? world e)
-                       (> (path/octile feet (cell (:entity/pos e))) bore-length))
+                       (> (path/octile feet (combat/cell (:entity/pos e))) bore-length))
               (tag {:intent/kind :tunnel-to
-                    :intent/target [(first (cell (:entity/pos e))) (second feet)
-                                    (nth (cell (:entity/pos e)) 2)]
+                    :intent/target [(first (combat/cell (:entity/pos e))) (second feet)
+                                    (nth (combat/cell (:entity/pos e)) 2)]
                     :intent/reach 1.5
                     :intent/climb 0
                     :intent/no-down? true
@@ -3259,7 +3248,9 @@
                         (take candidates)))
              (when-not (worn-out? world)
                (when-let [[_ e] (routable world far)]
-                 {:intent/kind :walk :intent/target (cell (:entity/pos e)) :intent/for :pearls})))
+                 {:intent/kind :walk
+                  :intent/target (combat/cell (:entity/pos e))
+                  :intent/for :pearls})))
            (when-not overworld-death? (descend world (endermen world descend-radius)))
            (ascend world (endermen world descend-radius))
            (toward world far)
@@ -3304,7 +3295,7 @@
                        " "
                        eid
                        " at "
-                       (cell (:entity/pos e))
+                       (combat/cell (:entity/pos e))
                        " shoots the bot at "
                        (intent/feet world)
                        ": no cover"))
@@ -3714,7 +3705,7 @@
   ;; sim probe 39890964793 (seed 5) wore its pickaxe out on burrows, then struck calm endermen in
   ;; the open in worlds R2 and R3 and was slain, R2 nine times
   [world goal table]
-  (let [k (when-not (menaced? world) (fresh-kill world))
+  (let [k (when-not (menaced? world) (forage/fresh-kill world :pearls))
         [_ d] (when k (drop-of world k))
         fire (burning-at world)
         replacing (when-not (sword/serviceable world) (make-sword world goal table))
@@ -3732,7 +3723,7 @@
           (intent/why :pearls/d
                       {:intent/kind :collect-drops
                        :intent/item pearl
-                       :intent/target (cell (:entity/pos d))
+                       :intent/target (combat/cell (:entity/pos d))
                        :intent/for :pearls})
           (and k (body? world k)) (intent/why :pearls/and-k-body?-world-k {:plan/wait :drop})
           (< (:player/health world 20.0) danger-health)

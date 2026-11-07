@@ -1,6 +1,6 @@
 (ns clojurecraft.end-portal
-  "The end portal lit and stepped into (issue #266): the :end-portal goal, done when an end portal
-   block is remembered, and :enter-end, done when the dimension is the End.
+  "The end portal lit and stepped into: the :end-portal goal, done when an end portal block is
+   remembered, and :enter-end, done when the dimension is the End.
 
    The frames are landmarks (memory/landmark-kinds), remembered as their chunk loads; the lit
    portal's blocks are too, so the goal is read from memory like the fortress's bricks. The work
@@ -179,14 +179,13 @@
 ;; ---------------------------------------------------------------- the goals
 
 (defn next-toward
-  "The next intent toward the lit portal, and with enter? into the End: the :end-portal intent
-   while a remembered frame without an eye has a reachable stand or the End is still to enter;
-   when empty frames remain and none has a reachable stand yet (the portal room's wall or roof
-   still between the feet and the frames after :portal-room arrived within 6), the way through
-   to the nearest empty frame (toward-frame); a wait :no-frames with no frame on record,
-   :no-eyes when fewer eyes are held than frames lack them (the eyes stage, issue #264, is the
-   one to look at), :lighting once every frame is eyed and the portal's blocks are not yet on
-   record; nil when nothing is left."
+  "The next intent toward the lit portal, and with enter? into the End: the :end-portal intent while
+   a remembered frame without an eye has a reachable stand or the End is still to enter; when empty
+   frames remain and none has a reachable stand yet (the portal room's wall or roof still between
+   the feet and the frames after :portal-room arrived within 6), the way through to the nearest
+   empty frame (toward-frame); a wait :no-frames with no frame on record, :no-eyes when fewer eyes
+   are held than frames lack them, :lighting once every frame is eyed and the portal's blocks are
+   not yet on record; nil when nothing is left."
   [world enter?]
   (let [fs (frames world)
         empty (empty-frames world)]

@@ -89,14 +89,14 @@
     (if (> (- (:time/now world) sent-at) answer-timeout) :overdue :waiting)))
 
 (defn lost
-  "A click went unanswered past answer-timeout: the intent picks up from the server's slots,
-   which are the truth. First a resync (resync, the cursor the world shows may not be the
-   server's), then the intent goes on at stage restart, a stage that sends no blind next click
-   (a craft or a smelt settles again: cursor down, grid or furnace emptied, then laid again; a
-   swap into the hand is asked again). The max-lost-th loss fails :stale-window. A loaded server
-   answers late rather than never: the race that refilled each server's 25 slots the moment a
-   bot ended (issues #131, #132, 34 bots in one round) failed crafts and equips :stale-window on
-   the first click left over three seconds, while the smelt, which took this way, went on."
+  "A click went unanswered past answer-timeout: the intent picks up from the server's slots, which
+   are the truth. First a resync (resync, the cursor the world shows may not be the server's), then
+   the intent goes on at stage restart, a stage that sends no blind next click (a craft or a smelt
+   settles again: cursor down, grid or furnace emptied, then laid again; a swap into the hand is
+   asked again). The max-lost-th loss fails :stale-window. A loaded server answers late rather than
+   never: the race that refilled each server's 25 slots the moment a bot ended failed crafts and
+   equips :stale-window on the first click left over three seconds, while the smelt, which took this
+   way, went on."
   [world {:intent/keys [lost] :or {lost 0}} restart]
   (if (>= (inc lost) max-lost)
     (intent/fail world :stale-window)
@@ -116,17 +116,10 @@
 
 (def junk
   "What a full inventory throws away to make room: what mining and walking pick up that no stage
-   asks for, no recipe the goals reach takes and no floor is laid from (filler/fillers). Race
-   38805920624 runner 5 (issues #172, #192): eight bots stopped at 36 full slots, 450 to 830
-   cobblestone, the stones that drop themselves, raw copper, lapis, sand and clay among them;
-   a craft's result or a furnace's output shift-clicked into the inventory had nowhere to go, the
-   server answered nothing, and the resync after it found no free slot: :inventory-full. The
-   Nether adds what a tunnel to the fortress picks up (race 39337645053, issue #446: soul sand
-   and soil, wart blocks, shroomlights, nuggets, quartz; magma blocks, which a tunnel through a
-   basalt delta digs by the stack, probe 39855333521, issue #338, R3-28-1). The fortress's
-   own bricks and fences are junk too: no floor is laid from them (filler/fillers) and no
-   recipe the goals reach takes them, and a fortress dug through fills slots with them by
-   the hundred (issue #580: 705 nether bricks held, no slot for a craft's result)."
+   asks for, no recipe the goals reach takes and no floor is laid from (filler/fillers). The Nether
+   adds what a tunnel to the fortress picks up. The fortress's own bricks and fences are junk too:
+   no floor is laid from them (filler/fillers) and no recipe the goals reach takes them, and a
+   fortress dug through fills slots with them by the hundred."
   #{:sand :red_sand :sandstone :red_sandstone :clay_ball :raw_copper :lapis_lazuli :redstone
     :calcite :tuff_bricks :dripstone_block :pointed_dripstone :amethyst_shard :leaf_litter
     :moss_block :moss_carpet :big_dripleaf :small_dripleaf :wildflowers :wheat_seeds :oak_sapling
@@ -165,12 +158,9 @@
                    (< spare-uses))))
 
 (defn worn-spare-slot
-  "The player slot (main inventory first) of a worn tool (worn?) that the inventory holds a
-   better one of the same item beside: the stack a full inventory throws first of its tools. The
-   last stack of a tool is never one, however worn. Race 39337645053 (issues #463, #457): bots at
-   the flint and steel and the cast held sixteen and eighteen stone pickaxes, each worn out by
-   the stairs and tunnels and each made again as a spare (make/resolve-spares), one slot apiece
-   because tools do not stack, and the craft that needed a slot failed :inventory-full."
+  "The player slot (main inventory first) of a worn tool (worn?) that the inventory holds a better
+   one of the same item beside: the stack a full inventory throws first of its tools. The last stack
+   of a tool is never one, however worn."
   [world]
   (let [inv (:player/inventory world)
         held (for [p inventory/main-then-hotbar

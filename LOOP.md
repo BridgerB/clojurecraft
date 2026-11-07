@@ -139,7 +139,7 @@ Asleep at the wheel means a tick that ends with nothing changed: "lanes still ru
 2. **The real race is the honest metric.** Report every rate as k/n.
 3. **A scripted expert per stage sets the ceiling.** If the expert fails, fix the plan, kit or gate, not thresholds.
 4. **Structure beats magnitude.** Every fix names its structural cause from a log line.
-5. **Sweep numbers in the sim, don't hand-tune them.** Thresholds live in EDN tables (resources/clojurecraft/hunt.edn).
+5. **Sweep numbers in the sim, don't hand-tune them.** Thresholds live in EDN tables (resources/clojurecraft/pearls.edn).
 6. **Reverse curriculum; practise every phase.** This is section 1's checkpoint rule. Move the start earlier only when the later phase passes.
 7. **Observation discipline:** the bot uses only what the server sends, and the sim sends only that.
 

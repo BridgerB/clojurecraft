@@ -16,9 +16,9 @@
             [clojurecraft.dimension :as dimension]
             [clojurecraft.eat :as eat]
             [clojurecraft.filler :as filler]
+            [clojurecraft.forage :as forage]
             [clojurecraft.game :as game]
             [clojurecraft.hunger :as hunger]
-            [clojurecraft.hunt :as hunt]
             [clojurecraft.intent :as intent]
             [clojurecraft.make :as make]
             [clojurecraft.memory :as memory]
@@ -1059,17 +1059,17 @@
       (empty? (plan/undone world (filter #(= dimension/nether (:goal/dimension %)) plan/goals)))))
 
 (defn fed-for-nether?
-  "Does the bot hold hunt/entry-food-min edible items? Sim R1/1 (probe 40795259629) went back
+  "Does the bot hold forage/entry-food-min edible items? Sim R1/1 (probe 40795259629) went back
    through the portal with none, and the hunt row never ran in the forty minutes of the build that
    took it there (foraging? is never out of a :build): the hunt comes first, so the build is not
    started until the food is held."
   [world]
-  (>= (hunt/edible-held world) hunt/entry-food-min))
+  (>= (forage/edible-held world) forage/entry-food-min))
 
 (defmethod plan/next-intent :return-nether
   ;; not ready: a rest while the food heals (food at the healing level), the scrap eaten, a rest
   ;; while the hunt has yet to search; healthy but without food for the Nether: a rest (done at
-  ;; once, asked again) while the hunt has yet to search. Once it has (hunt/search-spent?) the way
+  ;; once, asked again) while the hunt has yet to search. Once it has (forage/search-spent?) the way
   ;; back is taken anyway: food is a nice-to-have, never a gate. A wait here ends the plan after
   ;; wait-ticks (plan/wait-ticks): :no-food-to-return ended 3 of 7 real runs and 5 sim runs of
   ;; main dab82b629 (fortress x2, blaze-rods x1), a bot that respawned with full health and hunger
@@ -1082,9 +1082,9 @@
                 (eat/scrap-held world)
                 (intent/why :return-nether/eat-scrap
                             {:intent/kind :eat :intent/item (eat/scrap-held world)})
-                (hunt/search-spent? world) (intent/why :return-nether/back-after-search (back))
+                (forage/search-spent? world) (intent/why :return-nether/back-after-search (back))
                 :else (intent/why :return-nether/rest-until-hunt-searched {:intent/kind :rest}))
-          (or (fed-for-nether? world) (hunt/search-spent? world))
+          (or (fed-for-nether? world) (forage/search-spent? world))
           (intent/why :return-nether/back-ready (back))
           :else (intent/why :return-nether/rest-for-food {:intent/kind :rest}))))
 

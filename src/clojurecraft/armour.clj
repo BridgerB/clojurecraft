@@ -1,6 +1,6 @@
 (ns clojurecraft.armour
-  "Armour (issue #259): an iron helmet and chestplate, made from the ingots left once the portal
-   kit's iron is in hand, and anything wearable held put on.
+  "Armour: an iron helmet and chestplate, made from the ingots left once the portal kit's iron is in
+   hand, and anything wearable held put on.
 
    Requiring this namespace registers two rows' rules. :wear-armour (an always row at priority 0,
    after the meal) is done by :dressed?, no piece held unworn over an empty armour slot, and
@@ -94,12 +94,12 @@
   [:flint_and_steel :water_bucket :bucket])
 
 (defn counts
-  "Held items by name, wherever the bot's windows have them: the inventory, a crafting grid's
-   cells (window 0's, or an open crafting table's, never the result) and the cursor.
-   A craft moves its ingredients out of the inventory into the grid, and a :wear lifts its piece
-   onto the cursor: counted from the inventory alone, the armour row's first run against the
-   model (issue #259) saw its chestplate's eight ingots leave as they were laid, found nothing
-   wanted, and abandoned the craft :goal-met with the grid full."
+  "Held items by name, wherever the bot's windows have them: the inventory, a crafting grid's cells
+   (window 0's, or an open crafting table's, never the result) and the cursor. A craft moves its
+   ingredients out of the inventory into the grid, and a :wear lifts its piece onto the cursor:
+   counted from the inventory alone, the armour row's first run against the model saw its
+   chestplate's eight ingots leave as they were laid, found nothing wanted, and abandoned the craft
+   :goal-met with the grid full."
   [world]
   (let [grid (dissoc (:window/grid world) inventory/result-slot)
         {:window/keys [menu-type slots]} (:window/open world)
@@ -197,11 +197,9 @@
               (intent/assoc-intent :intent/stage :put :intent/since (:time/now world))))))
 
 (defmethod wear-stage :put
-  ;; the click's answer can move the window's state id before its set-cursor packet lands:
-  ;; wait for the cursor to show the piece, a stage's answer-timeout at the most, rather
-  ;; than fail with the piece on its way to the cursor (gym chain-w1's dragon run 3: the
-  ;; pumpkin wear failed :not-picked-up, the pumpkin stayed off the head and an enderman
-  ;; slew the bot at the perch)
+  ;; the click's answer can move the window's state id before its set-cursor packet lands: wait for
+  ;; the cursor to show the piece, a stage's answer-timeout at the most, rather than fail with the
+  ;; piece on its way to the cursor
   [world {:intent/keys [item since]}]
   (cond (cursor-holds? world item)
         (-> world

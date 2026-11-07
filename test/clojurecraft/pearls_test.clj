@@ -3300,7 +3300,7 @@
       (is (not (pearls/angry-within? far pearls/hold-radius)) "52 blocks off: no hold"))))
 
 (deftest hunt-thresholds-table-is-loaded-and-complete
-  ;; the hunt thresholds are loaded from resources/clojurecraft/hunt.edn
+  ;; the hunt thresholds are loaded from resources/clojurecraft/pearls.edn
   (let [t pearls/thresholds]
     (is (map? t) "the thresholds are an EDN map")
     (is (= 64.0 (:seek-radius t) pearls/seek-radius))
