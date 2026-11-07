@@ -5,8 +5,8 @@
    {:single id} or {:bits n :palette [ids] :longs long[]} (palette nil when direct). Nothing is
    expanded to 4096 entries; block-at indexes the bits on demand. The long[] is never mutated
    after decode, so a section is a value. :chunk/biomes holds each section's biome container the
-   same way (64 cells, 4x4x4 blocks each, ids in the server's biome registry); nothing in the bot
-   reads it through biome-at."
+   same way (64 cells, 4x4x4 blocks each, ids in the server's biome registry); biome-at
+   reads it."
   (:require [clojure.math :as math]
             [clojurecraft.bytes :as b]
             [clojurecraft.dimension :as dimension])
