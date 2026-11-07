@@ -5,6 +5,8 @@
   (:require [clojure.edn :as edn]
             [clojure.string :as str]))
 
+(set! *warn-on-reflection* true)
+
 (defn lane-of
   "The lane n of kind (:real or :sim) in cfg (ci/lanes.edn's value): the first entry of that kind
    whose :lane/runners hold n, else kind's :default; always a map with :lane/page, and with
