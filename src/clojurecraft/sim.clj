@@ -32,10 +32,11 @@
             [clojurecraft.physics :as physics]
             [clojurecraft.sim.end :as sim-end :refer [through-end-portal tick-eyes]]
             [clojurecraft.sim.mobs :as sim-mobs :refer
-             [tick-burn tick-fireballs tick-fires tick-lava tick-mobs tick-wither with-mobs]]
+             [tick-burn tick-fireballs tick-fires tick-lava tick-wither with-mobs]]
             [clojurecraft.sim.portal :as sim-portal :refer [through-portal]]
             [clojurecraft.sim.protocol :as sim-protocol :refer
              [drown feed keep-alive kill login pick-up stream tick-delayed tick-eating]]
+            [clojurecraft.sim.spawns :as sim-spawns :refer [tick-mobs]]
             [clojurecraft.sim.window :as sim-window :refer [tick-furnaces]]
             [clojurecraft.sim.world :as sim-world :refer
              [column-key keep-alive-every max-air max-health mob-salt on-packet pickup-delay roll

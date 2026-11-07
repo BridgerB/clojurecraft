@@ -9,7 +9,7 @@ lastUpdated: 2026-10-22
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/sim.clj#defn init
-  - src/clojurecraft/sim/mobs.clj#defn try-nether-spawn
+  - src/clojurecraft/sim/spawns.clj#defn try-nether-spawn
   - src/clojurecraft/sim.clj#defn joined
   - "src/clojurecraft/sim.clj#Returns [world sim] (run+ for the moment before the stop too)"
   - src/clojurecraft/sim.clj#defn connect!

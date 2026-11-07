@@ -894,7 +894,7 @@
 (s/def :sim.wither/until int?)
 (s/def :sim.wither/next int?)
 (s/def :sim/wither (s/keys :req-un [:sim.wither/until :sim.wither/next])) ; a wither skeleton's wither: when it ends, when it next hurts
-;; mobs in the model (issue #260): each one's kind, place, health and clocks (mob.clj, sim-mobs/tick-mobs)
+;; mobs in the model (issue #260): each one's kind, place, health and clocks (mob.clj, sim-spawns/tick-mobs)
 (s/def :sim.mob/type (set (keys mob/kinds)))
 (s/def :sim.mob/pos ::vec3)
 (s/def :sim.mob/health (s/double-in :min 0.0 :NaN? false :infinite? false))

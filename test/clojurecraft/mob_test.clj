@@ -17,6 +17,7 @@
             [clojurecraft.sim :as sim]
             [clojurecraft.sim.mobs :as sim-mobs]
             [clojurecraft.sim.protocol :as sim-protocol]
+            [clojurecraft.sim.spawns :as sim-spawns]
             [clojurecraft.world :as world]))
 
 (use-fixtures :once fx/instrumented)
@@ -561,7 +562,7 @@
         sim (last states)]
     (is (seq (:sim/mobs sim)) "the night rule spawned")
     (is (= (:sim/wild-rng sim0) (:sim/wild-rng sim)) "and the Nether's stream never rolled")
-    (is (every? #(identical? % (sim-mobs/try-nether-spawn %)) states)
+    (is (every? #(identical? % (sim-spawns/try-nether-spawn %)) states)
         "the Nether's rule leaves every overworld tick as it was")))
 
 ;; ---------------------------------------------------------------- blaze spawners

@@ -6,7 +6,7 @@
  ;; layout is zprint's (:keep): zprint hangs a short :require on its line and drops a long one below
  ;; it, and clean-ns forcing either fought the other, so a ns could not grow past 47 requires (main's,
  ;; 2026-11-07); the classes inside one package import are left as written for the same reason. A :refer list
- ;; wraps one column short of :max-line-length, so 101 is the width zprint's 100 allows.
+ ;; wraps two columns short of :max-line-length, so 102 is the width zprint's 100 allows.
  :clean {:ns-inner-blocks-indentation :keep
          :sort
-         {:ns true :require true :import true :import-classes nil :refer {:max-line-length 101}}}}
+         {:ns true :require true :import true :import-classes nil :refer {:max-line-length 102}}}}
