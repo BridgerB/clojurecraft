@@ -1,6 +1,6 @@
 /loop Win Minecraft with clojurecraft (BridgerB/clojurecraft): a bot that goes from a fresh spawn to killing the Ender Dragon, with no human input and no cheats. You are the lead, and until workers have quota, also the hands. All helper files are in /Users/bridger/.claude-personal/jobs/b02a5091/tmp/ (T below). If you have just been compacted or restarted, do section 2 before anything else.
 
-**The goal right now: get through the stuck stage, which is stage 18 (ender-pearls, #263), in both the real race and the sim race, while stage 17 (blaze-rods, #262) keeps passing. Then the next stuck stage, the same way, to the dragon (Bridger, 2026-11-05).**
+**The goal right now: get through the stuck stage, which is stage 18 (ender-pearls, #263), in both the real race and the sim race. Then the next stuck stage, the same way, to the dragon (Bridger, 2026-11-05).**
 
 - "Pass" means the results page (https://bridgerb.github.io/clojurecraft/) shows bots reaching the stage in BOTH the real race and the sim race, at about 5% of the bots that start it or better.
 - The long goal is unchanged: one full path, spawn to dragon, all 25 stages. A 1% win rate is enough.
@@ -26,11 +26,11 @@ The moment a stage becomes the stuck stage, it gets its own start in both races.
   - Stage 19: rods plus 12 ender pearls.
   - Later stages: the same idea.
 - **Checkpoint bots are their own kind on the results page** (`real-18`, `sim-18`, ...), so the earlier stage's rate is measured only by bots that played it. A checkpoint bot's failures file at its own stage only.
-- **Lanes split:** about half of each race plays the full chain from the current race start (which keeps the earlier stage measured and catches regressions), and half plays from the checkpoint.
+- **Every lane plays the checkpoint (Bridger, 2026-11-06: "I only care about passing one at a time; we have proven the first 17 enough").** No lane plays the full chain; the earlier stages are not re-measured while a stage is stuck.
 - **Later:** real moments of bots that reached a stage become starts too. A real recording, folded at its commit, gives the bot's world at that moment (`real.clj`, the same machinery `simrace --judge` uses for failures). Use it for the sim side when a plain kit-and-place start differs from what real bots carry.
 - **The gym is curriculum, not the measure.** Gym rows may start anywhere. The races, real and sim, are the measure.
 
-Once the stuck stage passes from its checkpoint, check it from the full chain. Then move the checkpoint to the next stuck stage.
+Once the stuck stage passes from its checkpoint, move the checkpoint to the next stuck stage.
 
 ## 2. Getting going again after a compaction or restart
 
@@ -121,7 +121,7 @@ Asleep at the wheel means a tick that ends with nothing changed: "lanes still ru
 
 ## 6. Runners: all 20 on the stuck stage
 
-- **The races:** race.yml (real) and simrace.yml (sim) start bots at the current race start (`:race/from`, now `"fortress"`) and play to `:race/until` (now `pearls-12`). With section 1 in place, about half of each kind's lanes start at the stuck stage's checkpoint.
+- **The races:** race.yml (real) and simrace.yml (sim) start bots at the current race start (`:race/from`, now `"fortress"`) and play to `:race/until` (now `pearls-12`). Every lane of each kind starts at the stuck stage's checkpoint (`:race/checkpoint` and `:simrace/checkpoint`, lanes 1 to 8).
 - **Fleet:** ci/fleet.edn keeps at least 6 real lanes and 2 sim lanes. It dispatches only while no other job waits, so the gym must not keep a queue. A merge replaces lanes after 120 minutes; docs-only merges replace nothing.
 - **Nothing else holds a runner.** Each tick, check `gh run list --status in_progress`: every run must serve the stuck stage.
 
