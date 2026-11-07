@@ -1,6 +1,6 @@
 (ns clojurecraft.sword
-  "The sword (issue #259): the best one the bot can make without a trip, when it is better than
-   the best it holds.
+  "The sword: the best one the bot can make without a trip, when it is better than the best it
+   holds.
 
    Requiring this namespace registers the :sword row's rules: an always row at the portal kit's
    priority, after the armour in the table, so a chained run comes to it once the iron the portal
