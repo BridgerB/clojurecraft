@@ -35,11 +35,15 @@
   (vary-meta i assoc :intent/why label))
 
 (defn cuts?
-  "Would the planner cut running intent i in world w: the dragon row's fresh answer, planned with
-   nothing running, ranks above it (plan/outranks?)?"
+  "Would the planner cut running intent i in world w, as the bot meets it in the End: the dragon
+   row's fresh answer (plan/next-intent), planned with nothing running, ranks above it
+   (plan/outranks?)?"
   [w i]
-  (let [row (plan/row-of plan/goals :dragon)]
-    (plan/outranks? row i (plan/next-intent (dissoc w :plan/intent :plan/last) row plan/goals))))
+  (let [row (plan/row-of plan/goals :dragon)
+        end (-> w
+                (assoc :player/dimension dimension/end)
+                (dissoc :plan/intent :plan/last))]
+    (plan/outranks? row i (plan/next-intent end row plan/goals))))
 
 ;; ---------------------------------------------------------------- a spike on a floor
 

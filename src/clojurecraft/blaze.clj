@@ -79,7 +79,7 @@
     :when "camp, rest"}
    :intent/until
    {:doc
-    "ms (:time/now) after which the running intent is cut for the row's next choice: set by the blaze row's long-shot wall (3 s), whose :place waited 17 s under fire in blaze-race-z7 landing 2"
+    "ms (:time/now) after which the running intent is cut for the row's next choice: set by the blaze row's long-shot wall (3 s)"
     :when "a :place from blaze/long-shot-cover"}})
 
 (s/def :intent/spawner :clojurecraft.spec/block-pos)
