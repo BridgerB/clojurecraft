@@ -351,7 +351,7 @@
 
 (defmethod on-packet [:play :damage-event]
   [w {:keys [entity-id source-type source-cause source-direct]}]
-  (if (= entity-id (or (:player/entity-id w) (:player/eid w)))
+  (if (= entity-id (:player/entity-id w))
     (let [attacker (if (pos? (long (or source-direct 0)))
                      (dec (long source-direct))
                      (when (pos? (long (or source-cause 0))) (dec (long source-cause))))]
@@ -434,8 +434,7 @@
   ;; explosion) is kept as :player/knock, which the ledger notes
   [w {:keys [entity-id vel]}]
   (cond-> (track w entity-id assoc :entity/vel vel)
-    (= entity-id (or (:player/entity-id w) (:player/eid w)))
-    (assoc :player/knock {:vel (vec vel) :at (:time/now w 0)})))
+    (= entity-id (:player/entity-id w)) (assoc :player/knock {:vel (vec vel) :at (:time/now w 0)})))
 (defmethod on-packet [:play :teleport-entity]
   ;; position and velocity, each axis relative when its Relative bit says so (X 1 Y 2 Z 4, the
   ;; deltas 32 64 128), as the player's own teleport reads them
