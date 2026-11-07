@@ -6,20 +6,17 @@
      bb site build <pages-dir> <out-dir>    the site: index.html (the shell, with the road from
                                             goals.edn, ci/race.edn and ci/road.edn in it),
                                             site/app.js and site/style.css, the branch's data/
-                                            and orchestrator.json, agents.html sending to the
-                                            Agents tab
      bb site gyms                           the gym runs (gym.yml) and the plan runs (plan.yml)
                                             not yet on the branch, a line each in data/gyms.ndjson:
                                             from gym summary artifacts, and from the reports plan
                                             runs post on the roadmap issues (they outlive the
                                             artifacts)
-     bb site agents <out-dir>               data/agents.json in the site: the bot-failure issues
-                                            and the pull requests that fix them, from GitHub
+     bb site agents <out-dir>               data/agents.json in the site: the bot-failure issues,
+                                            from GitHub
 
    The page is one shell and a script (site/app.js): it loads data/summary.json first (every
    day's totals), a day's file when the history opens it, data/gyms.ndjson for the road's gym
-   proof, data/agents.json for the Agents tab, and the orchestrator's state live from the
-   branch. A branch still in the one-file layout (rounds.edn, before the first publish of this
+   proof, data/agents.json for the road's open issues. A branch still in the one-file layout (rounds.edn, before the first publish of this
    code) is laid out in the site alone (page/changes), so the page never waits for a publish.
    Babashka runs this; nothing here requires the bot."
   (:require [babashka.fs :as fs]
@@ -176,7 +173,7 @@
         known (set (map :run kept))]
     {gyms-file (page/ndjson (sort-by :run (concat kept (remove (comp known :run) lines))))}))
 
-;; ---------------------------------------------------------------- the agents
+;; ---------------------------------------------------------------- the bot-failure issues
 
 (defn signature-of
   "[stage reason] from a bot-failure issue's title (\"Bot stops at fortress: no-pickaxe\"), or nil."
@@ -185,47 +182,20 @@
           rest
           vec))
 
-(defn by-whom
-  "Who wrote a pull request: copilot (Copilot's cloud agent, copilot/* branches), fixer (a fix/*
-   branch: a person or a Claude session, AGENTS.md section 3) or person."
-  [{:keys [headRefName author]}]
-  (cond (or (str/starts-with? (str headRefName) "copilot/")
-            (str/includes? (str/lower-case (str (:login author))) "copilot"))
-        "copilot"
-        (str/starts-with? (str headRefName) "fix/") "fixer"
-        :else "person"))
-
 (defn agents
-  "The Agents tab's history from GitHub's lists (gh issue list and gh pr list JSON): every
-   bot-failure issue with its signature, state, why it closed and when; every pull request that
-   closes one, or that Copilot opened, with who wrote it, its state and when it opened, merged or
-   closed. now is when it was asked."
-  [issues prs now]
-  (let [failure? (set (map :number issues))]
-    {:updated now
-     :issues (vec (for [{:keys [number title state stateReason createdAt closedAt labels]} issues
-                        :let [[stage reason] (signature-of title)]]
-                    (cond-> {:n number
-                             :title title
-                             :state (str/lower-case (str state))
-                             :opened createdAt
-                             :labels (mapv :name labels)}
-                      stage (assoc :stage stage :reason reason)
-                      closedAt (assoc :closed closedAt :why (str/lower-case (str stateReason))))))
-     :prs (vec (for [pr prs
-                     :let [fixes (filterv failure? (map :number (:closingIssuesReferences pr)))
-                           who (by-whom pr)]
-                     :when (or (seq fixes) (= "copilot" who))]
-                 (cond-> {:n (:number pr)
-                          :title (:title pr)
-                          :by who
-                          :branch (:headRefName pr)
-                          :state (str/lower-case (str (:state pr)))
-                          :draft (boolean (:isDraft pr))
-                          :opened (:createdAt pr)
-                          :fixes fixes}
-                   (:mergedAt pr) (assoc :merged (:mergedAt pr))
-                   (:closedAt pr) (assoc :closed (:closedAt pr)))))}))
+  "The bot-failure issues from GitHub's list (gh issue list JSON): each with its signature, state,
+   why it closed and when. now is when it was asked."
+  [issues now]
+  {:updated now
+   :issues (vec (for [{:keys [number title state stateReason createdAt closedAt labels]} issues
+                      :let [[stage reason] (signature-of title)]]
+                  (cond-> {:n number
+                           :title title
+                           :state (str/lower-case (str state))
+                           :opened createdAt
+                           :labels (mapv :name labels)}
+                    stage (assoc :stage stage :reason reason)
+                    closedAt (assoc :closed closedAt :why (str/lower-case (str stateReason))))))})
 
 ;; ---------------------------------------------------------------- the shell
 
@@ -235,7 +205,7 @@
   (str/replace (json/generate-string x) "</" "<\\/"))
 
 (defn shell
-  "The page as hiccup: the header, the four tabs' places (the script fills them), the road as
+  "The page as hiccup: the header, the three tabs' places (the script fills them), the road as
    JSON for the script, the script. version (the commit) is asked of the script and the style, so
    a deploy is never drawn by a browser's cached copy of the last."
   [road repo version]
@@ -257,15 +227,14 @@
     [:header.top
      [:div.brand [:h1 "clojurecraft"]
       [:p.sub
-       "From spawn to a dead Ender Dragon with no human input: how far the bots get, what stops them, and who is fixing it."]]
+       "From spawn to a dead Ender Dragon with no human input: how far the bots get, and what stops them."]]
      [:div.top-right [:div#live.live "Lanes: …"]
       [:button#theme.ghost {:type "button" :aria-label "Switch light or dark"} "◐"]]]
     [:nav.tabs {:role "tablist"}
-     (for [[id label] [["road" "Road"] ["trends" "Trends"] ["history" "History"]
-                       ["agents" "Agents"]]]
+     (for [[id label] [["road" "Road"] ["trends" "Trends"] ["history" "History"]]]
        [:a {:href (str "#" id) :data-tab id :role "tab"} label])]
     [:main
-     (for [id ["road" "trends" "history" "agents"]]
+     (for [id ["road" "trends" "history"]]
        [:section {:id (str "tab-" id) :class "tab" :hidden true} [:p.loading "Loading…"]])]
     [:footer
      [:p "Data: " [:a {:href "data/summary.json"} "data/summary.json"] " (every day's totals), "
@@ -276,13 +245,6 @@
     [:div#tip.tip {:role "tooltip" :hidden true}]
     [:script#road {:type "application/json"} (h/raw (json-in-html road))]
     [:script {:src (str "app.js?v=" version) :defer true}]]])
-
-(defn redirect
-  "agents.html as hiccup: the old Agents page's address, sent to the tab."
-  []
-  [:html {:lang "en"}
-   [:head [:meta {:charset "utf-8"}] [:meta {:http-equiv "refresh" :content "0; url=./#agents"}]
-    [:title "clojurecraft: agents"]] [:body [:a {:href "./#agents"} "The Agents tab"]]])
 
 (defn html "Hiccup as an HTML document." [x] (str "<!DOCTYPE html>\n" (h/html x)))
 
@@ -337,13 +299,8 @@
     (fs/copy-tree (fs/file pages-dir "data") (fs/file out-dir "data") {:replace-existing true}))
   (legacy! pages-dir out-dir)
   (recount! pages-dir out-dir)
-  (when (fs/exists? (fs/file pages-dir "orchestrator.json"))
-    (fs/copy (fs/file pages-dir "orchestrator.json")
-             (fs/file out-dir "orchestrator.json")
-             {:replace-existing true}))
   (doseq [a assets] (fs/copy a (fs/file out-dir (fs/file-name a)) {:replace-existing true}))
   (spit (str (fs/file out-dir "index.html")) (html (shell (read-road) (page/repo) (version))))
-  (spit (str (fs/file out-dir "agents.html")) (html (redirect)))
   (println "built" (str out-dir)))
 
 (defn gh-json
@@ -454,28 +411,18 @@
          (page/update-branch! "gyms" (str "Gym runs: " (count lines)) #(gyms-change lines %)))))))
 
 (defn agents!
-  "Write data/agents.json under out-dir from GitHub's issue and pull request lists."
+  "Write data/agents.json under out-dir from GitHub's bot-failure issue list."
   [out-dir]
-  (let
-    [issues (gh-json "issue" "list"
-                     "--repo" (page/repo)
-                     "--label" "bot-failure"
-                     "--state" "all"
-                     "--limit" "2000"
-                     "--json" "number,title,state,stateReason,createdAt,closedAt,labels")
-     prs
-     (gh-json
-      "pr" "list"
-      "--repo" (page/repo)
-      "--state" "all"
-      "--limit" "2000"
-      "--json"
-      "number,title,headRefName,author,state,isDraft,createdAt,closedAt,mergedAt,closingIssuesReferences")]
-    (when (and issues prs)
-      (fs/create-dirs (fs/file out-dir "data"))
-      (spit (str (fs/file out-dir "data" "agents.json"))
-            (json/generate-string (agents issues prs (str (java.time.Instant/now)))))
-      (println "agents:" (count issues) "issues," (count prs) "pull requests"))))
+  (when-let [issues (gh-json "issue" "list"
+                             "--repo" (page/repo)
+                             "--label" "bot-failure"
+                             "--state" "all"
+                             "--limit" "2000"
+                             "--json" "number,title,state,stateReason,createdAt,closedAt,labels")]
+    (fs/create-dirs (fs/file out-dir "data"))
+    (spit (str (fs/file out-dir "data" "agents.json"))
+          (json/generate-string (agents issues (str (java.time.Instant/now)))))
+    (println "agents:" (count issues) "issues")))
 
 (defn -main
   "build <pages-dir> <out-dir>, gyms, agents <out-dir>."
