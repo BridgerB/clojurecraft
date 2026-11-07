@@ -33,6 +33,7 @@
             [clojurecraft.place :as place]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
+            [clojurecraft.shapes]
             [clojurecraft.sim :as sim]
             [clojurecraft.stairs :as stairs]
             [clojurecraft.stone :as stone]
@@ -44,8 +45,6 @@
 
 (set! *warn-on-reflection* true)
 
-(s/def ::vec3 (s/coll-of double? :kind vector? :count 3))
-(s/def ::block-pos (s/coll-of int? :kind vector? :count 3))
 
 ;; ---------------------------------------------------------------- build plans (issue #8)
 
