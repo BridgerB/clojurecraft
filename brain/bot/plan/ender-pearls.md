@@ -88,7 +88,7 @@ sourceRefs:
   - test/clojurecraft/pearls_test.clj#a-calm-one-given-up-on-at-hand-gets-no-burrow-cut-for-it
   - src/clojurecraft/gym.clj#def pearl-kit
   - src/clojurecraft/pearls.clj#def thresholds
-  - resources/clojurecraft/hunt.edn#:seek-radius
+  - resources/clojurecraft/pearls.edn#:seek-radius
   - test/clojurecraft/pearls_test.clj#hunt-thresholds-table-is-loaded-and-complete
   - src/clojurecraft/pearls.clj#def stare-from (:stare-from thresholds)
   - src/clojurecraft/pearls.clj#def stare-ms 3000
@@ -203,7 +203,7 @@ sourceRefs:
   - test/clojurecraft/pearls_test.clj#one-far-below-no-route-reaches-is-descended-to-by-stairs
   - test/clojurecraft/pearls_test.clj#a-lookout-that-found-nothing-roams-somewhere-else
   - test/clojurecraft/pearls_test.clj#the-stare-is-for-the-nearest-one-in-sight-not-only-the-nearest
-  - src/clojurecraft/pearls.clj#defn fresh-kill
+  - src/clojurecraft/forage.clj#defn fresh-kill
   - src/clojurecraft/pearls.clj#defn drop-of
   - src/clojurecraft/pearls.clj#defn body?
   - src/clojurecraft/pearls.clj#defmethod intent/run :provoke

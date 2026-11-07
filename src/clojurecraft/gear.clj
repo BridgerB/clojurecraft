@@ -16,7 +16,7 @@
   (:require [clojurecraft.armour :as armour]
             [clojurecraft.dimension :as dimension]
             [clojurecraft.eat :as eat]
-            [clojurecraft.hunt :as hunt]
+            [clojurecraft.forage :as forage]
             [clojurecraft.intent :as intent]
             [clojurecraft.make :as make]
             [clojurecraft.memory :as memory]
@@ -121,9 +121,9 @@
 ;; ---------------------------------------------------------------- cooking
 
 (def cookable
-  "{raw-name cooked-name} for the raw meats the hunt row brings (hunt/game-kinds) that a furnace
+  "{raw-name cooked-name} for the raw meats the hunt row brings (forage/game-kinds) that a furnace
    cooks into food (eat/edible)."
-  (let [raw (set (vals hunt/game-kinds))]
+  (let [raw (set (vals forage/game-kinds))]
     (into {}
           (for [r recipe/smelting
                 :let [in (first (:smelt/input r))]

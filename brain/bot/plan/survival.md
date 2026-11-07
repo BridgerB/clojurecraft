@@ -77,40 +77,40 @@ sourceRefs:
   - test/clojurecraft/combat_test.clj#a-creeper-that-stands-still-is-shunned-not-fled-from-for-ever
   - src/clojurecraft/combat.clj#def look-ms 3000
   - test/clojurecraft/combat_test.clj#an-attack-trial-looks-round-before-it-finds-nothing
-  - src/clojurecraft/hunt.clj#defn game
-  - test/clojurecraft/hunt_test.clj#an-animal-whose-cell-a-walk-failed-at-is-not-hunted-again
-  - src/clojurecraft/hunt.clj#defn fightable-from-route?
-  - test/clojurecraft/hunt_test.clj#an-animal-up-a-tree-is-not-game-from-beneath-it
-  - src/clojurecraft/hunt.clj#defn reach
-  - test/clojurecraft/hunt_test.clj#a-starving-bot-hunts-further-afield
-  - src/clojurecraft/hunt.clj#defn fresh-kill
-  - src/clojurecraft/hunt.clj#defn hunting?
-  - test/clojurecraft/hunt_test.clj#a-hunt-running-is-never-done-under-it
-  - test/clojurecraft/hunt_test.clj#a-fight-that-left-the-animal-alive-is-no-kill
-  - src/clojurecraft/hunt.clj#defmethod plan/next-intent :hunt
-  - src/clojurecraft/hunt.clj#defn foraging?
-  - src/clojurecraft/hunt.clj#defn afloat?
-  - src/clojurecraft/hunt.clj#defn provision-phase
-  - src/clojurecraft/hunt.clj#defn forage-state
-  - src/clojurecraft/hunt.clj#defn forage-leg
-  - src/clojurecraft/hunt.clj#defn forage-reaches
-  - src/clojurecraft/hunt.clj#defn walkable-end
-  - src/clojurecraft/hunt.clj#defmethod intent/run :forage
-  - test/clojurecraft/hunt_test.clj#the-search-is-bounded-and-never-held-against-a-build-or-the-mine
-  - test/clojurecraft/hunt_test.clj#with-the-stone-pickaxe-food-is-provisioned-before-the-descent
-  - test/clojurecraft/hunt_test.clj#the-early-search-is-short-and-leaves-the-kits-its-own-budget
-  - test/clojurecraft/hunt_test.clj#a-forage-leg-turns-a-quarter-right-and-falls-back-to-the-next-way
-  - test/clojurecraft/hunt_test.clj#the-forage-intent-becomes-the-walk-it-chose-or-ends-the-search
-  - src/clojurecraft/hunt.clj#def strike-range 4.5
+  - src/clojurecraft/forage.clj#defn game
+  - test/clojurecraft/forage_test.clj#an-animal-whose-cell-a-walk-failed-at-is-not-hunted-again
+  - src/clojurecraft/forage.clj#defn fightable-from-route?
+  - test/clojurecraft/forage_test.clj#an-animal-up-a-tree-is-not-game-from-beneath-it
+  - src/clojurecraft/forage.clj#defn reach
+  - test/clojurecraft/forage_test.clj#a-starving-bot-hunts-further-afield
+  - src/clojurecraft/forage.clj#defn fresh-kill
+  - src/clojurecraft/forage.clj#defn hunting?
+  - test/clojurecraft/forage_test.clj#a-hunt-running-is-never-done-under-it
+  - test/clojurecraft/forage_test.clj#a-fight-that-left-the-animal-alive-is-no-kill
+  - src/clojurecraft/forage.clj#defmethod plan/next-intent :hunt
+  - src/clojurecraft/forage.clj#defn foraging?
+  - src/clojurecraft/forage.clj#defn afloat?
+  - src/clojurecraft/forage.clj#defn provision-phase
+  - src/clojurecraft/forage.clj#defn forage-state
+  - src/clojurecraft/forage.clj#defn forage-leg
+  - src/clojurecraft/forage.clj#defn forage-reaches
+  - src/clojurecraft/forage.clj#defn walkable-end
+  - src/clojurecraft/forage.clj#defmethod intent/run :forage
+  - test/clojurecraft/forage_test.clj#the-search-is-bounded-and-never-held-against-a-build-or-the-mine
+  - test/clojurecraft/forage_test.clj#with-the-stone-pickaxe-food-is-provisioned-before-the-descent
+  - test/clojurecraft/forage_test.clj#the-early-search-is-short-and-leaves-the-kits-its-own-budget
+  - test/clojurecraft/forage_test.clj#a-forage-leg-turns-a-quarter-right-and-falls-back-to-the-next-way
+  - test/clojurecraft/forage_test.clj#the-forage-intent-becomes-the-walk-it-chose-or-ends-the-search
+  - src/clojurecraft/forage.clj#def strike-range 4.5
   - src/clojurecraft/sword.clj#defn payable
   - src/clojurecraft/sword.clj#defn serviceable
   - src/clojurecraft/sword.clj#defn wanted
   - src/clojurecraft/sword.clj#defn blade?
   - "resources/clojurecraft/goals.edn#{:goal/id :hunt"
   - "resources/clojurecraft/goals.edn#{:goal/id :sword"
-  - test/clojurecraft/hunt_test.clj#hungry-with-nothing-to-eat-the-nearest-cow-is-walked-to-then-fought
-  - test/clojurecraft/hunt_test.clj#a-kill-just-made-is-collected-where-it-fell
-  - test/clojurecraft/hunt_test.clj#a-hungry-bot-kills-a-cow-picks-up-its-beef-and-eats-it-against-the-model
+  - test/clojurecraft/forage_test.clj#hungry-with-nothing-to-eat-the-nearest-cow-is-walked-to-then-fought
+  - test/clojurecraft/forage_test.clj#a-kill-just-made-is-collected-where-it-fell
+  - test/clojurecraft/forage_test.clj#a-hungry-bot-kills-a-cow-picks-up-its-beef-and-eats-it-against-the-model
   - test/clojurecraft/sword_test.clj#the-best-sword-the-held-items-make-better-than-the-one-held
   - test/clojurecraft/sword_test.clj#iron-only-from-ingots-the-armour-leaves
   - "resources/clojurecraft/goals.edn#{:goal/id :defend"
@@ -176,7 +176,7 @@ Gym row `armour`: the portal's iron, a table and 13 ingots given; judged by `exe
 
 **`:attack`** (`--until attack`): the gym's trial, every hostile within `attack-radius` 16 fought (`quarry`, done by `:cleared?`, and not before `look-ms` 3000 after the plan went active: the server shows a landing's entities a moment after its chunks, and gym attack-259a run 3 was done 0.2 s after the go with its husk unseen). It is the first row marked `:goal/aside?`: `plan/through`, `plan/current-until` and the results page's chain leave asides out, as they leave out the water trial, so no chained run ever takes it as a step.
 
-A target no fight can strike or reach is not picked again for a while (`combat/given-up`, `:plan/given-up`, `give-up-ms` 60 s): an `:engage` that finds its target not `strikable?` with no `route-walk` still ends done (issue #564: a blaze is not blacklisted, and its row's tunnel starts), but it records the target given up at that moment, and `threats`, `quarry` and `hunt/game` pass it over while its aim stays out of `in-reach?` and the minute has not run out. `threats` also asks `approachable?` now, as the acts that choose a blaze already did. Without this, a zombie in water two blocks below the bot (seen, `hittable?`, never strikable, no route) was fought and given up every 150 ms for the whole stage, and the water bucket, the ingots, the furnace and the portal kit each timed out behind it (issues #69, #62, #582 and #161; probe 40084779455 played both #69 snapshots 3000 ticks in that loop, alive at full health).
+A target no fight can strike or reach is not picked again for a while (`combat/given-up`, `:plan/given-up`, `give-up-ms` 60 s): an `:engage` that finds its target not `strikable?` with no `route-walk` still ends done (issue #564: a blaze is not blacklisted, and its row's tunnel starts), but it records the target given up at that moment, and `threats`, `quarry` and `forage/game` pass it over while its aim stays out of `in-reach?` and the minute has not run out. `threats` also asks `approachable?` now, as the acts that choose a blaze already did. Without this, a zombie in water two blocks below the bot (seen, `hittable?`, never strikable, no route) was fought and given up every 150 ms for the whole stage, and the water bucket, the ingots, the furnace and the portal kit each timed out behind it (issues #69, #62, #582 and #161; probe 40084779455 played both #69 snapshots 3000 ticks in that loop, alive at full health).
 
 **The model's mobs** are issue #258's ([[sim-mobs]]): `sim/init` takes `:mobs [{:type :pos}]`, zombies walk at the bot and hit it, and an `attack` in reach hurts by the held item. The fight tests kill a zombie at hand with `:defend` and one coming from afar with the `:attack` trial against it.
 
@@ -184,12 +184,12 @@ A target no fight can strike or reach is not picked again for a while (`combat/g
 
 `hittable?` judges a mob from `floor-pos`, the feet at the floor the bot stands on or jumped from (the cell under them when nothing solid is under the cell they are in), not from a jump's height: a stairs up lifts the bot a block and more at the top of every step, and two zombies three over its shaft were in sight only there, so `:defend` began a fight and dropped it every fourteen ticks, the stairs up preempted and restarted each time (issue #178, world R4/14).
 
-## The food producer (hunt.clj)
-`:hunt` is an always row at priority 0 after the meal: done by `:provisioned?`, no meat wanted (`hunt/wants-meat?`: hungry with nothing edible held, or `hunt/provisioning?`: in a `provision-phase`, `:early` with a stone pickaxe held (before the descent for coal and iron, while the bot is still among the animals, issue #504) or `:kit` with flint and steel and a water bucket held, and under `provision-wanted` 6 edible items, so the Nether is entered with meals, issue #501), (the meal comes first), or no `game` and no `fresh-kill` while no hunt intent runs (`hunting?`: the first run against the model killed its cow, the row found nothing left, and the planner abandoned the fight `:goal-met` the tick the cow died, before it was done, so its beef was never collected). `game` is the nearest cow, mooshroom, pig, sheep or rabbit (`game-kinds`, never a chicken: raw chicken may make the eater hungry), alive, not blacklisted, within `reach` (`hunt-radius` 24, `starving-radius` 48 once the food is at or under `starving-below` 6: issues #69, #62, #135, bots at food 0 and one health with game just past 24 blocks, and the model places animals three chunks round the player), the first of the three nearest a route reaches (`intent/routable?`). Planned by `:hunt`: a kill just made (the last intent a `:fight` for `:hunt`, done, with `:intent/target-pos`, where the fight last saw its target, and the target gone: `entity/gone?`, for a fight that ended with the animal alive is no kill. A `:fight` for `:hunt` never breaks off under `retreat-health`, an animal not striking back: a starving bot at 0.7 health used to retreat, end the fight done, collect at the live cow, fail `:not-picked-up` and fight again for the whole run, issue #178) is a `:collect` of the meat there; else a `:walk` to the animal's cell, and once within `strike-range` 4.5 on the plane (past a walk's reach, so a walk that arrived is never asked again) a `:fight` for `:hunt`. The meat is eaten raw by `:eat`. Against the model a cow drops one to three beef by its loot table ([[sim-mobs]]).
+## The food producer (forage.clj)
+`:hunt` is an always row at priority 0 after the meal: done by `:provisioned?`, no meat wanted (`forage/wants-meat?`: hungry with nothing edible held, or `forage/provisioning?`: in a `provision-phase`, `:early` with a stone pickaxe held (before the descent for coal and iron, while the bot is still among the animals, issue #504) or `:kit` with flint and steel and a water bucket held, and under `provision-wanted` 6 edible items, so the Nether is entered with meals, issue #501), (the meal comes first), or no `game` and no `fresh-kill` while no hunt intent runs (`hunting?`: the first run against the model killed its cow, the row found nothing left, and the planner abandoned the fight `:goal-met` the tick the cow died, before it was done, so its beef was never collected). `game` is the nearest cow, mooshroom, pig, sheep or rabbit (`game-kinds`, never a chicken: raw chicken may make the eater hungry), alive, not blacklisted, within `reach` (`hunt-radius` 24, `starving-radius` 48 once the food is at or under `starving-below` 6: issues #69, #62, #135, bots at food 0 and one health with game just past 24 blocks, and the model places animals three chunks round the player), the first of the three nearest a route reaches (`intent/routable?`). Planned by `:hunt`: a kill just made (the last intent a `:fight` for `:hunt`, done, with `:intent/target-pos`, where the fight last saw its target, and the target gone: `entity/gone?`, for a fight that ended with the animal alive is no kill. A `:fight` for `:hunt` never breaks off under `retreat-health`, an animal not striking back: a starving bot at 0.7 health used to retreat, end the fight done, collect at the live cow, fail `:not-picked-up` and fight again for the whole run, issue #178) is a `:collect` of the meat there; else a `:walk` to the animal's cell, and once within `strike-range` 4.5 on the plane (past a walk's reach, so a walk that arrived is never asked again) a `:fight` for `:hunt`. The meat is eaten raw by `:eat`. Against the model a cow drops one to three beef by its loot table ([[sim-mobs]]).
 
-An animal is game only where a blow can reach it from the end of the walk (`hunt/fightable-from-route?`, the pure half `fightable-from?`: its feet no more than `intent/pickup-rise` over the route's end, so a blow reaches it and the meat can be picked up): sheep on a spruce crown five over the walk's end were fought three times from beneath, `:unreachable`, and the third ended the plan (issue #515, R2/30).
+An animal is game only where a blow can reach it from the end of the walk (`forage/fightable-from-route?`, the pure half `fightable-from?`: its feet no more than `intent/pickup-rise` over the route's end, so a blow reaches it and the meat can be picked up): sheep on a spruce crown five over the walk's end were fought three times from beneath, `:unreachable`, and the third ended the plan (issue #515, R2/30).
 
-With none in reach while provisioning, the bot looks for animals on foot (`hunt/foraging?`, issue #501: herds are about one chunk in ten, and three raw meats were eaten to the bar's 18 before the portal, so the Nether leg began with none): a `:forage` intent, planned by `:hunt` when no `game` and no kill stands, picks the next leg (`hunt/forage-leg`: the end of the first route (`walkable-end`: found, or partial and going 12 blocks on) to a cell `forage-reaches` out, 48 blocks for the first two legs and 48 more for each two after up to 96, then 48, 32 or 16, along a `forage-headings` heading, a quarter turn right of the last leg's, the others after it when it has no route) and becomes the `:walk` to it. `:hunt/forage` ({:forage/since :forage/leg :forage/retry-at :forage/phase}) keeps the search across legs, one search a `provision-phase` (`forage-state`: another phase's is not this one's): it ends `forage-budget` after its first leg, `early-forage-ms` (two minutes) before the descent and `forage-ms` (six minutes) with the kit (issue #504: the kit is often finished at y -29, where there is nothing to find, so the stock is made on the surface after the stone pickaxe, and topped up if the bot surfaces with the kit); a look that finds no route at any heading waits `forage-retry-ms` (`:forage/retry-at`) before the next; it pauses after a failed intent (`:plan/attempts` and `:plan/unwalkable`, so failures in a row never end the plan), with health under 14 or a hostile within `forage-wary` 32 blocks (sim run R1/5 searched at night through creepers and zombies until it died), while a `:build` runs (a cast is never left half made), a `:dig` already begun (it is finished; a stairs or a tunnel is the descent and is not paused, so the search still wins before they start) or a `:swim-out` or `:flee` already begun (an escape is finished: the box leaves the water before the swim is done), while `afloat?` (the flag, or the box on water: a `:go` plans before a tick writes the flag, and a pond's first intent was a forage ahead of the swim out) and with the feet under a roof (a bot in its mine has no animals to find). Then the row is done and the portal goes on with what is held: the search never holds it up. Cooked meat (a furnace is in the kit) and the crops and apples the overworld gives are not yet looked for; they count when held (`edible-held`).
+With none in reach while provisioning, the bot looks for animals on foot (`forage/foraging?`, issue #501: herds are about one chunk in ten, and three raw meats were eaten to the bar's 18 before the portal, so the Nether leg began with none): a `:forage` intent, planned by `:hunt` when no `game` and no kill stands, picks the next leg (`forage/forage-leg`: the end of the first route (`walkable-end`: found, or partial and going 12 blocks on) to a cell `forage-reaches` out, 48 blocks for the first two legs and 48 more for each two after up to 96, then 48, 32 or 16, along a `forage-headings` heading, a quarter turn right of the last leg's, the others after it when it has no route) and becomes the `:walk` to it. `:hunt/forage` ({:forage/since :forage/leg :forage/retry-at :forage/phase}) keeps the search across legs, one search a `provision-phase` (`forage-state`: another phase's is not this one's): it ends `forage-budget` after its first leg, `early-forage-ms` (two minutes) before the descent and `forage-ms` (six minutes) with the kit (issue #504: the kit is often finished at y -29, where there is nothing to find, so the stock is made on the surface after the stone pickaxe, and topped up if the bot surfaces with the kit); a look that finds no route at any heading waits `forage-retry-ms` (`:forage/retry-at`) before the next; it pauses after a failed intent (`:plan/attempts` and `:plan/unwalkable`, so failures in a row never end the plan), with health under 14 or a hostile within `forage-wary` 32 blocks (sim run R1/5 searched at night through creepers and zombies until it died), while a `:build` runs (a cast is never left half made), a `:dig` already begun (it is finished; a stairs or a tunnel is the descent and is not paused, so the search still wins before they start) or a `:swim-out` or `:flee` already begun (an escape is finished: the box leaves the water before the swim is done), while `afloat?` (the flag, or the box on water: a `:go` plans before a tick writes the flag, and a pond's first intent was a forage ahead of the swim out) and with the feet under a roof (a bot in its mine has no animals to find). Then the row is done and the portal goes on with what is held: the search never holds it up. Cooked meat (a furnace is in the kit) and the crops and apples the overworld gives are not yet looked for; they count when held (`edible-held`).
 
 `game` skips an animal whose cell is in `:plan/blacklist` (a walk that failed `:no-path` blacklists the cell, not the animal) and chooses none while the body is in water, where no route is walked from (issue #162, R1-41-1 and real-2-s2-Clj_r05: a sheep across the sea and an animal above a tunnel were each walked at every twelve seconds until twelve walks failed the plan).
 

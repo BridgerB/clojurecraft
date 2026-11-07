@@ -168,7 +168,7 @@ A build is a vector of ops with done-predicates as data (`build/holds?`); `next-
 
 `plan/start-intent` numbers the intent (`:intent/id` from `:plan/intents`) and appends `:started`; then `:done`, `:failed` (with `:intention/reason`), or `:abandoned`. `memory/intentions` (oldest first); `memory/intention-as-of world t`: what it was doing at t (the tick before a death). Answers: `:ack` (`:answer/sequence`), `:pickup` (`:answer/entity :answer/count`), `:death`; read with `memory/answers`. Intents without `:intent/id` (hand-built in tests) are not recorded.
 
-### 19.15 Survival and combat (`combat.clj`, `eat.clj`, `hunt.clj`, `armour.clj`, `sword.clj`, `entity.clj`; issues #258, #259)
+### 19.15 Survival and combat (`combat.clj`, `eat.clj`, `forage.clj`, `armour.clj`, `sword.clj`, `entity.clj`; issues #258, #259)
 
 - Entities (`entity.clj`): every `add-entity` is kept in `:world/entities` with `:entity/vel` (blocks/tick), `:entity/health` (metadata index 9), `:entity/flags` (index 0), `:entity/died-at`; death is `entity-event` status 3 or removal. `entity/hostiles` (monster category from the generated `mobs.edn`, minus enderman and zombified piglin), `entity/nearest`, `entity/gone?`. `:intent/target` may be an eid.
 - `:fight` (intent): approach straight while it closes 0.1; after 20 ticks without progress a route to a cell within 2 (`combat/route-walk`, a child `:walk`); no route → `:unreachable`. Engage: look at the target (y+0.9 for a hoverer), `attack` then `swing` when `:time/now ≥ :intent/next-swing` (650 ms); below 10 health break off; `:ghost` after 25 swings in reach; 20 s with no attack → `:unreachable` (hold fights excepted); done when `entity/gone?`. Only targets in sight and within reach of the floor are fought (`combat/hittable?`).

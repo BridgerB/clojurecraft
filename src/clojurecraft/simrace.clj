@@ -32,8 +32,8 @@
             [clojurecraft.dimension :as dimension]
             [clojurecraft.entity :as entity]
             [clojurecraft.failure :as failure]
+            [clojurecraft.forage :as forage]
             [clojurecraft.game :as game]
-            [clojurecraft.hunt :as hunt]
             [clojurecraft.main :as main]
             [clojurecraft.memory :as memory]
             [clojurecraft.mob :as mob]
@@ -452,7 +452,7 @@
                                 (= :blaze)))
         every (if (= dimension/nether (:player/dimension after)) sample-ms overworld-sample-ms)
         sample? (not= (quot (:time/now before 0) every) (quot (:time/now after 0) every))
-        drop? (>= (- (hunt/edible-held before) (hunt/edible-held after)) 2)
+        drop? (>= (- (forage/edible-held before) (forage/edible-held after)) 2)
         reached (sort (remove (set (:plan/reached before)) (:plan/reached after)))
         hit? (and (= dimension/nether (:player/dimension after))
                   (<= 2.0 (- (:player/health before 20.0) (:player/health after 20.0))))
@@ -476,7 +476,7 @@
          :dim (:player/dimension after)
          :health (:player/health after)
          :food (:player/food after)
-         :edible (hunt/edible-held after)
+         :edible (forage/edible-held after)
          :sword (sword/serviceable after)
          :worn (into [] (keep #(armour/worn after %)) [0 1 2 3 :offhand])
          :ingots (get (armour/counts after) :iron_ingot 0)

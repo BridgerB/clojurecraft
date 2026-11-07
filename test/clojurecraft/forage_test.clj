@@ -1,12 +1,12 @@
-(ns clojurecraft.hunt-test
+(ns clojurecraft.forage-test
   "The food producer (issue #259): hungry with nothing to eat, the nearest animal is walked to,
    killed and its meat picked up, then eaten; over canned worlds and against the server model."
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.combat :as combat]
             [clojurecraft.fixtures :as fx]
+            [clojurecraft.forage :as forage]
             [clojurecraft.game :as game]
-            [clojurecraft.hunt :as hunt]
             [clojurecraft.intent :as intent]
             [clojurecraft.memory :as memory]
             [clojurecraft.plan :as plan]
@@ -58,7 +58,7 @@
         low (assoc (standing 8 {} hog) :player/health 9.3)
         ok (assoc (standing 8 {} hog) :player/health 12.0)
         beside (assoc (standing 8 {} {5 (animal :hoglin [11.5 64.0 8.5])}) :player/health 12.0)]
-    (is (nil? (hunt/game low)))
+    (is (nil? (forage/game low)))
     (is (plan/done-by low hunt-row) "not approached under retreat-health")
     (is (= {:intent/kind :walk :intent/target [14 64 8] :intent/for :hunt}
            (plan/next-intent ok hunt-row plan/goals)))
@@ -86,17 +86,19 @@
         "fed, kit held, no food: a cow is hunted")
     (is (= {:intent/kind :fight :intent/target 5 :intent/for :hunt}
            (plan/next-intent (standing 20 kit cow) hunt-row plan/goals)))
-    (is (plan/done-by (standing 20 (assoc kit 2 (item :bread hunt/provision-wanted)) cow) hunt-row)
+    (is (plan/done-by (standing 20 (assoc kit 2 (item :bread forage/provision-wanted)) cow)
+                      hunt-row)
         "provision-wanted foods held")
-    (is (not (plan/done-by (standing 20 (assoc kit 2 (item :bread (dec hunt/provision-wanted))) cow)
-                           hunt-row))
+    (is (not (plan/done-by
+              (standing 20 (assoc kit 2 (item :bread (dec forage/provision-wanted))) cow)
+              hunt-row))
         "one fewer is under it")
     (is (plan/done-by (standing 20 {} cow) hunt-row) "no kit yet: no trip for food")
     (is (plan/done-by (standing 20 {0 (item :flint_and_steel 1)} cow) hunt-row)
         "the water bucket is the kit's too")
     (is (plan/done-by (assoc (standing 20 kit {})
                              :hunt/forage {:forage/since 0 :forage/leg 4 :forage/phase :kit}
-                             :time/now hunt/forage-ms)
+                             :time/now forage/forage-ms)
                       hunt-row)
         "no animal and the search's time spent: the portal is not held up")
     (is (plan/done-by (assoc (standing 20 kit cow) :player/dimension "minecraft:the_nether")
@@ -122,9 +124,10 @@
                   :intent/target-pos [11.7 64.0 8.2]
                   :intent/status :done})]
     (is (not (plan/done-by w hunt-row)) "no animal left, but the drop is still to pick up")
-    (is (=
-         {:intent/kind :collect :intent/target [11 64 8] :intent/drops hunt/meats :intent/for :hunt}
-         (plan/next-intent w hunt-row plan/goals)))))
+    (is
+     (=
+      {:intent/kind :collect :intent/target [11 64 8] :intent/drops forage/meats :intent/for :hunt}
+      (plan/next-intent w hunt-row plan/goals)))))
 
 (deftest a-hungry-bot-kills-a-cow-picks-up-its-beef-and-eats-it-against-the-model
   ;; food 10: the model's cow (mob.clj, issue #258) drops one to three beef, three each; the bot
@@ -158,8 +161,8 @@
                (assoc (standing food {} far)
                       :world/chunks
                       (zipmap [[0 0] [1 0] [2 0] [3 0]] (repeat col))))]
-    (is (= hunt/hunt-radius (hunt/reach (wide 8))))
-    (is (= hunt/starving-radius (hunt/reach (wide hunt/starving-below))))
+    (is (= forage/hunt-radius (forage/reach (wide 8))))
+    (is (= forage/starving-radius (forage/reach (wide forage/starving-below))))
     (is (plan/done-by (wide 8) hunt-row) "hungry only: a cow thirty blocks off is out of reach")
     (is (not (plan/done-by (wide 4) hunt-row)) "starving: it is hunted")
     (is (= {:intent/kind :walk :intent/target [38 64 8] :intent/for :hunt}
@@ -171,10 +174,10 @@
   ;; given (a flat floor has none to a cell in the air): found, ending at [11 64 8]. The pure half
   ;; is asked, never path/plan redefined: a global redef reaches every test routing in parallel.
   (let [sheep (fn [y] (animal :sheep [11.5 y 8.5]))
-        fightable? (fn [y] (hunt/fightable-from? (sheep y) :found [11 64 8]))]
+        fightable? (fn [y] (forage/fightable-from? (sheep y) :found [11 64 8]))]
     (is (fightable? 65.0) "a step up is within a blow and the meat's pickup")
     (is (not (fightable? 69.5)) "five over is out of reach from where the walk ends")
-    (is (hunt/fightable-from? (sheep 69.5) :none [11 64 8])
+    (is (forage/fightable-from? (sheep 69.5) :none [11 64 8])
         "no route found yet is not held against it")))
 
 (deftest a-fight-that-left-the-animal-alive-is-no-kill
@@ -187,7 +190,7 @@
                   :intent/target 5
                   :intent/target-pos [11.7 64.0 8.2]
                   :intent/status :done})]
-    (is (nil? (hunt/fresh-kill w)))
+    (is (nil? (forage/fresh-kill w)))
     (is (= :fight (:intent/kind (plan/next-intent w hunt-row plan/goals))))))
 
 (def kit-held {0 (item :flint_and_steel 1) 1 (item :water_bucket 1)})
@@ -202,35 +205,35 @@
   (let [began {:forage/since 1000 :forage/leg 3 :forage/phase :kit :forage/life 0}
         w (-> (provisioning 2000)
               (assoc :hunt/forage began))]
-    (is (not (hunt/search-spent? w)))
-    (is (not (hunt/search-spent? (provisioning 2000))) "none begun")
-    (is (hunt/search-spent? (assoc w :time/now (+ 1000 hunt/forage-ms))))))
+    (is (not (forage/search-spent? w)))
+    (is (not (forage/search-spent? (provisioning 2000))) "none begun")
+    (is (forage/search-spent? (assoc w :time/now (+ 1000 forage/forage-ms))))))
 
 (deftest before-the-descent-the-early-reserve-is-six
   ;; sim snapshot R3-27-1 (issue #69): sixteen at the stone-pickaxe stage kept the bot hunting at
   ;; the water bucket; the sixteen are the kit's and the return's (issue #262)
   (let [w (-> (standing 20 {0 (item :stone_pickaxe 1)} {})
               (assoc :time/now 1000 :time/tick 0))]
-    (is (= :early (hunt/provision-phase w)))
-    (is (= hunt/early-provision-wanted (hunt/provision-target w)))
-    (is (hunt/provisioning? w))
-    (is (not (hunt/provisioning? (assoc w
-                                        :player/inventory
-                                        {0 (item :stone_pickaxe 1)
-                                         1 (item :bread hunt/early-provision-wanted)}))))
-    (is (= hunt/provision-wanted (hunt/provision-target (standing 20 kit-held {}))))))
+    (is (= :early (forage/provision-phase w)))
+    (is (= forage/early-provision-wanted (forage/provision-target w)))
+    (is (forage/provisioning? w))
+    (is (not (forage/provisioning? (assoc w
+                                          :player/inventory
+                                          {0 (item :stone_pickaxe 1)
+                                           1 (item :bread forage/early-provision-wanted)}))))
+    (is (= forage/provision-wanted (forage/provision-target (standing 20 kit-held {}))))))
 
 (deftest back-from-the-nether-with-a-stone-pickaxe-the-phase-is-the-returns
   ;; probe 40801960382: the pickaxe was kept through the death, :early took the phase, its target
   ;; of six and its two minutes, and :no-food-to-return came 142 s after the respawn
   (let [w (-> (standing 20 {0 (item :stone_pickaxe 1)} {})
               (assoc :plan/reached #{:nether} :time/now 1000 :time/tick 0))]
-    (is (= :return (hunt/provision-phase w)))
-    (is (= hunt/provision-wanted (hunt/provision-target w)))
-    (is (= hunt/forage-ms (hunt/forage-budget (hunt/provision-phase w))))
-    (is (= :early (hunt/provision-phase (assoc w :plan/reached #{})))
+    (is (= :return (forage/provision-phase w)))
+    (is (= forage/provision-wanted (forage/provision-target w)))
+    (is (= forage/forage-ms (forage/forage-budget (forage/provision-phase w))))
+    (is (= :early (forage/provision-phase (assoc w :plan/reached #{})))
         "the Nether never reached: the early phase as before")
-    (is (= :kit (hunt/provision-phase (assoc w :player/inventory kit-held)))
+    (is (= :kit (forage/provision-phase (assoc w :player/inventory kit-held)))
         "the kit held: the kit's")))
 
 (deftest back-in-the-overworld-after-the-nether-the-bot-stocks-food-again
@@ -238,14 +241,14 @@
   ;; applied, and the bot went back through its lit portal twelve times with no edible item
   (let [w (-> (standing 20 {} {})
               (assoc :plan/reached #{:nether} :time/now 1000 :time/tick 0))]
-    (is (= :return (hunt/provision-phase w)))
-    (is (hunt/provisioning? w))
-    (is (not (hunt/provisioning? (assoc w :player/dimension "minecraft:the_nether")))
+    (is (= :return (forage/provision-phase w)))
+    (is (forage/provisioning? w))
+    (is (not (forage/provisioning? (assoc w :player/dimension "minecraft:the_nether")))
         "in the Nether the bot is not provisioning")
-    (is (not (hunt/provisioning?
-              (assoc w :player/inventory {0 (item :bread hunt/provision-wanted)})))
+    (is (not (forage/provisioning?
+              (assoc w :player/inventory {0 (item :bread forage/provision-wanted)})))
         "the reserve held")
-    (is (nil? (hunt/provision-phase (assoc w :plan/reached #{})))
+    (is (nil? (forage/provision-phase (assoc w :plan/reached #{})))
         "the Nether never reached: no phase")))
 
 (deftest a-search-of-an-earlier-life-does-not-end-this-lifes
@@ -259,17 +262,17 @@
                      :time/tick 0
                      :hunt/forage spent
                      :stats/deaths 3))]
-    (is (nil? (hunt/forage-state w)) "a search of life 0 is not life 3's")
-    (is (hunt/foraging? w))
+    (is (nil? (forage/forage-state w)) "a search of life 0 is not life 3's")
+    (is (forage/foraging? w))
     (is (= :hunt (:goal/id (plan/choose w plan/goals)))
         "the hunt row comes before the way back to the Nether")
-    (is (not (hunt/foraging? (assoc w :stats/deaths 0)))
+    (is (not (forage/foraging? (assoc w :stats/deaths 0)))
         "the same life: its budget is spent, the bot goes on")))
 
 (deftest with-no-animal-in-reach-the-portal-bot-searches-for-one
   ;; issue #501: herds are about one chunk in ten, and the Nether has no game
   (let [w (provisioning 1000)]
-    (is (hunt/foraging? w))
+    (is (forage/foraging? w))
     (is (not (plan/done-by w hunt-row)) "the row is undone: a search is planned")
     (is (= {:intent/kind :forage :intent/for :hunt} (plan/next-intent w hunt-row plan/goals)))
     (is (= {:intent/kind :fight :intent/target 5 :intent/for :hunt}
@@ -281,59 +284,60 @@
 (deftest the-search-is-bounded-and-never-held-against-a-build-or-the-mine
   (let [w (provisioning 1000)
         began (assoc w :hunt/forage {:forage/since 1000 :forage/leg 2 :forage/phase :kit})]
-    (is (hunt/foraging? (assoc began :time/now (+ 1000 (dec hunt/forage-ms)))))
-    (is (not (hunt/foraging? (assoc began :time/now (+ 1000 hunt/forage-ms))))
+    (is (forage/foraging? (assoc began :time/now (+ 1000 (dec forage/forage-ms)))))
+    (is (not (forage/foraging? (assoc began :time/now (+ 1000 forage/forage-ms))))
         "forage-ms after its first leg it is over, however many legs")
-    (is (plan/done-by (assoc began :time/now (+ 1000 hunt/forage-ms)) hunt-row)
+    (is (plan/done-by (assoc began :time/now (+ 1000 forage/forage-ms)) hunt-row)
         "and the row is done, the portal goes on with what is held")
     (let [looked (assoc
                   w
                   :hunt/forage
                   {:forage/since 1000 :forage/leg 0 :forage/retry-at 5000 :forage/phase :kit})]
-      (is (not (hunt/foraging? (assoc looked :time/now 4999))) "no route lately: it waits")
-      (is (hunt/foraging? (assoc looked :time/now 5000)) "then it looks again"))
-    (is (not (hunt/foraging? (assoc w :plan/attempts 1))) "a failed leg ends it for the moment")
-    (is (not (hunt/foraging? (assoc w :plan/unwalkable 1))) "so does a leg that found no path")
-    (is (not (hunt/foraging? (assoc w :player/health (dec hunt/forage-health)))) "hurt: it stays")
-    (is (not (hunt/foraging? (assoc-in w [:world/entities 9] (animal :zombie [30.5 64.0 8.5]))))
+      (is (not (forage/foraging? (assoc looked :time/now 4999))) "no route lately: it waits")
+      (is (forage/foraging? (assoc looked :time/now 5000)) "then it looks again"))
+    (is (not (forage/foraging? (assoc w :plan/attempts 1))) "a failed leg ends it for the moment")
+    (is (not (forage/foraging? (assoc w :plan/unwalkable 1))) "so does a leg that found no path")
+    (is (not (forage/foraging? (assoc w :player/health (dec forage/forage-health))))
+        "hurt: it stays")
+    (is (not (forage/foraging? (assoc-in w [:world/entities 9] (animal :zombie [30.5 64.0 8.5]))))
         "a zombie within forage-wary: R1/5 searched at night through creepers and zombies and died")
-    (is (hunt/foraging? (assoc-in w [:world/entities 9] (animal :zombie [60.5 64.0 8.5])))
+    (is (forage/foraging? (assoc-in w [:world/entities 9] (animal :zombie [60.5 64.0 8.5])))
         "one farther is no reason")
-    (is (hunt/foraging? (assoc-in w [:world/entities 9] (animal :cow [11.5 64.0 40.5])))
+    (is (forage/foraging? (assoc-in w [:world/entities 9] (animal :cow [11.5 64.0 40.5])))
         "an animal is no hazard")
-    (is (not (hunt/foraging? (assoc w :plan/intent {:intent/kind :build :intent/status :active})))
+    (is (not (forage/foraging? (assoc w :plan/intent {:intent/kind :build :intent/status :active})))
         "a cast is never left half made")
-    (is (not (hunt/foraging? (assoc w :plan/intent {:intent/kind :dig :intent/status :active})))
+    (is (not (forage/foraging? (assoc w :plan/intent {:intent/kind :dig :intent/status :active})))
         "a dig already begun is finished")
-    (is (not (hunt/foraging?
+    (is (not (forage/foraging?
               (assoc w :plan/intent {:intent/kind :swim-out :intent/status :active})))
         "a swim already begun is finished")
-    (is (not (hunt/foraging? (assoc w :plan/intent {:intent/kind :flee :intent/status :active})))
+    (is (not (forage/foraging? (assoc w :plan/intent {:intent/kind :flee :intent/status :active})))
         "so is a flee")
-    (is (not (hunt/foraging? (assoc w :plan/intent {:intent/kind :smelt :intent/status :active})))
+    (is (not (forage/foraging? (assoc w :plan/intent {:intent/kind :smelt :intent/status :active})))
         "a smelt in the furnace is waited out, not left with the iron inside")
     (is (not
-         (hunt/foraging?
+         (forage/foraging?
           (assoc w :plan/last {:intent/kind :dig :intent/status :done :intent/for :dig-gravel})))
         "a dug block's drop is collected before the search")
-    (is (hunt/foraging?
+    (is (forage/foraging?
          (assoc w :plan/last {:intent/kind :dig :intent/status :done :intent/for :hunt}))
         "the hunt's own dig is no reason")
-    (is (not (hunt/foraging? (assoc w :player/in-water? true)))
+    (is (not (forage/foraging? (assoc w :player/in-water? true)))
         "in the water: the swim out comes first")
-    (is (not (hunt/foraging?
+    (is (not (forage/foraging?
               (assoc w :world/chunks {[0 0] (world/column {[8 64 8] blocks/water-base})})))
         "afloat before the flag: a :go plans before any tick")
-    (is (not (hunt/foraging? (assoc (standing 20 {} {}) :time/now 1000))) "no kit, no search")
-    (is (not (hunt/foraging?
-              (assoc (standing 20 (assoc kit-held 2 (item :bread hunt/provision-wanted)) {})
+    (is (not (forage/foraging? (assoc (standing 20 {} {}) :time/now 1000))) "no kit, no search")
+    (is (not (forage/foraging?
+              (assoc (standing 20 (assoc kit-held 2 (item :bread forage/provision-wanted)) {})
                      :time/now
                      1000)))
         "provision-wanted foods held: enough")
-    (is (not (hunt/foraging? (assoc w :player/dimension "minecraft:the_nether")))
+    (is (not (forage/foraging? (assoc w :player/dimension "minecraft:the_nether")))
         "the Nether has no game")
     (is (not
-         (hunt/foraging?
+         (forage/foraging?
           (assoc w :world/chunks {[0 0] (world/column {[8 70 8] (blocks/default-state :stone)})})))
         "under a roof: deep in the ground there are no animals to find")))
 
@@ -351,7 +355,7 @@
 (deftest a-forage-leg-turns-a-quarter-right-and-falls-back-to-the-next-way
   (let [w (provisioning 1000)
         asked (atom [])
-        leg-from (fn [plan leg] (hunt/forage-leg plan w {:forage/since 0 :forage/leg leg}))
+        leg-from (fn [plan leg] (forage/forage-leg plan w {:forage/since 0 :forage/leg leg}))
         always (stub-plan asked (constantly false) :found)]
     (is (= [[30 64 8] 1] (leg-from always 0)))
     (is
@@ -366,16 +370,16 @@
     (is (nil? (leg-from (stub-plan (atom []) (constantly true) :found) 0)) "no way at all")
     (is (= [[30 64 8] 1] (leg-from (stub-plan (atom []) (constantly false) :partial) 0))
         "a route that spent its budget but goes on is walked")
-    (is (nil? (hunt/forage-leg (fn [_ _ _ _] {:path/status :partial :path/waypoints [[10 64 8]]})
-                               w
-                               {:forage/since 0 :forage/leg 0}))
+    (is (nil? (forage/forage-leg (fn [_ _ _ _] {:path/status :partial :path/waypoints [[10 64 8]]})
+                                 w
+                                 {:forage/since 0 :forage/leg 0}))
         "one that goes nowhere is not")))
 
 (deftest the-legs-go-round-a-square-that-grows
-  (is (= [48 32 16] (hunt/forage-reaches 0)))
-  (is (= [48 32 16] (hunt/forage-reaches 1)))
-  (is (= [96 48 32 16] (hunt/forage-reaches 2)))
-  (is (= [96 48 32 16] (hunt/forage-reaches 40)) "never past what the server shows"))
+  (is (= [48 32 16] (forage/forage-reaches 0)))
+  (is (= [48 32 16] (forage/forage-reaches 1)))
+  (is (= [96 48 32 16] (forage/forage-reaches 2)))
+  (is (= [96 48 32 16] (forage/forage-reaches 40)) "never past what the server shows"))
 
 (deftest the-forage-intent-becomes-the-walk-it-chose-or-ends-the-search
   ;; the real route finder: four columns east of the bot hold a cell 48 blocks on, one column
@@ -394,9 +398,9 @@
     (is (= {:forage/since 1000 :forage/leg 1 :forage/phase :kit :forage/life 0}
            (:hunt/forage wide)))
     (is (intent/done? (:plan/intent alone)))
-    (is (= (+ 1000 hunt/forage-retry-ms) (get-in alone [:hunt/forage :forage/retry-at])))
-    (is (not (hunt/foraging? alone)) "it waits before it looks again")
-    (is (hunt/foraging? (assoc alone :time/now (+ 1000 hunt/forage-retry-ms))))
+    (is (= (+ 1000 forage/forage-retry-ms) (get-in alone [:hunt/forage :forage/retry-at])))
+    (is (not (forage/foraging? alone)) "it waits before it looks again")
+    (is (forage/foraging? (assoc alone :time/now (+ 1000 forage/forage-retry-ms))))
     (is (plan/done-by (dissoc alone :plan/intent) hunt-row) "the portal goes on meanwhile")))
 
 (deftest an-animal-whose-cell-a-walk-failed-at-is-not-hunted-again
@@ -404,9 +408,9 @@
   ;; animals by id, so the same sheep was walked at every twelve seconds until twelve failed
   (let [cow {5 (animal :cow [14.5 64.0 8.5])}
         w (standing 8 {} cow)]
-    (is (some? (hunt/game w)))
-    (is (nil? (hunt/game (assoc w :plan/blacklist #{[14 64 8]}))) "the cell it stands in")
-    (is (nil? (hunt/game (assoc w :player/in-water? true))) "no walk is routed from the water")))
+    (is (some? (forage/game w)))
+    (is (nil? (forage/game (assoc w :plan/blacklist #{[14 64 8]}))) "the cell it stands in")
+    (is (nil? (forage/game (assoc w :player/in-water? true))) "no walk is routed from the water")))
 
 (def pick-held {0 (item :stone_pickaxe 1)})
 
@@ -422,38 +426,38 @@
   ;; the stone pickaxe
   (let [cow {5 (animal :cow [11.5 64.0 8.5])}
         w (early 1000)]
-    (is (= :early (hunt/provision-phase w)))
-    (is (= :kit (hunt/provision-phase (standing 20 (merge pick-held kit-held) {})))
+    (is (= :early (forage/provision-phase w)))
+    (is (= :kit (forage/provision-phase (standing 20 (merge pick-held kit-held) {})))
         "the kit's phase wins")
-    (is (nil? (hunt/provision-phase (standing 20 {} {}))) "no pickaxe yet")
-    (is (nil? (hunt/provision-phase (assoc w :player/dimension "minecraft:the_nether"))))
+    (is (nil? (forage/provision-phase (standing 20 {} {}))) "no pickaxe yet")
+    (is (nil? (forage/provision-phase (assoc w :player/dimension "minecraft:the_nether"))))
     (is (= {:intent/kind :fight :intent/target 5 :intent/for :hunt}
            (plan/next-intent (standing 20 pick-held cow) hunt-row plan/goals))
         "an animal in reach is hunted")
     (is (= {:intent/kind :forage :intent/for :hunt} (plan/next-intent w hunt-row plan/goals))
         "none in reach: searched for")
-    (is (plan/done-by (standing 20 (assoc pick-held 2 (item :bread hunt/provision-wanted)) cow)
+    (is (plan/done-by (standing 20 (assoc pick-held 2 (item :bread forage/provision-wanted)) cow)
                       hunt-row)
         "provision-wanted foods held")))
 
 (deftest the-early-search-is-short-and-leaves-the-kits-its-own-budget
   (let [w (early 1000)
         began (assoc w :hunt/forage {:forage/since 1000 :forage/leg 2 :forage/phase :early})]
-    (is (< hunt/early-forage-ms hunt/forage-ms))
-    (is (hunt/foraging? (assoc began :time/now (+ 1000 (dec hunt/early-forage-ms)))))
-    (is (not (hunt/foraging? (assoc began :time/now (+ 1000 hunt/early-forage-ms))))
+    (is (< forage/early-forage-ms forage/forage-ms))
+    (is (forage/foraging? (assoc began :time/now (+ 1000 (dec forage/early-forage-ms)))))
+    (is (not (forage/foraging? (assoc began :time/now (+ 1000 forage/early-forage-ms))))
         "early-forage-ms after its first leg it is over")
-    (is (plan/done-by (assoc began :time/now (+ 1000 hunt/early-forage-ms)) hunt-row)
+    (is (plan/done-by (assoc began :time/now (+ 1000 forage/early-forage-ms)) hunt-row)
         "and the row is done: the descent goes on with what is held")
     (let [kit (assoc (standing 20 (merge pick-held kit-held) {})
-                     :time/now (+ 1000 hunt/forage-ms 1)
+                     :time/now (+ 1000 forage/forage-ms 1)
                      :time/tick 0
                      :hunt/forage (:hunt/forage began))]
-      (is (nil? (hunt/forage-state kit)) "the early search is not the kit's")
-      (is (hunt/foraging? kit)
+      (is (nil? (forage/forage-state kit)) "the early search is not the kit's")
+      (is (forage/foraging? kit)
           "the kit's search starts afresh, however long ago the early one began"))
     (is (not
-         (hunt/foraging?
+         (forage/foraging?
           (assoc w :world/chunks {[0 0] (world/column {[8 70 8] (blocks/default-state :stone)})})))
         "under a roof, in the mine: none")))
 
@@ -472,7 +476,7 @@
     (is (= :return-nether
            (:goal/id
             (plan/choose
-             (assoc (home (assoc kit-held 2 (item :bread hunt/provision-wanted))) :player/food 20)
+             (assoc (home (assoc kit-held 2 (item :bread forage/provision-wanted))) :player/food 20)
              plan/goals)))
         "provisioned: back through the portal")))
 
@@ -482,13 +486,13 @@
   ;; of gear and cast, and the meals had eaten the reserve
   (let [w (provisioning 1000)
         spent (assoc w
-                     :time/now (+ 1000 hunt/forage-ms 1)
+                     :time/now (+ 1000 forage/forage-ms 1)
                      :hunt/forage {:forage/since 1000 :forage/leg 2 :forage/phase :kit})
         lit (assoc spent :plan/reached #{:portal})]
-    (is (= :kit (hunt/provision-phase spent)))
-    (is (not (hunt/foraging? spent)) "the kit's budget is spent")
-    (is (= :entry (hunt/provision-phase lit)) "the portal lit, the Nether not entered")
-    (is (= hunt/entry-provision-wanted (hunt/provision-target lit)))
-    (is (hunt/foraging? lit) "a fresh search of its own")
-    (is (= :kit (hunt/provision-phase (assoc spent :plan/reached #{:portal :nether})))
+    (is (= :kit (forage/provision-phase spent)))
+    (is (not (forage/foraging? spent)) "the kit's budget is spent")
+    (is (= :entry (forage/provision-phase lit)) "the portal lit, the Nether not entered")
+    (is (= forage/entry-provision-wanted (forage/provision-target lit)))
+    (is (forage/foraging? lit) "a fresh search of its own")
+    (is (= :kit (forage/provision-phase (assoc spent :plan/reached #{:portal :nether})))
         "entered before: the :kit / :return phases as before")))
