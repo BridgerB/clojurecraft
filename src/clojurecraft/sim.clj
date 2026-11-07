@@ -1897,6 +1897,16 @@
                                             [(long (math/floor x)) (long (math/floor (+ y 1.62)))
                                              (long (math/floor z))]))))))
 
+(def hit-log-keep 64)                 ; hits the model remembers dealing the player (:sim/hit-log), the newest
+
+(defn hit-logged
+  "The hit log (a vector, or nil) with hit {:t :life :cause :by :dealt :health} appended, the
+   newest hit-log-keep kept: the model's own cause for each blow, beside the bot's ledger."
+  [log hit]
+  (let [v (conj (or log []) hit)]
+    (cond (> (count v) hit-log-keep) (subvec v (- (count v) hit-log-keep))
+          :else v)))
+
 (def hurt-window-ms 500)              ; after a hurt, only a harder one lands, for its excess (LivingEntity's invulnerableTime above 10 of its 20 ticks)
 
 (defn hurt
@@ -1905,9 +1915,12 @@
    one lands, for what it exceeds the last by (LivingEntity.hurtServer); health never under
    zero. A dead player is not hurt; the client learns its health from sync-health or the
    caller's tell-health. cause (a mob's kind, :starve, :drown) is kept in :sim/death-causes when
-   this blow is the one that reaches zero."
-  ([sim amount exhausting?] (hurt sim amount exhausting? :unknown))
-  ([sim amount exhausting? cause]
+   this blow is the one that reaches zero. Every blow that lands is also appended to
+   :sim/hit-log (hit-logged) with its cause, by (the mob eid that dealt it, or nil), what it
+   dealt and the health left."
+  ([sim amount exhausting?] (hurt sim amount exhausting? :unknown nil))
+  ([sim amount exhausting? cause] (hurt sim amount exhausting? cause nil))
+  ([sim amount exhausting? cause by]
    (let [{:keys [at last]} (:sim/hurt sim)
          window? (and at (< (- (:sim/now sim) at) hurt-window-ms))
          dealt (if window? (- amount last) amount)]
@@ -1917,6 +1930,14 @@
              (-> sim
                  (assoc :sim/health health
                         :sim/hurt {:at (if window? at (:sim/now sim)) :last amount})
+                 (update :sim/hit-log
+                         hit-logged
+                         {:t (:sim/now sim)
+                          :life (:sim/respawns sim 0)
+                          :cause cause
+                          :by by
+                          :dealt dealt
+                          :health health})
                  (cond-> (<= health 0.0) (update :sim/death-causes (fnil conj []) cause)
                          exhausting? (add-exhaustion (hunger/exhaustion :hurt)))))))))
 
@@ -2208,7 +2229,7 @@
         (remove-mob eid)
         (cond-> (and (pos? dmg)
                      (mob/sight? (solid-fn sim) (mob/head type pos) (physics/eye player)))
-                (hurt (armoured sim (mob/scaled dmg (:sim/difficulty sim))) true type)))))
+                (hurt (armoured sim (mob/scaled dmg (:sim/difficulty sim))) true type eid)))))
 
 (defn die-mob
   "Mob eid at zero health: a crystal blasts (blast); any other dies, the client told
@@ -2603,7 +2624,8 @@
                                         (mob/scaled (or (:melee k) (:contact k))
                                                     (:sim/difficulty sim)))
                               true
-                              type)
+                              type
+                              eid)
                         (tell-damage :mob_attack eid))]
             ;; the wither only when the hit landed: a swallowed swing applies none
             (cond-> sim
@@ -2690,7 +2712,7 @@
           :else
           (-> sim
               (assoc-in [:sim/mobs eid :attack-at] (+ now (* (:every k) physics/tick-ms)))
-              (hurt (armoured sim (mob/scaled (:shoot k) (:sim/difficulty sim))) true type)
+              (hurt (armoured sim (mob/scaled (:shoot k) (:sim/difficulty sim))) true type eid)
               (tell-damage (or (:projectile k) type) eid)
               (cond-> (:ignites k) (ignite-player (:ignites k)))))))
 
@@ -3118,32 +3140,32 @@
    the blaze's :ignites and tells the damage; one that meets a block or is older than its life is
    gone, told to the client."
   [sim]
-  (reduce (fn [sim [fid {:keys [pos dir owner born kind]}]]
-            (let [[what at] (fireball-path sim pos dir)
-                  k (mob/kinds kind)
-                  old? (>= (- (:sim/now sim) born) (* (:life mob/fireball) physics/tick-ms))
-                  gone (fn [sim]
-                         (-> sim
-                             (update :sim/fireballs dissoc fid)
-                             (send {:packet/name :remove-entities :ids [fid]})))]
-              (cond (= :hit what)
-                    (->
-                      sim
-                      gone
-                      (hurt (armoured sim (mob/scaled (:shoot k) (:sim/difficulty sim))) true kind)
-                      (tell-damage :fireball owner fid)
-                      (ignite-player (:ignites k)))
-                    (= :wall what)
-                    (-> sim
-                        gone
-                        (set-fire (mob/cell-of at)))
-                    old? (gone sim)
-                    :else
-                    (-> sim
-                        (tell-move fid pos at)
-                        (assoc-in [:sim/fireballs fid :pos] at)))))
-          sim
-          (sort-by key (:sim/fireballs sim))))
+  (reduce
+   (fn [sim [fid {:keys [pos dir owner born kind]}]]
+     (let [[what at] (fireball-path sim pos dir)
+           k (mob/kinds kind)
+           old? (>= (- (:sim/now sim) born) (* (:life mob/fireball) physics/tick-ms))
+           gone (fn [sim]
+                  (-> sim
+                      (update :sim/fireballs dissoc fid)
+                      (send {:packet/name :remove-entities :ids [fid]})))]
+       (cond (= :hit what)
+             (-> sim
+                 gone
+                 (hurt (armoured sim (mob/scaled (:shoot k) (:sim/difficulty sim))) true kind owner)
+                 (tell-damage :fireball owner fid)
+                 (ignite-player (:ignites k)))
+             (= :wall what)
+             (-> sim
+                 gone
+                 (set-fire (mob/cell-of at)))
+             old? (gone sim)
+             :else
+             (-> sim
+                 (tell-move fid pos at)
+                 (assoc-in [:sim/fireballs fid :pos] at)))))
+   sim
+   (sort-by key (:sim/fireballs sim))))
 
 (defn tick-mobs
   "One game tick of the mobs: the day moves on (:sim/day-time), chunks coming near get their
@@ -3322,7 +3344,8 @@
               (assoc-in [:sim/mobs eid :attack-at] (+ now (* mob/bite-every physics/tick-ms)))
               (hurt (armoured sim (mob/scaled mob/bite-damage (:sim/difficulty sim)))
                     true
-                    :ender_dragon)))))
+                    :ender_dragon
+                    eid)))))
 
 (defn perch
   "The perched dragon's tick: its bite, and while any crystal stands, one health back every
@@ -3449,18 +3472,22 @@
    like any other failure (issue #152: a crash used to leave no moment and no stage). go is sent
    once the bot is loaded, or never when nil. Each tick's :event/rand is 0.5, or, with a rand
    state, the next of a pure generator (tick-rand), so runs of one world with different seeds
-   are different runs, each the same every time."
-  [bot-step m stop? max-ms go every]
-  (let [lag (* physics/tick-ms (:sim/lag-ticks (:sim m) 0))
-        until-t (+ (:t m) max-ms)]
-    (loop [m m
-           moments []]
-      (let [moments (kept moments m every)
-            r (try (tick-from bot-step m stop? until-t go lag) (catch Exception e {:crashed e}))
-            ended {:before [(:world m) (:sim m)] :last m :moments moments}]
-        (cond (:crashed r) (assoc ended :world (:world m) :sim (:sim m) :crashed (:crashed r))
-              (:stop r) (merge ended (:stop r))
-              :else (recur (:next r) moments))))))
+   are different runs, each the same every time. With a tap (a function of the moment, called
+   once a tick before it is played, for an observer's atom: the truth ring), the tap sees every
+   moment and changes none."
+  ([bot-step m stop? max-ms go every] (play-from bot-step m stop? max-ms go every nil))
+  ([bot-step m stop? max-ms go every tap]
+   (let [lag (* physics/tick-ms (:sim/lag-ticks (:sim m) 0))
+         until-t (+ (:t m) max-ms)]
+     (loop [m m
+            moments []]
+       (let [moments (kept moments m every)
+             _ (when tap (tap m))
+             r (try (tick-from bot-step m stop? until-t go lag) (catch Exception e {:crashed e}))
+             ended {:before [(:world m) (:sim m)] :last m :moments moments}]
+         (cond (:crashed r) (assoc ended :world (:world m) :sim (:sim m) :crashed (:crashed r))
+               (:stop r) (merge ended (:stop r))
+               :else (recur (:next r) moments)))))))
 
 (defn play-on
   "Play a bot reducer against the model on from world and sim as they are, from t0 with pending
@@ -3498,14 +3525,16 @@
 (defn run+
   "Run a bot reducer against the model from a fresh handshake (start-moment) until (stop? world)
    or max-ms, sending go (default {:event/kind :go}) once the bot is loaded, keeping a moment every
-   moment-every-ms: play-from's answer, {:world :sim :before :last :moments}."
-  [bot-step world0 sim0 stop? max-ms & [go]]
+   moment-every-ms: play-from's answer, {:world :sim :before :last :moments}. A tap, when given
+   after go, is play-from's."
+  [bot-step world0 sim0 stop? max-ms & [go tap]]
   (play-from bot-step
              (start-moment bot-step world0 sim0)
              stop?
              max-ms
              (or go {:event/kind :go})
-             moment-every-ms))
+             moment-every-ms
+             tap))
 
 (defn run
   "Run a bot reducer against the model from a fresh handshake, a tick (physics/tick-ms) at a

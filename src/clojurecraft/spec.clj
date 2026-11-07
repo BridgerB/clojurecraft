@@ -840,6 +840,19 @@
 (s/def :sim.hurt/at int?)
 (s/def :sim.hurt/last number?)
 (s/def :sim/hurt (s/keys :req-un [:sim.hurt/at :sim.hurt/last])) ; the last hurt: when, how hard
+(s/def :sim.hit/t int?)
+(s/def :sim.hit/life nat-int?)
+(s/def :sim.hit/cause
+  (s/or :kw keyword?
+        :str string?))
+(s/def :sim.hit/by (s/nilable int?))
+(s/def :sim.hit/dealt number?)
+(s/def :sim.hit/health number?)
+(s/def :sim/hit-log ; the model's own cause for each blow that landed on the player (sim/hit-logged)
+  (s/coll-of (s/keys :req-un
+                     [:sim.hit/t :sim.hit/life :sim.hit/cause :sim.hit/dealt :sim.hit/health]
+                     :opt-un [:sim.hit/by])
+             :kind vector?))
 (s/def :sim.wither/until int?)
 (s/def :sim.wither/next int?)
 (s/def :sim/wither (s/keys :req-un [:sim.wither/until :sim.wither/next])) ; a wither skeleton's wither: when it ends, when it next hurts

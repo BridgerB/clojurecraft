@@ -840,7 +840,25 @@
     (is (some? (:sim/fire sim)) "alight")
     (is (empty? (:sim/fireballs sim)) "spent")
     (is (some #{14} (map :source-type (said sim :damage-event))) "a fireball")
-    (is (some #(= [90] (:ids %)) (said sim :remove-entities)))))
+    (is (some #(= [90] (:ids %)) (said sim :remove-entities)))
+    (is (= [{:cause :blaze :by 91 :dealt 5.0 :health 15.0}]
+           (map #(select-keys % [:cause :by :dealt :health]) (:sim/hit-log sim)))
+        "the model's own account of the blow: its cause, who dealt it, how much")))
+
+(deftest the-hit-log-keeps-the-newest-blows-and-skips-the-ones-the-window-swallowed
+  (let [log (reduce (fn [l i] (sim/hit-logged l {:t i})) nil (range (+ sim/hit-log-keep 3)))]
+    (is (= sim/hit-log-keep (count log)))
+    (is (= 3 (:t (first log)))))
+  (let [s (-> (arena {} {} :normal night [])
+              (assoc :sim/now 1000 :sim/health 20.0)
+              (sim/hurt 6.0 true :zombie 7)
+              (assoc :sim/now 1100)
+              (sim/hurt 4.0 true :zombie 7)
+              (assoc :sim/now 1200)
+              (sim/hurt 9.0 true :skeleton 8))]
+    (is
+     (= [[:zombie 7 6.0] [:skeleton 8 3.0]] (map (juxt :cause :by :dealt) (:sim/hit-log s)))
+     "a weaker blow inside the hurt window lands nothing and is not logged; a harder one lands its excess")))
 
 (deftest a-blaze-s-aim-misses-as-often-as-the-formula-says
   ;; triangular error of half-width 1.1485 * sqrt(distance) on x and z: at 10 blocks about one

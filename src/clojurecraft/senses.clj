@@ -288,8 +288,9 @@
    part D): its facts and the blocks round its feet (scene/facts, scene/slice), the intent chain,
    the plan's attributes, the stages' own, every entity within ledger-radius with all it is known
    by (kind and distance added), its hits, effects and armour, and the newest moment-intentions
-   intention facts (memory/intentions: what it set out to do, with reasons). A pure function of the
-   world; nil before the bot has a position."
+   intention facts (memory/intentions: what it set out to do, with reasons), and the eids it ranked
+   as threats (:threats, combat/threats), which blind sets against the model's truth. A pure
+   function of the world; nil before the bot has a position."
   [world]
   (when-let [pos (:player/pos world)]
     {:t (:time/now world)
@@ -308,7 +309,8 @@
      :hits (:player/hits world [])
      :effects (:player/effects world {})
      :armor (:player/armor world)
-     :intentions (vec (take-last moment-intentions (memory/intentions world)))}))
+     :intentions (vec (take-last moment-intentions (memory/intentions world)))
+     :threats (vec (sort (keys (combat/threats world))))}))
 
 ;;;; I/O: the observer and its file ;;;;
 

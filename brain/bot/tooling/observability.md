@@ -19,6 +19,12 @@ sourceRefs:
   - src/clojurecraft/intent.clj#defn why-of
   - "src/clojurecraft/memory.clj#The fact for intent i reaching event"
   - src/clojurecraft/race.clj#defn near-truth!
+  - src/clojurecraft/race.clj#defn serverlog-lines
+  - src/clojurecraft/sim.clj#defn hit-logged
+  - "src/clojurecraft/simrace.clj#What the model knew round the player at a moment"
+  - src/clojurecraft/simrace.clj#defn truth-ring-add
+  - src/clojurecraft/simrace.clj#defn truth-texts
+  - "bb/clojurecraft/blind.clj#What the truth knew that the bot did not:"
   - src/clojurecraft/race.clj#defn play-one!
   - bb/clojurecraft/botlogs.clj#defn case-of
   - bb/clojurecraft/botlogs.clj#defn case-text
@@ -54,6 +60,9 @@ The bot's whole mind is one world value, so everything a reader needs about a ru
 - **The moment:** the whole mind at the ending (`senses/moment`): facts, the blocks round the feet, the intent chain, the plan, the stages' keys, entities near, hits, effects, armour, and the newest 40 intentions.
 - **Why:** the stuck stage's planners label each intent with the branch that chose it (`intent/why`, on metadata, so equality is unchanged); intention facts keep `:intention/why`.
 - **Server truth** (real): every entity within 32 blocks of the ending and the bot's own entity, whole (`race/near-truth!`), as `<name>.server.txt`.
+- **Sim truth, every run:** the model's view round the player (`simrace/truth`: each mob within 32 blocks with its kind, position, health, anger, whether it targets the player and what it dealt this life, and the model's own cause for each blow from `:sim/hit-log`, `sim/hit-logged`) is written as `<run>.truth.edn` for every ended sim run, one that threw too (`simrace/truth-texts`, which says `:unavailable` instead of leaving no file). Every 5 simulated seconds the same view joins a ring of 120 (`simrace/truth-ring-add`, sampled by a tap on `sim/play-from`, only the mobs near the player), written as `<run>.truth-ring.edn`.
+- **Blind:** `blind/blind` sets the truth beside the bot's moment: mobs it never tracked, mobs that target it and it ranked as no threat (`:threats` in the moment), blows from an attacker it did not know. A case prints a `blind:` line for each (`botlogs/case-text`), for sim runs, which have both files.
+- **Server log** (real): the lines about the bot (its death line, a kick) and the server's trouble ("Can't keep up") from the log's tail, as `<name>.serverlog.txt` (`race/serverlog-lines`).
 - **The recording** of every failed run (`botlogs/keep-recording?`).
 
 ## How it is read

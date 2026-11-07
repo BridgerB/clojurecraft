@@ -993,6 +993,49 @@
         msg (assoc :death-message msg)))
     r))
 
+(def serverlog-tail 400)                ; the newest this many lines of the server log are read for a bot's ending
+
+(def serverlog-notable
+  "What in the server log is worth keeping beside a bot's ending, whoever it is about: the server
+   falling behind, a connection lost or kicked, a timeout, a warning or an error."
+  #"Can't keep up|Overloaded|lost connection|Disconnected|kicked|timed out|moved too quickly|moved wrongly|\[Server thread/(?:WARN|ERROR)\]")
+
+(defn serverlog-lines
+  "The lines of the server log text (its newest serverlog-tail) that bear on bot name's ending: any
+   that names the bot (its join, its death line, its leaving, whole word: Clj_r1 is not Clj_r10)
+   and any that serverlog-notable matches, in order, as a vector. Pure over the text."
+  [text name]
+  (let [mine (re-pattern (str "\\b" (java.util.regex.Pattern/quote name) "\\b"))]
+    (filterv #(or (re-find mine %) (re-find serverlog-notable %))
+             (take-last serverlog-tail (str/split-lines (str text))))))
+
+(def serverlog-bytes 524288)              ; the last half megabyte of the log file is read, not all of a five-hour log
+
+(defn file-tail
+  "The last n bytes of file f as text (UTF-8), the whole file when it is shorter; the first line
+   may be cut."
+  [^java.io.File f n]
+  (with-open [r (java.io.RandomAccessFile. f "r")]
+    (let [len (.length r)
+          start (max 0 (- len (long n)))
+          buf (byte-array (- len start))]
+      (.seek r start)
+      (.readFully r buf)
+      (String. buf "UTF-8"))))
+
+(defn serverlog-text
+  "The text of bot name's <name>.serverlog.txt: its serverlog-lines of the log file at path joined
+   by newlines, or why they could not be read (a missing file, an error), as one line. Never
+   throws."
+  [path name]
+  (let [f (some-> path
+                  io/file)]
+    (try (cond (nil? f) "no server log named"
+               (not (.exists f)) (str "no server log at " path)
+               :else
+               (str (str/join "\n" (serverlog-lines (file-tail f serverlog-bytes) name)) "\n"))
+         (catch Exception e (str "server log not read: " (ex-message e))))))
+
 (defn play-one!
   "One bot's whole life in a slot: the next serial's name (serials, an atom shared by the slots),
    its own atom and queue, on the board (live) and watched for milestones while it plays, landed on
@@ -1003,7 +1046,13 @@
    <name>.senses.edn the moment before its RESULT, so a batch that counts the RESULT has them,
    and its ledger beside them (senses/ledger!: every change, its hits, swings, intents and the
    entities round it) as <name>.events.edn, its mind at the end (senses/moment) as
-   <name>.moment.edn and the minutes before (the ring) as <name>.ring.edn.
+   <name>.moment.edn and the minutes before (the ring) as <name>.ring.edn, and the server log's
+   lines about it (serverlog-lines: its death line, a kick, "
+  Can't
+  keep
+  up
+  ") as
+   <name>.serverlog.txt.
    Returns {:name :result :truth}."
   [{:keys [server ch centre serials live watcher prefix record-dir commit deadline]}]
   (let [n (swap! serials inc)
@@ -1046,6 +1095,9 @@
               :on-result
               (fn [r]
                 (write-senses!)
+                (try (spit (str (io/file record-dir (str name ".serverlog.txt")))
+                           (serverlog-text (:server-log server) name))
+                     (catch Exception e (cli/log name "server log not kept:" e)))
                 (deliver truth (truth! server name))
                 (when-let [pos (:pos r)]
                   (try (spit (str (io/file record-dir (str name ".server.txt")))
