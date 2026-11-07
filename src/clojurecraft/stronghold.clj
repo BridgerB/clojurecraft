@@ -30,6 +30,7 @@
    (memory/landmark-kinds), however deep it lies. Every long walk goes in hops a route reaches
    (hop), as the pearl hunt's roam does."
   (:require [clojure.math :as math]
+            [clojurecraft.avoided :as avoided]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.drops :as drops]
             [clojurecraft.fortress :as fortress]
@@ -407,7 +408,7 @@
                 (when (and i
                            (not= c [fx fy fz])
                            (progress? [fx fy fz] c [x z] hop-gain)
-                           (not (contains? (:plan/blacklist world #{}) c))
+                           (not (contains? (avoided/all-of world :blacklist) c))
                            (intent/routable? world (assoc i :intent/max-nodes 400)))
                   i)))
             hop-turns))))
@@ -552,7 +553,7 @@
                    (let [c (stand-in world cx cz fy)]
                      (when (and c
                                 (dry-cell? world c)
-                                (not (contains? (:plan/blacklist world #{}) c))
+                                (not (contains? (avoided/all-of world :blacklist) c))
                                 (intent/routable?
                                  world
                                  {:intent/kind :walk :intent/target c :intent/max-nodes 400}))
@@ -568,13 +569,15 @@
    39134431529), every stair from it into the water, and failed :boxed."
   [world]
   (let [[fx fy fz] (intent/feet world)]
-    (some (fn [[d k]]
-            (let [a (* k (/ math/PI 4))
-                  x (long (math/floor (+ fx 0.5 (* d (math/cos a)))))
-                  z (long (math/floor (+ fz 0.5 (* d (math/sin a)))))
-                  c (when (stairs/dry-top? world [x z]) (stand-in world x z fy))]
-              (when (and c (dry-cell? world c) (not (contains? (:plan/blacklist world #{}) c))) c)))
-          (for [d (range (inc start-reach) (inc far-reach)) k (range 8)] [d k]))))
+    (some
+     (fn [[d k]]
+       (let [a (* k (/ math/PI 4))
+             x (long (math/floor (+ fx 0.5 (* d (math/cos a)))))
+             z (long (math/floor (+ fz 0.5 (* d (math/sin a)))))
+             c (when (stairs/dry-top? world [x z]) (stand-in world x z fy))]
+         (when (and c (dry-cell? world c) (not (contains? (avoided/all-of world :blacklist) c)))
+           c)))
+     (for [d (range (inc start-reach) (inc far-reach)) k (range 8)] [d k]))))
 
 (defn walked-ground
   "Where the newest walk that arrived ended (memory/last-done), ground the bot stood on, when it
@@ -616,7 +619,7 @@
                     i (when c {:intent/kind :walk :intent/target c :intent/for :stronghold})]
                 (when (and i
                            (<= cy (- fy downhill-drop))
-                           (not (contains? (:plan/blacklist world #{}) c))
+                           (not (contains? (avoided/all-of world :blacklist) c))
                            (intent/routable? world (assoc i :intent/max-nodes 400)))
                   i)))
             (for [r downhill-reaches turn hop-turns] [r turn])))))
@@ -730,7 +733,7 @@
   [world [_ y _ :as f]]
   (let [[_ fy _ :as feet] (intent/feet world)
         high? (> fy (+ y deep))
-        boxed? (contains? (:plan/boxed-at world #{}) feet)
+        boxed? (contains? (avoided/all-of world :boxed-at) feet)
         start (when (and high?
                          (not (:player/in-water? world))
                          (terrain/under-sky? world feet)
@@ -749,8 +752,8 @@
         retreats
         (when needed?
           (->> (rseq (:plan/trail world []))
-               (remove #(or (contains? (:plan/boxed-at world #{}) %)
-                            (contains? (:plan/blacklist world #{}) %)))
+               (remove #(or (contains? (avoided/all-of world :boxed-at) %)
+                            (contains? (avoided/all-of world :blacklist) %)))
                (filter #(<= (physics/horizontal-distance (:player/pos world) (physics/centre %))
                             retreat-reach))
                (sort-by #(physics/horizontal-distance (:player/pos world) (physics/centre %)))

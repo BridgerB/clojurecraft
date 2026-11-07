@@ -105,7 +105,7 @@
   ([world] (endermen world hunt-radius))
   ([world radius]
    (let [pos (:player/pos world)
-         bl (:plan/blacklist world #{})]
+         bl (avoided/all-of world :blacklist)]
      (into {}
            (filter (fn [[eid e]]
                      (and (= :enderman (entity/kind e))
@@ -127,7 +127,7 @@
   (let [pos (:player/pos world)
         [_ e :as near] (entity/nearest (endermen world) pos)]
     (cond (and e (<= (physics/distance pos (:entity/pos e)) strike-range)) near
-          :else (entity/nearest (endermen (dissoc world :plan/blacklist)) pos))))
+          :else (entity/nearest (endermen (avoided/forget world :blacklist)) pos))))
 
 (defn crowd
   "{eid entity} of the endermen standing within strike-range of the burrow's mouth
@@ -145,7 +145,7 @@
                      physics/centre)]
     (into {}
           (filter (fn [[_ e]] (<= (physics/distance m (:entity/pos e)) strike-range)))
-          (endermen (dissoc world :plan/blacklist)))
+          (endermen (avoided/forget world :blacklist)))
     {}))
 
 (defn crowded?
@@ -170,7 +170,7 @@
                                         (and (< (physics/y-of c) (physics/y-of mouth))
                                              (not= c end)
                                              (<= (physics/distance c end) burrow-span)))))
-                            (endermen (dissoc world :plan/blacklist)))
+                            (endermen (avoided/forget world :blacklist)))
                       (:player/pos world)))))
 
 (def danger-radius 16.0)              ; blocks from the burrow's mouth an angry enderman keeps the bot in from: the enderman's own stare range (EndermanLookForPlayerGoal: within 16 an angry one stands while looked at and rushes when not; farther, one with a target teleports to it after 30 ticks, so one farther that has not come has lost its target); eight let a burrow go stale with one angry nine to sixteen off that would rush the bot stepping out. The wait within is bounded by the lure (lure?), where one that never comes held batch pearls-warped-d run 1 thirty-four minutes
@@ -269,7 +269,7 @@
                               (not (and (lured-out? world) (unfightable? world eid e)))
                               (<= (physics/distance c p) danger-radius)
                               (<= (abs (- (physics/y-of p) (physics/y-of c))) danger-rise)))))
-             (endermen (if (lured-out? world) world (dissoc world :plan/blacklist)) stare-range))
+             (endermen (if (lured-out? world) world (avoided/forget world :blacklist)) stare-range))
        (:player/pos world)))))
 
 (defn menaced?
@@ -284,7 +284,7 @@
                        (and (entity/creepy? e)
                             (<= (physics/distance p q) danger-radius)
                             (<= (abs (- (physics/y-of q) (physics/y-of p))) danger-rise))))
-                   (endermen (dissoc world :plan/blacklist) stare-range)))))
+                   (endermen (avoided/forget world :blacklist) stare-range)))))
 
 (def park-ms 60000)                    ; ms an angry enderman has not closed in before it is parked
 (def park-near 8.0)                    ; blocks within which one is never parked: it is on the bot
@@ -304,7 +304,7 @@
         old (:pearls/angry world {})
         angry (into {}
                     (filter (comp entity/creepy? val))
-                    (endermen (dissoc world :plan/blacklist) stare-range))]
+                    (endermen (avoided/forget world :blacklist) stare-range))]
     (assoc world
            :pearls/angry
            (into {}
@@ -338,7 +338,7 @@
                             (<= (physics/distance p q) danger-radius)
                             (<= (abs (- (physics/y-of q) (physics/y-of p))) danger-rise)
                             (not (parked? world eid q)))))
-                   (endermen (dissoc world :plan/blacklist) stare-range)))))
+                   (endermen (avoided/forget world :blacklist) stare-range)))))
 
 (defn menace
   "[eid entity] of the nearest angry enderman (entity/creepy?) within park-near (8) blocks and
@@ -356,7 +356,7 @@
                                            (<= (physics/distance p q) park-near)
                                            (<= (abs (- (physics/y-of q) (physics/y-of p)))
                                                danger-rise)))))
-                          (endermen (dissoc world :plan/blacklist) stare-range))
+                          (endermen (avoided/forget world :blacklist) stare-range))
                     p)))
 
 (def stale-lookouts 12)              ; lookouts (five seconds each, a minute) stood with the burrow and nothing to do from it before it is given up for one cut beside the next enderman
@@ -388,7 +388,7 @@
   [world]
   (let [[bid] (blocking world)]
     (boolean (and bid
-                  (contains? (:plan/blacklist world #{}) bid)
+                  (contains? (avoided/all-of world :blacklist) bid)
                   (>= (or (memory/done-since world :lookout :burrow) 0) stale-lookouts)))))
 
 (defn stale?
@@ -424,7 +424,7 @@
    or a piglin comes down the stairs to the sword one at a time."
   [world]
   (let [pos (:player/pos world)
-        bl (:plan/blacklist world #{})]
+        bl (avoided/all-of world :blacklist)]
     (entity/nearest (into {}
                           (filter (fn [[eid e]]
                                     (and (not (contains? bl eid))
@@ -772,7 +772,7 @@
    radius of the feet and danger-rise of their height?"
   [world radius]
   (let [p (:player/pos world)
-        bl (if (lured-out? world) world (dissoc world :plan/blacklist))]
+        bl (if (lured-out? world) world (avoided/forget world :blacklist))]
     (boolean (some (fn [[eid e]]
                      (let [q (:entity/pos e)]
                        (and (entity/creepy? e)
@@ -797,7 +797,7 @@
                        (and (entity/creepy? e)
                             (<= (physics/distance p q) radius)
                             (<= (abs (- (physics/y-of q) (physics/y-of p))) danger-rise))))
-                   (endermen (dissoc world :plan/blacklist) stare-range)))))
+                   (endermen (avoided/forget world :blacklist) stare-range)))))
 
 (defn perched?
   "Do the feet stand on a lone column two or more blocks high, open air on all four sides of the
@@ -936,7 +936,8 @@
   [world ms]
   (let [pos (:player/pos world)
         fy (physics/y-of (path/feet-cell pos))]
-    (when (and (spare? world) (not (contains? (:plan/boxed-at world) (intent/feet world))))
+    (when (and (spare? world)
+               (not (contains? (avoided/all-of world :boxed-at) (intent/feet world))))
       (->> ms
            (sort-by (fn [[_ e]] (physics/distance pos (:entity/pos e))))
            (take candidates)
@@ -973,7 +974,7 @@
   (let [pos (:player/pos world)
         fy (physics/y-of (path/feet-cell pos))]
     (when (and (spare? world)
-               (not (contains? (:plan/boxed-at world) (intent/feet world)))
+               (not (contains? (avoided/all-of world :boxed-at) (intent/feet world)))
                (not-any? (fn [[_ e]] (level? world e)) ms))
       (->> ms
            (sort-by (fn [[_ e]] (physics/distance pos (:entity/pos e))))
@@ -1053,7 +1054,7 @@
    a time (some, not a chunked filter): it is the costly test."
   [world dir]
   (let [[x y z :as feet] (intent/feet world)
-        bl (:plan/blacklist world #{})]
+        bl (avoided/all-of world :blacklist)]
     (->> (for [dx (range (- site-reach) (inc site-reach))
                dz (range (- site-reach) (inc site-reach))
                dy [0 1 -1]]
@@ -1152,7 +1153,7 @@
   "[eid entity] of the nearest calm enderman (not entity/creepy?) crowding the burrow's mouth
    (crowd) that is not blacklisted (one that would not provoke is no reason to move), or nil."
   [world]
-  (let [bl (:plan/blacklist world #{})]
+  (let [bl (avoided/all-of world :blacklist)]
     (entity/nearest
      (into {} (remove (fn [[eid e]] (or (contains? bl eid) (entity/creepy? e)))) (crowd world))
      (:player/pos world))))
@@ -1171,7 +1172,7 @@
   [world e]
   (let [feet (intent/feet world)
         eye (game/eye world)
-        bl (:plan/blacklist world #{})
+        bl (avoided/all-of world :blacklist)
         [ex ey ez] (cell (:entity/pos e))
         from (fn [c] (assoc world :player/pos (feet-at c)))]
     (->> (for [dx (range (- crowd-reach) (inc crowd-reach))
@@ -1269,7 +1270,7 @@
         [_ e] (entity/nearest ms pos)]
     (when (and e
                (spare? world)
-               (not (contains? (:plan/boxed-at world) feet))
+               (not (contains? (avoided/all-of world :boxed-at) feet))
                (< (abs (- (physics/y-of (:entity/pos e)) (physics/y-of feet))) descend-drop)
                (within-cut-reach? world e)
                (>= (path/octile feet (cell (:entity/pos e))) bore-length))
@@ -1324,7 +1325,9 @@
   (let [pos (:player/pos world)
         feet (path/feet-cell pos)
         [_ e] (entity/nearest (endermen world descend-radius) pos)]
-    (when (and e (spare? world) (not (contains? (:plan/boxed-at world) (intent/feet world))))
+    (when (and e
+               (spare? world)
+               (not (contains? (avoided/all-of world :boxed-at) (intent/feet world))))
       (let [c (cell (:entity/pos e))
             i {:intent/kind :walk :intent/target c :intent/for :pearls}
             to (or (last (:path/waypoints (path/plan world feet (intent/goal-of i) {}))) feet)
@@ -1395,7 +1398,7 @@
    past a burrow's (spare?), or a staircase boxed from these feet (:plan/boxed-at)."
   [world]
   (let [feet (intent/feet world)]
-    (when (and (spare? world) (not (contains? (:plan/boxed-at world) feet)))
+    (when (and (spare? world) (not (contains? (avoided/all-of world :boxed-at) feet)))
       (when-let [dir (when (< (physics/y-of feet) (dec (roof-cap world (physics/y-of feet))))
                        (climb-heading world feet))]
         {:intent/kind :stairs-up
@@ -1416,7 +1419,7 @@
         n (floored-length world feet dir bore-length)]
     (when (and (= dimension/nether (dimension/of world))
                (spare? world)
-               (not (contains? (:plan/boxed-at world) feet))
+               (not (contains? (avoided/all-of world :boxed-at) feet))
                (pos? n)
                (solid-cut? world :tunnel feet dir n))
       {:intent/kind :tunnel :intent/dir dir :intent/length n :intent/for :pearls})))
@@ -1433,7 +1436,7 @@
   [world]
   (let [feet (intent/feet world)
         mouth (:pearls/mouth world)]
-    (when (and mouth (spare? world) (not (contains? (:plan/boxed-at world) feet)))
+    (when (and mouth (spare? world) (not (contains? (avoided/all-of world :boxed-at) feet)))
       (let [[fx _ fz] feet
             [mx _ mz] mouth
             dx (- fx mx)
@@ -1558,7 +1561,7 @@
                                       (and (entity/creepy? e)
                                            (<= (physics/distance pos (:entity/pos e)) strike-range)
                                            (combat/in-reach? world e))))
-                            (endermen (dissoc world :plan/blacklist) strike-range))
+                            (endermen (avoided/forget world :blacklist) strike-range))
                       pos))))
 
 (defn cell-toward
@@ -2003,7 +2006,7 @@
    cell above it is not in :plan/blacklist (a walk to it failed), or nil."
   [world]
   (let [feet (intent/feet world)
-        bl (:plan/blacklist world #{})]
+        bl (avoided/all-of world :blacklist)]
     (->> (memory/warped-chunks world)
          (map :forest/pos)
          (remove #(contains? bl (update % 1 inc)))
@@ -2274,7 +2277,7 @@
   [world]
   (let [feet (intent/feet world)
         [_ fy _] feet
-        bl (:plan/blacklist world #{})]
+        bl (avoided/all-of world :blacklist)]
     (when-let [[dx dz] (pocket-bore-heading world)]
       (let [along (fn [[hx hz]] [(+ (first feet) (* bore-reach hx)) fy
                                  (+ (last feet) (* bore-reach hz))])
@@ -2299,7 +2302,7 @@
             ;; ends it :done without a step, and the same cell is chosen again (Clj_r79 above);
             ;; a blacklisted cell (#719's guard, fail-intent) is passed over the same way
             target-c (some #(when (and (>= (physics/distance feet %) 2.0)
-                                       (not (contains? (:plan/blacklist world #{}) %)))
+                                       (not (contains? (avoided/all-of world :blacklist) %)))
                               %)
                            remaining)]
         (when target-c
@@ -2387,7 +2390,7 @@
   (let [held (:pearls/exit-target world)]
     (when (and held
                (>= (physics/distance (intent/feet world) held) exit-reach)
-               (not (contains? (:plan/blacklist world #{}) held)))
+               (not (contains? (avoided/all-of world :blacklist) held)))
       held)))
 
 (defn fortress-tunnel-target
@@ -2734,7 +2737,7 @@
    plan run 40583923956 run 3 (issue #263, pearls-12) walked to the mouth of its burrow fifteen
    times in 0.6 s, each failing :no-path, because these walks never asked the blacklist."
   [world target]
-  (when (and target (not (contains? (:plan/blacklist world #{}) target)))
+  (when (and target (not (contains? (avoided/all-of world :blacklist) target)))
     {:intent/kind :walk :intent/target target :intent/for :shelter}))
 
 (defn uncage
@@ -2772,7 +2775,7 @@
    to stare at, cutting its burrow 26 times and gaining one pearl; others stood 52, 53 and 63 off."
   [world]
   (let [pos (:player/pos world)
-        all (endermen (dissoc world :plan/blacklist) 128.0)
+        all (endermen (avoided/forget world :blacklist) 128.0)
         far (into {}
                   (filter (fn [[_ e]] (>= (physics/distance pos (:entity/pos e)) relocate-dist)))
                   all)
@@ -2833,7 +2836,7 @@
   [world e]
   (let [feet (intent/feet world)
         eye (game/eye world)
-        bl (:plan/blacklist world #{})
+        bl (avoided/all-of world :blacklist)
         spent (memory/arrived world)
         [ex ey ez] (cell (:entity/pos e))]
     (->> (for [dx (range -16 17) dz (range -16 17) dy (range -3 4)] [(+ ex dx) (+ ey dy) (+ ez dz)])
@@ -2909,7 +2912,7 @@
         c2 (:pearls/chase world)]
     (if (and c2 (distant-gave-up? world (:eid c2)))
       (-> world
-          (update :plan/blacklist (fnil conj #{}) (:eid c2))
+          (avoided/note :blacklist (:eid c2))
           (dissoc :pearls/chase))
       world)))
 
@@ -3034,7 +3037,8 @@
                                         (endermen world stare-range))
                                   pos)
         near? (and e (<= (physics/distance pos (:entity/pos e)) strike-range))
-        angry? (and near? (entity/creepy? e) (not (contains? (:plan/blacklist world #{}) eid)))
+        angry?
+        (and near? (entity/creepy? e) (not (contains? (avoided/all-of world :blacklist) eid)))
         in-reach? (and near?
                        (<= (physics/distance (game/eye world) (combat/aim e)) combat/attack-reach))
         hurt? (< (:player/health world 20.0) danger-health)
@@ -3056,7 +3060,7 @@
         ;; issue #263: 1310, 1561 and 1691 provoked in 14 s, three at the bot at once)
         coming? (coming? world)
         qid (when-not coming? quarry-id)
-        ghost? (and near? (not angry?) (contains? (:plan/blacklist world #{}) eid))
+        ghost? (and near? (not angry?) (contains? (avoided/all-of world :blacklist) eid))
         m (second (menace world))
         dir (when (and (nil? home)
                        (pickaxe? world)
@@ -3184,7 +3188,7 @@
            (or (entity/creepy? e)
                (and (not (pickaxe? world))
                     (not (worn-out? world))
-                    (not (contains? (:plan/blacklist world #{}) eid)))))
+                    (not (contains? (avoided/all-of world :blacklist) eid)))))
       (intent/why :hunt/and-near?-not-in?-not-unfightable?-world-eid-e-o
                   {:intent/kind :fight :intent/target eid :intent/for :pearls})
       meal (intent/why :hunt/meal meal)
@@ -3281,7 +3285,7 @@
         solid? (sight-fn world)]
     (if (some (fn [[_ e]]
                 (and (not (entity/creepy? e)) (mob/stared? solid? eye look (:entity/pos e))))
-              (endermen (dissoc world :plan/blacklist) stare-range))
+              (endermen (avoided/forget world :blacklist) stare-range))
       [(first look) 90.0]
       look)))
 
@@ -3327,7 +3331,7 @@
   [world pos]
   (into #{}
         (keep (fn [[eid e]] (when (<= (physics/distance pos (:entity/pos e)) cluster-radius) eid)))
-        (endermen (dissoc world :plan/blacklist) 128.0)))
+        (endermen (avoided/forget world :blacklist) 128.0)))
 
 (defn relocation
   "The world with the relocation (:pearls/relocate {:from feet :at ms :near ids}) begun when no
@@ -3352,7 +3356,8 @@
                    (and (>= moved (/ relocate-dist 2))
                         (seq (remove (:near r) (near-ids world (:player/pos world)))))))
           (-> world
-              (dissoc :pearls/relocate :pearls/shelter :pearls/mouth :plan/blacklist)
+              (dissoc :pearls/relocate :pearls/shelter :pearls/mouth)
+              (avoided/forget :blacklist)
               (assoc-in [:pearls/gain :at] now))
           (and (nil? r) g (>= (- now (:at g)) relocate-ms) (not (angry-within? world hold-radius)))
           (assoc world
@@ -3414,7 +3419,7 @@
                      (and (entity/creepy? e)
                           (not (fought-out? world eid))
                           (<= (physics/distance p (:entity/pos e)) strike-range)))
-                   (endermen (dissoc world :plan/blacklist) stare-range)))))
+                   (endermen (avoided/forget world :blacklist) stare-range)))))
 
 (def answers-to-hand #{:fight :back-off :eat :dig}) ; intents a running hunt keeps with an angry enderman at hand: the answers to it, a meal, a fire put out
 
@@ -3686,7 +3691,7 @@
         ;; to it is no craft, and the hunt in a rock pocket stood still (pearl-fight-i job 1, 28
         ;; digs left, six stems, sticks and cobblestone held, a table remembered ten blocks over it)
         i (if (and (= :walk (:intent/kind first-i)) (not (intent/routable? world first-i)))
-            (decide (update world :plan/blacklist (fnil conj #{}) (:intent/target first-i)))
+            (decide (avoided/note world :blacklist (:intent/target first-i)))
             first-i)]
     (when (and (:intent/kind i)
                (not (and (log-counted? world) (= :log (:intent/for i))))

@@ -5,6 +5,7 @@
    new namespace. Every deadline is an absolute ms value compared against :time/now; the only
    randomness comes in on the tick event."
   (:require [clojure.math :as math]
+            [clojurecraft.avoided :as avoided]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.dig :as dig]
             [clojurecraft.entity :as entity]
@@ -354,7 +355,7 @@
             mouth (last (:path/waypoints r))]
         (when (and (= :found (:path/status r))
                    (seq (:path/waypoints r))
-                   (not (contains? (:plan/blacklist world #{}) mouth)))
+                   (not (contains? (avoided/all-of world :blacklist) mouth)))
           {:intent/kind :walk :intent/target mouth :intent/for :opening})))))
 
 (defn route!

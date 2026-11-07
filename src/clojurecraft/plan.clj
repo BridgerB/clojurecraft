@@ -299,9 +299,9 @@
       (cond-> (:plan/intent world) (memory/remember-intention (:plan/intent world) :abandoned))
       (assoc :plan/status (if at :landing :active)
              :plan/since (:time/now world)
-             :plan/blacklist #{}
              :plan/attempts 0
              :plan/unwalkable 0)
+      (avoided/forget :blacklist)
       (avoided/forget :trunk-failures)
       (cond-> goals (assoc :plan/goals (set (map #(current-id table %) goals))))
       (cond-> at (assoc :plan/go-at at))
@@ -451,8 +451,8 @@
         ok? (fn [c]
               (and feet
                    (>= (physics/horizontal-distance c feet) regroup-distance)
-                   (not (contains? (:plan/blacklist world #{}) c))
-                   (not (contains? (:plan/boxed-at world #{}) c))))]
+                   (not (contains? (avoided/all-of world :blacklist) c))
+                   (not (contains? (avoided/all-of world :boxed-at) c))))]
     (->> (rseq (:plan/trail world []))
          (filter ok?)
          (take explore-tries)
@@ -584,9 +584,9 @@
         (cond-> (and (:intent/target i)
                      (not (contains? placing-kinds (:intent/kind i)))
                      (not (contains? crossing-kinds (:intent/kind i))))
-                (update :plan/blacklist (fnil conj #{}) (:intent/target i)))
+                (avoided/note :blacklist (:intent/target i)))
         (cond-> (and (contains? boxing-kinds (:intent/kind i)) (= :boxed (:intent/reason i)))
-                (-> (cond-> feet (update :plan/boxed-at (fnil conj #{}) feet))
+                (-> (cond-> feet (avoided/note :boxed-at feet))
                     (avoided/note-all :boxed-route (:intent/visited i))))
         (cond-> (and unwalkable? (= :log (:intent/for i)))
                 (avoided/note :unreached (:intent/target i)))
@@ -594,7 +594,7 @@
                     (when (contains? crossing-kinds (:intent/kind i)) (:intent/target i)))
                 (avoided/bump :trunk-failures
                               (let [[x _ z] (or (:intent/trunk i) (:intent/target i))] [x z])))
-        (cond-> (and feet (>= attempts max-attempts)) (update :plan/boxed-at (fnil conj #{}) feet))
+        (cond-> (and feet (>= attempts max-attempts)) (avoided/note :boxed-at feet))
         (assoc :plan/attempts attempts :plan/unwalkable unwalkable)
         (dissoc :plan/intent :plan/last)
         (game/say (str "intent "
@@ -680,8 +680,8 @@
   "The cell a stuck bot walks to to plan from afresh: of the cells of the trail it came by at least regroup-distance away (not blacklisted nor boxed-at), the farthest that has a route (routable?), trying explore-tries of them farthest first and then as many nearest first, so the walk lands where the bot has stood. With none routable, the cell explore-distance from the feet toward the farthest trail cell, else in the direction r (0 to 1 of a turn)."
   [world r]
   (let [[fx fy fz :as feet] (intent/feet world)
-        bl (:plan/blacklist world #{})
-        boxed (:plan/boxed-at world #{})
+        bl (avoided/all-of world :blacklist)
+        boxed (avoided/all-of world :boxed-at)
         cands (->> (:plan/trail world [])
                    (filter #(and (>= (physics/horizontal-distance % feet) regroup-distance)
                                  (not (contains? bl %))
@@ -788,7 +788,7 @@
               (assoc :plan/trail (vec (take-last 128 (conj trail feet)))))
       (memory/remember-intention i :started)
       (note-churn i)
-      (cond-> (:intent/dead-end i) (update :plan/boxed-at (fnil conj #{}) (:intent/dead-end i)))
+      (cond-> (:intent/dead-end i) (avoided/note :boxed-at (:intent/dead-end i)))
       (dissoc :plan/waiting :plan/waiting-since :plan/waiting-ticks :plan/failed)
       (game/say (str "intent " (:intent/kind i) " " (or (:intent/target i) (:intent/recipe i)))))))
 
@@ -891,7 +891,7 @@
         covering (when (and retrying? goal) (fire-cover world goal))
         retreat-cell (when retrying?
                        (some #(when-not (or (= % feet)
-                                            (contains? (:plan/blacklist world #{}) %)
+                                            (contains? (avoided/all-of world :blacklist) %)
                                             (> (physics/distance % feet) retreat-reach))
                                 %)
                              (rseq (:plan/trail world []))))]
@@ -931,7 +931,7 @@
           (and retrying? covering)
           (start-intent world (assoc covering :intent/goal (:goal/id goal)))
           (and retrying? retreat-cell)
-          (start-intent (update world :plan/boxed-at (fnil conj #{}) feet)
+          (start-intent (avoided/note world :boxed-at feet)
                         {:intent/kind :walk
                          :intent/target retreat-cell
                          :intent/for :retreat

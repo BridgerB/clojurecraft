@@ -779,7 +779,7 @@
    dragon's breath (breathed-on?)."
   [world]
   (let [pos (:player/pos world)
-        bl (:plan/blacklist world #{})
+        bl (avoided/all-of world :blacklist)
         left (answered-kinds world)
         [aid ae] (striker world)
         pool (cond-> (entity/hostiles world) ae (assoc aid ae))
@@ -994,7 +994,7 @@
    blacklisted, none given up as unreachable a while ago (given-up?)."
   [world]
   (let [pos (:player/pos world)
-        bl (:plan/blacklist world #{})]
+        bl (avoided/all-of world :blacklist)]
     (into {}
           (filter (fn [[eid e]]
                     (and (not (contains? bl eid))

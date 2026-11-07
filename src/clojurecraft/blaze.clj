@@ -30,6 +30,7 @@
    damage-event log is where to look if they kill. The bot does not put itself out: no water
    works in the Nether, and the gym rows give Fire Resistance until potions exist."
   (:require [clojure.math :as math]
+            [clojurecraft.avoided :as avoided]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.build :as build]
             [clojurecraft.combat :as combat]
@@ -90,7 +91,7 @@
   "{eid entity} of the blazes alive within fight-radius of the feet, none blacklisted (a ghost)."
   [world]
   (let [pos (:player/pos world)
-        bl (:plan/blacklist world #{})]
+        bl (avoided/all-of world :blacklist)]
     (into {}
           (filter (fn [[eid e]]
                     (and (= :blaze (entity/kind e))
@@ -163,7 +164,7 @@
    tunnel's own digs, lying in pits the bot's floor was over, were gone to and stood over until
    the collect failed :not-picked-up, three times, and the plan with it."
   [world]
-  (let [bl (:plan/blacklist world #{})
+  (let [bl (avoided/all-of world :blacklist)
         pos (:player/pos world)]
     (->> (drops/lying world rod pos drops/drop-radius)
          (remove (fn [[_ e]] (contains? bl (hunt/cell (:entity/pos e)))))
@@ -197,7 +198,8 @@
    beside a spawner 50 blocks off and 14 up, each one :blocked: nothing blacklisted the spawner,
    and the stand it chose did not depend on the blacklist."
   [world sp]
-  (let [bl (:plan/blacklist world #{})] (>= (count (filter bl (cells-beside sp))) stands-tried)))
+  (let [bl (avoided/all-of world :blacklist)]
+    (>= (count (filter bl (cells-beside sp))) stands-tried)))
 
 (declare stand)
 
@@ -220,7 +222,7 @@
    blacklist and searched far spirals for 4 hours ([-330 88 483] ...); s1 r16 `:walk failed :stuck`
    there; s2 r08 and r09 never arrived."
   [world]
-  (let [bl (:plan/blacklist world #{})
+  (let [bl (avoided/all-of world :blacklist)
         eye (game/eye world)
         candidates (remove #(or (and (bl %) (nil? (stand world %))) (given-up? world %))
                            (memory/positions-now world [spawner]))
@@ -248,7 +250,7 @@
    intent/routable?), a route to it, and no walk to it failed (blacklisted)."
   [world sp]
   (and (level-with? world sp)
-       (not (contains? (:plan/blacklist world #{}) sp))
+       (not (contains? (avoided/all-of world :blacklist) sp))
        (intent/routable? world {:intent/kind :walk :intent/target sp})))
 
 (defn top-in-sight?
@@ -300,7 +302,7 @@
    (run 40980342194) s2 r08 and r09 sent [543 57 203] and [544 57 203] by turns every 12 s, 539
    and 681 intents, none ever done, each abandoned for the other."
   [world sp]
-  (let [bl (:plan/blacklist world #{})
+  (let [bl (avoided/all-of world :blacklist)
         open (remove bl (filter #(open? world %) (cells-beside sp)))
         running (let [i (:plan/intent world)]
                   (when (= :tunnel-to (:intent/kind i)) (:intent/target i)))
@@ -378,7 +380,7 @@
   [world]
   (let [pos (:player/pos world)
         eye (game/eye world)
-        bl (:plan/blacklist world #{})]
+        bl (avoided/all-of world :blacklist)]
     (->> (:world/entities world)
          (filter (fn [[eid e]]
                    (and (entity/item? e)
@@ -738,7 +740,7 @@
   "{eid entity} of the blazes alive within cover-range of the feet, in sight or not."
   [world]
   (let [pos (:player/pos world)
-        bl (:plan/blacklist world #{})]
+        bl (avoided/all-of world :blacklist)]
     (into {}
           (filter (fn [[eid e]]
                     (and (= :blaze (entity/kind e))
@@ -968,7 +970,7 @@
    its cells past 11, and a spawner's blaze spawns only at 11 or less (gym blaze-7a run 3, run
    38891910129, made none for three minutes once the floor by it burned)."
   [world [sx sy sz]]
-  (let [bl (:plan/blacklist world #{})]
+  (let [bl (avoided/all-of world :blacklist)]
     (for [x (range (- sx fire-radius) (+ sx fire-radius 1))
           y (range (dec sy) (+ sy 3))
           z (range (- sz fire-radius) (+ sz fire-radius 1))
@@ -1040,7 +1042,7 @@
   [world sp]
   (let [dead (site-stalled world sp)
         walk {:intent/kind :walk :intent/target sp}
-        at (stand (update world :plan/blacklist (fnil into #{}) dead) sp)]
+        at (stand (avoided/note-all world :blacklist dead) sp)]
     (cond (walkable? world sp) walk
           at
           {:intent/kind :tunnel-to
@@ -1077,7 +1079,7 @@
   "The fortress bricks on record that have not been visited, not blacklisted, and not the target
    of a tunnel that ended on this cell (stalled)."
   [world]
-  (let [bl (into (:plan/blacklist world #{}) (stalled world))
+  (let [bl (into (avoided/all-of world :blacklist) (stalled world))
         visited (visited-locations world)]
     (->> (fortress/bricks world)
          (remove bl)
@@ -1105,7 +1107,7 @@
   [world]
   (let [feet (intent/feet world)
         at (path/cells world)
-        bl (:plan/blacklist world #{})
+        bl (avoided/all-of world :blacklist)
         near (->> (unvisited-fortress-bricks world)
                   (remove #(contains? bl (update % 1 inc)))
                   (filter #(<= (physics/distance (physics/centre feet) (physics/centre %))
@@ -2073,8 +2075,7 @@
     (cond (or (seq (remove seen here)) (rod-lying world) (< (:player/health world 20.0) health))
           (intent/done world)
           (> (- now since) camp-ms)
-          (intent/fail (cond-> world spawner (update :plan/blacklist (fnil conj #{}) spawner))
-                       :no-blaze)
+          (intent/fail (cond-> world spawner (avoided/note :blacklist spawner)) :no-blaze)
           :else world)))
 
 ;; ---------------------------------------------------------------- the :rest intent

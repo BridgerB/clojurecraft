@@ -1771,7 +1771,7 @@
     ;; (to-height takes the way out instead), as plan/fail-intent remembers an intent's
     (-> world
         (assoc :player/controls {})
-        (update :plan/boxed-at (fnil conj #{}) (intent/feet world))
+        (avoided/note :boxed-at (intent/feet world))
         (intent/dissoc-intent :intent/child)
         (game/say (str "build: " (:intent/kind child) " boxed in, the way out")))
     (and child (intent/failed? child) (dig-rejected? child))
@@ -2069,7 +2069,8 @@
         to (if src (inc sy) lava-depth)]
     (cond (> (physics/y-of feet) to)
           (or (stone/stairs world {:goal/depth to}) (stone/retreat world) (stone/climb world))
-          (contains? (:plan/boxed-at world #{}) feet) (or (stone/retreat world) (stone/climb world))
+          (contains? (avoided/all-of world :boxed-at) feet)
+          (or (stone/retreat world) (stone/climb world))
           (nil? src) (explore-lava world feet)
           (< (physics/y-of feet) to) (to-height world to)
           :else

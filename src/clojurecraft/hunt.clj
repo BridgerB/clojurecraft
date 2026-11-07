@@ -11,6 +11,7 @@
    provisioning on the surface, a :forage: a bounded search (forage-ms) of walked legs, a quarter
    turn right each, for animals past the 48 blocks the server shows (issue #501)."
   (:require [clojure.math :as math]
+            [clojurecraft.avoided :as avoided]
             [clojurecraft.combat :as combat]
             [clojurecraft.dimension :as dimension]
             [clojurecraft.eat :as eat]
@@ -166,7 +167,7 @@
    plan."
   [world]
   (let [pos (:player/pos world)
-        bl (:plan/blacklist world #{})
+        bl (avoided/all-of world :blacklist)
         radius (reach world)]
     (->> (:world/entities world)
          (filter (fn [[eid e]]

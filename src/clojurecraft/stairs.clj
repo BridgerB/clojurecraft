@@ -38,6 +38,7 @@
    sent, since a dig the server refused leaves the bot where it stood."
   (:require [clojure.math :as math]
             [clojure.string :as str]
+            [clojurecraft.avoided :as avoided]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.chunk :as chunk]
             [clojurecraft.dig :as dig]
@@ -122,7 +123,7 @@
    digs the same pocket again."
   [world cells]
   (let [kind #(path/classify world %)]
-    (and (not (contains? (:plan/boxed-at world #{}) (last cells)))
+    (and (not (contains? (avoided/all-of world :boxed-at) (last cells)))
          (every? #(not (#{:water :lava :unknown} (kind %))) cells)
          (every? #(not= :lava (kind %)) (exposed cells)))))
 
@@ -779,13 +780,13 @@
           (and (= :stairs-up kind) (= :surface for))
           (-> world
               (assoc :player/controls {})
-              (update :plan/boxed-at (fnil conj #{}) (intent/feet world))
+              (avoided/note :boxed-at (intent/feet world))
               intent/done
               (game/say "stairs: boxed in, no way out from here"))
           (and (= :lava for) target)
           (-> world
               (assoc :player/controls {})
-              (update :plan/boxed-at (fnil conj #{}) (intent/feet world))
+              (avoided/note :boxed-at (intent/feet world))
               (memory/give-up-site target)
               intent/done
               (game/say
@@ -793,7 +794,7 @@
           (and (= :bank for) target)
           (-> world
               (assoc :player/controls {})
-              (update :plan/blacklist (fnil conj #{}) target)
+              (avoided/note :blacklist target)
               intent/done
               (game/say
                (str "stairs: boxed in on the way to the bank of " target ", other water next")))
@@ -900,7 +901,7 @@
         ways (sort-by #(or (dry-head-distance world feet %) Long/MAX_VALUE) directions)]
     (when-let [d (first (filter #(level-safe? world (stair-cells feet %)) ways))]
       (-> world
-          (update :plan/boxed-at (fnil conj #{}) feet)
+          (avoided/note :boxed-at feet)
           (intent/assoc-intent :intent/dir d
                                :intent/level-dir d
                                :intent/turns 0
@@ -1571,7 +1572,7 @@
                     (assoc :player/controls {})
                     intent/done)
           (no-nearer? world i)
-          (-> (update :plan/blacklist (fnil into #{}) (cons target (pond-sources world target)))
+          (-> (avoided/note-all :blacklist (cons target (pond-sources world target)))
               (game/say (str "tunnel: no nearer the bank of " target ", other water next"))))
         (contains? #{:level :lay} stage) (stairs-stage world i event)
         :else (tunnel-plan world i)))

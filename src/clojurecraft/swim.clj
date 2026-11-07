@@ -22,6 +22,7 @@
    :flee is the lava half: the nearest standable cell with no lava beside or under it, walked to
    with forward and jump; the planner ends it the moment the trap clears."
   (:require [clojure.math :as math]
+            [clojurecraft.avoided :as avoided]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.chunk :as chunk]
             [clojurecraft.game :as game]
@@ -555,10 +556,11 @@
             deep? (and rise?
                        (< (second feet)
                           (- (or to-y (inc (float-top world feet surface))) rise-clear)))
-            b (cond deep? nil
-                    rise?
-                    (banks world feet surface (:plan/blacklist world #{}) #(in-the-open? world %))
-                    :else (banks world feet surface (:plan/blacklist world #{})))
+            b (cond
+                deep? nil
+                rise?
+                (banks world feet surface (avoided/all-of world :blacklist) #(in-the-open? world %))
+                :else (banks world feet surface (avoided/all-of world :blacklist)))
             cap (when-not b
                   (let [c (obstacle world feet nil)] (when (or (not rise?) (iced? world c)) c)))
             laid (when-not (or b cap rise?) (lift-bank world feet surface no-lay))
@@ -847,7 +849,7 @@
          (filter (fn [[_ [_ y _]]] (>= y (- ey wade-below))))
          (filter (fn [[_ pos]] (<= (physics/distance eye (physics/centre pos)) wade-radius)))
          (sort-by (fn [[_ pos]] (physics/distance eye (physics/centre pos))))
-         (some (fn [[key _]] (first (entries world key feet (:plan/blacklist world #{}))))))))
+         (some (fn [[key _]] (first (entries world key feet (avoided/all-of world :blacklist))))))))
 
 (defn beyond
   "Where the wade heads: the water cell's centre until the body has been in water, then a

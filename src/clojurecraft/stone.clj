@@ -139,7 +139,7 @@
                         (:world/blocks world)
                         (feet-chunk world)
                         states
-                        (:plan/blacklist world #{})
+                        (avoided/all-of world :blacklist)
                         (long (math/ceil (- ey search-height)))
                         (long (math/floor (+ ey search-height))))
          (remove #(path/near-lava-trap? world %))
@@ -184,7 +184,7 @@
    39186569902 (issue #456, R1/24 seed 2) laid the seal into one three times, :rejected."
   [world row]
   (let [eye (game/eye world)
-        blacklist (:plan/blacklist world #{})
+        blacklist (avoided/all-of world :blacklist)
         reachable? (fn [w] (<= (physics/distance eye (physics/centre w)) place/place-reach))]
     (some
      (fn [c]
@@ -257,7 +257,7 @@
    bots Clj_r15 (R1) and Clj_r16 (R3, issue #37) dug the dirt they could reach, climbed it away,
    and failed :boxed with stone and granite round them."
   [world]
-  (when (and (seq (:plan/boxed-at world)) (< (stairs/carried-filler world) filler-want))
+  (when (and (seq (avoided/all-of world :boxed-at)) (< (stairs/carried-filler world) filler-want))
     (->> (exposed-of-states world (filler-states-for world))
          (take max-candidates)
          (map #(walk-to world % :filler))
@@ -279,7 +279,7 @@
                               (keyword (str (subs n 0 (- (count n) 4)) "_planks")))))
                         held)]
     (when (and recipe-id
-               (seq (:plan/boxed-at world))
+               (seq (avoided/all-of world :boxed-at))
                (< (stairs/carried-filler world) filler-want)
                (nil? (stairs/planks-of held 1))
                (recipe/by-id recipe-id))
@@ -295,7 +295,7 @@
    stairs-up ends :boxed away from the cell that died, and the next stairs-down began from there
    (issue #37, one-wide strips of floor over open air)."
   [world [x y z :as feet]]
-  (let [boxed (into (:plan/boxed-at world #{}) (avoided/all-of world :boxed-route))]
+  (let [boxed (into (avoided/all-of world :boxed-at) (avoided/all-of world :boxed-route))]
     (boolean (or (contains? boxed feet)
                  (some (fn [[dx dz]] (contains? boxed [(+ x dx) y (+ z dz)])) stairs/directions)))))
 
@@ -366,7 +366,7 @@
                       distinct)]
     (when-not (some #(under-surface? feet %) surfaces)
       (->> surfaces
-           (remove (fn [c] (some #(near? c %) (:plan/boxed-at world #{}))))
+           (remove (fn [c] (some #(near? c %) (avoided/all-of world :boxed-at))))
            (map (fn [c] {:intent/kind :walk :intent/target c :intent/for :over-stone}))
            (filter #(intent/routable? world %))
            first))))
@@ -474,7 +474,7 @@
   (if (:player/in-water? world)
     {:intent/kind :swim-out :intent/for :retreat}
     (let [feet (intent/feet world)
-          boxed (into (:plan/boxed-at world #{})
+          boxed (into (avoided/all-of world :boxed-at)
                       (concat (avoided/all-of world :boxed-route)
                               (avoided/all-of world :retreat-unreachable)))
           r
@@ -522,7 +522,7 @@
   [world]
   (let [feet (intent/feet world)]
     (when-let [[hx hy hz] (:plan/go-at world)]
-      (when (and (contains? (:plan/boxed-at world #{}) feet)
+      (when (and (contains? (avoided/all-of world :boxed-at) feet)
                  (islet? world)
                  (terrain/under-sky? world feet))
         {:intent/kind :cross
@@ -581,7 +581,8 @@
   (when-let [[hx hy hz] (and (path/on-ice? world) (:plan/go-at world))]
     (let [target [(long (math/floor hx)) (long (math/floor hy)) (long (math/floor hz))]
           walk {:intent/kind :walk :intent/target target :intent/for :off-ice}]
-      (when (and (not (contains? (:plan/blacklist world #{}) target)) (intent/routable? world walk))
+      (when (and (not (contains? (avoided/all-of world :blacklist) target))
+                 (intent/routable? world walk))
         walk))))
 
 (def fall-wait-ticks 20)              ; planner ticks the mine waits for feet over a gap to fall before it plans anyway
