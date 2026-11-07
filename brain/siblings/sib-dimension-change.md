@@ -41,7 +41,7 @@ Both siblings reached the Nether naturally only recently, and both found their w
 `chunk/section-count` and `chunk/min-y` are constants today ([[chunk-sections]]); they become per-dimension values read from the dimension at decode time, `:world/chunks` is keyed by dimension (or cleared on change), and sightings carry the dimension. The heights are in [[mc-dimensions]].
 
 ## Limits
-typecraft's `respawn` field order and steve's own Nether tasks (`tasks/nether/main.ts`) were not read; the fortress approach (tunnels, lava falls) is only in ruststeve's design notes, summarised in docs/issues/09.
+typecraft's `respawn` field order and steve's own Nether tasks (`tasks/nether/main.ts`) were not read; the fortress approach (tunnels, lava falls) is only in ruststeve's design notes, summarised in issue #11.
 
 ## See also
 - [[mc-dimensions]] - the heights from the jar.

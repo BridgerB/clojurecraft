@@ -27,13 +27,12 @@ related:
   - "[[bot/tooling/_moc|Tooling]]"
   - "[[server-model]]"
   - "[[death-and-respawn]]"
-  - "[[survival]]"
   - "[[sim-race]]"
 ---
 
 # Hunger in the server model
 
-Every real server runs at Normal since #257, so a real bot gets hungry. #259 gave the model a bar (`:food`, `:sim/food`) that only eating moves, for the bot's `:eat` row ([[survival]]); #260 drains it as the server does. `hunger.clj` is vanilla's `FoodData` and `FoodConstants` (26.1.2) as values and pure functions; what each food restores is `food.clj`'s (nutrition, and now saturation); `sim.clj` applies them.
+Every real server runs at Normal since #257, so a real bot gets hungry. #259 gave the model a bar (`:food`, `:sim/food`) that only eating moves, for the bot's `:eat` row (`survival`); #260 drains it as the server does. `hunger.clj` is vanilla's `FoodData` and `FoodConstants` (26.1.2) as values and pure functions; what each food restores is `food.clj`'s (nutrition, and now saturation); `sim.clj` applies them.
 
 ## The rules (`hunger.clj`)
 - A player's food is a value `{:food/level 0-20 :food/saturation :food/exhaustion :food/timer}`; a new life is `fresh` (20, saturation 5).
@@ -55,5 +54,5 @@ Not modelled: sprinting (the bot never sprints), the hunger effect of raw chicke
 
 ## See also
 - [[server-model]] - the model this extends.
-- [[survival]] - the bot's `:eat` row that reads the bar.
+- `survival` - the bot's `:eat` row that reads the bar.
 - [[death-and-respawn]] - set-health, death and the respawn.

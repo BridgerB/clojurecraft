@@ -25,7 +25,7 @@ related:
 
 # Water traps both bots hit
 
-One list of every water failure the siblings paid for, so the roadmap's water issue (docs/issues/06) starts from the scars. The escape design itself is [[sib-water-escape]]; finding scoopable water is [[sib-bucket-water-find]].
+One list of every water failure the siblings paid for, so the roadmap's water issue (issue #5) starts from the scars. The escape design itself is [[sib-water-escape]]; finding scoopable water is [[sib-bucket-water-find]].
 
 ## Key files
 - steve `src/lib/typecraft/physics/physics.ts` - typecraft's port of prismarine-physics: constants (`const gravity = 0.08;`), the liquid branch, `applyPlayerState`.
@@ -46,7 +46,7 @@ One list of every water failure the siblings paid for, so the roadmap's water is
 9. **Dry biomes.** The two deepest steve runs hung at Fill Water Buckets with a full iron kit in inland jungle and savanna.
 
 ## What it means here
-Liquids are passable in our physics today ([[land-physics]]). The water issue (docs/issues/06) adds in-water movement with the 0.04 swim-up and the 0.3 wall impulse tested at the real position, eye-height submersion, a priority-zero escape goal re-derived every tick, and liquid sightings.
+Liquids are passable in our physics today ([[land-physics]]). The water issue (issue #5) adds in-water movement with the 0.04 swim-up and the 0.3 wall impulse tested at the real position, eye-height submersion, a priority-zero escape goal re-derived every tick, and liquid sightings.
 
 ## Limits
 Items 5, 8 and 9 rest on the comments and CHANGES entries quoted in the linked notes, not on a reproduced run. Item 9 is from steve's operator notes (not code) and is cited through [[sib-bucket-water-find]].

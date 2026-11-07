@@ -6,7 +6,7 @@ clojurecraft: a from-scratch Minecraft Java Edition bot in Clojure whose purpose
 
 ## The brain
 
-`brain/` is the verified knowledge base (method: `/Users/bridger/Developer/BRAIN.md`). Read `brain/_index.md` first, then one MOC, then the few notes a question needs; never dump it. Every verified note cites `path#symbol` anchors at a pinned commit. When a change touches a subsystem, update its note in the same change and run `clojure -M:brain` (four invariants at zero: broken, ambiguous, orphans, unresolved sourceRefs). Sibling-research notes are `draft` until someone opens their anchors.
+`brain/` is the verified knowledge base (method: `/Users/bridger/Developer/BRAIN.md`). Read `brain/_index.md` first, then one MOC, then the few notes a question needs; never dump it. Every verified note cites `path#symbol` anchors at a pinned commit. A change edits the brain only when it makes a design decision or finds a gotcha (a note under `decisions/` or `gotchas/`) or a game fact; what a function does is its docstring, and what a stage found is its `problems.edn` row and issue. Run `clojure -M:brain` (four invariants at zero: broken, ambiguous, orphans, unresolved sourceRefs). Sibling-research notes are `draft` until someone opens their anchors.
 
 ## Style (the point of the project)
 

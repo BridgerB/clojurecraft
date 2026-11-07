@@ -34,6 +34,6 @@ Real questions, the traversal that answers each, and how many notes it took. Re-
 | What does each field of the RESULT line mean, and which `--until` values exist? | [[bot/runtime/_moc]] → [[result-line]] | 1 |
 | Where do recipes come from, and why are they not in `--reports`? | [[mc-recipes-in-jar]] → [[datagen]] | 2 |
 | What does the walk intent do when it is stuck, and where does the randomness come from? | [[bot/plan/_moc]] → [[walk-intent]] → [[randomness-on-the-tick]] | 2 |
-| Which GitHub issue is water survival, and which draft has its research? | [[roadmap-issues]] | 1 |
+| Which GitHub issue is water survival, and which draft has its research? | `roadmap-issues` | 1 |
 | What did steve do for each of its 31 steps, and what covers it here? | [[siblings/_moc]] → [[sib-steve-steps-to-goals]] | 1 |
 | How does the bot get a wooden pickaxe when it has no table? | [[bot/crafting/_moc]] → [[make-goals]] → [[place-intent]] → [[open-container-intent]] | 3 |

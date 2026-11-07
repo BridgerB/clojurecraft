@@ -40,7 +40,7 @@ Combat was the step where ruststeve's bots swung forty times and nothing died. T
 Our loop has no tick-collapse bug (every deadline is `:time/now` from the tick event), so the 650 ms cadence is an absolute `:intent/next-swing` like the dig's swing schedule. The fight is an intent over `:world/entities`, which today keeps only item entities.
 
 ## Limits
-Rod pickup, spawner pathing and fortress approach are not covered (see the issue corpus, docs/issues/10). The goal-reached check was read in `app.rs`; how races record it was not.
+Rod pickup, spawner pathing and fortress approach are not covered (see issue #10). The goal-reached check was read in `app.rs`; how races record it was not.
 
 ## See also
 - [[sib-dimension-change]] - getting into the Nether first.

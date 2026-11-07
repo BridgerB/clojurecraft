@@ -12,7 +12,7 @@ Part of the bot-failure manual; [AGENTS.md](../../AGENTS.md) is its entry and in
 - A failed run's RESULT becomes a signature `[target reason]` (`failure/signature`), e.g. `[:ingots :boxed]`. One signature is one issue.
 - `sim.clj` is the server model: the packets a 26.1.2 server sends, over captured worlds. The sim race plays the real bot against it.
 - Every key in the world or an intent has a row in `model.clj` and a spec in `spec.clj`; the docs and spec tests fail otherwise.
-- `resources/clojurecraft/problems.edn` holds one row per stage: statement, needs, risks, done, and `:problem/last-failure`, a running record every fix appends to.
+- `resources/clojurecraft/problems.edn` holds one row per stage: statement, needs, risks, done, `:problem/last-failure` (one sentence) and `:problem/seen` (the runs that showed it, as data); the longer account of each failure is a comment on the stage's issue.
 
 ### 2.2 The rounds
 
