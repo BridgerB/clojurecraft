@@ -156,6 +156,32 @@
     (is (not (:run/cut? (race/marked (assoc r :reason :no-site)))) "a bot's own stop is a failure")
     (is (= {:ok true :reason :goal} (race/marked {:ok true :reason :goal})) "a pass is unchanged")))
 
+(deftest a-checkpoint-bot-has-a-cap-of-its-own
+  (is (= 3600000 (race/bot-cap-ms {:race/bot-minutes 60 :race/checkpoint {:from "rods"}} "rods")))
+  (is (nil? (race/bot-cap-ms {:race/bot-minutes 60 :race/checkpoint {:from "rods"}} "fortress"))
+      "only the checkpoint lanes cap")
+  (is (nil? (race/bot-cap-ms {:race/checkpoint {:from "rods"}} "rods")) "no key, no cap")
+  (is (= 3600000 (race/bot-timeout-ms 20000000 1000 3600000)) "the cap, when it comes first")
+  (is (= 5000 (race/bot-timeout-ms 10000 5000 3600000)) "the job's end, when it does")
+  (is (= 1000 (race/bot-timeout-ms 100 5000 nil)) "at least a second")
+  (is (= 19000 (race/bot-timeout-ms 20000 1000 nil)) "no cap: the job's end"))
+
+(deftest a-capped-bot-is-filed-and-the-jobs-end-is-cut
+  (let [r {:ok false
+           :until "pearls-12"
+           :reason :timeout
+           :plan {:plan/status :running :plan/reached #{:wood}}}
+        cap 3600000
+        own (race/marked (race/capped r 20000000 0 cap))
+        job (race/marked (race/capped r 3000000 0 cap))]
+    (is (= :bot-timeout (:reason own)))
+    (is (not (:run/cut? own)) "its own cap is a failure of the stage")
+    (is (not (:run/infra? own)) "bb failures files it")
+    (is (= :bot-timeout (second (:run/signature own))))
+    (is (:run/cut? job) "the job's end before the cap is still a cut")
+    (is (= :timeout (:reason job)))
+    (is (= :timeout (:reason (race/capped r 20000000 0 nil))) "no cap, no change")))
+
 (deftest a-slot-backs-off-while-its-bots-never-play
   (let [quick (dec race/quick-ms)]
     (is (= 1000 (race/backoff-ms 0 quick {:reason :crashed})) "the server refused: wait a second")

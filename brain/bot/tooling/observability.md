@@ -18,6 +18,11 @@ sourceRefs:
   - src/clojurecraft/game.clj#defn hit-of
   - src/clojurecraft/registry.clj#defn damage-type
   - src/clojurecraft/senses.clj#defn events
+  - src/clojurecraft/derived.clj#defn alight-cause
+  - src/clojurecraft/derived.clj#defn item-events
+  - src/clojurecraft/derived.clj#defn events
+  - src/clojurecraft/chunk.clj#defn biome-at
+  - bb/clojurecraft/botlogs.clj#defn cause-of-fire
   - src/clojurecraft/senses.clj#defn ledger!
   - src/clojurecraft/senses.clj#defn moment
   - src/clojurecraft/senses.clj#defn senses!
@@ -30,6 +35,10 @@ sourceRefs:
   - bb/clojurecraft/botlogs.clj#defn case-text
   - bb/clojurecraft/botlogs.clj#defn keep-recording?
   - bb/clojurecraft/botlogs.clj#defn upload!
+  - "bb/clojurecraft/botlogs.clj#A batch's observability row (the observability plan, part G) from facts"
+  - bb/clojurecraft/botlogs.clj#defn unheard
+  - bb/clojurecraft/botlogs.clj#def deliberate
+  - bb/clojurecraft/page.clj#defn observed-sum
   - bb/clojurecraft/probe_run.clj#defn why-command
   - dev/clojurecraft/why.clj#defn answers
 related:
@@ -61,6 +70,7 @@ The bot's whole mind is one world value, so everything a reader needs about a ru
 ## What is kept, per run
 
 - **The ledger:** `senses/events` names every change between two worlds; `senses/ledger!` keeps them all, unsampled, and counts any it drops. Written to `<name>.events.edn`.
+- **Derived senses** (`derived/events`, folded into the ledger): `:alight` with its cause (the newest non-burning hit within two seconds, `derived/alight-cause`, else lava or fire at the feet, else `:unknown`) and `:out` for `:player/on-fire?`; `:item` with the delta for the pearls, rods, eyes, pickaxes, food, buckets and cobblestone (per 64 crossed); `:knock` for the server setting the bot's own motion (`:player/knock`) and `:corrected` for a teleport after it was loaded (`:player/corrected`); `:biome` with the server's registry id under the feet (`chunk/biome-at`, no name table exists); `:air` at each three seconds of breath lost. Path search effort is not told: `path/plan` is called from many executors and its result never reaches the world.
 - **The senses:** one line a second (`senses/of`), and the ring: a moment a minute for the last five (`senses/senses!`).
 - **The moment:** the whole mind at the ending (`senses/moment`): facts, the blocks round the feet, the intent chain, the plan, the stages' keys, entities near, hits, effects, armour, and the newest 40 intentions.
 - **Why:** the stuck stage's planners label each intent with the branch that chose it (`intent/why`, on metadata, so equality is unchanged); intention facts keep `:intention/why`.
@@ -69,5 +79,6 @@ The bot's whole mind is one world value, so everything a reader needs about a ru
 
 ## How it is read
 
-- **Each batch** writes `<stem>.case.txt` and `.case.edn` for every ended run (`botlogs/case-of`, `case-text`): the ending, the killer, the last minute's first hit and what the bot did then and why, what it did at the end, hits by attacker, swings sent and landed, and the replay command. It also writes `cases.edn`, every case's signature `[ending killer doing why]`.
+- **Each batch** writes `<stem>.case.txt` and `.case.edn` for every ended run (`botlogs/case-of`, `case-text`): the ending, the killer, the last minute's first hit and what the bot did then and why, what lit the bot (`botlogs/cause-of-fire`) and the items it gained and lost, what it did at the end, hits by attacker, swings sent and landed, and the replay command. It also writes `cases.edn`, every case's signature `[ending killer doing why]`.
+- **The coverage row** (`botlogs/observed`, on each batch as `:observed`, added up per lane run by `page/observed-sum`, shown on the results page in each run's detail, with a red dot on the row when anything is short): runs with each file over the runs that should have one (senses, ledger, moment, ring, truth: a real run's server.txt, a sim run's truth.edn; the recording of a failed real run), intents with a why over intents, ledger events dropped, and the packets the bot threw away (`botlogs/unheard`: each RESULT's `:stats/unknown` named from packets.edn, less `botlogs/deliberate`, the packets skipped on purpose with their reasons). Every pair whole, 0 dropped and nothing unheard is full sight.
 - **The routine** (LOOP.md section 4): `T/cases.ts` first, three case texts of the top signature, and `bb probe why <tag> <asset> <stem> <ms>` only when a case cannot answer (`probe-run/why-command`, `dev/clojurecraft/why.clj`: the recording folded on a runner, the moment and the planner's answers printed).
