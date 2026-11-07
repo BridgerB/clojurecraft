@@ -2547,8 +2547,26 @@
          :intent/steps fortress/steps-per-tunnel
          :intent/for :pearls}))))
 
+(defn forest-way
+  "The way to target, a cell over a warped forest's nylium: a walk when a route reaches it
+   (intent/routable?), else, with a pickaxe held, a sealed tunnel toward it (a :tunnel-to, sealing
+   behind as the fortress exit bores; it climbs and descends to the target's height), else the walk
+   (a walk with no route fails :no-path, and the hunt chooses again). Real-18 Clj_r09 (4f317da lane
+   8, its case file): boxed in, it planned eleven walks to cells of one forest in four seconds, each
+   failed :no-path, and the run ended :no-path."
+  [world target]
+  (let [walk {:intent/kind :walk :intent/target target :intent/for :pearls}]
+    (cond (intent/routable? world (assoc walk :intent/max-nodes vantage-nodes)) walk ; a capped test: travel is asked several times a tick (#766)
+          (pickaxe? world)
+          {:intent/kind :tunnel-to
+           :intent/target target
+           :intent/reach 1.5
+           :intent/seal-behind? true
+           :intent/for :pearls}
+          :else walk)))
+
 (defn travel
-  "The walk to a warped forest, or nil: none in the Nether when the bot is in one (in-forest?);
+  "The way to a warped forest (forest-way: a walk, or a sealed tunnel when no walk reaches it), or nil: none in the Nether when the bot is in one (in-forest?);
    to the cell over the nylium nearest of the nearest known forest chunk (nearest-forest), else
    explore for one. Real race 40980342194, Clj_r13 (issue #263): two hours of lookouts and
    wandering round a fortress at x 4250-4440, no pearl, no code that went to a forest."
@@ -2557,16 +2575,14 @@
     (cond (and (fortress-escaping? world) (can-tunnel-out? world)) (fortress-tunnel-out world)
           (and (fortress-escaping? world) (not (can-tunnel-out? world)))
           (if-let [pos (nearest-forest world)]
-            {:intent/kind :walk
-             :intent/target (room-waypoint world (update pos 1 inc))
-             :intent/for :pearls}
+            (forest-way world (room-waypoint world (update pos 1 inc)))
             (explore world))
           :else
           (if-let [pos (nearest-forest world)]
-            {:intent/kind :walk
-             :intent/target
-             (if (near-fortress? world) (room-waypoint world (update pos 1 inc)) (update pos 1 inc))
-             :intent/for :pearls}
+            (forest-way world
+                        (if (near-fortress? world)
+                          (room-waypoint world (update pos 1 inc))
+                          (update pos 1 inc)))
             (explore world)))))
 
 (defn travel-caged?
