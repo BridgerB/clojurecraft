@@ -28,6 +28,7 @@ related:
 - [[test-fixtures]] - fold, ticks, packet, and the chunk-column builder.
 - [[harness-landing]] - the fixture process: RCON forest landing, then one :go on the bot's stdin.
 - [[rcon-client]] - the RCON wire format, auth, and the -M:rcon command.
+- [[observability]] - every ended run's case: what killed it, what it did and why, what the server knew; the ledger, the moment, the replay.
 
 ## See also
 - [[bot/_moc|Bot pillar]]
