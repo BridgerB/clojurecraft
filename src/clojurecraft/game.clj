@@ -148,10 +148,18 @@
       [yaw 90.0]
       look)))
 
+(def trail-breaking-teleport
+  "Blocks a later teleport moves the bot at or over which the plan trail (:plan/trail, the feet
+   of started intents) belongs to another place and is dropped: a checkpoint landing, a rescue."
+  32.0)
+
 (defn apply-teleport
   "The server moved the player: set pos and look (relative per flags; stare-safe-look), stop,
    accept the teleport and echo the position. The first teleport also sends player-loaded; any
-   later one is kept as :player/corrected, how far the server moved the bot and when."
+   later one is kept as :player/corrected, how far the server moved the bot and when, and one
+   of trail-breaking-teleport or more drops :plan/trail: its cells lie in another place, and a
+   retreat walk to one is a walk the bot cannot make (Clj_r03, 59e528b run 42364623752: 294
+   retreat walks to a cell 1,500 blocks off, under ghast fire, never moving)."
   [world {:keys [teleport-id x y z yaw pitch flags]}]
   (let [[ox oy oz] (or (:player/pos world) [0.0 0.0 0.0])
         [oyaw opitch] (:player/look world)
@@ -170,6 +178,8 @@
         (cond-> loaded?
                 (assoc :player/corrected
                        {:d (physics/distance [ox oy oz] moved) :at (:time/now world 0)}))
+        (cond-> (and loaded? (>= (physics/distance [ox oy oz] moved) trail-breaking-teleport))
+                (dissoc :plan/trail))
         (emit {:packet/name :accept-teleportation :teleport-id teleport-id})
         send-position
         (cond-> (not loaded?)
@@ -241,7 +251,9 @@
    before a login named one)."
   [w dim]
   (cond-> (assoc w :player/dimension dim)
-    (not= dim (dimension/of w)) (assoc :world/chunks {} :world/blocks {} :player/loaded? false)))
+    (not= dim (dimension/of w))
+    (-> (assoc :world/chunks {} :world/blocks {} :player/loaded? false)
+        (dissoc :plan/trail))))
 
 (defmethod on-packet [:play :respawn]
   [w p]
@@ -310,13 +322,13 @@
 (defmethod on-packet [:play :section-blocks-update] [w p] (terrain/section-update w p))
 (defn die
   "Health reached zero: the bot is dead until the server respawns it. Count the death, drop the
-   running intent and the last one and the held fortress exit (a new life plans afresh), stop moving, and ask to respawn."
+   running intent, the last one, the held fortress exit and the plan trail (a new life plans afresh), stop moving, and ask to respawn."
   [w]
   (-> w
       (assoc :player/dead? true :player/controls {})
       (memory/remember-answer {:answer/kind :death})
       (update :stats/deaths (fnil inc 0))
-      (dissoc :plan/intent :plan/last :pearls/exit-target)
+      (dissoc :plan/intent :plan/last :plan/trail :pearls/exit-target)
       (emit {:packet/name :client-command :action (p/value :client-command :perform-respawn)})))
 
 (defmethod on-packet [:play :set-health]
