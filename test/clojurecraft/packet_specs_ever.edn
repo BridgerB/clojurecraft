@@ -83,7 +83,7 @@
                         [:previous-game-type :i8] [:debug? :bool] [:flat? :bool]]
  [:play :s2c :damage-event] [[:entity-id :varint] [:source-type :varint] [:source-cause :varint]
                              [:source-direct :varint]]
- [:play :s2c :player-combat-kill] [[:player-id :varint]]
+ [:play :s2c :player-combat-kill] [[:player-id :varint] [:message :text]]
  [:play :s2c :game-event] [[:event :u8] [:param :f32]]
  [:play :s2c :boss-event] [[:uuid :uuid] [:action :varint] [:health [:if :action 2 :f32]]]
  [:play :c2s :client-command] [[:action :varint]]
@@ -113,4 +113,5 @@
   [:attributes
    [:vec
     [[:id :varint] [:base :f64]
-     [:modifiers [:vec [[:mod-id :string] [:amount :f64] [:operation :varint]]]]]]]]}
+     [:modifiers [:vec [[:mod-id :string] [:amount :f64] [:operation :varint]]]]]]]]
+ [:play :s2c :system-chat] [[:content :text] [:overlay :bool]]}
