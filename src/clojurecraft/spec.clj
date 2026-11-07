@@ -190,6 +190,7 @@
 (s/def :pearls/shelter ::block-pos)
 (s/def :pearls/shot-at-ms int?)
 (s/def :pearls/exit-logged boolean?)
+(s/def :pearls/exit-target (s/tuple int? int? int?))
 (s/def :angry/since int?)
 (s/def :angry/best number?)
 (s/def :angry/closed-at int?)

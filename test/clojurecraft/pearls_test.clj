@@ -4237,3 +4237,29 @@
       (is (= {:intent/kind :walk :intent/target [40 64 40] :intent/for :pearls}
              (pearls/forest-way w [40 64 40]))
           "a route: the walk"))))
+
+(deftest the-tunnel-out-target-is-held-while-the-feet-move-along-the-bore
+  ;; Logged state, sim d3ce99b R1-24-1 (issue #263): 620 :tunnel-to intents flipped between
+  ;; [-188 78 163] and [-188 78 160] for an hour, each target four blocks ahead of the feet and
+  ;; re-derived at every act, the pickaxe worn out. Two acts from cells along the bore must name
+  ;; the one target until it is reached, or a walk to it failed.
+  (let [netherrack (blocks/default-state :netherrack)
+        rock (into {} (for [x (range 0 16) y [75 76 77 78 79] z (range 0 16)] [[x y z] netherrack]))
+        w (-> (standing {} rock)
+              (assoc :player/dimension "minecraft:the_nether" :player/pos [10.5 77.0 8.5])
+              (assoc-in [:player/inventory 1] (item :iron_pickaxe 1))
+              (memory/observe [12 76 10] blaze/spawner)
+              (assoc :plan/trail [[2 77 10] [10 77 8]]))
+        first-target (pearls/fortress-tunnel-target w)
+        held (pearls/fortress-exit-hold w)
+        along (assoc held :player/pos [8.5 77.0 8.5])
+        fresh (assoc (dissoc held :pearls/exit-target) :player/pos [8.5 77.0 8.5])]
+    (is (= first-target (:pearls/exit-target held)) "the target is kept as a fact")
+    (is (not= first-target (pearls/fortress-tunnel-target fresh))
+        "re-derived from the next cell it would move four blocks on")
+    (is (= first-target (pearls/fortress-tunnel-target along)) "held two blocks along the bore")
+    (is (not= first-target (pearls/fortress-tunnel-target (assoc along :player/pos [6.5 77.0 8.5])))
+        "a new target once the held one is reached")
+    (is (not= first-target
+              (pearls/fortress-tunnel-target (assoc along :plan/blacklist #{first-target})))
+        "a failed target is passed over")))
