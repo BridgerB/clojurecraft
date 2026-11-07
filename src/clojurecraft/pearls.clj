@@ -1963,7 +1963,6 @@
                    :when (and to
                               (not= to feet)
                               (not (contains? spent to))
-                              (not (contains? (:plan/blacklist world #{}) to))
                               (not-any? #(< (path/octile to %) roam-reach) visited))]
                [(:path/status r) to (path/octile feet to)])
         far (filter #(>= (nth % 2) roam-reach) ends)]
