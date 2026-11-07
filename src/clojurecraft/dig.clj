@@ -44,10 +44,8 @@
 (defn ms
   "Milliseconds from START to the server breaking block id with held in hand, under the
    penalties {:eyes-in-water? bool :off-ground? bool}: nil for an unbreakable block (hardness
-   below zero) or an unknown one, 0 when it breaks at once: always for hardness 0 (an azalea, a
-   torch), which is never divided by. Sim race 38762695024 runner 8 (issue #152, every seed of
-   world R1/24): a tunnel for the water's bank at y 8 in a lush cave dug a block of hardness 0,
-   the boxed division threw ArithmeticException, and the run crashed."
+   below zero) or an unknown one, 0 when it breaks at once: always for hardness 0, which is never
+   divided by."
   [id held {:keys [eyes-in-water? off-ground?]}]
   (let [h (blocks/hardness id)]
     (cond (or (nil? h) (neg? h)) nil
