@@ -78,17 +78,16 @@
 
 (defn death-ended
   "RESULT r with :reason :death when the run was to end at its first death (end-on-death?: a race
-   that starts at the fortress, where a death is no step of the plan: race 41224855928, Clj_r23 took
-   its seven rods out of 23 deaths in 2.5 minutes, respawning at its pad each time) and world died
-   without reaching its goal; r as it is otherwise. A run that reached its goal before dying is
-   still a success, and one that died before it is a failure of the stage it was on."
+   that starts at the fortress, where a death is no step of the plan) and world died without
+   reaching its goal; r as it is otherwise. A run that reached its goal before dying is still a
+   success, and one that died before it is a failure of the stage it was on."
   [r world end-on-death?]
   (cond-> r
     (and end-on-death? (not (:ok r)) (pos? (:stats/deaths world 0))) (assoc :reason :death)))
 
 (defn ok?
   "Did a run that ended in world succeed, for --until until: its goal holds and the socket is
-   neither closed nor disconnected. The live run and its replay judge with this one rule."
+   neither closed nor disconnected."
   [world until]
   (boolean (and ((goal-fn until) world) (not (:bot/closed world)) (not (:bot/disconnected world)))))
 
@@ -104,14 +103,12 @@
        (catch Exception e [nil (str "unreadable: " (ex-message e))])))
 
 (defn result
-  "The RESULT map: :ok, :until, the reason, the game summary, held items, the nearest
-   remembered table, the health of the nearest living entity of each kind whose health is known
-   (:mobs, only when there is one, so older recordings' RESULTs are unchanged; the gym's entities
-   trial reads it), the eyes of ender thrown (:throws, only once one is kept: the gym's throw
-   trial reads the first), the nearest end portal frame remembered (:frame, only once one is: the
-   stronghold trials ask the server whether one stands there), the nearest end portal block
-   remembered (:portal, only once one is: the end-portal trial asks the server about it, issue
-   #266) and the plan summary (once a plan began)."
+  "The RESULT map: :ok, :until, the reason, the game summary, held items, the nearest remembered
+   table, the health of the nearest living entity of each kind whose health is known (:mobs, only
+   when there is one, so older recordings' RESULTs are unchanged), the eyes of ender thrown
+   (:throws, only once one is kept), the nearest end portal frame remembered (:frame, only once one
+   is: the stronghold trials ask the server whether one stands there), the nearest end portal block
+   remembered (:portal, only once one is) and the plan summary (once a plan began)."
   [world until ok]
   (merge {:ok ok
           :until until
@@ -132,7 +129,7 @@
          (when-let [h (and (:player/pos world)
                            (not-empty (entity/healths world (:player/pos world))))]
            {:mobs h})
-         (when (seq (:stronghold/throws world)) {:throws (:stronghold/throws world)}) ; the eyes' lines (issue #265: the gym's throw trial reads the first)
+         (when (seq (:stronghold/throws world)) {:throws (:stronghold/throws world)}) ; the eyes' lines
          (when-let [f (and (:player/pos world) (stronghold/nearest-frame world))] {:frame f}) ; the portal room's (the stronghold trials ask the server about it)
          (when-let [p (and (:player/pos world) (end-portal/nearest-portal world))] {:portal p}) ; the lit portal's (the end-portal trial asks the server about it)
          (when (seq (:world/traps world)) {:escaped true}) ; only once a trap was escaped, so older recordings' RESULTs are unchanged
@@ -306,11 +303,10 @@
       (dissoc :pos)))
 
 (defn replay-code
-  "Whose code a replay folds a recording with: :same when the recording names the commit that
-   is running, :other when it names another (the fold is then another run: newer code decides
-   otherwise and the bot ends up elsewhere, which reads as a truncated file; issue #111 was
-   that, on whole recordings), :unrecorded when the recording names none, :unknown when the
-   running commit cannot be told."
+  "Whose code a replay folds a recording with: :same when the recording names the commit that is
+   running, :other when it names another (the fold is then another run: newer code decides otherwise
+   and the bot ends up elsewhere, which reads as a truncated file), :unrecorded when the recording
+   names none, :unknown when the running commit cannot be told."
   [recorded running]
   (cond (nil? recorded) :unrecorded
         (nil? running) :unknown

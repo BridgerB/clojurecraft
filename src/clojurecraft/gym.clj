@@ -1373,6 +1373,15 @@
   (rcon/command! rc (str "spawnpoint " name " " x " " y " " z))
   landing)
 
+(defn search-points-from
+  "The Nether points [x z] a warped forest is located from, nearest first, for a bot at the
+   Nether's own [nx nz]: that point, then locate-offsets off it along each axis (warped-origins
+   for a landing in overworld coordinates; the race's forest start for a pad in the Nether)."
+  [nx nz]
+  (into
+   [[nx nz]]
+   (for [d locate-offsets [dx dz] [[1 0] [-1 0] [0 1] [0 -1]]] [(+ nx (* d dx)) (+ nz (* d dz))])))
+
 (defn warped-origins
   "The Nether points [x z] a warped forest is located from for a landing at overworld x z,
    nearest first: the landing's eighth (the Nether's scale, so each landing has a forest of its
@@ -1382,12 +1391,52 @@
    pearls-warped4-b, plan runs 39178856841, 39529384355 and 39596287510: a harness row each,
    the bot reset to the overworld spawn with no kit and the trial counted for nothing)."
   [x z]
-  (let [nx (quot x 8)
-        nz (quot z 8)]
-    (into [[nx nz]]
-          (for [d locate-offsets
-                [dx dz] [[1 0] [-1 0] [0 1] [0 -1]]]
-            [(+ nx (* d dx)) (+ nz (* d dz))]))))
+  (search-points-from (quot x 8) (quot z 8)))
+
+(defn locate-warped!
+  "[x y z] of the warped forest the server locates nearest the Nether point [ox oz]; throws when
+   it names none."
+  [rc [ox oz]]
+  (let [reply (rcon/command! rc
+                             (str "execute in "
+                                  dimension/nether
+                                  " positioned "
+                                  ox
+                                  " 64 "
+                                  oz
+                                  " run locate biome minecraft:warped_forest"))]
+    (or (located-pos reply) (throw (ex-info "no warped forest located" {:reply reply})))))
+
+(defn warped-floor!
+  "The cell [x y z] a floor in the warped forest round the located point [bx _ bz] stands on, or
+   nil: the bot named name spread onto one (spread) at each of warped-ranges, nearer first,
+   warped-tries times each, until the server says where it stands is warped forest (warped?) and
+   not the air of a carved cave (pocket?). The bot is left there."
+  [rc name [bx _ bz]]
+  (some (fn [r]
+          (let [spread-reply (str (rcon/command! rc (spread bx bz r name)))
+                p (when (str/starts-with? spread-reply "Spread") (fixture/position rc name))
+                c (when p (mapv #(long (math/floor %)) p))]
+            (cli/log "spread:" r spread-reply c)
+            (when (and c
+                       (fixture/passed? (rcon/command! rc (warped? c)))
+                       (not (fixture/passed? (rcon/command! rc (pocket? c)))))
+              c)))
+        (mapcat #(repeat warped-tries %) warped-ranges)))
+
+(defn warped-floor-from!
+  "{:floor [x y z] :tried #{located points}} for the bot named name: the forest located from each
+   of origins ([[x z] ...], nearest first; warped-origins, search-points-from) tried once each
+   (a forest already tried is skipped) until warped-floor! finds a floor in one; :floor is nil
+   when none gave one."
+  [rc name origins]
+  (reduce (fn [{:keys [tried] :as acc} origin]
+            (let [at (locate-warped! rc origin)
+                  f (when-not (contains? tried at) (warped-floor! rc name at))]
+              (cond f (reduced (assoc acc :floor f))
+                    :else (update acc :tried conj at))))
+          {:tried #{}}
+          origins))
 
 (defmethod land! :warped-forest
   ;; the warped forest nearest the landing's Nether coordinates (an eighth of the overworld's, so
@@ -1404,36 +1453,7 @@
   ;; round at every height)
   [rc row name [x z _]]
   (let [dim dimension/nether
-        locate (fn [[ox oz]]
-                 (let [reply (rcon/command! rc
-                                            (str "execute in "
-                                                 dim
-                                                 " positioned "
-                                                 ox
-                                                 " 64 "
-                                                 oz
-                                                 " run locate biome minecraft:warped_forest"))]
-                   (or (located-pos reply)
-                       (throw (ex-info "no warped forest located" {:reply reply})))))
-        floor-near (fn [[bx _ bz]]
-                     (some (fn [r]
-                             (let [spread-reply (str (rcon/command! rc (spread bx bz r name)))
-                                   p (when (str/starts-with? spread-reply "Spread")
-                                       (fixture/position rc name))
-                                   c (when p (mapv #(long (math/floor %)) p))]
-                               (cli/log "spread:" r spread-reply c)
-                               (when (and c
-                                          (fixture/passed? (rcon/command! rc (warped? c)))
-                                          (not (fixture/passed? (rcon/command! rc (pocket? c)))))
-                                 c)))
-                           (mapcat #(repeat warped-tries %) warped-ranges)))
-        {:keys [floor tried]} (reduce (fn [{:keys [tried] :as acc} origin]
-                                        (let [at (locate origin)
-                                              f (when-not (contains? tried at) (floor-near at))]
-                                          (cond f (reduced (assoc acc :floor f))
-                                                :else (update acc :tried conj at))))
-                                      {:tried #{}}
-                                      (warped-origins x z))
+        {:keys [floor tried]} (warped-floor-from! rc name (warped-origins x z))
         [fx fy fz] (or floor (throw (ex-info "no floor in the warped forest" {:at (vec tried)})))]
     (place! rc dim name [fx fz fy] 2 (vec (:gym/setup row)))))
 

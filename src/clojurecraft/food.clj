@@ -60,7 +60,7 @@
 
 (def saturation
   "Every food item by name, with the saturation it gives (FoodProperties' saturation: nutrition ×
-   the food's modifier × 2), which the server model's hunger spends before the bar (issue #260)."
+   the food's modifier × 2), which the server model's hunger spends before the bar."
   {:apple 2.4
    :baked_potato 6.0
    :beef 1.8
