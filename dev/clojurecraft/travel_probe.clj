@@ -36,7 +36,7 @@
   [file seed]
   (let [config (edn/read-string (slurp "ci/simrace.edn"))
         [max-ms _] (simrace/cap-max-ms config "rods" (* 60000 simrace/default-max-minutes))
-        r (simrace/run (world-of file) (parse-long seed) simrace/default-until max-ms)
+        r (simrace/run (world-of file) (parse-long seed) (:simrace/until config) max-ms)
         w (:run/end r)]
     (println "RESULT" (pr-str (select-keys r [:ok :reason :run/ms :run/signature])))
     (println "POS" (pr-str (:player/pos w)))
