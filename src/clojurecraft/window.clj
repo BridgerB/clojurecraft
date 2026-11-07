@@ -17,6 +17,7 @@
 
 (set! *warn-on-reflection* true)
 
+;; read by name (ns-resolve) in scratch_test and model_test, so the unused-var lint excludes it
 (def scratch
   "The intent attributes only this namespace's executor reads and writes: {attribute {:doc meaning
    :when lifetime}}. They are not world information, so they are not in clojurecraft.model;
