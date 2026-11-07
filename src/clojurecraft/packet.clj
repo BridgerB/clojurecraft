@@ -315,9 +315,11 @@
     :unit true))
 
 (defn read-slot
-  "{:item :count} (plus :components {type-name value} when the slot carries any) or nil for an empty
-   slot. The components patch is a count added, a count removed, each added type id with its value,
-   then each removed type id (the game's DataComponentPatch.STREAM_CODEC)."
+  "{:item :count} (plus :components {type-name value} when the slot carries any) or nil for an
+   empty slot. The components patch is a count added, a count removed, each added type id with
+   its value, then each removed type id (the game's DataComponentPatch.STREAM_CODEC). A component
+   whose codec is not in component-codecs cannot be stepped over: the slot is marked :components?
+   and ends what can be read of the frame."
   [buf]
   (let [n (b/read-varint buf)]
     (when (pos? n)
@@ -355,7 +357,12 @@
 (def metadata-readers
   "How the metadata values the bot steps over are written, by serializer id: the game's
    EntityDataSerializers in registration order, read in the 26.1.2 jar. A byte (0) is read unsigned,
-   since the one the bot reads is a bitfield (index 0, the shared flags: on fire, sneaking ...)."
+   since the one the bot reads is a bitfield (index 0, the shared flags: on fire, sneaking ...).
+   Direction (12) and pose (20) are varint enums. An item stack (7) is read as a slot (read-slot): a
+   dropped item's stack is its index 8, and a drop is known by what it holds. An optional block
+   state (15) is one varint, 0 for none: an enderman's carried block (index 16) comes just before
+   its creepy flag (17), which the pearl hunt reads. The rest (components, particles, block
+   positions, variants) are not here: a skim stops at the first of them."
   {0 b/read-u8      ; BYTE
    1 b/read-varint  ; INT
    2 b/read-varlong ; LONG
@@ -368,9 +375,13 @@
    20 b/read-varint}) ; POSE
 
 (defn read-metadata
-  "An entity's metadata as {index value}: entries of [index u8][serializer varint][value] up to the
-   index metadata-end. Only serializers in metadata-readers are read; at the first other one the
-   skim stops and keeps what it has, as a frame's unread tail is ignored."
+  "An entity's metadata as {index value}: entries of [index u8][serializer varint][value] up to
+   the index metadata-end. Only serializers in metadata-readers are read; at the first other one
+   the skim stops and keeps what it has, as a frame's unread tail is ignored. A living entity's
+   health (index 9) comes after its flags, air, pose and frozen ticks, all readable, so only a
+   custom name (index 2, a component) hides it. An item stack whose components could not be
+   stepped over (read-slot's :components?) is kept and ends the skim: where the next entry starts
+   is unknown."
   [buf]
   (loop [m {}]
     (let [i (b/read-u8 buf)

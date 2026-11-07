@@ -107,7 +107,8 @@
    (open-drop?): where a body that walks onto the cell to pick up what is dug there carries on. A
    cell beside a drop only at its sides is safe to pick up from along a floor that goes on: a
    one-block bridge over lava in a fortress's tunnel had a drop beside every cell of it, and with
-   drop-beside? alone a table, a furnace or a gravel found no spot on it."
+   drop-beside? alone a table, a furnace or a gravel found no spot on it. Pure; false for a cell
+   straight over or under the feet."
   [world [fx _ fz] [x y z]]
   (let [sx (Long/signum (long (- x fx)))
         sz (Long/signum (long (- z fz)))]
@@ -119,7 +120,12 @@
    server lets a block take the place of, blocks/replaceable?) and one the server has confirmed
    (terrain/confirmed?: not a cell the bot's own dig emptied before the server said so), no passage,
    support solid and not a block a click opens (a table, a furnace: right-clicked, it opens instead
-   of taking the block), not inside the player, within reach. A passage is allowed when passage-ok?"
+   of taking the block), not inside the player, within reach. A passage is allowed when passage-ok?
+   (a block placed only to be dug again at once, which leaves the way open). A cell in refused is
+   passed over: the server answered a placement there with the cell still empty, a body standing in
+   it (give-up), and a cell with a drop beside it (drop-beside?; with along? only one with a drop
+   past it on the line from the feet, drop-beyond?: the fallback when every cell has a drop beside
+   it). Pure; nil when there is none."
   ([world] (spot world false))
   ([world passage-ok?] (spot world passage-ok? #{}))
   ([world passage-ok? refused] (spot world passage-ok? refused false))
@@ -301,7 +307,8 @@
    again as soon as it is dug), no fluid beside it (the dig would refuse it), not a block the held
    tools cannot drop, neither a block that is never dug nor one the bot placed (a table in the last
    niche); nil when none. Where a staircase has no spot, the wall gives one: the side nearest the
-   landing (:plan/go-at), never the wall ahead, where the way goes on."
+   landing (:plan/go-at), never the wall ahead, where the way goes on. Powder snow may be the niche
+   itself or lie over it: no block can be placed into it, so it is dug out first like stone."
   [world]
   (let [[fx fy fz] (intent/feet world)
         home (:plan/go-at world)]

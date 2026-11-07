@@ -58,8 +58,9 @@
 
 (defn unworn
   "[player-slot name] of a piece of armour held in the hotbar or the main inventory whose armour
-   slot is empty, the lowest slot first; nil when there is none. A carved pumpkin is never one in
-   the overworld: it is the dragon row's to put on in the End, not dress for the whole run."
+   slot is empty, the lowest slot first; nil when there is none. A carved pumpkin is never
+   one in the overworld: it is the dragon row's to put on in the End, not dress for the whole run.
+   In the End, a held carved pumpkin is worn on the head first before an iron helmet."
   [world]
   (let [in-end? (= dimension/end (dimension/of world))
         pumpkin (when in-end?

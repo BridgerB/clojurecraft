@@ -58,7 +58,10 @@ back to (make/collect-batch) and not mined for again: the planner counts the inv
 (def burn-order
   "What the bot burns, in the order it burns it: coal and charcoal, then planks, each only where the
    game burns it (crimson planks do not). Never a log (it burns 300 ticks, the four planks it makes
-   1200), a stick, a tool, a table or anything else the fuel table lists."
+   1200), a stick, a tool, a table or anything else the fuel table lists. A stick is a pickaxe's
+   handle and burns 100 ticks, half one smelt: counted as fuel, the ingots' fuel took the two sticks
+   a new pickaxe needed deep in the mine, the planner sent the bot up for wood, and it dug coal with
+   its last pickaxe until it broke."
   (mapv (fn [s] (into (sorted-set) (filter burn-ticks) s))
         [(recipe/tags :coals) (recipe/tags :planks)]))
 
@@ -208,7 +211,9 @@ back to (make/collect-batch) and not mined for again: the planner counts the inv
 (defn cooking?
   "Is the open furnace cooking recipe r now: a fire going (lit) and r's input in its input slot. The
    batch's deadline (:intent/cook-by) is the bot's clock, the cook the server's ticks, and a loaded
-   server's ticks are longer."
+   server's ticks are longer. Past the deadline the cook waits while this holds: a furnace that
+   cooks gives an item within its cook total of the server's ticks, and one that stops (the input
+   gone, the fire out with no fuel) fails."
   [world {:view/keys [grid]} r]
   (and (pos? (lit world))
        (contains? (:smelt/input r)

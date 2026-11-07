@@ -178,10 +178,12 @@
          (cond-> (pos? left) (conj (inventory/left-click cs)))) (drop k cells)]))
 
 (defn clicks
-  "The clicks that lay one craft of r into the size×size grid of window 0, or nil when the inventory
-   cannot cover it. Each ingredient group comes from one stack when one covers it, else from the
-   lowest stacks in turn (sources): pick a stack up, right-click one item into each of its cells,
-   put the remainder back (lay-from)."
+  "The clicks that lay one craft of r into the size×size grid of window 0, or nil when the
+   inventory cannot cover it. Each ingredient group comes from one stack when one covers it,
+   else from the lowest stacks in turn (sources): pick a stack up, right-click one item into
+   each of its cells, put the remainder back (lay-from). Clicks are {:click/slot
+   :click/button :click/mode}. slot-of maps a player-inventory slot to a slot of the window
+   being clicked (window 0 by default)."
   ([inventory r size]
    (clicks inventory r size #(inventory/player->window-slot (inventory/layouts :inventory) %)))
   ([inventory r size slot-of]

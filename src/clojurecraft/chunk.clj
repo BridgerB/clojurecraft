@@ -113,7 +113,9 @@
 (defn section-find
   "[lx ly lz id] for every cell whose id satisfies pred, in index order (nil when none can). A
    section of one id asks pred once; a paletted one asks it once per palette entry and tests each
-   cell's index against those answers; the cells are walked over the packed longs unboxed."
+   cell's index against those answers; the cells are walked over the packed longs unboxed. Every
+   load scans a column's sections, and the lazy walk, pred asked of all 4096 cells, was a tenth of
+   a race's CPU."
   [section pred]
   (let [{:keys [single bits palette longs]} section]
     (cond (some? single) (when (pred single) (into [] (map #(cell-of-index % single)) (range 4096)))

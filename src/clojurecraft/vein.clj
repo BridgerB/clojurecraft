@@ -39,7 +39,10 @@
   "The raw iron still to be mined for the goals' chains (goals: the ids not yet reached, nil for
    every goal), from the held counts (armour/counts: worn and gridded items too): the ingots every
    piece of theirs not yet made costs (piece-cost, and the buckets short of what the goals carry),
-   less the ingots and raw iron already held. Never negative."
+   less the ingots and raw iron already held. Never negative. A pure function of what is held and
+   asked for: flag #1, 2026-10-31, the bot dug three ores of a vein, held four raw iron (the
+   :ingots row's four), and left the ore it could see for a staircase, with twenty-nine ingots
+   wanted by the whole chain."
   [counts goals]
   (let [wanted? (fn [ids] (or (nil? goals) (some goals ids)))
         made (reduce + (for [[k n] counts :when (#{:bucket :water_bucket :lava_bucket} k)] n))
@@ -65,11 +68,12 @@
           (plan/in-play world plan/goals))))
 
 (defn vein-next
-  "The next step of taking the whole vein, or nil: once iron has been mined (raw iron held) and the
-   chain still wants more (iron-want), the nearest iron ore exposed within vein-radius of the eye, a
-   chain in flight continued first. The needs planner nets the :ingots row's four against the four
-   raw iron held and goes on to the smelt, so without this the ore beside the bot is left; a player
-   mines the vein. Only what is in sight: no stairs, no tunnel (the row does those)."
+  "The next step of taking the whole vein, or nil: once iron has been mined (raw iron held) and
+   the chain still wants more (iron-want), the nearest iron ore exposed within vein-radius of the
+   eye, a chain in flight continued first. The needs planner nets the :ingots row's four against
+   the four raw iron held and goes on to the smelt, so without this the ore beside the bot is
+   left; a player mines the vein. Only what is in sight: no stairs, no tunnel (the row does
+   those)."
   [world]
   (let [row (first (filter #(= :mine-iron (:goal/id %)) plan/goals))
         c (armour/counts world)]

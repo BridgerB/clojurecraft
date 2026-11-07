@@ -92,7 +92,9 @@ water, it carves one: a notch two high in the nearest wall just over the float l
 (defn bank?
   "Could the feet rest in cell once out of the water: a cell they could stand in (path/standable?),
    or one over a lake's ice (stairs/lake-ice) with the body and the head clear. Neither body cell
-   may contain fluid: a passable water plant is not dry land."
+   may contain fluid: a passable water plant is not dry land. A route never stands on ice
+   (path/awkward-types: the physics does not slide), but the impulse lifts the body onto it as onto
+   any solid, and on it the bot is on dry land (trap/dry-land?)."
   [world [x y z :as cell]]
   (and (or (path/standable? world cell)
            (boolean (and (some-> (terrain/block-at world [x (dec y) z])
@@ -256,7 +258,8 @@ water, it carves one: a notch two high in the nearest wall just over the float l
    place reach of the eye, with a solid neighbour to place against (place/support: the wall the
    water meets), and over it two cells of open air with nothing wet or roofed over them
    (in-the-open?), so the block is a bank the lift reaches (bank-rise 1) and the body stands on.
-   Nearest first. nil when none."
+   Nearest first. nil when none. A notch cut into a wall under the sky is never a bank (banks keeps
+   only the open ones), so a sea that meets a cliff is left by a block, not a hole."
   [world feet surface]
   (first (bank-cells world feet surface notch-radius place/place-reach)))
 
@@ -391,7 +394,10 @@ water, it carves one: a notch two high in the nearest wall just over the float l
   "With no bank in reach and the water open to the sky over the feet: the nearest column, along
    eight bearings from bank-radius out to shore-reach, whose top at the water's surface is dry
    ground (shore-ground?), as the point at the water's surface to swim toward. Each pass that looks
-   for a bank looks again, so the bank found near the shore takes over. nil with neither."
+   for a bank looks again, so the bank found near the shore takes over. Before it, an escape at sea
+   rose to the surface and floated there until it timed out. With none, the point over the landing
+   (:plan/go-at), which is land. nil with neither. The shore chosen before (kept, the swim-out's
+   :intent/shore) is kept while its column is dry ground still."
   ([world feet surface] (far-shore world feet surface nil))
   ([world [fx _ fz] surface kept]
    (or (when (and kept (shore-ground? world [(first kept) (nth kept 2)] surface)) kept)

@@ -71,7 +71,7 @@
    the same item index is a fireball's look; for an enderman only, its creepy flag at creepy-index;
    for the dragon only, its phase at phase-index; for an area effect cloud only, its radius at
    radius-index (the same index as a drop's stack: a dragon's breath grows, and the bot keeps out of
-   all of it)."
+   all of it). An index the skim did not reach is simply absent: what was known stays."
   [type-id metadata]
   (let [flags (get metadata flags-index)
         health (get metadata health-index)
@@ -205,8 +205,8 @@
 
 (defn facing-bot?
   "Is entity e's head yaw (:entity/head-yaw, degrees) within within degrees of the line from it to
-   the bot standing at bot-pos, on the plane? False when the head yaw or the position is not known
-   or the two stand on one spot."
+   the bot standing at bot-pos, on the plane? False when the head yaw or the position is not
+   known or the two stand on one spot. Pure; observation only, nothing decides by it."
   [e bot-pos within]
   (boolean (and (:entity/head-yaw e)
                 (:entity/pos e)

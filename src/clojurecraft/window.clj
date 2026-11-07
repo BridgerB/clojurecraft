@@ -93,7 +93,10 @@
    are the truth. First a resync (resync, the cursor the world shows may not be the server's), then
    the intent goes on at stage restart, a stage that sends no blind next click (a craft or a smelt
    settles again: cursor down, grid or furnace emptied, then laid again; a swap into the hand is
-   asked again)."
+   asked again). The max-lost-th loss fails :stale-window. A loaded server answers late rather than
+   never: the race that refilled each server's 25 slots the moment a bot ended failed crafts and
+   equips :stale-window on the first click left over three seconds, while the smelt, which took this
+   way, went on."
   [world {:intent/keys [lost] :or {lost 0}} restart]
   (if (>= (inc lost) max-lost)
     (intent/fail world :stale-window)
@@ -114,7 +117,9 @@
 (def junk
   "What a full inventory throws away to make room: what mining and walking pick up that no stage
    asks for, no recipe the goals reach takes and no floor is laid from (stairs/fillers). The Nether
-   adds what a tunnel to the fortress picks up."
+   adds what a tunnel to the fortress picks up. The fortress's own bricks and fences are junk too:
+   no floor is laid from them (stairs/fillers) and no recipe the goals reach takes them, and a
+   fortress dug through fills slots with them by the hundred."
   #{:sand :red_sand :sandstone :red_sandstone :clay_ball :raw_copper :lapis_lazuli :redstone
     :calcite :tuff_bricks :dripstone_block :pointed_dripstone :amethyst_shard :leaf_litter
     :moss_block :moss_carpet :big_dripleaf :small_dripleaf :wildflowers :wheat_seeds :oak_sapling
@@ -231,12 +236,12 @@
       (click world v (inventory/toss-click (slot-of p))))))
 
 (defn resync
-  "Learn the server's cursor after a lost click: put it down into a free slot of view v with a click
-   the server answers in full (resync-click). A loaded cursor is put down, an empty one leaves
-   everything as it was, and either way the whole window and the real cursor come back. With no slot
-   free, the resync click throws a junk stack out instead (junk-slot; vanilla throws only with
-   nothing on the cursor, and answers in full either way). Fails :inventory-full when no slot is
-   free and nothing is junk."
+  "Learn the server's cursor after a lost click: put it down into a free slot of view v with a
+   click the server answers in full (resync-click). A loaded cursor is put down, an empty one
+   leaves everything as it was, and either way the whole window and the real cursor come back.
+   With no slot free, the resync click throws a junk stack out instead (junk-slot; vanilla throws
+   only with nothing on the cursor, and answers in full either way). Fails :inventory-full when
+   no slot is free and nothing is junk."
   [world {:view/keys [slot-of] :as v}]
   (let [s (free-slot world v)
         p (junk-slot world)]

@@ -335,7 +335,9 @@
    that played the race, when the race's churn runs it on the runner. When it recurs it stays at
    <out>/<name> and a REAL line says so; when it does not, it moves to <out>/gaps/<name> and a GAP
    line says how it got past (gap): a failure the model does not reproduce is a finding about the
-   model, never evidence. Returns {:path :recurs? :gap}."
+   model, never evidence. STORY lines say what the bot did over the window either way. o: the
+   command line's options, --signature (else the recording's RESULT's), --out, --name, --seed,
+   --round, --bot. Returns {:path :recurs? :gap}."
   [path o]
   (let [t0 (System/currentTimeMillis)
         folded (record/reduce-entries fold-step (start) path)
