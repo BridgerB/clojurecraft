@@ -8,7 +8,7 @@ status: verified
 lastUpdated: 2026-10-11
 verifiedAgainst: 26.1.2
 sourceRefs:
-  - src/clojurecraft/sim.clj#defn sync-window
+  - src/clojurecraft/sim/window.clj#defn sync-window
   - src/clojurecraft/window.clj#defn click
   - src/clojurecraft/window.clj#defn resync-click
   - "src/clojurecraft/window.clj#775 click semantics, all verified live: a click carries the client's prediction (changed slots and cursor); the server adopts it and then sends only what differs."

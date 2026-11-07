@@ -40,7 +40,7 @@
 (def cross-reach 48)                  ; blocks along the way to a trunk a crossing looks for open water
 (def surface-span 16)                 ; how far under the eye a column's top is looked for (and 8 over)
 (def bed-reach 4)                     ; cells over the head a dig up into water overhead looks through
-(def return-max-nodes 120000)         ; expansions for a complete way back to trees when local routes and hunts fail
+(def return-max-nodes (path/budget :return))         ; expansions for a complete way back to trees when local routes and hunts fail
 (def bridge-reach 12)                 ; blocks on the plane to a trunk no route reaches that a staircase is cut toward
 (def bridge-rise 3)                   ; blocks the trunk's bottom may lie over or under the feet for that staircase
 (def bridge-climb 2)                  ; stairs up that staircase cuts before the planner looks again

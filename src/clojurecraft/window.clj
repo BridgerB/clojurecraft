@@ -127,9 +127,9 @@
 
 (def junk
   "What a full inventory throws away to make room: what mining and walking pick up that no stage
-   asks for, no recipe the goals reach takes and no floor is laid from (stairs/fillers). The Nether
+   asks for, no recipe the goals reach takes and no floor is laid from (filler/fillers). The Nether
    adds what a tunnel to the fortress picks up. The fortress's own bricks and fences are junk too:
-   no floor is laid from them (stairs/fillers) and no recipe the goals reach takes them, and a
+   no floor is laid from them (filler/fillers) and no recipe the goals reach takes them, and a
    fortress dug through fills slots with them by the hundred."
   #{:sand :red_sand :sandstone :red_sandstone :clay_ball :raw_copper :lapis_lazuli :redstone
     :calcite :tuff_bricks :dripstone_block :pointed_dripstone :amethyst_shard :leaf_litter

@@ -15,6 +15,7 @@
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.sim :as sim]
+            [clojurecraft.sim.world :as sim-world]
             [clojurecraft.world :as world]))
 
 (use-fixtures :once fx/instrumented)
@@ -226,8 +227,8 @@
 (deftest twelve-eyes-light-the-portal-against-the-model
   (let [[w sim] (run [:end-portal])]
     (is (plan/done? w) (pr-str (plan/summary w)))
-    (is (every? #(end/eyed? (sim/block-at sim %)) frames) "every frame took its eye")
-    (is (every? #(= end/portal (sim/block-at sim %)) (end/interior middle)) "the portal lit")
+    (is (every? #(end/eyed? (sim-world/block-at sim %)) frames) "every frame took its eye")
+    (is (every? #(= end/portal (sim-world/block-at sim %)) (end/interior middle)) "the portal lit")
     (is (contains? (set (end/interior middle)) (end-portal/nearest-portal w))
         "and remembered: the RESULT names the portal block nearest the feet")
     (is (= 2 (end-portal/eyes-held w)) "twelve spent")

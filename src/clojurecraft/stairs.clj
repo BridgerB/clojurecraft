@@ -38,11 +38,11 @@
    sent, since a dig the server refused leaves the bot where it stood."
   (:require [clojure.math :as math]
             [clojure.spec.alpha :as s]
-            [clojure.string :as str]
             [clojurecraft.avoided :as avoided]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.chunk :as chunk]
             [clojurecraft.dig :as dig]
+            [clojurecraft.filler :as filler]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.memory :as memory]
@@ -191,71 +191,6 @@
   (let [[fx fy fz] (last cells)]
     (and (clear-way? world cells) (= :solid (path/classify world [fx (dec fy) fz])))))
 
-(def fillers
-  "The items a floor is laid from, what a mine carries most of first: cobblestone, the stones
-   that drop themselves, then dirt, then netherrack (what a descent in the Nether digs: gym batch
-   pearls-warped-e, plan run 39164914828, run 3 had every stair refused in a pocket with no
-   filler to lay), then the Nether's own rock a tunnel digs and carries (sim snapshot R3-38-1,
-   issue #410, held 55 soul soil and no filler). Never gravel or sand, which fall out of a floor."
-  [:cobblestone :cobbled_deepslate :andesite :diorite :granite :tuff :dirt :netherrack :soul_soil
-   :blackstone :basalt])
-
-(defn planks-of
-  "The first planks item among the held item counts that has n or more, or nil: a block that does
-   not fall, the last thing a floor or a seal is laid from."
-  [held n]
-  (->> held
-       (filter (fn [[item c]] (and (>= c n) (str/ends-with? (name item) "_planks"))))
-       (map first)
-       first))
-
-(def last-resorts
-  "Blocks that do not fall and are laid when nothing in fillers is held: the bricks a bastion's
-   loot gives and the soul sand a floor of the Nether is dug out as. A tunnel dug by hand drops
-   nothing, so these were all some bots held (sim snapshots R2-17-1 and R2-12-1, issue #410)."
-  [:polished_blackstone_bricks :cracked_polished_blackstone_bricks :soul_sand])
-
-(defn filler
-  "The first of fillers the inventory holds n or more of, else a planks item it holds n or more
-   of, else the first of last-resorts it holds n or more of, or nil. Planks and last-resorts are
-   the fallbacks only: carried-filler and so every stair down's reserve count none, so a descent
-   never spends them. Issue #37 (real bot Clj_r16, on a one-wide strip over open air holding
-   three planks, sticks and no other block): nothing to lay, and every climb out was :boxed."
-  [world n]
-  (let [held (recipe/counts (:player/inventory world))]
-    (or (first (filter #(>= (get held % 0) n) fillers))
-        (planks-of held n)
-        (first (filter #(>= (get held % 0) n) last-resorts)))))
-
-(def cobble-reserve 8) ; cobblestone a building filler keeps for seals and cover: fireball-proof, and the one block the Nether does not give
-
-(def pickaxe-cobble 3) ; cobblestone a building filler never lays: a stone pickaxe's, for the one a tunnel breaks
-
-(defn pickaxe-reserve
-  "The cobblestone kept back for a replacement pickaxe: pickaxe-cobble when the sticks to make one
-   are held (two), else 0 (the cobblestone alone makes none)."
-  [held]
-  (if (>= (get held :stick 0) 2) pickaxe-cobble 0))
-
-(defn building-filler
-  "The filler a tunnel's floors and steps are laid from, or nil: the Nether's own rock first (a
-   tunnel digs hundreds), then the rest of fillers in order, cobblestone only above n plus
-   cobble-reserve, then any filler (cobblestone above n plus pickaxe-cobble), planks and the last
-   resorts: a tunnel is not stopped for the reserve, but the cobblestone of one stone pickaxe is
-   never laid. It fell back to filler's own choice, cobblestone first: with the netherrack gone it
-   was spent to the last block (blaze-race-z14 job 5, run 41256755663, ended holding no
-   cobblestone, no pickaxe left to make and 8 sticks). Blaze-race-v job 5 laid its 64 cobblestone into floors on
-   the way down (y 72 to 67) with 160 netherrack held, and had none to seal with."
-  [world n]
-  (let [held (recipe/counts (:player/inventory world))
-        need (fn [item] (if (= :cobblestone item) (+ n cobble-reserve) n))]
-    (or (first (filter #(>= (get held % 0) (need %))
-                       (cons :netherrack (remove #{:netherrack} fillers))))
-        (first (filter #(>= (get held % 0) (if (= :cobblestone %) (+ n (pickaxe-reserve held)) n))
-                       fillers))
-        (planks-of held n)
-        (first (filter #(>= (get held % 0) n) last-resorts)))))
-
 (def lay-reserve 8)                    ; filler a staircase down never lays into floors: what the climb back seals and steps with
 
 (defn climb-reserve
@@ -274,11 +209,6 @@
     (min lay-reserve (- (long top) (long y)))
     0))
 
-(defn carried-filler
-  "How many of every filler the inventory holds, together."
-  [world]
-  (reduce + 0 (vals (select-keys (recipe/counts (:player/inventory world)) fillers))))
-
 (defn floors-affordable?
   "May a stair down lay to-lay (a floor and what holds it) before it is cut: only when the filler
    carried would floor the rest of the way down at this stair's rate and still
@@ -294,7 +224,7 @@
   (let [end (or floor-to to-y)]
     (or (not= :stairs-down kind)
         (nil? end)
-        (>= (carried-filler world)
+        (>= (filler/carried world)
             (+ lay-reserve (* (count to-lay) (max 1 (- (long y) (long end)))))))))
 
 (def bridge-depth 16)                 ; blocks under a floor to be laid looked down through for a fluid
@@ -349,7 +279,7 @@
    none can be."
   [world cells laid]
   (when (clear-way? world cells)
-    (when-let [cells (seq laid)] (when (filler world (count cells)) (vec cells)))))
+    (when-let [cells (seq laid)] (when (filler/pick world (count cells)) (vec cells)))))
 
 (def max-void-reserve 16)              ; most filler a bridge over a deep void keeps, twice lay-reserve
 
@@ -394,7 +324,7 @@
    other descents)."
   [world feet cells]
   (when-let [laid (cells-to-lay world cells (floor-laying world feet cells))]
-    (when (>= (- (carried-filler world) (count laid)) (floor-reserve world cells)) laid)))
+    (when (>= (- (filler/carried world) (count laid)) (floor-reserve world cells)) laid)))
 
 #_{:splint/disable [naming/conversion-functions]} ; "the step to lay", not a conversion
 (defn step-to-lay
@@ -483,7 +413,9 @@
   [world _feet cells]
   (when (and (up-safe? world cells) (not (up-sealed? world cells)) (not (water-over? world cells)))
     (let [cells (vec (remove #(place/inside-player? world %) (water-beside world cells)))]
-      (when (and (seq cells) (every? #(place/support world %) cells) (filler world (count cells)))
+      (when (and (seq cells)
+                 (every? #(place/support world %) cells)
+                 (filler/pick world (count cells)))
         cells))))
 
 (defn wet-feet
@@ -537,7 +469,7 @@
         all (into helpers wet)]
     (when (and (seq wet)
                (every? #(or (place/support world %) (some (set helpers) (neighbours %))) wet)
-               (filler world (count all)))
+               (filler/pick world (count all)))
       all)))
 
 (defn up-lay
@@ -569,7 +501,7 @@
   (let [sealed (seal world feet cells)
         laid (or sealed (lay world feet cells))]
     (when (and laid
-               (>= (- (carried-filler world) (count laid))
+               (>= (- (filler/carried world) (count laid))
                    (if sealed (climb-reserve world feet) lay-reserve)))
       laid)))
 
@@ -701,7 +633,7 @@
                (every? #(= :water (terrain/fluid-kind world %)) wet)
                (not-any? #{[fx fy fz] [fx (inc fy) fz]} wet)
                (every? #(place/support world %) wet)
-               (filler world (count laid)))
+               (filler/pick world (count laid)))
       laid)))
 
 (defn reserve-level-lay
@@ -714,7 +646,7 @@
   [world kind cells feet]
   (when-let [laid (level-lay world feet cells)]
     (when (or (not= :stairs-down kind)
-              (>= (- (carried-filler world) (count laid)) (bridge-reserve world cells)))
+              (>= (- (filler/carried world) (count laid)) (bridge-reserve world cells)))
       laid)))
 
 #_{:splint/disable [naming/conversion-functions]} ; "the next cell to open", not a conversion
@@ -781,7 +713,7 @@
    pillar-extras held. Gravel and sand are the last resort, never laid into a floor (fillers)."
   [world]
   (let [held (recipe/counts (:player/inventory world))]
-    (or (filler world 1) (first (filter #(pos? (get held % 0)) pillar-extras)))))
+    (or (filler/pick world 1) (first (filter #(pos? (get held % 0)) pillar-extras)))))
 
 (defn pillar-up?
   "May a boxed stair up go up as a shaft of pillars from feet (a pillar-item held, a solid block
@@ -1170,7 +1102,7 @@
                 (= :surface for)
                 (not no-shaft)
                 (not (pickaxe-held? world))
-                (filler world 1)
+                (filler/pick world 1)
                 (= :solid (path/classify world (update feet 1 dec)))
                 (intent/centred? world feet)
                 (shaft-safe? world feet))))
@@ -1279,7 +1211,7 @@
   ;; stair like any cell that cannot be cut: turn
   [world {:intent/keys [child lay level-cells] :as i} event]
   (let [next (first (remove #(= :solid (path/classify world %)) lay))
-        item (filler world 1)]
+        item (filler/pick world 1)]
     (cond (and child (intent/done? child)) (intent/dissoc-intent world :intent/child)
           (and child
                (intent/failed? child)

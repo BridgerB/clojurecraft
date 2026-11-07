@@ -32,6 +32,10 @@
             [clojurecraft.record :as record]
             [clojurecraft.scoop :as scoop]
             [clojurecraft.sim :as sim]
+            [clojurecraft.sim.portal :as sim-portal]
+            [clojurecraft.sim.protocol :as sim-protocol]
+            [clojurecraft.sim.window :as sim-window]
+            [clojurecraft.sim.world :as sim-world]
             [clojurecraft.stairs :as stairs]
             [clojurecraft.stone]
             [clojurecraft.swim]
@@ -182,7 +186,7 @@
   (let [table (recipe/item-id :crafting_table)
         sim (-> (sim/init {:column (world/column-bytes {}) :spawn [0.5 64.0 0.5]})
                 (assoc :sim/out [])
-                (sim/spawn-item [3.5 64.5 3.5] {:item table :count 1}))
+                (sim-protocol/spawn-item [3.5 64.5 3.5] {:item table :count 1}))
         [added data] (:sim/out sim)]
     (is (= :add-entity (:packet/name added)))
     (is (= {:packet/name :set-entity-data
@@ -266,7 +270,7 @@
     (is (= [:block-changed-ack] (mapv :packet/name (:sim/out sim)))
         "the real server acks and keeps breaking by its own clock")
     (let [[sim _] (sim/drain sim)
-          later (sim/step sim {:sim/kind :tick :sim/now (+ 1000 (sim/full-ms sim 1 nil))})]
+          later (sim/step sim {:sim/kind :tick :sim/now (+ 1000 (sim-world/full-ms sim 1 nil))})]
       (is (= #{[1 64 0]} (:sim/broken later)) "broken once the block's whole time has passed")
       (is (= :block-update (:packet/name (first (:sim/out later)))))
       (is (= 0 (:state (first (:sim/out later))))))))
@@ -358,12 +362,12 @@
   ;; issue #36: the model stacked every item to 64, so a spare pickaxe joined the one in use and
   ;; the dig that broke one emptied the slot of both
   (let [slots (map inventory/slot [[:hotbar 0] [:hotbar 1] [:hotbar 2]])
-        [view left] (sim/insert {} slots {:item wooden-pickaxe :count 2})]
-    (is (= 1 (sim/stack-size wooden-pickaxe)))
-    (is (= 64 (sim/stack-size (get blocks/items :cobblestone))))
+        [view left] (sim-window/insert {} slots {:item wooden-pickaxe :count 2})]
+    (is (= 1 (sim-world/stack-size wooden-pickaxe)))
+    (is (= 64 (sim-world/stack-size (get blocks/items :cobblestone))))
     (is (nil? left))
     (is (= [1 1] (keep #(:count (get view %)) slots)) "two pickaxes, two slots")
-    (let [worn (sim/wear (assoc-in view [(first slots) :durability] 1) (first slots))]
+    (let [worn (sim-world/wear (assoc-in view [(first slots) :durability] 1) (first slots))]
       (is (nil? (get worn (first slots))) "the one worn out is gone")
       (is (= {:item wooden-pickaxe :count 1} (get worn (second slots))) "the spare is not"))))
 
@@ -1276,7 +1280,7 @@
         "the cobblestone took the water's place")
     (is (= {:packet/name :block-update :pos [9 64 8] :state (blocks/default-state :cobblestone)}
            (first (:sim/out into-water))))
-    (is (= 1 (get-in into-water [:sim/inv (sim/held-slot into-water) :count])) "one taken")
+    (is (= 1 (get-in into-water [:sim/inv (sim-world/held-slot into-water) :count])) "one taken")
     (is (empty? (:sim/placed into-flower)))))
 
 ;; ---------------------------------------------------------------- the furnace, on the model
@@ -1330,9 +1334,9 @@
 
 (deftest flint-and-steel-in-a-complete-frame-lights-the-portal
   (let [sim (strike (lighter-sim frame) [5 64 8])]
-    (is (every? #(= :nether_portal (blocks/name-of (sim/block-at sim %)))
+    (is (every? #(= :nether_portal (blocks/name-of (sim-world/block-at sim %)))
                 (for [x [5 6] y [65 66 67]] [x y 8])))
-    (is (= :fire (blocks/name-of (sim/block-at (strike (lighter-sim {}) [5 63 8]) [5 64 8])))
+    (is (= :fire (blocks/name-of (sim-world/block-at (strike (lighter-sim {}) [5 63 8]) [5 64 8])))
         "no frame: a fire, no portal")))
 
 (deftest standing-in-the-portal-four-seconds-goes-to-the-nether
@@ -1346,13 +1350,14 @@
     (is (some #(= "minecraft:the_nether" (:dimension %)) (:sim/out later)))))
 
 (deftest a-nether-death-allows-another-portal-crossing
-  (let [lit (sim/stream (strike (lighter-sim frame) [5 64 8]))
+  (let [lit (sim-protocol/stream (strike (lighter-sim frame) [5 64 8]))
         dead (assoc lit :sim/health 0.0 :sim/dimension dimension/nether :sim/out [])
-        alive (sim/on-packet dead
-                             {:packet/name :client-command
-                              :action (packet/value :client-command :perform-respawn)})
+        alive (sim-world/on-packet dead
+                                   {:packet/name :client-command
+                                    :action (packet/value :client-command :perform-respawn)})
         in-portal (assoc alive :sim/player-pos [5.5 65.0 8.5])
-        entered (sim/through-portal (sim/through-portal in-portal 0) sim/portal-ms)]
+        entered (sim-portal/through-portal (sim-portal/through-portal in-portal 0)
+                                           sim-portal/portal-ms)]
     (is (= dimension/overworld (:sim/dimension alive)))
     (is (some #(= :level-chunk-with-light (:packet/name %)) (:sim/out alive))
         "the client discarded the other dimension's chunks")
@@ -1369,9 +1374,9 @@
                        :respawn-in dimension/nether
                        :inventory {[:hotbar 0] pick}})
         dead (assoc sim :sim/phase :play :sim/health 0.0 :sim/out [])
-        alive (sim/on-packet dead
-                             {:packet/name :client-command
-                              :action (packet/value :client-command :perform-respawn)})]
+        alive (sim-world/on-packet dead
+                                   {:packet/name :client-command
+                                    :action (packet/value :client-command :perform-respawn)})]
     (is (= dimension/nether (:sim/dimension alive)) "still in the Nether")
     (is (some #(= dimension/nether (:dimension %)) (:sim/out alive)) "told it is the Nether")
     (is (= 1 (:sim/respawns alive)))
@@ -1389,21 +1394,22 @@
                {:columns {[0 0] column [1 0] column} :spawn [0.5 64.0 0.5] :view-distance 0})
               (assoc :sim/broken #{broken replaced [17 63 1]}
                      :sim/placed {placed cobble replaced cobble [18 64 1] cobble}))
-        s (sim/stream s)
+        s (sim-protocol/stream s)
         updates (filter #(= :block-update (:packet/name %)) (:sim/out s))
         w (reduce game/on-packet (assoc (game/init fx/opts) :bot/phase :play) (:sim/out s))]
     (is (= {broken blocks/air placed cobble replaced cobble}
            (into {} (map (juxt :pos :state)) updates))
         "only the fresh column's changes, with a placement winning over an earlier break")
-    (doseq [p [broken placed replaced]] (is (= (sim/block-at s p) (terrain/block-at w p))))
+    (doseq [p [broken placed replaced]] (is (= (sim-world/block-at s p) (terrain/block-at w p))))
     (is (= :chunk-batch-finished (:packet/name (last (:sim/out s)))))
     (testing "a column that leaves view and comes back still carries its changes"
-      (let [away (sim/stream (assoc s :sim/player-pos [16.5 64.0 0.5] :sim/out []))
-            back (sim/stream (assoc away :sim/player-pos [0.5 64.0 0.5] :sim/out []))
+      (let [away (sim-protocol/stream (assoc s :sim/player-pos [16.5 64.0 0.5] :sim/out []))
+            back (sim-protocol/stream (assoc away :sim/player-pos [0.5 64.0 0.5] :sim/out []))
             w (reduce game/on-packet w (concat (:sim/out away) (:sim/out back)))]
-        (doseq [p [broken placed replaced]] (is (= (sim/block-at back p) (terrain/block-at w p))))))
+        (doseq [p [broken placed replaced]]
+          (is (= (sim-world/block-at back p) (terrain/block-at w p))))))
     (testing "a column already held sends nothing again"
-      (is (empty? (:sim/out (sim/stream (assoc s :sim/out []))))))))
+      (is (empty? (:sim/out (sim-protocol/stream (assoc s :sim/out []))))))))
 
 (deftest a-portal-transition-does-not-put-the-client-back-in-undug-rock
   (let [feet [1 62 1]
@@ -1413,11 +1419,11 @@
                      :sim/portal-since 0
                      :sim/placed {feet (blocks/default-state :nether_portal)}
                      :sim/broken #{head}))
-        s (sim/through-portal s sim/portal-ms)
+        s (sim-portal/through-portal s sim-portal/portal-ms)
         w (reduce game/on-packet (assoc (game/init fx/opts) :bot/phase :play) (:sim/out s))
         op (second (fortress/step-plan feet [1 0 0]))]
     (is (= dimension/nether (:player/dimension w)))
-    (is (= (sim/block-at s feet) (terrain/block-at w feet)))
+    (is (= (sim-world/block-at s feet) (terrain/block-at w feet)))
     (is (= blocks/air (terrain/block-at w head)))
     (is (path/standable? w feet))
     (is (= :walk (:intent/kind (build/op-child w {:intent/kind :tunnel-to} op)))
@@ -1481,7 +1487,7 @@
   (let [[w sim] (build-run :cast-one lava-pit [9.5 64.0 10.5] kit 600000)]
     (is (= :done (:intent/status (:plan/intent w)))
         (pr-str (select-keys (:plan/intent w) [:intent/status :intent/reason :intent/op])))
-    (is (= :obsidian (blocks/name-of (sim/block-at sim (at-build [1 0 0]))))
+    (is (= :obsidian (blocks/name-of (sim-world/block-at sim (at-build [1 0 0]))))
         "the first cell, obsidian")
     (is (= (recipe/item-id :water_bucket)
            (some #(when (= (recipe/item-id :water_bucket) (:item %)) (:item %))
@@ -1494,9 +1500,9 @@
         frame (for [[dx dy] build/frame-cells] (at-build [dx dy 0]))]
     (is (= :done (:intent/status (:plan/intent w)))
         (pr-str (select-keys (:plan/intent w) [:intent/status :intent/reason :intent/op])))
-    (is (every? #(= :obsidian (blocks/name-of (sim/block-at sim %))) frame) "ten obsidian")
+    (is (every? #(= :obsidian (blocks/name-of (sim-world/block-at sim %))) frame) "ten obsidian")
     (is (= 6
-           (count (filter #(= :nether_portal (blocks/name-of (sim/block-at sim %)))
+           (count (filter #(= :nether_portal (blocks/name-of (sim-world/block-at sim %)))
                           (for [[dx dy] build/interior] (at-build [dx dy 0]))))))
     (is (= "minecraft:the_nether" (:player/dimension w)))
     (is (empty? (:sim/violations sim)))))
@@ -1510,7 +1516,7 @@
         [w sim] (build-run :portal (merge lava-pit seeded) [9.5 64.0 10.5] kit 1800000)]
     (is (= :done (:intent/status (:plan/intent w)))
         (pr-str (select-keys (:plan/intent w) [:intent/status :intent/reason :intent/op])))
-    (is (= 9 (count (filter #(= blocks/lava-base (sim/block-at sim %)) (keys lava-pit))))
+    (is (= 9 (count (filter #(= blocks/lava-base (sim-world/block-at sim %)) (keys lava-pit))))
         "three lava scooped: four cells cast, not ten")
     (is (empty? (:sim/violations sim)))))
 
@@ -1541,23 +1547,23 @@
 (deftest a-lava-pour-aimed-at-the-cups-north-wall-fills-the-cup
   ;; ruststeve's aim: the north wall's inner face, low; the ray goes through the bowl and the cup
   (let [sim (use-toward (pour-sim :lava_bucket {}) [5.5 64.3 4.98])]
-    (is (= blocks/lava-base (sim/block-at sim [5 64 5])))
+    (is (= blocks/lava-base (sim-world/block-at sim [5 64 5])))
     (is (= (recipe/item-id :bucket) (get-in sim [:sim/inv (inventory/slot [:hotbar 0]) :item])))))
 
 (deftest water-poured-into-the-bowl-turns-the-lava-under-it-to-obsidian
   (let [sim (use-toward (pour-sim :water_bucket {[5 64 5] blocks/lava-base}) [5.5 65.5 4.98])]
-    (is (= :obsidian (blocks/name-of (sim/block-at sim [5 64 5]))))
-    (is (= blocks/water-base (sim/block-at sim [5 65 5])) "the water stays in the bowl")))
+    (is (= :obsidian (blocks/name-of (sim-world/block-at sim [5 64 5]))))
+    (is (= blocks/water-base (sim-world/block-at sim [5 65 5])) "the water stays in the bowl")))
 
 (deftest water-aimed-at-the-floor-goes-through-the-lava-and-replaces-it
   ;; a filled bucket's ray ignores fluids: ruststeve's floor aim replaced its lava source
   (let [sim (use-toward (pour-sim :water_bucket {[5 64 5] blocks/lava-base}) [5.5 64.0 5.5])]
-    (is (= blocks/water-base (sim/block-at sim [5 64 5])))
-    (is (not= :obsidian (blocks/name-of (sim/block-at sim [5 64 5]))))))
+    (is (= blocks/water-base (sim-world/block-at sim [5 64 5])))
+    (is (not= :obsidian (blocks/name-of (sim-world/block-at sim [5 64 5]))))))
 
 (deftest an-empty-bucket-scoops-lava
   (let [sim (use-toward (pour-sim :bucket {[5 64 5] blocks/lava-base}) [5.5 64.85 5.5])]
-    (is (= blocks/air (sim/block-at sim [5 64 5])))
+    (is (= blocks/air (sim-world/block-at sim [5 64 5])))
     (is (= (recipe/item-id :lava_bucket)
            (get-in sim [:sim/inv (inventory/slot [:hotbar 0]) :item])))))
 
@@ -1682,33 +1688,33 @@
         ingot {:item (item :iron_ingot) :count 3}
         ore {:item (item :raw_iron) :count 2}
         coal {:item (item :coal) :count 1}]
-    (is (= :left (sim/click-kind f (wire (inventory/left-click (in-furnace [:input])))))
+    (is (= :left (sim-window/click-kind f (wire (inventory/left-click (in-furnace [:input])))))
         "the input is no result")
     (is (= {:view {} :cursor coal}
-           (sim/click-view f {} coal (wire (inventory/left-click (in-furnace [:output])))))
+           (sim-window/click-view f {} coal (wire (inventory/left-click (in-furnace [:output])))))
         "nothing is put into the output")
     (is (= {:view {} :cursor ore}
-           (sim/click-view f {} ore (wire (inventory/right-click (in-furnace [:fuel])))))
+           (sim-window/click-view f {} ore (wire (inventory/right-click (in-furnace [:fuel])))))
         "the fuel slot refuses what does not burn")
     (is (= {:view {(in-furnace [:fuel]) coal} :cursor nil}
-           (sim/click-view f {} coal (wire (inventory/left-click (in-furnace [:fuel]))))))
+           (sim-window/click-view f {} coal (wire (inventory/left-click (in-furnace [:fuel]))))))
     (is (= {:view {} :cursor {:item (item :iron_ingot) :count 5}}
-           (sim/click-view f
-                           {(in-furnace [:output]) ingot}
-                           (assoc ingot :count 2)
-                           (wire (inventory/left-click (in-furnace [:output])))))
+           (sim-window/click-view f
+                                  {(in-furnace [:output]) ingot}
+                                  (assoc ingot :count 2)
+                                  (wire (inventory/left-click (in-furnace [:output])))))
         "a cursor of the output's item takes the output onto it")
     (is (= {:view {(in-furnace [:hotbar 0]) ore} :cursor nil}
-           (sim/click-view f
-                           {(in-furnace [:hotbar 0]) ore}
-                           nil
-                           (wire (inventory/swap-click (in-furnace [:fuel]) 0))))
+           (sim-window/click-view f
+                                  {(in-furnace [:hotbar 0]) ore}
+                                  nil
+                                  (wire (inventory/swap-click (in-furnace [:fuel]) 0))))
         "a hotbar swap cannot put ore into the fuel slot")
     (is (= {:view {(in-furnace [:main 0]) ore} :cursor nil}
-           (sim/click-view f
-                           {(in-furnace [:input]) ore}
-                           nil
-                           (wire (inventory/shift-click (in-furnace [:input])))))
+           (sim-window/click-view f
+                                  {(in-furnace [:input]) ore}
+                                  nil
+                                  (wire (inventory/shift-click (in-furnace [:input])))))
         "a shift-click on the input moves it into the store")))
 
 (defn ingots-target
@@ -1893,8 +1899,8 @@
   (let [sim0 (sim/init {:column (world/column-bytes {}) :spawn [0.5 64.0 0.5]})
         rolls (fn [seed n]
                 (->> (assoc sim0 :sim/rng seed)
-                     (iterate (comp first sim/roll))
-                     (map (comp second sim/roll))
+                     (iterate (comp first sim-world/roll))
+                     (map (comp second sim-world/roll))
                      (take n)))]
     (is (= (rolls 7 20) (rolls 7 20)) "the same seed, the same luck")
     (is (not= (rolls 7 20) (rolls 8 20)))
@@ -1902,8 +1908,8 @@
     (is (< 70 (count (filter #(< % 0.1) (rolls 7 1000))) 130) "about one in ten under 0.1")
     (doseq [seed (range 200)]
       (let [s (assoc sim0 :sim/rng seed)
-            [_ dropped] (sim/loot s gravel-state nil)]
-        (is (= (if (< (second (sim/roll s)) 0.1) (item :flint) (item :gravel)) dropped)
+            [_ dropped] (sim-world/loot s gravel-state nil)]
+        (is (= (if (< (second (sim-world/roll s)) 0.1) (item :flint) (item :gravel)) dropped)
             (str "seed " seed))))))
 
 (defn flint-run
@@ -1936,8 +1942,8 @@
         rolls (->> (assoc (sim/init {:column (world/column-bytes {}) :spawn [0.5 64.0 0.5]})
                           :sim/rng
                           seed)
-                   (iterate (comp first sim/roll))
-                   (map (comp second sim/roll)))]
+                   (iterate (comp first sim-world/roll))
+                   (map (comp second sim-world/roll)))]
     (is (= :done (:plan/status w)) (pr-str (plan/summary w)))
     (is (= {:flint 1} (held w)) "the gravel became flint")
     (is (= (inc (count (take-while #(>= % 0.1) rolls))) redigs)
@@ -1987,7 +1993,8 @@
   ;; the column its source left and the gravel to dig again for flint found no spot, three
   ;; times in half a second, before the trap could preempt; the act now gets ashore first
   (let [sim0 (sim/init {:column (world/column-bytes pond-edge) :spawn [8.5 62.0 8.5]})
-        lucky (first (filter #(< (second (sim/roll (assoc sim0 :sim/rng %))) 0.1) (range 100)))
+        lucky (first (filter #(< (second (sim-world/roll (assoc sim0 :sim/rng %))) 0.1)
+                             (range 100)))
         [w sim] (sim/run (game/compose game/step
                                        (partial plan/step-over
                                                 (conj plan/goals
@@ -2040,7 +2047,7 @@
                                   :pos [1 64 0]
                                   :face (packet/value :face :west)
                                   :sequence 2}))
-        at #(mapv (fn [y] (blocks/name-of (sim/block-at %1 [1 y 0]))) [64 65 66])]
+        at #(mapv (fn [y] (blocks/name-of (sim-world/block-at %1 [1 y 0]))) [64 65 66])]
     (is (= [:air :gravel :gravel] (at broken)) "the stone is gone")
     (is (= [:air :gravel :gravel] (at (game-ticks broken 1))) "nothing falls in the first tick")
     (is (= [:air :air :gravel] (at (game-ticks broken 2))) "the lower gravel is in the air")
@@ -2145,7 +2152,7 @@
     (is (<= 12.0 (first (:player/pos w))) "past the lava, still heading east")
     (is (= [1 0] (:intent/dir (:plan/intent w))))
     (is (not-any? #(< (first %) 8) (:sim/broken sim)) "nothing dug back west")
-    (is (= lava (sim/block-at sim [11 66 8])))
+    (is (= lava (sim-world/block-at sim [11 66 8])))
     (is (empty? (:sim/violations sim)))))
 
 (deftest a-tunnel-goes-round-ore-its-pickaxe-cannot-drop
@@ -2160,7 +2167,7 @@
                             120000)]
     (is (= :done (:intent/status (:plan/intent w)))
         (pr-str (select-keys (:plan/intent w) [:intent/status :intent/reason :intent/side])))
-    (is (= gold (sim/block-at sim [11 66 8])) "the ore left where it is")
+    (is (= gold (sim-world/block-at sim [11 66 8])) "the ore left where it is")
     (is (empty? (:sim/violations sim)))))
 
 (deftest a-collect-stops-at-a-ledge
@@ -2228,7 +2235,7 @@
                              [:intent/status :intent/reason :intent/stage :intent/level-steps])))
     (is (<= 72.0 (second (:player/pos w))))
     (is (not-any? #(= :water
-                      (some-> (sim/block-at sim %)
+                      (some-> (sim-world/block-at sim %)
                               blocks/fluid
                               :fluid/kind))
                   (for [x (range 4 13) y [67 68] z (range 4 13)] [x y z]))
@@ -2277,7 +2284,7 @@
     (is (every? (fn [[x _ z]] (and (<= 8 x) (= 8 z))) (:sim/broken sim))
         "nothing dug north, south or west, under the aquifer")
     (is (not-any? #(= :water
-                      (some-> (sim/block-at sim %)
+                      (some-> (sim-world/block-at sim %)
                               blocks/fluid
                               :fluid/kind))
                   (for [x (range 16) y (range 64 69) z (range 16)] [x y z]))
@@ -2488,7 +2495,7 @@
     (is (= :done (:intent/status (:plan/intent w)))
         (pr-str (select-keys (:plan/intent w) [:intent/status :intent/reason :intent/side])))
     (is (not (contains? (:sim/broken sim) [9 67 8])) "the cell under the gravel never cut")
-    (is (= :gravel (blocks/name-of (sim/block-at sim [9 68 8]))))
+    (is (= :gravel (blocks/name-of (sim-world/block-at sim [9 68 8]))))
     (is (empty? (:sim/violations sim)))))
 
 (deftest a-retreat-out-of-water-ends-on-dry-land
@@ -2544,7 +2551,7 @@
                              [:intent/status :intent/reason :intent/stage :intent/level-steps])))
     (is (<= 70.0 (second (:player/pos w))))
     (is (not (contains? (:sim/broken sim) [8 68 8])) "the cell under the gravel was never opened")
-    (is (= :gravel (blocks/name-of (sim/block-at sim [8 69 8]))) "the gravel never fell")
+    (is (= :gravel (blocks/name-of (sim-world/block-at sim [8 69 8]))) "the gravel never fell")
     (is (empty? (:sim/violations sim)))))
 
 (deftest a-climb-steps-out-from-under-a-bed-of-gravel-not-along-it
@@ -2580,9 +2587,10 @@
         model
         (fn [blocks]
           (assoc (sim/init {:column (world/column-bytes blocks) :spawn pos}) :sim/player-pos pos))]
-    (is (= [11 63 8] (sim/scooped (model bank-pond) look)) "the near source, from the bank")
-    (is (nil? (sim/scooped (model (assoc bank-pond [10 64 8] cane)) look)) "through cane: nothing")
-    (is (nil? (sim/scooped (model (assoc bank-pond [11 64 8] cane)) look))
+    (is (= [11 63 8] (sim-world/scooped (model bank-pond) look)) "the near source, from the bank")
+    (is (nil? (sim-world/scooped (model (assoc bank-pond [10 64 8] cane)) look))
+        "through cane: nothing")
+    (is (nil? (sim-world/scooped (model (assoc bank-pond [11 64 8] cane)) look))
         "cane over it: nothing")))
 
 (deftest an-empty-bucket-is-filled-at-a-pond-from-its-bank
@@ -2706,7 +2714,7 @@
     (is (empty? (:sim/violations sim)))))
 
 (deftest the-iron-kit-from-a-stone-pickaxe-and-its-recording-replays
-  (let [path (str (System/getProperty "java.io.tmpdir") "/clojurecraft-iron-kit.edn")
+  (let [path (fx/temp-path "clojurecraft-iron-kit" ".edn")
         tap (record/tap! path)
         [w sim] (sim/run (recording step tap)
                          (game/init fx/opts)
@@ -2767,7 +2775,7 @@
                  #(or (plan/done? %) (plan/failed? %) (pos? (get (held %) :wooden_pickaxe 0)))
                  120000
                  {:event/kind :go :go/goals [:cobblestone]})]
-    (is (not-any? #(= 1 (sim/block-at (assoc sim :sim/broken #{}) %)) (:sim/broken sim))
+    (is (not-any? #(= 1 (sim-world/block-at (assoc sim :sim/broken #{}) %)) (:sim/broken sim))
         "no stone was dug by hand")
     (is (or (pos? (get (held w) :wooden_pickaxe 0)) (plan/failed? w)) (pr-str (plan/summary w)))))
 
@@ -2814,22 +2822,24 @@
                         :sim/furnaces {pos furnace}))
         respawn {:packet/name :client-command
                  :action (packet/value :client-command :perform-respawn)}
-        alive (sim/on-packet dead respawn)
-        equipped (sim/on-packet alive
-                                (merge {:packet/name :container-click
-                                        :window-id 0
-                                        :state-id (:sim/state-id alive)
-                                        :changed []
-                                        :cursor nil}
-                                       (wire (inventory/swap-click (inventory/slot [:main 0]) 0))))]
+        alive (sim-world/on-packet dead respawn)
+        equipped (sim-world/on-packet alive
+                                      (merge {:packet/name :container-click
+                                              :window-id 0
+                                              :state-id (:sim/state-id alive)
+                                              :changed []
+                                              :cursor nil}
+                                             (wire (inventory/swap-click (inventory/slot [:main 0])
+                                                                         0))))]
     (is (nil? (:sim/window alive)) "the old life has no menu in the new one")
     (is (= (:sim/inv dead) (:sim/inv alive)) "keep_inventory still holds")
     (is (= furnace (get-in alive [:sim/furnaces pos])) "the furnace keeps its input")
     (is (= pickaxe (get-in equipped [:sim/inv (inventory/slot [:hotbar 0])])))
     (is (empty? (:sim/violations equipped)) "window 0 accepts the swap")
-    (is (= dead (sim/on-packet dead (assoc respawn :action 1))) "another command is not a respawn")
-    (let [living (assoc dead :sim/health sim/max-health)]
-      (is (= living (sim/on-packet living respawn)) "a living player's menu stays open"))))
+    (is (= dead (sim-world/on-packet dead (assoc respawn :action 1)))
+        "another command is not a respawn")
+    (let [living (assoc dead :sim/health sim-world/max-health)]
+      (is (= living (sim-world/on-packet living respawn)) "a living player's menu stays open"))))
 
 (deftest a-respawned-bot-is-told-the-mobs-about-it-again
   ;; issue #62, sim race 38900840841: the client forgets every entity at a respawn and the model
@@ -2903,7 +2913,7 @@
          (into {} (for [y (range 52 55)] [[8 y 8] blocks/air]))
          {[8 56 8] (blocks/default-state :tall_seagrass)})
         model (-> (sim/init {:column (world/column-bytes cells) :spawn [8.5 52.0 8.5]})
-                  (sim/set-cell [8 55 8] blocks/air))
+                  (sim-world/set-cell [8 55 8] blocks/air))
         step (fn [w e]
                (let [w (game/step w e)
                      i (:plan/intent w)]
@@ -3014,7 +3024,7 @@
            (let [[x y z] (path/feet-cell (:player/pos w))]
              (blocks/name-of (terrain/block-at w [x (dec y) z]))))
         "standing on the ice")
-    (is (= :water (:fluid/kind (blocks/fluid (sim/block-at sim [8 63 8]))))
+    (is (= :water (:fluid/kind (blocks/fluid (sim-world/block-at sim [8 63 8]))))
         "the ice dug over the head left water, as on a server")
     (is (empty? (:sim/violations sim)))))
 
@@ -3082,7 +3092,7 @@
             {:event/kind :go :go/goals goals})))
 
 (deftest the-portal-from-a-kit-and-its-recording-replays
-  (let [path (str (System/getProperty "java.io.tmpdir") "/clojurecraft-portal.edn")
+  (let [path (fx/temp-path "clojurecraft-portal" ".edn")
         tap (record/tap! path)
         [w sim] (nether-run (recording step tap) {})]
     ((:close tap))
@@ -3103,7 +3113,7 @@
     (is (= :done (:plan/status w)) (pr-str (plan/summary w)))
     (is (= 1 (:stats/deaths w)) "it died once")
     (is (= "minecraft:the_nether" (:player/dimension w)))
-    (is (= 3 (count (filter #(= blocks/lava-base (sim/block-at sim %)) (keys lava-pit))))
+    (is (= 3 (count (filter #(= blocks/lava-base (sim-world/block-at sim %)) (keys lava-pit))))
         "nine lava scooped, as without the death: no cell cast twice")
     (is (empty? (:sim/violations sim)))))
 
@@ -3148,7 +3158,7 @@
       (is (< (second origin) 41) "the frame cut into the stone under the sea's stand")
       (is (= :obsidian
              (blocks/name-of
-              (sim/block-at sim (build/cell origin (:site/facing (memory/site w)) [1 0 0]))))
+              (sim-world/block-at sim (build/cell origin (:site/facing (memory/site w)) [1 0 0]))))
           "the first cell, obsidian"))
     (is (empty? (:sim/violations sim)))))
 
@@ -3179,7 +3189,8 @@
   "The frame's ten cells at the site the world remembers, as the sim holds them."
   [w sim]
   (let [{:site/keys [origin facing]} (memory/site w)]
-    (for [[dx dy] build/frame-cells] (sim/block-at sim (build/cell origin facing [dx dy 0])))))
+    (for [[dx dy] build/frame-cells]
+      (sim-world/block-at sim (build/cell origin facing [dx dy 0])))))
 
 (def sealed-pool
   "A lava pool three by five at y 40 sealed in the stone (no air round it), and the bot in a
@@ -3242,15 +3253,15 @@
            {:event/kind :go :go/goals [:fortress]}))
 
 (deftest the-fortress-from-a-nether-landing-and-its-recording-replays
-  (let [path (str (System/getProperty "java.io.tmpdir") "/clojurecraft-fortress.edn")
+  (let [path (fx/temp-path "clojurecraft-fortress" ".edn")
         tap (record/tap! path)
         [w sim] (fortress-run (recording step tap))]
     ((:close tap))
     (is (= :done (:plan/status w)) (pr-str (plan/summary w)))
     (is (= dimension/nether (:player/dimension w)) "joined in the Nether, from the login")
     (is (some #(fortress/arrived? w %) (fortress/bricks w)) "within 6 of a brick")
-    (is (= blocks/lava-base (sim/block-at sim [8 64 7])) "the lava is still a source")
-    (is (= netherrack (sim/block-at sim [8 64 8]))
+    (is (= blocks/lava-base (sim-world/block-at sim [8 64 7])) "the lava is still a source")
+    (is (= netherrack (sim-world/block-at sim [8 64 8]))
         "and the cell beside it on the way was never opened")
     (is (zero? (:stats/deaths w 0)))
     (is (not-any? #(= :failed (:intention/event %)) (memory/intentions w)))
@@ -3309,8 +3320,8 @@
 
 (deftest a-portal-leads-to-the-scaled-point
   ;; NetherPortalBlock.getExitPortal: the overworld's x and z over 8, floored, y kept
-  (is (= [10 64 -2] (sim/exit-point [80.7 64.0 -9.2])))
-  (is (= [0 -25 0] (sim/exit-point [7.9 -25.0 0.5]))))
+  (is (= [10 64 -2] (sim-portal/exit-point [80.7 64.0 -9.2])))
+  (is (= [0 -25 0] (sim-portal/exit-point [7.9 -25.0 0.5]))))
 
 (deftest a-nether-arrival-needs-room-for-the-portal-not-an-isolated-foothold
   (let [gravel (blocks/default-state :gravel)
@@ -3321,8 +3332,8 @@
                        gravel))
         decoded (decoded-of (assoc captured-nether [0 0] column))
         at #(chunk/block-at decoded %)]
-    (is (sim/standing? at [1 34 1]) "one gravel block can hold the player")
-    (is (= [1.5 64.0 1.5] (:at (sim/arrival decoded [8.5 18.0 8.5])))
+    (is (sim-portal/standing? at [1 34 1]) "one gravel block can hold the player")
+    (is (= [1.5 64.0 1.5] (:at (sim-portal/arrival decoded [8.5 18.0 8.5])))
         "the linked portal needs ground for its whole frame, not gravel suspended over lava")))
 
 (deftest a-natural-nether-portal-needs-its-whole-frame-in-either-axis
@@ -3331,7 +3342,7 @@
                       (for [n (range -1 3)
                             y (range 63 68)]
                         [[(* n dx) y (* n dz)] (if (= y 63) netherrack blocks/air)]))
-          fits? #(sim/portal-space? (fn [p] (get % p)) [0 64 0])]
+          fits? #(sim-portal/portal-space? (fn [p] (get % p)) [0 64 0])]
       (is (fits? cells))
       (doseq [state [nil blocks/air lava]]
         (is (not (fits? (assoc cells [(* 2 dx) 63 (* 2 dz)] state)))
@@ -3342,23 +3353,25 @@
 
 (deftest the-arrival-is-the-standing-cell-nearest-the-exit-point
   (let [decoded (decoded-of captured-nether)]
-    (is (= {:at [1.5 64.0 1.5] :placed {}} (sim/arrival decoded [8.5 64.0 8.5]))
+    (is (= {:at [1.5 64.0 1.5] :placed {}} (sim-portal/arrival decoded [8.5 64.0 8.5]))
         "on the netherrack at the exit point itself")
     (testing "lava under the exit point: the nearest cell with a solid floor, ties by position"
       (let [pool (decoded-of (assoc captured-nether [0 0] (nether-column {[1 63 1] lava})))]
-        (is (= [0.5 64.0 1.5] (:at (sim/arrival pool [8.5 64.0 8.5]))))))
+        (is (= [0.5 64.0 1.5] (:at (sim-portal/arrival pool [8.5 64.0 8.5]))))))
     (testing "nearest in height too: a portal deep in the overworld comes out in a cave under it"
       (let [cave (decoded-of
                   (assoc captured-nether
                          [0 0]
                          (nether-column
                           (into {} (for [x (range 4 8) y (range 40 44)] [[x y 1] blocks/air])))))]
-        (is (= [5.5 40.0 1.5] (:at (sim/arrival cave [8.5 -20.0 8.5]))))))
+        (is (= [5.5 40.0 1.5] (:at (sim-portal/arrival cave [8.5 -20.0 8.5]))))))
     (testing "the bedrock roof is never stood under: no cell with its head at 128 or over"
-      (is (nil? (sim/exit-spot (fn [[_ y _]] (if (< y 128) netherrack blocks/air)) [0 120 0] 128))))
+      (is (nil? (sim-portal/exit-spot (fn [[_ y _]] (if (< y 128) netherrack blocks/air))
+                                      [0 120 0]
+                                      128))))
     (testing "nowhere to stand within sixteen: the server's forced platform"
-      (is (nil? (sim/exit-spot (constantly netherrack) [1 30 1] 128)))
-      (let [{:keys [at placed]} (sim/arrival {} [8.5 30.0 8.5])]
+      (is (nil? (sim-portal/exit-spot (constantly netherrack) [1 30 1] 128)))
+      (let [{:keys [at placed]} (sim-portal/arrival {} [8.5 30.0 8.5])]
         (is (= [1.5 70.0 1.5] at) "its y held at 70 or over")
         (is (= (blocks/default-state :obsidian) (placed [1 69 1])) "an obsidian floor")
         (is (= blocks/air (placed [1 71 1])) "air over it")
@@ -3392,12 +3405,12 @@
     (is (= dimension/nether (:player/dimension w)) (pr-str (plan/summary w)))
     (is (= netherrack (terrain/block-at w [x (dec y) z])) "on netherrack")
     (is (= blocks/air (terrain/block-at w feet)))
-    (is (<= (- sim/exit-search) x (inc sim/exit-search))
+    (is (<= (- sim-portal/exit-search) x (inc sim-portal/exit-search))
         "within sixteen of the portal's x over 8 (0 or 1: the arena is chunk [0 0])")
     (is (= lava (terrain/block-at w [x 31 z])) "the lava sea's top under it")
     (is (some #(= [16 64 6] %) (fortress/bricks w)) "the near fortress's bricks on record")
     (is (not-any? #(>= (first %) 64) (fortress/bricks w)) "the far one's never sent")
-    (is (= (sim/block-at sim [16 64 6]) (terrain/block-at w [16 64 6])))
+    (is (= (sim-world/block-at sim [16 64 6]) (terrain/block-at w [16 64 6])))
     (testing "and it tunnels on to the fortress it saw"
       (let [{w' :world sim' :sim} (sim/play-on step
                                                w
@@ -3606,18 +3619,18 @@
                      :sim/portal-since 0
                      :sim/placed placed
                      :sim/broken #{[2 63 2]}))
-        nether (sim/through-portal s sim/portal-ms)
+        nether (sim-portal/through-portal s sim-portal/portal-ms)
         dead (assoc nether :sim/health 0.0 :sim/out [])
-        alive (sim/on-packet dead
-                             {:packet/name :client-command
-                              :action (packet/value :client-command :perform-respawn)})]
+        alive (sim-world/on-packet dead
+                                   {:packet/name :client-command
+                                    :action (packet/value :client-command :perform-respawn)})]
     (is (= dimension/nether (:sim/dimension nether)))
     (is (not= (:sim/columns s) (:sim/columns nether)) "the Nether's own column")
     (is (= dimension/overworld (:sim/dimension alive)))
     (is (= (:sim/columns s) (:sim/columns alive)) "the overworld's columns again")
     (is (= placed (:sim/placed alive)) "the portal and the obsidian still stand")
     (is (= #{[2 63 2]} (:sim/broken alive)))
-    (is (= :obsidian (blocks/name-of (sim/block-at alive [3 70 3]))))
+    (is (= :obsidian (blocks/name-of (sim-world/block-at alive [3 70 3]))))
     (is (not (contains? alive :sim/overworld)) "nothing set aside once it is back")
     (is (some #(= :level-chunk-with-light (:packet/name %)) (:sim/out alive))
         "the client is sent the overworld's chunks")))

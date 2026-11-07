@@ -8,13 +8,13 @@ status: verified
 lastUpdated: 2026-10-11
 verifiedAgainst: HEAD
 sourceRefs:
-  - src/clojurecraft/sim.clj#defn cook
-  - src/clojurecraft/sim.clj#defn reset-on-new-input
-  - src/clojurecraft/sim.clj#defn tick-furnaces
-  - src/clojurecraft/sim.clj#defn open-furnace
-  - src/clojurecraft/sim.clj#defn furnace-data
-  - src/clojurecraft/sim.clj#defn accepts?
-  - src/clojurecraft/sim.clj#defn take-onto
+  - src/clojurecraft/sim/window.clj#defn cook
+  - src/clojurecraft/sim/window.clj#defn reset-on-new-input
+  - src/clojurecraft/sim/window.clj#defn tick-furnaces
+  - src/clojurecraft/sim/window.clj#defn open-furnace
+  - src/clojurecraft/sim/window.clj#defn furnace-data
+  - src/clojurecraft/sim/window.clj#defn accepts?
+  - src/clojurecraft/sim/window.clj#defn take-onto
   - test/clojurecraft/sim_test.clj#four-raw-iron-cook-on-one-coal-in-200-ticks-each
   - test/clojurecraft/sim_test.clj#a-plank-runs-dry-after-one-ingot-and-the-progress-unwinds
   - test/clojurecraft/sim_test.clj#a-furnace-cooks-with-its-window-closed

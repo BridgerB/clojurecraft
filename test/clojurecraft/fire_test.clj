@@ -1,12 +1,12 @@
 (ns clojurecraft.fire-test
-  "Fire on the player (fire.clj) and the model burning it (sim/tick-burn): the real numbers, race
+  "Fire on the player (fire.clj) and the model burning it (sim-mobs/tick-burn): the real numbers, race
    f8b28e3 lane 2, are in the namespace's docstring."
   (:require [clojure.test :refer [deftest is]]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.fire :as fire]
             [clojurecraft.mob :as mob]
             [clojurecraft.mob-test :as m]
-            [clojurecraft.sim :as sim]
+            [clojurecraft.sim.mobs :as sim-mobs]
             [clojurecraft.simrace :as simrace]))
 
 (defn burn-run
@@ -94,10 +94,10 @@
   (let [rack (blocks/default-state :netherrack)
         flame (blocks/default-state :fire)
         on-rack (-> (m/arena {[5 63 0] rack} {} :normal m/night [])
-                    (sim/set-fire [5 64 0])
+                    (sim-mobs/set-fire [5 64 0])
                     (m/ticks 200))
         on-stone (-> (m/arena {} {} :normal m/night [])
-                     (sim/set-fire [5 64 0])
+                     (sim-mobs/set-fire [5 64 0])
                      (m/ticks 100))]
     (is (= flame (get-in on-rack [:sim/placed [5 64 0]])) "still burning after ten seconds")
     (is (empty? (:sim/fires on-rack)) "no end set")

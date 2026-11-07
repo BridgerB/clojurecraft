@@ -109,8 +109,6 @@
  :vantage-rise 2
  ;; vantages, nearest the feet first, a route is asked for before none is taken: the route is the costly test. At 8, and stare-site's route test without vantage-nodes, 3 endermen by 8 vantages at the full budget froze real-18 bots 19 to 53 s a tick and the server timed them out (4f317da lane 2, Clj_r01: profile probe 42327950512, 921 of 1219 samples in stare-site)
  :vantage-tries 3
- ;; expansions a route to or from a vantage may spend: it lies within shelter-reach, and sixteen such routes may be asked in one planner tick
- :vantage-nodes 1500
  ;; cells on the plane from a calm enderman crowding a given-up burrow's mouth, at most, a new burrow is cut within: the nearer its mouth, the surer the stare from it follows
  :crowd-reach 10
  ;; blocks past stare-from that a new burrow's mouth stands from that enderman's head, at the least, so that the stare from it is not cut short as one that came near (:provoke)

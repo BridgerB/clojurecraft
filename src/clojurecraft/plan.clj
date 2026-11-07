@@ -122,7 +122,7 @@
 (def avoid-ms 300000)                 ; ms after the watchdog fires that the place it fired at is avoided by the row's choices
 (def avoid-radius 16.0)               ; blocks from that place a cell counts as it
 (def explore-tries 4)                 ; trail cells tried farthest first, then as many nearest first, for a route
-(def explore-nodes 2000)              ; expansions each of those route searches may spend
+(def explore-nodes (path/budget :explore))              ; expansions each of those route searches may spend
 (def retreat-reach
   "Blocks from the feet within which a trail cell is a retreat: further is not a step back."
   16)

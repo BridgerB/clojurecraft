@@ -19,6 +19,8 @@
             [clojurecraft.real :as real]
             [clojurecraft.record :as record]
             [clojurecraft.sim :as sim]
+            [clojurecraft.sim.portal :as sim-portal]
+            [clojurecraft.sim.world :as sim-world]
             [clojurecraft.simrace :as simrace]
             [clojurecraft.world :as world]))
 
@@ -131,8 +133,9 @@
     (is (= [:wood :no-log] (:run/signature (:result run))))
     (is (= dimension/nether (:player/dimension bw) (:sim/dimension s)))
     (is (= 0 (get-in bw [:world/chunks [0 0] :chunk/min-y])) "the bot's column is the Nether's")
-    (is (= :stone (blocks/name-of (sim/block-at s [8 10 8]))) "the model reads the Nether column")
-    (is (= :air (blocks/name-of (sim/block-at s [8 70 8]))))
+    (is (= :stone (blocks/name-of (sim-world/block-at s [8 10 8])))
+        "the model reads the Nether column")
+    (is (= :air (blocks/name-of (sim-world/block-at s [8 70 8]))))
     (is (simrace/recurs? snap played) (pr-str (:run/signature played)))))
 
 (def zombie (:zombie blocks/entity-types))
@@ -191,7 +194,7 @@
            (:sim/inv s)))
     (is (= [2 7 15.0 17 2.5]
            ((juxt :sim/held :sim/state-id :sim/health :sim/food :sim/saturation) s)))
-    (is (= 389 (sim/player-eid-of s)))
+    (is (= 389 (sim-world/player-eid-of s)))
     (is (= {[1 64 1] 1} (:sim/placed s)) "the server's word, never the bot's guess")
     (is (= #{[0 0] [1 0]} (set (keys (:sim/columns s))))
         "the columns near the bot, not the far one")
@@ -244,11 +247,11 @@
         m {:world (assoc (bot-world) :player/dimension dimension/overworld)
            :columns {[0 0] (world/column-bytes {})}}
         nether (real/nether-of folded m)
-        s (sim/arrive (real/model m {:seed 1 :nether nether}))]
+        s (sim-portal/arrive (real/model m {:seed 1 :nether nether}))]
     (is (= #{[0 0]} (set (keys (:columns nether)))) "the Nether near the arrival")
     (is (= [8.5 64.0 8.5] (:sim/player-pos s)))
     (is (= 0 (:chunk/min-y (get (:sim/decoded s) [0 0]))) "the Nether's column, decoded on arrival")
-    (is (= :stone (blocks/name-of (sim/block-at s [8 10 8]))))
+    (is (= :stone (blocks/name-of (sim-world/block-at s [8 10 8]))))
     (is (empty? (:sim/mobs s)) "the overworld's zombie stays behind")
     (is (nil? (real/nether-of folded (assoc-in m [:world :player/dimension] dimension/nether)))
         "a moment already in the Nether goes nowhere new")))

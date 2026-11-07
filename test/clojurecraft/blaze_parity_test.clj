@@ -14,6 +14,7 @@
             [clojurecraft.mob-test :as m]
             [clojurecraft.physics :as physics]
             [clojurecraft.sim :as sim]
+            [clojurecraft.sim.mobs :as sim-mobs]
             [clojurecraft.world :as world]))
 
 (def real (edn/read-string (slurp (io/resource "clojurecraft/real_blaze.edn"))))
@@ -32,7 +33,7 @@
                    (assoc :sim/health 20.0))
             out (:sim/out s')
             spawned (count (filter #(and (= :add-entity (:packet/name %))
-                                         (= sim/fireball-type (:type %)))
+                                         (= sim-mobs/fireball-type (:type %)))
                                    out))
             dmg (filter #(= :damage-event (:packet/name %)) out)
             by (fn [t] (count (filter #(= t (:source-type %)) dmg)))]

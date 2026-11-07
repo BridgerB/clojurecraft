@@ -421,7 +421,7 @@
                            (not= c [fx fy fz])
                            (progress? [fx fy fz] c [x z] hop-gain)
                            (not (contains? (avoided/all-of world :blacklist) c))
-                           (intent/routable? world (assoc i :intent/max-nodes 400)))
+                           (intent/routable? world (assoc i :intent/max-nodes (path/budget :near))))
                   i)))
             hop-turns))))
 
@@ -471,7 +471,9 @@
         c (when d (mapv #(long (math/floor %)) (:entity/pos d)))]
     (when (and c
                (<= (abs (- (physics/y-of c) (physics/y-of (intent/feet world)))) pickup-rise)
-               (intent/routable? world {:intent/kind :walk :intent/target c :intent/max-nodes 400}))
+               (intent/routable?
+                world
+                {:intent/kind :walk :intent/target c :intent/max-nodes (path/budget :near)}))
       {:intent/kind :collect-drops :intent/item eye :intent/target c :intent/for :stronghold})))
 
 
@@ -557,9 +559,10 @@
                      (when (and c
                                 (dry-cell? world c)
                                 (not (contains? (avoided/all-of world :blacklist) c))
-                                (intent/routable?
-                                 world
-                                 {:intent/kind :walk :intent/target c :intent/max-nodes 400}))
+                                (intent/routable? world
+                                                  {:intent/kind :walk
+                                                   :intent/target c
+                                                   :intent/max-nodes (path/budget :near)}))
                        c))))))))
 
 (defn far-start
@@ -615,7 +618,7 @@
                 (when (and i
                            (<= cy (- fy downhill-drop))
                            (not (contains? (avoided/all-of world :blacklist) c))
-                           (intent/routable? world (assoc i :intent/max-nodes 400)))
+                           (intent/routable? world (assoc i :intent/max-nodes (path/budget :near))))
                   i)))
             (for [r downhill-reaches turn hop-turns] [r turn])))))
 
@@ -740,9 +743,10 @@
                (sort-by #(physics/horizontal-distance (:player/pos world) (physics/centre %)))
                (take retreat-tries)))
         walkable (some #(when (or (not (terrain/chunk-loaded? world %))
-                                  (intent/routable?
-                                   world
-                                   {:intent/kind :walk :intent/target % :intent/max-nodes 400}))
+                                  (intent/routable? world
+                                                    {:intent/kind :walk
+                                                     :intent/target %
+                                                     :intent/max-nodes (path/budget :near)}))
                           %)
                        retreats)]
     (cond (:player/in-water? world) {:intent/kind :swim-out :intent/for :retreat}

@@ -9,29 +9,29 @@ lastUpdated: 2026-10-22
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/gym.clj#def gyms
-  - src/clojurecraft/gym.clj#def spread-under
-  - src/clojurecraft/gym.clj#defn pocket?
+  - src/clojurecraft/land.clj#def spread-under
+  - src/clojurecraft/land.clj#defn pocket?
   - src/clojurecraft/gym.clj#defn outcome
   - src/clojurecraft/gym.clj#defn report
   - src/clojurecraft/gym.clj#defn landing!
   - src/clojurecraft/gym.clj#defn trial!
   - src/clojurecraft/gym.clj#defn located-in
   - src/clojurecraft/gym.clj#defn judge!
-  - src/clojurecraft/gym.clj#defn fill-in
+  - src/clojurecraft/land.clj#defn fill-in
   - src/clojurecraft/gym.clj#defn truth-re
   - test/clojurecraft/gym_test.clj#a-truth-can-hold-the-server-to-what-the-bot-saw
   - src/clojurecraft/gym.clj#def portal-arena
-  - src/clojurecraft/gym.clj#def nether-arena
-  - src/clojurecraft/gym.clj#defmethod land! :nether-arena
-  - src/clojurecraft/gym.clj#defmethod land! :warped-forest
-  - src/clojurecraft/gym.clj#defn spread
-  - src/clojurecraft/gym.clj#defn warped?
+  - src/clojurecraft/land.clj#def nether-arena
+  - src/clojurecraft/land.clj#defmethod land! :nether-arena
+  - src/clojurecraft/land.clj#defmethod land! :warped-forest
+  - src/clojurecraft/land.clj#defn spread
+  - src/clojurecraft/land.clj#defn warped?
   - src/clojurecraft/gym.clj#defn trial-name
   - test/clojurecraft/gym_test.clj#a-warped-forest-landing-is-spread-onto-its-floor
   - test/clojurecraft/gym_test.clj#the-pearl-rows-are-found-by-their-own-names
-  - src/clojurecraft/gym.clj#defmethod land! :end
-  - src/clojurecraft/gym.clj#defn place!
-  - src/clojurecraft/gym.clj#defn wait-in!
+  - src/clojurecraft/land.clj#defmethod land! :end
+  - src/clojurecraft/land.clj#defn place!
+  - src/clojurecraft/land.clj#defn wait-in!
   - src/clojurecraft/gym.clj#defn kit
   - src/clojurecraft/gym.clj#defn summons
   - src/clojurecraft/gym.clj#defn no-ai-zombie

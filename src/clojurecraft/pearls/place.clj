@@ -74,10 +74,9 @@
   "Can the bot standing with its feet in cell [x y z] not be hit by an enderman: its feet and head
    cells open, and no cell an enderman could stand in (stand?) in the nine columns round it at the
    heights whose body would overlap the bot's (feet two under to one over). A mob's melee reaches
-   its own box grown 0.83 sideways and not at all up or down (Mob.getAttackBoundingBox, probe run
-   38893918055), so an enderman two cells off on the plane, or wholly above or below, cannot
-   reach; one cell off it always can. Gym batch pearls-263a (plan run 38892130785): five of five
-   live trials died fighting in the open in iron, the enderman landing 5.74 a second."
+   its own box grown 0.83 sideways and not at all up or down (Mob.getAttackBoundingBox), so an
+   enderman two cells off on the plane, or wholly above or below, cannot reach; one cell off it
+   always can."
   [world [x y z]]
   (and (not (solid-or-unloaded? world [x y z]))
        (not (solid-or-unloaded? world [x (inc y) z]))
@@ -87,10 +86,7 @@
 (defn perched?
   "Do the feet stand on a lone column two or more blocks high, open air on all four sides of the
    feet's cell and of the two cells under it: a pillar the bot raised (combat/cover against a
-   teleporter) and never came down? From one no walk has a route and no level tunnel a floor.
-   Real-18 Clj_r11 (3af52ae lane 2 b2, probe 42268355364) stood on such a pillar at y 98 for
-   its last fifteen minutes, every walk :no-path and every :chase tunnel :blocked, until the run
-   ended :blocked."
+   teleporter) and never came down? From one no walk has a route and no level tunnel a floor."
   [world]
   (let [[x y z] (intent/feet world)
         open? (fn [c] (= :clear (path/classify world c)))
@@ -117,9 +113,7 @@
     (when (and s
                (<= (physics/distance (intent/feet world) s) pparams/shelter-reach)
                (shelter? world s)
-               ;; with an angry one within hold-radius the bot waits inside: pearl-fight-p job 3 (plan
-               ;; run 41256381552) gave its burrow up as stale with 3217 angry 7 to 8 blocks off, walked
-               ;; out to a new site and was slain 3 blocks from it
+               ;; with an angry one within hold-radius the bot waits inside
                (or (not (psense/stale? world)) (psense/angry-within? world pparams/hold-radius)))
       s)))
 
@@ -149,10 +143,7 @@
 
 (defn lava-floor
   "The height in the Nether under which no stair, tunnel or burrow is cut: the lava sea's top and
-   lava-margin over it (a cell of lava or a dug cell beside it floods the cut). 0 elsewhere. Gym
-   plan run 41134469333 (pearls-travel-b) job 6 (issue #263): a descent toward an enderman cut
-   down from y 47 to y 34 and the burrow at [2498 34 2160] let lava in; two flees and \"tried to
-   swim in lava\" at 62 minutes."
+   lava-margin over it (a cell of lava or a dug cell beside it floods the cut). 0 elsewhere."
   [world]
   (if (= dimension/nether (dimension/of world)) (+ pparams/lava-sea-top pparams/lava-margin) 0))
 
@@ -176,11 +167,7 @@
    in it fills and the bot does not: from two over the feet to one under mob/tall over them,
    one cell, [x y+2 z], for its 2.9. The bot stands in two open cells and an enderman needs
    three, so a burrow whose mouth it cannot stand in (stand?) it never enters, however its
-   stairs are cut: :burrow digs these first. Gym batch pearls-warped7-b (plan run 39725964182,
-   probe 39732372050) run 3 cut its burrow under a huge fungus's cap, a warped wart block two
-   over the mouth's feet, with every stair four high below it; the enderman the lure brought
-   stood in the hollows two to four blocks beside the mouth, and six held fights in six timed
-   out :unreachable over twenty minutes."
+   stairs are cut: :burrow digs these first."
   [[x y z]]
   (mapv (fn [dy] [x (+ y dy) z]) (range 2 (mob/tall :enderman))))
 
@@ -214,12 +201,8 @@
   "The cell nearest the feet, within site-reach on the plane and a block up or down at most,
    not the feet, that the bot could stand in (standable?), cut a burrow along dir from
    (burrowable?), and walk to (intent/routable?), and that a walk has not failed toward
-   (:plan/blacklist); nil when there is none. Gym batch pearls-warped-e (plan run 39164914828)
-   run 1: on broken ground :burrow failed :no-shelter six times in a row where the bot stood,
-   and it then provoked an enderman with no shelter and was slain in the open. Batch
-   pearls-warped2-b (plan run 39182782203) run 1: a site with no way to it was chosen again
-   after each failed walk, thirteen :no-path in a row. The route is asked last and one cell at
-   a time (some, not a chunked filter): it is the costly test."
+   (:plan/blacklist); nil when there is none. The route is asked last and one cell at a time
+   (some, not a chunked filter): it is the costly test."
   [world dir]
   (let [[x y z :as feet] (intent/feet world)
         bl (avoided/all-of world :blacklist)]
@@ -238,33 +221,19 @@
                              {:intent/kind :walk :intent/target c :intent/for :shelter}))
                    c))))))
 
-; blocks from the burrow's end within which an enderman is provoked from outside the mouth: a provoked one is at the bot in about a second, and four hits fell it in the 3.6 s a walk of six blocks home took (gym plan run 40747177526 run 6)
+; blocks from the burrow's end within which an enderman is provoked from outside the mouth: a provoked one is at the bot in about a second
 (defn vantage
   "A walk to look from within the burrow's reach, with none of ms provokable from here: a cell
    on the plane between stare-from and vantage-reach from the nearest of the candidates nearest
    endermen in ms, within vantage-rise of its height and shelter-reach of the burrow
    (:pearls/shelter) and no farther from the burrow than from the enderman (provoked, it comes
-   at the bot's pace and more; the bot must be home first: gym batch pearls-warped5-b, plan run
-   39671293287, probe 39683564524, run 1 provoked one 7.6 blocks off from a vantage 12 from its
-   burrow's end and was slain on the walk home at 106 s, and run 5 lost eleven health on the
-   walk home from one 15 off), that the bot could stand in (standable?), from which the enderman is
-   provokable?, past a walk's reach of the eye (nearer, the walk arrives where it starts) and
-   not where a walk already arrived (memory/arrived); of those, nearest the feet first and
-   vantage-tries at most, the first a route reaches (intent/routable?) with a route from it
-   home (gym batch pearls-warped-e's run 1, plan run 39164914828, provoked fifteen blocks from
-   its burrow and found no path home); nil when none. Gym batch pearls-warped4-b (plan run
-   39596287510, probe 39616249061): the stone arena's endermen wander off its lit square within
-   the first minute, out of the mouth's line, and run 2 stood at its mouth at 33 s with all
-   three 16 to 28 blocks off and hidden, walked out to the nearest and met the zombies, a
-   skeleton and a creeper the dark round the arena spawned, its burrow out of reach by then;
-   pearls-12's run 3 stood in its burrow from 341 s to the end over a calm enderman four blocks
-   from the mouth, too near to stare at from there and hidden from the end, giving the burrow
-   up every minute and cutting the same one again beside it; run 4 walked from its mouth to an
-   enderman's cell, back in and out again 130 times. Provoked from a vantage, the enderman
-   follows the bot home, and the fight is the burrow's. Now only within provoke-home-reach of the
-   burrow's end: gym plan run 40860669235 job 4 walked to a vantage five blocks out over a calm
-   enderman crowding the mouth, with an angry one tracked, was fought in the open there at 11
-   health and was slain."
+   at the bot's pace and more; the bot must be home first), that the bot could stand in
+   (standable?), from which the enderman is provokable?, past a walk's reach of the eye (nearer,
+   the walk arrives where it starts) and not where a walk already arrived (memory/arrived); of
+   those, nearest the feet first and vantage-tries at most, the first a route reaches
+   (intent/routable?) with a route from it home; nil when none. Provoked from a vantage, the
+   enderman follows the bot home, and the fight is the burrow's. Only within provoke-home-reach
+   of the burrow's end."
   [world ms]
   (let [pos (:player/pos world)
         feet (intent/feet world)
@@ -325,10 +294,8 @@
    stand in (standable?) and cut a burrow from heading from it (burrowable?, along away), past a
    walk's reach of the eye, not one a walk failed toward (:plan/blacklist), and of those, nearest
    the feet first and vantage-tries at most, the first a route reaches (intent/routable?); nil
-   when there is none. A walk to the enderman itself ends beside it, the burrow is cut there,
-   and a look while digging stares at it point blank: sim probe 39885559223 (world R2, seed 4)
-   walked to a calm one with its burrow given up, was provoked two blocks off as it began the
-   burrow beside it, and was slain in the open in six seconds."
+   when there is none. A walk to the enderman itself ends beside it, and a look while digging
+   there stares at it point blank."
   [world e]
   (let [feet (intent/feet world)
         eye (game/eye world)
@@ -362,13 +329,8 @@
 (defn crowd-site
   "The stare-site of the calm enderman crowding the burrow's mouth (crowder), where a new burrow
    is cut when the old one is given up (stale?) over it; nil when there is none, or no crowder.
-   Sim probe 39883402083 (world R1, seed 4): a calm enderman stood by the mouth from the eighth
-   minute to the end, too near to stare at from the mouth and hidden from the end; every minute
-   of lookouts gave the burrow up, the walk toward the nearest enderman went to that one, and the
-   burrow cut beside it was the same burrow again, its end and mouth the cells they had been.
-   Worlds R1, R2 and R4 stood 28 to 49 of their 60 minutes so over seeds 3 to 5; gym batch
-   pearls-warped4-a's runs 1 and 5 stood 35 and 21 minutes over such ones (plan run
-   39544677155)."
+   Beside the crowder the old burrow would be cut again, its end and mouth the cells they had
+   been."
   [world]
   (when-let [[_ e] (crowder world)] (stare-site world e)))
 
@@ -376,10 +338,7 @@
   "How many of the first n level steps from feet along dir stand on a floor once the steps
    before them are open (stairs/level-safe? a step at a time on the block overlay, as
    burrowable? opens a burrow's steps): the length a tunnel toward an enderman may cut before
-   a step out over a drop. Gym batch pearls-warped9-a (plan run 39898400239) run 3's tunnel
-   toward an enderman broke into the cave it stood in and the bot came down from y 51 to
-   y 38 into the fight in the open there, where it died: the step the tunnel would lay a
-   floor for over that drop is refused, as dig-out refuses a cut from a brink (brink?)."
+   a step out over a drop, as dig-out refuses a cut from a brink (brink?)."
   [world feet dir n]
   (let [steps (reductions (fn [cells _] (stairs/level-cells (last cells) dir))
                           (stairs/level-cells feet dir)
@@ -405,10 +364,7 @@
 
 (defn brink?
   "Does one of the eight cells beside feet [x y z] at its height stand open over brink-drop or more
-   open cells: a drop the bot can be pushed or step off into? Gym batch pearls-warped8-c (plan run
-   39845223845, probe 39854206523) run 2 started dig-out's stairs up on a ledge over a lava lake;
-   the stair's lay backed the bot off the edge, eleven blocks down into the lava, the plan failing
-   :no-footing."
+   open cells: a drop the bot can be pushed or step off into?"
   [world [x y z]]
   (boolean (some (fn [[dx dz]]
                    (let [cx (+ x dx)
@@ -422,11 +378,10 @@
   ;; water, lava and drops, turning where refused), then a tunnel burrow-length on along the
   ;; heading the stairs ended on: the stairs are four high (:intent/tall, mob/tall), so an
   ;; enderman follows down them, and the tunnel two high, so it stops at its mouth, two cells
-  ;; from the bot (three-high stairs under a hill held it at the first: probe 39206015361).
+  ;; from the bot (three-high stairs under a hill would hold it at the first).
   ;; First, while a cell over the mouth that an enderman standing in it would fill is solid
-  ;; (mouth-cells), a child :dig of it: under a fungus's cap the mouth is two high, the
-  ;; enderman never enters, and batch pearls-warped7-b's run 3 held six fights :unreachable
-  ;; (probe 39732372050). Done when the feet stand in a shelter?, kept as :pearls/shelter, with
+  ;; (mouth-cells), a child :dig of it: under a fungus's cap the mouth is two high and the
+  ;; enderman never enters. Done when the feet stand in a shelter?, kept as :pearls/shelter, with
   ;; where it began as :pearls/mouth; failed :no-shelter when they do not, or with a child's
   ;; reason
   [world {:intent/keys [stage dir mouth] :as i} event]
@@ -471,9 +426,8 @@
 (defmethod intent/run :lookout
   ;; {:intent/kind :lookout}: stand, the eyes level and turning (lookout-turn), for lookout-ms,
   ;; then done: the hunt with nothing to go after waits as an intent, not a planner wait, whose
-  ;; 400 ticks fail the plan. Gym batch pearls-263c (plan run 38897897563): the warped forest
-  ;; landings failed :no-enderman and :no-route in 40 s, before any enderman had come. A stare
-  ;; it turns onto by chance provokes one, which is what the hunt wants
+  ;; 400 ticks fail the plan. A stare it turns onto by chance provokes one, which is what the hunt
+  ;; wants
   [world i _]
   (let [now (:time/now world)
         since (or (:intent/since i) now)

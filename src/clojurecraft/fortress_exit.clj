@@ -27,8 +27,7 @@
    room: the newest fortress trail cell outside every box, the way the bot came in. From outside
    with the line through it: the newest trail cell outside the boxes from which the line to
    target is clear, else the nearest corner of a box, a block past its margin, whose two legs
-   are clear. Clj_r11 of race f8b28e39d (replayed on main, probe 41267637866) was walked out of the
-   room by leave-sight and walked back in by the travel to the forest beyond it, flip after flip."
+   are clear."
   [world target]
   (let [boxes (pcover/room-boxes world)
         feet (intent/feet world)]
@@ -76,10 +75,8 @@
 
 (defn exit-anchors
   "The positions the tunnel-out leaves: the known spawners when any is known, else every
-   fortress point. A fortress runs a hundred blocks and more, and every brick of it seen through
-   the tunnel kept the bot near it: in sim R1/17 (batch 59e528b, probe 42370534718, 9642 points)
-   it tunnelled 110 blocks out, 60 from the spawner, then back 100 and spent nine pickaxes and
-   all its wood. The blaze room, the spawner, is what the exit leaves."
+   fortress point. A fortress runs a hundred blocks and more, so the bricks seen through the
+   tunnel would keep the bot near it: the blaze room, the spawner, is what the exit leaves."
   [world]
   (let [spawners (memory/positions-now world [blaze/spawner])]
     (if (seq spawners) spawners (fortress-points world))))
@@ -176,9 +173,7 @@
    or nil when no solid wall is found. Never a cell within 2 blocks of the feet: the bot's own
    bored tunnel cell beside the corridor is enclosed and boreable, and a tunnel to it (or to an
    adjacent cell, inside :intent/reach 1.5) ends :done at once without a step, so the planner
-   chose it again every tick (race run 41781768766 lane 8 s1 Clj_r79: 24,234 :tunnel-to starts
-   on its own feet cell [886 53 -180] after the rods, 3 cells dug, never 2 blocks from the
-   spawner pocket until the lane cut it)."
+   would choose it again every tick."
   [world [cx cy cz]]
   (let [feet (intent/feet world)
         offsets (for [d [1 2 3 4] [dx dz] [[-1 0] [1 0] [0 -1] [0 1]]] [(* d dx) (* d dz)])]
@@ -201,12 +196,10 @@
   "The fixed cardinal exit heading [dx dz] for the pocket bore, or nil with no spawner known:
    from the spawner toward the start of the inbound trail (the oldest :plan/trail cell, where
    the bot entered the fortress ground), else toward the nearest known forest, else east of
-   the spawner (never explore's target: its eight route searches ran in every call and froze
-   real rod bots, and it moves with the feet). Derived only from facts that do not move as the bot
-   steps (the spawner, the trail's start, the forest), never from the feet, so the heading is
-   the same at every cell of the bore and cannot flip between two targets: run 41852247420
-   s2 Clj_r32 alternated :tunnel-to [-741 77 116] and [-737 77 116] 45 times each after the
-   rods, wearing its stone pickaxe from 131 to 1 durability without leaving the pocket."
+   the spawner (never explore's target: its eight route searches are costly and it moves with the
+   feet). Derived only from facts that do not move as the bot steps (the spawner, the trail's
+   start, the forest), never from the feet, so the heading is the same at every cell of the bore
+   and cannot flip between two targets."
   [world]
   (when-let [sp (blaze/nearest-spawner world)]
     (let [[sx _ sz] sp
@@ -251,12 +244,10 @@
    target bore-reach along a perpendicular heading whose next step is enclosed, at the same
    y; when neither is enclosed, the reverse heading as a last resort, so a pocket beside a
    fortress room whose heading and side steps all border the room's air still bores through
-   the rock behind it instead of holding forever (probe 41914633411 R1/32 seed 1: sealed
-   at full health, then :tunnel-to [-43 69 220] from [-40 69 220] with the feet unmoved
-   from t 570 s to 810 s until blazes killed it where it stood). A target the instant-churn
-   guard (#719) has blacklisted (:plan/blacklist, fail-intent on :instant-churn/:blocked)
-   is passed over for the next enclosed heading, so the guard never rules out the bore's
-   own steps. Nil when no heading is enclosed and unblacklisted. Never below the feet."
+   the rock behind it instead of holding forever. A target the instant-churn guard (#719) has
+   blacklisted (:plan/blacklist, fail-intent on :instant-churn/:blocked) is passed over for the
+   next enclosed heading, so the guard never rules out the bore's own steps. Nil when no heading
+   is enclosed and unblacklisted. Never below the feet."
   [world]
   (let [feet (intent/feet world)
         [_ fy _] feet
@@ -282,7 +273,7 @@
       (let [idx (nearest-trail-index feet trail)
             remaining (when idx (drop (inc idx) trail))
             ;; only a cell 2 or more away: one nearer is inside the tunnel's reach (1.5) and
-            ;; ends it :done without a step, and the same cell is chosen again (Clj_r79 above);
+            ;; ends it :done without a step, and the same cell is chosen again;
             ;; a blacklisted cell (#719's guard, fail-intent) is passed over the same way
             target-c (some #(when (and (>= (physics/distance feet %) 2.0)
                                        (not (contains? (:plan/blacklist world #{}) %)))
@@ -297,9 +288,8 @@
 (defn fortress-exit-dir
   "The horizontal unit direction [dx dz] away from the fortress: toward nearest-forest if known,
    else away from the nearest spawner or brick. Never explore's: its eight route searches
-   (far-ends) ran in every call, several a tick through fortress-escaping?, and froze real rod
-   bots 2 to 19 s a tick (Clj_r08, lane 42202999306 b1, profile probe 42210270571: 2057 of 2613
-   samples); a bored tunnel goes through rock, so a walk's route end says nothing of its way."
+   (far-ends) are costly, several a tick through fortress-escaping?, and a bored tunnel goes
+   through rock, so a walk's route end says nothing of its way."
   [world]
   (let [feet (intent/feet world)
         [fx _ fz] feet
@@ -414,12 +404,9 @@
    ranged kind and stands within the sword's reach (combat/in-reach?). At or over the danger-line
    (combat/danger-line) a :fight held where the bot stands (:intent/hold?, :intent/yield?: it ends
    under retreat-health); a kind of combat/avoided only at combat/avoided-health or more and with no
-   other of those within defend-radius; under those lines the cover
-   (combat/cover: a block laid between, a meal), never the fight and never the wait that ends
-   the plan. The hunt answers wither skeletons and hoglins itself (combat/answering), so the
-   :defend row leaves them, and the bore, which asks nothing, dug on with its back open: Clj_r10
-   (d3ce99b, run 42353848749) was faced 16 times and hit 6, 20 health to none in 21 s, with no
-   swing sent (issue #263)."
+   other of those within defend-radius; under those lines the cover (combat/cover: a block laid
+   between, a meal), never the fight and never the wait that ends the plan. The hunt answers
+   wither skeletons and hoglins itself (combat/answering), so the :defend row leaves them."
   [world]
   (when (and (fortress-escaping? world) (can-tunnel-out? world))
     (when-let [[eid e] (combat/striker world)]
@@ -446,11 +433,10 @@
    when it can be sealed (:seal), and while sealed and under full health eat (blaze/meal)
    or hold (:pocket-hold) until full; hurt outside a pocket after a hit while boring, get
    into the blaze row's refuge (blaze/pocket-go, else blaze/here-intent sealed in place)
-   before going on. A seal the server rejected (:rejected, run 41852247420 s2 Clj_r12 and
-   Clj_r13: `place failed: :rejected` and death-blaze seconds later) leaves the pocket
-   open and unsealed: then a hurt bot eats or holds in it instead of boring out exposed.
-   Sealed at full health, or in no pocket at full health, nil: fortress-tunnel-out bores
-   from where the bot stands along the fixed heading (pocket-bore-heading)."
+   before going on. A seal the server rejected (:rejected) leaves the pocket open and unsealed:
+   then a hurt bot eats or holds in it instead of boring out exposed. Sealed at full health, or in
+   no pocket at full health, nil: fortress-tunnel-out bores from where the bot stands along the
+   fixed heading (pocket-bore-heading)."
   [world]
   (when (and (fortress-escaping? world) (can-tunnel-out? world))
     (let [site (:pocket/site world)
@@ -463,8 +449,6 @@
                  (blaze/reach-blaze world)
                  (blaze/fightable-blaze world))
             ;; a blaze in reach of the open pocket is struck, never held under
-            ;; (probe 41914679195 R3/10 seed 1: :pocket-hold at hp 13.8 to 0 with
-            ;; a blaze on the bot, its seal never laid)
             (intent/why :pocket-bore/and-in?-not-sealed?-hp-blaze-low-health-blaze-re
                         {:intent/kind :fight
                          :intent/target (first (blaze/fightable-blaze world))
@@ -551,8 +535,7 @@
         (or (blaze/commit-fight world)
             (blaze/hold-intent world)
             ;; hold-intent is nil with a blaze in reach: the row strikes it (its fight
-            ;; branch), never holds in the open pocket while it hits (R3/10 seed 1,
-            ;; probe 41914679195: pocket-hold at hp 13.8 to 0 with a blaze on the bot)
+            ;; branch), never holds in the open pocket while it hits
             (when-let [[eid] (and (blaze/reach-blaze world) (blaze/fightable-blaze world))]
               {:intent/kind :fight :intent/target eid :intent/to-the-end? true :intent/yield? true})
             ;; hold-intent is nil with a blaze in reach to be fought or nothing to heal:
@@ -577,9 +560,7 @@
               (blaze/here-intent world)
               ;; no pocket to go to and none to seal where it stands: the cover
               ;; walk out of every watcher's sight, never the hunt's bore in the
-              ;; open (probe 41986025500 R1/12 seed 1: at the rod, hp 14.4, five
-              ;; watchers, the refuge's chain came back nil and the hunt laid a
-              ;; wall where it stood, 14.4 to 1.6 in two seconds, death-blaze)
+              ;; open
               (blaze/hide world)))))))
 
 (defn fortress-exit-hold
@@ -609,9 +590,8 @@
 
 (defn room-exit
   "The :tunnel-to along the fortress trail to its newest cell outside every blaze room, or nil:
-   while the feet are inside one (room-boxes) and no enderman is tracked within seek-radius. The
-   rod bots' climb-out and dig-out opened straight up into the room (Clj_r02 of race f8b28e39d:
-   :tunnel then :stairs-up from a sealed pocket under 23 blazes, probe 41267636159)."
+   while the feet are inside one (room-boxes) and no enderman is tracked within seek-radius. A
+   climb-out or dig-out would open straight up into the room."
   [world]
   (let [boxes (pcover/room-boxes world)
         feet (intent/feet world)]

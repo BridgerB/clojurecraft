@@ -23,7 +23,9 @@
    other sizes (the row is the medium one: 4 health, 4 on Normal) and a hoglin's swing landing
    anywhere from 3 to 8 (the row uses 6). The armour the player wears takes its share of a mob's
    hit. A wither skeleton's wither does not (wither-tick)."
-  (:require [clojure.math :as math]
+  (:require [clojure.edn :as edn]
+            [clojure.java.io :as io]
+            [clojure.math :as math]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.physics :as physics]
             [clojurecraft.recipe :as recipe]))
@@ -31,6 +33,10 @@
 (set! *warn-on-reflection* true)
 
 ;; ---------------------------------------------------------------- the kinds, as data
+
+(def mob-table
+  "The mobs file, as read (resources/clojurecraft/mob-kinds.edn): {:mob/kinds :mob/equipment :mob/passive :mob/warped :mob/fortress :mob/crimson}."
+  (edn/read-string (slurp (io/resource "clojurecraft/mob-kinds.edn"))))
 
 (def kinds
   "Each kind's numbers. :health the game's max health; :box [width height] its hitbox; :speed
@@ -45,142 +51,13 @@
    them; :loot [[item lo hi]], each item lo to hi when killed by the player; :paths finds a
    route round what stops its straight walk (route); :teleports teleports at its target as an
    enderman does (toward-aim, away-aim)."
-  {:zombie {:health 20.0
-            :box [0.6 1.95]
-            :speed 0.115
-            :follow 35.0
-            :melee 3.0
-            :every 20
-            :reach 1.4
-            :undead true
-            :hostile true
-            :weight 100
-            :loot [[:rotten_flesh 0 2]]}
-   :skeleton {:health 20.0
-              :box [0.6 1.99]
-              :speed 0.137
-              :follow 16.0
-              :shoot 3.0
-              :every 40
-              :range 15.0
-              :keep 10.0
-              :undead true
-              :hostile true
-              :weight 100
-              :loot [[:bone 0 2] [:arrow 0 2]]}
-   :creeper {:health 20.0
-             :box [0.6 1.7]
-             :speed 0.137
-             :follow 16.0
-             :fuse 30
-             :swell 3.0
-             :blast 3.0
-             :hostile true
-             :weight 100
-             :loot [[:gunpowder 0 2]]}
-   :spider {:health 16.0
-            :box [1.4 0.9]
-            :speed 0.197
-            :follow 16.0
-            :melee 2.0
-            :every 20
-            :reach 1.6
-            :hostile true
-            :weight 100
-            :loot [[:string 0 2]]}
-   :enderman {:health 40.0
-              :box [0.6 2.9]
-              :speed 0.197
-              :follow 64.0
-              :melee 7.0
-              :every 20
-              :reach 1.4
-              :neutral true
-              :hostile true
-              :weight 10
-              :paths true
-              :teleports true
-              :loot [[:ender_pearl 0 1]]}
-   :blaze {:health 20.0
-           :box [0.6 1.8]
-           :speed 0.2
-           :flies true
-           :contact 6.0
-           :reach 2.0
-           :contact-every 20
-           :follow 48.0
-           :shoot 5.0
-           :projectile :fireball
-           :ignites 5000
-           :volley {:charge 60 :shots 3 :between 6 :rest 100}
-           :range 48.0
-           :keep 16.0
-           :loot [[:blaze_rod 0 1]]}
-   ;; a fortress's own hostiles (structure spawn_overrides: wither_skeleton weight 8, magma_cube 3).
-   ;; No :weight: the overworld's night rule does not roll them (hostile-kinds). :melee is omitted
-   ;; on the magma cube because combat/hit-damage reads it and the bot's line for a magma cube
-   ;; stays unknown; its hit is :contact, which only the model strikes with.
-   :wither_skeleton {:health 20.0
-                     :box [0.7 2.4]
-                     :speed 0.137
-                     :follow 16.0
-                     :melee 8.0
-                     :every 20
-                     :reach 1.4
-                     :wither true
-                     :undead true
-                     :hostile true
-                     :loot [[:bone 0 2] [:coal 0 1]]}
-   :magma_cube {:health 4.0
-                :box [1.0 1.0]
-                :speed 0.11
-                :follow 16.0
-                :contact 4.0
-                :every 20
-                :reach 1.5
-                :hostile true
-                :loot [[:magma_cream 0 1]]}
-   :hoglin {:health 40.0
-            :box [1.4 1.4]
-            :speed 0.15
-            :follow 16.0
-            :melee 6.0
-            :every 20
-            :reach 2.0
-            :hostile true
-            :loot [[:porkchop 2 4]]}
-   :ghast {:health 10.0
-           :box [4.0 4.0]
-           :speed 0.0
-           :follow 100.0
-           :shoot 6.0
-           :every 60
-           :range 64.0
-           :keep 64.0
-           :loot [[:ghast_tear 0 1] [:gunpowder 0 2]]}
-   :piglin {:health 16.0
-            :box [0.6 1.95]
-            :speed 0.115
-            :follow 16.0
-            :shoot 5.0
-            :every 40
-            :range 16.0
-            :keep 8.0
-            :loot []}
-   :cow {:health 10.0 :box [0.9 1.4] :passive true :loot [[:beef 1 3] [:leather 0 2]]}
-   :pig {:health 10.0 :box [0.9 0.9] :passive true :loot [[:porkchop 1 3]]}
-   :sheep {:health 8.0 :box [0.9 1.3] :passive true :loot [[:mutton 1 2] [:white_wool 1 1]]}
-   :chicken {:health 4.0 :box [0.4 0.7] :passive true :loot [[:chicken 1 1] [:feather 0 2]]}
-   :ender_dragon {:health 200.0 :box [16.0 8.0] :perched true :loot []}
-   :end_crystal {:health 1.0 :box [2.0 2.0] :blast 6.0 :crystal true :loot []}})
+  (:mob/kinds mob-table))
 
 (def equipment
   "{kind {slot item}} what a kind holds when the server shows it (set-equipment, slot names as
    entity/equipment-slots): a skeleton's bow, a wither skeleton's stone sword, a piglin's
    crossbow. A kind not here shows nothing."
-  {:skeleton {:mainhand :bow}
-   :wither_skeleton {:mainhand :stone_sword}
-   :piglin {:mainhand :crossbow}})
+  (:mob/equipment mob-table))
 
 (defn type-id
   "The entity type id of kind (entity-types.edn), as add-entity carries it."
@@ -197,7 +74,7 @@
 
 (def passive-kinds
   "The animals a chunk is given when it is first loaded, in a fixed order."
-  [:chicken :cow :pig :sheep])
+  (:mob/passive mob-table))
 
 (def death-ticks 20)                  ; a dead mob is removed this long after it died (LivingEntity.tickDeath)
 (def dragon-death-ticks 200)          ; the dragon's death takes ten seconds (EnderDragon.tickDeath)
@@ -663,17 +540,17 @@
   "The kinds a warped forest's monster list spawns, with their weights: the enderman alone
    (weight 1, in packs of enderman-pack), as vanilla's warped_forest biome lists them. The
    Nether spawns by biome; the model tells a warped forest by its floor (warped-floor?)."
-  [[:enderman 1]])
+  (:mob/warped mob-table))
 
 (def fortress-kinds
   "The kinds a fortress's brick floor spawns, with their weights, beside the blaze spawner:
    wither skeleton 8 and magma cube 3, the structure's spawn_overrides (fortress.json). Blazes
    stay the spawner's. One mob a try, the model's rate, not the structure's minCount."
-  [[:wither_skeleton 8] [:magma_cube 3]])
+  (:mob/fortress mob-table))
 
 (def crimson-kinds
   "The kind a crimson forest's floor spawns: the hoglin, weight 1. Piglins are not modelled."
-  [[:hoglin 1]])
+  (:mob/crimson mob-table))
 
 (def enderman-pack 4)                 ; endermen a warped forest's spawn tries for at once (the biome's spawner: minCount and maxCount both 4)
 (def pack-walk 6)                     ; each pack member steps nextInt(6) - nextInt(6) on x and on z from the last (NaturalSpawner.spawnCategoryForPosition)
