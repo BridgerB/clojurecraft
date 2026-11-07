@@ -1437,12 +1437,12 @@
   (and (= 1 (held-count world :bucket)) (held? world :water_bucket)))
 
 (defn seal-source
-  "The child that removes the water source at pos without a bucket: a filler block (filler/for)
+  "The child that removes the water source at pos without a bucket: a filler block (filler/pick)
    placed into it takes the source's place, to be dug out where a later op needs the cell open
    (the next cell's hole, the interior); nil when no filler is held or no solid neighbour holds
    the click (place/support)."
   [world pos]
-  (when-let [item (filler/for world 1)]
+  (when-let [item (filler/pick world 1)]
     (when (place/support world pos) {:intent/kind :place :intent/item item :intent/cell pos})))
 
 (defn spare-pour-op
@@ -1452,7 +1452,7 @@
    filler (last-bucket-scoop?). nil unless a filler is held and such a cell exists."
   [world {:intent/keys [origin facing]}]
   (let [at #(cell origin facing %)]
-    (when (filler/for world 1)
+    (when (filler/pick world 1)
       (some (fn [[dx dy :as c]]
               (let [[sx :as s] (stands c)
                     over (at [dx (inc dy) 0])]

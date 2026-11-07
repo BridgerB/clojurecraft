@@ -334,7 +334,7 @@
          (or (nil? failed) (> (- (:time/now world 0) failed) seal-retry-ms))
          (pickaxe-held? world)
          (pos? n)
-         (some? (filler/for world n)))))
+         (some? (filler/pick world n)))))
 
 (defn ops
   "The site as build ops: a dig of each cell still to dig, from the stand, then (unless prepare?:
@@ -476,7 +476,7 @@
               (intent/assoc-intent :intent/started (or (:intent/started i) (:time/now world 0)))
               (work-ops
                i
-               (seal-ops (:pocket/cell site) cells (or (filler/for world (count cells)) seal-item))
+               (seal-ops (:pocket/cell site) cells (or (filler/pick world (count cells)) seal-item))
                event
                true)))))
 

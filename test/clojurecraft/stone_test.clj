@@ -1394,9 +1394,9 @@
 (deftest planks-are-the-last-filler-and-no-descent-spends-them
   (let [planks (standing 48 :birch_planks :birch_planks :birch_planks)
         both (standing 48 :birch_planks :birch_planks :birch_planks :dirt)]
-    (is (= :birch_planks (filler/for planks 3)) "nothing else held: planks")
-    (is (nil? (filler/for planks 4)) "not more than held")
-    (is (= :dirt (filler/for both 1)) "a filler first")
+    (is (= :birch_planks (filler/pick planks 3)) "nothing else held: planks")
+    (is (nil? (filler/pick planks 4)) "not more than held")
+    (is (= :dirt (filler/pick both 1)) "a filler first")
     (is (zero? (filler/carried planks)) "a descent's reserve counts none")))
 
 (deftest a-water-cell-with-no-support-is-laid-after-a-supported-one-beside-it

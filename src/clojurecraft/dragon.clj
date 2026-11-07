@@ -1087,7 +1087,7 @@
             under [sx (dec sy) sz]
             wall (bed-wall stand site)
             open (filter #(= :clear (path/classify world %)) wall)
-            stone (filler/for world 1)
+            stone (filler/pick world 1)
             standing (- (count wall) (count open))
             dist (physics/horizontal-distance (physics/centre stand) (physics/centre site))
             health (:player/health world full-health)

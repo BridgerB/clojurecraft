@@ -313,7 +313,7 @@ water, it carves one: a notch two high in the nearest wall just over the float l
    was refused (no-lay) or no cell does."
   [world feet surface no-lay]
   (when-not no-lay
-    (when-let [item (filler/for world 1)]
+    (when-let [item (filler/pick world 1)]
       (when-let [cell (bank-block world feet surface)] [cell item]))))
 
 (defn start-lay
@@ -519,7 +519,7 @@ water, it carves one: a notch two high in the nearest wall just over the float l
                   (let [c (obstacle world feet nil)] (when (or (not rise?) (iced? world c)) c)))
             laid (when-not (or b cap rise?) (lift-bank world feet surface no-lay))
             toward (when-not (or b cap laid rise? no-lay)
-                     (when (filler/for world 1) (wall-toward world feet surface)))
+                     (when (filler/pick world 1) (wall-toward world feet surface)))
             wall (when-not (or b cap laid toward rise?) (notch world feet surface))]
         (cond b
               (-> world
@@ -553,7 +553,7 @@ water, it carves one: a notch two high in the nearest wall just over the float l
       (> (- tick best-tick) stuck-ticks)
       (let [cell (obstacle world feet bank)
             laid (when-not cell (lift-bank world feet surface no-lay))
-            blocked (when (and (nil? cell) (nil? laid) (not no-lay) (filler/for world 1))
+            blocked (when (and (nil? cell) (nil? laid) (not no-lay) (filler/pick world 1))
                       (occupied-bank world feet surface))
             ;; under a roof a block cannot be laid (bank-block wants the open sky), so a bank the
             ;; lift cannot reach is made the notch's way instead: carve a stand at the body's own

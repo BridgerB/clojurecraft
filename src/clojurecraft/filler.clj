@@ -2,7 +2,6 @@
   "The blocks a bot lays and seals with: which item to lay from what is held, with what each
    caller keeps back. Values in, values out: every function reads the inventory of a world and
    chooses an item name."
-  (:refer-clojure :exclude [for])
   (:require [clojure.string :as str]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.path :as path]
@@ -31,7 +30,7 @@
    loot gives and the soul sand a floor of the Nether is dug out as."
   [:polished_blackstone_bricks :cracked_polished_blackstone_bricks :soul_sand])
 
-(defn for
+(defn pick
   "The first of fillers the inventory holds n or more of, else a planks item it holds n or more of,
    else the first of last-resorts it holds n or more of, or nil. Planks and last-resorts are
    fallbacks only: carried counts none of them, so a descent never spends them."

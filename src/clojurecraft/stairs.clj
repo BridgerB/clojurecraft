@@ -221,7 +221,7 @@
    none can be."
   [world cells laid]
   (when (clear-way? world cells)
-    (when-let [cells (seq laid)] (when (filler/for world (count cells)) (vec cells)))))
+    (when-let [cells (seq laid)] (when (filler/pick world (count cells)) (vec cells)))))
 
 (def max-void-reserve 16)              ; most filler a bridge over a deep void keeps, twice lay-reserve
 
@@ -357,7 +357,7 @@
     (let [cells (vec (remove #(place/inside-player? world %) (water-beside world cells)))]
       (when (and (seq cells)
                  (every? #(place/support world %) cells)
-                 (filler/for world (count cells)))
+                 (filler/pick world (count cells)))
         cells))))
 
 (defn wet-feet
@@ -411,7 +411,7 @@
         all (into helpers wet)]
     (when (and (seq wet)
                (every? #(or (place/support world %) (some (set helpers) (neighbours %))) wet)
-               (filler/for world (count all)))
+               (filler/pick world (count all)))
       all)))
 
 (defn up-lay
@@ -575,7 +575,7 @@
                (every? #(= :water (terrain/fluid-kind world %)) wet)
                (not-any? #{[fx fy fz] [fx (inc fy) fz]} wet)
                (every? #(place/support world %) wet)
-               (filler/for world (count laid)))
+               (filler/pick world (count laid)))
       laid)))
 
 (defn reserve-level-lay
@@ -655,7 +655,7 @@
    pillar-extras held. Gravel and sand are the last resort, never laid into a floor (fillers)."
   [world]
   (let [held (recipe/counts (:player/inventory world))]
-    (or (filler/for world 1) (first (filter #(pos? (get held % 0)) pillar-extras)))))
+    (or (filler/pick world 1) (first (filter #(pos? (get held % 0)) pillar-extras)))))
 
 (defn pillar-up?
   "May a boxed stair up go up as a shaft of pillars from feet (a pillar-item held, a solid block
@@ -1044,7 +1044,7 @@
                 (= :surface for)
                 (not no-shaft)
                 (not (pickaxe-held? world))
-                (filler/for world 1)
+                (filler/pick world 1)
                 (= :solid (path/classify world (update feet 1 dec)))
                 (intent/centred? world feet)
                 (shaft-safe? world feet))))
@@ -1153,7 +1153,7 @@
   ;; stair like any cell that cannot be cut: turn
   [world {:intent/keys [child lay level-cells] :as i} event]
   (let [next (first (remove #(= :solid (path/classify world %)) lay))
-        item (filler/for world 1)]
+        item (filler/pick world 1)]
     (cond (and child (intent/done? child)) (intent/dissoc-intent world :intent/child)
           (and child
                (intent/failed? child)

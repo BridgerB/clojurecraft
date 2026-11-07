@@ -1645,7 +1645,7 @@
                           plan/goals))
      "a fence two high between the bot and its burrow, one to provoke over it: to the mouth
          first, as run 1 should have (the walk fails, and the provoke waits)")
-    (is (= :netherrack (filler/for {:player/inventory {0 (item :netherrack 3)}} 2))
+    (is (= :netherrack (filler/pick {:player/inventory {0 (item :netherrack 3)}} 2))
         "a Nether descent lays its floors from what it digs")))
 
 (deftest a-burrow-site-is-one-a-walk-reaches-and-none-a-walk-failed-toward

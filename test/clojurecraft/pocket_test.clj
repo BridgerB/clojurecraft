@@ -211,7 +211,7 @@
         w (-> (world-of walled)
               (assoc-in [:player/inventory 9] {:item (recipe/item-id :netherrack) :count 40})
               (assoc-in [:player/inventory 10] {:item (recipe/item-id :iron_pickaxe) :count 1}))]
-    (is (= :netherrack (filler/for w 2)))
+    (is (= :netherrack (filler/pick w 2)))
     (is (pocket/can-seal? w site) "no cobblestone: the Nether's own rock seals")
     (is (every? #(= :netherrack (:build/item %))
                 (pocket/seal-ops [8 64 8] [[7 64 8] [7 65 8]] :netherrack)))

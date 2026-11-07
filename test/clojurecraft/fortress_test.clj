@@ -374,7 +374,7 @@
         (is (not (fortress/bridge-over-void? short [0 64 0] [1 0 0])) "15 together: short")))
     (testing "soul sand is no bridge (R1/37 seed 2: soul sand 207, lava all round, :blocked)"
       (let [sand (assoc w :player/inventory {0 {:item (recipe/item-id :soul_sand) :count 207}})]
-        (is (some? (filler/for sand 16)) "it is the last resort filler")
+        (is (some? (filler/pick sand 16)) "it is the last resort filler")
         (is (not (fortress/bridge-over-void? sand [0 64 0] [1 0 0])))
         (is (not (fortress/bridge? sand [0 64 0] [1 0 0] true)))))))
 
@@ -1515,7 +1515,7 @@
         "another filler is laid before them")
     (is (= :cobblestone (filler/building (w :cobblestone 4 :stick 8) 1))
         "one above the pickaxe's three")
-    (is (= :cobblestone (filler/for (w :cobblestone 64 :netherrack 160) 1))
+    (is (= :cobblestone (filler/pick (w :cobblestone 64 :netherrack 160) 1))
         "seals and cover still take filler's cobblestone first")
     (is (= :netherrack (filler/walkable (w :cobblestone 64 :netherrack 160) [1 63 0])))))
 

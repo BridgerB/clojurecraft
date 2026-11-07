@@ -171,7 +171,7 @@
    refuses only for that water, or nil: the stone has one to three water cells beside it (six
    neighbours; no lava, no gravel or sand over a fluid), each within the place reach of the eye with
    a solid neighbour to place against (place/support) and not given up (:plan/blacklist), a route
-   reaches it once sealed (routable?), and a filler is held for all of them (filler/for, else
+   reaches it once sealed (routable?), and a filler is held for all of them (filler/pick, else
    planks). Once the water is a block the stone is exposed to the walk, dig and collect chain as any
    other. Every wet cell is one a block takes the place of (blocks/placeable-into?)."
   [world row]
@@ -182,7 +182,7 @@
      (fn [c]
        (let [wet (vec (for [d six-around :let [n (mapv + c d)] :when (terrain/fluid-at world n)] n))
              item (when (and (seq wet) (every? #(placeable-cell? world %) wet))
-                    (or (filler/for world (count wet)) (planks-held world (count wet))))
+                    (or (filler/pick world (count wet)) (planks-held world (count wet))))
              target (first wet)]
          (when (and item
                     (<= (count wet) 3)
@@ -258,7 +258,7 @@
   "A :craft of a held log into its planks in the inventory's grid, or nil: only once a staircase
    died :boxed (:plan/boxed-at), with less than filler-want filler carried (filler/carried),
    no planks held (filler/planks-of) and a log whose planks recipe is known. Planks are the last
-   thing a floor is laid from (filler/for), and a log is four of them."
+   thing a floor is laid from (filler/pick), and a log is four of them."
   [world]
   (let [held (recipe/counts (:player/inventory world))
         recipe-id (some (fn [[item c]]
@@ -646,12 +646,12 @@
                 (:player/in-water? world))))
 
 (defn foothold
-  "The child :place of a filler block (filler/for) into a cell under the feet's level, one of the
+  "The child :place of a filler block (filler/pick) into a cell under the feet's level, one of the
    four beside the feet column or the one under it, that a click can reach (place/support) and that
    is no part of the player, so that the cell over it is a spot for a block to be placed and dug
    again; nil when no filler is held or no such cell is there."
   [world]
-  (when-let [item (filler/for world 1)]
+  (when-let [item (filler/pick world 1)]
     (let [[fx fy fz] (intent/feet world)
           eye (game/eye world)
           cell (first (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1] [0 0]]

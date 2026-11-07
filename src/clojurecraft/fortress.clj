@@ -138,7 +138,7 @@
    runs into the tunnel."
   [world lava]
   (and (<= (count lava) max-seals)
-       (some? (filler/for world (count lava)))
+       (some? (filler/pick world (count lava)))
        (every? #(= % (build/foundation world %)) lava)))
 
 (def deep-drop 3) ; non-solid cells under a floor that make it thin
@@ -162,13 +162,13 @@
 
 (defn underlay-possible?
   "Can the cell under floor be filled from the stand before the floor is walked: a filler carried
-   (filler/for), bridge-min-filler of them together so that the fill never eats a bridge's
+   (filler/pick), bridge-min-filler of them together so that the fill never eats a bridge's
    reserve (landing 5 went from 64 cobblestone to 12 in 70 s, a floor and a fill under it at every
    step down its own pillar), and a solid neighbour to place against (build/foundation is the cell
    itself)?"
   [world floor]
   (let [under (plus floor [0 -1 0])]
-    (and (some? (filler/for world 1))
+    (and (some? (filler/pick world 1))
          (>= (filler/carried world) bridge-min-filler)
          (= under (build/foundation world under)))))
 
@@ -320,7 +320,7 @@
    lava under it within stairs/bridge-depth (stairs/over-fluid?: a causeway over a lake is no
    cave's floor, unless fluid-ok?: bridge-over-void? asks for ground itself), a filler carried,
    the step dry? and, with that floor laid, safe?. The block laid is one that stands as a floor
-   once laid (filler/walkable: soul sand, the last resort of filler/for, is not), as the safe?
+   once laid (filler/walkable: soul sand, the last resort of filler/pick, is not), as the safe?
    asked of it assumes cobblestone and the placing puts the carried filler there: sim R1/37 seed 2
    (probe 40826098892) bridged the lava sea with soul sand and stood on five of its blocks, lava all
    round, and was :blocked three times in four seconds. The fortress's tunnel bridges only by

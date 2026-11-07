@@ -50,8 +50,8 @@
          :climb climb
          :intent (select-keys i [:intent/kind :intent/bridge? :intent/move :intent/retreats])
          :health (:player/health w)
-         :filler (filler/for w 1)
-         :filler16 (filler/for w 16)
+         :filler (filler/pick w 1)
+         :filler16 (filler/pick w 16)
          :held
          (into {}
                (comp (map val)

@@ -1586,7 +1586,7 @@
             target (when cell
                      (let [f (build/foundation world cell)]
                        (when (and f (not (place/inside-player? world f))) f)))
-            filler (filler/for world combat/wall-fill)]
+            filler (filler/pick world combat/wall-fill)]
         (when (and target filler (not (combat/wall-failed? world target)))
           {:intent/kind :place
            :intent/item filler
