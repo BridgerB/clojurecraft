@@ -57,7 +57,7 @@ sourceRefs:
   - src/clojurecraft/scoop.clj#defn aim-point
   - src/clojurecraft/scoop.clj#defmethod scoop-stage :sent
   - src/clojurecraft/place.clj#defn equip
-  - src/clojurecraft/sim.clj#defn scooped
+  - src/clojurecraft/sim/world.clj#defn scooped
   - test/clojurecraft/scoop_test.clj#the-act-scoops-in-reach-walks-to-water-in-sight-and-refuses-cave-water
   - test/clojurecraft/scoop_test.clj#a-scoop-the-server-never-answers-fails-no-scoop
   - test/clojurecraft/sim_test.clj#an-empty-bucket-is-filled-at-a-pond-from-its-bank

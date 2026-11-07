@@ -54,6 +54,8 @@ resources/clojurecraft/threats.edn   per-kind facts of the hostiles (hit damage,
 src/clojurecraft/forage.clj     the food producer: hungry with nothing to eat, walk to the nearest cow, pig, sheep or rabbit, fight it, collect the meat
 src/clojurecraft/pearls.clj   the hunt row (stage 18): ender pearls by hunting endermen: provoke by a stare from range, fight at the legs, the pearl picked up where it fell
 src/clojurecraft/pearls/params.clj   the pearl hunt's constants: the pearls.edn table and the values derived from it
+src/clojurecraft/pearls/facts.clj    the facts the hunt's rules ask of the world, computed lazily once per call
+src/clojurecraft/pearls/rules.clj    the rule table (pearls-rules.edn) and decide: the first row whose facts hold
 src/clojurecraft/pearls/sense.clj    what the hunt perceives: endermen, anger, menace, shooters
 src/clojurecraft/pearls/place.clj    the burrow and shelter geometry; the :burrow, :lookout and :provoke intents
 src/clojurecraft/pearls/cover.clj    cover from shooters and swarms
@@ -82,7 +84,13 @@ src/clojurecraft/model.clj    the information model: every attribute, its meanin
 src/clojurecraft/spec.clj     specs for attributes, events, effects, intents, packets; fdefs on the reducers
 src/clojurecraft/record.clj   the recording: a channel tap, reading it back, replay and verify
 src/clojurecraft/replay.clj   clojure -M:replay: fold a recording with no server, print RESULT
-src/clojurecraft/sim.clj      pure server model for socket-free end-to-end runs; holds a whole world of columns
+src/clojurecraft/sim.clj      pure server model for socket-free end-to-end runs; holds a whole world of columns: init, the tick (tick-steps), step, run, connect!
+src/clojurecraft/sim/world.clj    the model's floor: constants, rolls, blocks, what it tells, fluids and falls; the on-packet table
+src/clojurecraft/sim/window.clj   the player's inventory, containers, the click rules, the furnace
+src/clojurecraft/sim/protocol.clj login, chunks, movement, digging, using items, the player's life (hurt, hunger, pickup)
+src/clojurecraft/sim/portal.clj   placing blocks, the Nether portal and the arrival
+src/clojurecraft/sim/mobs.clj     spawning, goals and attacks of every mob, the dragon's perch
+src/clojurecraft/sim/end.clj      eyes of ender, the End portal, the arrival on the main island
 src/clojurecraft/fluid.clj    water and lava as the server moves them: levels, flow, spread, mixing, as data and pure rules
 src/clojurecraft/hunger.clj   hunger as the server keeps it: exhaustion, saturation, regeneration, starvation, eating, as data and pure rules
 src/clojurecraft/mob.clj      mobs as the server runs them, for the model: kinds as data, spawning, walking, hitting, shooting, blasting, loot

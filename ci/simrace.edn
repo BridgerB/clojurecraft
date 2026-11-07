@@ -1,23 +1,10 @@
 ;; The sim race (simrace.yml, clojure -M:simrace): runners that play the whole bot in the race's
 ;; captured worlds against the server model, on every core, from every landing with seed after
-;; seed until the budget is spent. The real-server race (ci/race.edn) has the other runners.
-{:simrace/runners 8                  ; GitHub runners, each a share of the worlds; the real race has eight, four stay free
+;; seed until the budget is spent. Which start a lane plays and the page its results go under are
+;; in ci/lanes.edn; what a start is, in resources/clojurecraft/starts.edn.
+{:simrace/runners 8 ; GitHub runners, each a share of the worlds
  :simrace/sets ["R1" "R2" "R3" "R4"] ; the race's landing sets (ci/gym.edn), captured by simworld.yml
- :simrace/until "pearls-12"          ; the target each run plays every step up to: the Nether, the fortress (issue #261), seven blaze rods from its spawner (#262), in each set's captured Nether (#353) with the model's fortress spawners (#495), then twelve ender pearls from the model's warped-forest endermen (#263: they spawn, #523, and teleport and walk round walls, #542), as the real race (#516)
- :simrace/max-minutes 330            ; simulated minutes a run may take: the real bots' horizon, a lane's job (#252); a run that finishes early stops early
- :simrace/checkpoint-max-minutes 60 ; simulated minutes a checkpoint run may take, a :bot-timeout beyond (simrace/cap-max-ms); the real checkpoint bots' :race/bot-minutes
- :simrace/budget-minutes 330 ; wall minutes a runner plays: 300 took 303 with setup (sim race 38515210080), inside the job's 355 of GitHub's 360
- :simrace/from "fortress" ; each run starts in its set's captured Nether at the fortress with the real race's kit and plays only stages 17 and 18 (probe simfort-c 41217235280: R1/1 seeds 1-2 signed [:blaze-rods :timeout], a death respawns in the Nether with the kit); remove the line to start from spawn
- :simrace/checkpoint [{:from "rods" :kind "sim-18" :lanes [1 2 3 4]}
-                      {:from "forest" :kind "sim-18f" :lanes [5 6 7 8]}] ; a vector of checkpoints (a lone map is read as one: cli/checkpoints): lanes 1 to 4 start at the fortress (rods), lanes 5 to 8 in the set's warped forest nearest it (forest, simrace/forest-start), page kind sim-18f. every lane plays stage 18 (the stuck stage, 2026-11-06), stage 18's checkpoint (LOOP.md section 1): these lanes start each run at its fortress with the kit and seven rods (simrace/starts "rods"), page kind sim-18; no sim run had reached a warped forest from the blaze rods (0 of 52)
- :simrace/heap-mb 11264}                ; the runner's 16 GB, less the system's share and the churn's 2 GB judge (issue #299)
-;; A start at a fortress (issue #263/#262 frontier, branch ci/simrace-from-fortress): with
-;; :simrace/from "fortress" each run starts in its set's captured Nether, on ground thirty-two
-;; blocks (nearer when there is none) from the fortress spawner nearest the landing's Nether
-;; coordinates, with the kit below, and plays only the stages from the blaze rods up to :simrace/until
-;; (a failure before them is not the run's to file). Worlds whose Nether holds no spawner are left out.
-;; Absent, every run starts from spawn in the overworld as before. --from fortress does the same on one
-;; command line.
-;;   :simrace/from "fortress"   ; (set above)
-;;   :simrace/kit {:stone_pickaxe 1 :cobblestone 256 ...}   ; replaces simrace/fortress-kit-default,
-;;                                                         ; the real race's :race/kit
+ :simrace/until "pearls-12" ; the target; a run plays every step from its start up to it
+ :simrace/max-minutes 330 ; simulated minutes a run may take, the real bots' horizon
+ :simrace/budget-minutes 330 ; wall minutes a runner plays, inside the job's 355
+ :simrace/heap-mb 11264} ; the runner's 16 GB, less the system's share and the churn's 2 GB judge

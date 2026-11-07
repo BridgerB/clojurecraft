@@ -12,12 +12,12 @@ sourceRefs:
   - src/clojurecraft/hunger.clj#defn starves?
   - src/clojurecraft/hunger.clj#defn eat
   - src/clojurecraft/food.clj#def saturation
-  - src/clojurecraft/sim.clj#defn food-value
-  - src/clojurecraft/sim.clj#defn moved
-  - src/clojurecraft/sim.clj#defn feed
-  - src/clojurecraft/sim.clj#defn tick-eating
-  - src/clojurecraft/sim.clj#defn sync-health
-  - src/clojurecraft/sim.clj#defmulti use-held
+  - src/clojurecraft/sim/world.clj#defn food-value
+  - src/clojurecraft/sim/protocol.clj#defn moved
+  - src/clojurecraft/sim/protocol.clj#defn feed
+  - src/clojurecraft/sim/protocol.clj#defn tick-eating
+  - src/clojurecraft/sim/world.clj#defn sync-health
+  - src/clojurecraft/sim/protocol.clj#defmulti use-held
   - src/clojurecraft/simrace.clj#def difficulty :normal
   - test/clojurecraft/hunger_test.clj#eighty-one-jumps-cost-a-food-point-once-saturation-is-gone
   - test/clojurecraft/hunger_test.clj#starving-on-normal-stops-at-one-health

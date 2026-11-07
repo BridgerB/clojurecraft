@@ -24,9 +24,8 @@
 
 (defn worn-out?
   "Has the hunt spent its pickaxe: a burrow cut this run (memory/last-done) and no pickaxe held
-   now? A bot that never held one hunts in the open as it always has; one that wore its pickaxe
-   out on burrows does not: sim probe 39890964793 (seed 5) struck calm endermen in the open in
-   worlds R2 and R3 after its pickaxe broke and was slain, R2 nine times."
+   now? A bot that never held one hunts in the open; one that wore its pickaxe out on burrows
+   does not."
   [world]
   (boolean (and (not (pickaxe? world)) (memory/last-done world :burrow))))
 
@@ -42,12 +41,8 @@
 
 (defn spare?
   "Does a held pickaxe have spare-digs or more left, so that stairs or a tunnel for something
-   other than a burrow may spend some? Gym batch pearls-warped3-a (plan run 39529384355) run 1:
-   three kills from a burrow, then stairs, tunnels and bores wore the iron pickaxe out at
-   fourteen minutes (:stairs-down failed :no-pickaxe, 238 netherrack held), and with no burrow
-   to be cut it stood in :lookout for the last twenty-five; run 3 ended with 25 digs left.
-   Netherrack makes no pickaxe, but a warped stem does (make-pickaxe): under spare-digs the
-   hunt makes the next one before this one breaks."
+   other than a burrow may spend some? Netherrack makes no pickaxe, but a warped stem does
+   (make-pickaxe): under spare-digs the hunt makes the next one before this one breaks."
   [world]
   (boolean (some-> (digs-left world)
                    (>= pparams/spare-digs))))
@@ -56,13 +51,7 @@
   "Is a log already counted, in the inventory or laid in the crafting grid (sword/with-laid
    over recipe/counts)? Then a remake's wood is in hand and its log chain is finished:
    another trunk is not walked to, the log is crafted. A crafting table held is no wood
-   (sword/pieces? counts one as pieces): gym batch pearls-w2 (plan run 40428200343) run 3,
-   slain by a piglin, respawned at the overworld spawn, remade its wooden sword and took
-   its table up, then failed :no-pickaxe with sticks and the table held and spruces
-   remembered round it: the pickaxe's :log walk was refused for the table's sake, with no
-   plank and no log held. The log hunt of the batch before (pearls-w1 run 1, the same
-   failure) is refused only when a trunk is remembered, so the hunt's allowance alone never
-   reached it."
+   (sword/pieces? counts one as pieces)."
   [world]
   (pos? (recipe/have (recipe/counts (:player/inventory (sword/with-laid world)))
                      (recipe/tags :logs))))
@@ -79,20 +68,15 @@
   "The intent that makes the best sword the held items pay for (sword/payable) through the needs
    planner, when that craft can start from here: one of sword-acts, or the log chain to a
    remembered trunk (:intent/for :log) while no log is already counted (log-counted?).
-   Nil when nothing is payable, or the planner would only wait, go looking for
-   a tree, or chop another trunk with a log already in the grid. The Nether has no oak, and a
-   wait there fails the plan. With no blade payable from the planks or cobblestone held but a
-   log held, in the inventory or the grid (sword/with-laid: in the warped forest a stem, which
-   counts as a log), a wooden sword is asked for instead: its planks come from the log, as a
-   pickaxe's do (make-pickaxe). Gym batch pearls-m10-a (plan run 40106206590) run 2 held
-   twenty-five warped stems and six pearls when its iron sword broke and failed :no-sword:
-   sword/payable counts planks, and none were held. With no sword at all (combat/sword nil:
-   the hands a death leaves empty), a wooden sword is asked for with nothing held either, and
-   the log hunt for a trunk (:intent/for :log-hunt, wood/hunt) may start it: the craft is
-   made where the bot stands rather than the plan failing :no-sword on the respawn (gym
-   batches pearls-m10-a and pearls-m10-c, plan runs 40106206590 and 40133706786: each death
-   was followed at once by the :no-sword wait). A worn sword still held is replaced only as
-   before, never by a hunt for wood."
+   Nil when nothing is payable, or the planner would only wait, go looking for a tree, or chop
+   another trunk with a log already in the grid. The Nether has no oak, and a wait there fails
+   the plan. With no blade payable from the planks or cobblestone held but a log held, in the
+   inventory or the grid (sword/with-laid: in the warped forest a stem, which counts as a log), a
+   wooden sword is asked for instead: its planks come from the log, as a pickaxe's do
+   (make-pickaxe). With no sword at all (combat/sword nil: the hands a death leaves empty), a
+   wooden sword is asked for with nothing held either, and the log hunt for a trunk (:intent/for
+   :log-hunt, wood/hunt) may start it. A worn sword still held is replaced only as before, never
+   by a hunt for wood."
   [world goal table]
   (let [bare? (or (nil? (combat/sword world)) (not (sword/serviceable world)))]
     (when-let [k (or (sword/payable world)
@@ -131,11 +115,7 @@
    crafting grid visible (sword/with-laid), and a finished log chain not continued once a
    log is already counted (log-counted?), as sword/for-decide does for a sword. Not once
    the table's pieces are held (sword/pieces?): a table held counts there with no log and
-   no plank beside it, and gym batch pearls-w3 (plan run 40434266158) run 1, slain ninety
-   seconds in and respawned at the overworld spawn, remade its wooden sword, took its
-   table up and then walked to the spruce trunk beside it 356,882 times to the five-hour
-   timeout: each walk arrived in a tick, its done chain was hidden here for the table's
-   sake, and the decide asked for the walk again, never the dig."
+   no plank beside it."
   [world]
   (cond-> (sword/with-laid (drop-worn-picks world))
     (and (log-counted? world) (= :log (:intent/for (:plan/last world)))) (dissoc :plan/last)))
@@ -148,12 +128,12 @@
                 (recipe/counts (:player/inventory world)))))
 
 (defn reserve-gather
-  "The next step of cutting stems (wood/continue-gather and wood/near-walk: the log chain to a remembered trunk, never a hunt for wood) while the best pickaxe held has
-   under reserve-digs digs left and fewer than reserve-stems logs are held, with no angry enderman
-   near: a pickaxe reserve before the last digs, so that the successor is made from stems
-   (make-pickaxe, under spare-digs) and the hunt never stands in a rock pocket with six digs and no
-   wood (pearl-fight-i job 2, plan run 41178660163: 549 netherrack held and nothing to make a
-   pickaxe from). Nil when none is held or the chain waits."
+  "The next step of cutting stems (wood/continue-gather and wood/near-walk: the log chain to a
+   remembered trunk, never a hunt for wood) while the best pickaxe held has under reserve-digs
+   digs left and fewer than reserve-stems logs are held, with no angry enderman near: a pickaxe
+   reserve before the last digs, so that the successor is made from stems (make-pickaxe, under
+   spare-digs) and the hunt never stands in a rock pocket with six digs and no wood. Nil when
+   none is held or the chain waits."
   [world]
   (let [d (digs-left world)]
     (when (and d
@@ -166,19 +146,13 @@
   "The intent that makes a pickaxe through the needs planner (a goal providing
    {:tag/pickaxes 1}, as blaze.clj's row asks), when that craft can start from here: one of
    pick-acts, or the log chain to a remembered trunk (:intent/for :log) while no log is
-   already counted (log-counted?). Nil when the planner would only wait, or go
-   out by stairs, a swim or a search for the wood. In a warped forest the trunk is a warped
-   stem (blocks/log? counts stems, and the item tag :logs lists them beside the logs): stem to
-   planks to sticks and a crafting table, then the pickaxe the held items reach, a stone one
-   with cobblestone held, a wooden one without. Gym batch pearls-warped9-a (plan run
-   39898400239) run 2 spent 239 digs on five pearls, about sixteen a burrow, and with eleven
-   digs left stood in lookouts for four hours: no burrow could be cut, and no pickaxe remade.
-   With no pickaxe at all (pickaxe? false: the hands a death leaves empty, respawned at the
-   overworld spawn), the log hunt for a trunk (:intent/for :log-hunt, wood/hunt) may start
-   it too, as it may a bare-handed sword (make-sword): gym batch pearls-w1 (plan run
-   40387599204) run 1 died, remade its wooden sword from the spruces at spawn, then failed
-   :no-pickaxe twenty seconds later with sticks and its table held, the hunt for the
-   pickaxe's wood refused. A worn pickaxe still held is replaced only as before, never by
+   already counted (log-counted?). Nil when the planner would only wait, or go out by stairs, a
+   swim or a search for the wood. In a warped forest the trunk is a warped stem (blocks/log?
+   counts stems, and the item tag :logs lists them beside the logs): stem to planks to sticks and
+   a crafting table, then the pickaxe the held items reach, a stone one with cobblestone held, a
+   wooden one without. With no pickaxe at all (pickaxe? false: the hands a death leaves empty),
+   the log hunt for a trunk (:intent/for :log-hunt, wood/hunt) may start it too, as it may a
+   bare-handed sword (make-sword). A worn pickaxe still held is replaced only as before, never by
    a hunt for wood (wood/hunt is nil underground, so the Nether remake is unchanged)."
   [world goal table]
   (let [bare? (not (pickaxe? world))
@@ -187,8 +161,7 @@
           (make/decide (for-pick-decide w) (assoc goal :goal/provides {:tag/pickaxes 1}) table))
         first-i (decide world)
         ;; a remembered table no route reaches is replaced by a new one, not walked at: the walk
-        ;; to it is no craft, and the hunt in a rock pocket stood still (pearl-fight-i job 1, 28
-        ;; digs left, six stems, sticks and cobblestone held, a table remembered ten blocks over it)
+        ;; to it is no craft, and the hunt in a rock pocket would stand still
         i (if (and (= :walk (:intent/kind first-i)) (not (intent/routable? world first-i)))
             (decide (update world :plan/blacklist (fnil conj #{}) (:intent/target first-i)))
             first-i)]

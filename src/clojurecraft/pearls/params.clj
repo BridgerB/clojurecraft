@@ -146,10 +146,10 @@
 ; health a provoke keeps over the two hits it risks before the bot is back in its burrow
 (def provoke-health (:provoke-health thresholds))
 
-; health under which no enderman is provoked, from the mouth or anywhere: the bot rests in its burrow first (sim-endermen3's probe 39847287615: in worlds R1, R2 and R4 the first death came of a provoke 4 to 8 blocks off at 10.8 to 17.8 health just outside the burrow, the enderman landing three to five blows in five seconds); away from the mouth (a vantage) only at full health
+; health under which no enderman is provoked, from the mouth or anywhere: the bot rests in its burrow first; away from the mouth (a vantage) only at full health
 (def danger-health (or (:danger-health thresholds) combat/retreat-health))
 
-; health under which the hunt never fights, provokes or goes toward an enderman: one enderman hit (7 on Normal, ns doc) plus a margin, the same line combat breaks a fight off at. At or under it the bot backs off, walks home, eats or rests where it stands until its health is back over it (issue #563, probe 40022662598: after the second stone sword was crafted the hunt re-fought an angry enderman it had just backed away from, again and again down to 1.3 health, one hit from death)
+; health under which the hunt never fights, provokes or goes toward an enderman: one enderman hit (7 on Normal, ns doc) plus a margin, the same line combat breaks a fight off at. At or under it the bot backs off, walks home, eats or rests where it stands until its health is back over it
 (def break-hp (:break-hp thresholds))
 
 (def resume-hp (:resume-hp thresholds))

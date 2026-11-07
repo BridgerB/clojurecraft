@@ -16,8 +16,8 @@ sourceRefs:
   - src/clojurecraft/game.clj#def max-air 300
   - src/clojurecraft/game.clj#defmethod on-packet [:play :respawn]
   - "src/clojurecraft/packet.clj#[:play :c2s :client-command]"
-  - src/clojurecraft/sim.clj#defn drown
-  - src/clojurecraft/sim.clj#defmethod on-packet [:play :client-command]
+  - src/clojurecraft/sim/protocol.clj#defn drown
+  - src/clojurecraft/sim/protocol.clj#defmethod on-packet [:play :client-command]
   - test/clojurecraft/sim_test.clj#held-under-water-the-bot-drowns-and-respawns-with-no-intent
   - test/clojurecraft/sim_test.clj#a-respawned-player-can-equip-after-dying-with-a-furnace-open
   - test/clojurecraft/sim_test.clj#a-nether-death-allows-another-portal-crossing

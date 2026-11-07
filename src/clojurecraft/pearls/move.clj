@@ -25,9 +25,7 @@
    its octile) from the point reach behind the feet, which the cells reach or more ahead
    satisfy at any height, and the cells beside and behind do not. The route finds the way to
    one: along a cave's passage, up a cliff's side, round a lake of lava. Never by the height
-   alone: gym batch pearls-warped2-a (plan run 39179234118) run 3 roamed its own staircase up
-   and down for thirty minutes, each flight far enough by path's :away, which counts the
-   height."
+   alone (path's :away counts it), or a roam walks its own staircase up and down."
   ([feet heading] (roam-goal feet heading pparams/roam-reach))
   ([[x y z] [dx dz] reach]
    {:goal/kind :afar
@@ -37,38 +35,17 @@
 (defn roam
   "A walk to look round from somewhere else: along the first of the eight headings, from one the
    clock picks (roam-turn-ms a heading), to the end of a route that reaches a roam-goal cell
-   (path/plan :found, its last node, which the walk then plans to again and reaches), roam-reach
-   out first and then each of roam-reaches farther; nil when
-   no heading has one at any reach. Gym batch pearls-263e (plan run 38905343997): with the stare reaching 64
-   blocks, a warped forest landing still stood looking round for forty minutes, every enderman
-   out of its sight. Batch pearls-263f (plan run 38918584959, probe 39130057525): the roam then
-   asked for one cell a heading, roam-reach off within eight of the feet's height, and from a
-   cave under the forest found rock in all eight, forty minutes long; the Nether is caves and
-   cliffs, and a route knows where the cells are. Never to an end a walk already arrived at
-   (memory/arrived): it is somewhere else that is wanted, and batch pearls-warped3-a (plan run
-   39529384355, probe 39543118281) roamed to the same ends between its lookouts. Farther when
-   every end sixteen off is spent: gym batch pearls-warped6-b (plan run 39700288080, probe
-   39711523945) run 5 took six pearls in twenty-two minutes from one stretch of the forest
-   floor, then had no enderman within 64 for most of its last sixteen minutes, every one of the
-   eighty-six ends it had walked to lying within thirty blocks, and stood in lookouts from the
-   twenty-seventh minute with the roam finding no end it had not seen; the forest spawns four
-   endermen at a time and no more where the bot has thinned them, and somewhere else is
-   farther. With no route reaching any roam-goal (the search spends its expansions in the
-   caves and cliffs on the way: :partial, or its frontier: :none), the farthest end those
-   routes came to, roam-reach or more from the feet on the plane and not spent, is walked to
-   instead, as a walk toward an enderman goes as far as its route goes (toward): from there
-   the routes are planned again, so the search chains outward past one search's budget. And
-   with every end a route reaches spent, the farthest of those spent ends is walked to
-   again: from forty-eight blocks off the ends round there are unspent, and the forest there
-   has had the walk's minutes to spawn into; the ends near the feet are revisited only by
-   being walked past. Never one of the two ends the last walks arrived at (memory/newest-dones:
-   where the bot stands and where it just came from), and never a spent end when an enderman is
-   tracked within descend-radius (the hunt cuts toward it with dig-out instead). With both refused
-   the hunt digs out or rests where it stands, and the forest round it spawns to it there. Gym
-   batch pearls-warped9-a (plan run 39898400239) run 1 took three pearls by about minute forty and
-   then stood in lookouts in one place for four hours with no enderman tracked: nothing for the roam
-   or dig-out to go after, and the forest it never searched past its stretch of floor spawned
-   endermen it never saw."
+   (path/plan :found, its last node), roam-reach out first and then each of roam-reaches
+   farther; nil when no heading has one at any reach. Never to an end a walk already arrived at
+   (memory/arrived): it is somewhere else that is wanted. With no route reaching any roam-goal
+   (:partial, or :none), the farthest end those routes came to, roam-reach or more from the feet
+   on the plane and not spent, is walked to instead, as toward does: from there the routes are
+   planned again, so the search chains outward past one search's budget. With every end a route
+   reaches spent, the farthest of the spent ends is walked to again, since the forest there has
+   had the walk's minutes to spawn into. Never one of the two ends the last walks arrived at
+   (memory/newest-dones), and never a spent end when an enderman is tracked within
+   descend-radius (the hunt cuts toward it with dig-out instead). With both refused the hunt
+   digs out or rests where it stands."
   [world]
   (let [feet (intent/feet world)
         start (mod (quot (:time/now world 0) pparams/roam-turn-ms) (count pparams/headings))
@@ -113,9 +90,7 @@
 (defn routable
   "[eid entity] of the first of the candidates nearest endermen past a walk's reach of the eye
    (intent/reach: nearer, the walk arrives where it begins and is planned again every tick) that
-   a route reaches (intent/routable?), or nil. Gym batch pearls-warped7-a (plan run 39714009099,
-   probe 39720871893) run 4 planned the walk to one 3.8 blocks off 18,760 times over its last
-   fifteen minutes, five pearls held."
+   a route reaches (intent/routable?), or nil."
   [world ms]
   (let [pos (:player/pos world)
         eye (game/eye world)]
@@ -133,20 +108,11 @@
    (routable found none): to the end of the route that comes nearest it (path/plan's :partial or
    :none, the way as far as it goes), when that end is toward-gain or more nearer it than the
    feet on the plane (path/octile), past a walk's reach of the eye (intent/reach: nearer, the
-   walk arrives where it starts, and batch pearls-warped-a's run 3, plan run 39131478416,
-   planned it again every tick for minutes) and not inside the hunt's own burrow (within
-   burrow-span of :pearls/shelter); nil when no route gains on any. Gym batch pearls-263f (plan
-   run 38918584959, probe 39130057525): a landing on the forest floor tracked fifteen endermen,
-   every route to them :none, the nearest 33 blocks off, and stood looking round for thirty
-   minutes. The way as far as it goes changes what is in sight, and from the new place the
-   route is asked again. Batch pearls-warped-c's run 2 (plan run 39152813557, probe
-   39157605071), on a ledge over the forest floor, walked from its burrow's mouth back to its
-   end, three lower and nearer by the route's measure of height, and out again, for forty
-   minutes: the height is the stairs' to gain (descend). Never to an end a walk has already
-   arrived at (memory/arrived): batch pearls-warped3-a (plan run 39529384355, probe
-   39543118281) run 3 walked between the ends of the routes toward two endermen, each end four
-   nearer one of them than the other end, for twenty-five minutes, and run 1 between its
-   burrow's mouth and one such end; what is in sight from an end was seen the first time."
+   walk arrives where it starts and is planned again every tick) and not inside the hunt's own
+   burrow (within burrow-span of :pearls/shelter); nil when no route gains on any. The way as far
+   as it goes changes what is in sight, and from the new place the route is asked again. The
+   height is the stairs' to gain (descend), not the walk's. Never to an end a walk has already
+   arrived at (memory/arrived)."
   [world ms]
   (let [pos (:player/pos world)
         feet (path/feet-cell pos)
@@ -173,20 +139,10 @@
    pickaxe held with digs to spare past a burrow's (spare?): a :stairs-down to descend-step
    lower, or to its height, cut the straight way toward it (the opposite of away); nil when none
    stands so low and so near, no pickaxe with spare digs is held, or a staircase from these feet
-   was boxed (:plan/boxed-at:
-   batch pearls-warped-d run 3, plan run 39160760074, cut the same refused stairs from the same
-   cell for twenty-seven minutes and failed :boxed; a roam moves it first). Gym batch pearls-warped-c (plan run 39152813557, probe
-   39157605071): both landings that lived stood on a ledge of the forest, every enderman 14 to
-   50 blocks below, no route down to any and none in sight, and looked round for forty minutes.
-   The forest floor lies under its ledges; a route refuses the drop, a staircase takes it. Only
-   toward one near on the plane: a flight is eight blocks and about twenty digs of the pickaxe,
-   and gym batch pearls-warped6-b (plan run 39700288080, probe 39711523945) run 2 cut four
-   flights toward endermen 47 to 69 blocks off and 10 to 14 below (about 90 digs) and three
-   tunnels toward ones 41 to 61 off in the five minutes after its first kill, and wore the
-   pickaxe out at eleven minutes; the flights that paid (run 4's seven kills after six, run 5's
-   four after three) went toward ones 12 to 31 off and 8 to 22 below. Not only with none on this
-   level, as ascend asks: run 4's paying flights went with one to seven on its level within 128,
-   all hidden and far, and the many below near."
+   was boxed (:plan/boxed-at; a roam moves it first). The forest floor lies under its ledges: a
+   route refuses the drop, a staircase takes it. Only toward one near on the plane, since a
+   flight is eight blocks and about twenty digs. Not only with none on this level, as ascend
+   asks."
   [world ms]
   (let [pos (:player/pos world)
         fy (physics/y-of (path/feet-cell pos))]
@@ -209,23 +165,13 @@
 (defn ascend
   "Stairs up toward the first of the candidates nearest endermen in ms that stands descend-drop
    or more above the feet within cut-reach on the plane (within-cut-reach?, as descend asks), a
-   pickaxe held with digs to spare past a burrow's (spare?): a
-   :stairs-up to descend-step higher, or to its height (:intent/to-height?: it ends at that
-   height, not where the ground opens), cut the straight way toward it; nil when none stands so
-   high and so near, no pickaxe with spare digs is held, or a staircase from these feet was boxed
-   (:plan/boxed-at). The way back up that descend has no answer to: gym batch pearls-warped5-b
-   (plan run 39671293287, probe 39683564524) run 5 took five pearls in 150 s from a burrow on
-   the forest floor at y 59, cut seven flights down to three endermen in a cave at y 36 and
-   killed them, and then stood thirty-two minutes at y 33 to 50 with every enderman on the
-   floor above it, 20 to 30 blocks up, no route up and a roam that gained no height; runs 2, 3
-   and 4 of the same batch spent most of their forty minutes in the caves under the floor the
-   same way. The forest's endermen spawn on its floor; a bot under it hunts nothing. Only with
-   none of ms on this level (less than descend-drop above or below the feet): one on this level
-   is walked toward, tunnelled toward or looked out for first, and a climb toward a far ledge
-   over a forest that still has endermen on the floor is the stairs' wear for nothing (batch
-   pearls-warped6-a's run 1, plan run 39687964414, climbed toward one thirty above on a ledge
-   with one three above seventeen blocks off, was refused under the ledge's overhang, stepped
-   aside downhill, and cut 161 stairs up and 25 down in nineteen minutes, down to y 28)."
+   pickaxe held with digs to spare past a burrow's (spare?): a :stairs-up to descend-step higher,
+   or to its height (:intent/to-height?: it ends at that height, not where the ground opens), cut
+   the straight way toward it; nil when none stands so high and so near, no pickaxe with spare
+   digs is held, or a staircase from these feet was boxed (:plan/boxed-at). The way back up that
+   descend has no answer to: the forest's endermen spawn on its floor, and a bot under it hunts
+   nothing. Only with none of ms on this level (less than descend-drop above or below the feet):
+   one on this level is walked toward, tunnelled toward or looked out for first."
   [world ms]
   (let [pos (:player/pos world)
         fy (physics/y-of (path/feet-cell pos))]
@@ -247,21 +193,12 @@
 (defn bore
   "A tunnel (:tunnel, stairs.clj: level steps, turning where one is refused) the straight way
    toward the nearest enderman in ms, as far as its steps stand on a floor, bore-length at
-   most (floored-length), standing less than descend-drop above or
-   below the feet and within cut-reach on the plane (within-cut-reach?), a pickaxe held with
-   digs to spare past a burrow's (spare?) and no staircase boxed from these feet
-   (:plan/boxed-at); nil
-   otherwise. For when no route reaches one and none gains on one (toward): the bot stands
-   enclosed, at the foot of its own descent inside the rock. Gym batch pearls-warped2-a (plan
-   run 39179234118) run 3: three flights down to the endermen's level ended in the rock, with
-   none in sight and no route, and the bot walked its staircase for thirty minutes. Near on the
-   plane only: a tunnel of eight is sixteen digs, and gym batch pearls-warped6-b (plan run
-   39700288080, probe 39711523945) run 5 cut three toward one 41 to 54 blocks off in its last
-   quarter hour, the pickaxe's last 46 digs, and run 2 one toward one 61 off. And never toward
-   one nearer than bore-length on the plane: the tunnel would run past it, and the next one
-   back; batch pearls-warped7-a (plan run 39714009099, probe 39720871893) run 4 cut fifteen
-   tunnels east and west over one standing 5 blocks off and 4 below in a cave, about 100 digs
-   in a minute."
+   most (floored-length), standing less than descend-drop above or below the feet and within
+   cut-reach on the plane (within-cut-reach?), a pickaxe held with digs to spare past a burrow's
+   (spare?) and no staircase boxed from these feet (:plan/boxed-at); nil otherwise. For when no
+   route reaches one and none gains on one (toward): the bot stands enclosed, at the foot of its
+   own descent inside the rock. Near on the plane only, since a tunnel of eight is sixteen digs,
+   and never toward one nearer than bore-length on the plane: the tunnel would run past it."
   [world ms]
   (let [pos (:player/pos world)
         feet (intent/feet world)
@@ -279,11 +216,9 @@
 
 (defn cheapest-heading
   "The heading of the four straight ones (stairs/directions) whose first cut of kind (:stairs-up,
-   :stairs-down or :tunnel) from feet opens the fewest solid cells (solid-or-unloaded?), toward first among
-   equals. Where the rock is already cut a stair costs no digs, and a step a later cut took out is
-   laid (stairs/up-lay): gym batch pearls-warped8-a (plan run 39731473452, probe 39778589970) run
-   2's second flight down took the floor of its first flight's third stair, and the way back up
-   lay two stairs north, open, one block to lay and no dig."
+   :stairs-down or :tunnel) from feet opens the fewest solid cells (solid-or-unloaded?), toward first
+   among equals. Where the rock is already cut a stair costs no digs, and a step a later cut took
+   out is laid (stairs/up-lay)."
   [world kind feet toward]
   (first (sort-by (fn [h]
                     (count (filter #(pplace/solid-or-unloaded? world %)
@@ -296,16 +231,10 @@
    (path/plan's :partial or :none) while that end is past a walk's reach of the eye, and from
    there a :stairs-up to it or descend-step higher when it stands two or more above, a
    :stairs-down when two or more below, else a :tunnel as far as its steps stand on a floor
-   (floored-length), along the heading whose
-   first cut digs least (cheapest-heading); nil with no enderman tracked, no pickaxe held with
-   spare digs (spare?), or a staircase from these feet boxed (:plan/boxed-at), and no cut from a brink (brink?: batch
-   pearls-warped8-c's run 2 was backed off a ledge into lava). Cut-reach is not asked, as descend,
-   ascend and bore ask it; the burrow's digs are kept: sim probes 39889946639 and 39889965974 (world R3, seeds 4 and 5) wore the pickaxe out on cuts out of pockets, and with no burrow to be cut fought calm ones in the open and were slain. Gym batch
-   pearls-warped8-a (plan run 39731473452, probes 39776762205, 39776787768, 39778589970 and
-   39780802996): runs 2 and 3 held 3 and 4 pearls by their 21st and 31st minutes and then stood
-   in lookouts for four and a half hours, run 2 at y 45 in its own stairs and tunnels with 21
-   digs left, run 3 on a ledge over a pit with 208, every route from the feet ending within a
-   few blocks and every enderman past cut-reach."
+   (floored-length), along the heading whose first cut digs least (cheapest-heading); nil with no
+   enderman tracked, no pickaxe held with spare digs (spare?), or a staircase from these feet
+   boxed (:plan/boxed-at), and no cut from a brink (brink?). Cut-reach is not asked, as descend,
+   ascend and bore ask it; the burrow's digs are kept."
   [world]
   (let [pos (:player/pos world)
         feet (path/feet-cell pos)
@@ -368,12 +297,9 @@
 
 (defn roof-cap
   "The height a stair up from y stops at: y + descend-step, in the Nether at most
-   nether-climb-ceiling. Pearls-travel-d job 3 (plan run 41156746096, issue #263) climbed from y 72
-   to y 126 by eight-block flights and failed :rejected three times at bedrock; with the cap at the
-   roof itself (120), sim R1/17 seed 1 (probe 42374244659) climbed from y 88 to 120 by flights of
-   eight (109, 117, then the cap) and spent the hour penned in a cavity under the bedrock, where
-   neither a warped forest nor an enderman is: past the ceiling the bot digs and tunnels out
-   level (dig-out, tunnel-out), it does not climb."
+   nether-climb-ceiling, a little under the bedrock roof. Past the ceiling the bot digs and
+   tunnels out level (dig-out, tunnel-out), it does not climb: under the roof neither a warped
+   forest nor an enderman is."
   [world y]
   (let [up (+ y pparams/descend-step)]
     (if (= dimension/nether (dimension/of world)) (min up pparams/nether-climb-ceiling) up)))
@@ -399,8 +325,8 @@
   "A :tunnel of up to bore-length steps along the heading of stairs/directions the clock picks (a
    new one every thirty seconds, so a refused heading is followed by another), in the Nether, with
    digs to spare (spare?), a staircase not boxed from these feet, a floor under the steps
-   (floored-length) and rock to cut (solid-cut?); nil otherwise. The Nether has no open sky to climb
-   to: pearls-travel-d job 3 stood in rock and climbed to the bedrock roof."
+   (floored-length) and rock to cut (solid-cut?); nil otherwise. The Nether has no open sky to
+   climb to."
   [world]
   (let [feet (intent/feet world)
         dir (nth stairs/directions (mod (quot (:time/now world 0) 30000) (count stairs/directions)))
@@ -439,9 +365,8 @@
 (defn loitering?
   "Did the newest loiter-walks :walk intentions to end :done all end within loiter-radius of the
    feet (memory/newest-dones, their targets)? Then the hunt has shuffled in one place however
-   many lookouts it stood between the walks: the two-block roams that gym plan run 40839050567
-   jobs 1 to 4 made 446, 784, 346 and 460 times over two to five hours (issue #263), each walk
-   resetting the count of lookouts since the last."
+   many lookouts it stood between the walks, each walk resetting the count of lookouts since the
+   last."
   [world]
   (let [feet (intent/feet world)
         ds (memory/newest-dones world :walk pparams/loiter-walks)]
@@ -454,12 +379,8 @@
 (defn wandering?
   "Has the hunt stood wander-lookouts or more :lookout intents with no walk ended since (stuck?
    counts the same, from stale-lookouts), and does no enderman tracked have a route to it
-   (routable), however near it is by the air? Run 1 of gym plan run 40775811459 (issue #263,
-   pearls-12) held five pearls at twelve minutes and then stood 2,210 lookouts to the five-hour
-   cap, twelve endermen tracked 16 to 100 blocks off on other levels, none with a route. Or is it
-   loitering (loitering?), whatever is tracked: gym plan run 40905321229 job 6 shuffled 136 times
-   over 51 minutes on two cells with an angry enderman routable that never came, so the first
-   never held."
+   (routable), however near it is by the air? Or is it loitering (loitering?), whatever is
+   tracked."
   [world]
   (boolean (or (loitering? world)
                (and (>= (or (memory/done-since world :lookout :walk)
@@ -472,9 +393,7 @@
   "Where each of the eight headings' routes (path/plan toward ground wander-reach out, from index
    start in headings) ends, as [status end gain] with gain the end's octile distance from the feet:
    the ends roam-reach or more away and not in spent, nor within roam-reach of where one of the
-   last explore-memory walks arrived (an end near one already walked to is not new ground: in sim
-   R1/17 under the roof, probe 42374244659, the bot shuttled for forty minutes between the two ends of
-   its own tunnels, [1013 120 -205] and [1015 120 -165], with a pickaxe at 131 digs unused),
+   last explore-memory walks arrived (an end near one already walked to is not new ground),
    :found first, then the farthest."
   [world start spent]
   (let [feet (intent/feet world)
@@ -517,9 +436,7 @@
 (defn explore
   "A walk to the end (far-ends) farthest from the targets of the last explore-memory walks arrived
    at (memory/newest-dones), ground not arrived at (memory/arrived) only: the widening search for
-   a warped forest none is known of goes on away from where it has been. By the count of walks it
-   alternated between two ends forty blocks apart, west and east, twelve seconds each, for five and
-   a half minutes (gym plan run 41134469333, pearls-travel-b job 2, 22:18:43 on)."
+   a warped forest none is known of goes on away from where it has been."
   [world]
   (let [spent (memory/arrived world)
         feet (intent/feet world)
@@ -536,9 +453,7 @@
   "The way to target, a cell over a warped forest's nylium: a walk when a route reaches it
    (intent/routable?), else, with a pickaxe held, a sealed tunnel toward it (a :tunnel-to, sealing
    behind as the fortress exit bores; it climbs and descends to the target's height), else the walk
-   (a walk with no route fails :no-path, and the hunt chooses again). Real-18 Clj_r09 (4f317da lane
-   8, its case file): boxed in, it planned eleven walks to cells of one forest in four seconds, each
-   failed :no-path, and the run ended :no-path."
+   (a walk with no route fails :no-path, and the hunt chooses again)."
   [world target]
   (let [walk {:intent/kind :walk :intent/target target :intent/for :pearls}]
     (cond (intent/routable? world (assoc walk :intent/max-nodes pparams/vantage-nodes)) walk ; a capped test: travel is asked several times a tick (#766)
@@ -551,10 +466,9 @@
           :else walk)))
 
 (defn travel
-  "The way to a warped forest (forest-way: a walk, or a sealed tunnel when no walk reaches it), or nil: none in the Nether when the bot is in one (in-forest?);
-   to the cell over the nylium nearest of the nearest known forest chunk (nearest-forest), else
-   explore for one. Real race 40980342194, Clj_r13 (issue #263): two hours of lookouts and
-   wandering round a fortress at x 4250-4440, no pearl, no code that went to a forest."
+  "The way to a warped forest (forest-way: a walk, or a sealed tunnel when no walk reaches it), or
+   nil: none in the Nether when the bot is in one (in-forest?); to the cell over the nylium nearest
+   of the nearest known forest chunk (nearest-forest), else explore for one."
   [world]
   (when (and (= dimension/nether (dimension/of world)) (not (psense/in-forest? world)))
     (cond (and (fexit/fortress-escaping? world) (fexit/can-tunnel-out? world))
@@ -573,10 +487,7 @@
 
 (defn travel-caged?
   "Is the bot in the Nether, in no warped forest, with no enderman tracked, and no walk to or toward
-   one (travel) to be had: sealed in a pocket whose routes end within sixteen blocks? Pearls-
-   travel-c (plan run 41144362671, issue #263) jobs 2 and 3 landed in the gym's netherrack pad and
-   stood in :lookout for 106 and 111 minutes without a single walk; job 1 shuffled 337 walks in a
-   dozen blocks."
+   one (travel) to be had: sealed in a pocket whose routes end within sixteen blocks?"
   [world]
   (boolean (and (= dimension/nether (dimension/of world))
                 (not (psense/in-forest? world))
@@ -586,9 +497,7 @@
 (defn shelter-walk
   "A :walk for :shelter to target, or nil when target is nil or in :plan/blacklist (a walk to it
    failed, plan/fail-intent). A walk is tried once before it is known to fail: a fence between
-   the bot and its mouth is walked at first, as the burrow test holds, and given up after. Gym
-   plan run 40583923956 run 3 (issue #263, pearls-12) walked to the mouth of its burrow fifteen
-   times in 0.6 s, each failing :no-path, because these walks never asked the blacklist."
+   the bot and its mouth is walked at first, and given up after."
   [world target]
   (when (and target (not (contains? (:plan/blacklist world #{}) target)))
     (combat/shelter-walk target)))
@@ -596,10 +505,8 @@
 (defn uncage
   "A walk down to the burrow's end (:pearls/shelter) when the bot stands at a brink (brink?) and
    the end is within shelter-reach and routable: climb-out, dig-out and bore refuse to cut from
-   a brink, so a bot on a ledge over a cavern, the burrow behind it, tried every move and found
-   none. Pearl-fight-a job 4 (plan run 41143668588) stood 23 minutes so at [2533 41 2181] with 141
-   digs left and endermen 17 to 63 blocks off: every cell round the feet open over a drop but the
-   burrow's stair, a path to any enderman :none. From the end, in rock, the cuts are allowed."
+   a brink, so a bot on a ledge over a cavern, the burrow behind it, has no move. From the end,
+   in rock, the cuts are allowed."
   [world]
   (let [feet (intent/feet world)
         s (:pearls/shelter world)
@@ -614,9 +521,8 @@
   "A walk to leave this place for another, or nil: toward the densest of the remembered endermen
    (blacklisted or not, by how many others stand within cluster-radius of each, nearest first)
    that stand relocate-dist or more from the feet: to the first a route reaches (routable), else
-   as far as the route goes (toward), else explore, else wander, else the cage-break cuts (dig-out, tunnel-out, climb-out, uncage) from a pocket nothing walks out of. Pearl-fight-g jobs 3 and 5 (plan run 41166403154) had no walk: job 3 six remembered endermen 82 to 110 blocks off and no route, job 5 none tracked in a cave pocket, and neither moved in 80 minutes. Pearl-fight-e job 4 (plan run 41157320074)
-   stood 102 minutes beside one angry enderman parked at 8 blocks and calm ones at 7 to 9, too near
-   to stare at, cutting its burrow 26 times and gaining one pearl; others stood 52, 53 and 63 off."
+   as far as the route goes (toward), else explore, else wander, else the cage-break cuts
+   (dig-out, tunnel-out, climb-out, uncage) from a pocket nothing walks out of."
   [world]
   (let [pos (:player/pos world)
         all (psense/endermen (dissoc world :plan/blacklist) 128.0)

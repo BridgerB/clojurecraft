@@ -38,12 +38,8 @@
 (defn at-hand
   "[eid entity] of the enderman the hunt reckons with where the bot stands: the nearest not
    blacklisted when one stands within strike-range, else the nearest of all (blacklisted or not:
-   one a held fight gave up on is still angry, and batch pearls-warped-b's bots walked out to it
-   and were slain); nil with none. Not the nearest of all first: gym batch pearls-warped7-a
-   (plan run 39714009099, probe 39720871893) run 4 had three endermen in one spot 3.8 blocks
-   off, two of them calm and blacklisted as :unprovoked and one not, and with the blacklisted
-   one nearest by a hair no burrow was cut for the one that was not, and the walk to it was
-   planned 18,760 times over the run's last fifteen minutes."
+   one a held fight gave up on is still angry); nil with none. Not the nearest of all first: a
+   blacklisted calm one nearest by a hair would hide the one that is not."
   [world]
   (let [pos (:player/pos world)
         [_ e :as near] (entity/nearest (endermen world) pos)]
@@ -53,14 +49,9 @@
 (defn crowd
   "{eid entity} of the endermen standing within strike-range of the burrow's mouth
    (:pearls/mouth), height counted, blacklisted or not; empty with no mouth. A walk out to one
-   would end beside it too near to stare at (stare-from), and the hunt would walk back in: batch
-   pearls-warped-b's run 2 went from the end to the mouth and back for two minutes while one
-   stood there. Never on the plane alone: one under the mouth on the floor below a ledge is no
-   crowd (batch pearls-warped-d run 1's thirty-four minutes in the burrow). Blacklisted or not:
-   one a held fight gave up on (:unreachable, then blacklisted) is still angry and still hits
-   the bot that steps out to it (batch pearls-warped-b, plan run 39135767198: two landings in
-   three left the burrow after a held fight timed out and were slain by that enderman within
-   seconds)."
+   would end beside it too near to stare at (stare-from). Never on the plane alone: one under the
+   mouth on the floor below a ledge is no crowd. Blacklisted or not: one a held fight gave up on
+   is still angry and still hits the bot that steps out to it."
   [world]
   (if-let [m (some-> (:pearls/mouth world)
                      physics/centre)]
@@ -77,10 +68,9 @@
 (defn blocking
   "[eid entity] of an enderman standing in the burrow's stairs, blacklisted or not: its cell
    below the mouth's height (:pearls/mouth), within burrow-span of the end (:pearls/shelter) and
-   not the end; nil when none, or with no burrow. The stairs are one cell wide: a walk out
-   through it stalls on its body and fails :no-path, and three fail the plan (gym batch
-   pearls-warped4-a, plan run 39544677155, run 2 at 426 s). One out of the sword's reach is
-   waited for where the bot stands; one within it is struck."
+   not the end; nil when none, or with no burrow. The stairs are one cell wide, so a walk out
+   through it stalls on its body and fails :no-path. One out of the sword's reach is waited for
+   where the bot stands; one within it is struck."
   [world]
   (let [end (:pearls/shelter world)
         mouth (:pearls/mouth world)]
@@ -98,17 +88,11 @@
 (defn fought-out?
   "Have fight-tries or more of the newest sixteen :fight intentions to end :done (memory/
    newest-dones) had eid for their target, it still stands, and the newest of them ended
-   within fight-rest-ms? A kill is one fight; one that keeps teleporting out of the
-   tracked entities as it is faced ends its fight :done (entity/gone?, taken for a kill)
-   and is fought again the next tick it is tracked: gym batch pearls-w3 (plan run
-   40434266158) run 3 planned some sixty-four thousand fights on one enderman from its
-   second minute to the five-hour timeout, nineteen of them failing :unreachable and the
-   rest ending done, and held one pearl. Fought out, it is no fight's target and no
-   reason to stay (angry-near), as one lure-tries lures did not bring is (lured-out?):
-   the burrow goes stale and the hunt moves on. Only for the rest: sim gate r3fr3b (probe
-   40470765785, world R4 seed 3) left one fought out for good, and it teleported after
-   the bot and killed it 188 times while the hunt backed off and never fought back; a
-   minute on, one that is still at hand is fought again."
+   within fight-rest-ms? A kill is one fight; one that keeps teleporting out of the tracked
+   entities as it is faced ends its fight :done (entity/gone?, taken for a kill) and is fought
+   again the next tick it is tracked. Fought out, it is no fight's target and no reason to stay
+   (angry-near), as one lure-tries lures did not bring is (lured-out?): the burrow goes stale and
+   the hunt moves on. Only for the rest: a minute on, one that is still at hand is fought again."
   [world eid]
   (boolean (and eid
                 (let [on-eid (filter #(= eid (:intention/target %))
@@ -122,12 +106,8 @@
    engage as not strikable (combat/given-up?: it is not within the sword's reach from here), or
    failed a fight less than fight-retry-ms ago and not within the sword's reach now? A fight that
    fails (:unreachable) blacklists its target, and an angry one is fought regardless of the
-   blacklist: runs 2 and 3 of gym plan run 40775811459 failed :fight :unreachable eight times and
-   held a fight thirteen minutes.
-   Run 4 of gym plan run 40747177526 (issue #263, pearls-12) planned :fight on one eight blocks
-   below it eight times in 10 ms, each given up and ended done at once, and the eight counted as
-   fought out: the walk that followed was no longer cut by it, and the bot walked on while it
-   took 20 health in five seconds, with no attack sent."
+   blacklist. Several instant fights on one out of reach count as fought out, so the walk that
+   follows is no longer cut by it."
   [world eid e]
   (or (fought-out? world eid)
       (combat/given-up? world eid e)
@@ -151,23 +131,11 @@
 
 (defn angry-near
   "[eid entity] of the nearest angry enderman (entity/creepy?), blacklisted or not (not once
-   lured-out?), within
-   danger-radius of the burrow's mouth (:pearls/mouth) and danger-rise of its height; nil when
-   none, or with no burrow. One a held fight gave up on (:unreachable, then blacklisted) is
-   still angry and still hits the bot that walks out: gym batch pearls-warped5-a (plan run
-   39625347094, probe 39668407179) run 4 held a fight on one at 1498 s that never came, gave
-   the burrow up a minute later with it standing 7 blocks off (no crowd: past strike-range of
-   the mouth), walked out toward another and was slain by it at 1640 s. The height counts as
-   the radius does, not less: batch pearls-warped6-a (plan run 39687964414, probe 39699149771)
-   run 4's held fight gave up on one standing by the mouth, which then stood 3 to 9 blocks off
-   on the plane and 5 or 6 below it, on the slope, past the four the rise then allowed; the
-   burrow went stale three times, and each walk out cost the bot half its health, the third its
-   life at 597 s. Batch pearls-warped5-b's run 2 was slain the same way by one six below.
-   Blacklisted ones only until the bot is lured-out?: one that has not come in lure-tries lures
-   cannot reach the mouth (batch pearls-warped6-a's run 4 came the moment the bot stepped out), and
-   gym batch pearls-warped8-a (plan run 39731473452, probe 39776733945) run 1 walked to the mouth
-   and back every 34 s for four hours, its burrow never stale, over one blacklisted after a held
-   fight timed out :unreachable, standing 4.2 blocks from the mouth and never moving."
+   lured-out?), within danger-radius of the burrow's mouth (:pearls/mouth) and danger-rise of its
+   height; nil when none, or with no burrow. One a held fight gave up on (:unreachable, then
+   blacklisted) is still angry and still hits the bot that walks out. The height counts as the
+   radius does, not less. Blacklisted ones only until the bot is lured-out?: one that has not come
+   in lure-tries lures cannot reach the mouth."
   [world]
   (when-let [m (:pearls/mouth world)]
     (let [c (physics/centre m)]
@@ -187,8 +155,7 @@
 (defn menaced?
   "Does an angry enderman (entity/creepy?), blacklisted or not, stand within danger-radius of the
    feet and danger-rise of their height? Then no drop is walked to or waited for: the hunt meets
-   it first. Sim probe 39885574495 (world R2, seed 5): two provoked at once, one killed, and the
-   walk to its pearl, out of the burrow, was slain in five seconds by the other, beside it."
+   it first."
   [world]
   (let [p (:player/pos world)]
     (boolean (some (fn [[_ e]]
@@ -203,9 +170,7 @@
    {:since :best :closed-at}, :best the nearest it has been to the feet and :closed-at the ms it
    last came close-gain nearer than that; one that moved off by more than four blocks gets a
    farther best, not a newer :closed-at; one no longer angry or tracked is dropped. Pure; kept by
-   the :pearls steer. Churn-guard's pearl-fight-a job 3 (issue #263) died to a blacklisted angry
-   enderman that stalked at 6 to 19 blocks for 30 s and then hit five times; travel-b job 6 had
-   one parked at 12 blocks for 41 minutes: told apart by motion, not by the hunt's bookkeeping."
+   the :pearls steer. Parked ones are told apart by motion, not by the hunt's bookkeeping."
   [world]
   (let [now (:time/now world 0)
         p (:player/pos world)
@@ -252,9 +217,7 @@
   "[eid entity] of the nearest angry enderman (entity/creepy?) within park-near (8) blocks and
    danger-rise of the feet, blacklisted or fought out or not, or nil: one on the bot, never
    parked (parked?). The hunt with no burrow cuts one where it stands for it, and takes no
-   crowd-site walk. Pearl-fight-a job 3 (plan run 41143668588) died to one that stalked at 6 to
-   19 blocks for 30 s. The wander is held in by live-menaced? alone: travel-b job 6 stood 41
-   minutes on one parked at 12."
+   crowd-site walk. The wander is held in by live-menaced? alone."
   [world]
   (let [p (:player/pos world)]
     (entity/nearest (into {}
@@ -271,13 +234,9 @@
   "Has the bot stood lure-lookouts or more :lookout intents since its last walk ended
    (memory/done-since), or since the burrow was cut when no walk has ended since? An angry
    enderman near the mouth (angry-near) that will not come down the stairs on its own comes the
-   moment the bot shows itself (gym batch pearls-warped6-a's run 4, plan run 39687964414: three
-   times), so after half a minute of it standing there the bot walks to the mouth, and back in
-   as soon as it is out (hunt: an angry one near sends the bot home from outside), the enderman
-   after it down the stairs to the sword. Batch pearls-warped7-a (plan run 39714009099, probe
-   39720871893) run 2 stood eight minutes in its burrow over one 5 blocks off and 5 above, and
-   twenty-four over the next, 10 off and 3 above, which stood in one place from the 16th minute
-   to the end; batch pearls-warped6-b's run 3 stood twenty-five the same way."
+   moment the bot shows itself, so after half a minute of it standing there the bot walks to the
+   mouth, and back in as soon as it is out (an angry one near sends the bot home from outside),
+   the enderman after it down the stairs to the sword."
   [world]
   (>= (or (memory/done-since world :lookout :walk) (memory/done-since world :lookout :burrow) 0)
       pparams/lure-lookouts))
@@ -287,9 +246,7 @@
    standing in its stairs (blocking), out of the sword's reach and never coming down to it?
    Then that one holds the burrow no longer, as one lure-tries lures did not bring holds it no
    longer (lured-out?): the lure's walks to the mouth are never taken past one standing in
-   the stairs, so the lookouts here are the count. Sim probe 40102602895 (world R3, seed 4)
-   stood in its burrow from minute 26 to 60 over such a one, ten pearls held: blocking kept
-   it in, angry-near kept the burrow fresh, and no walk ever counted toward lured-out?."
+   the stairs, so the lookouts here are the count."
   [world]
   (let [[bid] (blocking world)]
     (boolean (and bid
@@ -300,18 +257,11 @@
   "Is the hunt's burrow given up: stale-lookouts or more :lookout intents done since it was cut
    (memory/done-since), and no angry enderman near its mouth (angry-near: an angry one still
    hits the bot that steps out, blacklisted or not; a calm one blacklisted as :unprovoked holds
-   nothing: batch pearls-warped5-a's run 3 stood 37 minutes in lookouts beside its burrow over
-   one such by the mouth)?
-   A minute of lookouts is a minute with nothing to provoke from the burrow, in it or from a
-   vantage within its reach: a calm one by the mouth that never moves held the bot for the run
-   (gym batch pearls-warped4-a, plan run 39544677155: run 1 stood in its burrow from 308 s to
-   the end, thirty-five minutes, over a calm enderman 2.7 blocks from the mouth, and run 5
-   twenty-one minutes over one 3.9 off), and every enderman hidden from the burrow's reach
-   would hold it as long. Given up, the burrow is no shelter (shelter), so the hunt walks to
-   the enderman and cuts a new burrow beside it, the way run 5 did at 1714 s by chance and
-   killed that enderman from the new burrow's end at 1731 s. One given up on standing in the
-   stairs (blocked-out?) no longer keeps it fresh either: the way out is then cut the other
-   way (cut-out), never walked through it."
+   nothing)? A minute of lookouts is a minute with nothing to provoke from the burrow, in it or
+   from a vantage within its reach. Given up, the burrow is no shelter (shelter), so the hunt
+   walks to the enderman and cuts a new burrow beside it. One given up on standing in the stairs
+   (blocked-out?) no longer keeps it fresh either: the way out is then cut the other way
+   (cut-out), never walked through it."
   [world]
   (boolean (and (>= (or (memory/done-since world :lookout :burrow) 0) pparams/stale-lookouts)
                 (or (nil? (angry-near world)) (blocked-out? world)))))
@@ -321,11 +271,9 @@
   "[eid entity] of the nearest hostile (entity/hostiles) within combat/defend-radius of the feet
    that is of no shunned kind and not blacklisted (one a held fight gave up on, a ghost); nil
    when none. With a burrow near the hunt meets it there, where the :defend row would fight it in
-   the open: gym batch pearls-warped4-a (plan run 39544677155) runs 3 and 4 were slain by other
-   mobs that row fought and backed away from at the forest's edge, each with a burrow cut, and
-   its pearls-1-live run 2 by one the midnight arena spawned. The burrow is one cell wide and
-   two high: a hoglin or a spider cannot follow, an arrow has no line to the end, and a zombie
-   or a piglin comes down the stairs to the sword one at a time."
+   the open. The burrow is one cell wide and two high: a hoglin or a spider cannot follow, an
+   arrow has no line to the end, and a zombie or a piglin comes down the stairs to the sword one
+   at a time."
   [world]
   (let [pos (:player/pos world)
         bl (:plan/blacklist world #{})]
@@ -376,12 +324,9 @@
   "[eid entity] of the enderman a stare is for: the nearest within stare-range not yet coming
    (entity/creepy?) that is provokable? from where the bot stands (one within 16 blocks and two or
    more below the burrow's mouth only when a route reaches the mouth: within 16 it never teleports,
-   EndermanLookForPlayerGoal, and cannot climb a ledge to the mouth), or nil. Not only the nearest:
-   gym batch pearls-263d (plan run 38899294690, probe 38904622614) tracked seventeen endermen 30
-   to 80 blocks round each warped forest landing, none within a route's reach, and stood looking
-   round for forty minutes while the nearest, behind a ledge, could not be stared at. One stared
-   at from past 16 blocks teleports toward the bot (EndermanLookForPlayerGoal): it need not be
-   walked to."
+   EndermanLookForPlayerGoal, and cannot climb a ledge to the mouth), or nil. Not only the
+   nearest: one behind a ledge cannot be stared at. One stared at from past 16 blocks teleports
+   toward the bot: it need not be walked to."
   [world]
   (let [pos (:player/pos world)
         mouth (:pearls/mouth world)
@@ -408,13 +353,8 @@
 ; blocks that burn whoever stands in them
 (defn burning-at
   "A cell the body overlaps, at the feet's height or the head's, that holds fire (fires), the
-   feet's own first, or nil. Gym batch pearls-warped8-b (plan run 39775345028, probe
-   39849820209) run 1's walk ended in a fire lit on gravel in its path, and it stood there in
-   :lookout, an :eat between, from 16 health to its death in seventeen seconds. The body's
-   cells, not the feet's one: gym batch pearls-w1 (plan run 40387599204, probe 40421394796)
-   run 1 dug out the fire in its feet's cell [2457 37 2165] and still burned to death over
-   twenty seconds of :eat and :lookout, standing at z 2165.14 with its box (physics/half-width
-   each way) reaching into the fire on gravel in the cell north of it."
+   feet's own first, or nil. The body's cells, not the feet's one: the box (physics/half-width
+   each way) can reach into a fire in the next cell."
   [world]
   (let [[fx fy fz] (intent/feet world)
         [px _ pz] (:player/pos world)
@@ -465,12 +405,8 @@
 (defn angry-tracked?
   "Does any angry enderman (entity/creepy?) stand within radius of the feet and danger-rise of
    their height, whatever the hunt thinks of it: blacklisted, fought out, lured out or given up
-   (angry-within? leaves the lured-out unfightable ones out, as no reason to stay). One of those
-   still strikes the bot the moment it walks out in the open: sim R1-2-1 on the stage-18 rods
-   start (lane 42212990209, replay probe 42217021861) held its first pearl, fought enderman 955
-   four times from its burrow without a hit landed (40 of 40 health), and with 955 angry ten
-   blocks off walked out 34 blocks to a new stare site; 955 struck it from 15.9 to 0 in four
-   seconds."
+   (angry-within? leaves the lured-out unfightable ones out, as no reason to stay)? One of those
+   still strikes the bot the moment it walks out in the open."
   [world radius]
   (let [p (:player/pos world)]
     (boolean (some (fn [[_ e]]
@@ -483,10 +419,8 @@
 ;; ---------------------------------------------------------------- the plan
 (defn at-site?
   "Has the bot just walked to a burrow site: the last intent a :walk for :shelter that ended done?
-   There the burrow is cut away from the nearest enderman (at-hand) even with none in sight: sim
-   probe 39861051222 (world R4, teleporting endermen) walked for fifty-seven minutes between a site,
-   from which its quarry was hidden, and the walk toward that quarry, from which it showed again,
-   three pearls held."
+   There the burrow is cut away from the nearest enderman (at-hand) even with none in sight, so
+   the bot does not shuttle between a site and the walk toward a quarry hidden from it."
   [world]
   (let [{:intent/keys [kind for status]} (:plan/last world)]
     (and (= :walk kind) (= :shelter for) (= :done status))))
@@ -495,8 +429,7 @@
   "[eid e] of the nearest angry enderman (entity/creepy?) within the sword's reach (combat/in-reach?)
    and strike-range of the feet while health is under struck-health, fought out or not, or nil.
    One that has hit the bot and stands where the sword reaches it is fought back, never walked
-   away from: runs 4 and 5 of the same plan run took three hits in five seconds with a walk and a
-   back-off going on, and sent no attack (run 4) or too few."
+   away from."
   [world]
   (when (< (:player/health world 20.0) pparams/struck-health)
     (let [pos (:player/pos world)]
@@ -511,10 +444,8 @@
 
 (defn swarm
   "{eid entity} of the monsters (blocks/mobs category) alive within swarm-radius of pos (the feet when
-   not given) that are
-   no enderman (the quarry, met its own way from the burrow): a zombified piglin counts, hostile
-   on sight or not, as it comes in packs and one hit angers them all. Gym plan run 40825468783 run
-   5 (issue #263, pearls-12): an enderman and two zombified piglins took 20 health in 1.5 s."
+   not given) that are no enderman (the quarry, met its own way from the burrow): a zombified
+   piglin counts, hostile on sight or not, as it comes in packs and one hit angers them all."
   ([world] (swarm world (:player/pos world)))
   ([world pos]
    (into {}
@@ -524,9 +455,7 @@
                         (= :monster (:category (blocks/mobs (entity/kind e))))
                         (<= (physics/distance pos (:entity/pos e))
                             (or (:range (mob/kinds (entity/kind e))) pparams/swarm-radius))
-                        ;; a blaze behind a wall hits nobody: pearl-fight-o's race bots (race 9d15bd69b,
-                        ;; Clj_r24 and four more) stood `swarmed?` by one 19 to 29 blocks off for the
-                        ;; rest of their lives, and travel is gated on it
+                        ;; a blaze behind a wall hits nobody, and travel is gated on swarmed?
                         (or (not (contains? pparams/ranged-kinds (entity/kind e)))
                             (not= pos (:player/pos world))
                             (combat/seen? world e)))))
@@ -553,27 +482,22 @@
 
 (defn shot-at?
   "Is a blaze or a ghast within its :range (mob/kinds) with a clear line from the eye (combat/seen?)?
-   Never fought (they hover out of the sword's reach); only covered from. Gym plan run 40839050567
-   job 6 (issue #263, pearls-12): five fireballs in 67 s of digging a staircase down in the open,
-   then burned to death."
+   Never fought (they hover out of the sword's reach); only covered from."
   [world]
   (boolean (some (fn [[_ e]]
                    (and (contains? pparams/ranged-kinds (entity/kind e)) (combat/seen? world e)))
                  (swarm world))))
 
 (defn recently-shot?
-  "Was a ghast in sight (:pearls/shot-at-ms, shot-at?) less than shot-hold-ms ago? Pearls-fight-c job 1
-   (plan run 41155212096, issue #263) died to a ghast in 1m48: a hide walk and a travel walk
-   alternated every second, 23 swings in 5.6 s, each undoing the other, 13 hits and no cover."
+  "Was a ghast in sight (:pearls/shot-at-ms, shot-at?) less than shot-hold-ms ago? Then no walk
+   goes elsewhere, so a hide walk and a travel walk do not undo each other."
   [world]
   (let [t (:pearls/shot-at-ms world)]
     (boolean (and t (< (- (:time/now world 0) t) pparams/shot-hold-ms)))))
 
 (defn weak?
   "Is entity e of a kind mob/kinds knows to hit for weak-melee or less on Normal (a zombie, a
-   spider), and no archer? A piglin, a hoglin or a blaze is not: gym plan run 41109441111
-   (pearls-travel-a) job 5 walked down to a piglin and fought it, three hits in four seconds,
-   dead at 39 minutes."
+   spider), and no archer? A piglin, a hoglin or a blaze is not."
   [e]
   (let [k (mob/kinds (entity/kind e))]
     (boolean (and k (:melee k) (nil? (:shoot k)) (<= (:melee k) pparams/weak-melee)))))
@@ -590,10 +514,7 @@
 (defn swarmed?
   "Are two or more monsters within their reach (swarm), a ghast in sight (shot-at?), one monster
    while health is under danger-health, or one hostile that is heavy? (a piglin, a hoglin)? A
-   lone one that is not over that health is met by the fight rules (a magma cube is small and slow).
-   Pearls-travel-d job 5 (plan run 41156746096, issue #263) lived 73 minutes and two pearls, then
-   the :defend row fought a lone piglin at full health: two swings, hits of 6.7 at 73.06, .09 and
-   .16 min, dead."
+   lone one that is not over that health is met by the fight rules (a magma cube is small and slow)."
   [world]
   (let [sw (swarm world)
         n (count sw)]
@@ -605,7 +526,7 @@
 (defn enderman-hit
   "The damage one enderman hit does the bot through the armour it wears (armour/worn over the four
    slots, mob/armour-points, mob/absorbed) of the 7 it does on Normal (mob/kinds :melee): 5.74
-   through an iron helmet and chestplate, as gym plan run 40860669235 job 4 measured."
+   through an iron helmet and chestplate."
   [world]
   (let [[points toughness] (reduce (fn [[pt tg] n]
                                      (let [[dp dt]
@@ -617,16 +538,14 @@
 
 (defn provoke-line
   "The health under which no enderman is provoked: provoke-margin over two of its hits
-   (enderman-hit), at most provoke-health. Job 4 of that plan run provoked at 11.19 health and
-   was felled by the second and third hit of a fight in the open."
+   (enderman-hit), at most provoke-health."
   [world]
   (min pparams/provoke-health (+ pparams/provoke-margin (* 2.0 (enderman-hit world)))))
 
 (defn coming?
   "Is the nearest angry enderman (entity/creepy?) within stare-range one the hunt still fights
    (not unfightable?: given up, fought out, cut or failed lately)? No other is provoked while it
-   is: churn-a (plan 41096292443) run 3 provoked 1310, 1561 and 1691 in 14 s and had three within
-   2.5 blocks of the bot."
+   is: one enderman at a time."
   [world]
   (let [[ceid ce] (entity/nearest
                    (into {} (filter (comp entity/creepy? val)) (endermen world pparams/stare-range))
@@ -642,10 +561,7 @@
   "Does an angry enderman (entity/creepy?), blacklisted or not, stand within strike-range of the
    feet, height counted? Not one fought out (fought-out?): it has had fight-tries fights to
    come into the open and kill or be killed and has done neither, and the hunt's way on is a
-   walk away from it, which an interrupt here would cut every tick. Sim gate r3fr3 (probe
-   40465621253, world R4 seed 3): with one fought out over its burrow's roof the hunt chose
-   the crowd site's walk 28,545 times, each cut at once, where on main the same run fought
-   it 18,657 times (probe 40465674776)."
+   walk away from it, which an interrupt here would cut every tick."
   [world]
   (let [p (:player/pos world)]
     (boolean (some (fn [[eid e]]

@@ -6,11 +6,12 @@
 
      clojure -M:race --config ci/race.edn --port 25565 --rcon-port 25575 --rcon-pass S \\
        [--record-dir data/race] [--commit sha] [--seed s] [--runner n] [--server k]
-       [--landings cache/worlds/R1/landings.edn --landing-offset n] [--from spawn|fortress]
+       [--landings cache/worlds/R1/landings.edn --landing-offset n] [--start id]
 
-   --from (else ci/race.edn's :race/from) is where each bot starts: spawn (a forest, every stage) or
-   fortress (the Nether, at the open pad beside its landing's fortress with :race/kit, playing only
-   the stages from the blaze rods).
+   --start is where each bot starts, an id in resources/clojurecraft/starts.edn (clojurecraft.start):
+   spawn, or a start in the Nether at the open pad beside its landing's fortress or in the warped
+   forest nearest it, with the start's kit, playing only the stages from its goal. Without it, the
+   table's default.
 
    --server names which of a runner's servers this race is on, when a runner carries more than
    one (:race/servers): each server is its own world, seed and race process, and its facts say
@@ -39,15 +40,20 @@
             [clojurecraft.claims :as claims]
             [clojurecraft.cli :as cli]
             [clojurecraft.dimension :as dimension]
-            [clojurecraft.failure :as failure]
             [clojurecraft.fixture :as fixture]
             [clojurecraft.game :as game]
             [clojurecraft.gym :as gym]
+            [clojurecraft.land :as land]
             [clojurecraft.landings :as landings]
             [clojurecraft.main :as main]
             [clojurecraft.plan :as plan]
+            [clojurecraft.race-facts :as facts :refer
+             [backoff-ms board-line bot-name bot-timeout-ms capped dead-after death-class health
+              marked milestone near-commands next-start reached-new recovered run-ms sample
+              serverlog-lines slot-index spawn-command start-at summary tick-times]]
             [clojurecraft.rcon :as rcon]
-            [clojurecraft.senses :as senses]))
+            [clojurecraft.senses :as senses]
+            [clojurecraft.start :as start]))
 
 (set! *warn-on-reflection* true)
 
@@ -60,201 +66,7 @@
 (def sample-every-ms 15000)            ; how often the sampler records the race as one fact
 (def milestones-buffer 256)           ; milestone facts waiting for the writer; a bot reaches at most a chain's worth
 (def min-play-ms 300000)              ; a slot starts no bot with less of the job left than this: it would only be cut
-(def quick-ms 30000)                  ; a bot that crashed or was cut off sooner than this never played: the server is gone or failing
-(def backoff-max-ms 60000)            ; the longest a slot waits before its next bot after quick ends
-(def dead-after 5)                    ; bots in a row that never got into play before the race calls its server down
 (def probe-every-ms 30000)            ; how often a slot asks a down server whether it accepts again
-(def start-gap-ms 1000)               ; the least time between two bots starting on one server, whatever the slots do
-(def recovered {:race/unplayed 0 :race/down? false}) ; a server's health when it plays, or accepts again
-
-(defn bot-name
-  "The name of racer k (from 1) with prefix: a server name, sixteen characters at most."
-  [prefix k]
-  (format "%s%02d" prefix k))
-
-(defn standing
-  "Where one bot is in the race, read from its world value: the target it works now, how many of
-   the chain's targets it has reached (a chained run's milestones), its dimension, its height,
-   its deaths and the plan's status."
-  [world]
-  {:race/target (some-> (and (:plan/status world) (plan/choose world plan/goals))
-                        :goal/id)
-   :race/reached (count (:plan/reached world))
-   :race/dimension (some-> (dimension/of world)
-                           (str/replace "minecraft:" ""))
-   :race/y (some-> (:player/pos world)
-                   second
-                   long)
-   :race/deaths (:stats/deaths world 0)
-   :race/status (:plan/status world)})
-
-(defn board-line
-  "One bot's line on the board."
-  [name world]
-  (let [{:race/keys [target reached dimension y deaths status]} (standing world)]
-    (str/join " "
-              [name (or status :waiting) (str "at " (or target "-")) (str "reached " reached)
-               dimension (str "y " (or y "?")) (str "deaths " deaths)])))
-
-(defn start-at
-  "When racer i (from 0) joins, ms after the race begins: stagger-ms apart, so fresh players do
-   not generate chunks at once."
-  [{:race/keys [stagger-ms]} i]
-  (* i stagger-ms))
-
-(defn backoff-ms
-  "How long a slot waits before its next bot: none after a bot that played; after one that crashed
-   or was cut off (failure/infra-reasons) within quick-ms, double the last wait (1 s the first
-   time), at most backoff-max-ms. A server that stopped or fails would otherwise have every slot
-   start bot after bot at once, each with its threads, until the machine can fork no more."
-  [wait life-ms {:keys [reason]}]
-  (cond (and (< life-ms quick-ms) (or (= :crashed reason) (contains? failure/infra-reasons reason)))
-        (min backoff-max-ms (max 1000 (* 2 wait)))
-        :else 0))
-
-(defn health
-  "A server's health ({:race/unplayed :race/down?}) after one of its bots ended with RESULT r:
-   :race/unplayed counts the bots in a row that never got into play (failure/unplayed?), and a bot
-   that played sets it back to 0; :race/down? turns true at dead-after of them and stays true until
-   a probe finds the server accepting again (recovered). Backing off alone still let a dead server's
-   15 slots start one bot a minute each for three hours."
-  [h r]
-  (let [n (if (failure/unplayed? r) (inc (:race/unplayed h 0)) 0)]
-    {:race/unplayed n :race/down? (boolean (or (:race/down? h) (>= n dead-after)))}))
-
-(defn next-start
-  "When the next bot may start on a server, ms: now, or start-gap-ms after the last start (last),
-   whichever is later. Every slot of a server takes its start from one clock, so however its bots
-   end, the server sees at most one new bot a start-gap-ms."
-  [last now]
-  (max now (+ (or last 0) start-gap-ms)))
-
-(defn run-ms
-  "How long a race plays, ms: :race/run-minutes (the churn's job, up to GitHub's cap), else
-   :race/timeout-ms."
-  [{:race/keys [run-minutes timeout-ms]}]
-  (or (some-> run-minutes
-              (* 60000))
-      timeout-ms))
-
-(defn bot-cap-ms
-  "A checkpoint bot's own time limit, ms, from the config: :race/bot-minutes when the server's
-   start (from) is one of the :race/checkpoint's (cli/checkpoints), so only the checkpoint lanes cap their bots; nil for
-   any other lane (a bot there plays until it ends or the job does)."
-  [config from]
-  (when (and from (some #(= from (:from %)) (cli/checkpoints (:race/checkpoint config))))
-    (some-> (:race/bot-minutes config)
-            (* 60000))))
-
-(defn bot-timeout-ms
-  "How long a bot may play, ms, started at now: until the job's deadline, or its own cap (ms, nil
-   for none) when that comes first; at least 1000."
-  [deadline now cap]
-  (max 1000 (min (- deadline now) (or cap Long/MAX_VALUE))))
-
-(defn capped
-  "A RESULT r of a bot that was stopped by its own cap (cap-ms, nil for none; started at start,
-   the job ending at deadline) rather than the job's end: a :timeout becomes :bot-timeout, a
-   stage's failure (no pearls in the time) that is filed. Any other RESULT is unchanged."
-  [r deadline start cap]
-  (cond-> r
-    (and (= :timeout (:reason r)) cap (< (+ start cap) deadline)) (assoc :reason :bot-timeout)))
-
-(defn marked
-  "A RESULT as the race prints it: marked for bb failures (failure/mark), cut (failure/cut) when
-   the job's end stopped the bot (a :timeout, the only timeout a churn bot has), and :run/infra?
-   when the bot never got into play (failure/unplayed?: its server refused it or was gone)."
-  [r]
-  (cond-> (failure/mark r)
-    (= :timeout (:reason r)) failure/cut
-    (failure/unplayed? r) (assoc :run/infra? true)))
-
-(defn tick-times
-  "The server's tick times in ms, {:avg :p50 :p95 :p99}, from its tick query reply; {} when the
-   reply has none."
-  [reply]
-  (let [ms (fn [re]
-             (some->> (re-find re (str reply))
-                      second
-                      parse-double))]
-    (into {}
-          (remove (comp nil? val))
-          {:avg (ms #"Average time per tick: ([\d.]+)ms")
-           :p50 (ms #"P50: ([\d.]+)ms")
-           :p95 (ms #"P95: ([\d.]+)ms")
-           :p99 (ms #"P99: ([\d.]+)ms")})))
-
-(defn quantile
-  "The q quantile (0 to 1) of numbers xs, nearest rank; nil when there are none."
-  [q xs]
-  (let [v (vec (sort xs))] (when (seq v) (nth v (min (dec (count v)) (long (* q (count v))))))))
-
-(defn sample
-  "The race at one moment as a fact, from every bot's world now ({name world}) and the tick each
-   was at dt-ms before ({name tick}): how many bots have joined, landed, are playing (in the world
-   and still racing: a bot that ended stops ticking), ended or were cut off; each playing bot's ticks per second (a bot whose machine is short of CPU falls below
-   20 first), as its median, tenth percentile and least; milestones reached in all; the server's
-   tick times and the bots' JVM heap."
-  [race worlds before dt-ms tick heap-mb now]
-  (let [playing (filter (fn [[_ w]]
-                          (and (= :play (:bot/phase w))
-                               (:player/loaded? w)
-                               (not (:bot/closed w))
-                               (not (:bot/disconnected w))
-                               (not (#{:done :failed} (:plan/status w)))))
-                        worlds)
-        rates (keep (fn [[name w]]
-                      (when-let [t0 (get before name)]
-                        (/ (* 1000.0 (- (:time/tick w 0) t0)) (max 1 dt-ms))))
-                    playing)]
-    {:sample/runner (:runner race)
-     :sample/server (:server race)
-     :sample/at now
-     :sample/joined (count (filter (comp :player/pos val) worlds))
-     :sample/landed (count (filter (comp :plan/go-at val) worlds))
-     :sample/playing (count playing)
-     :sample/ended (count (filter (comp #{:done :failed} :plan/status val) worlds))
-     :sample/cut-off (count (filter (fn [[_ w]] (or (:bot/closed w) (:bot/disconnected w))) worlds))
-     :sample/tick-rate
-     {:median (quantile 0.5 rates) :p10 (quantile 0.1 rates) :min (quantile 0 rates)}
-     :sample/milestones (reduce + (map (comp count :plan/reached val) worlds))
-     :sample/server-tick tick
-     :sample/bot-heap-mb heap-mb}))
-
-(defn reached-new
-  "The targets world reached that before did not: what a chained run's step just added to
-   :plan/reached, in no particular order."
-  [before world]
-  (remove (set (:plan/reached before)) (:plan/reached world)))
-
-(defn milestone
-  "The fact that bot name reached goal in world: on which runner (and which of its servers, when
-   it carries more than one) and seed, when (:time/now, ms), and how long after its plan began
-   (its landing)."
-  [{:keys [runner server seed]} name world goal]
-  (cond-> {:milestone/runner runner
-           :milestone/seed seed
-           :milestone/bot name
-           :milestone/goal goal
-           :milestone/at (:time/now world)}
-    server (assoc :milestone/server server)
-    (:plan/since world)
-    (assoc :milestone/after-s (quot (- (:time/now world) (:plan/since world)) 1000))))
-
-(defn summary
-  "The race as a value, from each bot's {:name :result :truth}: how many bots, how many reached
-   the target (RESULT :ok), why the others stopped, and every bot's reason and milestones."
-  [results]
-  {:race/bots (count results)
-   :race/ok (count (filter (comp :ok :result) results))
-   :race/reasons (frequencies (map (comp :reason :result) results))
-   :race/runs (mapv (fn [{:keys [name result truth]}]
-                      {:name name
-                       :ok (:ok result)
-                       :reason (:reason result)
-                       :reached (:plan/reached (:plan result))
-                       :truth truth})
-                    results)})
 
 ;;;; I/O: the claims loop, the fixture, the board, the bots ;;;;
 
@@ -300,61 +112,6 @@
           nil
           (take claim-tries (drop offset (claims/spiral)))))
 
-(def starts
-  "The race's starts at a fortress, by :race/from name: the first target a bot starting there plays
-   (:checkpoint/goal) and what it carries beyond :race/kit (:checkpoint/kit, give commands' item
-   counts). \"fortress\" plays the blaze rods with the race kit: the stages before it are the road
-   to the fortress. \"rods\" is stage 18's checkpoint (LOOP.md section 1): the race kit and the
-   seven rods stage 17 yields, at the same pad, so the pearl hunt is played by every bot that starts
-   there, not only the 5 to 7% that win the blaze rods first (0ace52e: 184 of 2518 real bots).
-   \"forest\" is the same kit and goal landed on a floor of the warped forest nearest the fortress
-   pad (land-forest!), the hunt practised from its own start (LOOP.md section 7.6): on 7c7e8dd 12 of
-   13 stalled bots never saw an enderman."
-  {"fortress" {:checkpoint/goal :blaze-rods :checkpoint/kit []}
-   "rods" {:checkpoint/goal :ender-pearls :checkpoint/kit ["minecraft:blaze_rod 7"]}
-   "forest" {:checkpoint/goal :ender-pearls
-             :checkpoint/kit ["minecraft:blaze_rod 7"]
-             :checkpoint/at :forest}})
-
-(defn start-of
-  "The start (starts) :race/from names, a string or a keyword, or nil for a start from spawn."
-  [from]
-  (when from (starts (name from))))
-
-(defn fortress?
-  "Does :race/from name a start at the fortress (starts)?"
-  [from]
-  (some? (start-of from)))
-
-(defn forest?
-  "Does :race/from name the start in the warped forest (starts, :checkpoint/at :forest)?"
-  [from]
-  (= :forest (:checkpoint/at (start-of from))))
-
-(defn start-kit
-  "What a bot starting at from is given, in order: the start's own items (start-of) first, then the
-   race kit. The race kit fills all 36 slots, and give drops what has no slot at the feet, so the
-   start's items go in first and the kit's last stack is what is left out, never the rods."
-  [kit from]
-  (into (vec (:checkpoint/kit (start-of from))) kit))
-
-(defn from-goals
-  "The targets a race to until plays when it starts at (:race/from) from: the whole chain to until
-   from spawn (nil or :spawn), else the chain from its start's first stage (starts :checkpoint/goal) on, so the
-   run is only stages 17 and 18 (blaze rods, ender pearls) and its failures are filed at those."
-  [from until]
-  (let [chain (plan/through until)]
-    (if-let [goal (:checkpoint/goal (start-of from))]
-      (vec (drop-while #(not= goal %) chain))
-      chain)))
-
-(defn landing-of
-  "The [x z] racer i (from 0) lands on in a landing set ([[x z y] ...]), offset into it: the
-   set's landing offset + i, wrapping, so a runner's servers and the runners sharing a set start
-   their bots on different landings, and the same racer always on the same one."
-  [set offset i]
-  (let [[x z _] (landings/landing-for set (inc (+ offset i)))] [x z]))
-
 (def team
   "The scoreboard team every racer joins: friendly fire off, so a bot's sweep or a retaliation never hurts another."
   "racers")
@@ -384,508 +141,49 @@
                          (doseq [c team-commands] (rcon/command! rc c))))
        (catch Exception e (cli/log "gamerule failed:" e))))
 
-(def pad-offsets
-  "Where, round a fortress, racer i's pad is: eight compass points 48 blocks off, so the bots of one
-   fortress (a landing set's 48 landings, 40 blocks apart in the Nether, find only two or three
-   fortresses) do not stand on one pad."
-  [[-48 0] [48 0] [0 -48] [0 48] [-48 -48] [48 48] [-48 48] [48 -48]])
-
-(defn pad-of
-  "The pad [x z y] of racer i (from 0) at the fortress located at [fx fz]: pad-offsets (i mod 8)
-   from it, at gym/pad-y."
-  [[fx fz] i]
-  (let [[dx dz] (nth pad-offsets (mod i (count pad-offsets)))] [(+ fx dx) (+ fz dz) gym/pad-y]))
-
-(def pad-radii
-  "How far from the fortress a pad may be, nearest first: the eight compass points at each."
-  [48 80 112])
-
-(def pad-compass [[-1 0] [1 0] [0 -1] [0 1] [-1 -1] [1 1] [-1 1] [1 -1]])
-
-(defn pad-candidates
-  "The pads [x z y] racer i may have at the fortress [fx fz], in the order they are tried: the eight
-   compass points at 48 blocks starting at point (i mod 8), then at 80, then at 112. The first is
-   pad-of."
-  [[fx fz] i]
-  (for [r pad-radii
-        k (range (count pad-compass))
-        :let [[dx dz] (nth pad-compass (mod (+ i k) (count pad-compass)))]]
-    [(+ fx (* r dx)) (+ fz (* r dz)) gym/pad-y]))
-
-(def brick-blocks ["minecraft:nether_bricks" "minecraft:nether_brick_fence"])
-
-(def brick-range 16)                  ; blocks round a pad in which no fortress block may stand: outside its body
-
-(defn brick-probes
-  "The cells [x y z] looked at for a fortress block round the pad [x z y]: five by five columns eight
-   apart (brick-range each side) at three heights eight apart, 75 cells."
-  [[x z y]]
-  (for [dx [-16 -8 0 8 16] dz [-16 -8 0 8 16] dy [-8 0 8]] [(+ x dx) (+ y dy) (+ z dz)]))
-
-(defn brick-test
-  "The RCON test that passes when the Nether's cell [x y z] holds block."
-  [[x y z] block]
-  (str "execute in minecraft:the_nether if block " x " " y " " z " " block))
-
-(def danger-mobs
-  "What a bot is not landed within mob-range of: a fortress's blaze, wither skeleton, the bastion's
-   brute, the forest's hoglin, the ghast."
-  ["minecraft:blaze" "minecraft:hoglin" "minecraft:wither_skeleton" "minecraft:piglin_brute"
-   "minecraft:ghast"])
-
-(def mob-range 32)
-
-(defn mob-test
-  "The RCON test that passes when a mob (an entity type) is within mob-range of the pad [x z y]."
-  [[x z y] mob]
-  (str "execute in minecraft:the_nether positioned "
-       x
-       " "
-       y
-       " "
-       z
-       " if entity @e[type="
-       mob
-       ",distance=.."
-       mob-range
-       "]"))
-
-(defn choose-pad
-  "The first of candidates for which (unsafe pad) is nil, else the first candidate: a pad is taken
-   outside the fortress's body and clear of mobs when one is, else the nearest as before."
-  [unsafe candidates]
-  (or (first (filter #(nil? (unsafe %)) candidates)) (first candidates)))
-
-(defn standing-on
-  "[x y z], where a bot stands on the pad [x z y]: the middle of its cell (the order a :go/at has:
-   gym/place! teleports to x.5 y z.5). Returned from the pad, never from a question to the server: a
-   landing that read a position nil handed the planner the pad's own [x z y], which is not a place,
-   and 30 s later the run ended :no-landing."
-  [[x z y]]
-  [(+ x 0.5) (double y) (+ z 0.5)])
-
-(def fortress-near 128)               ; Nether blocks within which a located fortress is the one for a landing: fortresses stand 400 or more apart, so one this near is the nearest
-
-(defn nearby-fortress
-  "The first of known ([fx fz] ...) within fortress-near blocks of the Nether point [nx nz], or nil."
-  [known [nx nz]]
-  (some (fn [[fx fz :as f]]
-          (when (<= (math/hypot (double (- fx nx)) (double (- fz nz))) fortress-near) f))
-        known))
-
-(def fortresses
-  "The fortresses located so far on this server, [[fx fz] ...] (an atom): a landing is given one
-   within fortress-near of it before the server is asked."
-  (atom []))
-
-(def pool-step 600)                   ; Nether blocks between the points a pool of fortresses is searched from, ring by ring
-(def pool-apart 160)                  ; Nether blocks a fortress must stand from the others of the pool to be another
-(def pool-max-locates 40)             ; searches a pool makes at most
-
-(defn search-centres
-  "The Nether points [x z] a pool of fortresses is searched from, nearest first: the centre, then
-   rings of eight compass points at pool-step, 2 pool-step, ... from it."
-  [[cx cz]]
-  (cons [cx cz]
-        (for [r (iterate inc 1)
-              [dx dz] pad-compass]
-          [(+ cx (* r pool-step dx)) (+ cz (* r pool-step dz))])))
-
-(defn pool-add
-  "The pool with fortress f added when it stands at least pool-apart from each of the pool's, else
-   as it was."
-  [pool [fx fz :as f]]
-  (if (some (fn [[x z]] (< (math/hypot (double (- x fx)) (double (- z fz))) pool-apart)) pool)
-    pool
-    (conj pool f)))
-
-(defn fortress-for
-  "The fortress of slot i in the pool: i mod the pool's size, so each slot has a fortress of its own
-   while the pool has as many as there are slots, and the pool's fortresses are shared evenly
-   when it has fewer."
-  [pool i]
-  (nth pool (mod i (count pool))))
-
-(defn per-fortress
-  "The most bots of slots slots at once on one fortress of a pool of n: the slots over the pool,
-   rounded up (fortress-for)."
-  [slots n]
-  (if (pos? n) (long (math/ceil (/ slots (double n)))) slots))
-
-(defn locate-fortress!
-  "The fortress for the landing [x z] (overworld coordinates; the Nether's are an eighth): one
-   already located within fortress-near (nearby-fortress), else the nearest as the server locates
-   it, remembered. A locate is a search in one tick of the server's thread, tens of seconds: asked
-   of fifteen bots at once it stopped the server's keepalives and every bot timed out. Running
-   31317ms behind`)."
-  [rc [x z]]
-  (let [here [(quot x 8) (quot z 8)]]
-    (or (nearby-fortress @fortresses here)
-        (let [reply (rcon/command! rc
-                                   (str "execute in minecraft:the_nether positioned "
-                                        (first here)
-                                        " 64 "
-                                        (second here)
-                                        " run locate structure minecraft:fortress"))
-              at (or (fixture/parse-located reply)
-                     (throw (ex-info "no fortress located" {:reply reply})))]
-          (swap! fortresses conj at)
-          at))))
-
-(def fortress-pool
-  "The fortresses a race's slots land at, [[fx fz] ...] distinct (pool-add), a vector in an atom,
-   built by prepare! (build-pool!)."
-  (atom []))
-
-(defn locate-from!
-  "The fortress nearest the Nether point [nx nz] as the server locates it, [fx fz], or nil."
-  [rc [nx nz]]
-  (fixture/parse-located (rcon/command! rc
-                                        (str "execute in minecraft:the_nether positioned "
-                                             nx
-                                             " 64 "
-                                             nz
-                                             " run locate structure minecraft:fortress"))))
-
-(defn build-pool!
-  "Fill fortress-pool with up to slots distinct fortresses, searching from search-centres of
-   centre ([nx nz], Nether coordinates) one at a time (at most pool-max-locates searches), and log
-   how many were found and the most bots a fortress carries. Fortresses a landing set's landings
-   cannot supply (they are 40 Nether blocks apart, two or three fortresses): lane 2 of race
-   f8b28e3 had 41 bots in two fortresses, 26 of them at one, sharing blaze aggro, fire and
-   spawner refills that a solo player never meets."
-  [rc centre slots]
-  (reset! fortress-pool (loop [pool []
-                               cs (take pool-max-locates (search-centres centre))]
-                          (cond (or (>= (count pool) slots) (empty? cs)) pool
-                                :else
-                                (recur (if-let [f (locate-from! rc (first cs))]
-                                         (pool-add pool f)
-                                         pool)
-                                       (rest cs)))))
-  (let [n (count @fortress-pool)]
-    (cli/log "fortress pool" n
-             "distinct for" slots
-             "slots, at most" (per-fortress slots n)
-             "bots on a fortress:" @fortress-pool)
-    (when (< n (quot (inc slots) 2))
-      (cli/log "fortress pool short: more than 2 bots on a fortress"))))
-
-(def pads-built
-  "The pads built so far on this server, #{[x z y] ...} (an atom): a pad is built once, before a
-   bot is sent to it."
-  (atom #{}))
-
-(defn tp-command
-  "The RCON command that teleports bot name onto the pad [x z y], the middle of its cell, in the
-   Nether."
-  [name [x z y]]
-  (gym/in-dimension dimension/nether (str "tp " name " " (+ x 0.5) " " y " " (+ z 0.5))))
-
-(def pad-view 112)                    ; blocks round a pad generated before a bot is sent to it: 15 by 15 chunks, within one forceload's 256 and past the server's view distance (6 chunks, bb/clojurecraft/server.clj)
-
-(defn pregenerate!
-  "Generate the Nether round the pad [x z y] to pad-view blocks with no bot on it: the square
-   forceloaded and waited for (best effort, three waits of 30 s), then released. A bot teleported
-   onto a pad whose surroundings were not generated made the server generate its whole view,
-   fortress structure included, in its thread."
-  [rc [x z _]]
-  (let [square [(- x pad-view) (- z pad-view) (+ x pad-view) (+ z pad-view)]
-        where (str/join " " square)]
-    (rcon/command! rc (gym/in-dimension dimension/nether (str "forceload add " where)))
-    (try (loop [n 3]
-           (when (and (pos? n) (not (gym/wait-loaded-in! rc dimension/nether square)))
-             (recur (dec n))))
-         (finally
-          (rcon/command! rc (gym/in-dimension dimension/nether (str "forceload remove " where)))))))
-
-(def lava-clear-radius 10) ; blocks round a pad on the plane cleared of lava.
-
-(defn lava-clear-command
-  "The RCON fill that turns every lava block round the pad [x z y] into netherrack:
-   lava-clear-radius on the plane, from a block under the pad's floor to its roof. The pad is a box
-   with a doorway (gym/fortress-pad-open), built once and landed on by every bot of its slot, and a
-   pad beside a lava sea let the lava in: on f9c021c every lava death of race lane 2 (the stage-18
-   rods start, landing set R2), 7 of 7, came 4 to 10 s after the teleport, hit by lava before the
-   bot's :go."
-  [[x z y]]
-  (gym/in-dimension dimension/nether
-                    (str "fill "
-                         (str/join " "
-                                   [(- x lava-clear-radius) (dec y) (- z lava-clear-radius)
-                                    (+ x lava-clear-radius) (+ y 3) (+ z lava-clear-radius)])
-                         " minecraft:netherrack replace minecraft:lava")))
-
-(defn build-pad!
-  "Build the pad [x z y] (gym/fortress-pad-open) in the Nether with no bot: the square round it
-   forceloaded and waited for, the commands, the forceload released. The first build of a Nether
-   region generates its chunks and a fortress's structure, seconds of the server's thread each: done
-   with a bot connected, the server fell 12 to 34 s behind and the bots timed out. Remembered in
-   pads-built."
-  [rc [x z _ :as pad]]
-  (when-not (contains? @pads-built pad)
-    (let [where (str/join " " [(- x 2) (- z 2) (+ x 2) (+ z 2)])]
-      (rcon/command! rc (gym/in-dimension dimension/nether (str "forceload add " where)))
-      (try (when-not (gym/wait-loaded-in! rc dimension/nether [(- x 2) (- z 2) (+ x 2) (+ z 2)])
-             (throw (ex-info "the pad's chunks never loaded" {:pad pad})))
-           (rcon/command! rc (lava-clear-command pad))
-           (doseq [c gym/fortress-pad-open]
-             (rcon/command! rc (gym/in-dimension dimension/nether (gym/fill-in c "" pad))))
-           (swap! pads-built conj pad)
-           (pregenerate! rc pad)
-           (finally (rcon/command! rc
-                                   (gym/in-dimension dimension/nether
-                                                     (str "forceload remove " where))))))))
-
-(defn with-loaded
-  "Call (f) with the Nether's square [x0 z0 x1 z1] forceloaded and waited for (best effort, 30 s),
-   and released after, even when f throws: a test of a block or an entity only sees a loaded chunk."
-  [rc square f]
-  (let [where (str/join " " square)]
-    (rcon/command! rc (gym/in-dimension dimension/nether (str "forceload add " where)))
-    (try (gym/wait-loaded-in! rc dimension/nether square)
-         (f)
-         (finally
-          (rcon/command! rc (gym/in-dimension dimension/nether (str "forceload remove " where)))))))
-
-(defn mobs-near?
-  "Is a danger-mob within mob-range of the pad [x z y] now? The chunks round it are loaded for the
-   question."
-  [rc [x z _ :as pad]]
-  (with-loaded
-   rc
-   [(- x 40) (- z 40) (+ x 40) (+ z 40)]
-   (fn [] (boolean (some #(fixture/passed? (rcon/command! rc (mob-test pad %))) danger-mobs)))))
-
-(defn bricks-near?
-  "Is a fortress block within brick-range of the pad [x z y]? (brick-probes, brick-blocks), the
-   chunks round it loaded for the question."
-  [rc [x z _ :as pad]]
-  (with-loaded rc
-               [(- x 24) (- z 24) (+ x 24) (+ z 24)]
-               (fn []
-                 (boolean (some (fn [cell]
-                                  (some #(fixture/passed? (rcon/command! rc (brick-test cell %)))
-                                        brick-blocks))
-                                (brick-probes pad))))))
-
-(def ground-ring
-  "The cells [dx dz] round a pad, four blocks off, that must stand on ground too: the way out of
-   its doorway is not a ledge. Eight points."
-  (for [dx [-4 0 4] dz [-4 0 4] :when (not= [0 0] [dx dz])] [dx dz]))
-
-(defn ground-test
-  "The RCON test that passes when the Nether's cell [x y z] is ground, a block of the nether's
-   own stone (netherrack, basalt, blackstone): not lava, not air."
-  [[x y z]]
-  (str "execute in minecraft:the_nether if block " x " " y " " z " #minecraft:base_stone_nether"))
-
-(defn air-test
-  "The RCON test that passes when the Nether's cell [x y z] holds block (minecraft:air or
-   minecraft:cave_air)."
-  [[x y z] block]
-  (str "execute in minecraft:the_nether if block " x " " y " " z " " block))
-
-(def ground-drop 3)                   ; blocks the floor may fall away round a pad and still be ground: the Nether's floors are not level, a step down of three is no ledge
-(def ground-top 100)
-(def ground-bottom 40)               ; the lava sea is at y 31; a pad is cut well over it
-
-(defn ground-y
-  "The height of the first ground under the roof for a pad at [x z], from ground-top down to
-   ground-bottom: ground under the cell, air in it and the two over it, and ground under every cell
-   of ground-ring within ground-drop below it (a ledge is not ground, a slope is), or nil. The first
-   version asked the ring at exactly the pad's floor: of 16 pads chosen in lane 2 of race f8b28e3,
-   15 fell back to y 72 after 333 and 192 `:no-ground` rejections. Race 9d15bd6, lane 7."
-  [rc [x z _]]
-  (with-loaded rc
-               [(- x 24) (- z 24) (+ x 24) (+ z 24)]
-               (fn []
-                 (let [ok? #(fixture/passed? (rcon/command! rc %))
-                       air? (fn [c]
-                              (or (ok? (air-test c "minecraft:air"))
-                                  (ok? (air-test c "minecraft:cave_air"))))]
-                   (loop [y ground-top]
-                     (cond (< y ground-bottom) nil
-                           (and (ok? (ground-test [x (dec y) z]))
-                                (every? air? [[x y z] [x (inc y) z] [x (+ y 2) z]])
-                                (every? (fn [[dx dz]]
-                                          (some #(ok? (ground-test [(+ x dx) (- y %) (+ z dz)]))
-                                                (range 1 (inc ground-drop))))
-                                        ground-ring))
-                           y
-                           :else (recur (dec y))))))))
-
-(defn pad-unsafe
-  "Why the pad is no landing, :bricks (inside the fortress's body) or :mobs (a danger-mob near), or
-   nil."
-  [rc pad]
-  (cond (bricks-near? rc pad) :bricks
-        (mobs-near? rc pad) :mobs))
-
-(def pads-chosen
-  "The pad each slot lands on, {slot [x z y]} (an atom), chosen by prepare! before any bot joins."
-  (atom {}))
-
-(defn choose-pad!
-  "Choose racer k's pad at the fortress [fx fz]: in the order of pad-candidates (minus the [x z]
-   of exclude), the first with ground (ground-y: its height is the pad's) that pad-unsafe finds
-   safe; else the first candidate as before. Build it (build-pad!), remember it (pads-chosen) and
-   log it with its distance to the fortress."
-  [rc [fx fz :as fortress] k exclude]
-  (let [skip (set (map (juxt first second) exclude))
-        candidates (remove #(skip [(first %) (second %)]) (pad-candidates fortress k))
-        pad (or (loop [[c & more] candidates]
-                  (when c
-                    (let [y (ground-y rc c)
-                          g (when y [(first c) (second c) y])
-                          why (if g (pad-unsafe rc g) :no-ground)]
-                      (when why (cli/log "pad" k c "unsafe:" why))
-                      (if why (recur more) g))))
-                (first candidates))]
-    (build-pad! rc pad)
-    (swap! pads-chosen assoc k pad)
-    (cli/log "pad" k
-             "chosen" pad
-             "fortress" fortress
-             "distance"
-             (long (math/hypot (double (- (first pad) fx)) (double (- (second pad) fz)))))
-    pad))
-
-(defn prepare!
-  "Before any bot joins: locate the fortresses and build the pads for the first bots' landings
-   (racers 0 to n - 1), one at a time on one RCON session, so the searches and the Nether's
-   chunk generation stall a server nobody is connected to (build-pad!). Then each of those bots
-   is only teleported onto a pad made, and finds its fortress in the cache."
-  [{:keys [host rcon-port rcon-pass landings landing-offset]} n]
-  (when landings
-    (try (rcon/with-rcon
-          host
-          rcon-port
-          rcon-pass
-          (fn [rc]
-            (let [t0 (System/currentTimeMillis)
-                  [x z] (landing-of landings (or landing-offset 0) 0)]
-              (build-pool! rc [(quot x 8) (quot z 8)] n)
-              (doseq [i (range n)]
-                (let [fortress (if (seq @fortress-pool)
-                                 (fortress-for @fortress-pool i)
-                                 (locate-fortress! rc
-                                                   (landing-of landings (or landing-offset 0) i)))]
-                  (choose-pad! rc fortress i nil)))
-              (cli/log "prepared" n "pads in" (quot (- (System/currentTimeMillis) t0) 1000) "s"))))
-         (catch Exception e (cli/log "prepare failed:" e)))))
-
-(defn land-fortress!
-  "Land the bot named name (racer i) at the fortress of its landing: the pad (pad-of the fortress the
-   server locates, built by prepare! or here when it is new, build-pad!), its lava cleared again
-   (lava-clear-command: lava flows back between landings), the bot teleported onto it; wait for the server to say it stands in the Nether, clear its inventory and give it kit
-   (\"minecraft:iron_sword 1\" ...: what a race bot carries to the fortress, ci/race.edn's
-   :race/kit). Returns where it stands ([x y z], standing-on the pad), or nil when the dimension
-   never came; a landing that cannot locate a fortress throws."
-  [rc name landing i kit]
-  (let [fortress
-        (if (seq @fortress-pool) (fortress-for @fortress-pool i) (locate-fortress! rc landing))
-        pad (or (get @pads-chosen i) (choose-pad! rc fortress i nil))
-        pad (if (mobs-near? rc pad) (choose-pad! rc fortress i [pad]) pad)]
-    (build-pad! rc pad)
-    (with-loaded rc
-                 [(- (first pad) lava-clear-radius) (- (second pad) lava-clear-radius)
-                  (+ (first pad) lava-clear-radius) (+ (second pad) lava-clear-radius)]
-                 #(cli/log "pad lava:" (rcon/command! rc (lava-clear-command pad))))
-    (cli/log "tp:" (rcon/command! rc (tp-command name pad)))
-    (when (gym/wait-in! rc name dimension/nether)
-      (rcon/command! rc (str "clear " name))
-      (doseq [item kit] (rcon/command! rc (str "give " name " " item)))
-      (Thread/sleep (long fixture/settle-ms))
-      (standing-on pad))))
-
-(defn forest-origins
-  "The Nether points [x z] a bot's forest is located from, nearest first, for its fortress pad
-   [x z y]: the pad's own point, then gym/locate-offsets off it along each axis for when the
-   nearest forest gives no floor (gym/search-points-from)."
-  [[x z _]]
-  (gym/search-points-from x z))
-
-(defn land-forest!
-  "Land the bot named name (racer i) on a floor of the warped forest nearest its fortress pad: the
-   pad as land-fortress! chooses it (built by prepare! or here), the forest the server locates
-   from it, the bot spread onto a floor round that point (gym/warped-floor-from!: warped forest,
-   never a carved cave's air, each forest tried once, the next nearest when one gives no floor),
-   then its inventory cleared and kit given as at the fortress. Returns where it stands ([x y z],
-   standing-on the floor), or nil when the dimension never came; throws when no forest near gave
-   a floor."
-  [rc name landing i kit]
-  (let [fortress
-        (if (seq @fortress-pool) (fortress-for @fortress-pool i) (locate-fortress! rc landing))
-        pad (or (get @pads-chosen i) (choose-pad! rc fortress i nil))
-        {:keys [floor tried]} (gym/warped-floor-from! rc name (forest-origins pad))
-        [fx fy fz]
-        (or floor (throw (ex-info "no floor in the warped forest" {:pad pad :at (vec tried)})))]
-    (cli/log "forest floor" [fx fy fz] "pad" pad)
-    (when (gym/wait-in! rc name dimension/nether)
-      (rcon/command! rc (str "clear " name))
-      (doseq [item kit] (rcon/command! rc (str "give " name " " item)))
-      (Thread/sleep (long fixture/settle-ms))
-      (standing-on [fx fz fy]))))
-
-(defn slot-index
-  "The index racer i (from 0) lands with at the fortress: i mod slots, so a bot that replaces one
-   that ended takes the landing and the pad of its slot, which prepare! built, and no new Nether
-   region is generated while bots are connected. (Racer serials grow with every replacement)"
-  [i slots]
-  (if (pos? (or slots 0)) (mod i slots) i))
-
-(defn spawn-command
-  "The RCON command that pins bot name's spawn at the cell of at ([x y z]) in the dimension dim:
-   `execute in` it, because spawnpoint takes the dimension of the command's source, the server's
-   overworld: pinned without it, a bot that died at the fortress respawned in the overworld at the
-   Nether's coordinates."
-  [name [x y z] dim]
-  (str "execute in " dim
-       " run spawnpoint " name
-       " " (long (math/floor (double x)))
-       " " (long (math/floor (double y)))
-       " " (long (math/floor (double z)))))
-
 (defn land-bot!
   "Land one bot, on a thread of its own with an RCON session of its own: wait for it to be
    online, make it a survival player, land it (on landing i of the set, with landings; else on a
    cell claimed for it round the race's centre, which the first bot online decides), pin its spawn
    there, and put its :go (every step up to until, milestones on, :go/at where it landed) on its
    queue. A bot whose landing fails starts where it stands."
-  [{:keys [host rcon-port rcon-pass until landings landing-offset from kit bots]} ch centre name
+  [{:keys [host rcon-port rcon-pass until landings landing-offset bots] begin :start} ch centre name
    queue i]
   (async/thread
-   (try (rcon/with-rcon
-         host
-         rcon-port
-         rcon-pass
-         (fn [rc]
-           (let [online (fixture/wait-online! rc name fixture/online-timeout)
-                 _ (when online (deliver centre [(long (first online)) (long (nth online 2))]))
-                 at (when online
-                      (rcon/command! rc (str "gamemode survival " name))
-                      (rcon/command! rc (team-join-command name))
-                      (cond (fortress? from)
-                            (let [k (slot-index i bots)]
-                              ((if (forest? from) land-forest! land-fortress!)
-                               rc
-                               name
-                               (if landings (landing-of landings (or landing-offset 0) k) @centre)
-                               k
-                               kit))
-                            landings
-                            (fixture/land-at! rc name (landing-of landings (or landing-offset 0) i))
-                            :else (land! rc ch name @centre i)))]
-             (when at
-               (rcon/command!
-                rc
-                (spawn-command name at (if (fortress? from) dimension/nether dimension/overworld))))
-             (cli/log name "landed at" at)
-             (async/>!! queue
-                        (cond-> {:event/kind :go :go/goals (from-goals from until) :go/chain? true}
-                          at (assoc :go/at at))))))
-        (catch Exception e (cli/log name "landing failed:" e)))))
+   (try
+     (rcon/with-rcon
+      host
+      rcon-port
+      rcon-pass
+      (fn [rc]
+        (let [online (fixture/wait-online! rc name fixture/online-timeout)
+              _ (when online (deliver centre [(long (first online)) (long (nth online 2))]))
+              at
+              (when online
+                (rcon/command! rc (str "gamemode survival " name))
+                (rcon/command! rc (team-join-command name))
+                (cond (start/nether? begin)
+                      (let [k (slot-index i bots)]
+                        ((if (start/forest? begin) land/land-forest! land/land-fortress!)
+                         rc
+                         name
+                         (if landings (land/landing-of landings (or landing-offset 0) k) @centre)
+                         k
+                         (start/kit-commands begin)))
+                      landings
+                      (fixture/land-at! rc name (land/landing-of landings (or landing-offset 0) i))
+                      :else (land! rc ch name @centre i)))]
+          (when at
+            (rcon/command! rc
+                           (spawn-command
+                            name
+                            at
+                            (if (start/nether? begin) dimension/nether dimension/overworld))))
+          (cli/log name "landed at" at)
+          (async/>!! queue
+                     (cond-> {:event/kind :go :go/goals (start/goals begin until) :go/chain? true}
+                       at (assoc :go/at at))))))
+     (catch Exception e (cli/log name "landing failed:" e)))))
 
 (defn board!
   "The board, on a thread of its own: every board-every-ms until done (a promise) is delivered,
@@ -967,30 +265,6 @@
                        #(str (rcon/command! % (str "data get entity " name " Dimension"))))
        (catch Exception e (str "truth failed: " (ex-message e)))))
 
-(def truth-radius 32)                  ; blocks round where a bot ended the server is asked about (near-truth!)
-(def truth-limit 12)                   ; the nearest this many entities asked about
-
-(defn near-commands
-  "The RCON commands that ask the server what stood round where bot name ended (pos, [x y z] in
-   dimension dim): every entity but items and orbs within truth-radius, nearest first, at most
-   truth-limit, whole (data get entity: type, Pos, Health, AngerTime, AngryAt, Target, HurtTime and
-   the rest), and the bot's own entity whole (health, effects, equipment, fire, fall distance). The
-   ground truth beside what the bot saw (the observability plan, part E)."
-  [name [x y z] dim]
-  [(str "execute in "
-        dim
-        " positioned "
-        x
-        " "
-        y
-        " "
-        z
-        " as @e[distance=.."
-        truth-radius
-        ",type=!item,type=!experience_orb,type=!player,sort=nearest,limit="
-        truth-limit
-        "] run data get entity @s") (str "data get entity " name)])
-
 (defn near-truth!
   "The server's answers to near-commands for bot name ended at pos in dim, one block of text a
    command, or why it could not be asked."
@@ -1004,26 +278,6 @@
                     (for [c (near-commands name (mapv #(long (math/floor (double %))) pos) dim)]
                       (str "> " c "\n" (rcon/command! rc c))))))
        (catch Exception e (str "near truth failed: " (ex-message e)))))
-
-(defn death-class
-  "The class of a server death line, a keyword: :blaze, :enderman, :piglin (a piglin, zombified or
-   brute), :hoglin, :wither (a wither skeleton), :ghast, :lava, :fire, :fall, else :other (also a
-   nil line). The mob is asked first: \"burned to a crisp while fighting Blaze\" is a blaze's, not
-   fire's. A death at a stage is filed by its class, so a blaze's and a lava's get different issues
-   and owners."
-  [msg]
-  (let [m (str msg)]
-    (condp re-find m
-      #"Blaze" :blaze
-      #"Enderman" :enderman
-      #"Piglin" :piglin
-      #"Hoglin" :hoglin
-      #"Wither Skeleton" :wither
-      #"Ghast" :ghast
-      #"lava" :lava
-      #"burned|fire|flames" :fire
-      #"fell from|hit the ground" :fall
-      :other)))
 
 (defn with-death-message
   "RESULT r with the server's death line for bot name (gym/death-message from the server's log,
@@ -1040,22 +294,6 @@
       (cond-> (assoc r :reason (keyword (str "death-" (clojure.core/name (death-class msg)))))
         msg (assoc :death-message msg)))
     r))
-
-(def serverlog-tail 400)                ; the newest this many lines of the server log are read for a bot's ending
-
-(def serverlog-notable
-  "What in the server log is worth keeping beside a bot's ending, whoever it is about: the server
-   falling behind, a connection lost or kicked, a timeout, a warning or an error."
-  #"Can't keep up|Overloaded|lost connection|Disconnected|kicked|timed out|moved too quickly|moved wrongly|\[Server thread/(?:WARN|ERROR)\]")
-
-(defn serverlog-lines
-  "The lines of the server log text (its newest serverlog-tail) that bear on bot name's ending: any
-   that names the bot (its join, its death line, its leaving, whole word) and any that
-   serverlog-notable matches, in order, as a vector. Pure over the text."
-  [text name]
-  (let [mine (re-pattern (str "\\b" (java.util.regex.Pattern/quote name) "\\b"))]
-    (filterv #(or (re-find mine %) (re-find serverlog-notable %))
-             (take-last serverlog-tail (str/split-lines (str text))))))
 
 (def serverlog-bytes 524288)              ; the last half megabyte of the log file is read, not all of a five-hour log
 
@@ -1088,7 +326,7 @@
   "One bot's whole life in a slot: the next serial's name (serials, an atom shared by the slots),
    its own atom and queue, on the board (live) and watched for milestones while it plays, landed on
    landing serial - 1 of the set (land-bot!), and played until its goal, its plan failing, a crash
-   or the job's end (deadline); a checkpoint lane's bot also stops at :race/bot-minutes (bot-cap-ms),
+   or the job's end (deadline); a bot whose start has a cap (start/cap-ms) also stops at it,
    a :bot-timeout, filed (capped), where the job's end is a cut. Its RESULT line is printed as it ends, marked
    cut (failure/cut) when the job's end stopped it. Its senses (senses/senses!: a line a second of
    what it sensed and decided, and the loop's slowest event) are written beside its recording as
@@ -1099,10 +337,10 @@
    lines about it (serverlog-lines: its death line, a kick, a server that can't keep up) as
    <name>.serverlog.txt.
    Returns {:name :result :truth}."
-  [{:keys [server ch centre serials live watcher prefix record-dir commit deadline config]}]
+  [{:keys [server ch centre serials live watcher prefix record-dir commit deadline]}]
   (let [n (swap! serials inc)
         start (System/currentTimeMillis)
-        cap (bot-cap-ms config (:from server))
+        cap (start/cap-ms (:start server))
         name (bot-name prefix n)
         queue (async/chan events-buffer)
         world* (atom (game/init {:host (:host server) :port (:port server) :name name}))
@@ -1132,7 +370,7 @@
               :name name
               :until (:until server)
               :chain true
-              :end-on-death? (fortress? (:from server))
+              :end-on-death? (start/nether? (:start server))
               :timeout-ms (bot-timeout-ms deadline start cap)
               :record (str (io/file record-dir (str name ".edn")))
               :commit commit
@@ -1263,10 +501,10 @@
                         :rcon-port (Long/parseLong rcon-port)
                         :rcon-pass rcon-pass
                         :until until
-                        :from (or (get o :from) (:race/from config))
+                        :start (or (start/start-of (get o :start))
+                                   (throw (ex-info "no such start" {:start (get o :start)})))
                         :bots bots
-                        :server-log (str "work/world-" (or which 1) "/logs/latest.log")
-                        :kit (start-kit (:race/kit config) (or (get o :from) (:race/from config)))}
+                        :server-log (str "work/world-" (or which 1) "/logs/latest.log")}
                  landings-file
                  (assoc :landings (landings/read-landings landings-file)
                         :landing-offset (parse-long (or landing-offset "0"))))
@@ -1293,7 +531,7 @@
              :deadline (+ t0 (run-ms config))}]
     (cli/log "race:" bots "slots to" until "seed" seed "for" (quot (run-ms config) 60000) "min")
     (set-gamerules! server)
-    (when (fortress? (:from server)) (prepare! server bots))
+    (when (start/nether? (:start server)) (land/prepare! server bots))
     (board! server live done)
     (sampler! server where live record-dir done)
     (let [slots (mapv #(slot! ctx %) (range bots))

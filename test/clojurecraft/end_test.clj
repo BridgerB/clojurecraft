@@ -14,6 +14,8 @@
             [clojurecraft.physics :as physics]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.sim :as sim]
+            [clojurecraft.sim.end :as sim-end]
+            [clojurecraft.sim.world :as sim-world]
             [clojurecraft.world :as world]))
 
 (use-fixtures :once fx/instrumented)
@@ -103,7 +105,7 @@
         over (ticks sim 81)
         [px _ pz] (flown there eid)]
     (is (= [0.5 64.9 0.5] from) "from the middle of the body")
-    (is (some #(and (= eid (:entity-id %)) (= sim/eye-type (:type %))) (said sim :add-entity))
+    (is (some #(and (= eid (:entity-id %)) (= sim-end/eye-type (:type %))) (said sim :add-entity))
         "the client sees an eye of ender")
     (is (= 11 (get-in sim [:sim/inv (inventory/slot [:hotbar 0]) :count])) "one eye spent")
     (is (< (abs (- (math/atan2 399.5 -300.5) (math/atan2 (- pz 0.5) (- px 0.5)))) 0.01)
@@ -137,10 +139,11 @@
         frames (keys (ring 0))
         eleven (reduce use-on sim (take 11 frames))
         twelve (use-on eleven (last frames))]
-    (is (every? #(end/eyed? (sim/block-at twelve %)) frames) "every frame took its eye")
-    (is (not-any? #(= end/portal (sim/block-at eleven %)) (end/interior middle))
+    (is (every? #(end/eyed? (sim-world/block-at twelve %)) frames) "every frame took its eye")
+    (is (not-any? #(= end/portal (sim-world/block-at eleven %)) (end/interior middle))
         "eleven: no portal")
-    (is (every? #(= end/portal (sim/block-at twelve %)) (end/interior middle)) "twelve: the portal")
+    (is (every? #(= end/portal (sim-world/block-at twelve %)) (end/interior middle))
+        "twelve: the portal")
     (is (nil? (get-in twelve [:sim/inv (inventory/slot [:hotbar 0])])) "every eye spent")
     (is (= 9 (count (filter #(= end/portal (:state %)) (said twelve :block-update))))
         "nine portal cells told")))
@@ -165,11 +168,11 @@
     (is (= dimension/end (:sim/dimension sim)))
     (is (some #(= dimension/end (:dimension %)) (said sim :respawn)))
     (is (= end/spawn (:sim/player-pos sim)))
-    (is (every? (fn [[x z]] (= :obsidian (blocks/name-of (sim/block-at sim [x 48 z]))))
+    (is (every? (fn [[x z]] (= :obsidian (blocks/name-of (sim-world/block-at sim [x 48 z]))))
                 (for [x (range 98 103) z (range -2 3)] [x z]))
         "the obsidian platform under the feet")
-    (is (= :obsidian (blocks/name-of (sim/block-at sim [100 48 0]))))
-    (is (= blocks/air (sim/block-at sim [100 49 0])))
+    (is (= :obsidian (blocks/name-of (sim-world/block-at sim [100 48 0]))))
+    (is (= blocks/air (sim-world/block-at sim [100 49 0])))
     (let [dragon (filter #(= :ender_dragon (:type (val %))) (:sim/mobs sim))
           crystals (filter #(= :end_crystal (:type (val %))) (:sim/mobs sim))]
       (is (= [200.0] (map (comp :health val) dragon)) "the dragon perched with 200 health")

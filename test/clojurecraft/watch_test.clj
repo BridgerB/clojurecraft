@@ -29,7 +29,7 @@
     (is (= 50 (:telemetry/at (watch/line a b))))))
 
 (deftest telemetry-watches-a-whole-run-without-touching-it
-  (let [path (str (System/getProperty "java.io.tmpdir") "/clojurecraft-telemetry.edn")
+  (let [path (fx/temp-path "clojurecraft-telemetry" ".edn")
         step (game/compose game/step plan/step)
         column (world/column-bytes {[6 64 0] 136 [6 65 0] 136 [6 66 0] 136 [6 67 0] 252})
         world* (atom (game/init fx/opts))

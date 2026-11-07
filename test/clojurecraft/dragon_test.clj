@@ -24,6 +24,7 @@
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.sim :as sim]
+            [clojurecraft.sim.world :as sim-world]
             [clojurecraft.world :as world]))
 
 (use-fixtures :once fx/instrumented)
@@ -803,7 +804,7 @@
     (is (not-any? #(= :end_crystal (:type %)) (vals (:sim/mobs sim))) "the crystal is gone")
     (is (= 20.0 (:sim/health sim)) "its blast never reached the bot")
     (is (= [:cobblestone :cobblestone]
-           (map #(blocks/name-of (sim/block-at sim %)) [[106 54 6] [106 55 6]]))
+           (map #(blocks/name-of (sim-world/block-at sim %)) [[106 54 6] [106 55 6]]))
         "the wall it struck from behind")
     (is (<= (second (:player/pos w)) 49.5) "back down the pillar")
     (is (empty? (:sim/violations sim)))))
