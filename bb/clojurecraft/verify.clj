@@ -1,16 +1,13 @@
 (ns clojurecraft.verify
-  "A fix's whole check in one command, for a Copilot session (bot-fixer profile) or anyone:
+  "A fix's whole check in one command:
 
      bb verify <n>    the issue's snapshots judged on the working tree, the suite without the
                       forest property, and every static check; a short verdict at the end
 
-   A session that ran these one at a time started each in the background and asked after it again
-   and again, every question re-sending its whole context (2026-10-17: 461 such polls in 32
-   sessions, 53 million input tokens, a third of the day's). One command run to its end prints
-   only what a fix needs: which snapshots still recur, which tests fail, which checks complain.
+   One command run to its end prints only what a fix needs: which snapshots still recur, which tests fail, which checks complain.
    Each step's full output stays in /tmp/verify-<step>.log for a closer look.
 
-   The snapshots are test/issues/<n>/*.edn.gz, else cache/issues/<n>/*.edn.gz (the brief's)."
+   The snapshots are test/issues/<n>/*.edn.gz, else cache/issues/<n>/*.edn.gz."
   (:require [babashka.fs :as fs]
             [babashka.process :as p]
             [clojure.edn :as edn]

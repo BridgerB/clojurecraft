@@ -284,6 +284,6 @@ Unproven or failing: <exactly what, with the exact error>.
 Next step: <the one you would have taken>.
 ```
 
-Leave the branch and any open PR as they are; never a draft. The branch stays, and whoever is named next continues it (section 5's hand-off row). Take the `no-agent` label off an issue you were named for, so the orchestrator can give it to Copilot.
+Leave the branch and any open PR as they are; never a draft. The branch stays, and whoever is named next continues it (section 5's hand-off row).
 
 ---

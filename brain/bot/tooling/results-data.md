@@ -47,7 +47,7 @@ On the `gh-pages` branch (`bb/clojurecraft/page.clj`):
 - `data/days/<day>.json`: the day's runs (one row a lane run and kind, its batches combined) and its totals per kind, rebuilt from the day's batches.
 - `data/summary.json`: every day's totals per kind (runs, reached per milestone, stops by stage, times, deaths, top failures with their issues), oldest first. The page's first load.
 - `data/gyms.ndjson`: a line per gym run, from its summary artifact (`bb site gyms`).
-- `orchestrator.json`: the Copilot orchestrator's state (`bb copilot dispatch`), unchanged.
+- `orchestrator.json`: the old Copilot orchestrator's last state, kept and no longer written.
 
 A day belongs to the day its run started, so a lane run is never split across files. A publish rewrites one day's two files and the summary (`changes`), so a write's cost does not grow with the history.
 

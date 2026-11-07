@@ -40,7 +40,7 @@
             [clojure.string :as str]
             [clojurecraft.failures :as failures]))
 
-(def branch "gh-pages")                ; the data's branch: data/, orchestrator.json (bb copilot dispatch)
+(def branch "gh-pages")                ; the data's branch: data/, orchestrator.json (no longer written)
 (def legacy-file "rounds.edn")         ; the one-file layout before data/: absorbed by the next publish, then removed
 (def stale-files ["index.html" "agents.html"]) ; the one-file layout's pages, built on the branch: pages.yml builds the site now
 (def summary-file "data/summary.json")
