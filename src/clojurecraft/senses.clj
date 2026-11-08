@@ -29,7 +29,7 @@
 (set! *warn-on-reflection* true)
 
 (def every-ms 1000)                    ; world time between two lines of a bot
-(def keep-lines 300)                   ; lines kept a bot, the last five minutes: what a death report reads
+(def keep-lines 4000)                   ; lines kept a bot, the last five minutes: what a death report reads
 (def hostile-radius 32.0)              ; blocks from the feet a hostile is listed within
 (def hostiles-listed 6)                ; the nearest this many listed, each with its distance and sight
 (def projectile-radius 16.0)           ; blocks from the feet a fireball is counted within
