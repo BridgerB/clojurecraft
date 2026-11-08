@@ -15,7 +15,8 @@
    side by side, so a redefined plan/choose or rcon/command! in one reached the tests of another
    (a-restored-block-after-finish-is-a-refused-break, a-forceload-is-released-even-when-the-work-throws
    failed at random). Exit code 1 when anything fails or errors."
-  (:require [clojure.string :as str]
+  (:require [clojure.spec.alpha :as s]
+            [clojure.string :as str]
             [clojurecraft.fixtures :as fixtures]
             [eftest.report.pretty]
             [eftest.runner :as eftest]))
@@ -69,20 +70,21 @@
 
 (defn roots
   "{var function} for every function and multimethod of the clojurecraft namespaces loaded now:
-   the roots a with-redefs may replace, taken to find one left replaced after the run."
+   the roots a test may replace for the whole JVM, taken to find one left replaced after the run.
+   A var with an fdef is left out: instrumenting swaps its root by design."
   []
   (into {}
         (for [n (all-ns)
               :when (str/starts-with? (str (ns-name n)) "clojurecraft.")
               [_ v] (ns-interns n)
-              :when (bound? v)
+              :when (and (bound? v) (nil? (s/get-spec (symbol v))))
               :let [x @v]
               :when (or (fn? x) (instance? clojure.lang.MultiFn x))]
           [v x])))
 
 (defn leaked
   "The vars of before (roots) whose root is no longer the function it was: a redefinition a test
-   left in place. A report, not a verdict: instrumenting a namespace later changes roots too."
+   left in place. A report, not a verdict."
   [before]
   (sort-by str (for [[v x] before :when (not (identical? x @v))] v)))
 
@@ -95,8 +97,7 @@
         {:keys [fail error] :as result}
         (run-split vars {:report eftest.report.pretty/report :test-warn-time 60000})]
     (when-let [vs (seq (leaked before))]
-      (println "REPLACED ROOTS after the run (a with-redefs left in place, or a later instrument):"
-               (str/join " " vs)))
+      (println "REPLACED ROOTS after the run (a stub a test left in place):" (str/join " " vs)))
     (println (str/join " "
                        (for [[k v] (select-keys result [:test :pass :fail :error :duration])]
                          (str (name k) " " v))))
