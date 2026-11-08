@@ -305,10 +305,9 @@
           (recur (assoc alive s (inc serial)) (inc serial) (dec left)))))))
 
 (deftest two-bots-alive-at-once-never-land-on-one-pad
-  ;; race 42460001362, lane 3: Clj_r11 and Clj_r21 were both alive from 08:49 on the pad of slot 0,
-  ;; because serials are drawn by whichever slot refills next, so (serial - 1) mod slots is not
-  ;; the slot of the bot that ended; r21 was teleported into the cobblestone r11 had placed, took
-  ;; in_wall damage 25 times and died at the pad
+  ;; serials are drawn by whichever slot refills next, so (serial - 1) mod slots is not the slot of
+  ;; the bot that ended: two live bots shared a pad, and the second was teleported into the blocks
+  ;; the first had placed
   (doseq [seed (range 20)
           :let [alive (refills 10 60 seed)]]
     (is (apply distinct? (map (fn [[slot serial]] (facts/landing-slot slot (dec serial) 10)) alive))

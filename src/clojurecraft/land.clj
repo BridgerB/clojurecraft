@@ -640,9 +640,8 @@
 (defn interior-clear-command
   "The RCON fill that turns the cells a bot stands and looks in at the pad [x z y] to air: the 3x3
    round the pad from its feet to two over them, never the floor under the feet. The pad is built
-   once and landed on by every bot of its slot, and a bot that ended there left what it placed
-   (cobblestone in the feet's column): the next bot teleported into those blocks took in_wall
-   damage until it died (Clj_r21, run 42460001362)."
+   once and landed on by every bot of its slot, so what a bot that ended there placed, or the
+   lava clear turned to netherrack, would otherwise bury the next one (in_wall damage)."
   [[x z y]]
   (in-dimension
    dimension/nether

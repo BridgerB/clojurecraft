@@ -5,8 +5,8 @@
             [clojurecraft.land :as land]))
 
 (deftest a-pad-is-cleared-of-lava-and-of-a-former-bots-blocks-before-a-bot-lands
-  ;; the pad is built once and every bot of its slot lands on it: Clj_r21 (run 42460001362) was
-  ;; teleported into the cobblestone the bot before it had placed, took in_wall damage 25 times
+  ;; the pad is built once and every bot of its slot lands on it: one teleported into blocks a
+  ;; former bot placed, or the netherrack the lava clear left in its cells, took in_wall damage
   (let [pad [96 224 72]
         [lava interior :as cmds] (land/pad-clear-commands pad)]
     (is (= 2 (count cmds)))
