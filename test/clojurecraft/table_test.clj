@@ -1,7 +1,7 @@
 (ns clojurecraft.table-test
   "The :keep-table row: the crafting table the bot placed is carried on once its crafting is done,
    so a pickaxe worn out far from it is made again on the spot."
-  (:require [clojure.test :refer [deftest is use-fixtures]]
+  (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
@@ -41,17 +41,23 @@
       (memory/observe at table-id)
       (memory/remember-intention {:intent/id 3 :intent/kind :place :intent/target at} :done)))
 
-(def spent {0 (item :cobblestone 3) 1 (item :stick 2)})
+(def spent
+  "What a stone pickaxe takes, still held: the sword row would craft with it at once."
+  {0 (item :cobblestone 3) 1 (item :stick 2)})
+
+(def crafted
+  "What is left of a craft that took all it held: the pickaxe."
+  {0 (item :stone_pickaxe 1)})
 
 (deftest the-table-placed-is-dug-up-after-its-craft
-  (let [w (beside-table spent)]
+  (let [w (beside-table crafted)]
     (is (table/own-table w))
     (is (not (plan/done-by w row)) "a placed table with nothing more to craft is not left")
     (is (= {:intent/kind :dig :intent/target at :intent/for :take-table}
            (plan/next-intent w row plan/goals)))))
 
 (deftest the-drop-of-the-table-is-collected-from-the-dig
-  (let [w (-> (beside-table spent)
+  (let [w (-> (beside-table crafted)
               (assoc :plan/last {:intent/kind :dig :intent/target at :intent/for :take-table})
               (assoc :world/chunks {[0 0] (world/column {})}))
         i (plan/next-intent w row plan/goals)]
@@ -59,33 +65,42 @@
     (is (= :take-table (:intent/for i)))))
 
 (deftest a-table-held-is-kept
-  (let [w (beside-table (assoc spent 2 (item :crafting_table 1)))]
+  (let [w (beside-table (assoc crafted 2 (item :crafting_table 1)))]
     (is (nil? (plan/next-intent w row plan/goals)))
     (is (plan/done-by w row))))
 
 (deftest a-table-the-bot-did-not-place-is-never-taken
-  (let [w (-> (beside-table spent)
+  (let [w (-> (beside-table crafted)
               (assoc :world/facts (:world/facts (memory/observe (game/init fx/opts) at table-id))))]
     (is (nil? (table/own-table w)))
     (is (nil? (plan/next-intent w row plan/goals)))))
 
 (deftest nothing-is-taken-but-right-after-a-craft
-  (let [w (beside-table spent)]
+  (let [w (beside-table crafted)]
     (is (nil? (plan/next-intent (assoc w :time/now 20000) row plan/goals)) "long after")
     (is (nil? (plan/next-intent (assoc w :plan/last {:intent/kind :walk}) row plan/goals))
         "after something else")
     (is (nil? (plan/next-intent (dissoc w :plan/chain?) row plan/goals)) "not in a chained run")))
 
 (deftest a-craft-queued-keeps-the-table-where-it-is
-  (let [w (assoc (beside-table spent) :plan/goals #{:keep-table :stone-pickaxe})]
-    (is (table/queued-craft? w) "a stone pickaxe is made at the table next")
-    (is (nil? (plan/next-intent w row plan/goals)))))
+  (testing "a stone pickaxe is made at the table next"
+    (let [w (assoc (beside-table spent) :plan/goals #{:keep-table :stone-pickaxe})]
+      (is (table/queued-craft? w))
+      (is (nil? (plan/next-intent w row plan/goals)))))
+  (testing "the sword row would craft with what is left"
+    (let [w (beside-table spent)]
+      (is (table/queued-craft? w))
+      (is (nil? (plan/next-intent w row plan/goals))))))
 
 (deftest a-pickaxe-is-made-on-the-spot-from-a-held-table
-  (let [w (-> (beside-table (assoc spent 2 (item :crafting_table 1)))
-              (assoc :plan/goals #{:stone-pickaxe}
-                     :world/chunks {[0 0] (world/column {})}
-                     :world/facts (:world/facts (game/init fx/opts))))
+  (let [w (-> (game/init fx/opts)
+              (assoc :bot/phase :play
+                     :player/pos [8.5 64.0 8.5]
+                     :player/loaded? true
+                     :player/on-ground? true
+                     :player/inventory (assoc spent 2 (item :crafting_table 1))
+                     :plan/goals #{:stone-pickaxe}
+                     :world/chunks {[0 0] (world/column {})}))
         goal (first (filter #(= :stone-pickaxe (:goal/id %)) plan/goals))
         i (make/decide w goal plan/goals)]
     (is (= :place (:intent/kind i)))
