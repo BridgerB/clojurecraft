@@ -789,7 +789,8 @@
 
 (defn watch-progress
   "The world with :pearls/watch {:target :best :at} kept for the running intent's held target
-   (held-class): the nearest the feet have been to it and when. When the feet have not come
+   (held-class): the nearest the feet have been to it and when (targets within watch-same of each other are one:
+   the exit flipped between two cells a block apart every 350 ms for thirty minutes in sim R2/21 and each flip restarted the clock). When the feet have not come
    (:blocks pparams/progress) nearer than that in :ms, the target is avoided (:blacklist, and for
    the exit its [x z] column under :exit-columns), so the intent is no longer wanted (the
    still-wanted? methods of the rows that hold a target) and the next mover takes over. One rule
@@ -804,7 +805,7 @@
         w (:pearls/watch world)
         rule (pparams/progress cls)]
     (cond (nil? cls) (dissoc world :pearls/watch)
-          (not= t (:target w))
+          (or (nil? w) (> (physics/distance t (:target w)) pparams/watch-same))
           (assoc world
                  :pearls/watch
                  {:target t :best (physics/distance (intent/feet world) t) :at now})

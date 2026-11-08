@@ -250,3 +250,5 @@
 (def seen-corridor (:seen-corridor thresholds))
 
 (def progress (:progress thresholds))
+
+(def watch-same (:watch-same thresholds))

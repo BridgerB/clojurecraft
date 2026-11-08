@@ -210,3 +210,29 @@
           sideways (:dir (:pearls/heading (pmove/reach-heading-hold blocked)))]
       (is (contains? #{[0 1] [0 -1]} sideways) "a blocked leg turns a quarter")
       (is (= [0 -1] sideways) "to the side with the more unseen ground"))))
+
+(deftest an-exit-that-flips-between-two-cells-is-one-held-target
+  ;; Logged state, sim R2/21 on the port (probe meas-mp-R2-21, issue #263): from minute 30 to 60
+  ;; the exit's target alternated [-99 56 403] and [-100 56 403] every 350 ms, each a :tunnel-to that
+  ;; got nowhere, and every flip restarted the progress clock, so it never gave up. Targets within
+  ;; watch-same are one held target; the column it is given up at covers its neighbour.
+  (let [base (-> (ps/standing {} {})
+                 (assoc :player/dimension ps/nether :time/now 0))
+        at (fn [w target t]
+             (assoc w
+                    :time/now t
+                    :pearls/exit-target target
+                    :plan/intent
+                    {:intent/kind :tunnel-to
+                     :intent/for :pearls
+                     :intent/target target
+                     :intent/status :active}))
+        rule (:exit pparams/progress)
+        w0 (pmove/watch-progress (at base [8 64 -60] 0))
+        flipped (pmove/watch-progress (at w0 [7 64 -60] 350))
+        late (pmove/watch-progress (at flipped [8 64 -60] (:ms rule)))]
+    (is (= 0 (:at (:pearls/watch flipped))) "one cell over is the same target: the clock goes on")
+    (is (avoided/noted? late :blacklist [8 64 -60]) "given up after the time, flips or not")
+    (is (avoided/noted? late :exit-columns [8 -60]))
+    (is (fexit/given-up-column? late [7 64 -60]) "the neighbouring cell is that column too")
+    (is (not (fexit/given-up-column? late [20 64 -60])) "a column far off is not")))

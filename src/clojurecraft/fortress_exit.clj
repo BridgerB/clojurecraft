@@ -365,6 +365,15 @@
                (not (contains? (avoided/all-of world :blacklist) held)))
       held)))
 
+(defn given-up-column?
+  "Is the [x z] column of target t within watch-same of a column the exit was given up at
+   (:exit-columns, pmove/watch-progress)? The exit's fresh target flips between cells a block apart."
+  [world t]
+  (boolean (some (fn [[cx cz]]
+                   (<= (physics/horizontal-distance [cx 0 cz] [(first t) 0 (last t)])
+                       pparams/watch-same))
+                 (avoided/all-of world :exit-columns))))
+
 (defn fortress-tunnel-target
   "The [x y z] target for the sealed fortress tunnel-out: the one held (held-exit-target) until
    reached or failed, else fresh-tunnel-target; nil once the fresh one is nil (clear of the
@@ -377,8 +386,7 @@
   [world]
   (when (seq (fortress-points world))
     (when-let [fresh (fresh-tunnel-target world)]
-      (let [t (or (held-exit-target world) fresh)]
-        (when-not (avoided/noted? world :exit-columns [(first t) (last t)]) t)))))
+      (let [t (or (held-exit-target world) fresh)] (when-not (given-up-column? world t) t)))))
 
 (defn fortress-escaping?
   "Is the bot leaving the fortress via sealed tunnel-out: inside/near the fortress,
