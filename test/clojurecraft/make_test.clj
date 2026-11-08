@@ -142,7 +142,7 @@
                 (remove :goal/provides plan/targets)))
     (is (= #{:needs :escape :wade :build :return-nether :fortress :eat :wear :armour :watch :defend
              :attack :hunt :sword :gear :regear :cook :pearls :blaze-rods :eyes :throw :stronghold
-             :portal-room :end-portal :enter-end :crystals :dragon :heal :spare-picks}
+             :portal-room :end-portal :enter-end :eye-frame :crystals :dragon :heal :spare-picks}
            ;; test rows (:test/...) register their own methods
            (set (remove #(= "test" (namespace %))
                         (keys (dissoc (methods plan/next-intent) :default))))))))

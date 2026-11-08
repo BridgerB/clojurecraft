@@ -73,20 +73,22 @@
   (get (swap! server-locks update server #(or % (Object.))) server))
 
 (defn command!
-  "Send one command, return the server's text response. One command at a time a server, across
-   every connection to it: vanilla gathers every RCON connection's command output in one console
-   source (MinecraftServer.runCommand reads rconConsoleSource's buffer), so two connections'
-   commands at once read each other's replies. Race 38709089706 runner 6 (issue #167): four bots
-   landing at once got each other's tp replies, took another bot's position as their landing and
-   failed :no-landing."
-  [{:keys [^DataInputStream in ^DataOutputStream out next-id server]} ^String s]
-  (let [lock (server-lock server)]
-    (locking lock
-      (let [id (swap! next-id inc)]
-        (.write out ^bytes (encode-packet id 2 s))
-        (.flush out)
-        (loop [acc ""]
-          (let [r (read-response in)] (if (= id (:id r)) (str acc (:body r)) (recur acc))))))))
+  "Send one command, return the server's text response. One command at a time a server, across every
+   connection to it: vanilla gathers every RCON connection's command output in one console source
+   (MinecraftServer.runCommand reads rconConsoleSource's buffer), so two connections' commands at
+   once read each other's replies. A connection map holding :answer, a function of the command
+   to its reply, is answered by it with no socket: the stand-in connection of a test."
+  [{:keys [^DataInputStream in ^DataOutputStream out next-id server answer]} ^String s]
+  (let [lock (when-not answer (server-lock server))]
+    (cond answer (answer s)
+          :else
+          (locking lock
+            (let [id (swap! next-id inc)]
+              (.write out ^bytes (encode-packet id 2 s))
+              (.flush out)
+              (loop [acc ""]
+                (let [r (read-response in)]
+                  (if (= id (:id r)) (str acc (:body r)) (recur acc)))))))))
 
 (defn close! "Close the connection's socket." [{:keys [^Socket sock]}] (.close sock))
 

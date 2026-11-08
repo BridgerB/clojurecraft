@@ -1,8 +1,7 @@
 (ns clojurecraft.eyes
-  "Eyes of ender (issue #264): the twelve the end portal's frames take, crafted in the 2x2 grid
-   from what the two stages before hold: blaze powder from the rods (#262, two a rod) and an eye
-   from a powder and a pearl (#263). Both recipes are generated craft rows, so the needs planner
-   finds the way; no table, no trip.
+  "Eyes of ender: the twelve the end portal's frames take, crafted in the 2x2 grid from what the two
+   stages before hold. Both recipes are generated craft rows, so the needs planner finds the way; no
+   table, no trip.
 
    Requiring this namespace registers the :eyes planner: the needs planner (make/decide), whose
    :stuck becomes a wait that names what is short, :no-pearls or :no-rods. No recipe makes either;

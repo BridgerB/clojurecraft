@@ -8,29 +8,29 @@ status: verified
 lastUpdated: 2026-10-22
 verifiedAgainst: HEAD
 sourceRefs:
-  - src/clojurecraft/sim.clj#defn volley
-  - src/clojurecraft/sim.clj#defn tick-fireballs
-  - src/clojurecraft/sim.clj#defn fly
+  - src/clojurecraft/sim/mobs.clj#defn volley
+  - src/clojurecraft/sim/mobs.clj#defn tick-fireballs
+  - src/clojurecraft/sim/mobs.clj#defn fly
   - src/clojurecraft/mob.clj#defn volley-next
   - test/clojurecraft/blaze_parity_test.clj#the-volley-matches-the-recorded-cycle-and-shot-gap
   - src/clojurecraft/fire.clj#defn tick
-  - src/clojurecraft/sim.clj#defn tick-burn
+  - src/clojurecraft/sim/mobs.clj#defn tick-burn
   - test/clojurecraft/fire_test.clj#a-fireball-burns-five-seconds-one-health-a-second
   - src/clojurecraft/mob.clj#def kinds
   - src/clojurecraft/mob.clj#def warped-kinds
   - src/clojurecraft/mob.clj#defn nether-spot?
   - src/clojurecraft/mob.clj#defn pack-step
-  - src/clojurecraft/sim.clj#defn wild-roll
-  - src/clojurecraft/sim.clj#defn try-nether-spawn
-  - src/clojurecraft/sim.clj#defn spawn-pack
+  - src/clojurecraft/sim/mobs.clj#defn wild-roll
+  - src/clojurecraft/sim/spawns.clj#defn try-nether-spawn
+  - src/clojurecraft/sim/spawns.clj#defn spawn-pack
   - src/clojurecraft/mob.clj#defn route
   - src/clojurecraft/mob.clj#defn moves
   - src/clojurecraft/mob.clj#defn toward-aim
   - src/clojurecraft/mob.clj#defn away-aim
   - src/clojurecraft/mob.clj#defn landing
-  - src/clojurecraft/sim.clj#defn trail
-  - src/clojurecraft/sim.clj#defn blink
-  - src/clojurecraft/sim.clj#defn teleport-mob
+  - src/clojurecraft/sim/mobs.clj#defn trail
+  - src/clojurecraft/sim/mobs.clj#defn blink
+  - src/clojurecraft/sim/mobs.clj#defn teleport-mob
   - test/clojurecraft/mob_test.clj#an-angry-enderman-far-off-teleports-toward-the-player
   - test/clojurecraft/mob_test.clj#an-angry-enderman-walks-round-a-wall-to-the-player
   - test/clojurecraft/mob_test.clj#a-warped-forest-spawns-packs-of-endermen-by-day-and-netherrack-spawns-nothing
@@ -41,23 +41,23 @@ sourceRefs:
   - src/clojurecraft/mob.clj#defn spawn-spots
   - src/clojurecraft/mob.clj#defn stared?
   - src/clojurecraft/mob.clj#defn absorbed
-  - src/clojurecraft/sim.clj#defn armoured
+  - src/clojurecraft/sim/mobs.clj#defn armoured
   - test/clojurecraft/mob_test.clj#armour-takes-its-share-of-a-mobs-hit
-  - src/clojurecraft/sim.clj#defn with-mobs
-  - src/clojurecraft/sim.clj#defn retell-entities
+  - src/clojurecraft/sim/mobs.clj#defn with-mobs
+  - src/clojurecraft/sim/protocol.clj#defn retell-entities
   - test/clojurecraft/sim_test.clj#a-respawned-bot-is-told-the-mobs-about-it-again
-  - src/clojurecraft/sim.clj#defn tick-mobs
-  - src/clojurecraft/sim.clj#defn try-spawn
+  - src/clojurecraft/sim/spawns.clj#defn tick-mobs
+  - src/clojurecraft/sim/spawns.clj#defn try-spawn
   - src/clojurecraft/mob.clj#defn spawner-awake?
   - src/clojurecraft/mob.clj#defn spawner-spawns
-  - src/clojurecraft/sim.clj#defn tick-spawners
-  - src/clojurecraft/sim.clj#defn spawn-batch
+  - src/clojurecraft/sim/spawns.clj#defn tick-spawners
+  - src/clojurecraft/sim/spawns.clj#defn spawn-batch
   - test/clojurecraft/mob_test.clj#a-spawner-near-the-player-makes-blazes-within-eight-hundred-ticks
   - test/clojurecraft/sim_test.clj#the-seventh-rod-from-a-spawner-in-the-models-nether
-  - src/clojurecraft/sim.clj#defn hurt-mob
-  - src/clojurecraft/sim.clj#defmethod on-packet [:play :attack]
-  - src/clojurecraft/sim.clj#defn populate-column
-  - src/clojurecraft/sim.clj#defn mob-roll
+  - src/clojurecraft/sim/mobs.clj#defn hurt-mob
+  - src/clojurecraft/sim/mobs.clj#defmethod on-packet [:play :attack]
+  - src/clojurecraft/sim/spawns.clj#defn populate-column
+  - src/clojurecraft/sim/mobs.clj#defn mob-roll
   - src/clojurecraft/simrace.clj#defn day-time-of
   - test/clojurecraft/mob_test.clj#an-iron-sword-kills-a-zombie-in-four-hits-and-it-drops-and-goes
   - test/clojurecraft/mob_test.clj#a-creeper-swells-for-a-second-and-a-half-and-blasts
@@ -67,9 +67,7 @@ related:
   - "[[bot/tooling/_moc|Tooling]]"
   - "[[server-model]]"
   - "[[sim-hunger]]"
-  - "[[survival]]"
   - "[[sib-775-attack-packet]]"
-  - "[[ender-pearls]]"
 ---
 
 # Mobs in the server model
@@ -83,7 +81,7 @@ Health, hitbox, walking speed in blocks a tick (a zombie's 0.23 attribute walks 
 - The day turns in `:sim/day-time` (given by `:day-time`, a model with a `:difficulty` keeps it); night is 13000-23000 of each 24000. `simrace/day-time-of` starts a run at one of eight times by its seed, so some lanes start at night.
 - `try-spawn`, every 100 ticks under the cap of 70 hostiles within 128: a column rolled in the ring 24-48 from the player, its spots within 16 of the player's feet that have solid under them, room for a body and darkness (`mob/roofed?`: a solid block that is not leaves overhead, dark day and night since no torch is modelled; or any spot at night), one rolled, a kind rolled by weight (zombie, skeleton, creeper, spider 100 each, enderman 10). A model's rate, not vanilla's per-chunk rule.
 - `tick-spawners` (the Nether only, at a difficulty above peaceful): a blaze spawner block in a captured Nether is a block state like any other, so capture (#353) keeps it. The model finds the spawners in the nine columns round the player whenever it enters a column (`:sim/spawners {cell due-ms}`), and `tick-spawner` runs each as vanilla's BaseSpawner does (`mob/spawner`): awake with the player within 16 of its centre; the first tick awake rolls a delay of 200 to 800 ticks; then a batch of four tries (`spawn-batch`, vanilla's SpawnCount; it was two to four until issue #525's batch, which moves sim replays), cut to the room under its cap of six blazes within four blocks (`spawner-room`, `spawner-crowded?`), each try five rolls to a cell of the 9x3x9 box as BaseSpawner picks it (`spawner-spot`: x and z triangular, (r1 - r2) * 4 from the spawner's cell, y one of three) where a blaze's two cells are free and no other blaze was put (`spawner-fits?`); light is the model's fixed `interior-light` of 0, under the blaze's limit of 11. Rolls come from `mob-roll`, as every other. Blazes are not `:hostile` in `mob/kinds`, so the overworld's night rule never picks one and `despawn` never takes one. A broken spawner stops; `arrive` forgets the list.
-- `try-nether-spawn` (the Nether only, at a difficulty above peaceful, `wild-spawning?`; issue #263): vanilla spawns the Nether's hostiles by biome, and a warped forest's monster list is the enderman alone, weight 1, in packs of four (`mob/warped-kinds`, `mob/enderman-pack`). The captured Nether's bytes carry the biome containers, and `chunk/decode` keeps them as `:chunk/biomes` (for the viewer), but the model does not read them, so the model tells a warped forest by its floor: warped nylium under the feet (`mob/warped-floor?`), as the bot does. Every 100 ticks under the cap, a column is rolled in the same ring as `try-spawn`'s, its spots within 16 of the feet with nylium under them and an enderman's three cells free (`mob/nether-spot?`, `mob/nether-spots`; any light: the model's light is 0 everywhere, under the Nether's `monster_spawn_light_level` of 7, so the shroomlit cells vanilla refuses are not told apart), one rolled, and a pack walked out from it (`spawn-pack`): each member `nextInt(6) - nextInt(6)` off the last on x and on z at the pack's height (`mob/pack-step`), placed where its cell is a spot and 24 or more from the player, skipped where not, as `NaturalSpawner.spawnCategoryForPosition` does. A column with no nylium spawns no enderman. A fortress's brick floor (nether bricks, fence or stairs) spawns one wither skeleton or magma cube a try (`try-fortress-spawn`, weights 8 and 3, the structure's `spawn_overrides`; one mob, not the structure's minCount). A crimson floor spawns one hoglin (`try-crimson-spawn`). Piglins, zombified piglins, ghasts, skeletons and striders are still not modelled. The rolls come from the Nether's own stream (`wild-roll`, `:sim/wild-rng`, seeded from `:seed` and `wild-salt`), never `mob-roll`'s, so the overworld's night rule rolls as it did before it (`the-overworld-spends-no-roll-of-the-nethers-stream`: `try-nether-spawn` is the identity on every overworld tick), and a Nether run that meets no warped forest rolls its fortress's spawners as before: snapshots and replays from before keep their luck. Once endermen stand in the model, their turns and despawn rolls come from `mob-roll` like every mob's. The spawned endermen are `:hostile`, so `despawn` takes them as it takes the overworld's, and they are neutral until stared at or hurt (`provoke`, `anger`). `a-warped-forest-spawns-packs-of-endermen-by-day-and-netherrack-spawns-nothing` pins the rule. Probe 39779112668 (probe/263-sim-endermen, the bot with an iron kit put in each set's warped forest at Normal, 60 simulated minutes): every set's forest spawned packs from the first try (R2 reached the cap of 70); in R4 the hunt provoked, killed and picked up six pearls in eight minutes, then failed `:unreachable` waiting on a drop; in R1-R3 it provoked one or two and killed none, most likely as the model's endermen walk straight at the player and neither path round walls nor teleport (below), so one provoked beyond a wall never reaches the burrow's end.
+- `try-nether-spawn` (the Nether only, at a difficulty above peaceful, `wild-spawning?`; issue #263): vanilla spawns the Nether's hostiles by biome, and a warped forest's monster list is the enderman alone, weight 1, in packs of four (`mob/warped-kinds`, `mob/enderman-pack`). The captured Nether's bytes carry the biome containers, and `chunk/decode` keeps them as `:chunk/biomes`, but the model does not read them, so the model tells a warped forest by its floor: warped nylium under the feet (`mob/warped-floor?`), as the bot does. Every 100 ticks under the cap, a column is rolled in the same ring as `try-spawn`'s, its spots within 16 of the feet with nylium under them and an enderman's three cells free (`mob/nether-spot?`, `mob/nether-spots`; any light: the model's light is 0 everywhere, under the Nether's `monster_spawn_light_level` of 7, so the shroomlit cells vanilla refuses are not told apart), one rolled, and a pack walked out from it (`spawn-pack`): each member `nextInt(6) - nextInt(6)` off the last on x and on z at the pack's height (`mob/pack-step`), placed where its cell is a spot and 24 or more from the player, skipped where not, as `NaturalSpawner.spawnCategoryForPosition` does. A column with no nylium spawns no enderman. A fortress's brick floor (nether bricks, fence or stairs) spawns one wither skeleton or magma cube a try (`try-fortress-spawn`, weights 8 and 3, the structure's `spawn_overrides`; one mob, not the structure's minCount). A crimson floor spawns one hoglin (`try-crimson-spawn`). Piglins, zombified piglins, ghasts, skeletons and striders are still not modelled. The rolls come from the Nether's own stream (`wild-roll`, `:sim/wild-rng`, seeded from `:seed` and `wild-salt`), never `mob-roll`'s, so the overworld's night rule rolls as it did before it (`the-overworld-spends-no-roll-of-the-nethers-stream`: `try-nether-spawn` is the identity on every overworld tick), and a Nether run that meets no warped forest rolls its fortress's spawners as before: snapshots and replays from before keep their luck. Once endermen stand in the model, their turns and despawn rolls come from `mob-roll` like every mob's. The spawned endermen are `:hostile`, so `despawn` takes them as it takes the overworld's, and they are neutral until stared at or hurt (`provoke`, `anger`). `a-warped-forest-spawns-packs-of-endermen-by-day-and-netherrack-spawns-nothing` pins the rule. Probe 39779112668 (probe/263-sim-endermen, the bot with an iron kit put in each set's warped forest at Normal, 60 simulated minutes): every set's forest spawned packs from the first try (R2 reached the cap of 70); in R4 the hunt provoked, killed and picked up six pearls in eight minutes, then failed `:unreachable` waiting on a drop; in R1-R3 it provoked one or two and killed none, most likely as the model's endermen walk straight at the player and neither path round walls nor teleport (below), so one provoked beyond a wall never reaches the burrow's end.
 - `despawn`: a hostile not persistent goes at once beyond 128, and by a roll of 1 in 800 a tick beyond 32 (`Mob.checkDespawn`).
 - `populate`: each chunk within three of the player gets its animals once (`:sim/populated`): one time in ten a herd of three of one kind on the grass at its middle, persistent, as a server populates a chunk it generates.
 - Every roll comes from the mobs' own stream (`mob-roll`, `:sim/mob-rng`), never the loot's, so gravel's flint falls the same with mobs or without.
@@ -100,7 +98,7 @@ Probe 39779112668 showed the pearl hunt in R1-R3 provoking endermen that never r
 `attack` (775's packet, `{:entity-id}`): a living mob whose box is within 3.2 of the eye (`mob/box-distance`) is hurt by the held item (`weapon-damage`: a sword 4-8, an axe 7-10, a pickaxe 2-6, a shovel 2.5-6.5, the hand 1; no charge, the bot swings every 650 ms), the item worn (a sword one, a tool two), 0.1 exhaustion spent. `hurt-mob` keeps the hurt window: within 500 ms of its last hurt only a harder hit lands, for its excess, so the siblings' 40 swings in 66 ms deal one. A hurt mob turns on the player (`anger`; an enderman's creepy flag is sent then, index 17, as the server sends it when it takes a target); at zero it dies, its loot dropped as item entities when the player killed it.
 
 ## Armour
-Every mob hit, arrow and blast on the player passes through `armoured` (issue #263): the points and toughness of the pieces in window 0's four armour slots (`mob/armour-points`, read from `ArmorMaterials`) take their share by `mob/absorbed` (CombatRules: armour counts for points − damage / (2 + toughness / 4), at least a fifth of the points and at most 20, 4% a point), after the difficulty scales the hit. Without it an enderman's 7 a second beat every sword before the fight's break-off ([[ender-pearls]]). Starving, drowning and lava are not mob hits and pass untouched. The pieces never wear out.
+Every mob hit, arrow and blast on the player passes through `armoured` (issue #263): the points and toughness of the pieces in window 0's four armour slots (`mob/armour-points`, read from `ArmorMaterials`) take their share by `mob/absorbed` (CombatRules: armour counts for points − damage / (2 + toughness / 4), at least a fifth of the points and at most 20, 4% a point), after the difficulty scales the hit. Without it an enderman's 7 a second beat every sword before the fight's break-off (`ender-pearls`). Starving, drowning and lava are not mob hits and pass untouched. The pieces never wear out.
 
 ## Fire on the player (issue #262, sim vs real blaze fights)
 The sim and the real race disagreed on stage 17 (f8b28e3: 6.8% of sim runs reached seven rods, 1.9% of real). Measured over 45 real recordings (lane 2, 1241 blazes in view, the Nether segments), burning was 1778 of 2600 hurts and 45% of all the health the blaze fights cost, and the sim had no fire at all. `fire.clj` is the rules: a small fireball's hit (`:ignites 5000` on the blaze row) sets the player on fire for five seconds (`fire/ignite`: a hurt at once, then every second, five in all, 1.0 each, `on_fire`, armour takes none), water at the feet puts it out, standing in a fire block lights it for eight seconds. `sim/tick-burn` applies it each tick (`:sim/fire`), tells the flags byte to the client (`tell-flags`, bit 0x01 of index 0, as the real server's `{0 1}` and `{0 0}`) and sends a `damage-event` for every hurt (`tell-damage`, source types `mob/damage-source` as the recordings number them: fireball 14, mob_attack 28, on_fire 31): the bot reads `:player/hurt-at` and the strike from them, which the model never sent before. `fire-test` pins them.
@@ -126,4 +124,4 @@ A respawn makes the client forget every entity, so the model tells it every mob 
 ## See also
 - [[server-model]] - the model this extends.
 - [[sim-hunger]] - the hunger the hits and heals cost.
-- [[survival]] - the bot's own eating and fighting rows.
+- `survival` - the bot's own eating and fighting rows.

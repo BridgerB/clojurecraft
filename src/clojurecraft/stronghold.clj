@@ -1,7 +1,7 @@
 (ns clojurecraft.stronghold
-  "Finding the stronghold (issue #265), the one stage of the run no sibling has proven: steve's
-   finder is a stub (\"TODO: Track the eye entity, calculate direction, triangulate\") and
-   ruststeve never threw an eye.
+  "Finding the stronghold, the one stage of the run no sibling has proven: steve's finder is a stub
+   (\"TODO: Track the eye entity, calculate direction, triangulate\") and ruststeve never threw an
+   eye.
 
    An eye of ender used in the overworld finds the nearest stronghold (EnderEyeItem.use:
    findNearestMapStructure over the eye_of_ender_located structures) and flies from the
@@ -12,14 +12,13 @@
    kept as a fact on the world, {:throw/from :throw/dir :throw/at} in :stronghold/throws, and
    the crossing is a pure function of two of them (triangulate).
 
-   Requiring this namespace registers the :throw-eye intent and the :eye-throw row's rules (the
-   gym's throw trial: one throw followed and kept). The throw: the eye put in the hand
-   (place/equip), the eyes looking up a little (a use-item while looking at an end portal frame
-   fills the frame instead), one use-item; then the next eye entity the server adds at the bot's
-   middle is followed for follow-ms, and the line from where it was first seen to where it is
-   then is the throw's. The intent stays on until the server removes the eye (its life is 80
-   ticks), so the planner after it knows where it ended and can pick up the eye it drops four
-   throws in five.
+   Requiring this namespace registers the :throw-eye intent and the :eye-throw row's rules. The
+   throw: the eye put in the hand (place/equip), the eyes looking up a little (a use-item while
+   looking at an end portal frame fills the frame instead), one use-item; then the next eye entity
+   the server adds at the bot's middle is followed for follow-ms, and the line from where it was
+   first seen to where it is then is the throw's. The intent stays on until the server removes the
+   eye (its life is 80 ticks), so the planner after it knows where it ended and can pick up the eye
+   it drops four throws in five.
 
    The :stronghold row's plan (stronghold-next) is the whole search: the eye just thrown picked
    up where it fell; a first throw; then a walk off the first line at an angle (travel blocks at
@@ -30,6 +29,8 @@
    (memory/landmark-kinds), however deep it lies. Every long walk goes in hops a route reaches
    (hop), as the pearl hunt's roam does."
   (:require [clojure.math :as math]
+            [clojure.spec.alpha :as s]
+            [clojurecraft.avoided :as avoided]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.drops :as drops]
             [clojurecraft.fortress :as fortress]
@@ -43,12 +44,30 @@
             [clojurecraft.place :as place]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
+            [clojurecraft.shapes]
             [clojurecraft.stairs :as stairs]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.window :as window]
             [clojurecraft.wood :as wood]))
 
 (set! *warn-on-reflection* true)
+
+;; read by name (ns-resolve) in scratch_test and model_test, so the unused-var lint excludes it
+(def scratch
+  "The intent attributes only this namespace's executor reads and writes: {attribute {:doc meaning
+   :when lifetime}}. They are not world information, so they are not in clojurecraft.model;
+   scratch_test holds that no other namespace uses one."
+  {:intent/eye-from {:doc "where the eye a :throw-eye follows was first seen [x y z]"
+                     :when ":throw-eye, once its eye is seen"}
+   :intent/eye-pos {:doc "where the eye a :throw-eye follows was last seen [x y z]; it drops there"
+                    :when ":throw-eye, once its eye is seen"}
+   :intent/gone-at {:doc
+                    "ms the server removed the eye a :throw-eye follows; its drop may come after"
+                    :when ":throw-eye, once its eye is removed"}})
+
+(s/def :intent/eye-from :clojurecraft.spec/vec3)
+(s/def :intent/eye-pos :clojurecraft.spec/vec3)
+(s/def :intent/gone-at int?)
 
 (def eye :ender_eye)                  ; the item thrown
 (def eye-type (blocks/entity-types :eye_of_ender)) ; the entity a thrown eye becomes (50)
@@ -288,7 +307,7 @@
     {:intent/kind :throw-eye :intent/for :stronghold}
     {:plan/wait :no-eye}))
 
-(defmethod plan/next-intent :throw [world _ _] (throw-now world)) ; the gym's throw trial: one throw
+(defmethod plan/next-intent :throw [world _ _] (throw-now world))
 
 ;; ---------------------------------------------------------------- the search
 
@@ -337,10 +356,8 @@
 (def on-line 4.0)                     ; blocks off a throw's line within which the feet are on it, for spots
 
 (defn spots
-  "The two places the throw after t may be made from, second-spot turned either way: the one on
-   the side of its line the feet are on first, once they are more than on-line off it. Gym batch
-   stronghold-265b (plan run 38930188463) run 2: a lake between, a hop toward one spot ended where
-   only the other had a way, and the bot walked to and fro between them twelve times."
+  "The two places the throw after t may be made from, second-spot turned either way: the one on the
+   side of its line the feet are on first, once they are more than on-line off it."
   [world t]
   (let [[px _ pz] (:player/pos world)
         a (second-spot t travel-turn)
@@ -381,16 +398,12 @@
   (< (norm [(- x cx) (- z cz)]) (- (norm [(- x fx) (- z fz)]) gain)))
 
 (defn hop
-  "A walk toward the far point [x z]: to a cell (stand-in) hop-reach blocks along the way, or
-   nearer when the point is, that a route reaches (intent/routable?); straight on first, then
-   turned by each of hop-turns, never to a cell a walk failed at (:plan/blacklist), and none that
-   ends less than hop-gain nearer the point (progress?: gym chain-w16 run 2 walked 67 times in 11
-   minutes between [13127 66 16728] and [13101 64 16752], each hop ending where only a turned one
-   had a route, back to where the other began, and the tunnel or swim after them never came). nil
-   when none is, or when the feet are there already. A walk to somewhere hundreds of blocks off is beyond a
-   route's node budget, so it goes a hop at a time, the planner choosing the next from where the
-   last ended. Gym batch stronghold-265a (plan run 38927120252) run 3 walked at one cell twelve
-   times, each walk failing :no-path, the same hop chosen again after each."
+  "A walk toward the far point [x z]: to a cell (stand-in) hop-reach blocks along the way, or nearer
+   when the point is, that a route reaches (intent/routable?); straight on first, then turned by
+   each of hop-turns, never to a cell a walk failed at (:plan/blacklist), and none that ends less
+   than hop-gain nearer the point. nil when none is, or when the feet are there already. A walk to
+   somewhere hundreds of blocks off is beyond a route's node budget, so it goes a hop at a time, the
+   planner choosing the next from where the last ended."
   [world [x z]]
   (let [[fx fy fz] (intent/feet world)
         v [(- x fx) (- z fz)]
@@ -407,8 +420,8 @@
                 (when (and i
                            (not= c [fx fy fz])
                            (progress? [fx fy fz] c [x z] hop-gain)
-                           (not (contains? (:plan/blacklist world #{}) c))
-                           (intent/routable? world (assoc i :intent/max-nodes 400)))
+                           (not (contains? (avoided/all-of world :blacklist) c))
+                           (intent/routable? world (assoc i :intent/max-nodes (path/budget :near))))
                   i)))
             hop-turns))))
 
@@ -416,10 +429,7 @@
 
 (defn cross-failed-near?
   "Did a :cross toward a cell within cross-failed-radius of the point [x z] fail :no-crossing or
-   :stuck, by the intentions on record? Gym chain-w18 run 2 (plan run 40914832722) swam toward the
-   crossing at [12864 16672] three times, each ended :no-crossing, :stuck, :no-crossing over
-   five minutes, and the third failed in a row ended the plan with the dry tunnel under the sea
-   never tried: a swim that found no far shore is not asked again for that point."
+   :stuck, by the intentions on record?"
   [world [x z]]
   (boolean (some (fn [f]
                    (and (= :cross (:intention/kind f))
@@ -431,11 +441,9 @@
 
 (defn way
   "A way toward the far point [x z]: a hop; else, with open water toward it, a swim across it
-   (swim's :cross, done on the far side's dry land); else a dry tunnel toward it at height y
-   (the fortress's :tunnel-to with :intent/dry?, fortress/steps-per-tunnel steps) when its first
-   step can be taken; nil when none is. Gym batch stronghold-265a (plan run 38927120252, probe
-   38929010443): two landings stood on a lake's shore with the stronghold across it and every hop
-   ending in the water, one on a mountainside whose hops had no route; each waited :no-way."
+   (swim's :cross, done on the far side's dry land); else a dry tunnel toward it at height y (the
+   fortress's :tunnel-to with :intent/dry?, fortress/steps-per-tunnel steps) when its first step can
+   be taken; nil when none is."
   [world [x z] y]
   (let [feet (intent/feet world)
         target [(long (math/floor x)) y (long (math/floor z))]]
@@ -455,9 +463,7 @@
 (defn picked-up
   "The pickup of the eye the last throw dropped: when the last intent was a :throw-eye that ended
    done and an eye lies where it fell (eye-drop) within pickup-rise of the feet's height, in a cell
-   a route reaches, a :collect-drops of it; else nil. Gym batch stronghold-265b (plan run
-   38930188463): four of six landings went for an eye lying on a tree or a hill six over the
-   feet and failed :not-picked-up, each an attempt toward the three that end a plan."
+   a route reaches, a :collect-drops of it; else nil."
   [world]
   (let [l (:plan/last world)
         [_ d] (when (and (= :throw-eye (:intent/kind l)) (intent/done? l) (:intent/eye-pos l))
@@ -465,7 +471,9 @@
         c (when d (mapv #(long (math/floor %)) (:entity/pos d)))]
     (when (and c
                (<= (abs (- (physics/y-of c) (physics/y-of (intent/feet world)))) pickup-rise)
-               (intent/routable? world {:intent/kind :walk :intent/target c :intent/max-nodes 400}))
+               (intent/routable?
+                world
+                {:intent/kind :walk :intent/target c :intent/max-nodes (path/budget :near)}))
       {:intent/kind :collect-drops :intent/item eye :intent/target c :intent/for :stronghold})))
 
 
@@ -531,13 +539,11 @@
             [(+ x dx) (+ y dy) (+ z dz)])))
 
 (defn dry-start
-  "Where the way down to frame f starts: the feet when they stand dry (dry-cell?); else the
-   nearest cell on the plane within start-reach a body stands in (stand-in, within hop-rise of the
-   feet's height) that is dry, not one a walk failed at (:plan/blacklist) and one a route reaches
+  "Where the way down to frame f starts: the feet when they stand dry (dry-cell?); else the nearest
+   cell on the plane within start-reach a body stands in (stand-in, within hop-rise of the feet's
+   height) that is dry, not one a walk failed at (:plan/blacklist) and one a route reaches
    (intent/routable?), the nearer f first among those as near; nil when none is. On a shore every
-   stair opens a cell by water: gym batch stronghold-265c (plan run 38934412014) run 2 of the
-   portal room swam out onto the lake's bank over the frame, had every stair refused there and
-   failed :boxed; batch 265b run 2 the tunnel's every first step from the bank, :blocked."
+   stair opens a cell by water."
   [world [x _ z]]
   (let [[fx fy fz :as feet] (intent/feet world)]
     (if (dry-cell? world feet)
@@ -552,35 +558,34 @@
                    (let [c (stand-in world cx cz fy)]
                      (when (and c
                                 (dry-cell? world c)
-                                (not (contains? (:plan/blacklist world #{}) c))
-                                (intent/routable?
-                                 world
-                                 {:intent/kind :walk :intent/target c :intent/max-nodes 400}))
+                                (not (contains? (avoided/all-of world :blacklist) c))
+                                (intent/routable? world
+                                                  {:intent/kind :walk
+                                                   :intent/target c
+                                                   :intent/max-nodes (path/budget :near)}))
                        c))))))))
 
 (defn far-start
-  "With no dry start within start-reach: the nearest cell along eight bearings from the feet,
-   from past start-reach out to far-reach, in a column whose top is ground (stairs/dry-top?: not
-   a lake, nor a cave under one) that a body stands in (stand-in) dry (dry-cell?), not one a walk
-   failed at (:plan/blacklist); nil when none is. Its way is a swim (swim's :cross), no route:
-   gym batch stronghold-room-b (plan run 39132210882) run 2 of the portal room ended its swim
-   toward the crossing on a block in the lake over the frame, nothing dry within 48 of it (probe
-   39134431529), every stair from it into the water, and failed :boxed."
+  "With no dry start within start-reach: the nearest cell along eight bearings from the feet, from
+   past start-reach out to far-reach, in a column whose top is ground (stairs/dry-top?: not a lake,
+   nor a cave under one) that a body stands in (stand-in) dry (dry-cell?), not one a walk failed at
+   (:plan/blacklist); nil when none is. Its way is a swim (swim's :cross), no route."
   [world]
   (let [[fx fy fz] (intent/feet world)]
-    (some (fn [[d k]]
-            (let [a (* k (/ math/PI 4))
-                  x (long (math/floor (+ fx 0.5 (* d (math/cos a)))))
-                  z (long (math/floor (+ fz 0.5 (* d (math/sin a)))))
-                  c (when (stairs/dry-top? world [x z]) (stand-in world x z fy))]
-              (when (and c (dry-cell? world c) (not (contains? (:plan/blacklist world #{}) c))) c)))
-          (for [d (range (inc start-reach) (inc far-reach)) k (range 8)] [d k]))))
+    (some
+     (fn [[d k]]
+       (let [a (* k (/ math/PI 4))
+             x (long (math/floor (+ fx 0.5 (* d (math/cos a)))))
+             z (long (math/floor (+ fz 0.5 (* d (math/sin a)))))
+             c (when (stairs/dry-top? world [x z]) (stand-in world x z fy))]
+         (when (and c (dry-cell? world c) (not (contains? (avoided/all-of world :blacklist) c)))
+           c)))
+     (for [d (range (inc start-reach) (inc far-reach)) k (range 8)] [d k]))))
 
 (defn walked-ground
-  "Where the newest walk that arrived ended (memory/last-done), ground the bot stood on, when it
-   is farther than start-reach from the feet on the plane; nil otherwise. The way back to land
-   from water with nothing dry in sight: batch stronghold-room-b run 2 had walked the lake's far
-   shore before its swim. Not one more than hop-rise over or under the feet: a walk on the
+  "Where the newest walk that arrived ended (memory/last-done), ground the bot stood on, when it is
+   farther than start-reach from the feet on the plane; nil otherwise. The way back to land from
+   water with nothing dry in sight. Not one more than hop-rise over or under the feet: a walk on the
    mountain over a cave is no way out of the cave."
   [world]
   (let [[fx fy fz] (intent/feet world)
@@ -589,18 +594,14 @@
       c)))
 
 (defn downhill
-  "A walk down the surface toward frame [x _ z] from feet under the open sky
-   (terrain/under-sky?): the cell a body stands in (stand-in) downhill-drop or more under the
-   feet, each of downhill-reaches along the way, the farther first, straight on first then
-   turned by each of hop-turns, not one a walk failed at (:plan/blacklist), one a route reaches
-   (intent/routable?); nil when none is, or the feet are not under the sky. A mountain's slope falls faster than a
-   staircase's one in one: stairs cut from it leave it into the air and lay a floor every stair
-   over the valley, a bridge into the sky that ends where the stairs' floor would be a bridge
-   over the valley's water (stairs/over-fluid?). Gym batch stronghold-room-e (plan run
-   39152932850) run 3 of the portal room cut six legs from the mountain at y 120 and left its
-   western slope at y 83 into the open air over a flooded valley, laid a floor a stair down to
-   y 72, fifteen over the water, where every stair was refused and every level step laid one
-   more block of causeway, 32 east, :boxed three times (probes 39158899900, 39159213076)."
+  "A walk down the surface toward frame [x _ z] from feet under the open sky (terrain/under-sky?):
+   the cell a body stands in (stand-in) downhill-drop or more under the feet, each of
+   downhill-reaches along the way, the farther first, straight on first then turned by each of
+   hop-turns, not one a walk failed at (:plan/blacklist), one a route reaches (intent/routable?);
+   nil when none is, or the feet are not under the sky. A mountain's slope falls faster than a
+   staircase's one in one: stairs cut from it leave it into the air and lay a floor every stair over
+   the valley, a bridge into the sky that ends where the stairs' floor would be a bridge over the
+   valley's water (stairs/over-fluid?)."
   [world [x _ z]]
   (let [[fx fy fz :as feet] (intent/feet world)
         v [(- x fx) (- z fz)]
@@ -616,8 +617,8 @@
                     i (when c {:intent/kind :walk :intent/target c :intent/for :stronghold})]
                 (when (and i
                            (<= cy (- fy downhill-drop))
-                           (not (contains? (:plan/blacklist world #{}) c))
-                           (intent/routable? world (assoc i :intent/max-nodes 400)))
+                           (not (contains? (avoided/all-of world :blacklist) c))
+                           (intent/routable? world (assoc i :intent/max-nodes (path/budget :near))))
                   i)))
             (for [r downhill-reaches turn hop-turns] [r turn])))))
 
@@ -634,15 +635,10 @@
    :intent/for :stronghold})
 
 (defn tunnel-spent?
-  "Did the last intent, a dry tunnel toward f, take every step it had without arriving, and end
-   less than tunnel-gain nearer f than it began (:intent/from-feet)? It went round and round:
-   gym batch stronghold-265c (plan run 38934412014) run 3 of the portal room stood over the frame
-   at y 84, a cave under it, every step down refused for the air under the next cell
-   (fortress/safe? never steps onto air), stepped level between two cells 32 times a tunnel for
-   eighteen minutes to the timeout. One that came nearer is the way on, not spent: batch
-   stronghold-room-d (plan run 39138341075) run 1, three over the frame 135 blocks off, had the
-   stairs cut after every tunnel, away from the frame into the rock, and the next tunnel walked
-   back up them, fifteen minutes to the timeout."
+  "Did the last intent, a dry tunnel toward f, take every step it had without arriving, and end less
+   than tunnel-gain nearer f than it began (:intent/from-feet)? It went round and round. never steps
+   onto air), stepped level between two cells 32 times a tunnel for eighteen minutes to the timeout.
+   One that came nearer is the way on, not spent."
   [world f]
   (let [l (:plan/last world)
         from (:intent/from-feet l)
@@ -659,10 +655,8 @@
 
 (defn safe-portal-move?
   "Does move from feet open no cell that is or borders lava, have no lava floor, and open no
-   infested block? In the portal room the 3x3 pool under the frame is lava; stepping or digging
-   into it is a death. A stronghold's walls hold infested stone bricks: gym chain-w13 run 4 (job 4,
-   plan run 40798605016) dug one at [14775 -13 13507] and a silverfish came out and bit it from
-   9.3 health to 0 in 23 s, and run 3 and 5 of that batch the same."
+   infested block? In the portal room the 3x3 pool under the frame is lava; stepping or digging into
+   it is a death. A stronghold's walls hold infested stone bricks."
   [world feet move]
   (let [cells (fortress/opens feet move)
         floor (fortress/plus (fortress/plus feet move) [0 -1 0])
@@ -684,13 +678,12 @@
                           (safe-portal-move? world feet m)))
                    (fortress/moves feet f fortress/climb-past)))))
 
-(def retreat-reach 24.0)              ; blocks on the plane a retreat cell may lie from the feet: a swim or a walk to one farther is not a way (gym chain-w15/w18 run 3 crossed to a trail cell 100 blocks off, :stuck in five seconds)
+(def retreat-reach 24.0)              ; blocks on the plane a retreat cell may lie from the feet: a swim or a walk to one farther is not a way
 (def retreat-tries 4)                 ; trail cells a retreat looks at for one a route reaches, nearest first
 
 (defn water-near?
-  "Is there water at the feet, or in the cell beside them, at their height or one under? The place
-   a swim (:cross) starts from: on dry ground it ends :stuck at once (gym chain-w15 run 3: two
-   crosses in a row, five seconds each, and the third failure in a row failed the plan)."
+  "Is there water at the feet, or in the cell beside them, at their height or one under? The place a
+   swim (:cross) starts from: on dry ground it ends :stuck at once."
   [world]
   (let [[fx fy fz] (intent/feet world)]
     (boolean (some (fn [c]
@@ -702,35 +695,29 @@
                      [(+ fx dx) (+ fy dy) (+ fz dz)])))))
 
 (defn to-room
-  "The way to the portal room's frame f, in order: in water, out to the nearest bank first
-   (swim's :swim-out :retreat); from a shore, a walk to a dry start (dry-start) that ends
-   standing in that cell (a :retreat walk, intent/standing-walks: one ending near it was chosen
-   again from the wet cell it ended in, twelve thousand times a model run); with none within
-   start-reach and the open sky over the feet (a lake's, not a cave's), a swim (:cross) to one
-   farther (far-start), else back to the ground last walked (walked-ground), never stairs from a
-   block in a lake, nor once the way down has begun (the last intent the stairs or the tunnel:
-   batch stronghold-room-d run 2 swam back up from its first leg of stairs); standing dry under
-   the open sky with lower ground toward the frame a route reaches, a walk down to it
-   (downhill: a slope is walked, never staired into the air; batch stronghold-room-e run 3 built
-   a bridge off the mountain's slope into the sky over a flooded valley); more than deep
-   over the frame, or after a tunnel that got nowhere (tunnel-spent?), a staircase down toward
-   it a leg of stair-leg at a time (stairs-toward), never under room-over over the frame; then
-   the fortress's tunnel to it, its steps opening no cell by water (fortress/dry?) and no cell
-   through or bordering lava (safe-portal-move?), when its first step can be taken from the feet
-   (through the stronghold's walls, never into its frames: fortress/unbreakable); else, still over
-   room-over, the stairs; else with feet boxed or no move forward, a retreat step back along the
-   plan trail to an earlier unboxed cell no walk failed at (:plan/blacklist) that a route reaches or whose chunk is not loaded
-   (retreat-tries of them looked at), else, with water at the feet, a swim (:cross) to the nearest, else a new staircase up a leg (:stairs-up: a swim from dry ground or to a cell far off ends :stuck), the cells looked at being those within retreat-reach, nearest first: gym chain-w11 to w14
-   run 1 stood on a bank at the bottom of its flooded staircase and asked for a walk to each
-   trail cell in turn, fifty milliseconds apart, every one :no-path (the way up is under water),
-   twelve of them failed the plan at 8 minutes; else the wait :no-way. Gym
-   batch stronghold-265b (plan run 38930188463) run 2 of the portal room: the frame at y 0
-   under a lake, seen while the bot swam it, every first step of the tunnel from the water opened
-   a cell by water and it failed :blocked."
+  "The way to the portal room's frame f, in order: in water, out to the nearest bank first (swim's
+   :swim-out :retreat); from a shore, a walk to a dry start (dry-start) that ends standing in that
+   cell (a :retreat walk, intent/standing-walks: one ending near it was chosen again from the wet
+   cell it ended in, twelve thousand times a model run); with none within start-reach and the open
+   sky over the feet (a lake's, not a cave's), a swim (:cross) to one farther (far-start), else back
+   to the ground last walked (walked-ground), never stairs from a block in a lake, nor once the way
+   down has begun (the last intent the stairs or the tunnel); standing dry under the open sky with
+   lower ground toward the frame a route reaches, a walk down to it (downhill: a slope is walked,
+   never staired into the air); more than deep over the frame, or after a tunnel that got nowhere
+   (tunnel-spent?), a staircase down toward it a leg of stair-leg at a time (stairs-toward), never
+   under room-over over the frame; then the fortress's tunnel to it, its steps opening no cell by
+   water (fortress/dry?) and no cell through or bordering lava (safe-portal-move?), when its first
+   step can be taken from the feet (through the stronghold's walls, never into its frames:
+   fortress/unbreakable); else, still over room-over, the stairs; else with feet boxed or no move
+   forward, a retreat step back along the plan trail to an earlier unboxed cell no walk failed at
+   (:plan/blacklist) that a route reaches or whose chunk is not loaded (retreat-tries of them looked
+   at), else, with water at the feet, a swim (:cross) to the nearest, else a new staircase up a leg
+   (:stairs-up: a swim from dry ground or to a cell far off ends :stuck), the cells looked at being
+   those within retreat-reach, nearest first."
   [world [_ y _ :as f]]
   (let [[_ fy _ :as feet] (intent/feet world)
         high? (> fy (+ y deep))
-        boxed? (contains? (:plan/boxed-at world #{}) feet)
+        boxed? (contains? (avoided/all-of world :boxed-at) feet)
         start (when (and high?
                          (not (:player/in-water? world))
                          (terrain/under-sky? world feet)
@@ -749,16 +736,17 @@
         retreats
         (when needed?
           (->> (rseq (:plan/trail world []))
-               (remove #(or (contains? (:plan/boxed-at world #{}) %)
-                            (contains? (:plan/blacklist world #{}) %)))
+               (remove #(or (contains? (avoided/all-of world :boxed-at) %)
+                            (contains? (avoided/all-of world :blacklist) %)))
                (filter #(<= (physics/horizontal-distance (:player/pos world) (physics/centre %))
                             retreat-reach))
                (sort-by #(physics/horizontal-distance (:player/pos world) (physics/centre %)))
                (take retreat-tries)))
         walkable (some #(when (or (not (terrain/chunk-loaded? world %))
-                                  (intent/routable?
-                                   world
-                                   {:intent/kind :walk :intent/target % :intent/max-nodes 400}))
+                                  (intent/routable? world
+                                                    {:intent/kind :walk
+                                                     :intent/target %
+                                                     :intent/max-nodes (path/budget :near)}))
                           %)
                        retreats)]
     (cond (:player/in-water? world) {:intent/kind :swim-out :intent/for :retreat}

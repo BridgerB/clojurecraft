@@ -1,10 +1,12 @@
 (ns clojurecraft.gym-test
   (:require [clojure.edn :as edn]
+            [clojure.java.io :as io]
             [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
             [clojurecraft.fixture :as fixture]
             [clojurecraft.gym :as gym]
+            [clojurecraft.land :as land]
             [clojurecraft.landings :as landings]
             [clojurecraft.plan :as plan]
             [clojurecraft.rcon :as rcon]
@@ -43,6 +45,36 @@
              (gym/go-event row [10.0 64.0 20.0])))
       (is (= (fixture/go-event "dragon" [10.0 64.0 20.0])
              (gym/go-event (gym/gym "dragon") [10.0 64.0 20.0]))))))
+
+(deftest the-registry-file-loads-and-every-builder-form-is-known
+  (let [raw (edn/read-string (slurp (io/resource "clojurecraft/gyms.edn")))
+        fields [:gym/prereqs :gym/setup :gym/summon :gym/truth]
+        form? #(and (vector? %) (keyword? (first %)))
+        forms (for [row raw k fields e (get row k) :when (form? e)] e)]
+    (is (= (count raw) (count gym/gyms)) "one row for each in the file")
+    (is (seq forms) "the file names its builders")
+    (is (every? #(contains? (methods gym/gym-setup) (first %)) forms) "each has a defmethod")
+    (is (not-any? form? (for [row gym/gyms k fields e (get row k)] e)) "none is left unexpanded")
+    (is (every? #(= gym/trial-ms (:gym/timeout-ms %)) gym/gyms) "the trial cap, unless a row says")
+    (is (every? #(and (keyword? (:gym/goal %)) (string? (:gym/until %))) gym/gyms))))
+
+(deftest a-row-is-its-builders-expanded-in-order
+  (let [blaze-7 (gym/gym "blaze-7")
+        live (gym/gym "pearls-1-live")
+        beds (gym/gym "dragon-beds")]
+    (is (= (into gym/iron-armour
+                 [gym/fire-resistance gym/no-fire (gym/slow-blaze-spawner [3 0 3])
+                  (gym/summon "blaze" [-2 1 -2] "{PersistenceRequired:1b}")])
+           (:gym/summon blaze-7))
+        "the armour, Fire Resistance, no fire, the slow spawner, one blaze")
+    (is (= gym/pearl-kit (:gym/prereqs live)))
+    (is (= gym/pearl-arena (:gym/setup live)))
+    (is (= (into [] (mapcat #(gym/endermen 1 %)) [[10 0 0] [-10 0 2] [0 0 10]]) (:gym/summon live)))
+    (is (= (into [gym/no-crystals] gym/invulnerable) (:gym/summon beds)))
+    (is (= [gym/no-crystals] (:gym/setup beds)))
+    (is (= (gym/rods-held 7) (first (:gym/truth blaze-7))))
+    (is (= (gym/block-count "minecraft:nether_portal" "cloned [1-9]")
+           (second (:gym/truth (gym/gym "portal")))))))
 
 (def ok-result {:ok true :reason :goal :stats {}})
 
@@ -91,11 +123,11 @@
 (deftest an-arena-is-written-round-the-landing
   ;; a portal row builds its arena relative to the landing [x z y] (issue #8)
   (is (= "fill 92 63 192 116 63 216 minecraft:stone"
-         (gym/fill-in "fill {x-8} {y-1} {z-8} {x+16} {y-1} {z+16} minecraft:stone"
-                      "Clj_g1"
-                      [100 200 64])))
+         (land/fill-in "fill {x-8} {y-1} {z-8} {x+16} {y-1} {z+16} minecraft:stone"
+                       "Clj_g1"
+                       [100 200 64])))
   (is (= "data get entity Clj_g1 Dimension"
-         (gym/fill-in "data get entity {name} Dimension" "Clj_g1" [0 0 0]))))
+         (land/fill-in "data get entity {name} Dimension" "Clj_g1" [0 0 0]))))
 
 (deftest the-pearl-arena-is-a-walled-lit-room-with-no-roof
   ;; issue #263: the dark round the lit square spawned the zombies that came down the burrow's
@@ -103,7 +135,7 @@
   ;; arena is a block of stone with the room carved out: a wall seven high round the square,
   ;; nothing walks in; and no roof, since a surface landing stands on the highest solid block
   (let [[stone air light] (filter #(str/starts-with? % "fill") gym/pearl-arena)
-        at (fn [cmd] (gym/fill-in cmd "Clj_g1" [100 200 64]))]
+        at (fn [cmd] (land/fill-in cmd "Clj_g1" [100 200 64]))]
     (is (= "fill 87 56 187 113 70 213 minecraft:stone" (at stone))
         "stone 27 square, eight under the landing to six over it")
     (is (= "fill 88 64 188 112 70 212 minecraft:air" (at air))
@@ -118,16 +150,16 @@
   (is (= "summon minecraft:zombie {x+2} {y} {z-2} {NoAI:1b,PersistenceRequired:1b}"
          (gym/no-ai-zombie [2 0 -2])))
   (is (= "summon minecraft:zombie 102 72 198 {NoAI:1b,PersistenceRequired:1b}"
-         (gym/fill-in (gym/no-ai-zombie [2 0 -2]) "Clj_g1" [100 200 72])))
+         (land/fill-in (gym/no-ai-zombie [2 0 -2]) "Clj_g1" [100 200 72])))
   (is (= "summon minecraft:pig {x} {y+1} {z}" (gym/summon "pig" [0 1 0])))
   (is (str/starts-with?
-       (gym/fill-in (gym/blaze-spawner [3 0 3]) "Clj_g1" [0 0 72])
+       (land/fill-in (gym/blaze-spawner [3 0 3]) "Clj_g1" [0 0 72])
        "setblock 3 72 3 minecraft:spawner{SpawnData:{entity:{id:\"minecraft:blaze\"}}"))
-  (is (str/includes? (gym/fill-in (gym/slow-blaze-spawner [3 0 3]) "Clj_g1" [0 0 72])
+  (is (str/includes? (land/fill-in (gym/slow-blaze-spawner [3 0 3]) "Clj_g1" [0 0 72])
                      "setblock 3 72 3 minecraft:spawner{")
       "issue #262: the slower one, one blaze at a time")
   (is (= "effect give Clj_g1 minecraft:fire_resistance 1000000 0 true"
-         (gym/fill-in gym/fire-resistance "Clj_g1" [0 0 72])))
+         (land/fill-in gym/fire-resistance "Clj_g1" [0 0 72])))
   (is (= 3 (count (gym/endermen 3 [0 0 2]))))
   (is (every? #(str/starts-with? % "summon minecraft:enderman {x} {y} {z+2}")
               (gym/endermen 3 [0 0 2])))
@@ -146,7 +178,7 @@
 
 (deftest the-portal-room-is-the-vanilla-piece-round-the-landing
   ;; issue #266: StrongholdPieces.PortalRoom block for block, the bot landing at its (5, 1, 2)
-  (let [cmds (mapv #(gym/fill-in % "Clj_g1" [100 200 64]) gym/portal-room)]
+  (let [cmds (mapv #(land/fill-in % "Clj_g1" [100 200 64]) gym/portal-room)]
     (is (= "fill 95 63 198 105 70 213 minecraft:stone_bricks hollow" (first cmds)) "the shell")
     (is (some #{"fill 99 66 206 101 66 206 minecraft:end_portal_frame[facing=south]"} cmds)
         "the northern frames face south, two over the floor the bot lands on")
@@ -159,12 +191,12 @@
     (is (= [:portal] (:truth/at (first (:gym/truth (gym/gym "end-portal"))))))))
 
 (deftest ^:eftest/synchronized each-landing-names-its-dimension
-  (is (= "minecraft:the_nether" (gym/dimension-of (gym/gym :fortress))))
-  (is (= "minecraft:the_nether" (gym/dimension-of (gym/gym :arena-nether))))
-  (is (= "minecraft:the_end" (gym/dimension-of (gym/gym :arena-end))))
-  (is (= "minecraft:overworld" (gym/dimension-of (gym/gym :wood))))
+  (is (= "minecraft:the_nether" (land/dimension-of (gym/gym :fortress))))
+  (is (= "minecraft:the_nether" (land/dimension-of (gym/gym :arena-nether))))
+  (is (= "minecraft:the_end" (land/dimension-of (gym/gym :arena-end))))
+  (is (= "minecraft:overworld" (land/dimension-of (gym/gym :wood))))
   (is (= "execute as Clj_g1 at @s if dimension minecraft:the_end"
-         (gym/dimension-test "Clj_g1" "minecraft:the_end"))))
+         (land/dimension-test "Clj_g1" "minecraft:the_end"))))
 
 (defn landing-commands
   "The RCON commands landing! sends for goal, against a server that answers every test with
@@ -181,7 +213,7 @@
                                   (if (str/includes? c " Pos")
                                     "Clj_g1 has the following entity data: [100.5d, 72.0d, 200.5d]"
                                     (reply-for c)))
-                  gym/dimension-wait-ms 300]
+                  land/dimension-wait-ms 300]
       (let [r (gym/landing! {:goal goal
                              :run 1
                              :name "Clj_g1"
@@ -316,7 +348,7 @@
                 :else "Test passed"))]
     (is (= [[100 200] [356 200] [-156 200] [100 456] [100 -56] [612 200] [-412 200] [100 712]
             [100 -312]]
-           (gym/warped-origins 800 1600))
+           (land/warped-origins 800 1600))
         "the landing's eighth, then 256 and 512 off it along each axis")
     (is (:gym/landed? r))
     (is (= 12 (count (filter #(str/includes? % "spreadplayers 120 240") sent)))

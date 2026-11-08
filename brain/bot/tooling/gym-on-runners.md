@@ -5,33 +5,33 @@ type: reference
 tags: [bot, tooling, ci, gym]
 aliases: [gym.yml, world.yml, test.yml, wood.yml, clojure -M:gym, GYMRESULT, result.edn, landing set, landings.edn, truth command, outcome, Wilson, paired landings, CI]
 status: verified
-lastUpdated: 2026-10-22
+lastUpdated: 2026-11-07
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/gym.clj#def gyms
-  - src/clojurecraft/gym.clj#def spread-under
-  - src/clojurecraft/gym.clj#defn pocket?
+  - src/clojurecraft/land.clj#def spread-under
+  - src/clojurecraft/land.clj#defn pocket?
   - src/clojurecraft/gym.clj#defn outcome
   - src/clojurecraft/gym.clj#defn report
   - src/clojurecraft/gym.clj#defn landing!
   - src/clojurecraft/gym.clj#defn trial!
   - src/clojurecraft/gym.clj#defn located-in
   - src/clojurecraft/gym.clj#defn judge!
-  - src/clojurecraft/gym.clj#defn fill-in
+  - src/clojurecraft/land.clj#defn fill-in
   - src/clojurecraft/gym.clj#defn truth-re
   - test/clojurecraft/gym_test.clj#a-truth-can-hold-the-server-to-what-the-bot-saw
   - src/clojurecraft/gym.clj#def portal-arena
-  - src/clojurecraft/gym.clj#def nether-arena
-  - src/clojurecraft/gym.clj#defmethod land! :nether-arena
-  - src/clojurecraft/gym.clj#defmethod land! :warped-forest
-  - src/clojurecraft/gym.clj#defn spread
-  - src/clojurecraft/gym.clj#defn warped?
+  - src/clojurecraft/land.clj#def nether-arena
+  - src/clojurecraft/land.clj#defmethod land! :nether-arena
+  - src/clojurecraft/land.clj#defmethod land! :warped-forest
+  - src/clojurecraft/land.clj#defn spread
+  - src/clojurecraft/land.clj#defn warped?
   - src/clojurecraft/gym.clj#defn trial-name
   - test/clojurecraft/gym_test.clj#a-warped-forest-landing-is-spread-onto-its-floor
   - test/clojurecraft/gym_test.clj#the-pearl-rows-are-found-by-their-own-names
-  - src/clojurecraft/gym.clj#defmethod land! :end
-  - src/clojurecraft/gym.clj#defn place!
-  - src/clojurecraft/gym.clj#defn wait-in!
+  - src/clojurecraft/land.clj#defmethod land! :end
+  - src/clojurecraft/land.clj#defn place!
+  - src/clojurecraft/land.clj#defn wait-in!
   - src/clojurecraft/gym.clj#defn kit
   - src/clojurecraft/gym.clj#defn summons
   - src/clojurecraft/gym.clj#defn no-ai-zombie
@@ -47,7 +47,6 @@ sourceRefs:
   - bb/clojurecraft/worlds.clj#a forceload was left behind
   - ".github/workflows/gym.yml#fail-on-cache-miss: true"
   - ".github/workflows/gym.yml#max-parallel: 20"
-  - .github/workflows/full.yml#One fresh world, nothing given.
   - src/clojurecraft/plan.clj#defn through
   - test/clojurecraft/gym_test.clj#outcome-is-judged-twice
   - test/clojurecraft/recordings_test.clj#every-recorded-run-replays
@@ -62,13 +61,17 @@ related:
 
 # Gym on runners
 
-`test.yml` runs the suite and the brain checker on every push in a few minutes on three runners ([[test-fixtures]]: the parallel runner, one forest shard of 250, actionlint; a dispatch runs all eight shards): the races hold sixteen of the twenty runners without end, so a push gets the other four. `gym.yml` runs real runs of goals on real terrain by hand only: one goal `runs` times (`goal`, `runs`, `landing-set`, `label`); it ran every goal once on every push until the rounds made that twelve runners a push. `world.yml` builds a landing set's world once and caches it. `full.yml` is the one fresh world, nothing given: spawn, every step up to the current stage (`plan/through`), 5.5 hours, by hand only. A gym trial still names one target (`plan/goals-for`).
+`test.yml` runs the suite and the brain checker on every push in a few minutes on three runners ([[test-fixtures]]: the parallel runner, one forest shard of 250, actionlint; a dispatch runs all eight shards): the races hold sixteen of the twenty runners without end, so a push gets the other four. `gym.yml` runs real runs of goals on real terrain by hand only: one goal `runs` times (`goal`, `runs`, `landing-set`, `label`); it ran every goal once on every push until the rounds made that twelve runners a push. `world.yml` builds a landing set's world once and caches it. A gym trial still names one target (`plan/goals-for`).
 
 ## How a batch runs
 1. **plan**: refuses when more than 20 jobs are already running in the repository, then `clojure -M:gym plan --goals ... --runs N` prints the trial matrix; only goal, run number and job minutes cross the job boundary.
 2. **world** (`world.yml`): restores the world cache for the set, or on a miss builds it with `bb prepare-world` (`bb/clojurecraft/worlds.clj`) and saves it. The key hashes `ci/gym.edn`, `bb/clojurecraft/server.clj`, `bb/clojurecraft/worlds.clj`, `landings.clj` and `fixture.clj`. A weekly run restores it to keep it from eviction.
 3. **trial** (one runner per run, up to 20 at once, `fail-fast: false`): restores the world with `fail-on-cache-miss` (trials never build terrain), starts the server, insists `forceload query` is empty, then `clojure -M:gym trial` (`gym/trial!`, the same trial a plan runs): the bot starts as its own JVM (`--events stdin --record`), `landing!` lands it (wait for the bot, the row's difficulty, survival, clear, teleport onto `landings[run]` or the row's start, then, once the server says the bot is in the row's dimension, the prerequisites and the row's summons) and its `:go` with `:go/at` goes down its stdin, and `judge!` waits for RESULT, runs every truth command while the bot holds, writes `result.edn` and prints one `GYMRESULT` line. A `:disconnect` is run once more on the same landing, under `trial/retry/`. The trial directory (recordings compressed with zstd) is uploaded with the server log and the forceload checks.
 4. **aggregate**: downloads every trial's artifact, `clojure -M:gym report` folds the `result.edn` files (a retried trial's retry, not its first attempt: `gym/located-in`) into markdown (per goal: pass k/n with a 95% Wilson interval, a row per run with its truth replies, the outcome and reason tallies), writes it to the run summary and comments it on the branch's open PR.
+
+## The registry and landing
+A gym row is data in `resources/clojurecraft/gyms.edn`: the goal, its prereqs, its setup, summons and truth commands, with builders named by a keyword where a row needs commands computed. `land.clj` is the landing both the gym and the race use over RCON: `land!` is an open multimethod that puts a row's bot where the row starts (a new kind of start is a defmethod), and the helpers under it build and stand the bot on a pad or arena.
+
 
 ## Judging
 `gym/gyms` is the registry, data like the goal table: goal, `--until`, prerequisites, timeout, and truth commands that count items without removing them (`clear <name> <item> 0` answers "Found N matching item(s)"). `gym/outcome` is one pure function: `:harness` when the landing failed, `:disconnect` when the bot never printed RESULT or lost its socket, `:death`, `:timeout`, `:pass` only when RESULT is ok and every truth passes, else `:fail`. The bot saying ok while the server disagrees is `:fail`, with the server's reply in the row. `:harness` and `:disconnect` are not counted.
@@ -87,10 +90,10 @@ A row says how it starts with `:gym/land`, a `land!` method; `gym/dimensions` na
 **The kit after the dimension.** `landing!` used to give the prerequisites before the teleport; across a dimension change that is the order that lost steve its End kit (the client counted six beds the server never held). Now it lands, asks `execute as <bot> at @s if dimension <dim>` until it passes (`wait-in!`, up to 30 s; never: a failed landing, not a kit in the wrong world), then gives (`kit`), then runs the row's `:gym/summon` in its dimension (`summons`): what the bot meets arrives after its sword. `:gym/difficulty` is sent before the landing. The summon helpers write fill-in templates: `summon`, `no-ai-zombie` (NoAI, persistent), `blaze-spawner` (arena-run.sh's numbers), `endermen`, `dragon` (any dragon killed, one summoned at the fountain with `DragonPhase:0` and `Health:200f`: a summoned dragon has no fight manager and hovers in phase 10 otherwise), `crystals` (every crystal killed, then one at each offset), `night`. Two fixture rows (`:gym/fixture? true`, an `--until` that puts no goal in play, so RESULT is ok once loaded and the truths judge the landing alone) prove the starts: `arena-nether` (the Nether, the sword held, netherrack underfoot, the zombie within 6) and `arena-end` (the End, the sword, end stone underfoot, the crystal within 8, a dragon). The fight rows of #258 and #259 start from them.
 
 ## Several rows of one goal (#262)
-A row may carry `:gym/name` when more than one row plays its goal from different starts: the blaze rods are played from an invulnerable bot in the nether arena (`blaze-1`), from a hurt one there (`blaze-7`) and from the fortress pad (`blaze-fortress`), all `:gym/goal :blaze-rods` with `--until blaze-rods` ([[blaze-rods]]). `gym` finds a row by its name first, then by its goal or `--until` name; `plan-matrix` puts the name (else the `--until` name) in the matrix, so each trial looks its own row up. The summon helpers for them: `invulnerable` (Resistance V and Fire Resistance, since no command sets `Invulnerable` on a player), `iron-armour`, and the truth `rods-held`.
-**The pearl rows (issue #263).** `pearls-1`: five NoAI endermen within the hunt's strike range in the Nether room, the pearl kit (`pearl-kit`: an iron sword, two iron pickaxes since the chain's `:cast-one` and `:portal` rows keep a spare (#485) and one wore out at 11 and 32 minutes in batch pearls-warped6-b's best runs, the iron helmet and chestplate, cooked beef); judged by a pearl held (`pearls-held`). Five because a kill drops a pearl one time in two ([[ender-pearls]]). `pearls-1-live`: three live endermen ten blocks off in `pearl-arena` (a room 25 square and seven high carved out of a block of stone 27 square, so a floor eight deep and a wall one thick ring it, a clear midnight sky, light blocks five over the floor: the burrow is cut in stone, the endermen are far enough to be provoked on purpose, no zombie spawns in the light, and what the dark beyond the wall spawns cannot walk in; the Nether room put all three within reach, the unlit arena of batch pearls-263b spawned a zombie the :defend row and the hunt took turns over until the bot died, and the lit, unwalled one of batches pearls-warped4-a to 5-b let the zombies of the dark ten blocks past its edge walk in to the burrow's stairs, four arena runs in twelve), a pearl held and health left. `pearls-12`: `:warped-forest`, the forest `locate biome` names nearest the landing's Nether coordinates, and a floor in it: the bot spread onto one round the located point (`spread`: `spreadplayers ... under 120` (`spread-under`): the highest floor with two cells of air over it below that height, scanning down, where vanilla judges a player safe), ranges `warped-ranges` 16 to 96, three tries each, until the server says the cell is warped forest (`warped?`, `if biome`) and not the air of a carved cave (`pocket?`, `if block ... cave_air`); then `place!` stands the bot there. Batches pearls-263d, e and f spread under 110 where the forest floor stood at 113 to 118: the scan went down through the rock into a cave pocket, and two landings in three stood there forty minutes (probe 39130057525). Batches pearls-263a and b asked for nylium cell by cell round the located point and found none: probe 38896760962 read that column netherrack from y 4 to 125, the located height inside the rock; twelve pearls held. The two `pearls-1` rows share their goal and `--until`, so the live one carries `:gym/name`: `gym` finds a row by it first, and `trial-name` sends it across the job boundary in the matrix (every other row still crosses as its `--until`).
+A row may carry `:gym/name` when more than one row plays its goal from different starts: the blaze rods are played from an invulnerable bot in the nether arena (`blaze-1`), from a hurt one there (`blaze-7`) and from the fortress pad (`blaze-fortress`), all `:gym/goal :blaze-rods` with `--until blaze-rods` (`blaze-rods`). `gym` finds a row by its name first, then by its goal or `--until` name; `plan-matrix` puts the name (else the `--until` name) in the matrix, so each trial looks its own row up. The summon helpers for them: `invulnerable` (Resistance V and Fire Resistance, since no command sets `Invulnerable` on a player), `iron-armour`, and the truth `rods-held`.
+**The pearl rows (issue #263).** `pearls-1`: five NoAI endermen within the hunt's strike range in the Nether room, the pearl kit (`pearl-kit`: an iron sword, two iron pickaxes since the chain's `:cast-one` and `:portal` rows keep a spare (#485) and one wore out at 11 and 32 minutes in batch pearls-warped6-b's best runs, the iron helmet and chestplate, cooked beef); judged by a pearl held (`pearls-held`). Five because a kill drops a pearl one time in two (`ender-pearls`). `pearls-1-live`: three live endermen ten blocks off in `pearl-arena` (a room 25 square and seven high carved out of a block of stone 27 square, so a floor eight deep and a wall one thick ring it, a clear midnight sky, light blocks five over the floor: the burrow is cut in stone, the endermen are far enough to be provoked on purpose, no zombie spawns in the light, and what the dark beyond the wall spawns cannot walk in; the Nether room put all three within reach, the unlit arena of batch pearls-263b spawned a zombie the :defend row and the hunt took turns over until the bot died, and the lit, unwalled one of batches pearls-warped4-a to 5-b let the zombies of the dark ten blocks past its edge walk in to the burrow's stairs, four arena runs in twelve), a pearl held and health left. `pearls-12`: `:warped-forest`, the forest `locate biome` names nearest the landing's Nether coordinates, and a floor in it: the bot spread onto one round the located point (`spread`: `spreadplayers ... under 120` (`spread-under`): the highest floor with two cells of air over it below that height, scanning down, where vanilla judges a player safe), ranges `warped-ranges` 16 to 96, three tries each, until the server says the cell is warped forest (`warped?`, `if biome`) and not the air of a carved cave (`pocket?`, `if block ... cave_air`); then `place!` stands the bot there. Batches pearls-263d, e and f spread under 110 where the forest floor stood at 113 to 118: the scan went down through the rock into a cave pocket, and two landings in three stood there forty minutes (probe 39130057525). Batches pearls-263a and b asked for nylium cell by cell round the located point and found none: probe 38896760962 read that column netherrack from y 4 to 125, the located height inside the rock; twelve pearls held. The two `pearls-1` rows share their goal and `--until`, so the live one carries `:gym/name`: `gym` finds a row by it first, and `trial-name` sends it across the job boundary in the matrix (every other row still crosses as its `--until`).
 
-**The eyes row (issue #264).** `eyes`: a surface landing at Normal, seven blaze rods and twelve ender pearls given, judged by `clear <bot> minecraft:ender_eye 0` finding twelve or more: the 2x2 crafts alone, nothing to fight or fetch ([[eyes-of-ender]]).
+**The eyes row (issue #264).** `eyes`: a surface landing at Normal, seven blaze rods and twelve ender pearls given, judged by `clear <bot> minecraft:ender_eye 0` finding twelve or more: the 2x2 crafts alone, nothing to fight or fetch (`eyes-of-ender`).
 
 ## Landing sets
 `ci/gym.edn` names each set: a centre far from world spawn, n grid cells spacing apart, the biome cells snap to, and a pregeneration radius. A is forests (20000, 20000); W is beaches (26000, 20000), steve's landing set W for the water trial (`:shore`, [[water-escape]]), whose truth commands are the server's own dry-land test (`execute ... unless block ~ ~ ~ minecraft:water unless block ~ ~1 ~ minecraft:water`) and `OnGround 1b`. `landings/landings!` snaps each cell with `locate biome`, finds the surface with a marker entity, keeps it when y >= 55 and no fixture landing check passes (else tries the fixture's nearby offsets), and pregenerates the chunks around it. Run k always lands on `landings[k]` (`landing-for`, wrapping), so batches are paired.

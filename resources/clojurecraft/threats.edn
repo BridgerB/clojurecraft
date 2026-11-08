@@ -1,0 +1,24 @@
+;; Per-kind facts about the hostiles the :defend row answers, by entity kind. Hand-written data.
+;;   :hit             damage of one hit on Normal that mob/kinds does not carry (rounded up: the danger line errs high)
+;;   :avoided?        not fought alone below full health, nor two of (hits hard and withers)
+;;   :never-fought?   hovers out of a sword's reach and burns the bot: cover or moving on, not a fight
+;;   :teleports?      a back-off never gets away from it
+;;   :pack-neutral?   hitting one angers the pack: one that has struck is backed away from, never swung at
+;;   :pumpkin-safe?   not provoked by a look while a carved pumpkin is worn: only a hit makes it a threat
+;;   :radius          blocks within which it is a threat, in place of the defend radius
+{:kinds {:silverfish {:hit 1.0}
+         :cave_spider {:hit 2.0}
+         :husk {:hit 3.0}
+         :drowned {:hit 3.0}
+         :zombie_villager {:hit 3.0}
+         :stray {:hit 3.0}
+         :wither_skeleton {:hit 5.0 :avoided? true}
+         :piglin {:hit 7.0}
+         :zombified_piglin {:hit 7.0 :pack-neutral? true}
+         :hoglin {:hit 6.0}
+         :piglin_brute {:hit 8.0}
+         :ghast {:never-fought? true}
+         :enderman {:teleports? true :pumpkin-safe? true}
+         :creeper {:radius 6.0}}
+ ;; the order combat/cover tries its measures in against a threat that no back-off helps: a meal far from it, a meal out of its reach, a block between, a pillar, a meal, a hole under the feet
+ :cover-ladder [:far-rest :eat-out-of-reach :wall :pillar :eat :nook]}

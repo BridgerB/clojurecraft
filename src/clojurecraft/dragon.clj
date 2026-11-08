@@ -38,6 +38,7 @@
    before any crystal (toward-island). Not done: the cages round two spikes (the strike
    through their bars is unproven; the gym takes them away), and the exit portal."
   (:require [clojure.math :as math]
+            [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [clojurecraft.armour :as armour]
             [clojurecraft.beds :as beds]
@@ -46,6 +47,7 @@
             [clojurecraft.dimension :as dimension]
             [clojurecraft.eat :as eat]
             [clojurecraft.entity :as entity]
+            [clojurecraft.filler :as filler]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
@@ -56,11 +58,31 @@
             [clojurecraft.place :as place]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
-            [clojurecraft.stairs :as stairs]
+            [clojurecraft.shapes]
             [clojurecraft.terrain :as terrain]
+            [clojurecraft.threat :as threat]
             [clojurecraft.window :as window]))
 
 (set! *warn-on-reflection* true)
+
+;; read by name (ns-resolve) in scratch_test and model_test, so the unused-var lint excludes it
+(def scratch
+  "The intent attributes only this namespace's executor reads and writes: {attribute {:doc meaning
+   :when lifetime}}. They are not world information, so they are not in clojurecraft.model;
+   scratch_test holds that no other namespace uses one."
+  {:intent/under
+   {:doc "the feet cell a :pillar's jump left, which its block fills once the body is clear of it"
+    :when "a :pillar, between a jump and its block"}
+   :intent/refusals {:doc "placements under the feet the server answered with the cell still empty"
+                     :when "a :pillar, after one"}
+   :intent/perched
+   {:doc
+    "ticks in a row the dragon has held within dragon/perch-radius of the fountain under dragon/perch-below, perched (issue #267)"
+    :when "a :perch intent"}})
+
+(s/def :intent/under :clojurecraft.spec/block-pos)
+(s/def :intent/refusals nat-int?)
+(s/def :intent/perched nat-int?)
 
 (def pillar-blocks
   "The blocks the bot pillars and walls with, the first held first: what mining leaves in the
@@ -927,11 +949,33 @@
                       (breath-reach %))
                  (vals (breaths world)))))
 
-(defn shelter-walk
-  "A walk to cell that ends standing in it (:intent/for :shelter), which a breath near the feet
-   does not end (plan/interrupts?): the cell is out of every breath's reach."
-  [cell]
-  {:intent/kind :walk :intent/target cell :intent/for :shelter})
+(def shelter-walk
+  "A walk to cell that ends standing in it (:intent/for :shelter); the cell is out of every
+   breath's reach. See combat/shelter-walk."
+  combat/shelter-walk)
+
+(defn ring-cell
+  "The feet cell on the ground nearest the feet (other than the feet's own cell), of those r out
+   from the fountain for each r in radii, in escape-ways directions, that no breath reaches
+   (breathed?), that is not before the sitting dragon's head (before-head?) nor on a way past it;
+   nil when none has ground loaded."
+  [world radii]
+  (let [[_ d] (dragon world)
+        [fx fz] fountain
+        pos (:player/pos world)
+        feet (intent/feet world)
+        cells (->> (for [r radii
+                         k (range escape-ways)
+                         :let [a (* k (/ (* 2.0 math/PI) escape-ways))]]
+                     [(+ fx (* r (math/cos a))) (+ fz (* r (math/sin a)))])
+                   (keep #(ground-cell world %))
+                   (remove #{feet}))]
+    (threat/nearest-safe cells
+                         (fn [c]
+                           (or (breathed? world c)
+                               (before-head? d (physics/centre c))
+                               (bite-on-way? d pos (physics/centre c))))
+                         (fn [c] (physics/horizontal-distance pos (physics/centre c))))))
 
 (defn escape
   "The feet cell on the ground nearest the feet (other than the feet's own cell), of those
@@ -942,21 +986,7 @@
    pillar, jumped against it for six seconds inside the cloud and died; a walk to a cell goes
    round the pillar by its route."
   [world]
-  (let [[_ d] (dragon world)
-        [fx fz] fountain
-        pos (:player/pos world)
-        feet (intent/feet world)]
-    (->> (for [r (range escape-from (inc escape-to))
-               k (range escape-ways)
-               :let [a (* k (/ (* 2.0 math/PI) escape-ways))]]
-           [(+ fx (* r (math/cos a))) (+ fz (* r (math/sin a)))])
-         (keep #(ground-cell world %))
-         (remove #{feet})
-         (remove #(breathed? world %))
-         (remove #(before-head? d (physics/centre %)))
-         (remove #(bite-on-way? d pos (physics/centre %)))
-         (sort-by #(physics/horizontal-distance pos (physics/centre %)))
-         first)))
+  (ring-cell world (range escape-from (inc escape-to))))
 
 (defn step-out-cell
   "The feet cell on the ground nearest the feet, r (step-out-radius when not given) out from the
@@ -964,21 +994,7 @@
    sitting dragon's head nor on a way past it; nil when none has ground loaded: the nearest place
    beyond the head's reach along the rim."
   ([world] (step-out-cell world step-out-radius))
-  ([world r]
-   (let [[_ d] (dragon world)
-         [fx fz] fountain
-         pos (:player/pos world)
-         feet (intent/feet world)]
-     (->> (for [k (range escape-ways)
-                :let [a (* k (/ (* 2.0 math/PI) escape-ways))]]
-            [(+ fx (* r (math/cos a))) (+ fz (* r (math/sin a)))])
-          (keep #(ground-cell world %))
-          (remove #{feet})
-          (remove #(breathed? world %))
-          (remove #(before-head? d (physics/centre %)))
-          (remove #(bite-on-way? d pos (physics/centre %)))
-          (sort-by #(physics/horizontal-distance pos (physics/centre %)))
-          first))))
+  ([world r] (ring-cell world [r])))
 
 (defn sheltered?
   "Is the bot standing in a safe shelter cell outside the fountain basin: at least escape-from
@@ -1034,13 +1050,8 @@
   "The two cells, at the feet's height and the eye's, beside stand cell [x y z] toward site cell
    [sx _ sz] along the axis with the farther way to go: where the blocks go that stand between the
    bot and the bed, as a vector of cells."
-  [[x y z] [sx _ sz]]
-  (let [dx (- sx x)
-        dz (- sz z)
-        [ux uz] (if (>= (abs dx) (abs dz))
-                  [(long (math/signum (double dx))) 0]
-                  [0 (long (math/signum (double dz)))])]
-    [[(+ x ux) y (+ z uz)] [(+ x ux) (inc y) (+ z uz)]]))
+  [[x _ z :as stand] [sx _ sz]]
+  (combat/wall-cells stand (- sx x) (- sz z)))
 
 (defn bed-stands
   "The cells to lay a bed at site cell [sx sy sz] from, nearest the feet first: the ground cells
@@ -1099,7 +1110,7 @@
             under [sx (dec sy) sz]
             wall (bed-wall stand site)
             open (filter #(= :clear (path/classify world %)) wall)
-            stone (stairs/filler world 1)
+            stone (filler/pick world 1)
             standing (- (count wall) (count open))
             dist (physics/horizontal-distance (physics/centre stand) (physics/centre site))
             health (:player/health world full-health)
@@ -1206,37 +1217,43 @@
                (:player/on-ground? world true)
                (not (or (off-island? world) (on-pillar? world) (on-spike? world)))
                (escape world))
-          (shelter-walk (escape world))
+          (intent/ranked :dragon/escape-breath (shelter-walk (escape world)))
           (or (off-island? world) (seq (crystals world)) (on-pillar? world) (on-spike? world))
-          (toward-crystals world)
-          (struck-by-dragon? world) (after-blow world)
-          bed-intent bed-intent
-          (< (:player/health world full-health) perch-line) (recover world)
-          (and breath eid (holds? world)) {:intent/kind :perch :intent/target eid}
+          (intent/ranked :dragon/crystals (toward-crystals world))
+          (struck-by-dragon? world) (intent/ranked :dragon/after-blow (after-blow world))
+          bed-intent (intent/ranked :dragon/bed bed-intent)
+          (< (:player/health world full-health) perch-line)
+          (intent/ranked :dragon/recover (recover world))
+          (and breath eid (holds? world))
+          (intent/ranked :dragon/perch-in-breath {:intent/kind :perch :intent/target eid})
           (and breath eid d (grounded? d) (or (in-basin? world) (not blocked?)) far?)
-          (shelter-walk (or (when-not (in-basin? world)
-                              (some->> (around d pos (physics/centre stand))
-                                       (ground-cell world)))
-                            stand))
-          (and breath flight) (shelter-walk flight)
-          breath (back-off-breath world breath)
+          (intent/ranked :dragon/shelter-to-stand
+                         (shelter-walk (or (when-not (in-basin? world)
+                                             (some->> (around d pos (physics/centre stand))
+                                                      (ground-cell world)))
+                                           stand)))
+          (and breath flight) (intent/ranked :dragon/shelter-flight (shelter-walk flight))
+          breath (intent/ranked :dragon/back-off-breath (back-off-breath world breath))
           (and eid d (beds/held world) (not (and (grounded? d) (perched? d))))
-          (if (< (from-fountain world) step-out-radius)
-            (out-of-the-bite world)
-            {:intent/kind :hold :intent/target eid})
+          (intent/ranked :dragon/bed-hold
+                         (if (< (from-fountain world) step-out-radius)
+                           (out-of-the-bite world)
+                           {:intent/kind :hold :intent/target eid}))
           (and (nil? stand) eid (some? (ground world 0 0 sky)))
-          {:intent/kind :perch :intent/target eid}
+          (intent/ranked :dragon/perch-no-stand {:intent/kind :perch :intent/target eid})
           (nil? stand) {:plan/wait :no-fountain}
-          (and eid blocked? d (in-bite? d pos) (not (scanning? d)) stand) (out-of-the-bite world)
+          (and eid blocked? d (in-bite? d pos) (not (scanning? d)) stand)
+          (intent/ranked :dragon/out-of-bite (out-of-the-bite world))
           (and eid (or blocked? (and (scanning? d) (in-basin? world))))
-          {:intent/kind :perch :intent/target eid}
+          (intent/ranked :dragon/perch-blocked {:intent/kind :perch :intent/target eid})
           far?
-          (standing-walk (or (when-not (in-basin? world)
-                               (some->> (around d pos (physics/centre stand))
-                                        (ground-cell world)))
-                             stand))
+          (let [round (when-not (in-basin? world)
+                        (some->> (around d pos (physics/centre stand))
+                                 (ground-cell world)))]
+            (intent/ranked (if round :dragon/walk-around-head :dragon/walk-to-stand)
+                           (standing-walk (or round stand))))
           (nil? eid) {:plan/wait :no-dragon}
-          :else {:intent/kind :perch :intent/target eid})))
+          :else (intent/ranked :dragon/perch {:intent/kind :perch :intent/target eid}))))
 
 ;; ---------------------------------------------------------------- a lull
 
@@ -1293,37 +1310,12 @@
     (or (wear-pumpkin world) (toward-crystals world))
     {:plan/wait :other-dimension}))
 
-(defmethod plan/interrupts? :dragon
-  ;; a :perch ends at once hurt under combat/retreat-health (recover takes over: never
-  ;; fight the dragon under that line); any running intent but a :back-off ends when a breath is near (breath-near) and the feet are
-  ;; down off the pillars, spikes and entry bridge: gym dragon-d runs 1 and 3 walked into a
-  ;; fireball's cloud and died in it, six a second, nothing else ending a walk; unless the intent
-  ;; is the walk from the breath to a cell out of its reach (shelter-walk, :intent/for :shelter)
-  ;; or the :perch held through it in the basin (holds?); and a walk from outside the basin whose
-  ;; destination is before the sitting dragon's head (before-head?) or whose straight way passes
-  ;; before it (bite-on-way?) while the feet are not already there (the walk out from under the
-  ;; head to a safe cell continues; gym dragon3-b run 2 had the scanning head turn onto both the
-  ;; feet and the waypoint ahead, and walked into the head)
-  [world _ i]
-  (let [[_ d] (dragon world)
-        pos (:player/pos world)
-        shelter? (and (= :walk (:intent/kind i)) (= :shelter (:intent/for i)))]
-    (or (and (= :perch (:intent/kind i))
-             (or (< (:player/health world full-health) perch-line) (struck-by-dragon? world)))
-        (and (not= :back-off (:intent/kind i))
-             (not shelter?)
-             (not (off-island? world))
-             (not (on-pillar? world))
-             (not (on-spike? world))
-             (some? (breath-near world))
-             (not (and (= :perch (:intent/kind i)) (holds? world))))
-        (and (= :walk (:intent/kind i))
-             (not shelter?)
-             (:intent/target i)
-             (not (in-basin? world))
-             (let [goal (physics/centre (:intent/target i))]
-               (or (before-head? d goal)
-                   (and (not (before-head? d pos)) (bite-on-way? d pos goal))))))))
+(defmethod intent/still-wanted? :dragon/walk-around-head
+  ;; the detour round the sitting head ends when the head has turned onto its cell: the row plans
+  ;; again, round the head's new place or straight, as the old cut of a walk before the head did
+  [world i]
+  (let [[_ d] (dragon world)]
+    (or (nil? d) (in-basin? world) (not (before-head? d (physics/centre (:intent/target i)))))))
 
 (defmethod combat/answers :dragon
   ;; the dragon is the row's own: gym dragon2-a run 1's :defend fought the perched dragon at hand
@@ -1392,5 +1384,5 @@
 (defmethod plan/next-intent :dragon
   [world _ _]
   (if (= dimension/end (dimension/of world))
-    (or (wear-pumpkin world) (toward-dragon world))
+    (or (intent/ranked :dragon/wear (wear-pumpkin world)) (toward-dragon world))
     {:plan/wait :other-dimension}))

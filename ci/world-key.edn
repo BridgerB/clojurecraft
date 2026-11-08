@@ -1,0 +1,8 @@
+;; The world caches' key, beside ci/gym.edn (the landing sets): world.yml, simworld.yml and every job
+;; that restores a world hash these two files only, so a code edit that does not change what a world
+;; holds (a comment, a rename) never forces a rebuild. Bump :worlds when a change alters what a built
+;; or captured world contains: the server's version, seed or settings (bb/clojurecraft/server.clj),
+;; pregeneration (bb/clojurecraft/worlds.clj), landing choice (landings.clj, fixture.clj), or what a
+;; capture writes (capture.clj, capture_nether.clj). A bump makes every job miss until world.yml and
+;; simworld.yml are rerun for each set.
+{:worlds 1}

@@ -8,12 +8,12 @@ status: verified
 lastUpdated: 2026-10-11
 verifiedAgainst: HEAD
 sourceRefs:
-  - src/clojurecraft/sim.clj#defmethod on-packet [:play :use-item-on]
-  - src/clojurecraft/sim.clj#defn overlaps-player?
-  - src/clojurecraft/sim.clj#defn place
+  - src/clojurecraft/sim/portal.clj#defmethod on-packet [:play :use-item-on]
+  - src/clojurecraft/sim/protocol.clj#defn overlaps-player?
+  - src/clojurecraft/sim/portal.clj#defn place
   - test/clojurecraft/sim_test.clj#a-block-placed-into-water-takes-the-waters-place
-  - src/clojurecraft/sim.clj#defn open-window
-  - src/clojurecraft/sim.clj#defn block-at
+  - src/clojurecraft/sim/window.clj#defn open-window
+  - src/clojurecraft/sim/world.clj#defn block-at
   - test/clojurecraft/sim_test.clj#places-a-table-and-crafts-a-wooden-pickaxe
   - test/clojurecraft/sim_test.clj#a-table-is-never-placed-into-a-flower
 related:

@@ -17,8 +17,11 @@
    placed only where the rock is missing. Positions are written for the bot working from +z
    (:south) and turned for the other facings."
   (:require [clojure.math :as math]
+            [clojure.spec.alpha :as s]
+            [clojurecraft.avoided :as avoided]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.chunk :as chunk]
+            [clojurecraft.filler :as filler]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
@@ -31,6 +34,7 @@
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.scoop :as scoop]
+            [clojurecraft.shapes]
             [clojurecraft.stairs :as stairs]
             [clojurecraft.stone :as stone]
             [clojurecraft.terrain :as terrain]
@@ -38,6 +42,24 @@
             [clojurecraft.wood :as wood]))
 
 (set! *warn-on-reflection* true)
+
+;; read by name (ns-resolve) in scratch_test and model_test, so the unused-var lint excludes it
+(def scratch
+  "The intent attributes only this namespace's executor reads and writes: {attribute {:doc meaning
+   :when lifetime}}. They are not world information, so they are not in clojurecraft.model;
+   scratch_test holds that no other namespace uses one."
+  {:intent/build {:doc "which plan a :build works: :cast-one, :portal or :nether" :when ":build"}
+   :intent/origin {:doc "a build's frame origin [bx by bz]" :when ":build"}
+   :intent/facing {:doc "the side of the frame a build works from: :south :north :east :west"
+                   :when ":build"}
+   :intent/access
+   {:doc
+    "a build's lava height over its room's floor, which its access steps climb to (build/station)"
+    :when ":build"}})
+
+(s/def :intent/build #{:cast-one :portal :nether})
+(s/def :intent/origin :clojurecraft.spec/block-pos)
+(s/def :intent/access nat-int?)
 
 (def layers
   "The frame cells [dx dy] from the origin, in the order they are cast: the bottom pair, the two
@@ -50,6 +72,7 @@
   "The portal's inside, [dx dy]: two wide, three high."
   (for [dx [1 2] dy [1 2 3]] [dx dy]))
 (def facings #{:south :north :east :west}) ; the side of the frame the bot works from
+(s/def :intent/facing facings)
 
 ;; ---------------------------------------------------------------- predicates
 
@@ -804,7 +827,7 @@
               [(+ x 0.5) (+ y physics/eye-height) (+ z 0.5)])]
     (<= (physics/distance eye (physics/centre pos)) intent/reach)))
 
-(def stand-max-nodes 400) ; expansions spent looking for a reachable local stand to work an op
+(def stand-max-nodes (path/budget :near)) ; expansions spent looking for a reachable local stand to work an op
 
 (defn stand-cell?
   "Could the feet stand in cell to work pos: not pos, the head not in pos, standable, and pos
@@ -1436,12 +1459,12 @@
   (and (= 1 (held-count world :bucket)) (held? world :water_bucket)))
 
 (defn seal-source
-  "The child that removes the water source at pos without a bucket: a filler block (stairs/filler)
+  "The child that removes the water source at pos without a bucket: a filler block (filler/pick)
    placed into it takes the source's place, to be dug out where a later op needs the cell open
    (the next cell's hole, the interior); nil when no filler is held or no solid neighbour holds
    the click (place/support)."
   [world pos]
-  (when-let [item (stairs/filler world 1)]
+  (when-let [item (filler/pick world 1)]
     (when (place/support world pos) {:intent/kind :place :intent/item item :intent/cell pos})))
 
 (defn spare-pour-op
@@ -1451,7 +1474,7 @@
    filler (last-bucket-scoop?). nil unless a filler is held and such a cell exists."
   [world {:intent/keys [origin facing]}]
   (let [at #(cell origin facing %)]
-    (when (stairs/filler world 1)
+    (when (filler/pick world 1)
       (some (fn [[dx dy :as c]]
               (let [[sx :as s] (stands c)
                     over (at [dx (inc dy) 0])]
@@ -1755,7 +1778,7 @@
     ;; avoid retrying the same failed waypoint when the build recalculates its way out
     (-> world
         (assoc :player/controls {})
-        (update :plan/retreat-unreachable (fnil conj #{}) (:intent/target child))
+        (avoided/note :retreat-unreachable (:intent/target child))
         (intent/dissoc-intent :intent/child)
         (game/say "build: retreat waypoint failed, finding another"))
     (and child (lost-way? world i child))
@@ -1770,7 +1793,7 @@
     ;; (to-height takes the way out instead), as plan/fail-intent remembers an intent's
     (-> world
         (assoc :player/controls {})
-        (update :plan/boxed-at (fnil conj #{}) (intent/feet world))
+        (avoided/note :boxed-at (intent/feet world))
         (intent/dissoc-intent :intent/child)
         (game/say (str "build: " (:intent/kind child) " boxed in, the way out")))
     (and child (intent/failed? child) (dig-rejected? child))
@@ -2068,7 +2091,8 @@
         to (if src (inc sy) lava-depth)]
     (cond (> (physics/y-of feet) to)
           (or (stone/stairs world {:goal/depth to}) (stone/retreat world) (stone/climb world))
-          (contains? (:plan/boxed-at world #{}) feet) (or (stone/retreat world) (stone/climb world))
+          (contains? (avoided/all-of world :boxed-at) feet)
+          (or (stone/retreat world) (stone/climb world))
           (nil? src) (explore-lava world feet)
           (< (physics/y-of feet) to) (to-height world to)
           :else

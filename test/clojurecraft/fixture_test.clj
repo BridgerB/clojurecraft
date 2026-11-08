@@ -1,7 +1,6 @@
 (ns clojurecraft.fixture-test
   (:require [clojure.test :refer [deftest is testing]]
-            [clojurecraft.fixture :as fixture]
-            [clojurecraft.rcon :as rcon]))
+            [clojurecraft.fixture :as fixture]))
 
 (def passed "Test passed")
 (def failed "Test failed")
@@ -38,13 +37,12 @@
   (is (= 17 (count fixture/landing-offsets)))
   (is (apply distinct? fixture/landing-offsets)))
 
-(deftest ^:eftest/synchronized a-forceload-is-released-even-when-the-work-throws
-  (let [sent (atom [])]
-    (with-redefs [rcon/command! (fn [_ s] (swap! sent conj s) "")]
-      (is (= :done (fixture/with-forceload {:next-id (atom 0)} [1 2] (constantly :done))))
-      (is (thrown?
-           clojure.lang.ExceptionInfo
-           (fixture/with-forceload {:next-id (atom 0)} [0 0 31 31] #(throw (ex-info "boom" {}))))))
+(deftest a-forceload-is-released-even-when-the-work-throws
+  (let [sent (atom [])
+        rc {:answer (fn [s] (swap! sent conj s) "")}]
+    (is (= :done (fixture/with-forceload rc [1 2] (constantly :done))))
+    (is (thrown? clojure.lang.ExceptionInfo
+                 (fixture/with-forceload rc [0 0 31 31] #(throw (ex-info "boom" {})))))
     (is (= ["forceload add 1 2" "forceload remove 1 2" "forceload add 0 0 31 31"
             "forceload remove 0 0 31 31"]
            @sent))))

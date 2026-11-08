@@ -21,15 +21,15 @@
    furnace's own ticks move the window's state id too, so a load is judged by the slots it
    should have filled, not by the state id alone.
 
-   A batch loaded and not yet taken is remembered (:furnace/batch, set at the end of :load,
-   cleared once the furnace is emptied at :settle or closed), so a smelt interrupted after the
-   load is gone back to (make/collect-batch) and not mined for again: the planner counts the
-   inventory only (issue #686).
+A batch loaded and not yet taken is remembered (:furnace/batch, set at the end of :load, cleared
+once the furnace is emptied at :settle or closed), so a smelt interrupted after the load is gone
+back to (make/collect-batch) and not mined for again: the planner counts the inventory only.
 
    A lost click is recovered here rather than by failing: what a failed smelt leaves on the
    cursor or in the furnace is not in the inventory, so the planner, which plans from the
    inventory, could not plan for it again (lost)."
   (:require [clojure.math :as math]
+            [clojure.spec.alpha :as s]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
@@ -39,6 +39,18 @@
             [clojurecraft.window :as window]))
 
 (set! *warn-on-reflection* true)
+
+;; read by name (ns-resolve) in scratch_test and model_test, so the unused-var lint excludes it
+(def scratch
+  "The intent attributes only this namespace's executor reads and writes: {attribute {:doc meaning
+   :when lifetime}}. They are not world information, so they are not in clojurecraft.model;
+   scratch_test holds that no other namespace uses one."
+  {:intent/cook-by
+   {:doc
+    "ms by which the batch must be cooked; past it the cook stage fails once the furnace stops cooking"
+    :when "smelt, :cook stage, once the furnace is loaded"}})
+
+(s/def :intent/cook-by int?)
 
 (def stage-timeout 5000)              ; ms a smelt stage waits on the server before it fails
 (def cook-slack 5000)                 ; ms past the batch's cook time before the cook stage fails
@@ -57,12 +69,12 @@
   (get blocks/fuel-by-name n))
 
 (def burn-order
-  "What the bot burns, in the order it burns it: coal and charcoal, then planks, each only where
-   the game burns it (crimson planks do not). Never a log (it burns 300 ticks, the four planks it
-   makes 1200), a stick, a tool, a table or anything else the fuel table lists. A stick is a
-   pickaxe's handle and burns 100 ticks, half one smelt: counted as fuel, the ingots' fuel took
-   the two sticks a new pickaxe needed deep in the mine, the planner sent the bot up for wood, and
-   it dug coal with its last pickaxe until it broke (issue #36)."
+  "What the bot burns, in the order it burns it: coal and charcoal, then planks, each only where the
+   game burns it (crimson planks do not). Never a log (it burns 300 ticks, the four planks it makes
+   1200), a stick, a tool, a table or anything else the fuel table lists. A stick is a pickaxe's
+   handle and burns 100 ticks, half one smelt: counted as fuel, the ingots' fuel took the two sticks
+   a new pickaxe needed deep in the mine, the planner sent the bot up for wood, and it dug coal with
+   its last pickaxe until it broke."
   (mapv (fn [s] (into (sorted-set) (filter burn-ticks) s))
         [(recipe/tags :coals) (recipe/tags :planks)]))
 
@@ -210,16 +222,11 @@
        (or (some? (get grid fuel-slot)) (pos? (lit world)))))
 
 (defn cooking?
-  "Is the open furnace cooking recipe r now: a fire going (lit) and r's input in its input slot.
-   The batch's deadline (:intent/cook-by) is the bot's clock, the cook the server's ticks, and a
-   loaded server's ticks are longer: race 38805920624 runner 5 (issues #199, #200) ran both
-   servers behind (over 200 \"Can't keep up\" each), bot Clj_r17's at about 11 ticks a second,
-   three raw iron took 53 s against a 35 s deadline, and the bot failed :not-cooked 1.2 s
-   before the second ingot came out; 20 more of the round's bots failed :not-cooked and then
-   :stale-window (issues #131, #132), since the failure left the furnace open (place/equip).
-   Past the deadline the cook waits while this holds: a furnace that cooks gives an item within
-   its cook total of the server's ticks, and one that stops (the input gone, the fire out with
-   no fuel) fails."
+  "Is the open furnace cooking recipe r now: a fire going (lit) and r's input in its input slot. The
+   batch's deadline (:intent/cook-by) is the bot's clock, the cook the server's ticks, and a loaded
+   server's ticks are longer. Past the deadline the cook waits while this holds: a furnace that
+   cooks gives an item within its cook total of the server's ticks, and one that stops (the input
+   gone, the fire out with no fuel) fails."
   [world {:view/keys [grid]} r]
   (and (pos? (lit world))
        (contains? (:smelt/input r)

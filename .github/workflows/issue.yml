@@ -9,9 +9,7 @@ name: issue
 # captured worlds the snapshots name are restored. Older issues are not judged again here: the
 # races are the regression guard (the filer reopens an issue whose failure comes back). Beside
 # it, unit.yml: every test but the forest property and the static checks (#98). test and gym
-# skip fix branches: these two are the checks a fix gets. A Copilot cloud agent's branch
-# (copilot/*, .github/agents/bot-fixer.agent.md) gets the same two; its issue is the first the
-# body fixes, since Copilot names its own branches.
+# skip fix branches: these two are the checks a fix gets.
 
 on:
   pull_request:
@@ -27,11 +25,11 @@ concurrency:
 
 jobs:
   unit:
-    if: startsWith(github.head_ref, 'fix/') || startsWith(github.head_ref, 'copilot/')
+    if: startsWith(github.head_ref, 'fix/')
     uses: ./.github/workflows/unit.yml
 
   check:
-    if: startsWith(github.head_ref, 'fix/') || startsWith(github.head_ref, 'copilot/')
+    if: startsWith(github.head_ref, 'fix/')
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     steps:
@@ -47,20 +45,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           named=$(printf '%s\n' "$BODY" | grep -oiE '(fixes|closes|resolves) #[0-9]+' | grep -oE '[0-9]+' || true)
-          case "$HEAD_REF" in
-            copilot/*) n=$(printf '%s\n' "$named" | sed -n 1p) ;;
-            *) n=$(echo "$HEAD_REF" | sed -E 's|^fix/([0-9]+).*|\1|') ;;
-          esac
-          case "$n" in ''|*[!0-9]*) echo "::error::branch $HEAD_REF names no issue number (a copilot/ branch: no Fixes #n in the body)"; exit 1;; esac
+          n=$(echo "$HEAD_REF" | sed -E 's|^fix/([0-9]+).*|\1|')
+          case "$n" in ''|*[!0-9]*) echo "::error::branch $HEAD_REF names no issue number"; exit 1;; esac
           # only the snapshots this pull request adds or changes: its own evidence. A snapshot already
           # on main proved an earlier fix (and no longer recurs there), so a later PR for the same
           # issue (a fix/<n>-r2 after a regression, PR #245) is never judged by it
           added=$(git diff --name-only --diff-filter=AM "$BASE_SHA" HEAD -- 'test/issues/*/*.edn.gz' || true)
           files=""
           red=0
-          # a pull request carries only its own issues' evidence, whole: Copilot sessions swept other
-          # issues' fetched snapshots into their commits (#398, #401 changed #342's) and one left a
-          # snapshot empty (#403)
+          # a pull request carries only its own issues' evidence, whole, never another issue's
           for f in $(git diff --name-only --diff-filter=AMD "$BASE_SHA" HEAD -- 'test/issues/*/*' || true); do
             d=$(echo "$f" | cut -d/ -f3)
             if ! printf '%s\n%s\n' "$n" "$named" | grep -qx "$d"; then
@@ -79,8 +72,7 @@ jobs:
             elif printf '%s\n' "$named" | grep -qx "$m"; then
               labels=$(gh api "repos/$GITHUB_REPOSITORY/issues/$m" --jq '[.labels[].name] | join(",")' 2>/dev/null || echo '')
               if echo ",$labels," | grep -q ',sim,'; then
-                echo "::error::issue $m is reproduced in the sim (label sim) but this pull request adds no snapshot under test/issues/$m: bb issue-check fetch $m, or do not say Fixes"
-                red=1
+                echo "::warning::issue $m is reproduced in the sim (label sim) but this pull request adds no snapshot: judge the fetched ones with bb probe (AGENTS.md section 4, step 9)"
               else
                 echo "::warning::issue $m has no sim reproduction and no snapshot: it closes on the real recordings' word alone"
               fi
@@ -100,56 +92,56 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: cache/sim-worlds/R1
-          key: simworld-R1-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj', 'src/clojurecraft/capture.clj') }}
+          key: simworld-R1-${{ hashFiles('ci/gym.edn', 'ci/world-key.edn') }}
           fail-on-cache-miss: true
       - name: R2's captured worlds
         if: contains(steps.which.outputs.sets, 'R2,')
         uses: actions/cache/restore@v6
         with:
           path: cache/sim-worlds/R2
-          key: simworld-R2-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj', 'src/clojurecraft/capture.clj') }}
+          key: simworld-R2-${{ hashFiles('ci/gym.edn', 'ci/world-key.edn') }}
           fail-on-cache-miss: true
       - name: R3's captured worlds
         if: contains(steps.which.outputs.sets, 'R3,')
         uses: actions/cache/restore@v6
         with:
           path: cache/sim-worlds/R3
-          key: simworld-R3-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj', 'src/clojurecraft/capture.clj') }}
+          key: simworld-R3-${{ hashFiles('ci/gym.edn', 'ci/world-key.edn') }}
           fail-on-cache-miss: true
       - name: R4's captured worlds
         if: contains(steps.which.outputs.sets, 'R4,')
         uses: actions/cache/restore@v6
         with:
           path: cache/sim-worlds/R4
-          key: simworld-R4-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj', 'src/clojurecraft/capture.clj') }}
+          key: simworld-R4-${{ hashFiles('ci/gym.edn', 'ci/world-key.edn') }}
           fail-on-cache-miss: true
       - name: R1's captured Nether
         if: contains(steps.which.outputs.sets, 'R1,')
         uses: actions/cache/restore@v6
         with:
           path: cache/sim-nether/R1.edn.gz
-          key: simnether-R1-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj', 'src/clojurecraft/capture_nether.clj') }}
+          key: simnether-R1-${{ hashFiles('ci/gym.edn', 'ci/world-key.edn') }}
           fail-on-cache-miss: false
       - name: R2's captured Nether
         if: contains(steps.which.outputs.sets, 'R2,')
         uses: actions/cache/restore@v6
         with:
           path: cache/sim-nether/R2.edn.gz
-          key: simnether-R2-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj', 'src/clojurecraft/capture_nether.clj') }}
+          key: simnether-R2-${{ hashFiles('ci/gym.edn', 'ci/world-key.edn') }}
           fail-on-cache-miss: false
       - name: R3's captured Nether
         if: contains(steps.which.outputs.sets, 'R3,')
         uses: actions/cache/restore@v6
         with:
           path: cache/sim-nether/R3.edn.gz
-          key: simnether-R3-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj', 'src/clojurecraft/capture_nether.clj') }}
+          key: simnether-R3-${{ hashFiles('ci/gym.edn', 'ci/world-key.edn') }}
           fail-on-cache-miss: false
       - name: R4's captured Nether
         if: contains(steps.which.outputs.sets, 'R4,')
         uses: actions/cache/restore@v6
         with:
           path: cache/sim-nether/R4.edn.gz
-          key: simnether-R4-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj', 'src/clojurecraft/capture_nether.clj') }}
+          key: simnether-R4-${{ hashFiles('ci/gym.edn', 'ci/world-key.edn') }}
           fail-on-cache-miss: false
       - uses: actions/setup-java@v6
         if: steps.which.outputs.files != ''

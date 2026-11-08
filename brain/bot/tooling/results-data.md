@@ -18,7 +18,6 @@ sourceRefs:
   - bb/clojurecraft/churn.clj#defn read-held
   - bb/clojurecraft/site.clj#defn road
   - bb/clojurecraft/site.clj#defn gym-summary
-  - bb/clojurecraft/site.clj#defn by-whom
   - bb/clojurecraft/site.clj#defn legacy!
   - bb/clojurecraft/site.clj#defn recount!
   - bb/clojurecraft/page.clj#defn played
@@ -47,7 +46,6 @@ On the `gh-pages` branch (`bb/clojurecraft/page.clj`):
 - `data/days/<day>.json`: the day's runs (one row a lane run and kind, its batches combined) and its totals per kind, rebuilt from the day's batches.
 - `data/summary.json`: every day's totals per kind (runs, reached per milestone, stops by stage, times, deaths, top failures with their issues), oldest first. The page's first load.
 - `data/gyms.ndjson`: a line per gym run, from its summary artifact (`bb site gyms`).
-- `orchestrator.json`: the Copilot orchestrator's state (`bb copilot dispatch`), unchanged.
 
 A day belongs to the day its run started, so a lane run is never split across files. A publish rewrites one day's two files and the summary (`changes`), so a write's cost does not grow with the history.
 
@@ -72,9 +70,9 @@ A run whose bot never got into play (its server refused it or was gone before it
 
 ## The site
 
-The branch holds only data. `pages.yml`, dispatched by every publish, checks out main, adds new gym runs (`bb site gyms`), checks out the branch's tip, builds the site (`bb site build`: `index.html` with the road as JSON in it, `site/app.js`, `site/style.css`, the branch's `data/`) and asks GitHub for the bot-failure issues and the pull requests that fix them (`bb site agents`, `data/agents.json` in the site only, with the workflow's token, so the page spends none of a viewer's 60 unauthenticated API calls an hour on it). The page is therefore always main's code. A branch still in the old layout is laid out in the site alone (`legacy!`).
+The branch holds only data. `pages.yml`, dispatched by every publish, checks out main, adds new gym runs (`bb site gyms`), checks out the branch's tip, builds the site (`bb site build`: `index.html` with the road as JSON in it, `site/app.js`, `site/style.css`, the branch's `data/`) and asks GitHub for the bot-failure issues (`bb site agents`, `data/agents.json` in the site only, with the workflow's token, so the page spends none of a viewer's 60 unauthenticated API calls an hour on it). The page is therefore always main's code. A branch still in the old layout is laid out in the site alone (`legacy!`).
 
-The page (`site/app.js`, no library) has four tabs: the road (every stage from spawn to the dragon: the race's chain from `goals.edn` up to `ci/race.edn`'s `:race/until`, then `ci/road.edn`'s stages the race does not play yet; each stage's reach in the window, real and sim, its 14-day line, times, stops with their issues, open issues, gym proof; the wall), trends (reach per milestone by day, stops by phase, time to each milestone, runs and deaths a day, issues opened and closed), history (every day, its lane runs filterable by kind, commit and milestone, paginated, each with its funnel, stops, leader and links) and agents (the orchestrator's live state from `orchestrator.json`, then the issues and fix pull requests over time). The live lane count is one unauthenticated API call, kept two minutes in the viewer's session.
+The page (`site/app.js`, no library) has three tabs: the road (every stage from spawn to the dragon: the race's chain from `goals.edn` up to `ci/race.edn`'s `:race/until`, then `ci/road.edn`'s stages the race does not play yet; each stage's reach in the window, real and sim, its 14-day line, times, stops with their issues, open issues, gym proof; the wall), trends (reach per milestone by day, stops by phase, time to each milestone, runs and deaths a day, issues opened and closed) and history (every day, its lane runs filterable by kind, commit and milestone, paginated, each with its funnel, stops, leader and links). The live lane count is one unauthenticated API call, kept two minutes in the viewer's session.
 
 ## Sources
 

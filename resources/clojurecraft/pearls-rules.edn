@@ -1,0 +1,254 @@
+;; The pearl hunt's rules, in the order they are tried (clojurecraft.pearls.rules/decide): the first
+;; row whose :rule/when facts all hold chooses the intent, even when its builder yields nil.
+;; :rule/id is the intent's why label (goals.edn ranks and the recordings name it, so it stays).
+;; :rule/when is a vector of fact keys (clojurecraft.pearls.facts), each [:not k] to require it
+;; false; :rule/then is [:fact k] (the value of fact k) or [:intent m] (m, its [:fact k] values
+;; filled in). :rule/phase says which part of the hunt the row belongs to: :survive (every phase),
+;; :leave-fortress, :reach-forest, :set-up, :provoke, :fight (see :pearls/phases; a phase is done when its :phase/done facts hold, and the current phase is the first not done).
+{:pearls/phases [{:phase/id :leave-fortress :phase/done [[:not :fortress-escaping?]]}
+                 {:phase/id :reach-forest :phase/done [:in-forest-or-overworld]}
+                 {:phase/id :set-up :phase/done [:set-up-done?]}
+                 {:phase/id :provoke :phase/done [:coming?]} {:phase/id :fight}]
+ :pearls/rules
+ [{:rule/id :pearls/put-out-fire
+   :rule/phase :fire
+   :rule/when [:fire]
+   :rule/then [:intent {:intent/kind :dig :intent/target [:fact :fire]}]}
+  {:rule/id :hunt/blaze-refuge
+   :rule/phase :survive
+   :rule/when [:blaze-refuge]
+   :rule/then [:fact :blaze-refuge]}
+  {:rule/id :hunt/come-down
+   :rule/phase :survive
+   :rule/when [[:not :hurt?] :come-down]
+   :rule/then [:fact :come-down]}
+  {:rule/id :hunt/meal-unshot
+   :rule/phase :survive
+   :rule/when [:meal-unshot]
+   :rule/then [:fact :meal]}
+  {:rule/id :hunt/pocket-bore
+   :rule/phase :leave-fortress
+   :rule/when [:pocket-bore]
+   :rule/then [:fact :pocket-bore]}
+  {:rule/id :hunt/tunnel-answer
+   :rule/phase :leave-fortress
+   :rule/when [:tunnel-answer]
+   :rule/then [:fact :tunnel-answer]}
+  {:rule/id :hunt/escape-cover-from-fire
+   :rule/phase :leave-fortress
+   :rule/when [:fortress-escaping? :can-tunnel-out? :shot-at? :cover-from]
+   :rule/then [:fact :cover-from]}
+  {:rule/id :hunt/escape-tunnel-out
+   :rule/phase :leave-fortress
+   :rule/when [:fortress-escaping? :can-tunnel-out?]
+   :rule/then [:fact :fortress-tunnel-out]}
+  {:rule/id :hunt/leave-sight
+   :rule/phase :survive
+   :rule/when [[:not :in?] :leave-sight]
+   :rule/then [:fact :leave-sight]}
+  {:rule/id :hunt/cover-from-shooter
+   :rule/phase :survive
+   :rule/when [:shot-at? [:not :in?] :cover-from]
+   :rule/then [:fact :cover-from]}
+  {:rule/id :hunt/room-exit
+   :rule/phase :leave-fortress
+   :rule/when [[:not :in?] :room-exit]
+   :rule/then [:fact :room-exit]}
+  {:rule/id :hunt/walk-home
+   :rule/phase :survive
+   :rule/when [:home [:not :in?] :home-pressed? :home-routable?]
+   :rule/then [:fact :way-home]}
+  {:rule/id :hunt/cover-from-swarm
+   :rule/phase :survive
+   :rule/when [:swarmed? [:not :in?] [:not :home] :cover-from]
+   :rule/then [:fact :cover-from]}
+  {:rule/id :hunt/wall-in-burrow
+   :rule/phase :survive
+   :rule/when [:swarmed? :in?]
+   :rule/then [:fact :swarm-in-burrow]}
+  {:rule/id :hunt/hurt-in-burrow
+   :rule/phase :survive
+   :rule/when [:hurt? :in?]
+   :rule/then [:fact :meal-or-lookout]}
+  {:rule/id :hunt/cornered-meal-or-wall
+   :rule/phase :survive
+   :rule/when [:cornered? :hurt? [:not :in?] :meal-or-wall-off]
+   :rule/then [:fact :meal-or-wall-off]}
+  {:rule/id :hunt/back-off-from-enderman
+   :rule/phase :survive
+   :rule/when [:near? :hurt? [:not :in?]]
+   :rule/then [:intent {:intent/kind :back-off :intent/target [:fact :eid] :intent/for :pearls}]}
+  {:rule/id :hunt/cover-when-back-off-pointless
+   :rule/phase :survive
+   :rule/when [:hurt? [:not :in?] :tid :back-off-pointless? :cover-from]
+   :rule/then [:fact :cover-from]}
+  {:rule/id :hunt/back-off-from-threat
+   :rule/phase :survive
+   :rule/when [:hurt? [:not :in?] :tid]
+   :rule/then [:intent {:intent/kind :back-off :intent/target [:fact :tid] :intent/for :pearls}]}
+  {:rule/id :hunt/hurt-meal-or-lookout
+   :rule/phase :survive
+   :rule/when [:hurt? [:not :in?]]
+   :rule/then [:fact :meal-or-lookout]}
+  {:rule/id :hunt/fight-from-burrow
+   :rule/phase :fight
+   :rule/when [:in? :fight-id]
+   :rule/then [:intent
+               {:intent/kind :fight
+                :intent/target [:fact :fight-id]
+                :intent/hold? true
+                :intent/yield? true
+                :intent/for :pearls}]}
+  {:rule/id :hunt/fight-striker
+   :rule/phase :fight
+   :rule/when [:sid [:not :hurt?] [:not :in?]]
+   :rule/then [:intent {:intent/kind :fight :intent/target [:fact :sid] :intent/for :pearls}]}
+  {:rule/id :hunt/fight-weak-threat
+   :rule/phase :fight
+   :rule/when [:tid [:not :hurt?] [:not :in?] [:not :home] [:not :swarmed?] :weak-threat?]
+   :rule/then [:intent {:intent/kind :fight :intent/target [:fact :tid] :intent/for :pearls}]}
+  {:rule/id :hunt/cut-out-of-blocked-burrow
+   :rule/phase :fight
+   :rule/when [:at-end? :bid :blocked-out?]
+   :rule/then [:fact :cut-out-or-lookout]}
+  {:rule/id :hunt/fight-at-hand
+   :rule/phase :fight
+   :rule/when [:near? [:not :in?] [:not :at-hand-unfightable?] :at-hand-fightable-kind?]
+   :rule/then [:intent {:intent/kind :fight :intent/target [:fact :eid] :intent/for :pearls}]}
+  {:rule/id :hunt/meal :rule/phase :survive :rule/when [:meal] :rule/then [:fact :meal]}
+  {:rule/id :hunt/lookout-hurt-or-blocked
+   :rule/phase :survive
+   :rule/when [:hurt-or-blocked]
+   :rule/then [:intent {:intent/kind :lookout :intent/for :pearls}]}
+  {:rule/id :hunt/lure
+   :rule/phase :provoke
+   :rule/when [:in? :aid [:not :lured-out?] :lure? :mouth-walk]
+   :rule/then [:fact :mouth-walk]}
+  {:rule/id :hunt/lookout-angry-near
+   :rule/phase :provoke
+   :rule/when [:in? :aid-or-angry-within?]
+   :rule/then [:intent {:intent/kind :lookout :intent/for :pearls}]}
+  {:rule/id :pearls/collect-drop
+   :rule/phase :collect
+   :rule/when [:drop]
+   :rule/then [:fact :collect-drop]}
+  {:rule/id :pearls/wait-over-body
+   :rule/phase :collect
+   :rule/when [:over-body?]
+   :rule/then [:intent {:plan/wait :drop}]}
+  {:rule/id :pearls/make-sword
+   :rule/phase :upkeep
+   :rule/when [[:not :hurt?] :replacing]
+   :rule/then [:fact :replacing]}
+  {:rule/id :pearls/seek-wood-for-sword
+   :rule/phase :upkeep
+   :rule/when [[:not :hurt?] :seek-wood :no-sword?]
+   :rule/then [:fact :seek-wood]}
+  {:rule/id :pearls/no-sword
+   :rule/phase :upkeep
+   :rule/when [[:not :hurt?] :no-sword?]
+   :rule/then [:intent {:plan/wait :no-sword}]}
+  {:rule/id :pearls/make-pickaxe
+   :rule/phase :upkeep
+   :rule/when [[:not :hurt?] :remaking]
+   :rule/then [:fact :remaking]}
+  {:rule/id :pearls/reserve-stems
+   :rule/phase :upkeep
+   :rule/when [[:not :hurt?] :reserve-gather]
+   :rule/then [:fact :reserve-gather]}
+  {:rule/id :pearls/seek-wood-for-pickaxe
+   :rule/phase :upkeep
+   :rule/when [[:not :hurt?] :seek-wood :worn-out-homeless?]
+   :rule/then [:fact :seek-wood]}
+  {:rule/id :pearls/no-pickaxe
+   :rule/phase :upkeep
+   :rule/when [[:not :hurt?] :worn-out-homeless?]
+   :rule/then [:intent {:plan/wait :no-pickaxe}]}
+  {:rule/id :pearls/toss-for-room
+   :rule/phase :upkeep
+   :rule/when [[:not :hurt?] :reserve-toss]
+   :rule/then [:fact :reserve-toss]}
+  {:rule/id :hunt/travel
+   :rule/phase :reach-forest
+   :rule/when [:travel-walk]
+   :rule/then [:fact :travel-walk]}
+  {:rule/id :hunt/relocate
+   :rule/phase :reach-forest
+   :rule/when [:relocate-walk]
+   :rule/then [:fact :relocate-walk]}
+  {:rule/id :hunt/wander
+   :rule/phase :reach-forest
+   :rule/when [:wander-walk]
+   :rule/then [:fact :wander-walk]}
+  {:rule/id :hunt/cage-break
+   :rule/phase :reach-forest
+   :rule/when [:cage-break]
+   :rule/then [:fact :cage-break]}
+  {:rule/id :hunt/walk-to-crowd-site
+   :rule/phase :set-up
+   :rule/when [:csite :csite-walk]
+   :rule/then [:fact :csite-walk]}
+  {:rule/id :hunt/cut-burrow
+   :rule/phase :set-up
+   :rule/when [:digs?]
+   :rule/then [:intent {:intent/kind :burrow :intent/dir [:fact :dir] :intent/for :pearls}]}
+  {:rule/id :hunt/walk-to-burrow-site
+   :rule/phase :set-up
+   :rule/when [:site :site-walk]
+   :rule/then [:fact :site-walk]}
+  {:rule/id :hunt/provoke-from-burrow
+   :rule/phase :provoke
+   :rule/when [:in? :qid :rested?]
+   :rule/then [:intent {:intent/kind :provoke :intent/target [:fact :qid] :intent/for :pearls}]}
+  {:rule/id :hunt/lookout-unrested
+   :rule/phase :provoke
+   :rule/when [:in? :qid]
+   :rule/then [:intent {:intent/kind :lookout :intent/for :pearls}]}
+  {:rule/id :hunt/vantage-or-lookout
+   :rule/phase :provoke
+   :rule/when [:in? :crowded?]
+   :rule/then [:fact :vantage-or-lookout]}
+  {:rule/id :hunt/unseal-mouth
+   :rule/phase :set-up
+   :rule/when [:in? :mouth [:not :swarmed?] :unseal]
+   :rule/then [:fact :unseal]}
+  {:rule/id :hunt/walk-to-mouth
+   :rule/phase :provoke
+   :rule/when [:in? :mouth [:not :ce] :mouth-clear? :mouth-walk]
+   :rule/then [:fact :mouth-walk]}
+  {:rule/id :hunt/provoke
+   :rule/phase :provoke
+   :rule/when [:qid :rested? :provoke-place-ok?]
+   :rule/then [:intent {:intent/kind :provoke :intent/target [:fact :qid] :intent/for :pearls}]}
+  {:rule/id :hunt/walk-to-mouth-to-provoke
+   :rule/phase :provoke
+   :rule/when [:qid :home :rested? :mouth-walk]
+   :rule/then [:fact :mouth-walk]}
+  {:rule/id :hunt/walk-home-from-quarry
+   :rule/phase :provoke
+   :rule/when [:qid :home :home-routable?]
+   :rule/then [:fact :way-home]}
+  {:rule/id :hunt/fight-coming-held
+   :rule/phase :fight
+   :rule/when [[:not :hurt?] :ce :ce-fightable? :pickaxe?]
+   :rule/then [:intent
+               {:intent/kind :fight
+                :intent/target [:fact :ceid]
+                :intent/hold? true
+                :intent/yield? true
+                :intent/for :pearls}]}
+  {:rule/id :hunt/fight-coming-open
+   :rule/phase :fight
+   :rule/when [[:not :hurt?] :ce :ce-fightable?]
+   :rule/then [:intent {:intent/kind :fight :intent/target [:fact :ceid] :intent/for :pearls}]}
+  {:rule/id :hunt/burrow-idle
+   :rule/phase :set-up
+   :rule/when [:home]
+   :rule/then [:fact :home-fallback]}
+  ;; no walk out to a new site, a route or a sighting while an angry one is at hand, however the
+  ;; hunt has given it up: it strikes the bot in the open (angry-tracked?)
+  {:rule/id :hunt/lookout-angry-tracked
+   :rule/phase :survive
+   :rule/when [:angry-tracked-hold?]
+   :rule/then [:intent {:intent/kind :lookout :intent/for :pearls}]}
+  {:rule/id :hunt/search :rule/phase :reach-forest :rule/when [] :rule/then [:fact :search]}]}

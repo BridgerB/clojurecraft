@@ -1,6 +1,6 @@
 (ns clojurecraft.eat
-  "Eating (issue #259): on Normal difficulty hunger drains with every block dug and every jump,
-   and a bot whose food runs out stops healing and then starves down to one heart.
+  "Eating: on Normal difficulty hunger drains with every block dug and every jump, and a bot whose
+   food runs out stops healing and then starves down to one heart.
 
    Requiring this namespace registers the :eat row's rules: it is done by :fed? (the food the
    server last said is at least hungry-below, or nothing edible is held), planned by :eat into one
@@ -14,7 +14,8 @@
    (32 ticks for most) with no further word from the client, then sends set-health with the new
    food. A deadline of the food's eating time (food/eating-ticks, stretched by the server's
    slowdown, intent/slowdown) plus answer-ms fails it :not-eaten."
-  (:require [clojurecraft.dimension :as dimension]
+  (:require [clojure.spec.alpha :as s]
+            [clojurecraft.dimension :as dimension]
             [clojurecraft.food :as food]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
@@ -26,6 +27,20 @@
             [clojurecraft.window :as window]))
 
 (set! *warn-on-reflection* true)
+
+;; read by name (ns-resolve) in scratch_test and model_test, so the unused-var lint excludes it
+(def scratch
+  "The intent attributes only this namespace's executor reads and writes: {attribute {:doc meaning
+   :when lifetime}}. They are not world information, so they are not in clojurecraft.model;
+   scratch_test holds that no other namespace uses one."
+  {:intent/food-before {:doc
+                        "the food level when an :eat sent its use-item; a higher one is the meal"
+                        :when "eat, :eating stage"}
+   :intent/eat-by {:doc "ms past which an :eat whose food has not risen fails :not-eaten"
+                   :when "eat, :eating stage"}})
+
+(s/def :intent/food-before int?)
+(s/def :intent/eat-by number?)
 
 (def hungry-below 14)                 ; food under this is hunger to answer: six short of full, four below where natural healing stops (18)
 (def portal-fed 18)                   ; food under this is eaten once the portal kit is held, in the overworld: health comes back in the Nether only from food 18 (hunger/heal-level), which has no game
@@ -68,27 +83,23 @@
        (pos? (inventory/item-count world (recipe/item-id :water_bucket)))))
 
 (defn returning?
-  "Is the bot in the overworld after the Nether was reached, under portal-fed health? It is on
-   its way back (sim R1/1, probe 40787504601: in at 7.9 health, food 14, nothing eaten) and the
-   meal is for the health the Nether needs."
+  "Is the bot in the overworld after the Nether was reached, under portal-fed health? It is on its
+   way back and the meal is for the health the Nether needs."
   [world]
   (and (= dimension/overworld (dimension/of world))
        (contains? (:plan/reached world #{}) :nether)
        (< (:player/health world 20.0) portal-fed)))
 
 (defn hungry-under
-  "The food level under which a meal is eaten now: portal-fed once portal-kit?, else hungry-below.
-   Sim race 39712220957 (issue #501, R1/2) entered the Nether at food 16 with food held and none
-   eaten: health comes back only from food 18, and the Nether has no game."
+  "The food level under which a meal is eaten now: portal-fed once portal-kit?, else hungry-below."
   [world]
   (if (or (portal-kit? world) (returning? world)) portal-fed hungry-below))
 
 (defn scrap-held
-  "The name of rotten flesh when it is held in the hotbar or the main inventory, else nil: food
-   only a bot that cannot heal eats (unsafe: it may make the eater hungry for half a minute, a
-   cost under a point of food against the four it gives). Zombified piglins drop it in the
-   Nether, where nothing else is to be had: sim snapshots R1-10-2 and R2-44-2 (issue #501) held
-   eight and two while they rested hurt at food 13 and 14 for ever."
+  "The name of rotten flesh when it is held in the hotbar or the main inventory, else nil: food only
+   a bot that cannot heal eats (unsafe: it may make the eater hungry for half a minute, a cost under
+   a point of food against the four it gives). Zombified piglins drop it in the Nether, where
+   nothing else is to be had."
   [world]
   (when (pos? (inventory/held world #{(recipe/item-id :rotten_flesh)})) :rotten_flesh))
 
@@ -100,9 +111,7 @@
                    (< (long (hungry-under world))))))
 
 (defn under-attack?
-  "Was the bot hurt (:player/hurt-at, the tick health fell) within hit-quiet-ticks? Gym chain-w16
-   run 1 (plan run 40863839525) ate in the middle of the dragon's blows on a pillar's top, 13.7 to
-   11.8 to 8.9 to 6.0, and a breath cloud then took the rest."
+  "Was the bot hurt (:player/hurt-at, the tick health fell) within hit-quiet-ticks?"
   [world]
   (boolean (some-> (:player/hurt-at world)
                    (->> (- (:time/tick world 0)))

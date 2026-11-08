@@ -15,10 +15,10 @@
             [clojurecraft.end-portal :as end-portal]
             [clojurecraft.entity :as entity]
             [clojurecraft.eyes]
+            [clojurecraft.forage]
             [clojurecraft.fortress :as fortress]
             [clojurecraft.game :as game]
             [clojurecraft.gear]
-            [clojurecraft.hunt]
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
             [clojurecraft.make :as make]
@@ -26,12 +26,14 @@
             [clojurecraft.mob :as mob]
             [clojurecraft.packet :as p]
             [clojurecraft.path :as path]
-            [clojurecraft.pearls :as pearls]
+            [clojurecraft.pearls]
+            [clojurecraft.pearls.sense :as psense]
             [clojurecraft.physics :as physics]
             [clojurecraft.picks]
             [clojurecraft.place :as place]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
+            [clojurecraft.shapes]
             [clojurecraft.sim :as sim]
             [clojurecraft.stairs :as stairs]
             [clojurecraft.stone :as stone]
@@ -43,8 +45,6 @@
 
 (set! *warn-on-reflection* true)
 
-(s/def ::vec3 (s/coll-of double? :kind vector? :count 3))
-(s/def ::block-pos (s/coll-of int? :kind vector? :count 3))
 
 ;; ---------------------------------------------------------------- build plans (issue #8)
 
@@ -118,20 +118,9 @@
 (s/def :trap/at int?)
 (s/def ::trap (s/keys :req [:trap/pos :trap/kind :trap/at]))
 (s/def :world/traps (s/coll-of ::trap :kind vector?))
-(s/def :intent/bank ::block-pos)
-(s/def :intent/next-search int?)
-(s/def :intent/shore ::block-pos)
-(s/def :intent/dig-when-down ::block-pos)
-(s/def :intent/water ::block-pos)
-(s/def :intent/wet? boolean?)
-(s/def :intent/from-dist number?)
 (s/def :intent/exposes-ok? boolean?)
-(s/def :intent/no-lay boolean?)
-(s/def :intent/dug nat-int?)
 (s/def :intent/drop-ok? boolean?)
 (s/def :intent/passage-ok? boolean?)
-(s/def :intent/retreated? boolean?)
-(s/def :intent/niche ::block-pos)
 (s/def :player/dead? boolean?)
 (s/def :player/in-lava? boolean?)
 (s/def :player/eye-in-water? boolean?)
@@ -340,9 +329,6 @@
 (s/def :intent/window #{:inventory :table})
 (s/def :intent/smelt keyword?)
 (s/def :intent/count pos-int?)
-(s/def :intent/cook-by int?)
-(s/def :intent/lost pos-int?)
-(s/def :intent/tries pos-int?)
 (s/def :intent/resync boolean?)
 (s/def :intent/item keyword?)
 (s/def ::need-key
@@ -369,14 +355,28 @@
 (s/def :goal/blocks (s/coll-of keyword? :kind vector? :min-count 1)) ; what a :mine row digs
 (s/def :goal/depth int?)                   ; the lowest feet height a :mine row cuts stairs to
 (s/def :goal/dimension string?)            ; the dimension a row is worked in; elsewhere it waits
+(s/def :goal/anchors (s/coll-of keyword? :kind set?)) ; attributes forgotten when the row is stuck
+(s/def :goal/resets map?)                  ; attribute values the row starts over with when stuck
+(s/def :goal/clocks (s/coll-of vector?))   ; paths of ms clocks restarted at now when stuck
+(s/def :goal/stuck-after pos-int?)         ; ms without progress before the row is stuck
+(s/def :goal/facts-only? boolean?)         ; walking and tunnelling are no progress for the row
+(s/def :goal/progress (s/coll-of vector?)) ; terms (plan/progress-term) the watchdog compares
+(s/def :goal/commits
+  (s/or :all #{:all}
+        :kinds (s/coll-of keyword? :kind set?))) ; intents only an escape row may cut
+(s/def :goal/uncommitted (s/coll-of keyword? :kind set?)) ; kinds :goal/commits :all leaves cuttable
+(s/def :goal/parent (s/coll-of keyword? :kind set? :min-count 1)) ; rows whose play puts this satellite in play
+(s/def :goal/ranks (s/coll-of keyword? :kind vector?)) ; the row's plan branches (intent/why labels), most urgent first
 (s/def :goal/id keyword?)
-(s/def :goal/priority int?)
+(s/def :goal/priority number?)
 (s/def ::goal
   (s/keys :req [:goal/id :goal/priority :goal/done?]
           :opt
           [:goal/needs :goal/holds :goal/spares :goal/passage-ok? :goal/build :goal/act
            :goal/target? :goal/until :goal/doc :goal/superseded-by :goal/always? :goal/aside?
-           :goal/trap :goal/plan :goal/blocks :goal/depth :goal/dimension]))
+           :goal/trap :goal/plan :goal/blocks :goal/depth :goal/dimension :goal/anchors :goal/resets
+           :goal/parent :goal/ranks :goal/commits :goal/uncommitted :goal/clocks :goal/stuck-after
+           :goal/facts-only? :goal/progress]))
 
 (s/def ::world
   (s/keys :req [:bot/phase :bot/effects :time/now :time/tick]
@@ -509,8 +509,6 @@
 (s/def :chat/via keyword?)
 (s/def :world/chat
   (s/coll-of (s/keys :req-un [::at :chat/text] :opt-un [:chat/key] :opt [:chat/via]) :kind vector?))
-(s/def :intent/food-before int?)
-(s/def :intent/eat-by number?)
 (s/def :entity/seen-at int?)
 (s/def :sight/pos ::block-pos)
 (s/def :sight/state int?)
@@ -553,8 +551,6 @@
 (s/def :plan/last (s/keys :req [:intent/kind]))
 (s/def :plan/ended (s/keys :req [:intent/kind :ended/at]))
 (s/def :ended/at int?)
-(s/def :plan/churn (s/keys :req [:intent/kind :churn/n]))
-(s/def :churn/n nat-int?)
 (s/def :choice/goal (s/nilable keyword?))
 (s/def :choice/over (s/nilable keyword?))
 (s/def :choice/how
@@ -577,19 +573,10 @@
 (s/def :intent/reason some?)
 (s/def :intent/ended-at ::block-pos)
 (s/def :intent/for keyword?)
-(s/def :intent/enter? boolean?)
 (s/def :intent/top int?)
-(s/def :intent/under ::block-pos)
-(s/def :intent/refusals nat-int?)
-(s/def :intent/perched nat-int?)
 (s/def :intent/pickup? boolean?)
 (s/def :intent/step-down? boolean?)
 (s/def :intent/cell ::block-pos)
-(s/def :intent/click-face #{:down :up :north :south :west :east})
-(s/def :intent/build #{:cast-one :portal :nether})
-(s/def :intent/origin ::block-pos)
-(s/def :intent/facing build/facings)
-(s/def :intent/access nat-int?)
 (s/def :intent/op ::op)
 (s/def :intent/aim (s/coll-of number? :kind vector? :count 3))
 (s/def :intent/expect :build/done)
@@ -599,9 +586,6 @@
 (s/def :intent/from-feet ::block-pos)
 (s/def :intent/dead-end ::block-pos)
 (s/def :intent/taken nat-int?)
-(s/def :intent/tunnel-visited (s/coll-of ::block-pos :kind set?))
-(s/def :intent/retreats nat-int?)
-(s/def :intent/airborne nat-int?)
 (s/def :intent/steps pos-int?)
 (s/def :intent/reach (s/and number? pos?))
 (s/def :intent/climb nat-int?)
@@ -615,11 +599,8 @@
 (s/def :intent/since int?)
 (s/def :intent/started int?)
 (s/def :intent/still nat-int?)
-(s/def :intent/face int?)
 (s/def :intent/next-swing number?)
-(s/def :intent/swings pos-int?)
 (s/def :intent/target-pos ::vec3)
-(s/def :intent/spawner ::block-pos)
 (s/def :pocket/cell ::block-pos)
 (s/def :pocket/stand (s/nilable ::block-pos))
 (s/def :pocket/dig (s/coll-of ::block-pos :kind vector?))
@@ -640,56 +621,25 @@
 (s/def :intent/prepare? boolean?)
 (s/def :intent/site :pocket/site)
 (s/def :intent/heal-to number?)
-(s/def :intent/raised? boolean?)
-(s/def :intent/blazes (s/coll-of int? :kind set?))
-(s/def :intent/health number?)
 (s/def :intent/hold? boolean?)
 (s/def :intent/yield? boolean?)
 (s/def :intent/to-the-end? boolean?)
-(s/def :intent/mouth ::block-pos)
-(s/def :intent/eye-from ::vec3)
-(s/def :intent/eye-pos ::vec3)
-(s/def :intent/gone-at int?)
-(s/def :intent/finish-at number?)
-(s/def :intent/slot (s/int-in 0 9))
-(s/def :intent/tool (s/nilable int?))
-(s/def :intent/dig-ms nat-int?)
-(s/def :intent/state int?)
-(s/def :intent/confirm-left nat-int?)
 (s/def :intent/to-y int?)
 (s/def :intent/tall pos-int?)
 (s/def :intent/floor-to int?)
 (s/def :intent/to-height? boolean?)
 (s/def :intent/wall? boolean?)
 (s/def :intent/dir (s/tuple int? int?))
-(s/def :intent/turns nat-int?)
 (s/def :intent/rejections pos-int?)
 (s/def :intent/body-refusals pos-int?)
-(s/def :intent/until number?)
-(s/def :intent/cells (s/coll-of ::block-pos :kind vector? :min-count 3))
-(s/def :intent/level-cells (s/coll-of ::block-pos :kind vector? :count 2))
-(s/def :intent/bore (s/coll-of ::block-pos :kind vector? :min-count 1))
-(s/def :intent/lay (s/coll-of ::block-pos :kind vector? :min-count 1 :max-count 12)) ; a floor and its holder, a step, or a seal over the water beside three cells
-(s/def :intent/level-steps pos-int?)
 (s/def :intent/length pos-int?)
-(s/def :intent/side (s/tuple int? int?))
-(s/def :intent/level-dir (s/tuple int? int?))
-(s/def :intent/rise #{-1 1})
 (s/def :intent/visited (s/coll-of ::block-pos :kind set?))
 (s/def :intent/child (s/keys :req [:intent/kind]))
-(s/def :intent/started-y number?)
-(s/def :intent/started-tick int?)
 (s/def :intent/best-dist number?)
 (s/def :intent/best-tick int?)
-(s/def :intent/detour-until int?)
-(s/def :intent/detour-yaw number?)
-(s/def :intent/detours nat-int?)
 (s/def :intent/waypoints (s/coll-of ::block-pos :kind vector?))
 (s/def :intent/route #{:found :partial :none})
-(s/def :intent/at nat-int?)
-(s/def :intent/replans nat-int?)
 (s/def :intent/max-nodes pos-int?)
-(s/def :intent/planned-chunks nat-int?)
 (s/def :path/waypoints (s/coll-of ::block-pos :kind vector?))
 (s/def :path/cost double?)
 (s/def :path/status #{:found :partial :none})
@@ -708,12 +658,8 @@
   (s/and (s/keys :req [:goal/kind]
                  :opt [:goal/pos :goal/range :goal/rise :goal/step-down? :goal/boxed :goal/cells])
          #(or (contains? #{:sky :surface} (:goal/kind %)) (contains? % :goal/pos))))
-(s/def :intent/logs-before nat-int?)
 (s/def :intent/drops (s/coll-of int? :kind set?))
-(s/def :intent/drops-before nat-int?)
 (s/def :intent/blocked-by ::block-pos)
-(s/def :intent/clears nat-int?)
-(s/def :intent/resume (s/keys :req [:intent/kind]))
 (s/def :intent/clicks (s/coll-of map? :kind sequential?))
 (s/def :intent/result int?)
 (s/def :intent/makes pos-int?)
@@ -721,9 +667,7 @@
 (s/def :intent/awaiting int?)
 (s/def :intent/awaiting-window int?)
 (s/def :intent/sent-at int?)
-(s/def :intent/against ::block-pos)
 (s/def :intent/refused (s/coll-of ::block-pos :kind set?))
-(s/def :intent/nudges nat-int?)
 (s/def :intent/sequence int?)
 (s/def :chunk/column map?)
 (s/def :chunk/min-y #{-64 0})
@@ -799,14 +743,18 @@
 (s/def :problem/needs (s/coll-of ::text :kind vector? :min-count 1))
 (s/def :problem/risks (s/coll-of ::text :kind vector? :min-count 1))
 (s/def :problem/done ::text)
-(s/def :problem/last-failure ::text)
+(s/def :problem/last-failure ::text) ; one sentence; the longer account is the stage's issue
+(s/def :seen/issue pos-int?)
+(s/def :seen/run ::text)
+(s/def :problem/seen ; runs that showed the stage fail, newest last; the text is on the issue
+  (s/coll-of (s/keys :req-un [:seen/run] :opt-un [:seen/issue]) :kind vector?))
 (s/def :problem/sources (s/coll-of ::text :kind vector? :min-count 1))
 (s/def :problem/decisions (s/coll-of ::text :kind vector? :min-count 1)) ; the open questions answered before the code
 (s/def ::problem
   (s/keys :req
           [:problem/stage :problem/statement :problem/needs :problem/risks :problem/done
            :problem/last-failure :problem/sources]
-          :opt [:problem/issue :problem/goals :problem/decisions]))
+          :opt [:problem/issue :problem/goals :problem/decisions :problem/seen]))
 (s/def :intent/goal keyword?)
 
 ;; the server model (sim): a reducer too, so it is specced and instrumented like the bot's
@@ -823,7 +771,7 @@
 (s/def :sim/rng int?)
 (s/def :sim/furnaces (s/map-of ::block-pos map?))
 (s/def :sim/falls (s/map-of ::block-pos int?))
-(s/def :sim/fluids (s/map-of ::block-pos int?)) ; a fluid cell → when its next tick is due, ms (sim/wake-fluids)
+(s/def :sim/fluids (s/map-of ::block-pos int?)) ; a fluid cell → when its next tick is due, ms (sim-world/wake-fluids)
 (s/def :sim/fluid-sources-ready? boolean?)
 (s/def :sim/dimension string?)
 (s/def :sim/portal-since int?)
@@ -832,7 +780,7 @@
   (s/and (s/keys :opt-un
                  [:sim.nether/at :sim.nether/column :sim.nether/columns :sim.nether/decoded
                   :sim.nether/view-distance])
-         ;; whole columns may leave :at out: the arrival is then the portal's (sim/arrival, #353)
+         ;; whole columns may leave :at out: the arrival is then the portal's (sim-portal/arrival, #353)
          #(or (:columns %) (and (:column %) (:at %)))))
 (s/def :sim.nether/column bytes?)
 (s/def :sim.nether/columns (s/map-of ::column-key bytes?))
@@ -886,7 +834,7 @@
 (s/def :sim.hit/by (s/nilable int?))
 (s/def :sim.hit/dealt number?)
 (s/def :sim.hit/health number?)
-(s/def :sim/hit-log ; the model's own cause for each blow that landed on the player (sim/hit-logged)
+(s/def :sim/hit-log ; the model's own cause for each blow that landed on the player (sim-protocol/hit-logged)
   (s/coll-of (s/keys :req-un
                      [:sim.hit/t :sim.hit/life :sim.hit/cause :sim.hit/dealt :sim.hit/health]
                      :opt-un [:sim.hit/by])
@@ -894,7 +842,7 @@
 (s/def :sim.wither/until int?)
 (s/def :sim.wither/next int?)
 (s/def :sim/wither (s/keys :req-un [:sim.wither/until :sim.wither/next])) ; a wither skeleton's wither: when it ends, when it next hurts
-;; mobs in the model (issue #260): each one's kind, place, health and clocks (mob.clj, sim/tick-mobs)
+;; mobs in the model (issue #260): each one's kind, place, health and clocks (mob.clj, sim-spawns/tick-mobs)
 (s/def :sim.mob/type (set (keys mob/kinds)))
 (s/def :sim.mob/pos ::vec3)
 (s/def :sim.mob/health (s/double-in :min 0.0 :NaN? false :infinite? false))
@@ -906,9 +854,9 @@
 (s/def :sim.mob/angry? boolean?)               ; a neutral one has turned on the player
 (s/def :sim.mob/persistent? boolean?)          ; never despawned: a fixture's, an animal
 (s/def :sim.mob/yaw double?)                   ; its body's yaw in degrees, told at add-entity: the dragon's says where its head is
-(s/def :sim.mob/route (s/coll-of (s/tuple int? int? int?) :kind vector? :min-count 1)) ; the cells it walks round a wall (sim/trail, issue #263)
+(s/def :sim.mob/route (s/coll-of (s/tuple int? int? int?) :kind vector? :min-count 1)) ; the cells it walks round a wall (sim-mobs/trail, issue #263)
 (s/def :sim.mob/route-at int?)                 ; when it last searched a route
-(s/def :sim.mob/far-ticks nat-int?)            ; ticks an angry enderman has stood far from its target (sim/blink)
+(s/def :sim.mob/far-ticks nat-int?)            ; ticks an angry enderman has stood far from its target (sim-mobs/blink)
 (s/def ::sim-mob
   (s/keys :req-un [:sim.mob/type :sim.mob/pos :sim.mob/health]
           :opt-un
@@ -917,8 +865,8 @@
            :sim.mob/far-ticks]))
 (s/def :sim/mobs (s/map-of int? ::sim-mob))
 (s/def :sim/fixture-mobs (s/coll-of (s/keys :req-un [:sim.mob/type :sim.mob/pos]) :kind vector?))
-(s/def :sim/mob-rng int?)                      ; the mobs' own roll stream (sim/mob-roll)
-(s/def :sim/wild-rng int?)                     ; the Nether's own spawns' roll stream (sim/wild-roll, issue #263)
+(s/def :sim/mob-rng int?)                      ; the mobs' own roll stream (sim-mobs/mob-roll)
+(s/def :sim/wild-rng int?)                     ; the Nether's own spawns' roll stream (sim-mobs/wild-roll, issue #263)
 (s/def :sim/day-time int?)                     ; game ticks into the days, night from 13000 of each 24000
 (s/def :sim/populated (s/coll-of (s/tuple int? int?) :kind set?)) ; chunks whose animals were placed
 (s/def :sim/populated-at (s/tuple int? int?))  ; the column the player was in when they last were
@@ -1051,7 +999,7 @@
   :args
   (s/cat :world (requires :world/entities)
          :eid int?))
-(s/fdef pearls/endermen
+(s/fdef psense/endermen
   :args
   (s/cat :world (requires :world/entities :player/pos)
          :radius (s/? number?)))
@@ -1107,7 +1055,7 @@
          :target ::block-pos
          :climb nat-int?
          :dry-only? boolean?
-         :visited :intent/tunnel-visited
+         :visited (s/coll-of ::block-pos :kind set?)
          :bridge-ok? (s/? boolean?)
          :no-down? (s/? boolean?))
   :ret (s/nilable :intent/move))
@@ -1137,7 +1085,7 @@
    `terrain/solid-fn `terrain/fluid-fn `memory/positions-now `memory/nearest-surface-water
    `memory/nearest-log `make/near `make/decide `wood/gather-next `wood/return-walk `place/spot
    `place/ashore `stone/redig-place `window/view `path/plan `path/classify `entity/hostiles
-   `entity/gone? `eat/food-held `drops/lying `blaze/blazes `pearls/endermen `stairs/down-safe?
+   `entity/gone? `eat/food-held `drops/lying `blaze/blazes `psense/endermen `stairs/down-safe?
    `stairs/down-lay `stone/retreat `build/safe-source? `build/scoop-blocked? `build/lit-entry
    `fortress/next-move `end-portal/next-op `dragon/best-approach `dragon/toward-crystals])
 (s/def :stats/deaths pos-int?)

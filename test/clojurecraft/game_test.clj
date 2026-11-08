@@ -5,7 +5,7 @@
             [clojurecraft.game :as game]
             [clojurecraft.inventory :as inventory]
             [clojurecraft.memory :as memory]
-            [clojurecraft.sim :as sim]
+            [clojurecraft.sim.protocol :as sim-protocol]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.world :as world]))
 
@@ -233,7 +233,7 @@
         (is (= {} (:window/grid w)))))))
 
 (deftest a-login-says-the-dimension-the-bot-joins-in
-  (let [[w _] (run (in-play) [(packet (sim/login "minecraft:the_nether"))])]
+  (let [[w _] (run (in-play) [(packet (sim-protocol/login "minecraft:the_nether"))])]
     (is (= "minecraft:the_nether" (:player/dimension w))))
   (testing "a login recorded before it carried one leaves the overworld"
     (let [[w _] (run (in-play)

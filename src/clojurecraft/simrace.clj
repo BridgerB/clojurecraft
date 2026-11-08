@@ -14,16 +14,17 @@
    (failure/signature: the target it was on and why it stopped) is what groups failures into one
    issue however many runs hit it.
 
-   A world is read once and its columns decoded once (prepared); every run of it shares that
-   value. The model holds the whole world: nothing loads or unloads. A portal leads to the set's
-   captured Nether (capture_nether.clj, cache/sim-nether/<set>.edn.gz beside the set's worlds),
-   read and decoded once for every world of the set, streamed round the player as a server's
-   view (issue #353); a set with none captured keeps the overworld's columns past the portal."
+   A world is read once and its columns decoded once (prepared); every run of it shares that value.
+   The model holds the whole world: nothing loads or unloads. A portal leads to the set's captured
+   Nether (capture_nether.clj, cache/sim-nether/<set>.edn.gz beside the set's worlds), read and
+   decoded once for every world of the set, streamed round the player as a server's view; a set with
+   none captured keeps the overworld's columns past the portal."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.math :as math]
             [clojure.string :as str]
             [clojurecraft.armour :as armour]
+            [clojurecraft.avoided :as avoided]
             [clojurecraft.blaze :as blaze]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.capture :as capture]
@@ -32,8 +33,8 @@
             [clojurecraft.dimension :as dimension]
             [clojurecraft.entity :as entity]
             [clojurecraft.failure :as failure]
+            [clojurecraft.forage :as forage]
             [clojurecraft.game :as game]
-            [clojurecraft.hunt :as hunt]
             [clojurecraft.main :as main]
             [clojurecraft.memory :as memory]
             [clojurecraft.mob :as mob]
@@ -44,6 +45,9 @@
             [clojurecraft.scene :as scene]
             [clojurecraft.senses :as senses]
             [clojurecraft.sim :as sim]
+            [clojurecraft.sim.mobs :as sim-mobs]
+            [clojurecraft.sim.protocol :as sim-protocol]
+            [clojurecraft.start :as start]
             [clojurecraft.sword :as sword]
             [clojurecraft.terrain :as terrain]
             [datascript.core :as d]))
@@ -52,8 +56,8 @@
 
 (def default-seeds 8)                 ; runs of each world
 (def default-until "nether")          ; the target a run plays every step up to
-(def default-max-minutes 330)         ; simulated minutes a run may take: a real bot's horizon, a lane's job (#252)
-(def difficulty :normal)              ; the model's difficulty, as every real server's since #257: hunger and mobs (issue #260)
+(def default-max-minutes 330)         ; simulated minutes a run may take.
+(def difficulty :normal)              ; the model's difficulty, as every real server's since #257: hunger and mobs
 (def day-step 3000)                   ; game ticks between the times of day a run may start at, by its seed
 (def nether-view 6)                   ; chunks a race server shows round a player (view-distance, bb/clojurecraft/server.clj)
 
@@ -79,9 +83,7 @@
          (into {} (map (fn [[k bytes]] [k (chunk/decode bytes)])) (:capture/columns w))))
 
 (defn nether-file
-  "The captured Nether of the set a world file belongs to, by the caches' layout: world
-   cache/sim-worlds/R1/7.edn.gz is set R1's, whose Nether capture-nether wrote to
-   cache/sim-nether/R1.edn.gz."
+  "The captured Nether of the set a world file belongs to, by the caches' layout."
   [world-file]
   (let [set-dir (.getParentFile (io/file (str world-file)))
         cache (some-> set-dir
@@ -98,7 +100,7 @@
    decoded once for every run of its set to share, streamed nether-view chunks round the player
    (a captured overworld goes to the client whole; a set's whole Nether at once would show the
    bot fortresses no server showed it), and no :at, so a run arrives where the server would link
-   its portal (sim/arrival)."
+   its portal (sim-portal/arrival)."
   [n]
   {:columns (:nether/columns n)
    :decoded (into {} (map (fn [[k bytes]] [k (chunk/decode bytes)])) (:nether/columns n))
@@ -111,45 +113,6 @@
   (assoc w :capture/nether nether :capture/nether-file (str file)))
 
 ;; ---------------------------------------------------------------- a start at a fortress
-
-(def fortress-kit-default
-  "What a bot brings to a fortress in the real race, as {item count} (ci/race.edn's :race/kit, from the
-   lane audits): a stone pickaxe, an iron sword and three pieces of iron armour in the bag (the
-   :wear-armour row puts them on), a table, sticks, flint and steel, both buckets, coal, cooked food and
-   junk stone and loot, all thirty-six slots. ci/simrace.edn's :simrace/kit
-   replaces it as one line."
-  {:stone_pickaxe 1
-   :iron_sword 1
-   :iron_helmet 1
-   :iron_chestplate 1
-   :iron_leggings 1
-   :cooked_beef 16
-   :crafting_table 1
-   :stick 12
-   :flint_and_steel 1
-   :bucket 1
-   :water_bucket 1
-   :coal 4
-   :stone_sword 1
-   :cobblestone 256
-   :netherrack 64
-   :diorite 128
-   :granite 64
-   :andesite 64
-   :cobbled_deepslate 64
-   :dirt 64
-   :gravel 16
-   :raw_copper 12
-   :lapis_lazuli 11
-   :leather 6
-   :bone 2
-   :string 3
-   :oak_planks 1
-   :flint 1
-   :sand 16
-   :golden_boots 1
-   :spruce_planks 1
-   :white_wool 2})
 
 (def stack-size 64)
 
@@ -214,8 +177,7 @@
   "Where a run starts in its set's warped forest: the cell over warped nylium nearest spawn ([x y
    z], a fortress start's) that the feet can stand in (standable-cell?), {:spawn [x y z]} at its
    centre, or nil when the captured Nether shows no nylium with room over it. Stage 18 split as
-   stage 17 was (LOOP.md section 1): the hunt measured alone, the travel from the fortress
-   apart (gym probe 39779112668 landed in each set's forest: six pearls in eight minutes in R4)."
+   stage 17 was (LOOP.md section 1): the hunt measured alone, the travel from the fortress apart."
   [decoded [sx sy sz]]
   (let [nylium (blocks/default-state :warped_nylium)
         d (fn [[x y z]] (+ (abs (- x sx)) (abs (- y sy)) (abs (- z sz))))
@@ -227,8 +189,7 @@
     (when cell (let [[x y z] cell] {:spawn [(+ x 0.5) (double y) (+ z 0.5)]}))))
 
 (defn world-number
-  "The number of world w in its set (cache/sim-worlds/R1/7.edn.gz is 7), 0 for a world with no
-   file or a name that is no number."
+  "The number of world w in its set, 0 for a world with no file or a name that is no number."
   [w]
   (or (some-> (:capture/file w)
               io/file
@@ -257,27 +218,6 @@
                  start)]
      (if start (assoc w :capture/fortress (assoc start :inventory (kit->inventory kit))) w))))
 
-(def starts
-  "The sim race's starts at a fortress, by :simrace/from name, as the real race's (race/starts):
-   the first target a run plays (:checkpoint/goal) and what it carries beyond the kit (:checkpoint/kit, {item
-   count}). \"rods\" is stage 18's checkpoint (LOOP.md section 1): seven rods in hand, so every run
-   plays the pearl hunt; no sim run had reached a warped forest from the blaze rods (0 of 52). The
-   kit fills the 36 slots in name order (kit->inventory), so the rods take a slot and the kit's
-   last-named stack is the one left out."
-  {"fortress" {:checkpoint/goal :blaze-rods :checkpoint/kit {}}
-   "rods" {:checkpoint/goal :ender-pearls :checkpoint/kit {:blaze_rod 7}}
-   "forest" {:checkpoint/goal :ender-pearls :checkpoint/kit {:blaze_rod 7} :checkpoint/at :forest}})
-
-(defn fortress-goals
-  "The goal ids a run that starts at a fortress plays to until: the chain's own, the stages from
-   goal up (their priority at least goal's row's; the blaze rods by default), nothing before: a bot
-   there has gone through them, and a failure before goal is not the run's to file."
-  ([until] (fortress-goals until :blaze-rods))
-  ([until goal]
-   (let [row (fn [id] (first (filter #(= id (:goal/id %)) plan/goals)))
-         from (:goal/priority (row goal))]
-     (filterv #(>= (:goal/priority (row %) 0) from) (plan/through until)))))
-
 (defn spawn-of
   "Where a run starts: at its fortress when it has one (with-fortress), else on the landing ([x z y],
    its surface) at the column's centre."
@@ -286,11 +226,11 @@
 
 (defn go-of
   "The :go a run of w to until is given once its bot is loaded: the chain to until (from the blaze
-   rods when the run starts at a fortress, fortress-goals) and the start (:go/at)."
+   rods when the run starts at a fortress, start/goals-from) and the start (:go/at)."
   [w until]
   {:event/kind :go
    :go/goals (if-let [f (:capture/fortress w)]
-               (fortress-goals until (:checkpoint/goal f :blaze-rods))
+               (start/goals-from (:checkpoint/goal f :blaze-rods) until)
                (plan/through until))
    :go/chain? true
    :go/at (spawn-of w)})
@@ -346,7 +286,7 @@
      :intent (select-keys (:plan/intent world)
                           [:intent/kind :intent/why :intent/stage :intent/distance
                            :intent/to-the-end? :intent/target])
-     :cornered (count (:plan/cornered world #{}))
+     :cornered (count (avoided/all-of world :cornered))
      :fled (count (:plan/fled world {}))
      :near (into []
                  (take 3)
@@ -367,7 +307,7 @@
 
 (defn dealt-by
   "What each mob dealt the player in the player's current life, {eid damage}, from the model's hit
-   log (sim/hurt): the model's own account of who hurt it, over the hits with an attacker."
+   log (sim-protocol/hurt): the model's own account of who hurt it, over the hits with an attacker."
   [sim]
   (let [life (:sim/respawns sim 0)]
     (reduce (fn [acc {:keys [by dealt] l :life}]
@@ -379,7 +319,7 @@
   "What the model knew round the player at a moment, beside the bot's moment (the observability
    plan, part E): its own mobs within truth-radius, nearest first, each with every fact the model
    keeps (type, position, health, anger, its next attack, dead or not), whether it has the player
-   as its target (:targets? sim/targets?) and what it dealt the player this life (:dealt), the
+   as its target (:targets? sim-mobs/targets?) and what it dealt the player this life (:dealt), the
    player's position and health by the model's word, the model's causes of death, and its own
    cause for each blow (:hits, sim/hit-log: when, cause, the attacker's eid, what it dealt). What
    the bot never tracked or never saw stands out against its moment. Only the mobs near the
@@ -398,7 +338,7 @@
                             (assoc m
                                    :eid eid
                                    :d (/ (math/round (* 10.0 d)) 10.0)
-                                   :targets? (boolean (sim/targets? sim m))
+                                   :targets? (boolean (sim-mobs/targets? sim m))
                                    :dealt (get dealt eid 0.0))))))]
     {:t (:sim/now sim)
      :player {:pos p :health (:sim/health sim) :dimension (:sim/dimension sim)}
@@ -463,9 +403,8 @@
   "The TRACE line for the tick that took world before to after, or nil: a :portal-home intent
    starting or ending, a blaze :fight starting or ending, a change of dimension, a goal newly in
    :plan/reached (:reached, with the time: when the gear and the portal kit were done). It carries
-   when, the health, the food, the edible items held and the blazes within 16 of the feet, the
-   facts a replay of the blaze stage is read by (issue #262). Not part of the run's result, and
-   never read by the bot."
+   when, the health, the food, the edible items held and the blazes within 16 of the feet, the facts
+   a replay of the blaze stage is read by. Not part of the run's result, and never read by the bot."
   [before after world-set seed]
   (let [ident (fn [w] (let [i (:plan/intent w)] [(:intent/kind i) (:intent/id i)]))
         [kb :as ib] (ident before)
@@ -476,7 +415,7 @@
                                 (= :blaze)))
         every (if (= dimension/nether (:player/dimension after)) sample-ms overworld-sample-ms)
         sample? (not= (quot (:time/now before 0) every) (quot (:time/now after 0) every))
-        drop? (>= (- (hunt/edible-held before) (hunt/edible-held after)) 2)
+        drop? (>= (- (forage/edible-held before) (forage/edible-held after)) 2)
         reached (sort (remove (set (:plan/reached before)) (:plan/reached after)))
         hit? (and (= dimension/nether (:player/dimension after))
                   (<= 2.0 (- (:player/health before 20.0) (:player/health after 20.0))))
@@ -500,7 +439,7 @@
          :dim (:player/dimension after)
          :health (:player/health after)
          :food (:player/food after)
-         :edible (hunt/edible-held after)
+         :edible (forage/edible-held after)
          :sword (sword/serviceable after)
          :worn (into [] (keep #(armour/worn after %)) [0 1 2 3 :offhand])
          :ingots (get (armour/counts after) :iron_ingot 0)
@@ -516,33 +455,24 @@
                               [:intent/kind :intent/for :intent/goal :intent/target])}))))
 
 (defn run
-  "One run: the bot from empty hands on world w's landing, playing every step up to until,
-   against the model, at most max-ms of simulated time, rolling from seed. Returns its RESULT
-   (main/result) with :run/world (its set and landing), :run/seed, :run/ms (simulated time),
-   :run/violations (what a real server would have punished), :run/respawns and :run/eaten (the
-   lives the model gave after deaths and the foods it let the player eat), :run/backoff-ms (how
-   long the intent was :back-off), :run/death-causes (the cause of each death: a mob's kind,
-   :starve, :drown, :scheduled or :ender_dragon), :run/end (the world it stopped
-   in), :run/last (the moment of the
-   stopping tick) and :run/moments (the moments sim/play-from kept, every half minute, the
-   last six minutes), from which a failure's snapshot is chosen (dropped from the lines written).
-   A run that starts at the fortress ends at its first death (death-ended), as the real race's
-   does. The two counters do not change a decision. A death prints a DEATH line (death-note: the
-   intent, the position, the nearest hostiles) and a respawn prints a RESPAWN line. Neither
-   line is part of the result. Its
-   :go names the landing (:go/at), as race/land-bot! does for a real bot: the plan's
-   landing-relative choices (the climb home from deep, a climb's level steps toward the landing,
-   how far they may go) are the real race's. Without it, sim race 38659291345 world R4/38 (issue
-   #37) climbed under a lake with 32 level steps where a real bot has 32 and the way home, and
-   was :boxed five columns short of the shore. The model runs at difficulty from a time of day
-   the seed picks (day-time-of), as the real servers
-   do (issue #260: before it the sim lanes had no hunger and were easier than the real ones). Its
-   portal leads to w's Nether (:capture/nether, with-nether) when w has one: before issue #353
-   none had, and a bot through its portal tunnelled the overworld's stone for bricks. With food
-   (0-20) the player's bar starts there instead of full (the lane's --food): a hungry
-   start, for the hunger rows (:eat, :hunt) that a lane from a full bar seldom reaches (issue
-   #260: 21 lane runs of up to 330 simulated minutes on 8f50709a ended at food 19 or 20 but one,
-   as a bot that never sprints and is seldom hurt drains under a point an hour)."
+  "One run: the bot from empty hands on world w's landing, playing every step up to until, against
+   the model, at most max-ms of simulated time, rolling from seed. Returns its RESULT (main/result)
+   with :run/world (its set and landing), :run/seed, :run/ms (simulated time), :run/violations (what
+   a real server would have punished), :run/respawns and :run/eaten (the lives the model gave after
+   deaths and the foods it let the player eat), :run/backoff-ms (how long the intent was :back-off),
+   :run/death-causes (the cause of each death: a mob's kind, :starve, :drown, :scheduled or
+   :ender_dragon), :run/end (the world it stopped in), :run/last (the moment of the stopping tick)
+   and :run/moments (the moments sim/play-from kept, every half minute, the last six minutes), from
+   which a failure's snapshot is chosen (dropped from the lines written). A run that starts at the
+   fortress ends at its first death (death-ended), as the real race's does. The two counters do not
+   change a decision. A death prints a DEATH line (death-note: the intent, the position, the nearest
+   hostiles) and a respawn prints a RESPAWN line. Neither line is part of the result. Its :go names
+   the landing (:go/at), as race/land-bot! does for a real bot: the plan's landing-relative choices
+   (the climb home from deep, a climb's level steps toward the landing, how far they may go) are the
+   real race's. The model runs at difficulty from a time of day the seed picks (day-time-of), as the
+   real servers do. Its portal leads to w's Nether (:capture/nether, with-nether) when w has one.
+   With food (0-20) the player's bar starts there instead of full (the lane's --food): a hungry
+   start, for the hunger rows (:eat, :hunt) that a lane from a full bar seldom reaches."
   ([w seed until max-ms] (run w seed until max-ms nil))
   ([w seed until max-ms food]
    (let [opts {:host "sim" :port 0 :name "Clj_sim"}
@@ -659,7 +589,7 @@
 (def decision-lead-ms 30000)          ; a snapshot's moment comes at least this long before the choice that failed
 (def stall-window-ms 300000)          ; a :timeout is a stall: five simulated minutes with no new stage, where its moment is kept
 (def stall-reasons #{:timeout :bot-timeout}) ; a checkpoint run's own cap (:bot-timeout) is a stall like the horizon's
-(def stall-judge-ms 900000)           ; and the window a stall is judged over: fifteen simulated minutes (issue #62)
+(def stall-judge-ms 900000)           ; and the window a stall is judged over: fifteen simulated minutes
 (def window-tail-ms 60000)            ; a failure's window runs this long past the stop it led to
 
 (defn decision
@@ -704,16 +634,16 @@
                              :else (+ (- stop-t (:t m)) window-tail-ms))})))
 
 (defn snapshot
-  "A failed run's moment as a value to keep (issue #77): a moment the run kept (chosen-moment:
-   before the choice that failed, not the tick before the stop), whole: the bot's world, the
-   model's state and what the next tick depends on (:snapshot/next: pending packets, time, tick
-   seed state, go sent, packets in flight), so playing it on is the run itself. Also the captured
-   world's file (its chunks and columns are not copied: the keys the bot held are, to reattach
-   them, moment-of), the seed, the target, the code, the signature and :snapshot/moment, when
-   and why and the window it is judged over. The facts are d/serializable, since a DataScript
-   value does not print as EDN. Everything else prints as the recordings print (byte arrays as
-   #clojurecraft/bytes). A world with a captured Nether (with-nether) is named by its file too
-   (:snapshot/nether-file), the model's Nether kept without its columns, as the world is."
+  "A failed run's moment as a value to keep: a moment the run kept (chosen-moment: before the choice
+   that failed, not the tick before the stop), whole: the bot's world, the model's state and what
+   the next tick depends on (:snapshot/next: pending packets, time, tick seed state, go sent,
+   packets in flight), so playing it on is the run itself. Also the captured world's file (its
+   chunks and columns are not copied: the keys the bot held are, to reattach them, moment-of), the
+   seed, the target, the code, the signature and :snapshot/moment, when and why and the window it is
+   judged over. The facts are d/serializable, since a DataScript value does not print as EDN.
+   Everything else prints as the recordings print (byte arrays as #clojurecraft/bytes). A world with
+   a captured Nether (with-nether) is named by its file too (:snapshot/nether-file), the model's
+   Nether kept without its columns, as the world is."
   [w seed until commit signature {:keys [world sim moment] :as m}]
   (cond-> {:snapshot/file (:capture/file w)
            :snapshot/seed seed
@@ -746,10 +676,8 @@
   (str (io/file dir (str (world-seed-name w seed) ".edn.gz"))))
 
 (defn stranded?
-  "Is a snapshot's player in the overworld holding none of its columns after a death: a respawn
-   from the Nether written before issue #504, when the model left the Nether's columns over the
-   overworld's, the bot's chunks none and the view streamed from them? Its view is streamed
-   again. A bot that never died (a moment before it has loaded) is not."
+  "Is a snapshot's player in the overworld holding none of its columns after a death. Its view is
+   streamed again. A bot that never died (a moment before it has loaded) is not."
   [chunks world sim]
   (boolean (and (empty? chunks)
                 (pos? (:stats/deaths world 0))
@@ -760,12 +688,11 @@
    bot held reattached (decoded once, prepared), the model's columns too, the facts a DataScript
    value again, and what the next tick depends on. w is the captured world the snapshot names,
    prepared. A snapshot from before :snapshot/next plays on from its world's time with nothing
-   pending and the tick seed restarted; a plan with no landing (a snapshot written before run
-   named one, issue #37) gets the captured world's. With w's captured Nether (:capture/nether),
-   the model's Nether gets its columns back, and a moment past the portal holds the Nether's
-   columns, the bot's chunks among them, where one before it holds the overworld's. The overworld
-   set aside while the player is in another dimension (:sim/overworld, sim/leave-overworld) gets
-   w's columns back."
+   pending and the tick seed restarted; a plan with no landing gets the captured world's. With w's
+   captured Nether (:capture/nether), the model's Nether gets its columns back, and a moment past
+   the portal holds the Nether's columns, the bot's chunks among them, where one before it holds the
+   overworld's. The overworld set aside while the player is in another dimension (:sim/overworld,
+   sim-protocol/leave-overworld) gets w's columns back."
   [{:snapshot/keys [chunks world sim next]} w]
   (let [nether (:capture/nether w)
         here (if (and nether (= dimension/nether (:sim/dimension sim)))
@@ -786,13 +713,12 @@
                    (stranded? chunks world sim)
                    (-> (assoc :sim/view #{})
                        (dissoc :sim/view-at)
-                       sim/stream))})))
+                       sim-protocol/stream))})))
 
 (defn own-world
-  "The world a self-contained snapshot is played in, prepared: the columns it carries
-   (:snapshot/columns, a real failure's, issue #299: what the real server had sent the bot, with
-   no captured world file to name) and its landing; nil for a snapshot that names a captured
-   world's file instead (a sim run's), which the caller reads."
+  "The world a self-contained snapshot is played in, prepared: the columns it carries and its
+   landing; nil for a snapshot that names a captured world's file instead (a sim run's), which the
+   caller reads."
   [snap]
   (when-let [columns (:snapshot/columns snap)]
     (prepared
@@ -810,11 +736,9 @@
 
 (defn window-of
   "The simulated ms a snapshot is judged over: its moment's window, or snapshot-budget-ms for a
-   snapshot from before moments were kept; a stall's at least stall-judge-ms. A stall is kept
-   from its run's last five minutes with no new stage, but a stage can take longer than that by
-   rights (iron mined and smelted): issue #62's two stall snapshots, the bot no longer dying on
-   one stair, smelted their ingots 8 and 11 minutes on, and a five-minute judge called both
-   recurring. Kept snapshots carry five minutes; they are judged over fifteen."
+   snapshot from before moments were kept; a stall's at least stall-judge-ms. A stall is kept from
+   its run's last five minutes with no new stage, but a stage can take longer than that by rights
+   (iron mined and smelted). Kept snapshots carry five minutes; they are judged over fifteen."
   [snap]
   (let [w (get-in snap [:snapshot/moment :window-ms] snapshot-budget-ms)]
     (if (= :stall (get-in snap [:snapshot/moment :why])) (max w stall-judge-ms) w)))
@@ -904,10 +828,8 @@
      :run/moments)))
 
 (defn tally
-  "The runs as a value: how many, how many reached the target, the lives given after deaths and
-   the foods eaten over them all (issue #260: the lanes show deaths and eating), and the failures
-   counted by
-   signature, most first."
+  "The runs as a value: how many, how many reached the target, the lives given after deaths and the
+   foods eaten over them all, and the failures counted by signature, most first."
   [runs]
   {:simrace/runs (count runs)
    :simrace/ok (count (filter :ok runs))
@@ -971,14 +893,10 @@
        (str (io/file dir (str stem ".truth.edn")))
        (catch Exception e (println "truth not written:" (ex-message e)) nil)))
 (defn cap-max-ms
-  "The simulated ms a checkpoint run may take, [ms capped?]: the checkpoint's own cap
-   (:simrace/checkpoint-max-minutes of config) when the run starts at a checkpoint (from names a
-   start) and the cap is under max-ms, else [max-ms false]."
-  [config from max-ms]
-  (let [cap (when (starts from)
-              (some-> (:simrace/checkpoint-max-minutes config)
-                      (* 60000)))]
-    (if (and cap (< cap max-ms)) [cap true] [max-ms false])))
+  "The simulated ms a run from start may take, [ms capped?]: the start's own cap (start/cap-ms)
+   when it has one and it is under max-ms, else [max-ms false]."
+  [start max-ms]
+  (let [cap (start/cap-ms start)] (if (and cap (< cap max-ms)) [cap true] [max-ms false])))
 
 (defn capped
   "A RESULT r of a run its own cap stopped (capped?) rather than the lane's horizon: a :timeout
@@ -987,13 +905,13 @@
   (cond-> r (and capped? (= :timeout (:reason r))) (assoc :reason :bot-timeout)))
 
 (defn play!
-  "One run, never throwing (a run that throws is a :crashed RESULT), its RESULT printed as a
-   SIMRUN line and appended to out as it ends, with what reproduces it (:run/file, :run/seed,
-   :run/commit) and, when it failed, what bb failures reads (failure/mark) and a moment from
-   before the choice that failed kept as a snapshot beside out (:run/snapshot, chosen-moment,
-   issue #77). Also prints a GATE line: deaths by cause, minutes in :back-off, and minutes
-   to the kit, the stone pickaxe, the iron kit and the portal kit. Every ended run, one that threw
-   too, also writes its truth beside its senses (write-truth!, :run/truth-file). Returns the run."
+  "One run, never throwing (a run that throws is a :crashed RESULT), its RESULT printed as a SIMRUN
+   line and appended to out as it ends, with what reproduces it (:run/file, :run/seed, :run/commit)
+   and, when it failed, what bb failures reads (failure/mark) and a moment from before the choice
+   that failed kept as a snapshot beside out. Also prints a GATE line: deaths by cause, minutes in
+   :back-off, and minutes to the kit, the stone pickaxe, the iron kit and the portal kit. Every
+   ended run, one that threw too, also writes its truth beside its senses (write-truth!,
+   :run/truth-file). Returns the run."
   ([w seed until max-ms commit out food] (play! w seed until max-ms commit out food false))
   ([w seed until max-ms commit out food capped?]
    (let [r (try (capped (run w seed until max-ms food) capped?)
@@ -1095,7 +1013,7 @@
         (with-nether (read-nether (:snapshot/nether-file snap)) (:snapshot/nether-file snap)))))
 
 (def judge-wall-ms 240000)            ; a judge's wall-clock budget a snapshot: four minutes, inside issue.yml's 15
-(def slow-ms (quot judge-wall-ms 2))  ; a judge slower than this is no evidence: on a slower runner it would halt (issue #299)
+(def slow-ms (quot judge-wall-ms 2))  ; a judge slower than this is no evidence: on a slower runner it would halt
 
 (defn judge!
   "Judge the snapshot at path as the issue check does (judged, halted after judge-wall-ms of wall
@@ -1156,15 +1074,15 @@
         budget (get o :budget-minutes)
         food (some-> (get o :food)
                      Long/parseLong)
-        config (let [f (io/file "ci/simrace.edn")] (when (.exists f) (edn/read-string (slurp f))))
-        from (or (get o :from) (:simrace/from config))
-        kit (or (:simrace/kit config) fortress-kit-default)
+        begin (or (start/start-of (get o :start))
+                  (throw (ex-info "no such start" {:start (get o :start)})))
+        kit (start/kit-map begin)
         given (some-> (get o :runs)
                       slurp
                       edn/read-string)
         until (or until default-until)
         [max-ms capped?]
-        (cap-max-ms config from (* 60000 (Long/parseLong (or minutes (str default-max-minutes)))))
+        (cap-max-ms begin (* 60000 (Long/parseLong (or minutes (str default-max-minutes)))))
         first-seed (Long/parseLong (or seed "1"))
         files (cond given (mapv io/file (distinct (map first given)))
                     world [(io/file world)]
@@ -1184,16 +1102,15 @@
                          nether (nether-of path)]
                      (cond-> w
                        nether (with-nether nether path)
-                       (and nether (starts from))
-                       (-> (with-fortress (merge-with + kit (:checkpoint/kit (starts from)))
-                                          (:checkpoint/at (starts from)))
+                       (and nether (start/nether? begin))
+                       (-> (with-fortress kit (when (start/forest? begin) :forest))
                            (as-> w'
                              (cond-> w'
                                (:capture/fortress w')
                                (assoc-in [:capture/fortress :checkpoint/goal]
-                                (:checkpoint/goal (starts from)))))))))
+                                (:start/goal begin))))))))
                  files)
-        ws (if (starts from)
+        ws (if (start/nether? begin)
              (let [with (filterv :capture/fortress ws)]
                (cli/log "from fortress:"
                         (count with)
@@ -1240,6 +1157,8 @@
    --judge f1,f2 judges snapshots as the issue check does (judge!), uninstrumented: a judge, not
    a spec test. With --expect recur, it exits 1 unless every one recurs (the base code: the
    moment must reproduce the failure); with --expect pass, unless none does (the fix).
+   --start id is where each run begins, an id in resources/clojurecraft/starts.edn (clojurecraft.start;
+   the table's default without it).
    --from-landing f replays a snapshot's run from its landing to its stage (from-landing!): a
    probe's tool for the whole road, up to default-max-minutes, never the check's.
    --from-recording f1,f2 turns real races' recordings into snapshots of their failures

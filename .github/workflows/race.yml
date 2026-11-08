@@ -27,8 +27,8 @@ on:
         description: the lane, 1..8 (the runner of the old matrix)
         required: true
         default: '1'
-      from:
-        description: "where the bots start, spawn or fortress; empty keeps ci/race.edn's :race/from"
+      start:
+        description: "where the bots start (an id in resources/clojurecraft/starts.edn); empty keeps the lane's own (ci/lanes.edn)"
         required: false
         default: ''
 
@@ -53,7 +53,7 @@ jobs:
       bots: ${{ steps.read.outputs.bots }}
       server-heap: ${{ steps.read.outputs.server-heap }}
       bot-heap: ${{ steps.read.outputs.bot-heap }}
-      from: ${{ steps.read.outputs.from }}
+      start: ${{ steps.read.outputs.start }}
       kind: ${{ steps.read.outputs.kind }}
     steps:
       - uses: actions/checkout@v7
@@ -68,10 +68,8 @@ jobs:
                    (println (str "sets=" (cheshire.core/generate-string (:race/landing-sets r))))
                    (println (str "bots=" (:race/bots r)))
                    (println (str "server-heap=" (:race/server-heap-mb r)))
-                   (println (str "bot-heap=" (:race/bot-heap-mb r)))
-                   (let [cs (let [c (:race/checkpoint r)] (cond (nil? c) [] (map? c) [c] :else c)) lane (parse-long "${{ inputs.lane }}") c (first (filter (fn [c] (contains? (set (:lanes c)) lane)) cs))]
-                     (println (str "from=" (if c (:from c) "")))
-                     (println (str "kind=" (if c (:kind c) "real")))))' >> "$GITHUB_OUTPUT"
+                   (println (str "bot-heap=" (:race/bot-heap-mb r))))' >> "$GITHUB_OUTPUT"
+          bb lane real "${{ inputs.lane }}" >> "$GITHUB_OUTPUT"
           cat "$GITHUB_OUTPUT"
 
   race:
@@ -120,7 +118,7 @@ jobs:
         with:
           path: cache/worlds/${{ steps.set.outputs.set }}
           # world.yml's key, the same expression: a matrix of world.yml calls returns no key per set
-          key: world-${{ steps.set.outputs.set }}-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj') }}
+          key: world-${{ steps.set.outputs.set }}-${{ hashFiles('ci/gym.edn', 'ci/world-key.edn') }}
           fail-on-cache-miss: true
       - uses: actions/setup-java@v6
         with:
@@ -156,8 +154,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}   # the churn's reports: issues, the page, releases
           RUNNER_N: ${{ matrix.runner }}
-          FROM: ${{ inputs.from || needs.plan.outputs.from }}  # a checkpoint lane's start (ci/race.edn :race/checkpoint), else '' keeps :race/from
-          KIND: ${{ needs.plan.outputs.kind }}  # real, or the checkpoint's own page kind (real-18)
+          START: ${{ inputs.start || needs.plan.outputs.start }}  # the lane's start (ci/lanes.edn), else '' keeps the default start
+          KIND: ${{ needs.plan.outputs.kind }}  # the lane's page kind (ci/lanes.edn)
         run: |
           races=""
           for k in $(seq 1 "$SERVERS"); do mkdir -p "data/race/s$k"; touch "data/race/s$k/race.log"; done
@@ -166,12 +164,12 @@ jobs:
             dir="data/race/s$k"
             server=""
             if [ "$SERVERS" -gt 1 ]; then server="--server $k"; fi
-            from=""
-            if [ -n "$FROM" ]; then from="--from $FROM"; fi
-            # shellcheck disable=SC2086 # $server and $from are two words or none
+            start=""
+            if [ -n "$START" ]; then start="--start $START"; fi
+            # shellcheck disable=SC2086 # $server and $start are two words or none
             clojure -J-Xmx${{ needs.plan.outputs.bot-heap }}m -M:race --config ci/race.edn --port $((25564 + k)) \
               --rcon-port $((25574 + k)) --rcon-pass "$RCON_PASS" --record-dir "$dir" --commit "$GITHUB_SHA" \
-              --seed "${{ steps.set.outputs.set }}" --runner ${{ matrix.runner }} $server $from \
+              --seed "${{ steps.set.outputs.set }}" --runner ${{ matrix.runner }} $server $start \
               --landings "cache/worlds/${{ steps.set.outputs.set }}/landings.edn" \
               --landing-offset $(( ${{ steps.set.outputs.first }} + (k - 1) * BOTS )) \
               > "$dir/race.log" 2>&1 &

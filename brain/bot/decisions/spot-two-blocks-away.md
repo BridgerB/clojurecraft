@@ -12,7 +12,7 @@ sourceRefs:
   - src/clojurecraft/place.clj#defn inside-player?
   - test/clojurecraft/place_test.clj#a-spot-is-found-on-an-uneven-floor
   - test/clojurecraft/place_test.clj#a-placement-spot-is-never-inside-the-player
-  - src/clojurecraft/sim.clj#defn overlaps-player?
+  - src/clojurecraft/sim/protocol.clj#defn overlaps-player?
   - src/clojurecraft/place.clj#defn drop-beyond?
   - test/clojurecraft/place_test.clj#a-spot-along-a-bridge
 related:

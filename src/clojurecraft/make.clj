@@ -14,6 +14,7 @@
    Requiring this namespace registers the :needs planner, the :provided? predicate and the
    :gather, :place, :craft and :smelt acts."
   (:require [clojure.math :as math]
+            [clojurecraft.avoided :as avoided]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.craft]
             [clojurecraft.game :as game]
@@ -133,7 +134,7 @@
   (when (contains? memory/placed-kinds block)
     (memory/nearest-of (game/eye world)
                        table-search
-                       (remove (or (:plan/blacklist world) #{})
+                       (remove (or (avoided/all-of world :blacklist) #{})
                                (memory/positions-now world (blocks/states-of block))))))
 
 ;; ---------------------------------------------------------------- the planner
@@ -158,24 +159,16 @@
   (or (= :stuck action) (contains? fetching-acts (:goal/act action))))
 
 (defn spare-worth?
-  "Is action worth doing to keep a spare tool? Not :stuck, and not a mine. A gather is worth it
-   when a log can be started now (gather-next returns an intent): a walk to a trunk, or the
-   stairs up to the trees, while a pickaxe is still held. A walk up the shaft already dug
-   (:intent/for :opening) is not: it reaches the sky, not a tree, and from that mouth the trunk
-   may still have no route. Full run f277605 held one stone pickaxe, flint and steel and a water
-   bucket, and spent five hours walking out for the spare and cutting back down. A gather that
-   would wait :no-log is not either, which is the open sky with no tree remembered. Gym batch
-   iron-a7 runs 1-3, deep in the mine with a working pickaxe and no wood, waited :no-log for a
-   second pickaxe. Nor is a swim across open water to the trees (wood/crossing, issue #87): a
-   spare is not worth a lake. Full run 068485c kept mining on its last stone pickaxe until it broke at y 16,
-   then the wooden one broke on the stairs and three :no-pickaxe failures ended the plan. A climb
-   out (:intent/for :surface) is worth it once from a place, not again from below where a climb
-   came out within the window (stairs/surfaced-near?): it came out where the gather found nothing
-   worth the spare, and the mine went back down. Sim race 38806318231 (issue #161, 206 runs in 73
-   rounds, world R1/37) climbed from y 58 to the surface, found no tree in reach, cut stairs back
-   down for the iron, and climbed again, every twenty seconds for ninety minutes. A log taken
-   after the climb ends its mark (plan/finish-intent): that climb found trees, and the next is
-   worth it."
+  "Is action worth doing to keep a spare tool? Not :stuck, and not a mine. A gather is worth it when
+   a log can be started now (gather-next returns an intent): a walk to a trunk, or the stairs up to
+   the trees, while a pickaxe is still held. A walk up the shaft already dug (:intent/for :opening)
+   is not: it reaches the sky, not a tree, and from that mouth the trunk may still have no route. A
+   gather that would wait :no-log is not either, which is the open sky with no tree remembered. Nor
+   is a swim across open water to the trees: a spare is not worth a lake. A climb out (:intent/for
+   :surface) is worth it once from a place, not again from below where a climb came out within the
+   window (stairs/surfaced-near?): it came out where the gather found nothing worth the spare, and
+   the mine went back down. A log taken after the climb ends its mark (plan/finish-intent): that
+   climb found trees, and the next is worth it."
   [world action]
   (cond (or (nil? action) (= :stuck action) (= :mine (:goal/act action))) false
         (= :gather (:goal/act action))
@@ -187,10 +180,7 @@
         :else true))
 
 (defn without-worn
-  "counts less the tools in the inventory that are worn (worn?): what a spare is counted from.
-   Race 38477665442 bot Clj_r22 tunnelled for coal at y 16 with a stone pickaxe and, for its
-   spare, the wooden one that had dug the first cobblestone; both broke in one tunnel, two
-   sticks, a table and 173 cobblestone in hand (issue #39)."
+  "counts less the tools in the inventory that are worn (worn?): what a spare is counted from."
   [world counts]
   (reduce (fn [c [n k]] (update c n (fnil #(max 0 (- % k)) 0)))
           counts
@@ -342,10 +332,7 @@
 
 (defn wood-covers?
   "Do the logs in counts, but log-reserve, make the planks that burn ticks? Then they are the fuel
-   to use before any coal is mined: the twelfth live run held two logs, eight planks' worth of
-   fire, and tunnelled thirteen minutes at y 0 for coal until the trial timed out. The reserve
-   is wood for a new pickaxe: gym batch iron-a6 runs 2 and 5 broke theirs climbing out with no
-   wood left."
+   to use before any coal is mined. The reserve is wood for a new pickaxe."
   [counts ticks]
   (let [planks (long (math/ceil (/ ticks plank-ticks)))]
     (>= (- (recipe/have counts (recipe/tags :logs)) log-reserve)
@@ -390,11 +377,9 @@
 
 (defn take-table-along
   "A dig of the bot's placed crafting table, to carry it on, when no table is held and the
-   remembered one is within reach; nil otherwise. With every slot full the dig waits for a :toss
-   of junk (window/tossable), or for :inventory-full when none can go, the table left standing: the table's drop needs an empty slot, and the pickaxe
-   crafted at it took the one the table left. Sim race R2/36 (issue #135) dug its table at y -3
-   with 36 slots held, failed :collect :not-picked-up, and climbed from the cast at y -55
-   with sticks and no table."
+   remembered one is within reach; nil otherwise. With every slot full the dig waits for a :toss of
+   junk (window/tossable), or for :inventory-full when none can go, the table left standing: the
+   table's drop needs an empty slot, and the pickaxe crafted at it took the one the table left."
   [world]
   (let [pos (near world :crafting_table)]
     (when (and pos
@@ -408,22 +393,14 @@
 
 (defn take-table
   "A dig of the bot's placed crafting table, to carry it on (take-table-along), when row goes out
-   for something (fetch?); nil otherwise. A table
-   left behind is a log spent on the next: gym batch iron-a7 run 1 crafted three on its way
-   down the mine and had no wood left for a pickaxe. Race 38477665442 bots Clj_r19, Clj_r23 and
-   Clj_r06 crafted the bucket at the furnace, climbed out for the water and left the table
-   there; with sticks and cobblestone in hand and no table, none could make the pickaxe the
-   climb or the gravel tunnels wore out (issues #39 and #67)."
+   for something (fetch?); nil otherwise. A table left behind is a log spent on the next."
   [world row]
   (when (fetch? row) (take-table-along world)))
 
 (defn make-room
-  "A :toss of junk (window/tossable) before row goes out for something (fetch?) with every slot
-   of the inventory full and no container open: what it fetches is picked up on contact, and with
-   no slot free it is never picked up. nil otherwise. Sim race 38806318231 (issue #161, world
-   R3/7): at the portal kit, three planks short of a table for the bucket, 36 slots full of
-   cobblestone, stones, sand, lapis and copper, the bot dug log after log and every collect timed
-   out :not-picked-up, for the run's last half hour."
+  "A :toss of junk (window/tossable) before row goes out for something (fetch?) with every slot of
+   the inventory full and no container open: what it fetches is picked up on contact, and with no
+   slot free it is never picked up. nil otherwise."
   [world row]
   (when (and (fetch? row)
              (nil? (:window/open world))
@@ -436,12 +413,12 @@
 
 (defn collect-batch
   "The intent that goes back to a furnace a smelt left loaded (:furnace/batch, set by the smelt's
-   :load stage): open the remembered furnace within reach, or walk to it; once the window is open
-   a :smelt of the batch's recipe empties the furnace into the inventory (its :settle) and loads
+   :load stage): open the remembered furnace within reach, or walk to it; once the window is open a
+   :smelt of the batch's recipe empties the furnace into the inventory (its :settle) and loads
    whatever raw input is held again. nil with no batch, one older than batch-ttl, no furnace
    remembered within table-search, or a smelt already running. The planner counts the inventory
    only: a smelt interrupted after the load (a forage, a defence, a flee) had its iron in the
-   furnace and the inventory showed none, so the iron kit gym mined for more (issue #686)."
+   furnace and the inventory showed none, so the iron kit gym mined for more."
   [world]
   (let [{:batch/keys [smelt at]} (:furnace/batch world)]
     (when (and smelt

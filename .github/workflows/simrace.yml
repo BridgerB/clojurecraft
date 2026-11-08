@@ -42,7 +42,7 @@ jobs:
       max-minutes: ${{ steps.read.outputs.max-minutes }}
       budget: ${{ steps.read.outputs.budget }}
       heap: ${{ steps.read.outputs.heap }}
-      from: ${{ steps.read.outputs.from }}
+      start: ${{ steps.read.outputs.start }}
       kind: ${{ steps.read.outputs.kind }}
     steps:
       - uses: actions/checkout@v7
@@ -58,10 +58,8 @@ jobs:
                    (println (str "until=" (:simrace/until r)))
                    (println (str "max-minutes=" (:simrace/max-minutes r)))
                    (println (str "budget=" (:simrace/budget-minutes r)))
-                   (println (str "heap=" (:simrace/heap-mb r)))
-                   (let [cs (let [c (:simrace/checkpoint r)] (cond (nil? c) [] (map? c) [c] :else c)) lane (parse-long "${{ inputs.lane }}") c (first (filter (fn [c] (contains? (set (:lanes c)) lane)) cs))]
-                     (println (str "from=" (if c (:from c) "")))
-                     (println (str "kind=" (if c (:kind c) "sim")))))' >> "$GITHUB_OUTPUT"
+                   (println (str "heap=" (:simrace/heap-mb r))))' >> "$GITHUB_OUTPUT"
+          bb lane sim "${{ inputs.lane }}" >> "$GITHUB_OUTPUT"
           cat "$GITHUB_OUTPUT"
 
   sim:
@@ -83,56 +81,56 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: cache/sim-worlds/R1
-          key: simworld-R1-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj', 'src/clojurecraft/capture.clj') }}
+          key: simworld-R1-${{ hashFiles('ci/gym.edn', 'ci/world-key.edn') }}
           fail-on-cache-miss: true
       - name: R2's captured worlds
         if: contains(fromJSON(needs.plan.outputs.sets), 'R2')
         uses: actions/cache/restore@v6
         with:
           path: cache/sim-worlds/R2
-          key: simworld-R2-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj', 'src/clojurecraft/capture.clj') }}
+          key: simworld-R2-${{ hashFiles('ci/gym.edn', 'ci/world-key.edn') }}
           fail-on-cache-miss: true
       - name: R3's captured worlds
         if: contains(fromJSON(needs.plan.outputs.sets), 'R3')
         uses: actions/cache/restore@v6
         with:
           path: cache/sim-worlds/R3
-          key: simworld-R3-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj', 'src/clojurecraft/capture.clj') }}
+          key: simworld-R3-${{ hashFiles('ci/gym.edn', 'ci/world-key.edn') }}
           fail-on-cache-miss: true
       - name: R4's captured worlds
         if: contains(fromJSON(needs.plan.outputs.sets), 'R4')
         uses: actions/cache/restore@v6
         with:
           path: cache/sim-worlds/R4
-          key: simworld-R4-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj', 'src/clojurecraft/capture.clj') }}
+          key: simworld-R4-${{ hashFiles('ci/gym.edn', 'ci/world-key.edn') }}
           fail-on-cache-miss: true
       - name: R1's captured Nether
         if: contains(fromJSON(needs.plan.outputs.sets), 'R1')
         uses: actions/cache/restore@v6
         with:
           path: cache/sim-nether/R1.edn.gz
-          key: simnether-R1-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj', 'src/clojurecraft/capture_nether.clj') }}
+          key: simnether-R1-${{ hashFiles('ci/gym.edn', 'ci/world-key.edn') }}
           fail-on-cache-miss: true
       - name: R2's captured Nether
         if: contains(fromJSON(needs.plan.outputs.sets), 'R2')
         uses: actions/cache/restore@v6
         with:
           path: cache/sim-nether/R2.edn.gz
-          key: simnether-R2-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj', 'src/clojurecraft/capture_nether.clj') }}
+          key: simnether-R2-${{ hashFiles('ci/gym.edn', 'ci/world-key.edn') }}
           fail-on-cache-miss: true
       - name: R3's captured Nether
         if: contains(fromJSON(needs.plan.outputs.sets), 'R3')
         uses: actions/cache/restore@v6
         with:
           path: cache/sim-nether/R3.edn.gz
-          key: simnether-R3-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj', 'src/clojurecraft/capture_nether.clj') }}
+          key: simnether-R3-${{ hashFiles('ci/gym.edn', 'ci/world-key.edn') }}
           fail-on-cache-miss: true
       - name: R4's captured Nether
         if: contains(fromJSON(needs.plan.outputs.sets), 'R4')
         uses: actions/cache/restore@v6
         with:
           path: cache/sim-nether/R4.edn.gz
-          key: simnether-R4-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj', 'src/clojurecraft/capture_nether.clj') }}
+          key: simnether-R4-${{ hashFiles('ci/gym.edn', 'ci/world-key.edn') }}
           fail-on-cache-miss: true
       - uses: actions/setup-java@v6
         with:
@@ -156,17 +154,17 @@ jobs:
           SETS: ${{ needs.plan.outputs.sets }}
           GH_TOKEN: ${{ github.token }}   # the churn's reports: issues, the page
           RUNNER_N: ${{ matrix.runner }}
-          FROM: ${{ needs.plan.outputs.from }}  # a checkpoint lane's start (ci/simrace.edn :simrace/checkpoint), else '' keeps :simrace/from
-          KIND: ${{ needs.plan.outputs.kind }}  # sim, or the checkpoint's own page kind (sim-18)
+          START: ${{ needs.plan.outputs.start }}  # the lane's start (ci/lanes.edn), else '' keeps the default start
+          KIND: ${{ needs.plan.outputs.kind }}  # the lane's page kind (ci/lanes.edn)
         run: |
-          from=""
-          if [ -n "$FROM" ]; then from="--from $FROM"; fi
+          start=""
+          if [ -n "$START" ]; then start="--start $START"; fi
           worlds=$(echo "$SETS" | jq -r 'map("cache/sim-worlds/" + .) | join(",")')
           mkdir -p data/simrace
           clojure -J-Xmx${{ needs.plan.outputs.heap }}m -M:simrace --worlds "$worlds" \
             --runner ${{ matrix.runner }} --runners ${{ needs.plan.outputs.count }} \
             --until ${{ needs.plan.outputs.until }} --max-minutes ${{ needs.plan.outputs.max-minutes }} \
-            --budget-minutes ${{ needs.plan.outputs.budget }} --commit "$GITHUB_SHA" --out data/simrace $from \
+            --budget-minutes ${{ needs.plan.outputs.budget }} --commit "$GITHUB_SHA" --out data/simrace $start \
             > data/simrace/simrace.log 2>&1 &
           sim=$!
           mkdir -p work

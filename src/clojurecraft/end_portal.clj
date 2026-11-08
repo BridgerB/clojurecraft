@@ -1,6 +1,6 @@
 (ns clojurecraft.end-portal
-  "The end portal lit and stepped into (issue #266): the :end-portal goal, done when an end portal
-   block is remembered, and :enter-end, done when the dimension is the End.
+  "The end portal lit and stepped into: the :end-portal goal, done when an end portal block is
+   remembered, and :enter-end, done when the dimension is the End.
 
    The frames are landmarks (memory/landmark-kinds), remembered as their chunk loads; the lit
    portal's blocks are too, so the goal is read from memory like the fortress's bricks. The work
@@ -17,7 +17,8 @@
    floor round a 3x3 pit of lava, reached up a staircase of three stairs blocks with a
    silverfish spawner in the middle of the top step; the way up is a side of the stairs. The
    room is the gym's :portal-room landing (gym/portal-room)."
-  (:require [clojurecraft.blocks :as blocks]
+  (:require [clojure.spec.alpha :as s]
+            [clojurecraft.blocks :as blocks]
             [clojurecraft.build :as build]
             [clojurecraft.dimension :as dimension]
             [clojurecraft.end :as end]
@@ -31,6 +32,18 @@
             [clojurecraft.terrain :as terrain]))
 
 (set! *warn-on-reflection* true)
+
+;; read by name (ns-resolve) in scratch_test and model_test, so the unused-var lint excludes it
+(def scratch
+  "The intent attributes only this namespace's executor reads and writes: {attribute {:doc meaning
+   :when lifetime}}. They are not world information, so they are not in clojurecraft.model;
+   scratch_test holds that no other namespace uses one."
+  {:intent/enter?
+   {:doc
+    "does the :end-portal intent step into the portal once every frame is eyed (the :enter-end row's) or stop at the lit portal (the :end-portal row's) (issue #266)"
+    :when "an :end-portal intent"}})
+
+(s/def :intent/enter? boolean?)
 
 (def portal-radius 64)                ; blocks from the feet a remembered end portal block is the RESULT's :portal
 
@@ -179,14 +192,13 @@
 ;; ---------------------------------------------------------------- the goals
 
 (defn next-toward
-  "The next intent toward the lit portal, and with enter? into the End: the :end-portal intent
-   while a remembered frame without an eye has a reachable stand or the End is still to enter;
-   when empty frames remain and none has a reachable stand yet (the portal room's wall or roof
-   still between the feet and the frames after :portal-room arrived within 6), the way through
-   to the nearest empty frame (toward-frame); a wait :no-frames with no frame on record,
-   :no-eyes when fewer eyes are held than frames lack them (the eyes stage, issue #264, is the
-   one to look at), :lighting once every frame is eyed and the portal's blocks are not yet on
-   record; nil when nothing is left."
+  "The next intent toward the lit portal, and with enter? into the End: the :end-portal intent while
+   a remembered frame without an eye has a reachable stand or the End is still to enter; when empty
+   frames remain and none has a reachable stand yet (the portal room's wall or roof still between
+   the feet and the frames after :portal-room arrived within 6), the way through to the nearest
+   empty frame (toward-frame); a wait :no-frames with no frame on record, :no-eyes when fewer eyes
+   are held than frames lack them, :lighting once every frame is eyed and the portal's blocks are
+   not yet on record; nil when nothing is left."
   [world enter?]
   (let [fs (frames world)
         empty (empty-frames world)]
@@ -197,21 +209,20 @@
           (empty? (portals world)) {:plan/wait :lighting}
           :else nil)))
 
-(defmethod plan/interrupts? :end-portal
-  [world _ i]
-  (and (not= :end-portal (:intent/kind i))
-       (let [f (stronghold/nearest-frame world)]
-         (and f
-              (<= (physics/distance (intent/feet world) f) 6.0)
-              (some? (some #(eye-op world %) (empty-frames world)))))))
+(defn eye-in-reach?
+  "Is the nearest remembered frame within 6 blocks of the feet with an empty frame an eye can be put
+   into from a reachable stand (eye-op)? Asked only in the overworld and, before any search, only
+   near a frame."
+  [world]
+  (boolean (and (:player/pos world)
+                (= dimension/overworld (dimension/of world))
+                (when-let [f (stronghold/nearest-frame world)]
+                  (and (<= (physics/distance (intent/feet world) f) 6.0)
+                       (some #(eye-op world %) (empty-frames world)))))))
 
-(defmethod plan/interrupts? :enter-end
-  [world _ i]
-  (and (not= :end-portal (:intent/kind i))
-       (let [f (stronghold/nearest-frame world)]
-         (and f
-              (<= (physics/distance (intent/feet world) f) 6.0)
-              (some? (some #(eye-op world %) (empty-frames world)))))))
+(defmethod plan/done-by :no-eye-in-reach? [world _] (not (eye-in-reach? world)))
+
+(defmethod plan/next-intent :eye-frame [_ _ _] {:intent/kind :end-portal :intent/enter? false})
 
 (defmethod plan/done-by :portal-lit? [world _] (boolean (seq (portals world))))
 

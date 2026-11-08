@@ -10,9 +10,9 @@ verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/intent.clj#defn finish-delay
   - test/clojurecraft/props_test.clj#a-dig-never-finishes-before-its-deadline
-  - src/clojurecraft/sim.clj#defmethod on-packet [:play :player-action]
+  - src/clojurecraft/sim/protocol.clj#defmethod on-packet [:play :player-action]
   - test/clojurecraft/sim_test.clj#an-early-finish-breaks-the-block-only-by-the-servers-clock
-  - src/clojurecraft/sim.clj#defn tick-delayed
+  - src/clojurecraft/sim/protocol.clj#defn tick-delayed
 related:
   - "[[bot/gotchas/_moc|Gotchas]]"
   - "[[dig-timeline]]"

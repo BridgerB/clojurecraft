@@ -14,11 +14,13 @@
             [clojurecraft.dimension :as dimension]
             [clojurecraft.drops :as drops]
             [clojurecraft.entity :as entity]
+            [clojurecraft.fortress-exit :as fexit]
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
             [clojurecraft.make :as make]
             [clojurecraft.memory :as memory]
-            [clojurecraft.pearls :as pearls]
+            [clojurecraft.pearls.params :as pparams]
+            [clojurecraft.pearls.sense :as psense]
             [clojurecraft.plan :as plan]
             [clojurecraft.pocket :as pocket]
             [clojurecraft.recipe :as recipe]
@@ -58,7 +60,7 @@
   [world]
   (boolean (or (>= (blaze/rods world) blaze/rods-wanted)
                (contains? (:plan/reached world) :blaze-rods)
-               (pearls/pearls-stage? world))))
+               (fexit/pearls-stage? world))))
 
 (defn blaze-in-sight?
   "Is any alive blaze in sight of the bot (combat/seen?) within shooter range?"
@@ -76,13 +78,13 @@
    not trapped, no blaze in sight, no angry enderman near, and if in the fortress, sealed in
    its pocket?"
   [world]
-  (boolean (and (>= (double (:player/health world 20.0)) (double pearls/danger-health))
+  (boolean (and (>= (double (:player/health world 20.0)) (double pparams/danger-health))
                 (not (:player/on-fire? world))
                 (nil? (:plan/trap world))
                 (not (blaze-in-sight? world))
-                (nil? (pearls/blaze-refuge world))
-                (not (pearls/menaced? world))
-                (or (not (pearls/near-fortress? world)) (sealed-in-fortress? world)))))
+                (nil? (fexit/blaze-refuge world))
+                (not (psense/menaced? world))
+                (or (not (fexit/near-fortress? world)) (sealed-in-fortress? world)))))
 
 (defn placed-table?
   "Is the crafting table placed near but not held in the bag?"
@@ -214,7 +216,7 @@
                                table-placed? (some? (make/near world :crafting_table))]
                            (or (<= k 1)
                                table-placed?
-                               (and (pearls/near-fortress? world) (< k target-picks)))))))))
+                               (and (fexit/near-fortress? world) (< k target-picks)))))))))
 
 (defn spare-intent
   "The spare-picks row's next intent, or nil: nil when not pending?, and nil when pending? but

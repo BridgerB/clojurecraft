@@ -12,7 +12,7 @@ You never run a test locally; the PR's `unit / unit` runs them all in 2-4 minute
 | `plan_test.clj` | planner end to end over canned events; scenarios `shaft`, `quarry`, `crevice`, `canopy-pocket`, `sky-shaft` |
 | `sim_test.clj` | whole bot against the model in small built worlds; largest; holds the forest property |
 | `props_test.clj`, `make_test.clj` | test.check properties (keep-alives, phase, `step` total, needs never pick unmet goals, FINISH never early) |
-| `issues_test.clj` | `every-snapshot-fits-on-github`, `an-issue-keeps-two-snapshots-at-most` (judging is the PR check's `--judge`) |
+| `issues_test.clj` | `every-snapshot-fits-on-github`, `an-issue-keeps-two-snapshots-at-most` (for snapshots a PR adds under `test/issues/`; judging is a probe's `--judge`) |
 | `recordings_test.clj` | promoted recordings replay with every effect verified |
 | `model_test`, `docs_test`, `style_test` | keys in `model.clj`; docstrings; no `if` nested in `if` |
 | `packet_test`, `packet_specs_ever.edn` | decoding; `packet-specs-only-grow` |
@@ -38,14 +38,13 @@ You never run a test locally; the PR's `unit / unit` runs them all in 2-4 minute
 | `simrace.yml` | same (`simrace lane k`) | up to 8 lanes, bot against the model in captured worlds, every core | `simrace-<sha>-<runner>`: `runs.edn`, `simrace.log`, `snapshots/` |
 | `test.yml` | every push, any branch | `unit` (via `unit.yml`), one forest shard of 250 (dispatch: 8), actionlint | none |
 | `unit.yml` | called by `test.yml`, `issue.yml` | every test but the forest property (`bb test`), then `bb check` | none |
-| `issue.yml` | PR from `fix/*` | `check`: the issues the PR names; `sim` issues must have snapshots; `--judge` on base (must recur) and head (must not), only their worlds restored (15 min cap, a few in practice); plus `unit / unit` | step summary: JUDGE and STORY lines |
+| `issue.yml` | PR from `fix/*` | `check`: the issues the PR names; snapshots a PR adds are judged on base (must recur) and head (must not); plus `unit / unit` | step summary: JUDGE and STORY lines |
 | `probe.yml` | hand | one command on a branch with the sim worlds asked for | `probe-<id>`: files under `out/` |
 | `gym.yml` | hand | N trials of one goal on real servers, judged by RESULT + truth commands | recordings and logs |
-| `world.yml`, `simworld.yml` | hand when a key changes | build a landing set's world / capture sim worlds and each set's Nether once | caches |
+| `world.yml`, `simworld.yml` | hand when `ci/gym.edn` or `ci/world-key.edn` changes | build a landing set's world / capture sim worlds and each set's Nether once | caches |
 | `pages.yml` | each report | builds the results site from main over `gh-pages`'s data, adds new gym runs, deploys | Pages |
-| `plan.yml`, `timer.yml`, `capacity.yml`, `full.yml` | hand or schedule | plan files, capacity study, one fresh-world attempt | their own |
 
-- A push does not judge snapshots; the PR's check does, or a probe with `--judge` before the PR.
+- A push does not judge snapshots; a probe with `--judge` before the PR does.
 - A code merge to `main` cancels and restarts the rounds (they keep artifacts and run a last report).
 - Artifacts last 7 days; job logs are readable only when the job ends.
 - Required on `main`: `unit / unit` and `check`; `check` "skipping" on a non-`fix/*` PR counts as passing. A PR with merge conflicts runs no checks.

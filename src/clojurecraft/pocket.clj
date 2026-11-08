@@ -14,12 +14,12 @@
   (:require [clojure.string :as str]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.build :as build]
+            [clojurecraft.filler :as filler]
             [clojurecraft.intent :as intent]
             [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
             [clojurecraft.place :as place]
             [clojurecraft.recipe :as recipe]
-            [clojurecraft.stairs :as stairs]
             [clojurecraft.terrain :as terrain]))
 
 (set! *warn-on-reflection* true)
@@ -38,7 +38,7 @@
 
 (defn plus "Cell c moved by [dx dy dz]." [[x y z] [dx dy dz]] [(+ x dx) (+ y dy) (+ z dz)])
 
-(defn solid-at?
+(defn solid-loaded?
   "Is the cell a loaded solid block? An unloaded cell is not: nothing is known of it."
   [world c]
   (boolean (some-> (terrain/block-at world c)
@@ -64,7 +64,7 @@
 (defn shut?
   "Is the side [dx dz] of the cell closed at the feet and at the head: both cells beside it solid?"
   [world c [dx dz]]
-  (and (solid-at? world (plus c [dx 0 dz])) (solid-at? world (plus c [dx 1 dz]))))
+  (and (solid-loaded? world (plus c [dx 0 dz])) (solid-loaded? world (plus c [dx 1 dz]))))
 
 (defn openings
   "The sides of the cell that are not shut (shut?), as [dx dz]."
@@ -103,11 +103,11 @@
                (diggable-at? world ph)
                (every? #(shut? world pf %) (remove #{back} sides))
                (roofed? world pf)
-               (solid-at? world floor)
+               (solid-loaded? world floor)
                (not (contains? blocks/lava-states (terrain/block-at world floor))))
       {:pocket/cell pf
        :pocket/stand stand
-       :pocket/dig (filterv #(solid-at? world %) [pf ph])
+       :pocket/dig (filterv #(solid-loaded? world %) [pf ph])
        :pocket/placed []})))
 
 (defn valid?
@@ -237,7 +237,7 @@
   (vec (concat (for [s (openings world c)
                      dy [0 1]
                      :let [p (plus c [(first s) dy (second s)])]
-                     :when (not (solid-at? world p))]
+                     :when (not (solid-loaded? world p))]
                  p)
                (when-not (roofed? world c) [(plus c [0 2 0])]))))
 
@@ -280,7 +280,7 @@
    open: a :seal that ended :done when its stale list was solid, the bot having moved, and this test
    said sealed (flip_trace2, run 41212534031)."
   [world {:pocket/keys [cell placed]}]
-  (boolean (and (every? #(solid-at? world %) placed)
+  (boolean (and (every? #(solid-loaded? world %) placed)
                 (or (nil? cell) (empty? (open-seal-cells world cell)))
                 ;; a site that names no cell and has no cell to seal is a cell shut on every side (a pocket
                 ;; the bot dug into rock and stands in): sealed. Without a cell it is nothing (nil cell).
@@ -304,14 +304,6 @@
   "The ops that open the pocket again: a dig of each placed cell, the highest first, from the cell."
   [c placed]
   (mapv #(build/dig-op % c nil :unseal) (reverse placed)))
-
-(defn seal-filler
-  "The block to seal n cells with, or nil: the first of stairs/filler's list (cobblestone, then
-   the Nether's own rock, which a tunnel carries by the hundred) the bot holds n of. Blaze-race-v
-   job 5 laid its 64 cobblestone into a tunnel's floors in 8 minutes, held 160 netherrack, could
-   not seal, and held open under fire until dead (hp 14 to 1 in 26 s)."
-  [world n]
-  (stairs/filler world n))
 
 (def seal-retry-ms 60000) ; ms after a seal failed anywhere before another is tried
 
@@ -342,7 +334,7 @@
          (or (nil? failed) (> (- (:time/now world 0) failed) seal-retry-ms))
          (pickaxe-held? world)
          (pos? n)
-         (some? (seal-filler world n)))))
+         (some? (filler/pick world n)))))
 
 (defn ops
   "The site as build ops: a dig of each cell still to dig, from the stand, then (unless prepare?:
@@ -468,7 +460,7 @@
           ;; no :pocket/seal-failed-at, which would hold every other site's seal back too
           (and site
                (= (:pocket/cell site) (intent/feet world))
-               (every? #(solid-at? world %) cells)
+               (every? #(solid-loaded? world %) cells)
                (not (sealed? world site)))
           (-> world
               (assoc :player/controls {})
@@ -484,7 +476,7 @@
               (intent/assoc-intent :intent/started (or (:intent/started i) (:time/now world 0)))
               (work-ops
                i
-               (seal-ops (:pocket/cell site) cells (or (seal-filler world (count cells)) seal-item))
+               (seal-ops (:pocket/cell site) cells (or (filler/pick world (count cells)) seal-item))
                event
                true)))))
 
@@ -512,7 +504,7 @@
    unsealed at full health, was hit through the first opened cell, and the unseal (a defence,
    plan/holds?) dug on for 27 s while it burned: hp 20 to 0.4."
   [world placed]
-  (boolean (and (some #(not (solid-at? world %)) placed)
+  (boolean (and (some #(not (solid-loaded? world %)) placed)
                 (or (:player/on-fire? world)
                     (<= (- (:time/now world 0) (:player/struck-at world -1000000)) reopen-ms)))))
 
@@ -523,7 +515,7 @@
   (let [site (:pocket/site world)
         placed (:pocket/placed site)
         cell (:pocket/cell site)
-        open? (every? #(not (solid-at? world %)) placed)]
+        open? (every? #(not (solid-loaded? world %)) placed)]
     (cond (or (nil? site) (not= cell (intent/feet world)))
           (-> world
               (assoc :player/controls {})

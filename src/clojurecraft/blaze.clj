@@ -30,6 +30,8 @@
    damage-event log is where to look if they kill. The bot does not put itself out: no water
    works in the Nether, and the gym rows give Fire Resistance until potions exist."
   (:require [clojure.math :as math]
+            [clojure.spec.alpha :as s]
+            [clojurecraft.avoided :as avoided]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.build :as build]
             [clojurecraft.combat :as combat]
@@ -38,10 +40,11 @@
             [clojurecraft.drops :as drops]
             [clojurecraft.eat :as eat]
             [clojurecraft.entity :as entity]
+            [clojurecraft.filler :as filler]
+            [clojurecraft.forage :as forage]
             [clojurecraft.fortress :as fortress]
             [clojurecraft.game :as game]
             [clojurecraft.hunger :as hunger]
-            [clojurecraft.hunt :as hunt]
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
             [clojurecraft.make :as make]
@@ -52,12 +55,37 @@
             [clojurecraft.plan :as plan]
             [clojurecraft.pocket :as pocket]
             [clojurecraft.recipe :as recipe]
-            [clojurecraft.stairs :as stairs]
+            [clojurecraft.shapes]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.window :as window]
             [datascript.core :as d]))
 
 (set! *warn-on-reflection* true)
+
+;; read by name (ns-resolve) in scratch_test and model_test, so the unused-var lint excludes it
+(def scratch
+  "The intent attributes only this namespace's executor reads and writes: {attribute {:doc meaning
+   :when lifetime}}. They are not world information, so they are not in clojurecraft.model;
+   scratch_test holds that no other namespace uses one."
+  {:intent/spawner {:doc "the remembered spawner a :camp waits by for its blazes (issue #262)"
+                    :when "camp"}
+   :intent/blazes
+   {:doc
+    "the blazes within fight range when a :camp began, or watching when a :rest began; a new one ends it"
+    :when "camp, rest"}
+   :intent/health
+   {:doc
+    "the health when a :camp or a :rest began; a fall under it ends it, since nothing else ends a running intent (issue #262)"
+    :when "camp, rest"}
+   :intent/until
+   {:doc
+    "ms (:time/now) after which the running intent is cut for the row's next choice: set by the blaze row's long-shot wall (3 s)"
+    :when "a :place from blaze/long-shot-cover"}})
+
+(s/def :intent/spawner :clojurecraft.spec/block-pos)
+(s/def :intent/blazes (s/coll-of int? :kind set?))
+(s/def :intent/health number?)
+(s/def :intent/until number?)
 
 (def rods-wanted 7)                   ; six for the twelve blaze powder twelve eyes take, one spare
 (def fight-radius 12.0)               ; a blaze this near the feet is fought
@@ -79,7 +107,7 @@
 (def rest-ms 90000)                   ; a rest with no health coming back this long fails :no-heal (the slow heal is one point every four seconds)
 (def fire-radius 4)                   ; cells from a spawner a fire is put out in: a fire lights its cells past 11, where a spawner's blaze no longer spawns
 (def corridor-reach 48.0)             ; bricks within this of the feet are walked or tunnelled to; farther is another fortress, not this leg
-(def corridor-nodes 800)              ; nodes one corridor walk may spend finding its route (the cover search's budget)
+(def corridor-nodes (path/budget :cover))              ; nodes one corridor walk may spend finding its route (the cover search's budget)
 
 (def rod (recipe/item-id :blaze_rod))
 (def spawner (blocks/default-state :spawner))
@@ -90,7 +118,7 @@
   "{eid entity} of the blazes alive within fight-radius of the feet, none blacklisted (a ghost)."
   [world]
   (let [pos (:player/pos world)
-        bl (:plan/blacklist world #{})]
+        bl (avoided/all-of world :blacklist)]
     (into {}
           (filter (fn [[eid e]]
                     (and (= :blaze (entity/kind e))
@@ -138,7 +166,7 @@
   "The walk onto the cell drop e lies in: the feet there are in the pickup box of a drop in a pit
    under the floor (:intent/for :rod ends standing in the cell)."
   [e]
-  {:intent/kind :walk :intent/target (hunt/cell (:entity/pos e)) :intent/for :rod})
+  {:intent/kind :walk :intent/target (forage/cell (:entity/pos e)) :intent/for :rod})
 
 (defn fetchable?
   "Can the bot pick drop e up: its cell is not solid (a drop a block was placed over, no
@@ -152,7 +180,7 @@
   [world e]
   (and (not (drops/over-void? world e))
        (not (intent/ledge-ahead? world (:entity/pos e)))
-       (not (some-> (terrain/block-at world (hunt/cell (:entity/pos e)))
+       (not (some-> (terrain/block-at world (forage/cell (:entity/pos e)))
                     blocks/solid?))
        (or (not (drops/under-reach? world e)) (intent/routable? world (fetch-walk e)))))
 
@@ -163,10 +191,10 @@
    tunnel's own digs, lying in pits the bot's floor was over, were gone to and stood over until
    the collect failed :not-picked-up, three times, and the plan with it."
   [world]
-  (let [bl (:plan/blacklist world #{})
+  (let [bl (avoided/all-of world :blacklist)
         pos (:player/pos world)]
     (->> (drops/lying world rod pos drops/drop-radius)
-         (remove (fn [[_ e]] (contains? bl (hunt/cell (:entity/pos e)))))
+         (remove (fn [[_ e]] (contains? bl (forage/cell (:entity/pos e)))))
          (sort-by (fn [[_ e]] (physics/distance pos (:entity/pos e))))
          (take candidates)
          (some (fn [[_ e :as ee]] (when (fetchable? world e) ee))))))
@@ -197,7 +225,8 @@
    beside a spawner 50 blocks off and 14 up, each one :blocked: nothing blacklisted the spawner,
    and the stand it chose did not depend on the blacklist."
   [world sp]
-  (let [bl (:plan/blacklist world #{})] (>= (count (filter bl (cells-beside sp))) stands-tried)))
+  (let [bl (avoided/all-of world :blacklist)]
+    (>= (count (filter bl (cells-beside sp))) stands-tried)))
 
 (declare stand)
 
@@ -220,7 +249,7 @@
    blacklist and searched far spirals for 4 hours ([-330 88 483] ...); s1 r16 `:walk failed :stuck`
    there; s2 r08 and r09 never arrived."
   [world]
-  (let [bl (:plan/blacklist world #{})
+  (let [bl (avoided/all-of world :blacklist)
         eye (game/eye world)
         candidates (remove #(or (and (bl %) (nil? (stand world %))) (given-up? world %))
                            (memory/positions-now world [spawner]))
@@ -248,7 +277,7 @@
    intent/routable?), a route to it, and no walk to it failed (blacklisted)."
   [world sp]
   (and (level-with? world sp)
-       (not (contains? (:plan/blacklist world #{}) sp))
+       (not (contains? (avoided/all-of world :blacklist) sp))
        (intent/routable? world {:intent/kind :walk :intent/target sp})))
 
 (defn top-in-sight?
@@ -300,7 +329,7 @@
    (run 40980342194) s2 r08 and r09 sent [543 57 203] and [544 57 203] by turns every 12 s, 539
    and 681 intents, none ever done, each abandoned for the other."
   [world sp]
-  (let [bl (:plan/blacklist world #{})
+  (let [bl (avoided/all-of world :blacklist)
         open (remove bl (filter #(open? world %) (cells-beside sp)))
         running (let [i (:plan/intent world)]
                   (when (= :tunnel-to (:intent/kind i)) (:intent/target i)))
@@ -373,20 +402,20 @@
       {:intent/kind :craft :intent/recipe (:recipe/id r) :intent/window :inventory})))
 
 (defn food-lying
-  "[eid entity] of the nearest edible drop within hunt/hunt-radius that the eye can see
+  "[eid entity] of the nearest edible drop within forage/hunt-radius that the eye can see
    (combat/clear?), that can be picked up (fetchable?), or nil."
   [world]
   (let [pos (:player/pos world)
         eye (game/eye world)
-        bl (:plan/blacklist world #{})]
+        bl (avoided/all-of world :blacklist)]
     (->> (:world/entities world)
          (filter (fn [[eid e]]
                    (and (entity/item? e)
                         (not (entity/dead? e))
                         (contains? food-drop-ids (:entity/item e))
                         (not (contains? bl eid))
-                        (not (contains? bl (hunt/cell (:entity/pos e))))
-                        (<= (physics/distance pos (:entity/pos e)) hunt/hunt-radius)
+                        (not (contains? bl (forage/cell (:entity/pos e))))
+                        (<= (physics/distance pos (:entity/pos e)) forage/hunt-radius)
                         (combat/clear? world eye (:entity/pos e)))))
          (sort-by (fn [[_ e]] (physics/distance pos (:entity/pos e))))
          (some (fn [[_ e :as ee]] (when (fetchable? world e) ee))))))
@@ -396,21 +425,21 @@
    :collect-drops of what it holds."
   [world e]
   (let [n (recipe/item-name (:entity/item e))
-        cell (hunt/cell (:entity/pos e))]
+        cell (forage/cell (:entity/pos e))]
     (if (drops/under-reach? world e)
       {:intent/kind :walk :intent/target cell :intent/for :food}
       {:intent/kind :collect-drops :intent/item n :intent/target cell})))
 
 (defn hoglin-intent
-  "A walk or a yielding fight of the nearest hoglin hunt/game would take, or nil. hunt/game
+  "A walk or a yielding fight of the nearest hoglin forage/game would take, or nil. forage/game
    already refuses one under combat/retreat-health: a hoglin hits back, and 9.3 is under 10
    (issue #577), so it is not approached. The fight yields, so a hit under that line ends it."
   [world]
-  (when-let [[eid e] (hunt/game world)]
+  (when-let [[eid e] (forage/game world)]
     (when (= :hoglin (entity/kind e))
-      (if (<= (physics/horizontal-distance (:player/pos world) (:entity/pos e)) hunt/strike-range)
+      (if (<= (physics/horizontal-distance (:player/pos world) (:entity/pos e)) forage/strike-range)
         {:intent/kind :fight :intent/target eid :intent/for :hunt :intent/yield? true}
-        {:intent/kind :walk :intent/target (hunt/cell (:entity/pos e)) :intent/for :hunt}))))
+        {:intent/kind :walk :intent/target (forage/cell (:entity/pos e)) :intent/for :hunt}))))
 
 (def crimson-ground #{:crimson_nylium}) ; the floor a hoglin is found on
 (def food-sight 16)                     ; blocks of crimson ground crossed to find a hoglin, only at or above retreat-health
@@ -443,7 +472,7 @@
    from what is held, or (only at or above combat/retreat-health) a nearby hoglin or the crimson
    ground one lives on. nil when none of that can be had. The hunt row itself does not run in
    the Nether at food 17 (eat/hungry? is food under 14, and provisioning? is the overworld), so
-   this asks hunt/game directly."
+   this asks forage/game directly."
   [world]
   (or (when-let [[_ e] (food-lying world)] (food-intent world e))
       (craft-meal world)
@@ -493,8 +522,8 @@
   "The intent to go home through the portal for food, or nil when no portal is on record: asked
    of a bot hurt under combat/retreat-health that cannot heal (heals? false) with nothing to take
    in the Nether (provisions). Sim R1/17 reached the blazes at 9.3 health, food 17, nothing edible,
-   and no fight is allowed there; the overworld has animals (hunt/provisioning? stocks
-   hunt/provision-wanted again with the portal kit held) and the :return-nether row brings it back."
+   and no fight is allowed there; the overworld has animals (forage/provisioning? stocks
+   forage/provision-wanted again with the portal kit held) and the :return-nether row brings it back."
   [world]
   (when (home-portal world) {:intent/kind :portal-home}))
 
@@ -503,12 +532,12 @@
 (defn stocking
   "The food to take before the stage starts, or nil: fewer than food-reserve edible items held,
    no blaze watching, and a source at hand (an edible drop in sight, a meal craftable from what
-   is held, a hoglin hunt/game would take, which it refuses under combat/retreat-health). Never
+   is held, a hoglin forage/game would take, which it refuses under combat/retreat-health). Never
    a search for crimson ground: the stage is not held up for a forest that may not be near.
    Sim R1/17 reached the blazes at 9.3 health with food 17 and nothing edible, where nothing
    heals and no fight is allowed (follow-up 1:15 AM)."
   [world]
-  (when (and (< (hunt/edible-held world) food-reserve) (empty? (watchers world)))
+  (when (and (< (forage/edible-held world) food-reserve) (empty? (watchers world)))
     (or (when-let [[_ e] (food-lying world)] (food-intent world e))
         (craft-meal world)
         (hoglin-intent world))))
@@ -679,7 +708,7 @@
   [world es]
   (let [pos (:player/pos world)
         recent (into #{} (map :intention/target) (memory/newest-dones world :walk 2))
-        [c & cs] (map #(if (vector? %) % (hunt/cell (:entity/pos %)))
+        [c & cs] (map #(if (vector? %) % (forage/cell (:entity/pos %)))
                       (sort-by #(if (vector? %)
                                   (physics/distance pos (physics/centre %))
                                   (physics/distance pos (:entity/pos %)))
@@ -688,7 +717,7 @@
             (path/plan world
                        (path/feet-cell pos)
                        {:goal/kind :unseen :goal/pos c :goal/cells (vec cs) :goal/exclude recent}
-                       {:path/max-nodes 800}))
+                       {:path/max-nodes (path/budget :cover)}))
         to (last (:path/waypoints r))]
     (when (and r (= :found (:path/status r)) to (not= to (intent/feet world)))
       {:intent/kind :walk :intent/target to :intent/for :cover})))
@@ -712,7 +741,7 @@
   (let [blazes (remove vector? threats)]
     (when-let [n (and sp (seq blazes) (not (churning? world)) (nook world sp))]
       (when (and (not= n (intent/feet world))
-                 (every? (fn [e] (unseen-from? world n (hunt/cell (:entity/pos e)))) blazes))
+                 (every? (fn [e] (unseen-from? world n (forage/cell (:entity/pos e)))) blazes))
         {:intent/kind :walk
          :intent/target n
          :intent/for :cover
@@ -738,7 +767,7 @@
   "{eid entity} of the blazes alive within cover-range of the feet, in sight or not."
   [world]
   (let [pos (:player/pos world)
-        bl (:plan/blacklist world #{})]
+        bl (avoided/all-of world :blacklist)]
     (into {}
           (filter (fn [[eid e]]
                     (and (= :blaze (entity/kind e))
@@ -968,7 +997,7 @@
    its cells past 11, and a spawner's blaze spawns only at 11 or less (gym blaze-7a run 3, run
    38891910129, made none for three minutes once the floor by it burned)."
   [world [sx sy sz]]
-  (let [bl (:plan/blacklist world #{})]
+  (let [bl (avoided/all-of world :blacklist)]
     (for [x (range (- sx fire-radius) (+ sx fire-radius 1))
           y (range (dec sy) (+ sy 3))
           z (range (- sz fire-radius) (+ sz fire-radius 1))
@@ -1040,7 +1069,7 @@
   [world sp]
   (let [dead (site-stalled world sp)
         walk {:intent/kind :walk :intent/target sp}
-        at (stand (update world :plan/blacklist (fnil into #{}) dead) sp)]
+        at (stand (avoided/note-all world :blacklist dead) sp)]
     (cond (walkable? world sp) walk
           at
           {:intent/kind :tunnel-to
@@ -1077,7 +1106,7 @@
   "The fortress bricks on record that have not been visited, not blacklisted, and not the target
    of a tunnel that ended on this cell (stalled)."
   [world]
-  (let [bl (into (:plan/blacklist world #{}) (stalled world))
+  (let [bl (into (avoided/all-of world :blacklist) (stalled world))
         visited (visited-locations world)]
     (->> (fortress/bricks world)
          (remove bl)
@@ -1105,7 +1134,7 @@
   [world]
   (let [feet (intent/feet world)
         at (path/cells world)
-        bl (:plan/blacklist world #{})
+        bl (avoided/all-of world :blacklist)
         near (->> (unvisited-fortress-bricks world)
                   (remove #(contains? bl (update % 1 inc)))
                   (filter #(<= (physics/distance (physics/centre feet) (physics/centre %))
@@ -1269,7 +1298,7 @@
                    (and (= :blaze (entity/kind e))
                         (not (entity/dead? e))
                         (<= (physics/distance (physics/centre c) (:entity/pos e)) cover-range)
-                        (not (unseen-from? world c (hunt/cell (:entity/pos e))))))
+                        (not (unseen-from? world c (forage/cell (:entity/pos e))))))
                  (vals (:world/entities world)))))
 
 (defn sees-a-blaze?
@@ -1502,7 +1531,7 @@
   [world]
   (boolean (or (:player/on-fire? world) (reignited? world))))
 
-(def refuge-kinds
+(def refuge-answer-kinds
   "Intents that are the answer to a refuge: none of them is cut for one."
   #{:pocket :seal :unseal :pocket-hold :eat :fight :back-off :rest :dodge})
 
@@ -1586,7 +1615,7 @@
             target (when cell
                      (let [f (build/foundation world cell)]
                        (when (and f (not (place/inside-player? world f))) f)))
-            filler (stairs/filler world combat/wall-fill)]
+            filler (filler/pick world combat/wall-fill)]
         (when (and target filler (not (combat/wall-failed? world target)))
           {:intent/kind :place
            :intent/item filler
@@ -1618,7 +1647,7 @@
     (fetch-walk e)
     {:intent/kind :collect-drops
      :intent/item :blaze_rod
-     :intent/target (hunt/cell (:entity/pos e))}))
+     :intent/target (forage/cell (:entity/pos e))}))
 
 (defn refuge-now
   "What the bot does for its refuge now, or nil: the hold, seal or unseal in the pocket (hold-intent),
@@ -1640,8 +1669,7 @@
    10 off, past the at-hand radius, shot the bot from 16.8 health to none in ten seconds, since
    nothing ends a running intent but itself and the planner is asked only then."
   [world i]
-  (and (not (contains? #{:fight :eat :rest :back-off :pocket-hold :pocket :seal :unseal :dodge}
-                       (:intent/kind i)))
+  (and (not (contains? refuge-answer-kinds (:intent/kind i)))
        (not= :cover (:intent/for i))
        (seq (watchers world))
        (some? (cond (hurt? world) (healing world false)
@@ -1826,18 +1854,30 @@
   [world i]
   (and (= :fight (:intent/kind i)) (some? (commit-fight world))))
 
-(defmethod plan/holds? :fight
-  ;; a blaze-rods fight is not cut by another row (the default keeps a :defend row's fight
-  ;; cuttable, as a fight ends by its own break-off); the row's own interrupts? commits it
-  [i]
-  (= :blaze-rods (:intent/goal i)))
+(defn hollow-pocket?
+  "Is next a :pocket at the feet that cannot be sealed (pocket/cannot-seal?)? The steer drops such a
+   site the tick it is entered and the pocket ends at once, so cutting a tunnel for it moves
+   nothing."
+  [world next]
+  (boolean (when-let [c (and (= :pocket (:intent/kind next))
+                             (:player/pos world)
+                             (:pocket/cell (:intent/site next)))]
+             (and (= c (intent/feet world)) (pocket/cannot-seal? world c)))))
+
+(defn hollow-replacement?
+  "Would the row, planning again without the running :tunnel-to i, answer with a hollow pocket at
+   the feet (hollow-pocket?)? Then the tunnel is not cut for it."
+  [world goal i]
+  (and (= :tunnel-to (:intent/kind i))
+       (let [cut (plan/abandon-intent world i :interrupted)]
+         (hollow-pocket? cut (plan/next-intent cut goal plan/goals)))))
 
 (defmethod plan/interrupts? :blaze-rods
   ;; any running intent but a fight ends when a blaze is at hand (at-hand-blaze), and the act
   ;; fights it when healthy: gym blaze-fire-b run 3 (run 39136853644) tunnelled on with one hitting it in melee
   ;; from 20 health to 13.8, since nothing else ends a running intent; never interrupt cover or healing when hurt (#577);
   ;; and one hurt and watched (under-fire?) by blazes further off, whatever the intent but the answer to it
-  [world _ i]
+  [world goal i]
   (and (not (committed-fight? world i))
        (or ;; a fire block lit in the feet's cell or the head's while an intent runs (a pick-up of a rod
            ;; lying in it, a hold): the row's @out is asked only when none runs. Blaze-race-z8 job 3
@@ -1853,11 +1893,11 @@
         (and (:intent/until i) (> (:time/now world 0) (:intent/until i)))
         (and (= :pocket-hold (:intent/kind i)) (= :seal (:intent/kind (hold-intent world))))
         (and (= :tunnel-to (:intent/kind i)) (some? (long-shot-cover world)))
-        (and (not (contains? refuge-kinds (:intent/kind i)))
+        (and (not (contains? refuge-answer-kinds (:intent/kind i)))
              (not= :fight (:intent/kind i))
              (not (rod-grab? world i))
              (sortie-over? world))
-        (and (not (contains? refuge-kinds (:intent/kind i)))
+        (and (not (contains? refuge-answer-kinds (:intent/kind i)))
              (not (and (rod-grab? world i) (grab-over-refuge? world)))
              (some? (refuge-now world (nearest-spawner world))))
         (and (not (hurt? world))
@@ -1865,7 +1905,8 @@
              (not (and (= :cover (:intent/for i)) (crowded? world)))
              (not (and (= :collect-drops (:intent/kind i)) (some? (near-rod world))))
              (some? (fightable-blaze world)))
-        (under-fire? world i))))
+        (under-fire? world i))
+       (not (hollow-replacement? world goal i))))
 
 (defn passive?
   "Is the bot healthy and idle at the fortress: hp at passive-health or more, not burning, no blaze
@@ -1964,7 +2005,7 @@
       (intent/why :blaze/lying
                   {:intent/kind :collect-drops
                    :intent/item :blaze_rod
-                   :intent/target (hunt/cell (:entity/pos lying))})
+                   :intent/target (forage/cell (:entity/pos lying))})
       (and (not (hurt? world)) beid)
       (intent/why :blaze/and-not-hurt?-world-beid
                   {:intent/kind :fight :intent/target beid :intent/yield? true})
@@ -2073,8 +2114,7 @@
     (cond (or (seq (remove seen here)) (rod-lying world) (< (:player/health world 20.0) health))
           (intent/done world)
           (> (- now since) camp-ms)
-          (intent/fail (cond-> world spawner (update :plan/blacklist (fnil conj #{}) spawner))
-                       :no-blaze)
+          (intent/fail (cond-> world spawner (avoided/note :blacklist spawner)) :no-blaze)
           :else world)))
 
 ;; ---------------------------------------------------------------- the :rest intent

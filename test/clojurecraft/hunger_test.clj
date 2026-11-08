@@ -9,6 +9,8 @@
             [clojurecraft.physics :as physics]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.sim :as sim]
+            [clojurecraft.sim.protocol :as sim-protocol]
+            [clojurecraft.sim.world :as sim-world]
             [clojurecraft.world :as world]))
 
 (use-fixtures :once fx/instrumented)
@@ -135,7 +137,7 @@
     (is (= 6.0 (:sim/saturation done)))
     (is (= 1 (get-in done [:sim/inv slot :count])) "one bread taken")
     (is (= 1 (:sim/eaten done)))
-    (is (= [{:entity-id sim/player-eid :status sim/use-finished}]
+    (is (= [{:entity-id sim-world/player-eid :status sim-protocol/use-finished}]
            (map #(select-keys % [:entity-id :status]) (said done :entity-event))))
     (is (some #(and (= 15 (:food %)) (= 6.0 (:saturation %))) (said done :set-health))
         "the client is told the new bar and saturation")))
@@ -149,7 +151,7 @@
         swapped (ticks (sends (ticks sim 10) {:packet/name :set-carried-item :slot 1}) 40)
         released (ticks (sends (ticks sim 10)
                                {:packet/name :player-action
-                                :status sim/release-use-item
+                                :status sim-protocol/release-use-item
                                 :pos [0 0 0]
                                 :face 0
                                 :sequence 0})
@@ -174,5 +176,5 @@
                  {:sim/food 3 :sim/saturation 0.0 :sim/health 0.0 :sim/respawn [0.5 64.0 0.5]})
                 (sends {:packet/name :client-command
                         :action (packet/value :client-command :perform-respawn)}))]
-    (is (= hunger/fresh (sim/food-value sim)))
-    (is (= sim/max-health (:sim/health sim)))))
+    (is (= hunger/fresh (sim-world/food-value sim)))
+    (is (= sim-world/max-health (:sim/health sim)))))

@@ -1388,7 +1388,7 @@
                                    row
                                    tunnel)))))
     (testing "far from the spawner: not yet"
-      (is (not (plan/interrupts? (memory/forgotten w) row tunnel))))))
+      (is (not (plan/interrupts? (fx/forgotten w) row tunnel))))))
 
 (deftest a-fireball-in-flight-is-dodged-whatever-the-bot-was-doing
   ;; blaze-race-l race 2 at +210.4 s (fireball 542, hit 450 ms after its spawn): the planner steps
@@ -1621,7 +1621,7 @@
     (testing "food at 18: the rest heals, so it is the rest"
       (is (= {:intent/kind :rest} (next-intent (assoc w :player/food 18)))))
     (testing "no portal on record: a rest that cannot heal is never chosen (probe 40634461444)"
-      (is (not= :rest (:intent/kind (next-intent (memory/forgotten w))))))))
+      (is (not= :rest (:intent/kind (next-intent (fx/forgotten w))))))))
 
 (deftest a-spawner-whose-walk-failed-is-tunnelled-to-not-given-up
   ;; race lane 4 s1 r15: `:walk [544 57 203]` failed :no-path at the fortress, the blacklist took the
@@ -2045,20 +2045,25 @@
         "the row leaves through the search, not back to the pocket")
     (is (not= :camp (:intent/kind (next-intent (assoc w :plan/avoid avoid)))))))
 
-(deftest ^:eftest/synchronized a-watched-void-retreat-covers-before-it-rests
+(def void-behind
+  "A lip of nether brick west of the bot and a drop past it no landing survives: backing away from
+   a blaze to the east steps off it."
+  (into {[7 64 8] (blocks/default-state :nether_bricks)}
+        (for [x [5 6] y (range 60 64)] [[x y 8] (blocks/default-state :air)])))
+
+(deftest a-watched-void-retreat-covers-before-it-rests
   ;; sim fortress probe 41215805587 (R1/1 seed 1, ci/simrace-from-fortress): :rest at [310 79 234] from
   ;; t 83 s to 120 s with 2 and then 5 blazes 6.8 to 7.2 blocks off, hp 14.6 to 0.9, dead resting
   (let [near (entity :blaze [15.5 65.0 8.5] :entity/health 20.0)
         w (-> (standing {7 near})
+              (assoc :world/chunks {[0 0] (world/column void-behind)})
               (assoc :player/health 14.6 :player/food 20 :time/now 100000)
               (assoc-in [:player/inventory 9] (item :cobblestone 40)))]
-    (with-redefs [combat/void-retreat? (constantly true)]
-      (let [i (blaze/healing w)]
-        (is (not= {:intent/kind :rest} i) "not a rest in the line of fire")
-        (is (= :place (:intent/kind i)) "a block laid between")))
-    (with-redefs [combat/void-retreat? (constantly true)]
-      (is (= {:intent/kind :rest} (blaze/healing (assoc w :player/inventory {})))
-          "nothing to lay, eat or dig: the rest on the lip, as before"))))
+    (let [i (blaze/healing w)]
+      (is (not= {:intent/kind :rest} i) "not a rest in the line of fire")
+      (is (= :place (:intent/kind i)) "a block laid between"))
+    (is (= {:intent/kind :rest} (blaze/healing (assoc w :player/inventory {})))
+        "nothing to lay, eat or dig: the rest on the lip, as before")))
 
 (deftest the-long-shot-wall-is-not-laid-against-a-blaze-to-fight
   ;; blaze-race-z8 job 6 (landing 6): two blazes at 0.7 to 3.1 blocks, hp 20 to 3.6 in 9 s, one attack sent:
@@ -2092,7 +2097,7 @@
           (str "hp " hp " burning " burning? ": one row, the fight")))
     (doseq [hp [20.0 16.2 12.0]]
       (is (not (plan/interrupts? (tick hp true) row running)) (str "a running fight holds at " hp)))
-    (is (true? (plan/holds? running)) "and another row does not preempt it")
+    (is (true? (plan/holds? plan/goals running)) "and another row does not preempt it")
     (testing "under low-health an open landing is not a pocket, so the fight stands"
       (is (nil? (blaze/here-intent (tick 11.0 true))))
       (is (= :fight (fight (tick 11.0 true)))))))
@@ -2132,7 +2137,7 @@
                       :player/struck-at struck
                       :player/on-fire? true
                       :time/now now))]
-    (with-redefs [pocket/can-seal? (constantly false)]
+    (testing "a pocket the hits come through"
       (let [out (plan/steer (hurt pocket 12.0 4500 5000) row)]
         (is (nil? (:pocket/site out)) "hit again 3.5 s after the first hurt, 8 hp down: dropped")
         (is (contains? (:pocket/failed out) (:pocket/cell (:pocket/site pocket)))

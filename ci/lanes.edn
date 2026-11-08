@@ -1,0 +1,10 @@
+;; Which start each lane plays and the page kind its results go under (clojurecraft.lanes).
+;; :lane/kind is :real (race.yml) or :sim (simrace.yml); :lane/start is an id in
+;; resources/clojurecraft/starts.edn; :lane/page names the lane's rows on the results page;
+;; :lane/runners are the lane numbers it holds. A lane no entry names plays :default's page from
+;; the table's default start.
+{:lanes [{:lane/kind :real :lane/start :rods :lane/page "real-18" :lane/runners [1 2 3 4]}
+         {:lane/kind :real :lane/start :forest :lane/page "real-18f" :lane/runners [5 6 7 8]}
+         {:lane/kind :sim :lane/start :rods :lane/page "sim-18" :lane/runners [1 2 3 4]}
+         {:lane/kind :sim :lane/start :forest :lane/page "sim-18f" :lane/runners [5 6 7 8]}]
+ :default {:real {:lane/page "real"} :sim {:lane/page "sim"}}}

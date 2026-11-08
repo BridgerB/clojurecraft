@@ -9,13 +9,13 @@ lastUpdated: 2026-10-11
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/sim.clj#Fault knobs are inputs, not hidden state
-  - src/clojurecraft/sim.clj#defmethod on-packet [:play :container-close]
+  - src/clojurecraft/sim/window.clj#defmethod on-packet [:play :container-close]
   - src/clojurecraft/sim.clj#defn init
-  - src/clojurecraft/sim.clj#defn full-ms
+  - src/clojurecraft/sim/world.clj#defn full-ms
   - test/clojurecraft/sim_test.clj#a-niche-is-placed-into-only-once-the-slow-server-has-broken-it
   - src/clojurecraft/sim.clj#defn tick-from
   - test/clojurecraft/sim_test.clj#no-blind-take-under-lag-or-a-dropped-click
-  - src/clojurecraft/sim.clj#(update :sim/violations conj [:place-into-player dest])
+  - src/clojurecraft/sim/portal.clj#(update :sim/violations conj [:place-into-player dest])
   - test/clojurecraft/sim_test.clj#a-lost-craft-click-is-resynced-never-a-blind-take
 related:
   - "[[bot/crafting/_moc|Crafting]]"

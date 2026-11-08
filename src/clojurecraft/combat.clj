@@ -1,7 +1,7 @@
 (ns clojurecraft.combat
   "Fighting (issue #259): the :fight and :back-off executors, the swords, and the rows that use
    them: :defend (an always row at priority 0, after the escapes: a hostile within defend-radius
-   preempts any plan, a creeper within creeper-radius is backed away from, never fought) and the
+   preempts any plan, a creeper within its threats.edn radius is backed away from, never fought) and the
    gym's :attack (every hostile within attack-radius killed).
 
    775 split attacking out of interact: an attack is its own packet, the target's entity id alone
@@ -19,11 +19,14 @@
    for its row to retreat (:intent/yield?). A row whose act answers a kind of hostile itself
    (answers) has the :defend row leave that kind to it."
   (:require [clojure.math :as math]
+            [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [clojurecraft.armour :as armour]
+            [clojurecraft.avoided :as avoided]
             [clojurecraft.dimension :as dimension]
             [clojurecraft.eat :as eat]
             [clojurecraft.entity :as entity]
+            [clojurecraft.filler :as filler]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.memory :as memory]
@@ -34,11 +37,22 @@
             [clojurecraft.place :as place]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
-            [clojurecraft.stairs :as stairs]
             [clojurecraft.terrain :as terrain]
+            [clojurecraft.threat :as threat]
             [clojurecraft.window :as window]))
 
 (set! *warn-on-reflection* true)
+
+;; read by name (ns-resolve) in scratch_test and model_test, so the unused-var lint excludes it
+(def scratch
+  "The intent attributes only this namespace's executor reads and writes: {attribute {:doc meaning
+   :when lifetime}}. They are not world information, so they are not in clojurecraft.model;
+   scratch_test holds that no other namespace uses one."
+  {:intent/swings
+   {:doc "attacks a :fight has sent in reach of its target; combat/max-swings make it a ghost"
+    :when "fight, after its first attack"}})
+
+(s/def :intent/swings pos-int?)
 
 (def swing-every 650)                 ; ms between attacks: past a mob's 10-tick hurt invulnerability and a sword's full charge
 (def approach-range 3.0)              ; blocks on the plane to the target where the approach stops
@@ -322,7 +336,7 @@
   "The world with entity eid kept in :plan/given-up at now: a fight's engage gave it up as
    unreachable (not strikable, no route), so no act picks it again for a while (given-up?)."
   [world eid]
-  (assoc-in world [:plan/given-up eid] (:time/now world)))
+  (avoided/mark world :given-up eid (:time/now world)))
 
 (defn given-up?
   "Was entity eid given up (given-up) less than give-up-ms ago, and is its aim still out of
@@ -331,7 +345,7 @@
    blocks below (hittable, never strikable, no route) ended done at once, the act picked
    the same target again the next tick, and the stage's own task never ran to its timeout."
   [world eid e]
-  (let [at (get (:plan/given-up world) eid)]
+  (let [at (avoided/mark-of world :given-up eid)]
     (boolean (and at (< (- (:time/now world) at) give-up-ms) (not (in-reach? world e))))))
 
 (defmethod fight-stage :engage
@@ -394,21 +408,23 @@
 
 (def danger-margin 3.0)               ; health beyond the next hits' damage the bot keeps (#577): the enderman's 7 + 3 is retreat-health
 
+(def kinds
+  "{kind facts}: what the :defend row knows of each hostile kind (resources/clojurecraft/threats.edn)."
+  (:kinds threat/data))
+
+(defn kind-facts
+  "The facts (kinds) of entity kind k, or nil for a kind with none."
+  [k]
+  (get kinds k))
+
+(defn kinds-with
+  "The set of entity kinds whose facts hold a truthy value at key k."
+  [k]
+  (into #{} (keep (fn [[kind facts]] (when (k facts) kind))) kinds))
+
 (def extra-hits
-  "{kind damage}: one hit on Normal of the kinds mob/kinds does not carry. The Nether's: a piglin
-   took 6.7 a hit through the pearl kit's armour (pearl-fight-a job 6, run 41143668588: 18.6 to 11.9 to
-   5.2), a hoglin 5.7 (pearls-travel-b job 1), rounded up as the line errs high."
-  {:silverfish 1.0
-   :cave_spider 2.0
-   :husk 3.0
-   :drowned 3.0
-   :zombie_villager 3.0
-   :stray 3.0
-   :wither_skeleton 5.0
-   :piglin 7.0
-   :zombified_piglin 7.0
-   :hoglin 6.0
-   :piglin_brute 8.0})
+  "{kind damage}: one hit on Normal of the kinds mob/kinds does not carry, rounded up as the line errs high."
+  (into {} (keep (fn [[kind facts]] (when-let [h (:hit facts)] [kind h]))) kinds))
 
 (def pack-size 2)                      ; hostiles near that make a pack
 (def outmatched-line
@@ -522,19 +538,20 @@
    #62, world R1/11) backed away at a third of a health from a zombie stuck in the rock three
    blocks off, seven thousand times."
   [world eid e]
-  (update-in world
-             [:plan/backed-off eid]
-             (fn [{:keys [pos times] :as seen}]
-               (if (and seen (<= (physics/distance pos (:entity/pos e)) shun-drift))
-                 (assoc seen :times (inc times))
-                 {:pos (:entity/pos e) :times 1}))))
+  (let [{:keys [pos times] :as seen} (avoided/mark-of world :backed-off eid)]
+    (avoided/mark world
+                  :backed-off
+                  eid
+                  (if (and seen (<= (physics/distance pos (:entity/pos e)) shun-drift))
+                    (assoc seen :times (inc times))
+                    {:pos (:entity/pos e) :times 1}))))
 
 (defn cornered
   "The world with entity eid kept in :plan/cornered: a back-off from it ended on its clock, or
    the way away was a drop no landing survives, the target still nearer than back-off-to, so
    there was nowhere to back off to."
   [world eid]
-  (update world :plan/cornered (fnil conj #{}) eid))
+  (avoided/note world :cornered eid))
 
 (def void-look 3)                     ; blocks along a retreat looked at for a drop no landing survives
 
@@ -619,7 +636,6 @@
 (def over-feet 3.0)                   ; blocks a mob's feet may be over the bot's and be fought (its body, aim-height up, comes within reach)
 (def under-feet 2.0)                  ; blocks under the bot's feet a mob may be and be fought
 (def sight-step 0.25)                 ; blocks between the samples of a line of sight
-(def creeper-radius 6.0)              ; a creeper this near is backed away from, never fought
 (def shun-after 2)                    ; back-offs from one creeper that has not moved (shun-drift) after which it is shunned
 (def shunned-radius 3.0)              ; a shunned creeper is a threat only this near (its fuse starts at the mob's :swell, 3)
 (def given-up-after 6)                ; back-offs from a creeper that never moved after which only one at the feet is a threat
@@ -666,7 +682,7 @@
    back-off after back-off from one that never moved, and the walk to the ore, the water or the
    stairs never finished. One that moves on is counted afresh."
   [world eid e base]
-  (let [{:keys [pos times]} (get-in world [:plan/backed-off eid])
+  (let [{:keys [pos times]} (avoided/mark-of world :backed-off eid)
         still? (and pos (<= (physics/distance pos (:entity/pos e)) shun-drift))]
     (cond (not still?) base
           (>= times given-up-after) (min base given-up-radius)
@@ -730,11 +746,17 @@
 
 (def struck-ms 4000)                  ; ms a strike stays the answer to who is hitting: the gym's piglin hits came about a second apart
 
+(defn shelter-walk
+  "A :walk to cell that ends standing in it, tagged :intent/for :shelter, which a breath near the
+   feet does not end (plan/interrupts?)."
+  [cell]
+  {:intent/kind :walk :intent/target cell :intent/for :shelter})
+
 (defn pack-neutral?
-  "Is e a zombified piglin? Hitting one angers the pack, so one that has struck is backed away
-   from and never swung at."
+  "Is e of a pack-neutral kind (a zombified piglin)? Hitting one angers the pack, so one that has
+   struck is backed away from and never swung at."
   [e]
-  (= :zombified_piglin (entity/kind e)))
+  (boolean (:pack-neutral? (kind-facts (entity/kind e)))))
 
 (defn striker
   "[eid entity] that last struck the bot, while the strike is fresher than struck-ms and the
@@ -751,23 +773,20 @@
 
 (def never-fought
   "Kinds the :defend row never makes a fight of: a ghast hovers out of a sword's reach and burns
-   the bot with fireballs, so a fight on it is a walk after it. Blaze-race-c job 4 (3a082f7b7, real)
-   `burned to a crisp while fighting Ghast` after 172 minutes. Cover or moving on, not a fight."
-  #{:ghast})
+   the bot with fireballs, so a fight on it is a walk after it. Cover or moving on, not a fight."
+  (kinds-with :never-fought?))
 
 (def avoided
   "Kinds the :defend row does not fight alone below full health, nor two of: a wither skeleton
-   hits for 5 and withers, and a fortress holds them in threes. Blaze-race-f (real, 6e703362a) race
-   row runs 2 and 3, the stone-sword kit, were slain at 2m42 and 2m52: :fight 82 at 14.9 health,
-   three hits of 5 from 82, 84 and 83 in 0.03 minutes."
-  #{:wither_skeleton})
+   hits for 5 and withers, and a fortress holds them in threes."
+  (kinds-with :avoided?))
 
 (def avoided-health 18.0) ; health a fight with one of avoided is begun at
 
 (defn threats
   "{eid entity} of the hostiles (entity/hostiles) the :defend row answers, plus whoever last
    struck (striker) while that strike is fresh: within defend-radius of the feet, a creeper
-   within creeper-radius, either less once shunned (reach); none the plan blacklisted (a ghost),
+   within the creeper's radius (threats.edn), either less once shunned (reach); none the plan blacklisted (a ghost),
    none of a kind a row in play answers itself (answered-kinds), only what can be fought from
    here (hittable?) and come to (approachable?: a mob in water two blocks below is seen but
    never strikable and no route reaches it, and a fight on it ends done at once, re-picked for
@@ -777,40 +796,38 @@
    dragon's breath (breathed-on?)."
   [world]
   (let [pos (:player/pos world)
-        bl (:plan/blacklist world #{})
+        bl (avoided/all-of world :blacklist)
         left (answered-kinds world)
         [aid ae] (striker world)
         pool (cond-> (entity/hostiles world) ae (assoc aid ae))
         pumpkin? (= :carved_pumpkin (armour/worn world 0))
         hurt? (and (:player/hurt-at world)
                    (<= (- (:time/tick world 0) (:player/hurt-at world)) 60))]
-    (into
-     {}
-     (filter
-      (fn [[eid e]]
-        (and (not (breathed-on? world))
-             (not (contains? bl eid))
-             (not= :ender_dragon (entity/kind e))
-             (not (contains? never-fought (entity/kind e)))
-             (or (and (= eid (:player/attacker world)) (not (claimed-attacker? world e)))
-                 (not (contains? left (entity/kind e))))
-             (not (given-up? world eid e))
-             (or (not pumpkin?)
-                 (not= :enderman (entity/kind e))
-                 (= eid (:player/attacker world))
-                 (and hurt? (<= (physics/distance pos (:entity/pos e)) 3.5)))
-             (<= (physics/distance pos (:entity/pos e))
-                 (reach world eid e (if (= :creeper (entity/kind e)) creeper-radius defend-radius)))
-             (hittable? world e)
-             (approachable? world e))))
-     pool)))
+    (into {}
+          (filter
+           (fn [[eid e]]
+             (and (not (breathed-on? world))
+                  (not (contains? bl eid))
+                  (not= :ender_dragon (entity/kind e))
+                  (not (contains? never-fought (entity/kind e)))
+                  (or (and (= eid (:player/attacker world)) (not (claimed-attacker? world e)))
+                      (not (contains? left (entity/kind e))))
+                  (not (given-up? world eid e))
+                  (or (not pumpkin?)
+                      (not (:pumpkin-safe? (kind-facts (entity/kind e))))
+                      (= eid (:player/attacker world))
+                      (and hurt? (<= (physics/distance pos (:entity/pos e)) 3.5)))
+                  (<= (physics/distance pos (:entity/pos e))
+                      (reach world eid e (:radius (kind-facts (entity/kind e)) defend-radius)))
+                  (hittable? world e)
+                  (approachable? world e))))
+          pool)))
 
 (defmethod plan/done-by :safe? [world _] (or (nil? (:player/pos world)) (empty? (threats world))))
 
 (def teleporters
-  "Kinds a back-off never gets away from: they teleport to the bot (an enderman: gym main
-   dragon-main-a run 1, plan run 41092662823, backed off from two at 9.3 health and was slain)."
-  #{:enderman})
+  "Kinds a back-off never gets away from: they teleport to the bot."
+  (kinds-with :teleports?))
 
 (defn back-off-pointless?
   "Would a :back-off from entity e be done at once, getting the bot nowhere: it is already
@@ -840,6 +857,16 @@
                           (< (- cy 1.0) ey (+ cy 1.5)))))
                  (vals (:world/entities world)))))
 
+(defn wall-cells
+  "The two cells, at cell [x y z]'s height and the one over it, beside it along the axis of
+   [dx dz] with the larger magnitude (x on a tie), as a vector: where blocks go between a bot at
+   the cell and something that way."
+  [[x y z] dx dz]
+  (let [[ux uz] (if (>= (abs dx) (abs dz))
+                  [(long (math/signum (double dx))) 0]
+                  [0 (long (math/signum (double dz)))])]
+    [[(+ x ux) y (+ z uz)] [(+ x ux) (inc y) (+ z uz)]]))
+
 (defn wall-cell
   "The first cell clear (path/classify) and unoccupied (occupied?) of the two beside the feet
    toward entity e, at the feet's height then the eye's, or nil when neither is: where a block
@@ -847,14 +874,10 @@
    on the cell its silverfish stood in, the server refused each (`intent :place failed: :rejected
    (attempt 3 of 3)`), and the plan failed."
   [world e]
-  (let [[fx fy fz] (intent/feet world)
-        [px _ pz] (:player/pos world)
-        [ex _ ez] (:entity/pos e)
-        dx (- ex px)
-        dz (- ez pz)
-        [sx sz] (if (>= (abs dx) (abs dz)) [(long (math/signum dx)) 0] [0 (long (math/signum dz))])]
+  (let [[px _ pz] (:player/pos world)
+        [ex _ ez] (:entity/pos e)]
     (first (filter #(and (= :clear (path/classify world %)) (not (occupied? world %)))
-                   [[(+ fx sx) fy (+ fz sz)] [(+ fx sx) (inc fy) (+ fz sz)]]))))
+                   (wall-cells (intent/feet world) (- ex px) (- ez pz))))))
 
 (defn nook-cell
   "The cell under the feet when the bot holds a pickaxe and it and the one under it are solid
@@ -894,7 +917,7 @@
    (back-off-pointless?), never a fight (#577, danger-health): with e back-off-to or more away, the
    meal when food is held and the bar can take one, else the wait :resting; otherwise the meal
    when food is held, the bar can take one and e is out of attack-reach, else a block laid
-   between (wall-cell, a filler of stairs/filler), else a pillar of pillar-height when
+   between (wall-cell, a filler of filler/pick), else a pillar of pillar-height when
    pillar-fill filler is held, else the meal, else the dig of a nook under the feet (nook-cell,
    a pickaxe held) to stand in. Only with nothing at all held the wait :cornered, which ENDS THE
    PLAN after wait-ticks: the one choice here that is a death or a failure, taken with nothing
@@ -902,26 +925,51 @@
    50 ms for a second and died standing in it."
   [world e]
   (let [food (when (< (:player/food world 20) 20) (eat/food-held world))
-        near? (<= (physics/distance (game/eye world) (aim e)) attack-reach)
         wall (let [w (wall-cell world e)] (when-not (wall-failed? world w) w))
-        filler (stairs/filler world wall-fill)
-        pillar (when-not (pillar-failed? world) (stairs/filler world pillar-fill))
-        nook (nook-cell world)
-        [_ fy _] (intent/feet world)]
-    (cond (>= (horizontal world e) back-off-to)
-          (intent/why :cover/horizontal-world-e-back-off-to
-                      (if food {:intent/kind :eat :intent/item food} {:plan/wait :resting}))
-          (and food (not near?))
-          (intent/why :cover/and-food-not-near? {:intent/kind :eat :intent/item food})
-          (and wall filler)
-          (intent/why :cover/and-wall-filler
-                      {:intent/kind :place :intent/item filler :intent/cell wall})
-          pillar
-          (intent/why :cover/pillar
-                      {:intent/kind :pillar :intent/item pillar :intent/top (+ fy pillar-height)})
-          food (intent/why :cover/food {:intent/kind :eat :intent/item food})
-          nook (intent/why :cover/nook {:intent/kind :dig :intent/target nook})
-          :else (intent/why :cover/else {:plan/wait :cornered}))))
+        [_ fy _] (intent/feet world)
+        ctx {:e e
+             :food food
+             :far? (>= (horizontal world e) back-off-to)
+             :near? (<= (physics/distance (game/eye world) (aim e)) attack-reach)
+             :wall wall
+             :filler (filler/pick world wall-fill)
+             :pillar (when-not (pillar-failed? world) (filler/pick world pillar-fill))
+             :top (+ fy pillar-height)
+             :nook (nook-cell world)}]
+    (threat/shelter world
+                    ctx
+                    (:cover-ladder threat/data)
+                    (intent/why :cover/else {:plan/wait :cornered}))))
+
+(defmethod threat/measure :far-rest
+  [_ {:keys [far? food]} _]
+  (when far?
+    (intent/why :cover/horizontal-world-e-back-off-to
+                (if food {:intent/kind :eat :intent/item food} {:plan/wait :resting}))))
+
+(defmethod threat/measure :eat-out-of-reach
+  [_ {:keys [food near?]} _]
+  (when (and food (not near?))
+    (intent/why :cover/and-food-not-near? {:intent/kind :eat :intent/item food})))
+
+(defmethod threat/measure :wall
+  [_ {:keys [wall filler]} _]
+  (when (and wall filler)
+    (intent/why :cover/and-wall-filler
+                {:intent/kind :place :intent/item filler :intent/cell wall})))
+
+(defmethod threat/measure :pillar
+  [_ {:keys [pillar top]} _]
+  (when pillar
+    (intent/why :cover/pillar {:intent/kind :pillar :intent/item pillar :intent/top top})))
+
+(defmethod threat/measure :eat
+  [_ {:keys [food]} _]
+  (when food (intent/why :cover/food {:intent/kind :eat :intent/item food})))
+
+(defmethod threat/measure :nook
+  [_ {:keys [nook]} _]
+  (when nook (intent/why :cover/nook {:intent/kind :dig :intent/target nook})))
 
 (defn teleport-cover
   "The cover against e when it is one of teleporters, which no back-off gets away from, and a
@@ -940,12 +988,6 @@
     (or (when-let [e (get threats attacker)] [attacker e])
         (entity/nearest threats (:player/pos world)))))
 
-(def refuge-kinds
-  "Intents of another row that shelter the bot (a pocket dug and sealed, held, opened): kept against
-   the :defend row, which would lay a block or back off in their place (plan/holds?)."
-  #{:pocket :seal :unseal :pocket-hold})
-
-(doseq [k refuge-kinds] (defmethod plan/holds? k [_] true))
 
 (defmethod plan/next-intent :defend
   ;; the attacker among the threats, else the nearest (defend-target): a creeper, or anything
@@ -972,7 +1014,7 @@
                 (= :creeper (entity/kind e))
                 hurt?
                 (and (contains? avoided (entity/kind e))
-                     (not (contains? (:plan/cornered world #{}) eid))
+                     (not (avoided/noted? world :cornered eid))
                      (or (< (:player/health world 20.0) avoided-health)
                          (< 1
                             (count (filter #(contains? avoided (entity/kind %))
@@ -982,8 +1024,7 @@
             (= :silverfish (entity/kind e))
             (intent/why :defend/silverfish-entity-kind-e
                         {:intent/kind :fight :intent/target eid :intent/hold? true})
-            (or (contains? entity/neutral (entity/kind e))
-                (contains? (:plan/cornered world #{}) eid))
+            (or (contains? entity/neutral (entity/kind e)) (avoided/noted? world :cornered eid))
             (intent/why :defend/or-contains?-entity-neutral-entity-kind-e-contai
                         {:intent/kind :fight :intent/target eid :intent/to-the-end? true})
             :else (intent/why :defend/else {:intent/kind :fight :intent/target eid})))))
@@ -993,7 +1034,7 @@
    blacklisted, none given up as unreachable a while ago (given-up?)."
   [world]
   (let [pos (:player/pos world)
-        bl (:plan/blacklist world #{})]
+        bl (avoided/all-of world :blacklist)]
     (into {}
           (filter (fn [[eid e]]
                     (and (not (contains? bl eid))

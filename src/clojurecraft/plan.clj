@@ -12,6 +12,7 @@
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.math :as math]
+            [clojurecraft.avoided :as avoided]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.dimension :as dimension]
             [clojurecraft.entity :as entity]
@@ -53,6 +54,13 @@
   [table]
   (filterv #(and (:goal/target? %) (live? %)) table))
 
+(defn satellites-of
+  "The live satellite rows of a table: rows with a :goal/parent (a set of row ids), in play
+   whenever a parent is. A threat or an opportunity of a stage is a satellite: it is undone only
+   while it applies, then it outranks its parent, and its intent is not cut by the parent's row."
+  [table]
+  (filterv #(and (:goal/parent %) (live? %)) table))
+
 (def targets (targets-of goals))
 
 (defn goals-for
@@ -61,9 +69,7 @@
   (some (fn [g] (when (= until (:goal/until g)) [(:goal/id g)])) targets))
 
 (defn aside?
-  "Is a target row a trial of its own rather than a step of the run: the water trial (:goal/plan
-   :wade, from before the flag) or any row marked :goal/aside? (the gym's entities trial, issue
-   #258)? A run from spawn never plays one, and none is the current stage."
+  "Is a target row a trial of its own rather than a step of the run: the water trial (:goal/plan :wade) or any row marked :goal/aside?? A run from spawn never plays one, and none is the current stage."
   [row]
   (boolean (or (:goal/aside? row) (= :wade (:goal/plan row)))))
 
@@ -100,22 +106,13 @@
 (def landing-reach 2.0)               ; horizontal distance from :go/at that counts as landed
 
 (def target-scoped-failures
-  "[kind reason] pairs of failures that concern one target and no more: a fight that cannot reach
-   its mob, a pickup that found nothing. fail-intent blacklists the target, which bounds the retry
-   (the choice skips a blacklisted target), and counts no strike against the plan, for any goal.
-   Blaze-race-p job 6 ended at 6m24s with 16 hp, fifteen beef and full iron on two
-   :collect-drops :not-picked-up and a :fight :unreachable."
+  "[kind reason] pairs of failures that concern one target and no more: a fight that cannot reach its mob, a pickup that found nothing. fail-intent blacklists the target, which bounds the retry (the choice skips a blacklisted target), and counts no strike against the plan, for any goal."
   #{[:fight :unreachable] [:collect-drops :not-picked-up]})
 
 (def max-attempts 3)                  ; consecutive failed intents before the plan fails
 (def stall-ms 900000)                 ; ms with no intent done (progress?) after which a run out of attempts is a dead end: 15 min
 (def recover-cooldown-ms 10000)        ; ms between two recoveries: a recovery that fails again at once waits, it does not start over every 100 ms
 (def stuck-ms 600000)                 ; ms without progress (progress-key changed, or a move of stuck-extent) after which the bot is made to go elsewhere: 10 min
-(def fact-rows
-  "The :goal/plan of the rows whose progress is items and facts only (progress-key): a walk or a
-   tunnel does not count for them, however far. Blaze-race-z job 1 (run 41173997255) tunnelled 106 min
-   round a ring 67 blocks across."
-  #{:pearls :blaze-rods})
 (def stuck-extent 16.0)               ; blocks the box of the feet's places since progress was last seen must span (x or z) to count as a move: a tunnel loop inside 12 blocks is not one
 (def watch-every-ms 1000)             ; ms between two looks at progress
 (def quiet-ticks 6000)                ; ticks without damage after which a held defence is no longer defended for the watchdog: 5 min
@@ -125,23 +122,7 @@
 (def avoid-ms 300000)                 ; ms after the watchdog fires that the place it fired at is avoided by the row's choices
 (def avoid-radius 16.0)               ; blocks from that place a cell counts as it
 (def explore-tries 4)                 ; trail cells tried farthest first, then as many nearest first, for a route
-(def explore-nodes 2000)              ; expansions each of those route searches may spend
-(def anchors
-  "{:goal/plan #{attribute}}: the places a row holds on to (the pearl hunt's burrow, a blaze pocket),
-   dropped when it has made no progress for stuck-ms, so it does not walk back to them."
-  {:pearls #{:pearls/exit-target :pearls/shelter :pearls/mouth :pearls/relocate :plan/boxed-at
-             :plan/given-up}
-   :blaze-rods #{:pocket/site :pocket/prepared-at :pocket/seal-failed-at :sortie/since}})
-(def resets
-  "{:goal/plan {attribute value}}: what a stuck row starts over with (the pearl hunt's blacklist)."
-  {:pearls {:plan/blacklist #{}}})
-(def clocks
-  "{:goal/plan [path]}: the clocks (ms) inside a row's attributes restarted at now when it is stuck."
-  {:pearls [[:pearls/gain :at]]})
-(def stuck-after
-  "{:goal/plan ms}: how long a row may go without progress before it is stuck, where it is not
-   stuck-ms: a blaze camp can wait 14 to 16 min for its first blaze to be hurt."
-  {:blaze-rods 1200000})
+(def explore-nodes (path/budget :explore))              ; expansions each of those route searches may spend
 (def retreat-reach
   "Blocks from the feet within which a trail cell is a retreat: further is not a step back."
   16)
@@ -175,7 +156,16 @@
 (defmulti interrupts?
   "Should the running intent i of goal (the goal chosen now) end before it is done, so the row's
    act plans again? Nothing else ends a running intent but itself. Keyed by :goal/plan; never by
-   default."
+   default.
+   Only :blaze-rods and :ender-pearls define one. A row whose plan is ordered by urgency cuts by
+   rank instead (:goal/ranks, outranks?), with a stale intent cut by still-wanted?. These two cannot:
+   each is a matrix of triggers (a blaze at hand, a dodge, a refuge, a fire, a volley, an angry
+   enderman near the burrow ...) against exemptions on what is running (a rod pick-up, a meal, the
+   refuge's own intents, a fight to its end), and an exemption is not an order: a dodge outranks
+   everything except a pick-up already under way, and some exemptions read the world (a rod
+   within a step, a pick-up younger than two seconds). Each exemption is a past flip-flop, so the
+   matrix stays code, its kind sets named data in its namespace and its world tests named
+   predicates, until the plan itself is ordered so that the exemptions fall out of its order."
   {:arglists '([world goal i])}
   (fn [_world goal _i] (:goal/plan goal :needs)))
 
@@ -196,19 +186,6 @@
   {:arglists '([world goal])}
   (fn [_world goal] (:goal/plan goal :needs)))
 
-(defmulti holds?
-  "Is the running intent i a defence that another row's choice must not cut: one that runs to its
-   own end, whatever row the planner chooses meanwhile? Keyed by :intent/kind; every intent of
-   the :defend row by default, a fight excepted (it ends by its own break-off), and refuge kinds
-   by a defmethod. Only an escape row (:goal/trap) preempts it. Blaze-race-n jobs 4 and 6 (run
-   41105083204) lost a :pocket and a :seal to :defend within 50 ms of a new attacker, and
-   pearls-travel-b job 1 (41134469333) flipped :eat and :back-off every 50 ms as a hoglin crossed
-   the defend radius, no intent ever finishing."
-  {:arglists '([i])}
-  :intent/kind)
-
-(defmethod holds? :default [i] (and (= :defend (:intent/goal i)) (not= :fight (:intent/kind i))))
-
 (defmulti held-goal?
   "Is goal held by a threat or defense so the watchdog treats it as held, not stuck?"
   {:arglists '([world goal])}
@@ -216,18 +193,35 @@
 
 (defmethod held-goal? :default [_ _] false)
 
+(defn row-of
+  "The row of table with :goal/id id, or nil."
+  [table id]
+  (some #(when (= id (:goal/id %)) %) table))
+
+(defn commits?
+  "Does row commit its running intents of kind: only an escape row (:goal/trap) may cut one before
+   it ends? The row's :goal/commits is :all or the set of kinds; :goal/uncommitted removes kinds
+   from :all."
+  [row kind]
+  (let [c (:goal/commits row)]
+    (boolean (cond (= :all c) (not (contains? (:goal/uncommitted row #{}) kind))
+                   (set? c) (contains? c kind)))))
+
+(defn holds?
+  "Is the running intent i one its own row (:intent/goal in table) commits (commits?)?"
+  [table i]
+  (commits? (row-of table (:intent/goal i)) (:intent/kind i)))
+
 (defn held?
-  "Is running intent i kept against goal, or (with world) is goal held so the watchdog treats
-   it as held, not stuck?"
-  ([i goal]
-   (if (and i (contains? i :intent/kind))
-     (boolean (and goal
-                   (:intent/goal i)
-                   (not= (:goal/id goal) (:intent/goal i))
-                   (not (:goal/trap goal))
-                   (holds? i)))
-     (held-goal? i goal)))
-  ([world goal _] (held-goal? world goal)))
+  "Is running intent i, of another row than goal, kept against goal: its row commits it (holds?)
+   and goal is not an escape row (:goal/trap)?"
+  [table i goal]
+  (boolean (and i
+                goal
+                (:intent/goal i)
+                (not= (:goal/id goal) (:intent/goal i))
+                (not (:goal/trap goal))
+                (holds? table i))))
 
 (defmethod interrupts? :default [_ _ _] false)
 (defmethod steer :default [world _] world)
@@ -241,8 +235,11 @@
    row marked :goal/always? is in play whatever --until asked for: the escapes are."
   [world table]
   (let [goals (:plan/goals world)]
-    (->> (targets-of table)
-         (filter #(or (nil? goals) (:goal/always? %) (contains? goals (:goal/id %))))
+    (->> (concat (targets-of table) (satellites-of table))
+         (filter #(or (nil? goals)
+                      (:goal/always? %)
+                      (contains? goals (:goal/id %))
+                      (some goals (:goal/parent %))))
          (sort-by :goal/priority))))
 
 (defn here?
@@ -286,15 +283,7 @@
   (into (:plan/reached world #{}) (:plan/best world)))
 
 (defn restart-after-death
-  "A chained run after a death that lost the inventory starts its chain over. The server's
-   respawn contents of the new life have arrived (:inventory/life is :stats/deaths) and the bot
-   holds fewer than kept-items: :plan/reached goes back to nothing (reach then re-derives what
-   holds), the stages it had are kept in :plan/best, and :plan/reached-after is left alone.
-   A bot that kept its inventory (keep_inventory true, the races) is unchanged. One check per
-   life (:plan/lives). A local full run on a server with keep_inventory false suffocated in a wall,
-   respawned at spawn with nothing and went on as the water-bucket row, crafting wooden pickaxes
-   from scratch under its label, with wood, kit, pickaxe, cobblestone, stone-pickaxe, furnace,
-   ingots and bucket reached for ever (issue #670)."
+  "A chained run after a death that lost the inventory starts its chain over. The server's respawn contents of the new life have arrived (:inventory/life is :stats/deaths) and the bot holds fewer than kept-items: :plan/reached goes back to nothing (reach then re-derives what holds), the stages it had are kept in :plan/best, and :plan/reached-after is left alone. A bot that kept its inventory (keep_inventory true) is unchanged. One check per life (:plan/lives)."
   [world]
   (let [deaths (:stats/deaths world 0)]
     (cond (or (not (:plan/chain? world))
@@ -321,6 +310,7 @@
     (let [world (restart-after-death world)
           new (into []
                     (comp (remove :goal/always?)
+                          (remove :goal/parent)
                           (remove #(contains? (:plan/reached world #{}) (:goal/id %))) ; reached is reached: never asked again
                           (filter #(done-by world %))
                           (map :goal/id))
@@ -339,10 +329,10 @@
       (cond-> (:plan/intent world) (memory/remember-intention (:plan/intent world) :abandoned))
       (assoc :plan/status (if at :landing :active)
              :plan/since (:time/now world)
-             :plan/blacklist #{}
-             :plan/trunk-failures {}
              :plan/attempts 0
              :plan/unwalkable 0)
+      (avoided/clear :blacklist)
+      (avoided/clear :trunk-failures)
       (cond-> goals (assoc :plan/goals (set (map #(current-id table %) goals))))
       (cond-> at (assoc :plan/go-at at))
       (cond-> chain? (assoc :plan/chain? true :plan/reached #{}))
@@ -368,52 +358,29 @@
         (assoc world :plan/status :failed :plan/reason :no-landing)
         :else world))
 
-(def churn-log-every "Repeats of one intent between two `churn` log lines." 20)
+(def choice-keys
+  "The keys of a planned intent that make it this intent and not another: what it is (kind,
+   purpose), what it works on (item, recipe, target, cell) and how far (to-y). A deadline, the goal
+   it serves and a start time are left out because they move on every planning without making
+   another choice."
+  [:intent/kind :intent/for :intent/item :intent/recipe :intent/target :intent/cell :intent/to-y
+   :intent/top])
 
-(defn identity-of
-  "The kind, and the target and :intent/for when the intent has them, of intent i: what makes two
-   intents the same one for churn detection. Absent keys stay absent (an attribute is never nil)."
+(defn choice-key
+  "The identity of intent i as a choice: its choice-keys, read from the form it was planned in
+   (:intent/plan) when it has one, so a target an executor gained while running is not part of it.
+   Absent keys stay absent. Two intents are the same choice when their choice-keys are equal."
   [i]
-  (select-keys i [:intent/kind :intent/target :intent/for]))
+  (into {} (filter (comp some? val)) (select-keys (or (:intent/plan i) i) choice-keys)))
 
 (defn mark-ended
-  "The world with :plan/ended set to the identity of intent i (kind, target, purpose) and the
-   ms it ended at: what start-intent compares the next intent with (churn-count)."
+  "The world with :plan/ended set to the choice-key of intent i and the
+   ms it ended at: the identity of what ended, read by the rows that ask what just ended."
   [world i]
-  (assoc world :plan/ended (assoc (identity-of i) :ended/at (:time/now world 0))))
-
-(defn churn-count
-  "How many times in a row the planner has started the same intent (kind, target and :intent/for)
-   the tick after it ended, with i about to be the next one: 0 when i is not that repeat, else
-   one more than :plan/churn counted for the same intent. CHURN is the bug where the planner's
-   choice and the intent's own end check disagree about one state: the intent starts, ends in its
-   first tick, and the planner picks it again every 50 ms while the bot stands still (WALK-RESTART,
-   issue #615). Observation only: nothing reads it back."
-  [world i]
-  (let [e (:plan/ended world)
-        same? (fn [m]
-                (and (= (:intent/kind m) (:intent/kind i))
-                     (= (:intent/target m) (:intent/target i))
-                     (= (:intent/for m) (:intent/for i))))
-        repeat? (and e (same? e) (<= (- (:time/now world 0) (:ended/at e)) physics/tick-ms))]
-    (cond (not repeat?) 0
-          (same? (:plan/churn world)) (inc (:churn/n (:plan/churn world)))
-          :else 1)))
-
-(defn note-churn
-  "The world with :plan/churn updated for the intent i about to start (churn-count), and, once
-   every churn-log-every repeats, a `churn <kind> <target> xN` line."
-  [world i]
-  (let [n (churn-count world i)]
-    (cond-> (assoc world :plan/churn (assoc (identity-of i) :churn/n n))
-      (and (pos? n) (zero? (mod n churn-log-every)))
-      (game/say (str "churn " (:intent/kind i) " " (:intent/target i) " x" n)))))
+  (assoc world :plan/ended (assoc (choice-key i) :ended/at (:time/now world 0))))
 
 (def instant-limit
-  "No-progress instant ends of one choice in a row after which it counts as failed. Real churn
-   repeats every tick (the retrace of issue #717: 24,234 starts on one cell), so three in a row
-   is already a loop; a legitimate repeat never ends in its first tick with nothing done (a
-   fight swings, a meal takes its ticks, a dig along a line moves to the next target)."
+  "No-progress instant ends of one choice in a row after which it counts as failed. Real churn repeats every tick, so three in a row is already a loop; a legitimate repeat never ends in its first tick with nothing done."
   3)
 (def instant-window-ms
   "Ms between two no-progress instant ends of one choice for them to count as in a row."
@@ -453,15 +420,12 @@
                   (not (acted? world))))))
 
 (defn instant-count
-  "How many no-progress instant ends of intent i's choice (identity-of) in a row, i's end
+  "How many no-progress instant ends of intent i's choice (choice-key) in a row, i's end
    included: one more than :plan/instant counted when i is that choice and its last instant end
    was within instant-window-ms, else 1."
   [world i]
   (let [p (:plan/instant world)
-        same? (and p
-                   (= (:intent/kind p) (:intent/kind i))
-                   (= (:intent/target p) (:intent/target i))
-                   (= (:intent/for p) (:intent/for i)))
+        same? (and p (= (select-keys p choice-keys) (choice-key i)))
         fresh? (and same? (<= (- (:time/now world 0) (:instant/at p)) instant-window-ms))]
     (if fresh? (inc (:instant/n p)) 1)))
 
@@ -490,33 +454,18 @@
                               {:path/max-nodes explore-nodes}))))
 
 (defn regroup-cell
-  "The latest cell of the trail (feet of recently started intents) at least regroup-distance
-   from the feet on the plane, not blacklisted nor boxed-at, that has a route (routable?; at most
-   explore-tries searched), or nil: the new spot to plan from. Blaze-race-z11 job 5 (run
-   41233526639): every regroup walk failed :no-path in under a second (the trail cell lay in its own
-   tunnel) and the tunnel was planned again at once, 65 recoveries in 19 minutes."
+  "The latest cell of the trail (feet of recently started intents) at least regroup-distance from the feet on the plane, not blacklisted nor boxed-at, that has a route (routable?; at most explore-tries searched), or nil: the new spot to plan from."
   [world]
   (let [feet (when (:player/pos world) (intent/feet world))
         ok? (fn [c]
               (and feet
                    (>= (physics/horizontal-distance c feet) regroup-distance)
-                   (not (contains? (:plan/blacklist world #{}) c))
-                   (not (contains? (:plan/boxed-at world #{}) c))))]
+                   (not (contains? (avoided/all-of world :blacklist) c))
+                   (not (contains? (avoided/all-of world :boxed-at) c))))]
     (->> (rseq (:plan/trail world []))
          (filter ok?)
          (take explore-tries)
          (some #(when (routable? world %) %)))))
-
-(def choice-keys
-  "The keys of a planned intent that make it this intent and not another: what it is (kind,
-   purpose), what it works on (item, recipe, target, cell) and how far (to-y). Everything else a
-   row plans is left out because it moves on every planning without making another choice: a
-   deadline (:intent/until, now plus a few seconds: blaze-race-z8 job 5, run 41214675186, planned
-   one :place with 1793461559332, then ...482, then ...632), the goal it serves, a start time. The
-   target of an intent whose executor sets one (a :place) is the planned one, nil, never the one
-   it has gained running."
-  [:intent/kind :intent/for :intent/item :intent/recipe :intent/target :intent/cell :intent/to-y
-   :intent/top])
 
 (def failure-memory-ms 30000)            ; ms a failed choice is remembered
 (def failure-limit 16)                ; failed choices remembered
@@ -524,12 +473,6 @@
 (def area-radius 6.0)                 ; blocks on the plane that make an area
 (def area-blocked-after 3)            ; :blocked failures of one kind in an area after which the row is made to leave it
 (def blocked-after 3)                 ; failures of one choice within failure-memory-ms after which it is refused wherever the bot stands
-
-(defn choice-of
-  "The identity of intent i as a choice: its choice-keys, from the form it was planned in
-   (:intent/plan) when it has one."
-  [i]
-  (select-keys (or (:intent/plan i) i) choice-keys))
 
 (defn fresh-failures
   "The failures of :plan/failures within failure-memory-ms of now."
@@ -544,17 +487,13 @@
     (filterv #(<= (- now (:at %)) area-memory-ms) (:plan/failures world []))))
 
 (defn remember-failure
-  "The world with the failure of intent i (from feet) added to :plan/failures: the choice, where the
-   bot stood and when, the freshest failure-limit kept. Not cleared by the next intent that starts
-   (:plan/failed is): z9 job 3 (run 41222838848) alternated a :pillar that failed :boxed with a
-   :dig the row planned between, 166 failures in 29 s, the guard against an identical retry
-   seeing nothing after the :dig."
+  "The world with the failure of intent i (from feet) added to :plan/failures: the choice, where the bot stood and when, the freshest failure-limit kept. Not cleared by the next intent that starts (:plan/failed is), so a failure is seen when the row alternates between two choices."
   [world i feet]
   (assoc world
          :plan/failures
          (vec (take-last failure-limit
                          (conj (recent-failures world)
-                               {:choice (choice-of i)
+                               {:choice (choice-key i)
                                 :kind (:intent/kind i)
                                 :reason (:intent/reason i)
                                 :feet feet
@@ -565,18 +504,14 @@
    times within it from anywhere? A target-less intent (a :pillar, which fail-intent could not
    blacklist by target) is refused the same way."
   [world next feet]
-  (let [c (select-keys next choice-keys)
+  (let [c (choice-key next)
         fs (filter #(= c (:choice %)) (fresh-failures world))]
     (boolean (and next
                   (not (:plan/wait next))
                   (or (some #(= feet (:feet %)) fs) (>= (count fs) blocked-after))))))
 
 (defn area-blocked?
-  "Has an intent of next's kind ended :blocked area-blocked-after times or more within area-radius
-   of feet in the last area-memory-ms? A tunnel boxed in its own cells fails :blocked, and the row
-   plans another to a target a cell or two off (a stand beside the spawner, a spiral leg), which
-   the failure history's choice keys call another choice: blaze-race-z11 job 5 (run
-   41233526639) failed 255 tunnels in 19 minutes, 3 to 4 seconds each."
+  "Has an intent of next's kind ended :blocked area-blocked-after times or more within area-radius of feet in the last area-memory-ms? A tunnel boxed in its own cells fails :blocked, and the row plans another to a target a cell or two off, which the failure history's choice keys call another choice."
   [world next feet]
   (boolean (and next
                 feet
@@ -589,25 +524,13 @@
                     area-blocked-after))))
 
 (defn leave-area
-  "The intent that takes a bot out of an area its tunnels were blocked in (area-blocked?): a walk
-   to a trail cell regroup-distance or more away that has a route (regroup-cell), else nil and the
-   row's plan goes ahead under the retry rules. It had a tunnel along the bot's own trail as a
-   fallback, and that was itself blocked: blaze-race-z14 job 5 (run 41256755663) planned it 352
-   times in 33 minutes, the failure history never asked about it (it is not the row's plan)."
+  "The intent that takes a bot out of an area its tunnels were blocked in (area-blocked?): a walk to a trail cell regroup-distance or more away that has a route (regroup-cell), else nil and the row's plan goes ahead under the retry rules."
   [world]
   (when-let [cell (regroup-cell world)]
     {:intent/kind :walk :intent/target cell :intent/for :regroup}))
 
 (defn recover
-  "A run out of attempts that is not stalled (stalled?) tries again instead of ending: the failure
-   counts start over, the last failure is forgotten (the :blocked ones stay: three of them in one area are what area-blocked? counts, and a recovery after every three would never let it) (so the same intent is not refused as an
-   identical retry), and the trail's cell regroup-distance back (regroup-cell) becomes the next
-   thing to walk to, planning again from a new spot. :plan/recoveries counts them. Within
-   recover-cooldown-ms of the last one (:plan/recover-at) it changes nothing but the wait: pearl-fight-i
-   job 3 (run 41178660163) recovered 34 times in a second, the :defend row's :place and :pillar
-   failing three times in 300 ms each round, and was killed by the enderman it stood facing. Blaze-race-u
-   (run 41156125534) ended at 4 health after three :place :no-support in 300 ms, and at 16 after a
-   camp that found no blaze twice, with hours left."
+  "A run out of attempts that is not stalled (stalled?) tries again instead of ending: the failure counts start over, the last failure is forgotten (the :blocked ones stay, three of them in one area are what area-blocked? counts), and the trail's cell regroup-distance back (regroup-cell) becomes the next thing to walk to, planning again from a new spot. :plan/recoveries counts them. Within recover-cooldown-ms of the last one (:plan/recover-at) it changes nothing but the wait, so a recovery that fails again at once does not start over every tick."
   [world]
   (let [now (:time/now world 0)
         at (:plan/recover-at world)
@@ -625,20 +548,7 @@
 (declare fail-intent)
 
 (defn finish-intent
-  "An intent that succeeds ends any failure streak: attempts and unwalkable walks count
-   consecutive failures, so a long goal is not killed by three unrelated hiccups an hour apart.
-   A log picked up (a :collect for :log) ends :plan/surfaced: the climb out it came after found
-   a tree, so a later climb from near there for a spare's wood is worth it again
-   (stairs/surfaced-near?, make/spare-worth?). Without it, sim world R4/30 seed 1 (the full run
-   behind issue #161's second round, 74fa27b against 2736e27) came out of the ground for its
-   first logs near the landing, took them, and two minutes later, its stone pickaxe made at y 60,
-   declined the short climb back to those trees for the spare's sticks; it went down without
-   them, climbed out again from y 14 at seven minutes, made its ingots at 22 minutes instead of 9,
-   and timed out at the water bucket. The one exception is the instant-churn guard: an intent
-   that ends in its first tick with no progress (instant-end?), instant-limit of them in a row
-   within instant-window-ms, counts as failed instead (:instant-churn, by fail-intent, so the
-   choice enters :plan/failures and the row must choose something else), and one
-   `instant-churn <kind> <target> xN` line is logged."
+  "An intent that succeeds ends any failure streak: attempts and unwalkable walks count consecutive failures, so a long goal is not killed by three unrelated hiccups an hour apart. A log picked up (a :collect for :log) ends :plan/surfaced. The one exception is the instant-churn guard: an intent that ends in its first tick with no progress (instant-end?), instant-limit of them in a row within instant-window-ms, counts as failed instead (:instant-churn, by fail-intent), and one `instant-churn <kind> <target> xN` line is logged."
   [world i]
   (let [n (when (instant-end? world i) (instant-count world i))]
     (cond (and n (>= n instant-limit))
@@ -656,7 +566,7 @@
                       (dissoc :plan/surfaced))
               (cond-> n
                       (assoc :plan/instant
-                             (assoc (identity-of i) :instant/n n :instant/at (:time/now world 0))))
+                             (assoc (choice-key i) :instant/n n :instant/at (:time/now world 0))))
               (cond-> (not n) (dissoc :plan/instant))
               (dissoc :plan/intent :plan/began)))))
 
@@ -665,28 +575,7 @@
 (def crossing-kinds #{:cross})         ; intents whose target is a trunk the way to it failed, not a place to give up
 
 (defn fail-intent
-  "An intent failed: stop moving, blacklist its target (and count a failure against its trunk's
-   column, for a log: digging the base moves the bottom up, the column stays), count the attempt.
-   A :place or a :redig (placing-kinds) blacklists nothing: its target is the cell it chose, and
-   the table placed there next would not count as near (make/near skips the blacklist): race
-   38477665442 bot Clj_r04 failed a redig :not-picked-up at the cell before its feet, placed
-   the table for a spare pickaxe in that cell, could not see it, and went for the wood of a new
-   one with its last pickaxe (issue #43).
-   max-unwalkable walks in a row that failed :no-path fail the plan with that reason, so a search
-   whose places keep changing cannot run for hours. A staircase (down or up) or a tunnel that
-   died :boxed (boxing-kinds) records the cell it stood on in :plan/boxed-at, so the next descent,
-   climb or tunnel does not start there and a later stair will not step back onto it (the pearl
-   hunt's climb toward an enderman on a ledge, issue #263, is refused under the ledge's overhang
-   and must not be cut again from the same cell). Its visited cells join :plan/boxed-route: a
-   retreat back along the failed search is not new rock (issue #161, R1/29). A walk for a log
-   that failed :no-path adds its target to :plan/unreached, the places a choice of logs passes
-   over together with the trees round them (issue #75). A :cross (crossing-kinds) blacklists
-   nothing and counts against its trunk's column as a log's walk does, so the trunk is skipped
-   after max-trunk-failures of them and no sooner: its target is the trunk across the water,
-   which the bridge up the cliff at the far shore reaches (wood/trees-bridge) when the swim
-   does not. Sim worlds R3/45 (issues #87 and #108) crossed a lake toward the only trunk in
-   reach, met the foot of a cliff with the trunk on its top, and the failed cross blacklisted
-   it: the staircase up the cliff then found no trunk to climb toward and the plan waited :no-log."
+  "An intent failed: stop moving, blacklist its target (and count a failure against its trunk's column, for a log), count the attempt. A :place or a :redig (placing-kinds) blacklists nothing: its target is the cell it chose. A :cross (crossing-kinds) blacklists nothing and counts against its trunk's column. max-unwalkable walks in a row that failed :no-path fail the plan with that reason. A staircase or tunnel that died :boxed (boxing-kinds) records the cell it stood on in :plan/boxed-at and its visited cells in :plan/boxed-route. A walk for a log that failed :no-path adds its target to :plan/unreached."
   [world i]
   (let [unwalkable? (and (contains? #{:walk :end-portal} (:intent/kind i))
                          (= :no-path (:intent/reason i)))
@@ -704,18 +593,17 @@
         (cond-> (and (:intent/target i)
                      (not (contains? placing-kinds (:intent/kind i)))
                      (not (contains? crossing-kinds (:intent/kind i))))
-                (update :plan/blacklist (fnil conj #{}) (:intent/target i)))
+                (avoided/note :blacklist (:intent/target i)))
         (cond-> (and (contains? boxing-kinds (:intent/kind i)) (= :boxed (:intent/reason i)))
-                (-> (cond-> feet (update :plan/boxed-at (fnil conj #{}) feet))
-                    (update :plan/boxed-route (fnil into #{}) (:intent/visited i))))
+                (-> (cond-> feet (avoided/note :boxed-at feet))
+                    (avoided/note-all :boxed-route (:intent/visited i))))
         (cond-> (and unwalkable? (= :log (:intent/for i)))
-                (update :plan/unreached (fnil conj #{}) (:intent/target i)))
+                (avoided/note :unreached (:intent/target i)))
         (cond-> (or (:intent/trunk i)
                     (when (contains? crossing-kinds (:intent/kind i)) (:intent/target i)))
-                (update-in [:plan/trunk-failures
-                            (let [[x _ z] (or (:intent/trunk i) (:intent/target i))] [x z])]
-                           (fnil inc 0)))
-        (cond-> (and feet (>= attempts max-attempts)) (update :plan/boxed-at (fnil conj #{}) feet))
+                (avoided/bump :trunk-failures
+                              (let [[x _ z] (or (:intent/trunk i) (:intent/target i))] [x z])))
+        (cond-> (and feet (>= attempts max-attempts)) (avoided/note :boxed-at feet))
         (assoc :plan/attempts attempts :plan/unwalkable unwalkable)
         (dissoc :plan/intent :plan/last)
         (game/say (str "intent "
@@ -734,13 +622,6 @@
 
 (declare plan-tick abandon-intent can-abandon?)
 
-(defmulti progress-key
-  "A value that changes when the row the goal serves makes progress: what the stuck watchdog
-   compares from one look to the next. Keyed by :goal/plan; by default the items held by kind and
-   the stages reached (:plan/reached). A row narrows it with a defmethod."
-  {:arglists '([world goal])}
-  (fn [_world goal] (:goal/plan goal :needs)))
-
 (defn held-counts
   "{item count} of the stacks in the player's inventory, by item id."
   [world]
@@ -748,37 +629,41 @@
           {}
           (vals (:player/inventory world))))
 
-(defmethod progress-key :pearls
-  ;; the pearls held, the fights ended and the stages reached: a hunt that holds a pearl more, ended a
-  ;; fight or reached a stage has made progress; tunnelling and walking do not
-  [world _]
-  [(inventory/item-count world (recipe/item-id :ender_pearl)) (memory/done-count world :provoke)
-   (memory/done-count world :fight) (count (:plan/reached world #{}))])
+(defmulti progress-term
+  "One number or value of a row's :goal/progress, a term [kind & args] read from the world:
+   [:held item] the count held, [:done intention-kind] the intentions of that kind ended,
+   [:seen block] the sightings of that block on record, [:reached] the stages reached."
+  {:arglists '([world term])}
+  (fn [_world term] (first term)))
 
-(defmethod progress-key :blaze-rods
-  ;; the rods held, the fights ended and the spawners on record: a new spawner found is a stand
-  ;; reached; the netherrack a tunnel digs every leg is not progress (blaze-race-z job 1 tunnelled
-  ;; 106 min inside 12 blocks)
-  [world _]
-  [(inventory/item-count world (recipe/item-id :blaze_rod)) (memory/done-count world :fight)
-   (count (memory/positions-now world [(blocks/default-state :spawner)]))])
+(defmethod progress-term :held [world [_ item]] (inventory/item-count world (recipe/item-id item)))
+(defmethod progress-term :done [world [_ kind]] (memory/done-count world kind))
+(defmethod progress-term :reached [world _] (count (:plan/reached world #{})))
+(defmethod progress-term :seen
+  [world [_ block]]
+  (count (memory/positions-now world [(blocks/default-state block)])))
 
-(defmethod progress-key :default [world _] [(held-counts world) (count (:plan/reached world #{}))])
+(defn progress-key
+  "A value that changes when the row goal makes progress: what the stuck watchdog compares from
+   one look to the next. The row's :goal/progress terms (progress-term) read from the world, or
+   with none, the items held by kind and the stages reached."
+  [world goal]
+  (if-let [terms (:goal/progress goal)]
+    (mapv #(progress-term world %) terms)
+    [(held-counts world) (count (:plan/reached world #{}))]))
 
 (defn defended?
-  "Is the running intent i a defence (holds?) the bot is under fire in: damage taken within
+  "Is the running intent i a defence (holds? in table) the bot is under fire in: damage taken within
    quiet-ticks (:player/hurt-at against :time/tick)? A hold that has taken none for five minutes is
    quiet, and the watchdog may drop it: a pocket held for an hour with no blaze to fight."
-  [world i]
+  [world table i]
   (boolean (and i
-                (holds? i)
+                (holds? table i)
                 (:player/hurt-at world)
                 (<= (- (:time/tick world 0) (:player/hurt-at world)) quiet-ticks))))
 
 (defn menaced?
-  "Does a hostile (entity/hostiles: an enderman only once angry) stand within menace-radius of the
-   feet? The explore walk leaves a burrow, and pearl-fight-k job 2 (run 41197008609) fired it at
-   13:49:49, left the burrow, and was fighting enderman 4501 half a second later."
+  "Does a hostile (entity/hostiles: an enderman only once angry) stand within menace-radius of the feet? The explore walk leaves a burrow, so it is not started with one near."
   [world]
   (let [p (:player/pos world)]
     (boolean (some #(<= (physics/distance p (:entity/pos %)) menace-radius)
@@ -801,17 +686,11 @@
   (let [[lx _ lz] (:lo w) [hx _ hz] (:hi w)] (max (- hx lx) (- hz lz))))
 
 (defn explore-cell
-  "The cell a stuck bot walks to to plan from afresh: of the cells of the trail it came by at least
-   regroup-distance away (not blacklisted nor boxed-at), the farthest that has a route
-   (routable?), trying explore-tries of them farthest first and then as many nearest first, so the
-   walk lands where the bot has stood (never further into a room). With none routable, the cell
-   explore-distance from the feet toward the farthest trail cell, else in the direction r (0 to 1
-   of a turn). Pearl-fight-k job 2 (run 41197008609): the walk to the cell 48 out failed :no-path in
-   four of six firings, within 3 to 14 s."
+  "The cell a stuck bot walks to to plan from afresh: of the cells of the trail it came by at least regroup-distance away (not blacklisted nor boxed-at), the farthest that has a route (routable?), trying explore-tries of them farthest first and then as many nearest first, so the walk lands where the bot has stood. With none routable, the cell explore-distance from the feet toward the farthest trail cell, else in the direction r (0 to 1 of a turn)."
   [world r]
   (let [[fx fy fz :as feet] (intent/feet world)
-        bl (:plan/blacklist world #{})
-        boxed (:plan/boxed-at world #{})
+        bl (avoided/all-of world :blacklist)
+        boxed (avoided/all-of world :boxed-at)
         cands (->> (:plan/trail world [])
                    (filter #(and (>= (physics/horizontal-distance % feet) regroup-distance)
                                  (not (contains? bl %))
@@ -831,11 +710,7 @@
          (+ fz (long (math/round (* explore-distance uz))))])))
 
 (defn avoiding?
-  "Does the stuck watchdog ask rows to keep away from cell c: it fired within avoid-ms and c is
-   within avoid-radius on the plane of the place it fired at (:plan/avoid)? A row's choice of a
-   site (a pocket, a camp, a burrow) asks this and passes over the one it was stuck at.
-   Blaze-race-z6 (run 41201377711): all 12 firings of two jobs were followed within 50 ms by the
-   same :pocket, the explore walk undone."
+  "Does the stuck watchdog ask rows to keep away from cell c: it fired within avoid-ms and c is within avoid-radius on the plane of the place it fired at (:plan/avoid)? A row's choice of a site (a pocket, a camp, a burrow) asks this and passes over the one it was stuck at."
   [world c]
   (let [{:keys [near until]} (:plan/avoid world)]
     (boolean (and near
@@ -844,22 +719,17 @@
                   (<= (physics/horizontal-distance c near) avoid-radius)))))
 
 (defn unstick
-  "The world of a bot that has made no progress for stuck-ms: the running intent dropped, the
-   row's anchors (anchors) forgotten, the place avoided for avoid-ms, 5 min, not extended by a second firing inside the window (avoiding?), a walk away
-   planned (:plan/explore) unless a hostile is near (menaced?: a walk out into it is undone at
-   once and is not safe) and the watch restarted.
-   Pearl-fight-i jobs 1 and 2 (run 41178660163) stood at one block for 2 h 20 min, 1631 lookouts,
-   and blaze-race-z job 3 camped 119 min. Never a fight: only a walk."
+  "The world of a bot that has made no progress for stuck-ms: the running intent dropped, the row's :goal/anchors forgotten, its :goal/resets applied and :goal/clocks restarted, the place avoided for avoid-ms (not extended by a second firing inside the window), a walk away planned (:plan/explore) unless a hostile is near (menaced?) and the watch restarted. Never a fight: only a walk."
   [world goal i r now]
   (-> world
       (cond-> i (abandon-intent i :stuck))
-      (as-> w (apply dissoc w (get anchors (:goal/plan goal) #{})))
-      (into (get resets (:goal/plan goal) {}))
+      (as-> w (apply dissoc w (:goal/anchors goal #{})))
+      (into (:goal/resets goal {}))
       (as-> w
         (reduce (fn [w path] (cond-> w (get-in w path) (assoc-in path now)))
                 w
-                (get clocks (:goal/plan goal) [])))
-      (cond-> (not (or (menaced? world) (held? world goal)))
+                (:goal/clocks goal [])))
+      (cond-> (not (or (menaced? world) (held-goal? world goal)))
               (assoc :plan/explore (explore-cell world r)))
       (update :plan/avoid
               #(if (and (:until %) (< now (:until %)))
@@ -885,17 +755,16 @@
                 k (progress-key world goal)
                 w (assoc (widened w world) :checked now)]
             (cond (nil? goal) world
-                  (or (and (not (contains? fact-rows (:goal/plan goal)))
-                           (>= (extent w) stuck-extent))
+                  (or (and (not (:goal/facts-only? goal)) (>= (extent w) stuck-extent))
                       (not= k (:key w))
-                      (held? world goal))
+                      (held-goal? world goal))
                   (assoc world :plan/watch (watch-stamp world k now now))
-                  (or (< (- now (:at w)) (get stuck-after (:goal/plan goal) stuck-ms))
+                  (or (< (- now (:at w)) (:goal/stuck-after goal stuck-ms))
                       (and (menaced? world)
                            (< (- now (:at w))
-                              (+ menace-grace-ms (get stuck-after (:goal/plan goal) stuck-ms))))
+                              (+ menace-grace-ms (:goal/stuck-after goal stuck-ms))))
                       (not (can-abandon? world))
-                      (defended? world (:plan/intent world)))
+                      (defended? world table (:plan/intent world)))
                   (assoc world :plan/watch w)
                   :else (unstick world goal (:plan/intent world) (:event/rand event 0.5) now))))))
 
@@ -927,23 +796,18 @@
       (cond-> (and feet (not= feet (peek trail)))
               (assoc :plan/trail (vec (take-last 128 (conj trail feet)))))
       (memory/remember-intention i :started)
-      (note-churn i)
-      (cond-> (:intent/dead-end i) (update :plan/boxed-at (fnil conj #{}) (:intent/dead-end i)))
+      (cond-> (:intent/dead-end i) (avoided/note :boxed-at (:intent/dead-end i)))
       (dissoc :plan/waiting :plan/waiting-since :plan/waiting-ticks :plan/failed)
       (game/say (str "intent " (:intent/kind i) " " (or (:intent/target i) (:intent/recipe i)))))))
 
 (defn identical-retry?
-  "Is next an identical repeat of the intent that just failed from feet: same kind, target, height or recipe?"
+  "Is next the same choice (choice-key) as the intent that just failed from feet?"
   [next failed feet]
   (and next
        failed
        feet
        (= feet (:intent/from-feet failed))
-       (= (:intent/kind next) (:intent/kind failed))
-       (= (:intent/target next) (:intent/target failed))
-       (= (:intent/to-y next) (:intent/to-y failed))
-       (= (:intent/recipe next) (:intent/recipe failed))
-       (= (:intent/item next) (:intent/item failed))))
+       (= (choice-key next) (choice-key failed))))
 
 (defn abandon-intent
   "Drop the running intent i before it ended, for reason (:goal-met, :preempted, :interrupted): remember it
@@ -963,30 +827,14 @@
       (dissoc :plan/intent)))
 
 (defn can-abandon?
-  "May the planner drop the running work now? Not while the cursor holds an item: the intent
-   puts it down first, and the planner looks again next tick. Nor while a click of the running
-   intent is unanswered (window/waiting): a click forgets the cursor as it sends (window/click),
-   so what it holds is unknown until the server answers. The armour row's first run against the
-   model (issue #259) preempted a :wear between its pick-up and the answer, the helmet on a cursor
-   the bot believed empty; the row that came next crafted another helmet from ingots the bot no
-   longer knew where they were, and the run ended with eight of them unseen and no chestplate."
+  "May the planner drop the running work now? Not while the cursor holds an item: the intent puts it down first, and the planner looks again next tick. Nor while a click of the running intent is unanswered (window/waiting): a click forgets the cursor as it sends, so what it holds is unknown until the server answers."
   [world]
   (and (nil? (:window/cursor world))
        (nil? (some->> (:plan/intent world)
                       (window/waiting world)))))
 
 (defn wait
-  "Nothing to do yet for reason; waiting longer than wait-ticks (400 planner ticks, 20 s at
-   20 ticks a second) fails the plan with it. The deadline is counted in planner ticks, not
-   wall ms: a runner keeping 25 bots and two servers to a machine starved this bot's loop to
-   9 ticks in 21 s (race 38680745815 runner 5, issue #57's Clj_r05 and Clj_r10), and the wall
-   clock ran the wait out before tick-counted logic — the water trap's 20 ticks, the hunt's
-   next routable hop — had the ticks to act. The bot stood in a lake and on a peak waiting
-   :no-log and failed while its recovery was a tick or two away. And it is not over until wait-ms
-   has passed on the bot's clock (:time/now) too: a loop behind its schedule (main/run-loop!)
-   fires its missed ticks back to back, and 400 of them went by in 2 s (f9c021c race lane 2, s1
-   Clj_r04: waiting from 1793954058929, failed :nothing-to-do by 1793954060935, between two legs
-   of its tunnel out of the fortress, at 20 hp with seven rods)."
+  "Nothing to do yet for reason; waiting longer than wait-ticks planner ticks fails the plan with it. The deadline is counted in planner ticks, not wall ms, so a starved loop does not run it out; and it is not over until wait-ms has passed on the bot's clock (:time/now) too, so a loop behind its schedule that fires its missed ticks back to back does not either. A :retrying wait that runs out recovers unless the plan is stalled."
   [world reason]
   (let [since (or (:plan/waiting-since world) (:time/now world))
         ticks (inc (:plan/waiting-ticks world 0))
@@ -997,50 +845,37 @@
           (assoc world :plan/waiting-since since :plan/waiting-ticks ticks :plan/waiting reason))))
 
 (defn same-choice?
-  "Would the planner start intent next again as the running intent i: the same kind, target and
-   purpose (:intent/for)? False when next is nil or a wait. A cut that restarts what it cut ends
-   the intent's controls and its route each tick and moves nothing (WALK-RESTART: a walk to
-   [2345 58 2283] re-issued every 50 ms while a blaze stood at hand, the bot burning where it stood).
-   An intent keeps the form it was planned in (:intent/plan, made by start-intent) and is compared
-   by that: a :place gains its :intent/target once it runs, and compared by its running form it was
-   never the same as what the row planned again. Blaze-race-z8 job 5 (run 41214675186) cut and
-   restarted one :place 97 times in 14 s every 150 ms while burning, and died with 18 hp spent."
+  "Would the planner start intent next again as the running intent i: the same choice-key? False when next is nil or a wait. A cut that restarts what it cut ends the intent's controls and its route each tick and moves nothing. An intent keeps the form it was planned in (:intent/plan, made by start-intent), so what an executor gained while running is not part of it."
   [i next]
-  (boolean (and i
-                next
-                (not (:plan/wait next))
-                (if-let [planned (:intent/plan i)]
-                  (= (select-keys planned choice-keys) (select-keys next choice-keys))
-                  (and (= (:intent/kind i) (:intent/kind next))
-                       (= (:intent/target i) (:intent/target next))
-                       (= (:intent/for i) (:intent/for next)))))))
+  (boolean (and i next (not (:plan/wait next)) (= (choice-key i) (choice-key next)))))
 
-(defn hollow-pocket?
-  "Is next a :pocket at the feet that cannot be sealed (pocket/cannot-seal?)? Steer drops such a
-   site the tick it is entered, the pocket ends at once, and the row chooses the tunnel again.
-   Cutting the tunnel for it never moves the bot. z16 job 5 (plan 41276280629) alternated :pocket
-   and :tunnel-to [2210 60 1793] from 05:21:34 until the 300 min timeout, still at the landing
-   [2148 72 1763], 0 digs. unlayable? is false for that landing once the head is in the roof;
-   cannot-seal? is not. plan cannot require pocket: pocket requires build and build requires
-   plan, so the predicate is resolved when it is asked."
-  [world next]
-  (boolean (when-let [c (and (= :pocket (:intent/kind next))
-                             (:player/pos world)
-                             (:pocket/cell (:intent/site next)))]
-             (and (= c (intent/feet world))
-                  (let [^clojure.lang.IFn cannot-seal? (requiring-resolve
-                                                        'clojurecraft.pocket/cannot-seal?)]
-                    (cannot-seal? world c))))))
+(defn rank-of
+  "The rank of intent i in row goal's :goal/ranks: the position of its why label (intent/why-of)
+   in the table, lower is more urgent; a label the table does not list ranks last."
+  [goal i]
+  (let [ranks (:goal/ranks goal)
+        n (.indexOf ^java.util.List ranks (intent/why-of i))]
+    (if (neg? n) (count ranks) n)))
+
+(defn outranks?
+  "Does the fresh answer next of row goal rank strictly above (a lower number than) the running
+   intent i? Only a strictly more urgent branch of the row's plan cuts a running intent, an intent or
+   a labelled wait (the plan says: stop, there is nothing safe to do yet); an equal one is the same
+   commitment and nil or an unlisted wait never cuts. False for a row with no :goal/ranks."
+  [goal i next]
+  (boolean (and (seq (:goal/ranks goal))
+                i
+                (or (:intent/kind next) (:plan/wait next))
+                (< (rank-of goal next) (rank-of goal i)))))
 
 (defn plan-tick
   "One planning tick while :active. The goals are re-derived from the world every tick, even
    while an intent runs (docs/RICH-HICKEY.md: \"the planner runs every tick against the current
    value, so done is re-derived, regressions re-plan automatically\"): no target left means
    :done, whatever is running; a running intent that serves another target than the one chosen
-   now is preempted, as is one the chosen row's interrupts? cuts short, unless the row, planning again
-   without it, would start the same intent (same-choice?): that one keeps running. A :tunnel-to
-   also keeps running when the replacement is a hollow pocket at the feet (hollow-pocket?): it
-   ends at once and cutting the tunnel for it moves nothing. A defence
+   now is preempted, as is one the chosen row's plan now answers with a branch ranked strictly
+   above it (outranks?, the row's :goal/ranks), or that its interrupts? cuts short unless the row,
+   planning again without it, would start the same intent (same-choice?). A defence
    (holds?) is neither preempted nor cut by another row but an escape: it runs to its own end.
    Either waits
    while the cursor holds an item. Otherwise the intent runs, or
@@ -1052,15 +887,16 @@
         i (:plan/intent world)
         active? (= :active (:plan/status world))
         goal (when active? (choose world table))
-        held (held? i goal)
+        held (held? table i goal)
         preempt? (and i goal (:intent/goal i) (not= (:goal/id goal) (:intent/goal i)) (not held))
-        cut-world (when (and i goal (not preempt?) (not held) (interrupts? world goal i))
+        cuttable? (and i goal (not preempt?) (not held))
+        hooked? (and cuttable? (or (not (intent/still-wanted? world i)) (interrupts? world goal i)))
+        cut-world (when (and cuttable? (or hooked? (seq (:goal/ranks goal))))
                     (abandon-intent world i :interrupted))
         replacement (when cut-world (next-intent cut-world goal table))
         cut? (and cut-world
-                  (not (same-choice? i replacement))
-                  (not (and (= :tunnel-to (:intent/kind i))
-                            (hollow-pocket? cut-world replacement))))
+                  (or (outranks? goal i replacement)
+                      (and hooked? (not (same-choice? i replacement)))))
         next (when (and goal (nil? i)) (next-intent world goal table))
         feet (when (:player/pos world) (intent/feet world))
         failed (:plan/failed world)
@@ -1071,7 +907,7 @@
         covering (when (and retrying? goal) (fire-cover world goal))
         retreat-cell (when retrying?
                        (some #(when-not (or (= % feet)
-                                            (contains? (:plan/blacklist world #{}) %)
+                                            (contains? (avoided/all-of world :blacklist) %)
                                             (> (physics/distance % feet) retreat-reach))
                                 %)
                              (rseq (:plan/trail world []))))]
@@ -1091,7 +927,7 @@
           preempt? (plan-tick (abandon-intent world i :preempted) event table)
           cut? (plan-tick cut-world event table)
           i (run-intent world i event table)
-          (and (:plan/explore world) (held? world goal))
+          (and (:plan/explore world) (held-goal? world goal))
           (plan-tick (dissoc world :plan/explore) event table)
           (and (:plan/explore world) (not (:goal/trap goal)))
           (start-intent (dissoc world :plan/explore)
@@ -1111,7 +947,7 @@
           (and retrying? covering)
           (start-intent world (assoc covering :intent/goal (:goal/id goal)))
           (and retrying? retreat-cell)
-          (start-intent (update world :plan/boxed-at (fnil conj #{}) feet)
+          (start-intent (avoided/note world :boxed-at feet)
                         {:intent/kind :walk
                          :intent/target retreat-cell
                          :intent/for :retreat

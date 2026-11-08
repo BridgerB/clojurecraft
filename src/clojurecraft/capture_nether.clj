@@ -1,24 +1,23 @@
 (ns clojurecraft.capture-nether
-  "A real Nether for the server model (issue #353): one region of a race set's Nether, round
-   every landing's Nether point (its x/8, z/8) and margin chunks out from them, saved byte for
-   byte as the server sent it, one file a set.
+  "A real Nether for the server model: one region of a race set's Nether, round every landing's
+   Nether point (its x/8, z/8) and margin chunks out from them, saved byte for byte as the server
+   sent it, one file a set.
 
      clojure -M -m clojurecraft.capture-nether --port 25565 --rcon-port 25575 --rcon-pass S \\
        --landings cache/worlds/R1/landings.edn --set R1 --out cache/sim-nether/R1.edn.gz [--margin 32]
 
-   The sim race's worlds (capture.clj) are the overworld round each landing; a bot through its
-   portal needs the Nether the same seed's server gives a real bot there. The model takes this
-   region as its :sim/nether (simrace/sim-nether), stands the player where the server would place
-   the linked portal (sim/arrival) and streams the columns round it as a server does.
+   The model takes this region as its :sim/nether (simrace/sim-nether), stands the player where the
+   server would place the linked portal (sim-portal/arrival) and streams the columns round it as a server
+   does.
 
    How it is taken: capture.clj's client (main's loop and reducer, settle! and its stops' spacing)
-   joins, is made a spectator, is teleported into the Nether and over stops a view apart until
-   every column of the region has arrived, touring again the stops whose columns the server was
-   still generating. Only columns that arrive while the client is in the Nether are kept: the
-   overworld's round the spawn it joined at share their keys. Then the fortress bricks the region
-   holds are measured from each landing's Nether point (reach): what a run there can find. Not
-   locate structure: its ring search named fortresses 600 to 1100 blocks off for R4's landings
-   whose captured bricks were 0 to 250 away (simworld run 39017474789).
+   joins, is made a spectator, is teleported into the Nether and over stops a view apart until every
+   column of the region has arrived, touring again the stops whose columns the server was still
+   generating. Only columns that arrive while the client is in the Nether are kept: the overworld's
+   round the spawn it joined at share their keys. Then the fortress bricks the region holds are
+   measured from each landing's Nether point (reach): what a run there can find. Not locate
+   structure: its ring search named fortresses 600 to 1100 blocks off for R4's landings whose
+   captured bricks were 0 to 250 away.
 
    Its own namespace and its own cache key: capture.clj, landings.clj, fixture.clj and the
    server's files are the overworld worlds' key, and an edit to one makes every lane miss its
@@ -38,7 +37,7 @@
             [clojurecraft.landings :as landings]
             [clojurecraft.main :as main]
             [clojurecraft.rcon :as rcon]
-            [clojurecraft.sim :as sim]))
+            [clojurecraft.sim.portal :as sim-portal]))
 
 (set! *warn-on-reflection* true)
 
@@ -50,10 +49,10 @@
 ;; ---------------------------------------------------------------- what to take
 
 (defn nether-point
-  "The Nether block column [x z] a portal on landing [x z _] leads to (sim/exit-point: the
+  "The Nether block column [x z] a portal on landing [x z _] leads to (sim-portal/exit-point: the
    overworld's coordinates over 8)."
   [[x z _]]
-  (let [[nx _ nz] (sim/exit-point [x 0 z])] [nx nz]))
+  (let [[nx _ nz] (sim-portal/exit-point [x 0 z])] [nx nz]))
 
 (defn region
   "The chunk square [cx0 cz0 cx1 cz1] holding every landing's nether-point, margin chunks wider

@@ -37,6 +37,24 @@
          (memory/remember-column [0 0] col)))))
 
 (defn run [w events] (fold step w events))
+
+(defmethod plan/next-intent :test/says [_ goal _] (:test/intent goal))
+
+(defmethod plan/interrupts? :test/says [_ goal _] (boolean (:test/interrupts? goal)))
+
+(defn says
+  "goal as a target of the plan key :test/says, whose next intent is the given one: a row of a
+   plan key of its own, so no test redefines the planner for the others."
+  [goal intent]
+  (assoc goal :goal/target? true :goal/plan :test/says :test/intent intent))
+
+(defn in-play-with
+  "w with goal's id among the goals in play when it names any."
+  [w goal]
+  (update w
+          :plan/goals
+          #(some-> %
+                   (conj (:goal/id goal)))))
 (def go {:event/kind :go :go/goals [:wood]})
 
 (deftest memory-finds-the-bottom-of-the-trunk
@@ -132,7 +150,7 @@
     (is (some #(= :move-player-pos-rot (:packet/name %)) (packets fx)))))
 
 (deftest gives-up-without-logs
-  (let [w (memory/forgotten (world-state [0.5 64.0 0.5]))
+  (let [w (fx/forgotten (world-state [0.5 64.0 0.5]))
         [w _] (run w (cons go (ticks 50 25000)))]
     (is (plan/failed? w))
     (is (= :no-log (:plan/reason w)))))
@@ -1144,24 +1162,24 @@
                                   {:intent/kind :dig :intent/reason :target-gone :intent/id 2})))
         "any other failure breaks the streak")))
 
-(deftest ^:eftest/synchronized an-identical-failed-intent-steps-back-instead-of-repeating
+(deftest an-identical-failed-intent-steps-back-instead-of-repeating
   ;; findings 2026-10-27 item 1: stairs-down or end-portal failing from feet must not be retried
   ;; identically in a loop to fail the plan in under a second; it steps back to the previous cell
   (let [active (-> (plan/begin (world-state [5.5 64.0 5.5]) {:go/goals [:wood]} plan/goals)
                    (assoc :plan/trail [[0 64 0] [5 64 5]]))
         failed (plan/fail-intent active
                                  {:intent/kind :stairs-down :intent/to-y 20 :intent/reason :boxed})
-        goals [{:goal/id :test-goal :goal/done? :never :goal/act :stair}]
-        table goals]
-    (with-redefs [plan/choose (constantly (first goals))
-                  plan/next-intent (constantly {:intent/kind :stairs-down :intent/to-y 20})]
-      (let [w (plan/plan-tick failed {:event/kind :tick :event/now 50 :event/rand 0.5} table)]
-        (is (= :active (:plan/status w)) "does not fail the plan")
-        (is (contains? (:plan/boxed-at w) [5 64 5]) "failed feet cell marked boxed")
-        (is (= :walk (get-in w [:plan/intent :intent/kind])) "steps back via walk")
-        (is (= [0 64 0] (get-in w [:plan/intent :intent/target])) "walks back to previous cell")))))
+        goal (says {:goal/id :test-goal :goal/done? :never :goal/act :stair}
+                   {:intent/kind :stairs-down :intent/to-y 20})
+        w (plan/plan-tick (in-play-with failed goal)
+                          {:event/kind :tick :event/now 50 :event/rand 0.5}
+                          [goal])]
+    (is (= :active (:plan/status w)) "does not fail the plan")
+    (is (contains? (:plan/boxed-at w) [5 64 5]) "failed feet cell marked boxed")
+    (is (= :walk (get-in w [:plan/intent :intent/kind])) "steps back via walk")
+    (is (= [0 64 0] (get-in w [:plan/intent :intent/target])) "walks back to previous cell")))
 
-(deftest ^:eftest/synchronized run-3-boxed-stairs-down-steps-back-and-never-fails-in-retry-storm
+(deftest run-3-boxed-stairs-down-steps-back-and-never-fails-in-retry-storm
   ;; gym chain-w6 run 3 (17:47:19): stairs-down boxed at [14828 31 13564] failed attempts 1, 2, 3
   ;; in 0.4s because turned dir [-1 0] did not match planned dir [0 -1]. An identical stairs-down
   ;; must step back along trail and never repeat the identical intent nor fail while time remains.
@@ -1175,23 +1193,19 @@
                        :intent/dir [-1 0]
                        :intent/turns 3
                        :intent/reason :boxed}
-        goals [{:goal/id :test-goal :goal/done? :never :goal/act :stair}]
-        table goals]
-    (with-redefs [plan/choose (constantly (first goals))
-                  ;; Next-intent computes initial heading toward frame [0 -1], NOT [-1 0]
-                  plan/next-intent (constantly
-                                    {:intent/kind :stairs-down :intent/to-y 23 :intent/dir [0 -1]})]
-      ;; Driven with failure: plan-tick must detect identical retry despite different dir
-      (let [w1 (plan/plan-tick (plan/fail-intent active failed-intent)
-                               {:event/kind :tick :event/now 50 :event/rand 0.5}
-                               table)]
-        (is (= :active (:plan/status w1)) "first failure does not fail the plan")
-        (is (contains? (:plan/boxed-at w1) feet) "feet cell marked boxed-at")
-        (is (= :walk (get-in w1 [:plan/intent :intent/kind])) "steps back via walk")
-        (is (= prev (get-in w1 [:plan/intent :intent/target]))
-            "walks back to previous cell in trail")
-        (is (not= :stairs-down (get-in w1 [:plan/intent :intent/kind]))
-            "does not repeat identical stairs-down")))))
+        ;; next-intent computes the initial heading toward frame [0 -1], NOT [-1 0]
+        goal (says {:goal/id :test-goal :goal/done? :never :goal/act :stair}
+                   {:intent/kind :stairs-down :intent/to-y 23 :intent/dir [0 -1]})
+        ;; driven with failure: plan-tick must detect identical retry despite different dir
+        w1 (plan/plan-tick (in-play-with (plan/fail-intent active failed-intent) goal)
+                           {:event/kind :tick :event/now 50 :event/rand 0.5}
+                           [goal])]
+    (is (= :active (:plan/status w1)) "first failure does not fail the plan")
+    (is (contains? (:plan/boxed-at w1) feet) "feet cell marked boxed-at")
+    (is (= :walk (get-in w1 [:plan/intent :intent/kind])) "steps back via walk")
+    (is (= prev (get-in w1 [:plan/intent :intent/target])) "walks back to previous cell in trail")
+    (is (not= :stairs-down (get-in w1 [:plan/intent :intent/kind]))
+        "does not repeat identical stairs-down")))
 
 (deftest any-intent-failing-no-path-counts-as-unwalkable-not-attempts
   ;; end-portal or child walks failing :no-path are unwalkable routes, not instant failure attempts
@@ -1443,7 +1457,7 @@
   ;; race 38680745815 runner 5 (issue #57): with 25 bots and two servers to a runner the
   ;; bot's loop got 9 ticks in 21 s, and the wait's wall clock failed the plan :no-log while
   ;; the water trap's 20 ticks and the hunt's next routable hop were still owed theirs
-  (let [w (memory/forgotten (world-state [0.5 64.0 0.5]))
+  (let [w (fx/forgotten (world-state [0.5 64.0 0.5]))
         [w0 _] (run w [go])
         at (fn [n]
              (first (run w0
@@ -1667,6 +1681,11 @@
 
 ;;; FLIP-FLOP: a defence runs to its end whichever row is chosen meanwhile
 
+(defn table-with
+  "The shipped goal table with goal last: the rows an intent in flight belongs to, and the chosen row."
+  [goal]
+  (vec (concat plan/goals [goal])))
+
 (defn chosen-over
   "The world after one plan-tick with row goal chosen over a running intent i (numbered 1, its
    :intent/goal as given, controls held forward) when next-intent answers next; the walk itself
@@ -1678,7 +1697,7 @@
     (with-redefs [plan/choose (constantly goal)
                   plan/next-intent (constantly next)
                   intent/run (fn [world _ _] world)]
-      (plan/plan-tick w {:event/kind :tick :event/now 50 :event/rand 0.5} [goal]))))
+      (plan/plan-tick w {:event/kind :tick :event/now 50 :event/rand 0.5} (table-with goal)))))
 
 (def pearls-row {:goal/id :ender-pearls :goal/done? :never :goal/plan :flip-test})
 (def defend-row {:goal/id :defend :goal/done? :never :goal/plan :flip-test})
@@ -1727,43 +1746,64 @@
         "an escape row preempts a defence")))
 
 (deftest held-says-what-it-keeps
-  (is (plan/held? {:intent/kind :back-off :intent/goal :defend} pearls-row))
-  (is (plan/held? {:intent/kind :seal :intent/goal :blaze-rods} defend-row))
-  (is (not (plan/held? {:intent/kind :seal :intent/goal :blaze-rods} {:goal/id :blaze-rods}))
+  (is (plan/held? plan/goals {:intent/kind :back-off :intent/goal :defend} pearls-row))
+  (is (plan/held? plan/goals {:intent/kind :seal :intent/goal :blaze-rods} defend-row))
+  (is (not
+       (plan/held? plan/goals {:intent/kind :seal :intent/goal :blaze-rods} {:goal/id :blaze-rods}))
       "its own row")
-  (is (not (plan/held? nil pearls-row)))
-  (is (not (plan/held? {:intent/kind :back-off :intent/goal :defend} nil))))
+  (is (not (plan/held? plan/goals {:intent/kind :fight :intent/goal :defend} pearls-row))
+      "a defend fight ends by its own break-off")
+  (is (plan/held? plan/goals {:intent/kind :fight :intent/goal :blaze-rods} defend-row))
+  (is (not (plan/held? plan/goals
+                       {:intent/kind :back-off :intent/goal :defend}
+                       {:goal/id :swim :goal/trap :water}))
+      "an escape row cuts a defence")
+  (is (not (plan/held? plan/goals nil pearls-row)))
+  (is (not (plan/held? plan/goals {:intent/kind :back-off :intent/goal :defend} nil))))
 
 ;;; RETRY: three failures in a row start over; only a stalled run ends
 
-(defn place-failed
-  "blaze-race-u job 4 (run 41156125534) at the moment its third :place failed :no-support: feet at
-   [2345 57 2287], the trail it walked in :plan/trail, the clock at ms after the plan began."
-  [ms]
-  (let [fail (fn [w n]
-               (plan/fail-intent w
-                                 {:intent/kind :place
-                                  :intent/item :cobblestone
-                                  :intent/cell [2346 58 2287]
-                                  :intent/goal :blaze-rods
-                                  :intent/reason :no-support
-                                  :intent/id n}))
-        w (-> (world-state [2345.5 57.0 2287.5])
-              (assoc :plan/status :active
-                     :plan/since 0
-                     :plan/blacklist #{}
-                     :plan/attempts 0
-                     :time/now ms
-                     :plan/trail [[2288 72 2304] [2337 60 2290] [2344 60 2284] [2346 60 2283]]))]
-    (reduce fail w (range 1 4))))
+(defn flat-ground
+  "w over open ground: loaded flat columns (stone to y 63, air above) in the chunks x0 to x1 and z0
+   to z1, so a walk between cells at y 64 has a route."
+  [w x0 x1 z0 z1]
+  (let [col (world/column {})]
+    (assoc w
+           :world/chunks
+           (into {} (for [cx (range x0 (inc x1)) cz (range z0 (inc z1))] [[cx cz] col])))))
 
-(deftest ^:eftest/synchronized three-failures-in-a-row-start-over-and-do-not-end-the-run
-  (let [w (with-redefs [plan/routable? (constantly true)] (place-failed 316000))]
+(defn place-failed
+  "The bot at the moment its third :place failed :no-support, the trail it walked in :plan/trail,
+   the clock at ms after the plan began. With flat? the feet and the trail are on open ground at
+   y 64, where a walk to a trail cell has a route."
+  ([ms] (place-failed ms false))
+  ([ms flat?]
+   (let [fail (fn [w n]
+                (plan/fail-intent w
+                                  {:intent/kind :place
+                                   :intent/item :cobblestone
+                                   :intent/cell [2346 58 2287]
+                                   :intent/goal :blaze-rods
+                                   :intent/reason :no-support
+                                   :intent/id n}))
+         y (if flat? 64 60)
+         w (-> (world-state [2345.5 (if flat? 64.0 57.0) 2287.5])
+               (assoc :plan/status :active
+                      :plan/since 0
+                      :plan/blacklist #{}
+                      :plan/attempts 0
+                      :time/now ms
+                      :plan/trail [[2288 72 2304] [2337 y 2290] [2344 y 2284] [2346 y 2283]])
+               (cond-> flat? (flat-ground 143 147 140 145)))]
+     (reduce fail w (range 1 4)))))
+
+(deftest three-failures-in-a-row-start-over-and-do-not-end-the-run
+  (let [w (place-failed 316000 true)]
     (is (= :active (:plan/status w)) "five minutes in, not stalled: the run goes on")
     (is (zero? (:plan/attempts w)) "the count starts over")
     (is (= 1 (:plan/recoveries w)))
     (is (nil? (:plan/failed w)) "the last failure is forgotten, so the same intent is not refused")
-    (is (= [2337 60 2290] (:plan/regroup w))
+    (is (= [2337 64 2290] (:plan/regroup w))
         "planning again from the trail's cell 8 or more back")))
 
 (deftest a-run-with-nothing-done-for-the-stall-ends-with-the-reason
@@ -1798,17 +1838,18 @@
     (is (= :failed (:plan/status (at (+ plan/stall-ms 1000) :retrying))) "a dead end still ends")
     (is (= :failed (:plan/status (at 200000 :no-log))) "every other wait ends as it did")))
 
-(deftest ^:eftest/synchronized the-regroup-walk-starts-when-nothing-runs
-  (let [w (-> (with-redefs [plan/routable? (constantly true)] (place-failed 316000))
+(deftest the-regroup-walk-starts-when-nothing-runs
+  (let [w (-> (place-failed 316000 true)
               (dissoc :plan/intent))
-        goal {:goal/id :blaze-rods :goal/done? :never :goal/plan :flip-test}]
-    (with-redefs [plan/choose (constantly goal)
-                  plan/next-intent (constantly {:intent/kind :place :intent/item :cobblestone})]
-      (let [w (plan/plan-tick w {:event/kind :tick :event/now 316050 :event/rand 0.5} [goal])]
-        (is (= :walk (get-in w [:plan/intent :intent/kind])))
-        (is (= [2337 60 2290] (get-in w [:plan/intent :intent/target])))
-        (is (= :regroup (get-in w [:plan/intent :intent/for])))
-        (is (nil? (:plan/regroup w)) "taken once")))))
+        goal (says {:goal/id :blaze-rods :goal/done? :never}
+                   {:intent/kind :place :intent/item :cobblestone})
+        w (plan/plan-tick (in-play-with w goal)
+                          {:event/kind :tick :event/now 316050 :event/rand 0.5}
+                          [goal])]
+    (is (= :walk (get-in w [:plan/intent :intent/kind])))
+    (is (= [2337 64 2290] (get-in w [:plan/intent :intent/target])))
+    (is (= :regroup (get-in w [:plan/intent :intent/for])))
+    (is (nil? (:plan/regroup w)) "taken once")))
 
 ;;; RECOVER-CHURN: a recovery waits its cooldown
 
@@ -1843,21 +1884,33 @@
     (is (nil? (:plan/done-at w)) "no recovery or failure moves the stall clock")
     (is (plan/stalled? (assoc w :time/now (+ plan/stall-ms 1000))))))
 
-(deftest ^:eftest/synchronized the-regroup-walk-starts-under-an-always-row
+(deftest the-regroup-walk-starts-under-an-always-row
   ;; the :defend row is an always row; the regroup walk took no turn under it and the row's cover
   ;; failed again at once
-  (let [w (dissoc (with-redefs [plan/routable? (constantly true)] (place-failed 316000))
-           :plan/intent)
-        goal {:goal/id :defend :goal/always? true :goal/done? :never :goal/plan :flip-test}]
-    (with-redefs [plan/choose (constantly goal)
-                  plan/next-intent (constantly {:intent/kind :place :intent/item :cobblestone})]
-      (let [w (plan/plan-tick w {:event/kind :tick :event/now 316050 :event/rand 0.5} [goal])]
-        (is (= :regroup (get-in w [:plan/intent :intent/for])))))))
+  (let [w (dissoc (place-failed 316000 true) :plan/intent)
+        goal (says {:goal/id :defend :goal/always? true :goal/done? :never}
+                   {:intent/kind :place :intent/item :cobblestone})
+        w (plan/plan-tick (in-play-with w goal)
+                          {:event/kind :tick :event/now 316050 :event/rand 0.5}
+                          [goal])]
+    (is (= :regroup (get-in w [:plan/intent :intent/for])))))
 
 ;;; STUCK: no progress for stuck-ms sends the bot elsewhere
 
+(defn watchdog-fields
+  "The shipped row's fields the stuck watchdog reads (progress, anchors, resets, clocks, stuck-after)."
+  [id]
+  (select-keys (first (filter #(= id (:goal/id %)) plan/goals))
+               [:goal/anchors :goal/resets :goal/clocks :goal/stuck-after :goal/facts-only?
+                :goal/progress :goal/commits :goal/uncommitted]))
+
 (def pearls-table
-  [{:goal/id :ender-pearls :goal/target? true :goal/done? :never :goal/plan :pearls}])
+  [(merge (watchdog-fields :ender-pearls)
+          {:goal/id :ender-pearls :goal/target? true :goal/done? :never :goal/plan :pearls})])
+
+(def blaze-table
+  [(merge (watchdog-fields :blaze-rods)
+          {:goal/id :blaze-rods :goal/target? true :goal/done? :never :goal/plan :blaze-rods})])
 
 (def walker-table [{:goal/id :walker :goal/target? true :goal/done? :never :goal/plan :flip-test}])
 
@@ -1935,8 +1988,6 @@
   ;; blaze-race-z job 1 (run 41173997255) tunnelled 106 min (473 :tunnel-to) round a ring 67 blocks
   ;; across, digging netherrack every leg: items held changed, rods, fights and spawners never
   (let [event {:event/kind :tick :event/now 0 :event/rand 0.75}
-        blaze-table
-        [{:goal/id :blaze-rods :goal/target? true :goal/done? :never :goal/plan :blaze-rods}]
         start
         (-> (frozen-world 0)
             (assoc
@@ -1957,18 +2008,18 @@
     (is (= 1 (:plan/unstuck w)) "twenty minutes of tunnelling and nothing found: sent elsewhere")
     (is (some? (:plan/explore w)))))
 
-(deftest ^:eftest/synchronized the-explore-walk-starts-once
+(deftest the-explore-walk-starts-once
   (let [w (-> (frozen 5000)
               (dissoc :plan/intent)
               (assoc :plan/explore [2390 69 2212]))
-        goal (first pearls-table)]
-    (with-redefs [plan/choose (constantly goal)
-                  plan/next-intent (constantly {:intent/kind :lookout})]
-      (let [w (plan/plan-tick w {:event/kind :tick :event/now 5050 :event/rand 0.5} pearls-table)]
-        (is (= :walk (get-in w [:plan/intent :intent/kind])))
-        (is (= [2390 69 2212] (get-in w [:plan/intent :intent/target])))
-        (is (= :explore (get-in w [:plan/intent :intent/for])))
-        (is (nil? (:plan/explore w)))))))
+        goal (says (first pearls-table) {:intent/kind :lookout})
+        w (plan/plan-tick (in-play-with w goal)
+                          {:event/kind :tick :event/now 5050 :event/rand 0.5}
+                          [goal])]
+    (is (= :walk (get-in w [:plan/intent :intent/kind])))
+    (is (= [2390 69 2212] (get-in w [:plan/intent :intent/target])))
+    (is (= :explore (get-in w [:plan/intent :intent/for])))
+    (is (nil? (:plan/explore w)))))
 
 (deftest a-stuck-pearl-hunt-forgets-its-anchors-and-restarts-its-clocks
   ;; churn-guard's list: the burrow (:pearls/shelter, :pearls/mouth), the relocation, the boxed and
@@ -1995,8 +2046,6 @@
   ;; blaze-rods: a camp can wait 14 to 16 min for its first blaze to be hurt; a :pocket, :seal or
   ;; :pocket-hold running is not dropped, however long
   (let [event {:event/kind :tick :event/now 0 :event/rand 0.25}
-        blaze-table
-        [{:goal/id :blaze-rods :goal/target? true :goal/done? :never :goal/plan :blaze-rods}]
         at (fn [ms i]
              (let [w (-> (frozen-world ms)
                          (assoc :plan/intent
@@ -2165,15 +2214,14 @@
            {:intent/kind :dig :intent/target [2349 56 2289] :intent/goal :blaze-rods})]
     (assoc (plan/abandon-intent w (:plan/intent w) :interrupted) :time/now 1050)))
 
-(deftest ^:eftest/synchronized a-pillar-that-failed-is-not-planned-again-after-a-dig
+(deftest a-pillar-that-failed-is-not-planned-again-after-a-dig
   (let [w (pillar-failed)
-        goal {:goal/id :blaze-rods :goal/done? :never :goal/plan :flip-test}
+        goal (says {:goal/id :blaze-rods :goal/done? :never}
+                   {:intent/kind :pillar :intent/item :cobblestone :intent/top 60})
         tick (fn [w]
-               (with-redefs [plan/choose (constantly goal)
-                             plan/next-intent (constantly {:intent/kind :pillar
-                                                           :intent/item :cobblestone
-                                                           :intent/top 60})]
-                 (plan/plan-tick w {:event/kind :tick :event/now 1050 :event/rand 0.5} [goal])))]
+               (plan/plan-tick (in-play-with w goal)
+                               {:event/kind :tick :event/now 1050 :event/rand 0.5}
+                               [goal]))]
     (is (nil? (:plan/failed w)) "the :dig's start cleared the old guard")
     (is (= 1 (count (:plan/failures w))) "the history did not")
     (testing "from the same feet: a retreat along the trail, not the pillar"
@@ -2251,11 +2299,15 @@
 
 ;;; BLOCKED AREA: tunnels that keep ending :blocked in one place make the row leave it
 
+(def raised-column
+  "A loaded column of stone to y 66, so ground at y 67 stands under the feet of blocked-tunnels."
+  (world/column (into {} (for [x (range 16) z (range 16) y (range 64 67)] [[x y z] 1]))))
+
 (defn blocked-tunnels
   "blaze-race-z11 job 5 (run 41233526639) at 19:44:08 to 19:44:15: three tunnels to different cells a
    block or two apart ([2210 60 1793], [2224 60 1726], [2225 60 1727]) each ended :blocked from
    the feet [2160 67 1747], then the row planned a fourth. The trail has a cell 20 blocks back."
-  [& {:keys [at trail]}]
+  [& {:keys [at trail flat?]}]
   (let [blocked (fn [w target n]
                   (plan/fail-intent w
                                     {:intent/kind :tunnel-to
@@ -2269,7 +2321,10 @@
                      :plan/blacklist #{}
                      :plan/attempts 0
                      :time/now (or at 1000)
-                     :plan/trail (or trail [])))]
+                     :plan/trail (or trail []))
+              (cond-> flat?
+                      (assoc :world/chunks
+                             (into {} (for [cx (range 133 136)] [[cx 109] raised-column])))))]
     (reduce (fn [w [t n]] (blocked w t n))
             w
             [[[2210 60 1793] 1] [[2224 60 1726] 2] [[2225 60 1727] 3]])))
@@ -2287,41 +2342,29 @@
     (is (not (plan/area-blocked? (update w :plan/failures #(vec (take 2 %))) next feet))
         "two is not enough")))
 
-(deftest ^:eftest/synchronized the-row-leaves-the-area-its-tunnels-were-blocked-in
-  (let [goal {:goal/id :blaze-rods :goal/done? :never :goal/plan :flip-test}
+(deftest the-row-leaves-the-area-its-tunnels-were-blocked-in
+  (let [goal (says {:goal/id :blaze-rods :goal/done? :never}
+                   {:intent/kind :tunnel-to :intent/target [2172 52 1733] :intent/steps 32})
         tick (fn [w]
-               (with-redefs [plan/choose (constantly goal)
-                             plan/next-intent (constantly {:intent/kind :tunnel-to
-                                                           :intent/target [2172 52 1733]
-                                                           :intent/steps 32})
-                             plan/routable? (constantly true)]
-                 (plan/plan-tick w {:event/kind :tick :event/now 1050 :event/rand 0.5} [goal])))
+               (plan/plan-tick (in-play-with w goal)
+                               {:event/kind :tick :event/now 1050 :event/rand 0.5}
+                               [goal]))
         far [2140 67 1747]]
     (testing "a trail cell 20 back that has a route: the walk there"
-      (let [w (tick (assoc (blocked-tunnels :trail [far]) :time/now 1050))]
+      (let [w (tick (assoc (blocked-tunnels :trail [far] :flat? true) :time/now 1050))]
         (is (= :walk (get-in w [:plan/intent :intent/kind])))
         (is (= far (get-in w [:plan/intent :intent/target])))
         (is (= :regroup (get-in w [:plan/intent :intent/for])))))
-    (testing
-      "none routable: no escape tunnel (z14 job 5 planned it 352 times); the row's plan goes ahead"
-      (let [w (with-redefs [plan/routable? (constantly false)]
-                (with-redefs [plan/choose (constantly goal)
-                              plan/next-intent (constantly {:intent/kind :tunnel-to
-                                                            :intent/target [2172 52 1733]})]
-                  (plan/plan-tick (assoc (blocked-tunnels :trail [far]) :time/now 1050)
-                                  {:event/kind :tick :event/now 1050 :event/rand 0.5}
-                                  [goal])))]
+    (testing "none routable (nothing loaded there): no escape tunnel; the row's plan goes ahead"
+      (let [w (tick (assoc (blocked-tunnels :trail [far]) :time/now 1050))]
         (is (nil? (get-in w [:plan/intent :intent/for])))
-        (is (nil? (plan/leave-area (with-redefs [plan/routable? (constantly false)]
-                                     (blocked-tunnels :trail [far]))))
+        (is (nil? (plan/leave-area (blocked-tunnels :trail [far])))
             "leave-area has only the walk")))
     (testing "no trail at all: the row's own plan goes ahead"
       (let [w (tick (assoc (blocked-tunnels) :time/now 1050))]
         (is (nil? (get-in w [:plan/intent :intent/for])))))))
 
-;;; TUNNEL STALL: a hollow pocket at the feet must not cut the tunnel every tick
-
-(def tunnel-stall-goal {:goal/id :blaze-rods :goal/done? :never :goal/plan :tunnel-stall})
+;;; TUNNEL STALL: a hollow pocket at the feet is no reason to cut the tunnel
 
 (defn open-landing
   "z16 job 5 (plan 41276280629) at the end: feet [2148.5 72.0 1763.5], a :tunnel-to
@@ -2351,54 +2394,38 @@
                 {:intent/kind :tunnel-to :intent/target [2210 60 1793] :intent/goal :blaze-rods}}
                :world/chunks {[(bit-shift-right 2148 4) (bit-shift-right 1763 4)] col}))))
 
-(defn tick-tunnel
-  "One plan-tick of w with interrupts? true and next-intent answering next. The running intent
-   is a no-op, so a tunnel that is kept is still the one that went in."
-  [w next]
-  (with-redefs [plan/choose (constantly tunnel-stall-goal)
-                plan/interrupts? (constantly true)
-                plan/next-intent (constantly next)
-                intent/run (fn [world _ _] world)]
-    (plan/plan-tick w {:event/kind :tick :event/now 50 :event/rand 0.5} [tunnel-stall-goal])))
-
-(deftest ^:eftest/synchronized a-hollow-pocket-at-the-feet-does-not-cut-the-tunnel
-  ;; z16 job 5: 57942 starts of :tunnel-to [2210 60 1793] alternating with :pocket, no stage and
-  ;; no dig, still at [2148 72 1763] after 300 min. here-site refuses the cell (nothing to lay the
-  ;; roof on). A pocket handed in at that cell anyway is still not a reason to cut the tunnel:
-  ;; steer drops the site and the next tick would choose the tunnel again.
+(deftest a-hollow-pocket-at-the-feet-is-no-reason-to-cut-a-tunnel
+  ;; a pocket at the cell the feet stand in that cannot be sealed ends the tick it is entered, and
+  ;; the row would choose the tunnel again, so blaze's interrupts? does not cut the tunnel for it
   (let [w (open-landing)
         cell [2148 72 1763]
-        hollow
-        {:intent/kind :pocket
-         :intent/site
-         {:pocket/cell cell :pocket/here? true :pocket/stand nil :pocket/dig [] :pocket/placed []}}]
+        pocket-at
+        (fn [c]
+          {:intent/kind :pocket
+           :intent/site
+           {:pocket/cell c :pocket/here? true :pocket/stand nil :pocket/dig [] :pocket/placed []}})]
     (is (= cell (intent/feet w)))
-    (is (nil? (pocket/here-site w)) "an open landing is not chosen")
     (is (true? (pocket/unlayable? w cell)) "open roof: nothing to lay")
-    (testing "two ticks, the guard holding on each: the tunnel is still the one that was running"
-      (let [kept (tick-tunnel (tick-tunnel w hollow) hollow)]
-        (is (= 7 (get-in kept [:plan/intent :intent/id])))
-        (is (= :tunnel-to (get-in kept [:plan/intent :intent/kind])))
-        (is (= [2210 60 1793] (get-in kept [:plan/intent :intent/target])))
-        (is (= 7 (:plan/intents kept)) "no new intent was started")))
-    (testing "a pocket at the feet that can be sealed still cuts"
-      (let [cut (with-redefs [pocket/cannot-seal? (constantly false)] (tick-tunnel w hollow))]
-        (is (= :pocket (get-in cut [:plan/intent :intent/kind])))
-        (is (= 8 (:plan/intents cut)))))
-    (testing "a fight still cuts"
-      (let [cut (tick-tunnel w {:intent/kind :fight :intent/target 1})]
-        (is (= :fight (get-in cut [:plan/intent :intent/kind])))
-        (is (= 8 (:plan/intents cut)))))
-    (testing "a pocket that is not the cell the feet stand in still cuts"
-      (let [cut (tick-tunnel w
-                             {:intent/kind :pocket
-                              :intent/site {:pocket/cell [2200 60 1790]
-                                            :pocket/here? true
-                                            :pocket/stand nil
-                                            :pocket/dig []
-                                            :pocket/placed []}})]
-        (is (= :pocket (get-in cut [:plan/intent :intent/kind])))
-        (is (= 8 (:plan/intents cut)))))))
+    (is (blaze/hollow-pocket? w (pocket-at cell)))
+    (is (not (blaze/hollow-pocket? w {:intent/kind :fight :intent/target 1})))
+    (is (not (blaze/hollow-pocket? w (pocket-at [2200 60 1790]))) "not the cell the feet stand in")
+    (is (not (blaze/hollow-pocket? w nil)))
+    (testing "a pocket at the feet that can be sealed is no hollow one: it still cuts"
+      (let [lx (bit-and 2148 15)
+            lz (bit-and 1763 15)
+            stone (blocks/default-state :stone)
+            walls (into {}
+                        (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
+                              y [72 73]]
+                          [[(+ lx dx) y (+ lz dz)] stone]))
+            col (world/column
+                 (merge
+                  walls
+                  {[lx 71 lz] stone [lx 72 lz] blocks/air [lx 73 lz] blocks/air [lx 74 lz] stone}))
+            closed
+            (assoc w :world/chunks {[(bit-shift-right 2148 4) (bit-shift-right 1763 4)] col})]
+        (is (false? (pocket/cannot-seal? closed cell)) "every side already firm")
+        (is (not (blaze/hollow-pocket? closed (pocket-at cell))))))))
 
 (deftest ^:eftest/synchronized an-unlayable-landing-is-not-chosen-as-a-pocket
   ;; z16 fold at t=233999 (probes 41303425892 and 41304181213): the running :tunnel-to was cut for
@@ -2538,9 +2565,10 @@
     (with-redefs [plan/choose (constantly goal)
                   plan/next-intent (constantly next)
                   intent/run (fn [world _ _] world)]
-      (plan/chose w
-                  (plan/plan-tick w {:event/kind :tick :event/now 50 :event/rand 0.5} [goal])
-                  [goal]))))
+      (plan/chose
+       w
+       (plan/plan-tick w {:event/kind :tick :event/now 50 :event/rand 0.5} (table-with goal))
+       (table-with goal)))))
 
 (deftest a-row-that-preempts-is-recorded-with-the-row-it-was-over
   (let [w (choice-over {:intent/kind :walk :intent/target [1 64 1] :intent/goal :blaze-rods}

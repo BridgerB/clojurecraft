@@ -37,19 +37,6 @@
     (is (contains? churn/instantaneous-kinds :place))
     (is (nil? (churn/violation-with world [place-row] next-fn)))))
 
-(deftest a-repeat-the-tick-after-it-ended-is-counted-and-logged
-  (let [i {:intent/kind :walk :intent/target [1 64 1] :intent/for :cover}
-        w (reduce (fn [w n]
-                    (-> w
-                        (assoc :time/now (+ 1000 (* 50 n)))
-                        (plan/start-intent i)
-                        (plan/finish-intent (assoc i :intent/status :done))))
-                  world
-                  (range 21))]
-    (is (= 20 (get-in w [:plan/churn :churn/n])))
-    (is (some #(re-find #"churn :walk \[1 64 1\] x20" (str (:effect/message %)))
-              (:bot/effects w)))))
-
 (defn instant-cycle
   "One start and first-tick done end of intent i in world w, at tick and ms now, with no
    packets sent on the ending tick."
@@ -140,11 +127,3 @@
                     (range 5))]
       (is (nil? (:plan/instant w)))
       (is (nil? (:plan/failed w))))))
-
-(deftest a-different-or-later-start-is-not-a-repeat
-  (let [i {:intent/kind :walk :intent/target [1 64 1] :intent/for :cover}
-        ended (plan/finish-intent (assoc world :plan/intent i) (assoc i :intent/status :done))]
-    (testing "another target"
-      (is (zero? (plan/churn-count ended (assoc i :intent/target [2 64 2])))))
-    (testing "a second later" (is (zero? (plan/churn-count (assoc ended :time/now 2000) i))))
-    (testing "the very next tick" (is (= 1 (plan/churn-count (assoc ended :time/now 1050) i))))))

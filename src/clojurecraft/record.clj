@@ -63,9 +63,8 @@
       :close (fn [] (async/close! ch) (async/<!! done))})))
 
 (defn input-of
-  "The bytes of the recording at path: a path ending in .gz read through gzip (the size
-   recordings are kept at in git), one ending in .zst through the zstd command (a race
-   artifact's recordings are packed with it at the job's end, issue #299), any other as it is."
+  "The bytes of the recording at path: a path ending in .gz read through gzip (the size recordings
+   are kept at in git), one ending in .zst through the zstd command, any other as it is."
   ^java.io.InputStream [path]
   (cond (str/ends-with? (str path) ".gz") (GZIPInputStream. (io/input-stream path))
         (str/ends-with? (str path) ".zst")
@@ -81,8 +80,8 @@
 
 (defn reduce-entries
   "f folded over every line of a recording from init, in order, one line read at a time: a race's
-   recording is hundreds of thousands of lines, more than entries should hold at once (issue
-   #299 folds whole ones on the race's runner). Stops early when f returns a reduced value."
+   recording is hundreds of thousands of lines, more than entries should hold at once. Stops early
+   when f returns a reduced value."
   [f init path]
   (with-open [r (PushbackReader. (io/reader (input-of path)))]
     (loop [acc init]
@@ -150,9 +149,17 @@
                               produced (:bot/effects w)]
                           (if (= (sent produced) (sent r))
                             (assoc w :bot/effects [])
-                            (reduced
-                             {:record/mismatch
-                              {:index i :event e :recorded (sent r) :replayed (sent produced)}}))))
+                            (reduced {:record/mismatch {:index i
+                                                        :event e
+                                                        :recorded (sent r)
+                                                        :replayed (sent produced)
+                                                        :replay-world
+                                                        (select-keys w
+                                                                     [:player/held-slot
+                                                                      :player/inventory :plan/intent
+                                                                      :plan/last :plan/failed
+                                                                      :plan/attempts :time/tick
+                                                                      :time/now :player/pos])}}))))
                       world0
                       (map vector (range) (events path) recorded))]
       (when (:record/mismatch end) end))

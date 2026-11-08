@@ -6,7 +6,7 @@ clojurecraft: a from-scratch Minecraft Java Edition bot in Clojure whose purpose
 
 ## The brain
 
-`brain/` is the verified knowledge base (method: `/Users/bridger/Developer/BRAIN.md`). Read `brain/_index.md` first, then one MOC, then the few notes a question needs; never dump it. Every verified note cites `path#symbol` anchors at a pinned commit. When a change touches a subsystem, update its note in the same change and run `clojure -M:brain` (four invariants at zero: broken, ambiguous, orphans, unresolved sourceRefs). Sibling-research notes are `draft` until someone opens their anchors.
+`brain/` is the verified knowledge base (method: `/Users/bridger/Developer/BRAIN.md`). Read `brain/_index.md` first, then one MOC, then the few notes a question needs; never dump it. Every verified note cites `path#symbol` anchors at a pinned commit. A change edits the brain only when it makes a design decision or finds a gotcha (a note under `decisions/` or `gotchas/`) or a game fact; what a function does is its docstring, and what a stage found is its `problems.edn` row and issue. Run `clojure -M:brain` (four invariants at zero: broken, ambiguous, orphans, unresolved sourceRefs). Sibling-research notes are `draft` until someone opens their anchors.
 
 ## Style (the point of the project)
 
@@ -40,16 +40,28 @@ src/clojurecraft/inventory.clj the player's items and screen as values: slot map
 src/clojurecraft/entity.clj   every entity the server shows as values: type, position, velocity, a living one's health; hostiles, nearest, gone?
 src/clojurecraft/observe.clj  trials of what the bot sees: goals done when the world holds a fact the server sent (the entities trial)
 src/clojurecraft/terrain.clj  the blocks around the bot: columns, the block overlay, block-at, solid-fn; feeds memory
-src/clojurecraft/path.clj     a route for the feet over the block grid: A* with a node budget, moves and goals as data
+src/clojurecraft/path.clj     a route for the feet over the block grid: A* with a named node budget (path/budgets), moves and goals as data
 src/clojurecraft/dig.clj      a block's break time and drop as a pure function of block, held item and penalties, over the generated tables
 src/clojurecraft/intent.clj   open executors (multimethod on :intent/kind): :walk (follows a route) :dig (with the best tool) :collect, and the leaf blocker
 src/clojurecraft/stairs.clj   the :stairs-down executor: a staircase of child :dig intents, refusing water, lava and drops
+src/clojurecraft/filler.clj   the blocks a bot lays and seals with: pick (what is held), building (a tunnel's floors), carried, walkable
 src/clojurecraft/stone.clj    the :mine act: a row's blocks (stone, ore, gravel) walk → dig → collect, or stairs down to its depth
 src/clojurecraft/swim.clj     the escape goals' rules and executors: :swim-out, :flee, and :wade (the shore trial)
 src/clojurecraft/eat.clj      the :eat always row and executor: hungry under 14 with safe food held, one use-item, done when the server's food rises
 src/clojurecraft/combat.clj   the 775 attack: :fight (650 ms apart, a ghost after 25 swings, break off under 10 health), :back-off, the :defend always row and the gym's :attack
-src/clojurecraft/hunt.clj     the food producer: hungry with nothing to eat, walk to the nearest cow, pig, sheep or rabbit, fight it, collect the meat
-src/clojurecraft/pearls.clj   ender pearls by hunting endermen: provoke by a stare from range, fight at the legs, the pearl picked up where it fell
+src/clojurecraft/threat.clj   the threat table and cover ladder (threats.edn), measures as an open multimethod, nearest-safe: the one search for a cell no source reaches
+resources/clojurecraft/threats.edn   per-kind facts of the hostiles (hit damage, avoided, never fought, teleports, pack-neutral, pumpkin-safe, radius); combat reads them
+src/clojurecraft/forage.clj     the food producer: hungry with nothing to eat, walk to the nearest cow, pig, sheep or rabbit, fight it, collect the meat
+src/clojurecraft/pearls.clj   the hunt row (stage 18): ender pearls by hunting endermen: provoke by a stare from range, fight at the legs, the pearl picked up where it fell
+src/clojurecraft/pearls/params.clj   the pearl hunt's constants: the pearls.edn table and the values derived from it
+src/clojurecraft/pearls/facts.clj    the facts the hunt's rules ask of the world, computed lazily once per call
+src/clojurecraft/pearls/rules.clj    the rule table (pearls-rules.edn) and decide: the first row whose facts hold
+src/clojurecraft/pearls/sense.clj    what the hunt perceives: endermen, anger, menace, shooters
+src/clojurecraft/pearls/place.clj    the burrow and shelter geometry; the :burrow, :lookout and :provoke intents
+src/clojurecraft/pearls/cover.clj    cover from shooters and swarms
+src/clojurecraft/pearls/move.clj     the movers: roam, wander, explore, travel to a forest, relocate, the cuts out of a pocket
+src/clojurecraft/pearls/upkeep.clj   the sword and pickaxe made again, the reserve of digs and stems
+src/clojurecraft/fortress_exit.clj   the exit from the blaze fortress: sealed tunnel out, pocket bore, blaze refuge
 src/clojurecraft/eyes.clj     eyes of ender: the needs planner through the 2x2 craft rows, a wait that names the short stage (:no-pearls, :no-rods)
 src/clojurecraft/sword.clj    the :sword always row: the best sword the held items make without a trip, never from a log
 src/clojurecraft/armour.clj   the :wear-armour and :armour always rows: a piece held put on by two window-0 clicks; a helmet and chestplate from spare ingots
@@ -72,7 +84,14 @@ src/clojurecraft/model.clj    the information model: every attribute, its meanin
 src/clojurecraft/spec.clj     specs for attributes, events, effects, intents, packets; fdefs on the reducers
 src/clojurecraft/record.clj   the recording: a channel tap, reading it back, replay and verify
 src/clojurecraft/replay.clj   clojure -M:replay: fold a recording with no server, print RESULT
-src/clojurecraft/sim.clj      pure server model for socket-free end-to-end runs; holds a whole world of columns
+src/clojurecraft/sim.clj      pure server model for socket-free end-to-end runs; holds a whole world of columns: init, the tick (tick-steps), step, run, connect!
+src/clojurecraft/sim/world.clj    the model's floor: constants, rolls, blocks, what it tells, fluids and falls; the on-packet table
+src/clojurecraft/sim/window.clj   the player's inventory, containers, the click rules, the furnace
+src/clojurecraft/sim/protocol.clj login, chunks, movement, digging, using items, the player's life (hurt, hunger, pickup)
+src/clojurecraft/sim/portal.clj   placing blocks, the Nether portal and the arrival
+src/clojurecraft/sim/mobs.clj     goals and attacks of every mob, the dragon's perch
+src/clojurecraft/sim/spawns.clj   the night rule's and the Nether's spawns, despawn, populate, tick-mobs
+src/clojurecraft/sim/end.clj      eyes of ender, the End portal, the arrival on the main island
 src/clojurecraft/fluid.clj    water and lava as the server moves them: levels, flow, spread, mixing, as data and pure rules
 src/clojurecraft/hunger.clj   hunger as the server keeps it: exhaustion, saturation, regeneration, starvation, eating, as data and pure rules
 src/clojurecraft/mob.clj      mobs as the server runs them, for the model: kinds as data, spawning, walking, hitting, shooting, blasting, loot
@@ -87,13 +106,41 @@ src/clojurecraft/race.clj     the race: N bots (main/run-bot!, each its own atom
 src/clojurecraft/fixture.clj  what every fixture asks the server over RCON: wait, load, teleport, judge a landing; the :go event
 src/clojurecraft/rcon.clj     RCON client (fixtures, CI judge); `clojure -M:rcon`
 src/clojurecraft/gym.clj      the gym: registry, one trial (land, judge, retry a disconnect), report (`clojure -M:gym`)
-src/clojurecraft/plans.clj    one plan file across many jobs (`clojure -M:plan`, `ci/plan/`): `:plans/*`, because `:plan/*` belongs to `plan.clj`
 src/clojurecraft/landings.clj landing sets: grid, biome snap, surface checks, pregeneration
 src/clojurecraft/watch.clj    observers of the atom: --telemetry diffs successive worlds, bounded, off-thread
 src/clojurecraft/senses.clj   observer of the atom: a line a second of what a race bot senses and decides, the loop's slowest event, the classes a run ends in
-src/clojurecraft/viewer.clj   observer of the atom: --viewer serves the world round the bot, drawn by steve's vendored renderer, and its thinking
 src/clojurecraft/main.clj     loop, effects, RESULT line, --record, --telemetry, replay
 src/clojurecraft/cli.clj      what every entry point shares: --key value options, a timestamped stderr line
+src/clojurecraft/avoided.clj  what the bot has learned not to try again, behind one interface (noted?, mark-of): blacklist, boxed cells, unreached logs
+src/clojurecraft/shapes.clj   the two shapes position attributes share (vec3, block-pos), a leaf so executors can spec before spec.clj loads
+src/clojurecraft/memo.clj     a pure function's answers remembered by its inputs, where the inputs are a world's parts
+src/clojurecraft/registry.clj the generated registries a fight is told in: damage types, attributes, mob effects, sounds
+src/clojurecraft/nbt.clj      network NBT as values: the server's text components read, the model's written
+src/clojurecraft/text.clj     the server's text components as plain values, for death messages
+src/clojurecraft/said.clj     the one place a heard line joins :world/chat
+src/clojurecraft/chat.clj     what the server says in words, kept as facts
+src/clojurecraft/hear.clj     what the server says about a fight beyond health and the damage event, kept as facts
+src/clojurecraft/ear.clj      what the server lets the bot hear and see happen beyond its own sight
+src/clojurecraft/eye.clj      what the bot sees of a creature beyond where it is and how hurt
+src/clojurecraft/derived.clj  senses two successive worlds hold together: what set the bot alight, items gained and lost, the biome, breath
+src/clojurecraft/failure.clj  what a failed run was doing and why, as a value both races share
+src/clojurecraft/churn_guard.clj the invariant that catches an intent chosen again every tick, for every intent
+src/clojurecraft/scene.clj    what the world looked like at a moment, for a reader: the facts a fix starts from and the blocks round the feet
+src/clojurecraft/drops.clj    picking up what lies on the ground
+src/clojurecraft/vein.clj     the whole of an iron vein
+src/clojurecraft/gear.clj     the gear a bot takes into the Nether
+src/clojurecraft/picks.clj    the spare-pickaxes row
+src/clojurecraft/fire.clj     fire on the player as the server keeps it, for the model
+src/clojurecraft/beds.clj     the bed as a weapon in the End, as data and pure functions
+src/clojurecraft/blaze.clj    blaze rods (stage 17): the act, the hold in a pocket, the rest, the camp, the walk or tunnel to the spawner
+src/clojurecraft/pocket.clj   a pocket to fight blazes from: sites, seals, what a seal needs
+src/clojurecraft/dodge.clj    dodging a blaze's fireballs
+src/clojurecraft/dragon.clj   the dragon (stage 25): crystals, the perch, the beds, the meal
+src/clojurecraft/end_portal.clj the end portal lit and stepped into
+src/clojurecraft/start.clj    where and with what a bot begins, as data (starts.edn), read by the real and the sim race alike
+src/clojurecraft/lanes.clj    which start and page kind a lane plays (ci/lanes.edn), pure
+src/clojurecraft/land.clj     landing a bot where a run starts over RCON: land! (open, by kind of start), pads and arenas, the race's fortress landings
+src/clojurecraft/race_facts.clj a race as values: the board, samples, milestones, when a slot may start its next bot
 dev/clojurecraft/datagen.clj  vanilla --reports and the inner jar's data → resources/clojurecraft/*.edn
 dev/clojurecraft/jar_probe.clj hardness and tool materials read from the game's own classes, for datagen
 dev/clojurecraft/brain.clj    the brain checker (clojure -M:brain)
@@ -139,12 +186,11 @@ clojure -M:splint src dev test/clojurecraft                   # idioms (Splint, 
 clojure -M:lsp clean-ns                                       # sort and prune ns forms (clojure-lsp, settings in .lsp/config.edn); the hook too
 clojure -M:lsp diagnostics --raw                              # no unused public vars (clojure-lsp); the hook checks staged files, CI the repo
 clojure -M:brain                                              # brain checker (must be zero)
-clojure -M:plan plan --plan ci/plan/soak.edn                  # the job matrix for one plan file (also work, report, pull)
 clojure -M:rcon --port 25581 --pass "$(cat data/local-server/rcon.pass)" data get entity Clj_wood Inventory
 bb datagen                            # regenerate the EDN tables (needs the jar)
 ```
 
-The bot prints one `RESULT {...}` EDN line on stdout and exits 0 when `:ok true`. CI is the workflows below, and the two that race without end on main, as lanes the fleet dispatches (`fleet.yml`, `ci/fleet.edn`: one small job that fills free runners with lanes and gives the newest back when any other job has waited 90 s, floor two a kind): `race.yml` (real servers on the race's pregenerated landing sets, up to eight lanes) and `simrace.yml` (the bot in the same worlds, captured once by `simworld.yml` with each set's Nether, against the model, up to eight lanes), each keeping every runner full the whole job (a bot or run that ends is replaced at once; one still playing at the job's end is cut, never filed) and reporting every 20 minutes per runner, staggered (`bb churn`): the runs that ended since its last report file their failures as issues, one per signature (`brain/bot/tooling/sim-race.md`; a real lane first folds each failed bot's recording into a real snapshot, kept when the model reproduces it, `brain/bot/tooling/real-snapshots.md`), and go to the results page on `gh-pages` as a batch of the run (`bb page`, `brain/bot/tooling/race.md`). Neither looks its worlds up first: `world.yml` and `simworld.yml` build them once, dispatched by hand when a key changes, and a race job that misses the cache fails at once. A `fix/<issue>-*` pull request gets two checks: `issue.yml`, which judges the failing moments of the issues it names (snapshots under `test/issues/<issue>/`, each a moment kept from before the choice that failed, a sim run's or a real race's) with `clojure -M:simrace --judge`, uninstrumented, on the base commit (each must recur) and on the PR's code (none may), in a few minutes, and `unit.yml`, every test but the forest property plus the static checks (the same job `test.yml` runs on every push), so a fix that breaks an older assertion is seen before `main` is. `test.yml` runs the tests and the brain checker on every push in a few minutes and three jobs (one forest shard of 250; a dispatch runs all eight), and the fleet gives them runners. `gym.yml` runs N trials of one goal, by hand only, one runner and one pregenerated landing per trial, judged by RESULT plus the server's truth commands and reported with a 95% interval (`clojure -M:gym`, `brain/bot/tooling/gym-on-runners.md`). `probe.yml` runs one command for a branch on a runner, by hand: a test var, a snapshot judged, a probe script, a short sim (see Rules). `pages.yml` builds the results site from main's code over `gh-pages`'s data and deploys it, dispatched by each publish (`bb page`, `bb site`). `world.yml` builds a landing set's world once and caches it. `plan.yml` runs one plan file (`ci/plan/`, `clojure -M:plan`) as many jobs. `timer.yml` dispatches the next plan every twenty minutes. `full.yml` is one fresh world and one bot with nothing given, from spawn, playing every step up to the current stage (`plan/current-until`, `--chain`) for 5.5 hours, run by hand. The two races run without end on the latest `main`: the fleet replaces a lane when its job ends, and cancels and replaces lanes whose code a merge replaced (`RACE_CONTINUOUS=false` stops new lanes). Write code, push, and read the runs: the runners do the compute.
+The bot prints one `RESULT {...}` EDN line on stdout and exits 0 when `:ok true`. CI is the workflows below, and the two that race without end on main, as lanes the fleet dispatches (`fleet.yml`, `ci/fleet.edn`: one small job that fills free runners with lanes and gives the newest back when any other job has waited 90 s, floor two a kind): `race.yml` (real servers on the race's pregenerated landing sets, up to eight lanes) and `simrace.yml` (the bot in the same worlds, captured once by `simworld.yml` with each set's Nether, against the model, up to eight lanes), each keeping every runner full the whole job (a bot or run that ends is replaced at once; one still playing at the job's end is cut, never filed) and reporting every 20 minutes per runner, staggered (`bb churn`): the runs that ended since its last report file their failures as issues, one per signature (`brain/bot/tooling/sim-race.md`; a real lane first folds each failed bot's recording into a real snapshot, kept when the model reproduces it, `brain/bot/tooling/real-snapshots.md`), and go to the results page on `gh-pages` as a batch of the run (`bb page`, `brain/bot/tooling/race.md`). Neither looks its worlds up first: `world.yml` and `simworld.yml` build them once, dispatched by hand when a key changes, and a race job that misses the cache fails at once. A `fix/<issue>-*` pull request gets two checks: `issue.yml`, which judges the failing moments of the issues it names (snapshots under `test/issues/<issue>/`, each a moment kept from before the choice that failed, a sim run's or a real race's) with `clojure -M:simrace --judge`, uninstrumented, on the base commit (each must recur) and on the PR's code (none may), in a few minutes, and `unit.yml`, every test but the forest property plus the static checks (the same job `test.yml` runs on every push), so a fix that breaks an older assertion is seen before `main` is. `test.yml` runs the tests and the brain checker on every push in a few minutes and three jobs (one forest shard of 250; a dispatch runs all eight), and the fleet gives them runners. `gym.yml` runs N trials of one goal, by hand only, one runner and one pregenerated landing per trial, judged by RESULT plus the server's truth commands and reported with a 95% interval (`clojure -M:gym`, `brain/bot/tooling/gym-on-runners.md`). `probe.yml` runs one command for a branch on a runner, by hand: a test var, a snapshot judged, a probe script, a short sim (see Rules). `pages.yml` builds the results site from main's code over `gh-pages`'s data and deploys it, dispatched by each publish (`bb page`, `bb site`). `world.yml` builds a landing set's world once and caches it. The two races run without end on the latest `main`: the fleet replaces a lane when its job ends, and cancels and replaces lanes whose code a merge replaced (`RACE_CONTINUOUS=false` stops new lanes). Write code, push, and read the runs: the runners do the compute.
 
 ## Words
 
@@ -152,11 +198,7 @@ GitHub's words stay GitHub's. Actions is the product, a workflow is one yaml fil
 
 - **test** is the suite workflow. **gym** is the real-terrain workflow. One run of one goal on one landing is a **trial** (the matrix job in `gym.yml`).
 - **world** builds a landing set once (`world.yml`, `bb prepare-world`). The namespace is `clojurecraft.worlds` (`bb/clojurecraft/worlds.clj`), because `clojurecraft.world` is the test fixture that builds chunk columns.
-- **plan** is one file of experiments run together (`ci/plan/<label>.edn`, `plan.yml`, `clojure -M:plan`). The namespace is `clojurecraft.plans` and the keys are `:plans/*`. `clojurecraft.plan` and `:plan/*` are the bot's planner in `plan.clj`; a plan file does not use them.
-- **job** is one share of a plan (`--job N`, matrix key `job`, artifact `plan-<label>-job-<n>`).
 - **shard** is only a seeded slice of a sim property (`:exp/shards`, and the same word on `test.yml`'s forest matrix).
-- **soak** is the repeated plan, `ci/plan/soak.edn`. **timer** (`timer.yml`) dispatches the next file in `ci/plan/queue/`, or the soak when the queue is empty.
-- **full** is the one fresh-world attempt (`full.yml`): nothing given, from spawn, every step up to the current stage, for 5.5 hours. Run by hand (`gh workflow run full.yml --ref <branch>`), never a check: the rounds on `main` say more.
 - **lane** is one run of `race.yml` or `simrace.yml` on `main` (`race lane k`): one runner, one job's worth (about 5.5 h), the runner k of the old matrix; the **fleet** (`fleet.yml`) dispatches, gives back and replaces lanes. A **round** is a lane's run as the issues and the page count it. A **batch** is what one lane reports every 20 minutes, the runs that ended since its last (`bb churn`); the page shows a run as one row, its batches combined. The repository variable `RACE_CONTINUOUS=false` stops new lanes.
 
 ## Server facts
