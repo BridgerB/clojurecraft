@@ -5,7 +5,6 @@
             [clojurecraft.filler :as filler]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
-            [clojurecraft.intent :as intent]
             [clojurecraft.make]
             [clojurecraft.memory :as memory]
             [clojurecraft.mob :as mob]
@@ -297,9 +296,7 @@
                             :when (not= [0 0] [cx cz])]
                         [[cx cz] (world/column {})])))
         asked (atom [])]
-    ;; only this thread's route tests are counted (routable-here)
-    (with-redefs [intent/routable? (ps/routable-here
-                                    (fn [_ i] (swap! asked conj (:intent/max-nodes i)) false))]
-      (is (nil? (pplace/stare-site w e)) "no route: no site"))
+    (is (nil? (pplace/stare-site w e (fn [_ i] (swap! asked conj (:intent/max-nodes i)) false)))
+        "no route: no site")
     (is (<= 1 (count @asked) pparams/vantage-tries) "at most vantage-tries route tests")
     (is (every? #(= pparams/vantage-nodes %) @asked) "each within vantage-nodes")))

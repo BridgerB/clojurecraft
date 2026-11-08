@@ -631,3 +631,26 @@
     (is (= 6 (swapped (at {11 beef} 6))) "no tool held: into the held slot as before")
     (is (= 1 (swapped (at {0 pick 6 pick 11 beef} 6)))
         "a tool in slot 0 too: the first hotbar slot with none is 1")))
+
+(deftest a-given-cell-a-mob-stands-in-fails-occupied-at-once
+  ;; the server refuses a block laid into a mob; waiting for its answer cost the bot half a second
+  ;; a try under fire
+  (let [floor (into {} (for [x (range 3 10) z (range 3 10)] [[x 63 z] 1]))
+        zombie {:entity/type (blocks/entity-types :zombie)
+                :entity/pos [6.5 64.0 5.5]
+                :entity/seen-at 0
+                :entity/health 20.0}
+        at (fn [entities]
+             (-> (standing [4.5 64.0 5.5])
+                 (assoc :world/chunks {[0 0] (world/column floor)} :world/entities entities)
+                 (assoc :plan/intent
+                        {:intent/kind :place
+                         :intent/item :cobblestone
+                         :intent/status :active
+                         :intent/stage :spot
+                         :intent/cell [6 64 5]})))
+        run (fn [w]
+              (first (fx/fold intent-step w [{:event/kind :tick :event/now 0 :event/rand 0.5}])))]
+    (is (= :occupied (:intent/reason (:plan/intent (run (at {9 zombie}))))))
+    (is (= :settle (:intent/stage (:plan/intent (run (at {})))))
+        "with the cell empty, placed as before")))

@@ -53,6 +53,7 @@
               sample serverlog-lines spawn-command start-at summary tick-times]]
             [clojurecraft.rcon :as rcon]
             [clojurecraft.senses :as senses]
+            [clojurecraft.servers :as servers]
             [clojurecraft.start :as start]))
 
 (set! *warn-on-reflection* true)
@@ -518,6 +519,8 @@
                                parse-long)
                :server (some-> which
                                parse-long)}
+        where
+        (assoc where :simulation-distance (servers/simulation-distance config (:server where)))
         done (promise)
         live (atom {})
         ctx {:server server

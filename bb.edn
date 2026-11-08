@@ -3,7 +3,7 @@
 ;; what test.yml's unit job runs. The bot itself never runs under Babashka: tasks that need it
 ;; start the JVM (`clojure -M:...`).
 {:min-bb-version "1.13.225"
- :paths ["bb"]
+ :paths ["bb" "src"]
  :tasks
  {:requires ([clojurecraft.tasks :as t])
   ;; ---------------------------------------------------------------- checks, as CI runs them
@@ -18,6 +18,7 @@
               [clojurecraft.evidence-test]
               [clojurecraft.fleet-test]
               [clojurecraft.lanes-test]
+              [clojurecraft.server-test]
               [clojurecraft.page-test]
               [clojurecraft.site-test]
               [clojurecraft.verify-test])
@@ -26,6 +27,7 @@
                                                   'clojurecraft.evidence-test
                                                   'clojurecraft.fleet-test
                                                   'clojurecraft.lanes-test
+                                                  'clojurecraft.server-test
                                                   'clojurecraft.page-test
                                                   'clojurecraft.site-test
                                                   'clojurecraft.verify-test)]

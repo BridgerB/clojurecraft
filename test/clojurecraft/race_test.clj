@@ -121,8 +121,14 @@
                 "b" (assoc playing :time/tick 300 :plan/reached #{:wood :kit})
                 "c" {:bot/phase :play :bot/disconnected "gone" :player/pos [0 64 0]}
                 "d" (assoc playing :time/tick 100 :plan/status :done)}
-        s (facts/sample {:runner 3} worlds {"a" 100 "b" 100 "d" 100} 15000 {:p95 5.0} 900 1000)]
+        s (facts/sample {:runner 3 :server 2 :simulation-distance 3}
+                        worlds
+                        {"a" 100 "b" 100 "d" 100}
+                        15000 {:p95 5.0}
+                        900 1000)]
     (is (= 4 (:sample/joined s)))
+    (is (= [2 3] ((juxt :sample/server :sample/simulation-distance) s))
+        "the sample names its server and its distance")
     (is (= 2 (:sample/playing s)))
     (is (= 1 (:sample/cut-off s)))
     (is (= 4 (:sample/milestones s)))

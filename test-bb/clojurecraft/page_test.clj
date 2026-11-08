@@ -246,3 +246,27 @@
            (:observed r)))
     (is (nil? (:observed (page/combine [(page/batch (round {}))])))
         "a run whose batches kept no row has none")))
+
+(deftest a-batch-row-names-each-servers-distance-and-tick
+  (let [sample (fn [server distance playing avg p95]
+                 {:sample/server server
+                  :sample/simulation-distance distance
+                  :sample/playing playing
+                  :sample/server-tick {:avg avg :p50 avg :p95 p95 :p99 p95}})
+        samples [(sample 1 4 10 200.0 300.0) (sample 1 4 10 220.0 340.0) (sample 1 4 0 40.0 50.0)
+                 (sample 2 3 10 150.0 200.0)]
+        servers (page/servers-of samples)]
+    (is (= [{:server 1
+             :simulation-distance 4
+             :samples 2
+             :tick {:avg 210.0 :p50 210.0 :p95 320.0 :p99 320.0}}
+            {:server 2
+             :simulation-distance 3
+             :samples 1
+             :tick {:avg 150.0 :p50 150.0 :p95 200.0 :p99 200.0}}]
+           servers)
+        "the mean of the samples with bots playing, by server")
+    (is (nil? (page/servers-of [])) "no samples, no entry")
+    (is (= servers (:servers (page/batch (round {:round/servers servers})))) "it reaches the row")
+    (is (not (contains? (page/batch (round {})) :servers)) "and is absent without samples")
+    (is (= {:samples 0} (first (page/servers-of [{:sample/playing 0}]))) "a one-server runner")))
