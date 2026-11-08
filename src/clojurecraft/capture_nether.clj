@@ -219,6 +219,10 @@
                 columns))))
          (finally (deliver done true) (async/<!! loop-done) ((:close! c))))))
 
+(def known-options
+  "The options -main reads (cli/options rejects any other)."
+  #{:host :port :rcon-port :rcon-pass :landings :set :out :margin})
+
 (defn -main
   "Take the Nether of --landings (--set) from the server at --port (RCON --rcon-port,
    --rcon-pass) into the file --out, margin --margin chunks (default-margin), and print each
@@ -227,7 +231,7 @@
   (let [{:keys [host port rcon-port rcon-pass landings out margin]
          set-name :set
          :or {host "127.0.0.1"}}
-        (cli/options args)
+        (cli/options args known-options)
         server {:host host
                 :port (Long/parseLong port)
                 :rcon-port (Long/parseLong rcon-port)

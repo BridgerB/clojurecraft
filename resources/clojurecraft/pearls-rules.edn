@@ -196,6 +196,11 @@
    :rule/phase :reach-forest
    :rule/when [:cage-break]
    :rule/then [:fact :cage-break]}
+  ;; the last mover of the phase: after travel, relocate, wander and the cage-break cuts have found nothing, one long way along the held heading
+  {:rule/id :hunt/heading
+   :rule/phase :reach-forest
+   :rule/when [:heading-walk]
+   :rule/then [:fact :heading-walk]}
   {:rule/id :hunt/walk-to-crowd-site
    :rule/phase :set-up
    :rule/when [:csite :csite-walk]

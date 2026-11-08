@@ -479,6 +479,11 @@
              (recur (conj results r)
                     (long (backoff-ms wait (- (System/currentTimeMillis) t) (:result r)))))))))
 
+(def known-options
+  "The options -main reads (cli/options rejects any other)."
+  #{:config :host :port :rcon-port :rcon-pass :record-dir :commit :seed :landing-offset :runner
+    :server :landings :start})
+
 (defn -main
   "Run the race ci/race.edn (or --config) describes on the server at --port, its RCON at --rcon-port
    with --rcon-pass, for the job's length (run-ms): :race/bots slots, each refilled with a fresh bot
@@ -486,7 +491,7 @@
    milestones watch whichever bots play now. A RESULT line per bot as it ends, a RACE summary of
    every bot at the end, written to the record directory. Exits 0 when any bot reached the target."
   [& args]
-  (let [o (cli/options args)
+  (let [o (cli/options args known-options)
         {:keys [config host port rcon-port rcon-pass record-dir commit seed landing-offset]
          :or {config "ci/race.edn" host "127.0.0.1" record-dir "data/race"}}
         o

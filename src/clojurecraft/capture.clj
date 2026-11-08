@@ -164,6 +164,10 @@
   (with-open [r (PushbackReader. (io/reader (GZIPInputStream. (io/input-stream path))))]
     (edn/read {:readers record/readers} r)))
 
+(def known-options
+  "The options -main reads (cli/options rejects any other)."
+  #{:host :port :rcon-port :rcon-pass :landings :set :out :radius})
+
 (defn -main
   "Take every landing of --landings from the server at --port (RCON --rcon-port, --rcon-pass)
    into --out, one world file a landing, named by its place in the set (1.edn.gz ...)."
@@ -171,7 +175,7 @@
   (let [{:keys [host port rcon-port rcon-pass landings set out]
          chunks :radius
          :or {host "127.0.0.1"}}
-        (cli/options args)
+        (cli/options args known-options)
         server {:host host
                 :port (Long/parseLong port)
                 :rcon-port (Long/parseLong rcon-port)

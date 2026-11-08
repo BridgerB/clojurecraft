@@ -142,6 +142,16 @@
        (if (= dimension/nether (dimension/of w))
          (or (pmove/dig-out w) (pmove/tunnel-out w) (pmove/climb-out w) (pmove/uncage w))
          (or (pmove/climb-out w) (pmove/dig-out w) (pmove/uncage w)))))
+   :heading-walk (fn [f w]
+                   (when (and (not (f :hurt?))
+                              (not (f :tracked?))
+                              (not (f :swarmed?))
+                              (not (psense/recently-shot? w))
+                              (not (psense/menaced? w))
+                              (empty? (psense/endermen w pparams/seek-radius))
+                              (= dimension/nether (dimension/of w))
+                              (not (psense/in-forest? w)))
+                     (pmove/reach-heading w)))
    :csite-walk (fn [f w] (pmove/shelter-walk w (f :csite)))
    :site-walk (fn [f w] (pmove/shelter-walk w (f :site)))
    :overworld-death? (fn [_ w]

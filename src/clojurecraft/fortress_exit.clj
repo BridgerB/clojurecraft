@@ -365,23 +365,38 @@
                (not (contains? (avoided/all-of world :blacklist) held)))
       held)))
 
+(defn given-up-column?
+  "Is the [x z] column of target t within watch-same of a column the exit was given up at
+   (:exit-columns, pmove/watch-progress)? The exit's fresh target flips between cells a block apart."
+  [world t]
+  (boolean (some (fn [[cx cz]]
+                   (<= (physics/horizontal-distance [cx 0 cz] [(first t) 0 (last t)])
+                       pparams/watch-same))
+                 (avoided/all-of world :exit-columns))))
+
 (defn fortress-tunnel-target
   "The [x y z] target for the sealed fortress tunnel-out: the one held (held-exit-target) until
    reached or failed, else fresh-tunnel-target; nil once the fresh one is nil (clear of the
    fortress), however long a target has been held. A fresh target is bore-reach ahead of the feet
    and a blocked step turns the bore round, so re-derived each act it flipped between two
    targets four blocks apart for an hour of :tunnel-to, wearing the pickaxe out (sim
-   d3ce99b R1-24-1: [-188 78 163] and [-188 78 160], 620 :tunnel-to intents, no pearl)."
+   d3ce99b R1-24-1: [-188 78 163] and [-188 78 160], 620 :tunnel-to intents, no pearl). Nil too
+   when its column [x z] is one the exit was given up at for want of progress (:exit-columns, move/watch-progress): a
+   first failed tunnel is not the end of an exit (R4/1 reached its forest through exits that failed once), no progress is."
   [world]
   (when (seq (fortress-points world))
-    (when-let [fresh (fresh-tunnel-target world)] (or (held-exit-target world) fresh))))
+    (when-let [fresh (fresh-tunnel-target world)]
+      (let [t (or (held-exit-target world) fresh)] (when-not (given-up-column? world t) t)))))
 
 (defn fortress-escaping?
   "Is the bot leaving the fortress via sealed tunnel-out: inside/near the fortress,
-   or still surfacing underground while escaping?"
+   or still surfacing underground while escaping? Never in a warped forest (psense/in-forest?): the
+   hunt is there. Sim R4/1 seed 1 (issue #263) was in its forest from minute 8.7, 81 endermen in
+   sight, and still tunnelled the fortress exit at minute 47."
   [world]
   (boolean (and (= dimension/nether (dimension/of world))
                 (seq (fortress-points world))
+                (not (psense/in-forest? world))
                 (fortress-tunnel-target world))))
 
 (defn fortress-tunnel-out

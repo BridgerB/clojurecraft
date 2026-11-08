@@ -238,3 +238,18 @@
 (def reserve-stems (:reserve-stems thresholds))
 
 (def heavy-look (:heavy-look thresholds))
+(def heading-leg (:heading-leg thresholds))
+
+(def heading-span (:heading-span thresholds))
+
+(def heading-min-y (:heading-min-y thresholds))
+
+(def heading-max-y (:heading-max-y thresholds))
+
+(def heading-arrived (:heading-arrived thresholds))
+
+(def seen-corridor (:seen-corridor thresholds))
+
+(def progress (:progress thresholds))
+
+(def watch-same (:watch-same thresholds))
