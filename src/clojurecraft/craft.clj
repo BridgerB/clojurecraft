@@ -52,11 +52,10 @@
           (nil? (:view/state-id v))
           (if (> (- (now world) since) stage-timeout) (intent/fail world :no-window) world)
           (:window/cursor world)
-          (if-let [s (window/free-slot world v)]
-            (window/click world v (inventory/left-click s))
-            (if-let [p (window/tossable world v)]
-              (window/toss world v p)
-              (intent/fail world :inventory-full)))
+          (cond (window/free-slot world v)
+                (window/click world v (inventory/left-click (window/free-slot world v)))
+                (window/tossable world v) (window/toss world v (window/tossable world v))
+                :else (intent/fail world :inventory-full))
           (window/tossable world v) (window/toss world v (window/tossable world v))
           (dirty-grid-slot v) (window/click world v (inventory/shift-click (dirty-grid-slot v)))
           :else

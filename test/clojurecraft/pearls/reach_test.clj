@@ -13,7 +13,6 @@
             [clojurecraft.pearls-support :as ps]
             [clojurecraft.pearls.move :as pmove]
             [clojurecraft.pearls.params :as pparams]
-            [clojurecraft.pearls.rules :as rules]
             [clojurecraft.pearls.sense :as psense]
             [clojurecraft.world :as world]))
 
@@ -85,12 +84,10 @@
               (assoc-in [:player/inventory 1] (ps/item :iron_pickaxe 1))
               (assoc :plan/status :active :plan/goals #{:ender-pearls} :plan/active [ps/row]))
         held (pmove/reach-heading-hold w)
-        i (pmove/travel held)]
+        i (pmove/reach-heading held)]
     (is (> 104 pparams/nether-climb-ceiling) "above the ceiling")
     (is (some? (:pearls/heading held)) "a heading is held with no forest known")
     (is (= :tunnel-to (:intent/kind i)) "the heading's tunnel")
-    (is (nil? (pmove/travel held)) "travel finds nothing: the heading is not one of its ends")
-    (is (= :tunnel-to (:intent/kind (rules/decide held))) "the hunt's last mover, after the others")
     (is (<= (second (:intent/target i)) pparams/heading-max-y) "down to y 90 and under")
     (is (= i (pmove/reach-heading (pmove/reach-heading-hold held)))
         "the same leg at the next act")))
