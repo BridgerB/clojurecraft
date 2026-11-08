@@ -426,7 +426,8 @@
                                   :at (page/instant code-at)
                                   :runner runner
                                   :batch n
-                                  :issues (page/issue-numbers runs)}
+                                  :issues (page/issue-numbers runs)
+                                  :servers (page/servers-under dir)}
                                  senses
                                  (page/run-times run)))]
     (println "churn:" head ":" (count runs) "runs")

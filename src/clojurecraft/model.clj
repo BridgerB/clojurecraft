@@ -713,7 +713,9 @@
    [:sample/tick-rate "playing bots' ticks per second since the last sample: median, p10, min"
     "a race sample"] [:sample/milestones "targets reached by every bot, in all" "a race sample"]
    [:sample/server-tick "the server's tick times, ms: avg, p50, p95, p99" "a race sample"]
-   [:sample/bot-heap-mb "the bots' JVM heap in use" "a race sample"]
+   [:sample/simulation-distance
+    "the simulation distance, in chunks, the sampled server runs with (ci/race.edn's :race/server-overrides)"
+    "a race sample"] [:sample/bot-heap-mb "the bots' JVM heap in use" "a race sample"]
    [:sample/threads
     "the bots' JVM live threads: a bot's socket threads end with it, so a count that only grows as slots refill is a leak"
     "a race sample"] [:milestone/runner "the runner a milestone was reached on" "a milestone fact"]

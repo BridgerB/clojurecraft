@@ -738,6 +738,7 @@
 (s/def :sample/tick-rate (s/map-of #{:median :p10 :min} (s/nilable number?)))
 (s/def :sample/milestones nat-int?)
 (s/def :sample/server-tick (s/map-of #{:avg :p50 :p95 :p99} number?))
+(s/def :sample/simulation-distance (s/nilable pos-int?))
 (s/def :sample/bot-heap-mb nat-int?)
 (s/def :sample/threads nat-int?)
 (s/def :milestone/runner (s/nilable int?))
