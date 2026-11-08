@@ -50,7 +50,7 @@ jobs:
       - name: Install the Clojure CLI and Babashka
         if: steps.have.outputs.cache-hit != 'true'
         run: |
-          for i in 1 2 3 4 5 6; do curl -fsSL https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh -o /tmp/clj.sh && sudo bash /tmp/clj.sh && break; [ "$i" = 6 ] && exit 1; sleep $((i * 15)); done
+          for i in 1 2 3 4 5 6; do curl -fsSL https://download.clojure.org/install/linux-install-1.12.6.1673.sh -o /tmp/clj.sh && sed -i "s#https://github.com/clojure/brew-install/releases/download/1.12.6.1673/#https://download.clojure.org/install/#" /tmp/clj.sh && sudo bash /tmp/clj.sh && break; [ "$i" = 6 ] && exit 1; sleep $((i * 15)); done
           for i in 1 2 3 4 5 6; do curl -fsSL https://raw.githubusercontent.com/babashka/babashka/master/install -o /tmp/bb.sh && sudo bash /tmp/bb.sh --version 1.13.225 && break; [ "$i" = 6 ] && exit 1; sleep $((i * 15)); done
       - uses: actions/cache@v6
         if: steps.have.outputs.cache-hit != 'true'
@@ -121,7 +121,7 @@ jobs:
       - name: Install the Clojure CLI and Babashka
         if: steps.have.outputs.cache-hit != 'true'
         run: |
-          for i in 1 2 3 4 5 6; do curl -fsSL https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh -o /tmp/clj.sh && sudo bash /tmp/clj.sh && break; [ "$i" = 6 ] && exit 1; sleep $((i * 15)); done
+          for i in 1 2 3 4 5 6; do curl -fsSL https://download.clojure.org/install/linux-install-1.12.6.1673.sh -o /tmp/clj.sh && sed -i "s#https://github.com/clojure/brew-install/releases/download/1.12.6.1673/#https://download.clojure.org/install/#" /tmp/clj.sh && sudo bash /tmp/clj.sh && break; [ "$i" = 6 ] && exit 1; sleep $((i * 15)); done
           for i in 1 2 3 4 5 6; do curl -fsSL https://raw.githubusercontent.com/babashka/babashka/master/install -o /tmp/bb.sh && sudo bash /tmp/bb.sh --version 1.13.225 && break; [ "$i" = 6 ] && exit 1; sleep $((i * 15)); done
       - uses: actions/cache@v6
         if: steps.have.outputs.cache-hit != 'true'

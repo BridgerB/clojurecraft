@@ -37,7 +37,7 @@ jobs:
           java-version: '25'
       - name: Install the Clojure CLI
         run: |
-          for i in 1 2 3 4 5 6; do curl -fsSL https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh -o /tmp/clj.sh && sudo bash /tmp/clj.sh && break; [ "$i" = 6 ] && exit 1; sleep $((i * 15)); done
+          for i in 1 2 3 4 5 6; do curl -fsSL https://download.clojure.org/install/linux-install-1.12.6.1673.sh -o /tmp/clj.sh && sed -i "s#https://github.com/clojure/brew-install/releases/download/1.12.6.1673/#https://download.clojure.org/install/#" /tmp/clj.sh && sudo bash /tmp/clj.sh && break; [ "$i" = 6 ] && exit 1; sleep $((i * 15)); done
       - uses: actions/cache@v6
         with:
           path: |
@@ -55,5 +55,7 @@ jobs:
       - uses: actions/checkout@v7
       - name: actionlint
         run: |
-          bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.12/scripts/download-actionlint.bash) 1.7.12
+          # GitHub's release downloads fail now and then; the Go module proxy is a second source
+          bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.12/scripts/download-actionlint.bash) 1.7.12 \
+            || { go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 && cp "$(go env GOPATH)/bin/actionlint" ./actionlint; }
           ./actionlint -shellcheck= -color
