@@ -202,11 +202,19 @@
                     results)})
 
 (defn slot-index
-  "The index racer i (from 0) lands with at the fortress: i mod slots, so a bot that replaces one
-   that ended takes the landing and the pad of its slot, which prepare! built, and no new Nether
-   region is generated while bots are connected. (Racer serials grow with every replacement)"
+  "The index racer i (from 0) lands with at the fortress when no slot is known: i mod slots.
+   Racer serials grow with every replacement and are drawn by whichever slot refills next, so a
+   serial's remainder is not its slot's index (landing-slot)."
   [i slots]
   (if (pos? (or slots 0)) (mod i slots) i))
+
+(defn landing-slot
+  "The index racer i (from 0), playing in slot (or nil), lands with at the fortress: its slot, so
+   a bot that replaces one that ended takes the landing and the pad of its slot (prepare! built
+   it, and no new Nether region is generated while bots are connected) and two bots alive at once
+   never share a pad; else slot-index of its serial."
+  [slot i slots]
+  (if (some? slot) slot (slot-index i slots)))
 
 (defn spawn-command
   "The RCON command that pins bot name's spawn at the cell of at ([x y z]) in the dimension dim:

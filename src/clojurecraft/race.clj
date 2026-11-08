@@ -49,8 +49,8 @@
             [clojurecraft.plan :as plan]
             [clojurecraft.race-facts :as facts :refer
              [backoff-ms board-line bot-name bot-timeout-ms capped dead-after death-class health
-              marked milestone near-commands next-start reached-new recovered run-ms sample
-              serverlog-lines slot-index spawn-command start-at summary tick-times]]
+              landing-slot marked milestone near-commands next-start reached-new recovered run-ms
+              sample serverlog-lines spawn-command start-at summary tick-times]]
             [clojurecraft.rcon :as rcon]
             [clojurecraft.senses :as senses]
             [clojurecraft.start :as start]))
@@ -148,7 +148,7 @@
    there, and put its :go (every step up to until, milestones on, :go/at where it landed) on its
    queue. A bot whose landing fails starts where it stands."
   [{:keys [host rcon-port rcon-pass until landings landing-offset bots] begin :start} ch centre name
-   queue i]
+   queue i slot]
   (async/thread
    (try
      (rcon/with-rcon
@@ -163,7 +163,7 @@
                 (rcon/command! rc (str "gamemode survival " name))
                 (rcon/command! rc (team-join-command name))
                 (cond (start/nether? begin)
-                      (let [k (slot-index i bots)]
+                      (let [k (landing-slot slot i bots)]
                         ((if (start/forest? begin) land/land-forest! land/land-fortress!)
                          rc
                          name
@@ -337,7 +337,7 @@
    lines about it (serverlog-lines: its death line, a kick, a server that can't keep up) as
    <name>.serverlog.txt.
    Returns {:name :result :truth}."
-  [{:keys [server ch centre serials live watcher prefix record-dir commit deadline]}]
+  [{:keys [server ch centre serials live watcher prefix record-dir commit deadline slot]}]
   (let [n (swap! serials inc)
         start (System/currentTimeMillis)
         cap (start/cap-ms (:start server))
@@ -360,7 +360,7 @@
                           (catch Exception e (cli/log name "senses not written:" e))))]
     (swap! live assoc name world*)
     ((:watch watcher) name world*)
-    (land-bot! server ch centre name queue (dec n))
+    (land-bot! server ch centre name queue (dec n) slot)
     (try
       (let [truth (promise)
             {r :result}
@@ -474,7 +474,7 @@
            (let [_ (Thread/sleep (long wait))
                  _ (start-turn! ctx)
                  t (System/currentTimeMillis)
-                 r (play-one! ctx)]
+                 r (play-one! (assoc ctx :slot i))]
              (ended! ctx (:result r))
              (recur (conj results r)
                     (long (backoff-ms wait (- (System/currentTimeMillis) t) (:result r)))))))))

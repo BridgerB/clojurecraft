@@ -291,6 +291,43 @@
            (land/pad-of fortress (facts/slot-index 13 10)))
         "the serial after a slot's bot lands on the same pad")))
 
+(defn refills
+  "Simulate slots slots refilled in an order a seeded generator picks, each new bot taking the next
+   serial: [[slot serial] ...] of the bots alive after n refills, serials from 1."
+  [slots n seed]
+  (let [rng (java.util.Random. (long seed))]
+    (loop [alive (into {} (for [s (range slots)] [s (inc s)]))
+           serial slots
+           left n]
+      (if (zero? left)
+        (vec alive)
+        (let [s (.nextInt rng (int slots))]
+          (recur (assoc alive s (inc serial)) (inc serial) (dec left)))))))
+
+(deftest two-bots-alive-at-once-never-land-on-one-pad
+  ;; race 42460001362, lane 3: Clj_r11 and Clj_r21 were both alive from 08:49 on the pad of slot 0,
+  ;; because serials are drawn by whichever slot refills next, so (serial - 1) mod slots is not
+  ;; the slot of the bot that ended; r21 was teleported into the cobblestone r11 had placed, took
+  ;; in_wall damage 25 times and died at the pad
+  (doseq [seed (range 20)
+          :let [alive (refills 10 60 seed)]]
+    (is (apply distinct? (map (fn [[slot serial]] (facts/landing-slot slot (dec serial) 10)) alive))
+        "by slot: ten live bots on ten pads")
+    (is (= (count alive) (count (set (map first alive)))))))
+
+(deftest by-serial-two-live-bots-do-share-a-pad
+  ;; the rule before: it collides within a few refills
+  (is (some (fn [seed]
+              (let [alive (refills 10 60 seed)]
+                (not (apply distinct?
+                            (map (fn [[_ serial]] (facts/slot-index (dec serial) 10)) alive)))))
+            (range 20))))
+
+(deftest the-first-bots-land-on-their-slots-pad
+  (is (= [0 1 9] (map #(facts/landing-slot % % 10) [0 1 9])))
+  (is (= 3 (facts/landing-slot 3 20 10)) "a refill takes its slot's pad, not its serial's")
+  (is (= 0 (facts/landing-slot nil 20 10)) "no slot known: by serial"))
+
 (deftest a-pad-is-pregenerated-within-one-forceload
   ;; a forceload takes at most 256 chunks; pad-view blocks each side of a pad, however the square
   ;; lies on the chunk grid, and past the server's view distance (6 chunks, 96 blocks)
