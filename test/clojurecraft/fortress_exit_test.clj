@@ -135,10 +135,22 @@
                         :plan/active [ps/row]
                         :player/attacker blaze-id)
                  (memory/observe spawner-pos blaze/spawner)
-                 (update :player/inventory assoc
-                         1 (ps/item :cooked_beef 12)
-                         2 (ps/item :cobblestone 64)
-                         3 (ps/item :iron_pickaxe 1)))]
+                 (update :player/inventory
+                         assoc
+                         1
+                         (ps/item :cooked_beef 12)
+                         2
+                         (ps/item :cobblestone 64)
+                         3
+                         (ps/item :iron_pickaxe 1)
+                         4
+                         (ps/item :iron_sword 1)
+                         (armour/worn-slot 0)
+                         (ps/item :iron_helmet 1)
+                         (armour/worn-slot 1)
+                         (ps/item :iron_chestplate 1)
+                         (armour/worn-slot 2)
+                         (ps/item :iron_leggings 1)))]
     (testing
       "actively shot at by a blaze, the rod bot covers from the shooter, not tunneling in the line of fire"
       (is (fexit/near-fortress? base) "near the fortress")
@@ -681,8 +693,9 @@
 (deftest a-bot-hit-while-it-bores-out-of-the-fortress-answers-the-wither-skeleton
   ;; Clj_r10 (d3ce99b, run 42353848749) was faced 16 times and hit 6 by wither skeletons, 20
   ;; health to none in 21 s, a :tunnel-to its whole life: the hunt answers the heavy kinds itself,
-  ;; so :defend left them, and the bore never swung. Healthy it now fights the striker where it
-  ;; stands; hurt it lays a block between, never the fight and never the dig on (issue #263).
+  ;; so :defend left them, and the bore never swung. In the kit the races give (iron sword, helmet,
+  ;; chestplate and leggings) it fights the striker where it stands while combat/winnable?; hurt
+  ;; past that it lays a block between, never the fight and never the dig on (issue #263).
   (let [skeleton-id 42
         skeleton {:entity/type (blocks/entity-types :wither_skeleton)
                   :entity/pos [8.5 64.0 9.5]
@@ -713,7 +726,10 @@
         (is (= :fight (:intent/kind i)))
         (is (= skeleton-id (:intent/target i)))
         (is (true? (:intent/hold? i)))))
-    (testing "a wither skeleton is fought only from avoided-health: at 12 the cover"
+    (testing "with no sword in hand even a healthy bot lays the cover: twenty swings at a fist"
+      (let [i (plan/next-intent (update base :player/inventory dissoc 4) ps/row plan/goals)]
+        (is (not (contains? #{:fight :tunnel-to :dig} (:intent/kind i))))))
+    (testing "at 12 the three hits it takes to win leave under win-margin: the cover"
       (let [i (plan/next-intent (assoc base :player/health 12.0) ps/row plan/goals)]
         (is (not (contains? #{:fight :tunnel-to :dig} (:intent/kind i))))))
     (testing "two wither skeletons at full health: the cover, not the fight"
