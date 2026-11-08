@@ -211,6 +211,14 @@
    ;; when a burrow can be had (dug, or walked home to), with no pickaxe there is none to dig but
    ;; a lost fight is still lost: cover, and the fight only when there is none
    :open-cover (fn [f w] (combat/cover w (f :e)))
+   :striker (fn [f w] (get-in w [:world/entities (f :sid)]))
+   :striker-cover (fn [f w] (combat/cover w (f :striker)))
+   :striker-worth-fighting? (fn [f w]
+                              (or (nil? (f :striker))
+                                  (combat/winnable? w [(f :sid) (f :striker)])
+                                  (and (not (f :pickaxe?))
+                                       (= {:plan/wait :cornered} (f :striker-cover)))
+                                  (and (f :pickaxe?) (not (f :burrow-available?)))))
    :burrow-available? (fn [f _] (boolean (or (f :digs?) (and (f :home) (f :home-routable?)))))
    :at-hand-worth-fighting? (fn [f w]
                               (or (combat/winnable? w [(f :eid) (f :e)])

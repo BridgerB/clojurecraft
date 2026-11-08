@@ -101,8 +101,13 @@
                 :intent/for :pearls}]}
   {:rule/id :hunt/fight-striker
    :rule/phase :fight
-   :rule/when [:sid [:not :hurt?] [:not :in?]]
+   :rule/when [:sid [:not :hurt?] [:not :in?] :striker-worth-fighting?]
    :rule/then [:intent {:intent/kind :fight :intent/target [:fact :sid] :intent/for :pearls}]}
+  ;; struck by a fight not winnable in the open, with no pickaxe to dig a burrow with: the cover at once
+  {:rule/id :hunt/cover-from-striker
+   :rule/phase :survive
+   :rule/when [:sid [:not :hurt?] [:not :in?] [:not :pickaxe?]]
+   :rule/then [:fact :striker-cover]}
   {:rule/id :hunt/fight-weak-threat
    :rule/phase :fight
    :rule/when [:tid [:not :hurt?] [:not :in?] [:not :home] [:not :swarmed?] :weak-threat?]
