@@ -4454,19 +4454,22 @@
 
 (deftest a-fortress-exit-whose-tunnel-failed-is-given-up
   ;; Logged state, sim R1/17 seed 1 (probes rh5-20 and rh5-33, issue #263): :tunnel-to [938 75 -209]
-  ;; failed :blocked in 50 ms, was blacklisted by fail-intent, and the far fallback target chose it
-  ;; again: 107 attempts by minute 20, a thirty-second :retrying wait between each, forty minutes
-  ;; with no intent running. A target a tunnel failed to is not chosen again; the exit ends.
+  ;; failed :blocked in 50 ms and was chosen again: 107 attempts by minute 20, a thirty-second
+  ;; :retrying wait between each, forty minutes with no intent running. A first failure is not the end
+  ;; (R4/1 reached its forest through exits that failed once); a lack of progress is: the column the
+  ;; exit was abandoned at (watch-progress) is not a target again, and the exit ends.
   (let [w (-> (standing {})
               (assoc :player/dimension nether :player/pos [-163.5 38.0 221.5])
               (memory/observe [-176 70 219] blaze/spawner)
               (memory/observe [-164 40 221] (blocks/default-state :nether_bricks))
               (assoc-in [:player/inventory 1] (item :iron_pickaxe 1)))
         target (pearls/fortress-tunnel-target w)
-        failed (assoc w :plan/blacklist #{target})]
+        failed (assoc w :pearls/abandoned #{[(first target) (last target)]})
+        once (assoc w :plan/blacklist #{target})]
     (is (some? target) "an exit target is chosen")
     (is (pearls/fortress-escaping? w))
-    (is (nil? (pearls/fortress-tunnel-target failed)) "not the failed target again")
+    (is (some? (pearls/fortress-tunnel-target once)) "one failure: the exit goes on")
+    (is (nil? (pearls/fortress-tunnel-target failed)) "abandoned: not that column again")
     (is (not (pearls/fortress-escaping? failed)) "the exit is over: the other movers apply")))
 
 (deftest a-far-end-a-walk-failed-toward-is-not-chosen-again

@@ -375,6 +375,9 @@
    [:pearls/watch
     "the running held target and the nearest the feet have been to it: {:target [x y z] :best blocks :at ms}; the intent fails :no-progress when it is not nearer by the progress-table in time"
     "pearls/watch-progress"]
+   [:pearls/abandoned
+    "columns [x z] the fortress exit's held target was given up at (no progress): the exit is over there, the heading takes over; dropped at a death"
+    "pearls/watch-progress"]
    [:pearls/exit-target
     "the fortress tunnel-out target held until reached or failed, so the bore does not flip between targets as the feet move: [x y z], dropped once clear"
     "pearls/fortress-exit-hold"]
