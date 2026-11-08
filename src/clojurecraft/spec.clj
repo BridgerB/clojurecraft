@@ -183,6 +183,17 @@
 (s/def :pearls/shelter ::block-pos)
 (s/def :pearls/shot-at-ms int?)
 (s/def :pearls/exit-logged boolean?)
+(s/def :heading/dir (s/tuple int? int?))
+(s/def :heading/from ::block-pos)
+(s/def :heading/turns int?)
+(s/def :heading/target ::block-pos)
+(s/def :pearls/heading (s/keys :req-un [:heading/dir :heading/from :heading/target :heading/turns]))
+(s/def :watch/target ::block-pos)
+(s/def :watch/best number?)
+(s/def :watch/at int?)
+(s/def :pearls/watch (s/keys :req-un [:watch/target :watch/best :watch/at]))
+(s/def :pearls/seen (s/coll-of (s/tuple int? int?) :kind set?))
+(s/def :plan/exit-columns (s/coll-of (s/tuple int? int?) :kind set?))
 (s/def :pearls/exit-target (s/tuple int? int? int?))
 (s/def :angry/since int?)
 (s/def :angry/best number?)
@@ -388,7 +399,7 @@
            :window/state-id :window/grid :window/cursor :window/open :player/held-slot :plan/intent
            :plan/status :plan/blacklist :plan/trunk-failures :plan/chain? :plan/reached
            :plan/boxed-at :plan/boxed-route :plan/retreat-unreachable :plan/unreached
-           :plan/unwalkable :plan/backed-off :plan/cornered :plan/given-up]))
+           :plan/unwalkable :plan/backed-off :plan/cornered :plan/given-up :plan/exit-columns]))
 
 (s/fdef game/step
   :args

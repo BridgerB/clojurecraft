@@ -323,7 +323,13 @@
       (assoc :player/dead? true :player/controls {})
       (memory/remember-answer {:answer/kind :death})
       (update :stats/deaths (fnil inc 0))
-      (dissoc :plan/intent :plan/last :plan/trail :pearls/exit-target)
+      (dissoc :plan/intent
+              :plan/last
+              :plan/trail
+              :pearls/exit-target
+              :pearls/heading
+              :pearls/watch
+              :plan/exit-columns)
       (emit {:packet/name :client-command :action (p/value :client-command :perform-respawn)})))
 
 (defmethod on-packet [:play :set-health]
