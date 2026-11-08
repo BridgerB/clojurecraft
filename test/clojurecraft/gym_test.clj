@@ -300,15 +300,15 @@
   ;; issue #263: the forest nearest the landing's Nether coordinates; its located height can be
   ;; inside the rock (probe 38896760962), so the bot is spread onto a floor round it and kept
   ;; where the server says that floor is warped forest
-  (let [[r sent] (landing-commands
-                  :ender-pearls
-                  #(cond
-                     (str/includes? % "locate biome")
-                     "The nearest minecraft:warped_forest is at [120, 70, 240] (90 blocks away)"
-                     (str/includes? % "spreadplayers")
-                     "Spread 1 player around 120, 240 with an average distance of 0 blocks apart"
-                     (str/includes? % "cave_air") "Test failed"
-                     :else "Test passed"))]
+  (let [[r sent]
+        (landing-commands
+         :ender-pearls
+         #(cond (str/includes? % "locate biome")
+                "The nearest minecraft:warped_forest is at [120, 70, 240] (90 blocks away)"
+                (str/includes? % "spreadplayers")
+                "Spread 1 player around 120, 240 with an average distance of 0 blocks apart"
+                (or (str/includes? % "cave_air") (str/includes? % "if entity @e[")) "Test failed" ; a cave floor refused, no fortress mob in range
+                :else "Test passed"))]
     (is (:gym/landed? r))
     (is (= [100 200 72] (:gym/landing r)) "where the spread stood it (the server's Pos)")
     (is
@@ -345,6 +345,7 @@
                     "Spread 1 player around a point with an average distance of 0 blocks apart")
                 (str/includes? % "cave_air")
                 (if (= "spreadplayers 120 240" @spread-at) "Test passed" "Test failed")
+                (str/includes? % "if entity @e[") "Test failed" ; no fortress mob in range
                 :else "Test passed"))]
     (is (= [[100 200] [356 200] [-156 200] [100 456] [100 -56] [612 200] [-412 200] [100 712]
             [100 -312]]
