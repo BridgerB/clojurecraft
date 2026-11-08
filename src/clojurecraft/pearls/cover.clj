@@ -15,7 +15,8 @@
             [clojurecraft.pearls.place :as pplace]
             [clojurecraft.pearls.sense :as psense]
             [clojurecraft.pearls.upkeep :as pupkeep]
-            [clojurecraft.physics :as physics]))
+            [clojurecraft.physics :as physics]
+            [clojurecraft.place :as place]))
 
 (set! *warn-on-reflection* true)
 
@@ -41,7 +42,8 @@
     (some (fn [dy]
             (when-let [c (cell-toward world to dy)]
               (when-not (or (pplace/solid-or-unloaded? world c)
-                            (mob/occupied? (:world/entities world) c))
+                            (mob/occupied? (:world/entities world) c)
+                            (nil? (place/support world c)))
                 {:intent/kind :place
                  :intent/item item
                  :intent/cell c
@@ -157,8 +159,9 @@
 
 (defn line-cell
   "The first cell from the eye toward entity e's aim, a block to six along the line, that is open,
-   neither the feet's nor the head's, and has a solid neighbour to lay a block against (the walls
-   of a stair cut included), or nil. A fireball travels that line."
+   neither the feet's nor the head's, within place/place-reach, empty of mobs and not refused
+   before, and with a block the server lets it be laid against (place/support: loaded, solid, not
+   one a click opens), or nil. A fireball travels that line."
   [world e]
   (let [eye (game/eye world)
         aim (combat/aim e)
@@ -172,8 +175,8 @@
                            (not (pplace/solid-or-unloaded? world c))
                            (not (mob/occupied? (:world/entities world) c))
                            (not (avoided/noted? world :blacklist c))
-                           (some #(pplace/solid-or-unloaded? world (mapv + c %))
-                                 pparams/neighbours))
+                           (<= (physics/distance eye (physics/centre c)) place/place-reach)
+                           (some? (place/support world c)))
                   c)))
             (range 1.0 (min 6.0 d) 0.5)))))
 

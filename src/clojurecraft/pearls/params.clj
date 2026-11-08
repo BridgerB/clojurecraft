@@ -193,8 +193,6 @@
    not: a piglin's blade, a hoglin's tusks, a blaze and a ghast's fire."
   #{:piglin :piglin_brute :hoglin :zoglin :wither_skeleton :blaze :ghast :vindicator :evoker})
 
-(def neighbours [[1 0 0] [-1 0 0] [0 0 1] [0 0 -1] [0 1 0] [0 -1 0]])
-
 (def explore-memory (:explore-memory thresholds))
 
 (def forest-reach (:forest-reach thresholds))

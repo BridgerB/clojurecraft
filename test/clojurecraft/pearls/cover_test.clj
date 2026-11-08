@@ -216,3 +216,12 @@
     (is (not= :place (:intent/kind (pcover/cover-from failed))) "the next rung answers")
     (is (pcover/placing? (assoc failed :time/now (+ 1000 pparams/cover-place-hold-ms 1)))
         "and after the hold, blocks may be laid again")))
+
+(deftest a-cell-only-a-table-supports-is-no-place-for-cover
+  ;; place/support refuses a block a click opens: a cover cell it cannot click against fails
+  ;; :no-support, so cover does not choose it
+  (let [table (blocks/default-state :crafting_table)
+        ghast (ps/mob :ghast [14.5 64.0 8.5])
+        tables (ps/standing {7 ghast} (into {} (for [x (range 9 14)] [[x 64 8] table])))]
+    (is (nil? (pcover/line-cell tables ghast)))
+    (is (some? (pcover/line-cell (ps/standing {7 ghast} line-floor) ghast)) "stone it can click")))
