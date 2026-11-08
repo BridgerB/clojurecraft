@@ -26,14 +26,16 @@
    :rule/phase :survive
    :rule/when [:meal-unshot]
    :rule/then [:fact :meal]}
-  {:rule/id :hunt/pocket-bore
-   :rule/phase :leave-fortress
-   :rule/when [:pocket-bore]
-   :rule/then [:fact :pocket-bore]}
+  ;; a strike on the way out is answered before the pocket is sealed or held: sim R1/17 seed 2 sealed
+  ;; and held while a wither skeleton at 0.7 blocks hit it four times, 20 health to none in 4 s
   {:rule/id :hunt/tunnel-answer
    :rule/phase :leave-fortress
    :rule/when [:tunnel-answer]
    :rule/then [:fact :tunnel-answer]}
+  {:rule/id :hunt/pocket-bore
+   :rule/phase :leave-fortress
+   :rule/when [:pocket-bore]
+   :rule/then [:fact :pocket-bore]}
   {:rule/id :hunt/escape-cover-from-fire
    :rule/phase :leave-fortress
    :rule/when [:fortress-escaping? :can-tunnel-out? :shot-at? :cover-from]
