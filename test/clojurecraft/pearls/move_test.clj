@@ -566,21 +566,21 @@
 (deftest the-way-to-a-forest-no-walk-reaches-is-a-sealed-tunnel
   ;; real-18 Clj_r09 (4f317da lane 8): boxed in, eleven walks to one forest in four seconds, each
   ;; failed :no-path, and the run ended :no-path
-  (let [w (assoc-in (ps/standing {}) [:player/inventory 1] (ps/item :iron_pickaxe 1))]
-    (with-redefs [intent/routable? (ps/routable-here (constantly false))]
-      (is (= {:intent/kind :tunnel-to
-              :intent/target [40 64 40]
-              :intent/reach 1.5
-              :intent/seal-behind? true
-              :intent/for :pearls}
-             (pmove/forest-way w [40 64 40]))
-          "no route, a pickaxe: tunnel")
-      (is (= :walk (:intent/kind (pmove/forest-way (ps/standing {}) [40 64 40])))
-          "no pickaxe: the walk as before"))
-    (with-redefs [intent/routable? (ps/routable-here (constantly true))]
-      (is (= {:intent/kind :walk :intent/target [40 64 40] :intent/for :pearls}
-             (pmove/forest-way w [40 64 40]))
-          "a route: the walk"))))
+  (let [w (assoc-in (ps/standing {}) [:player/inventory 1] (ps/item :iron_pickaxe 1))
+        no-route (fn [_ _] false)
+        route (fn [_ _] true)]
+    (is (= {:intent/kind :tunnel-to
+            :intent/target [40 64 40]
+            :intent/reach 1.5
+            :intent/seal-behind? true
+            :intent/for :pearls}
+           (pmove/forest-way w [40 64 40] no-route))
+        "no route, a pickaxe: tunnel")
+    (is (= :walk (:intent/kind (pmove/forest-way (ps/standing {}) [40 64 40] no-route)))
+        "no pickaxe: the walk as before")
+    (is (= {:intent/kind :walk :intent/target [40 64 40] :intent/for :pearls}
+           (pmove/forest-way w [40 64 40] route))
+        "a route: the walk")))
 
 (deftest a-far-end-near-one-already-walked-to-is-not-new-ground
   ;; Logged state, sim R1/17 (probe 42374244659, issue #263): under the roof, in the cavity of its own

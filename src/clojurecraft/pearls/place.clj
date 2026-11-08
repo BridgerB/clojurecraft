@@ -293,38 +293,39 @@
    crowd-margin or more from the eye standing there and provokable? from it, a cell the bot could
    stand in (standable?) and cut a burrow from heading from it (burrowable?, along away), past a
    walk's reach of the eye, not one a walk failed toward (:plan/blacklist), and of those, nearest
-   the feet first and vantage-tries at most, the first a route reaches (intent/routable?); nil
+   the feet first and vantage-tries at most, the first a route reaches (routable?: intent/routable? unless a caller passes its own); nil
    when there is none. A walk to the enderman itself ends beside it, and a look while digging
    there stares at it point blank."
-  [world e]
-  (let [feet (intent/feet world)
-        eye (game/eye world)
-        bl (avoided/all-of world :blacklist)
-        [ex ey ez] (combat/cell (:entity/pos e))
-        from (fn [c] (assoc world :player/pos (psense/feet-at c)))]
-    (->> (for [dx (range (- pparams/crowd-reach) (inc pparams/crowd-reach))
-               dz (range (- pparams/crowd-reach) (inc pparams/crowd-reach))
-               dy (range (- pparams/vantage-rise) (inc pparams/vantage-rise))]
-           [(+ ex dx) (+ ey dy) (+ ez dz)])
-         (filter (fn [c]
-                   (and (not (contains? bl c))
-                        (> (physics/distance eye (physics/centre c)) intent/reach)
-                        (standable? world c))))
-         (sort-by #(physics/distance feet %))
-         (filter (fn [c]
-                   (let [at (from c)]
-                     (and (>= (physics/distance (game/eye at) (psense/head e))
-                              (+ pparams/stare-from pparams/crowd-margin))
-                          (psense/provokable? at e)
-                          (burrowable? world c (away at e))))))
-         (take pparams/vantage-tries)
-         (some (fn [c]
-                 (when (intent/routable? world
-                                         {:intent/kind :walk
-                                          :intent/target c
-                                          :intent/for :shelter
-                                          :intent/max-nodes pparams/vantage-nodes})
-                   c))))))
+  ([world e] (stare-site world e intent/routable?))
+  ([world e routable?]
+   (let [feet (intent/feet world)
+         eye (game/eye world)
+         bl (avoided/all-of world :blacklist)
+         [ex ey ez] (combat/cell (:entity/pos e))
+         from (fn [c] (assoc world :player/pos (psense/feet-at c)))]
+     (->> (for [dx (range (- pparams/crowd-reach) (inc pparams/crowd-reach))
+                dz (range (- pparams/crowd-reach) (inc pparams/crowd-reach))
+                dy (range (- pparams/vantage-rise) (inc pparams/vantage-rise))]
+            [(+ ex dx) (+ ey dy) (+ ez dz)])
+          (filter (fn [c]
+                    (and (not (contains? bl c))
+                         (> (physics/distance eye (physics/centre c)) intent/reach)
+                         (standable? world c))))
+          (sort-by #(physics/distance feet %))
+          (filter (fn [c]
+                    (let [at (from c)]
+                      (and (>= (physics/distance (game/eye at) (psense/head e))
+                               (+ pparams/stare-from pparams/crowd-margin))
+                           (psense/provokable? at e)
+                           (burrowable? world c (away at e))))))
+          (take pparams/vantage-tries)
+          (some (fn [c]
+                  (when (routable? world
+                                   {:intent/kind :walk
+                                    :intent/target c
+                                    :intent/for :shelter
+                                    :intent/max-nodes pparams/vantage-nodes})
+                    c)))))))
 
 (defn crowd-site
   "The stare-site of the calm enderman crowding the burrow's mouth (crowder), where a new burrow

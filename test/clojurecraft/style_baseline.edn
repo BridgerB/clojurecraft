@@ -61,8 +61,8 @@
            "test/clojurecraft/sword_test.clj" 1}
  :redefs {"test/clojurecraft/blaze_test.clj" 2
           "test/clojurecraft/gym_test.clj" 1
-          "test/clojurecraft/pearls/move_test.clj" 4
-          "test/clojurecraft/pearls/place_test.clj" 3
+          "test/clojurecraft/pearls/move_test.clj" 2
+          "test/clojurecraft/pearls/place_test.clj" 2
           "test/clojurecraft/pearls_support.clj" 1
           "test/clojurecraft/pearls_test.clj" 1
           "test/clojurecraft/plan_test.clj" 7
