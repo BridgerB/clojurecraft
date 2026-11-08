@@ -223,4 +223,12 @@
     (is (pmove/ground-under? w [8 64 8]) "stone under the feet")
     (is (pmove/ground-under? w [200 64 8]) "an unloaded column: nothing against it")
     (is (not (pmove/ground-under? cavern [72 70 8]))
-        "a loaded column of air from y 70 down to the band's floor: no ground")))
+        "a loaded column of air from y 70 down to the band's floor: no ground")
+    (is (not (pmove/ground-under?
+              (assoc-in w
+               [:world/chunks [4 0]]
+               (world/column (into {}
+                                   (concat (for [y (range 30 72)] [[8 y 8] ps/air])
+                                           [[[8 60 8] (first blocks/lava-states)] [[8 50 8] 1]]))))
+              [72 70 8]))
+        "lava first, rock under it: no ground")))

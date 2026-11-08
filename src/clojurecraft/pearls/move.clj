@@ -739,13 +739,22 @@
           (rest dirs)))
 
 (defn ground-under?
-  "Is there ground under the leg end [x y z] within the heading's y band: a solid block at or under
-   its y down to heading-min-y? True when the column is not loaded (nothing is known against it). In
-   an open-air cavern with no floor the leg would be bridged over air, 26 blocks a minute to nowhere
-   (sim R2/21, issue #263)."
+  "Is there ground under the leg end [x y z] within the heading's y band: scanning down from its y
+   to heading-min-y, the first solid block before any lava? True when the column is not loaded
+   (nothing is known against it); false over an open-air cavern with no floor, where the leg would be
+   bridged over air at 26 blocks a minute to nowhere (sim R2/21, issue #263), and false when lava
+   comes first (rock under a lava lake is no ground to tunnel to)."
   [world [x y z]]
-  (let [cells (for [cy (range y (dec pparams/heading-min-y) -1)] (terrain/block-at world [x cy z]))]
-    (or (every? nil? cells) (boolean (some #(and % (blocks/solid? %)) cells)))))
+  (let [cells (keep identity
+                    (for [cy (range y (dec pparams/heading-min-y) -1)]
+                      (terrain/block-at world [x cy z])))]
+    (or (empty? cells)
+        (boolean (reduce (fn [_ id]
+                           (cond (blocks/solid? id) (reduced true)
+                                 (contains? blocks/lava-states id) (reduced false)
+                                 :else false))
+                         false
+                         cells)))))
 
 (defn usable-dirs
   "Of dirs ([dx dz] axes, the preferred first) those a heading may take from feet: not one tried
