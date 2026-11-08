@@ -33,10 +33,14 @@
   [rc name]
   (when-let [forest (locate-forest! rc name)] (fixture/land-at! rc name forest)))
 
+(def known-options
+  "The options -main reads (cli/options rejects any other)."
+  #{:host :rcon-port :rcon-pass :name :until})
+
 (defn -main
   "clojure -M:harness [--host H] --rcon-port P --rcon-pass S --name N --until U"
   [& args]
-  (let [{:keys [host rcon-port rcon-pass until] :as opts} (cli/options args)
+  (let [{:keys [host rcon-port rcon-pass until] :as opts} (cli/options args known-options)
         bot (:name opts)
         host (or host "127.0.0.1")
         until (or until "wood")]
