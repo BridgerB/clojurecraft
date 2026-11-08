@@ -39,6 +39,7 @@
             [clojurecraft.stone :as stone]
             [clojurecraft.stronghold :as stronghold]
             [clojurecraft.sword]
+            [clojurecraft.table]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.window :as window]
             [clojurecraft.wood :as wood]))
