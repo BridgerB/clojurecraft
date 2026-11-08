@@ -572,6 +572,27 @@
                           (<= (physics/distance p (:entity/pos e)) pparams/strike-range)))
                    (endermen (avoided/forget world :blacklist) pparams/stare-range)))))
 
+(defn region-of
+  "The pocket region [rx rz] of cell [x y z]: the (:region pparams/stuck)-block square it lies in."
+  [[x _ z]]
+  (let [n (long (:region pparams/stuck))]
+    [(math/floor-div (long x) n) (math/floor-div (long z) n)]))
+
+(defn pocket-regions-near
+  "The pocket regions noted (avoided :pocket-regions) within one region of the feet's own, as
+   {region -> set of headings tried}: the bot drifts about a pocket."
+  [world]
+  (let [[rx rz] (region-of (intent/feet world))]
+    (into {}
+          (filter (fn [[[x z] _]] (and (<= (abs (- x rx)) 1) (<= (abs (- z rz)) 1))))
+          (avoided/all-of world :pocket-regions))))
+
+(defn in-stuck-pocket?
+  "Does the bot stand in, or beside, a pocket it sat in for five minutes without netting ten blocks
+   (pocket-regions-near)? A fortress exit or a tunnel from there has been tried."
+  [world]
+  (boolean (seq (pocket-regions-near world))))
+
 (defn in-forest?
   "Is a warped forest chunk known (memory/warped-chunks) within forest-reach chunks of the feet's
    chunk, in the Nether? The hunt's ground: its endermen spawn there and nowhere near a fortress."

@@ -3,6 +3,7 @@
   (:require [clojure.math :as math]
             [clojurecraft.avoided :as avoided]
             [clojurecraft.blaze :as blaze]
+            [clojurecraft.blocks :as blocks]
             [clojurecraft.combat :as combat]
             [clojurecraft.dimension :as dimension]
             [clojurecraft.entity :as entity]
@@ -17,7 +18,8 @@
             [clojurecraft.pearls.sense :as psense]
             [clojurecraft.pearls.upkeep :as pupkeep]
             [clojurecraft.physics :as physics]
-            [clojurecraft.stairs :as stairs]))
+            [clojurecraft.stairs :as stairs]
+            [clojurecraft.terrain :as terrain]))
 
 (set! *warn-on-reflection* true)
 
@@ -736,6 +738,25 @@
           (first dirs)
           (rest dirs)))
 
+(defn ground-under?
+  "Is there ground under the leg end [x y z] within the heading's y band: a solid block at or under
+   its y down to heading-min-y? True when the column is not loaded (nothing is known against it). In
+   an open-air cavern with no floor the leg would be bridged over air, 26 blocks a minute to nowhere
+   (sim R2/21, issue #263)."
+  [world [x y z]]
+  (let [cells (for [cy (range y (dec pparams/heading-min-y) -1)] (terrain/block-at world [x cy z]))]
+    (or (every? nil? cells) (boolean (some #(and % (blocks/solid? %)) cells)))))
+
+(defn usable-dirs
+  "Of dirs ([dx dz] axes, the preferred first) those a heading may take from feet: not one tried
+   from a pocket region near the feet (psense/pocket-regions-near: it got nowhere), and with
+   ground under its leg end (ground-under?). All of dirs when none passes."
+  [world feet dirs]
+  (let [tried (reduce into #{} (vals (psense/pocket-regions-near world)))
+        ok (filter #(and (not (contains? tried %)) (ground-under? world (leg-from world feet %)))
+                   dirs)]
+    (if (seq ok) ok dirs)))
+
 (defn reach-heading-hold
   "The world with :pearls/heading {:dir [dx dz] :from feet :target leg-target :turns n} held while
    the bot is in the Nether with no warped forest known: picked once, the axis with the most
@@ -750,13 +771,14 @@
         h (:pearls/heading world)
         feet (intent/feet world)
         [x _ z] feet
-        pick (fn []
-               (let [[ex ez] (fexit/fortress-exit-dir world)
-                     away
-                     (if (>= (abs ex) (abs ez)) [(if (neg? ex) -1 1) 0] [0 (if (neg? ez) -1 1)])
-                     dir (most-unseen-dir world
-                                          (cons away (remove #{away} [[1 0] [-1 0] [0 1] [0 -1]])))]
-                 {:dir dir :from feet :target (leg-from world feet dir) :turns 0}))
+        pick
+        (fn []
+          (let [[ex ez] (fexit/fortress-exit-dir world)
+                away (if (>= (abs ex) (abs ez)) [(if (neg? ex) -1 1) 0] [0 (if (neg? ez) -1 1)])
+                dirs
+                (usable-dirs world feet (cons away (remove #{away} [[1 0] [-1 0] [0 1] [0 -1]])))
+                dir (most-unseen-dir world dirs)]
+            {:dir dir :from feet :target (leg-from world feet dir) :turns 0}))
         t (:target h)]
     (cond (or (not nether?) (seq (memory/warped-chunks world))) (dissoc world :pearls/heading)
           (or (nil? h)
@@ -766,7 +788,7 @@
           (assoc world :pearls/heading (pick))
           (avoided/noted? world :blacklist t)
           (let [[dx dz] (:dir h)
-                dir (most-unseen-dir world [[(- dz) dx] [dz (- dx)]])]
+                dir (most-unseen-dir world (usable-dirs world feet [[(- dz) dx] [dz (- dx)]]))]
             (assoc world
                    :pearls/heading
                    (assoc h :dir dir :target (leg-from world feet dir) :turns (inc (:turns h)))))
@@ -774,48 +796,53 @@
           (assoc-in world [:pearls/heading :target] (leg-from world feet (:dir h)))
           :else world)))
 
-(defn held-class
-  "Which held target (pparams/progress) the running intent i goes to, or nil: :exit (the held exit
-   target), :heading (the heading's leg target), :relocate (a relocation's walk), :forest (any
-   other tunnel of the hunt)."
-  [world i]
-  (let [t (:intent/target i)]
-    (cond (nil? t) nil
-          (= t (:pearls/exit-target world)) :exit
-          (= t (heading-target world)) :heading
-          (and (= :walk (:intent/kind i)) (= :relocate (:intent/for i))) :relocate
-          (and (= :tunnel-to (:intent/kind i)) (= :pearls (:intent/for i))) :forest
-          :else nil)))
 
-(defn watch-progress
-  "The world with :pearls/watch {:target :best :at} kept for the running intent's held target
-   (held-class): the nearest the feet have been to it and when (targets within watch-same of each other are one:
-   the exit flipped between two cells a block apart every 350 ms for thirty minutes in sim R2/21 and each flip restarted the clock). When the feet have not come
-   (:blocks pparams/progress) nearer than that in :ms, the target is avoided (:blacklist, and for
-   the exit its [x z] column under :exit-columns), so the intent is no longer wanted (the
-   still-wanted? methods of the rows that hold a target) and the next mover takes over. One rule
-   for the exit that failed :blocked every thirty seconds for forty minutes (sim R1/17), the exit
-   and heading targets that flipped, and the forest tunnel that stood still (R2/21). The world as
-   it was with no held target running."
+(defn track-trail
+  "The world with :pearls/trail, a vector of [ms pos] samples (:every-ms apart, the newest
+   window-ms plus one), grown by the feet now when the last sample is :every-ms old."
   [world]
-  (let [i (:plan/intent world)
-        cls (when (= :active (:intent/status i)) (held-class world i))
-        t (:intent/target i)
+  (let [{:keys [window-ms every-ms]} pparams/stuck
         now (:time/now world 0)
-        w (:pearls/watch world)
-        rule (pparams/progress cls)]
-    (cond (nil? cls) (dissoc world :pearls/watch)
-          (or (nil? w) (> (physics/distance t (:target w)) pparams/watch-same))
-          (assoc world
-                 :pearls/watch
-                 {:target t :best (physics/distance (intent/feet world) t) :at now})
-          :else
-          (let [d (physics/distance (intent/feet world) t)]
-            (cond (<= d (- (:best w) (:blocks rule)))
-                  (assoc world :pearls/watch {:target t :best d :at now})
-                  (>= (- now (:at w)) (:ms rule))
-                  (cond-> (-> world
-                              (avoided/note :blacklist t)
-                              (dissoc :pearls/watch))
-                    (= :exit cls) (avoided/note :exit-columns [(first t) (last t)]))
-                  :else world)))))
+        trail (:pearls/trail world [])
+        last-t (first (peek trail))]
+    (if (or (nil? last-t) (>= (- now last-t) every-ms))
+      (assoc world
+             :pearls/trail
+             (into []
+                   (drop-while #(< (first %) (- now window-ms every-ms)))
+                   (conj trail [now (intent/feet world)])))
+      world)))
+
+(defn pocket-stuck?
+  "Is the bot stuck in a pocket: in the Nether, in no warped forest, no enderman within seek-radius, health at
+   or over danger-health, and the oldest sample of the trail window-ms old with the feet less than
+   :blocks from it? Net displacement over the window, whatever the movers did."
+  [world]
+  (let [{:keys [window-ms blocks]} pparams/stuck
+        [t0 p0] (first (:pearls/trail world))]
+    (boolean (and t0
+                  (= dimension/nether (dimension/of world))
+                  (not (psense/in-forest? world))
+                  (empty? (psense/endermen world pparams/seek-radius))
+                  (>= (:player/health world 20.0) pparams/danger-health)
+                  (>= (- (:time/now world 0) t0) window-ms)
+                  (< (physics/distance p0 (intent/feet world)) blocks)))))
+
+(defn watch-stuck
+  "The world with a stuck pocket (pocket-stuck?) noted: its region (psense/region-of) under avoided
+   :pocket-regions with the heading held there added to the headings tried, the held heading and the
+   trail dropped, so the heading picks another axis, the exit is over there (fortress-escaping?) and
+   the clock starts again. One rule for every mover, for the exit that failed :blocked every thirty
+   seconds for forty minutes (sim R1/17), the exit that flipped between two cells (R2/21), and two
+   tunnels that passed a target back and forth at the same x and z for 47 minutes (R2/21): none
+   moved the bot ten blocks in five minutes. The world, with the trail kept, as it was otherwise."
+  [world]
+  (let [w (track-trail world)]
+    (if (pocket-stuck? w)
+      (let [region (psense/region-of (intent/feet w))
+            tried (conj (avoided/mark-of w :pocket-regions region #{})
+                        (:dir (:pearls/heading w) [0 0]))]
+        (-> w
+            (avoided/mark :pocket-regions region tried)
+            (dissoc :pearls/heading :pearls/trail)))
+      w)))

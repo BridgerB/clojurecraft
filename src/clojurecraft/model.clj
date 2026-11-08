@@ -348,15 +348,15 @@
    [:pearls/heading
     "the long heading a bot with no forest known tunnels along: {:dir [dx dz] :from feet :target leg-target :turns n}, the target held until the feet are within 3 of it, turned a quarter when it is avoided, dropped once a forest is known or at a death"
     "pearls.move/reach-heading-hold"]
-   [:pearls/watch
-    "the running held target and the nearest the feet have been to it: {:target [x y z] :best blocks :at ms}; the target is avoided when not nearer by pearls.edn :progress in time"
-    "pearls.move/watch-progress"]
+   [:pearls/trail
+    "the bot's feet cells, a sample every 5 s for the last 5 minutes: [[ms [x y z]] ...]; the pocket is stuck when its net displacement over the window is under 12 blocks"
+    "pearls.move/track-trail"]
    [:pearls/seen
     "the chunk keys [cx cz] loaded in the Nether so far, grown once a second: where the bot has looked, for the heading to turn toward the ground it has not"
     "pearls.move/track-seen"]
-   [:plan/exit-columns
-    "columns [x z] the fortress exit's held target was given up at for want of progress (avoided :exit-columns): the exit is over there, the heading takes over; dropped at a death"
-    "pearls.move/watch-progress"]
+   [:plan/pocket-regions
+    "16x16 regions [rx rz] the bot sat in for five minutes without netting twelve blocks, each with the headings tried from it (avoided :pocket-regions): the exit is over there and the heading goes another way; dropped at a death"
+    "pearls.move/watch-stuck"]
    [:pearls/exit-target
     "the fortress tunnel-out target held until reached or failed, so the bore does not flip between targets as the feet move: [x y z], dropped once clear"
     "pearls/fortress-exit-hold"]

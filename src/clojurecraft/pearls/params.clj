@@ -249,6 +249,5 @@
 
 (def seen-corridor (:seen-corridor thresholds))
 
-(def progress (:progress thresholds))
+(def stuck (:stuck thresholds))
 
-(def watch-same (:watch-same thresholds))

@@ -160,10 +160,5 @@
  :heading-arrived 3.0
  ;; chunks a heading's unexplored ground is counted in, along an axis from the feet's chunk: :near to :far out, :width either side (past the view distance of 6, where the next forest is)
  :seen-corridor {:near 7 :far 16 :width 2}
- ;; blocks within which two targets are one held target (the exit's flips between two cells a block apart: sim R2/21, minute 30 to 60)
- :watch-same 4.0
- ;; how much nearer a held target must bring the feet within :ms, or it is given up (move/watch-progress): one table for the fortress exit, the heading's leg, the tunnel to a forest and the relocation's walk
- :progress {:exit {:blocks 6.0 :ms 180000}
-            :heading {:blocks 6.0 :ms 180000}
-            :forest {:blocks 6.0 :ms 240000}
-            :relocate {:blocks 6.0 :ms 240000}}}
+ ;; a stuck pocket (move/watch-stuck): the bot's net displacement over :window-ms is under :blocks, whatever the movers did; positions are kept :every-ms apart; its region is :region blocks square
+ :stuck {:window-ms 300000 :blocks 12.0 :every-ms 5000 :region 16}}

@@ -226,7 +226,7 @@
  "Sim R2/21 (probe stall-R2-21, 42383622038, issue #263) stood caged with 131 digs and no forest, 170 to 485 blocks from the nearest; the heading is the last mover: ahead of travel, relocate, wander and the cage-break cuts it delayed R4/1's forest from minute 2 to minute 9 (wide sets 2 and 3)."
  clojurecraft.pearls.move/unseen-ahead
  "The sim Nethers hold a warped forest 170 to 485 blocks from the fortress start (probe forest-reach2) and the bot sees 96 blocks; moving is not searching."
- clojurecraft.pearls.move/watch-progress
- "One rule for the exit that failed :blocked every thirty seconds for forty minutes (sim R1/17, probes rh5-20 and rh5-33: 107 attempts by minute 20), the exit and heading targets that flipped (d3ce99b R1-24-1, 620 :tunnel-to intents), and the forest tunnel that stood still at [-96 65 466] (R2/21). An exit given up on its first failure lost R4/1's forests (leave-one-out, wide set 2): no progress is the evidence, not one failure."
+ clojurecraft.pearls.move/watch-stuck
+ "One rule for every mover, judged on the bot's net displacement over five minutes, not on a target: the exit that failed :blocked every thirty seconds for forty minutes (sim R1/17, probes rh5-20 and rh5-33), the exit that flipped between two cells a block apart every 350 ms (R2/21 minute 30 to 60, which a per-target clock never saw as one target), and the exit and heading tunnels that passed targets back and forth at the same x and z for 47 minutes in an air cavern (meas-wf-R2-21). The earlier per-target rule (a clock on the held exit, heading, forest and relocation targets) is replaced."
  clojurecraft.fortress-exit/fortress-escaping?
  "Sim R4/1 seed 1 (probe wide-st2-R4-1) was in its forest from minute 8.7, 81 endermen in sight, and still tunnelled the fortress exit at minute 47."}
