@@ -94,6 +94,17 @@
     (is (= :engage (:intent/stage (:plan/intent w))))
     (is (= 3 (:intent/swings (:plan/intent w))))))
 
+(deftest a-loaded-server-gets-the-longer-wait-between-attacks
+  ;; the sword's charge and a mob's hurt immunity count server ticks: at 250 ms a tick (4 a
+  ;; second) the 650 ms of a 20-tick server is 2.6 ticks, a swing that deals a fifth of its damage
+  ;; or none, so the wait is stretched by the server's slowdown
+  (let [slow (assoc (fighting 2.0) :server/tick-ms 250.0)
+        [_ fx] (fx/fold intent-step slow (map tick (range 50 8050 50)))
+        hits (attacks fx)]
+    (is (= [150 3400 6650] (mapv first hits)) "3250 ms apart: 13 ticks of 250 ms")
+    (is (= 3250 (combat/swing-gap slow)))
+    (is (= 650 (combat/swing-gap (fighting 2.0))) "a server at 20 ticks a second: as before")))
+
 (deftest a-hovering-target-out-of-reach-is-pressed-in-on
   ;; issue #262: a blaze two over the floor, three off on the plane, has its aim 3.3 from the eye,
   ;; past attack-reach; the engage walks on until it is in reach, then attacks
