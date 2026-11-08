@@ -54,11 +54,12 @@
    :rule/phase :leave-fortress
    :rule/when [[:not :in?] :room-exit]
    :rule/then [:fact :room-exit]}
-  ;; an angry enderman within the sword's reach is fought, not walked away from: it teleports
-  {:rule/id :hunt/fight-adjacent
+  ;; the enderman that just hit the bot, in the sword's reach, is fought, not walked away from (it
+  ;; teleports): ahead of the walk home, which it took 4 deaths on
+  {:rule/id :hunt/fight-hit
    :rule/phase :fight
-   :rule/when [:adj-id [:not :hurt?] [:not :in?]]
-   :rule/then [:intent {:intent/kind :fight :intent/target [:fact :adj-id] :intent/for :pearls}]}
+   :rule/when [:hit-id [:not :hurt?] [:not :in?]]
+   :rule/then [:intent {:intent/kind :fight :intent/target [:fact :hit-id] :intent/for :pearls}]}
   {:rule/id :hunt/walk-home
    :rule/phase :survive
    :rule/when [:home [:not :in?] :home-pressed? :home-routable?]
@@ -109,13 +110,13 @@
    :rule/phase :survive
    :rule/when [:hurt? [:not :in?]]
    :rule/then [:fact :meal-or-lookout]}
-  ;; struck in the burrow above danger-health: the in-burrow twin of fight-striker
-  {:rule/id :hunt/fight-adjacent-in-burrow
+  ;; hit in the burrow above danger-health: the in-burrow twin of fight-hit
+  {:rule/id :hunt/fight-hit-in-burrow
    :rule/phase :fight
-   :rule/when [:in? :adj-id [:not :hurt?]]
+   :rule/when [:in? :hit-id [:not :hurt?]]
    :rule/then [:intent
                {:intent/kind :fight
-                :intent/target [:fact :adj-id]
+                :intent/target [:fact :hit-id]
                 :intent/hold? true
                 :intent/yield? true
                 :intent/for :pearls}]}
