@@ -4,6 +4,7 @@
             [clojurecraft.armour :as armour]
             [clojurecraft.blaze :as blaze]
             [clojurecraft.blocks :as blocks]
+            [clojurecraft.combat :as combat]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.fortress :as fortress]
             [clojurecraft.fortress-exit :as fexit]
@@ -794,7 +795,7 @@
   ;; (a block, a pillar, a one-block nook the tunnel interrupted), 0 swings, dead in 12-20 s
   (let [w (struck-on-the-way-out {:sword :iron_sword :armour iron-kit})
         i (fexit/tunnel-answer w)]
-    (is (fexit/can-beat? w 9 (get-in w [:world/entities 9])) "iron sword and iron armour at 15.2")
+    (is (combat/winnable? w 9 (get-in w [:world/entities 9])) "iron sword and iron armour at 15.2")
     (is (= :fight (:intent/kind i)) "the skeleton is fought")
     (is (= 9 (:intent/target i)))
     (is (true? (:intent/hold? i)) "held where the bot stands")))
@@ -807,7 +808,7 @@
       (is (not= :fight (:intent/kind i)))))
   (testing "three skeletons at once, even in a kit"
     (let [w (struck-on-the-way-out {:sword :iron_sword :armour iron-kit :more 2})]
-      (is (not (fexit/can-beat? w 9 (get-in w [:world/entities 9]))))
+      (is (not (combat/winnable? w 9 (get-in w [:world/entities 9]))))
       (is (not= :fight (:intent/kind (fexit/tunnel-answer w)))))))
 
 (deftest the-answer-to-a-strike-holds-between-a-skeletons-hits

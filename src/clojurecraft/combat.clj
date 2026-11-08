@@ -481,6 +481,72 @@
           (or (empty? hits) (some nil? hits)) retreat-health
           :else (min retreat-health (+ danger-margin (reduce + hits))))))
 
+(def mob-hit-every
+  "ms between the hits of a melee mob that stands at the bot (a mob's 20-tick attack cooldown)."
+  1000)
+
+(def win-margin
+  "Health the bot must still have, by the count of winnable?, when the last mob near is dead."
+  3.0)
+
+(def sword-damage
+  "{sword damage} of one full-charge swing on Normal (swords)."
+  {:netherite_sword 8.0
+   :diamond_sword 7.0
+   :iron_sword 6.0
+   :stone_sword 5.0
+   :copper_sword 5.0
+   :golden_sword 4.0
+   :wooden_sword 4.0})
+
+(def after-effect
+  "{kind damage} the hit of a kind goes on doing after it lands: a wither skeleton's wither."
+  {:wither_skeleton 1.0})
+
+(defn hit-through
+  "The damage a hit of damage does the bot through the armour it wears (armour/worn over the four
+   slots, mob/armour-points, mob/absorbed): 7 is 5.74 through an iron helmet and chestplate."
+  [world damage]
+  (let [[points toughness] (reduce (fn [[pt tg] n]
+                                     (let [[dp dt]
+                                           (get mob/armour-points (armour/worn world n) [0 0.0])]
+                                       [(+ pt dp) (+ tg dt)]))
+                                   [0 0.0]
+                                   (range 4))]
+    (mob/absorbed damage points toughness)))
+
+(defn mob-cost
+  "{:t ms :cost health} after the bot kills mob m, having spent t ms on the ones before: it needs a
+   swing per per damage of m's health (mob/kinds) and takes a hit through the armour of
+   hit-damage (plus the after-effect) every mob-hit-every ms until m is dead. {:cost ##Inf}
+   for a kind with no known hit or health."
+  [world per {:keys [t cost]} m]
+  (let [k (entity/kind m)
+        hit (hit-damage k)
+        health (get-in mob/kinds [k :health])
+        t' (+ t (* swing-every (math/ceil (/ (or health 0.0) per))))
+        one (+ (hit-through world (or hit 0.0)) (after-effect k 0.0))]
+    (cond (not (and hit health)) {:t t :cost ##Inf}
+          :else {:t t' :cost (+ cost (* one (math/ceil (/ t' mob-hit-every))))})))
+
+(defn winnable?
+  "Does the bot, at its health and in the armour it wears, kill the striker (entity e, id eid) and
+   every other hostile within defend-radius, one after another, the striker first, and keep
+   win-margin health? Each needs a swing per damage of the best sword held (sword-damage, sword;
+   a fist is 1) of its health, swing-every apart, and hits the bot meanwhile (mob-cost). A kind with
+   no known hit or health cannot be beaten. Pure."
+  [world eid e]
+  (let [[_ held] (sword world)
+        per (get sword-damage held 1.0)
+        pos (:player/pos world)
+        others (->> (entity/hostiles world)
+                    (remove (fn [[id _]] (= id eid)))
+                    (map val)
+                    (filter #(<= (physics/distance pos (:entity/pos %)) defend-radius))
+                    (sort-by #(physics/distance pos (:entity/pos %))))
+        total (reduce (partial mob-cost world per) {:t 0.0 :cost 0.0} (cons e others))]
+    (>= (- (:player/health world 20.0) (:cost total)) win-margin)))
+
 (defn breathed-on?
   "Does the bot stand in the dragon's breath (entity/in-breath?) in the End? A fight there is the
    bot's death: gym chain-w11 runs 3 and 4 fought an enderman inside a cloud, six health every

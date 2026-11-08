@@ -11,7 +11,6 @@
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.memory :as memory]
-            [clojurecraft.mob :as mob]
             [clojurecraft.pearls.cover :as pcover]
             [clojurecraft.pearls.params :as pparams]
             [clojurecraft.pearls.sense :as psense]
@@ -421,28 +420,6 @@
    took the bot back every time (real-18, three wither deaths in 12-20 s, 0 swings)."
   12000)
 
-(def mob-hit-every
-  "ms between the hits of a melee mob that stands at the bot (a mob's 20-tick attack cooldown)."
-  1000)
-
-(def win-margin
-  "Health the bot must still have, by the count of can-beat?, when the last mob near is dead."
-  3.0)
-
-(def sword-damage
-  "{sword damage} of one full-charge swing on Normal (combat/swords)."
-  {:netherite_sword 8.0
-   :diamond_sword 7.0
-   :iron_sword 6.0
-   :stone_sword 5.0
-   :copper_sword 5.0
-   :golden_sword 4.0
-   :wooden_sword 4.0})
-
-(def after-effect
-  "{kind damage} the hit of a kind goes on doing after it lands: a wither skeleton's wither."
-  {:wither_skeleton 1.0})
-
 (defn striker-held
   "[eid entity] that last struck the bot within strike-hold-ms, still there, alive and within
    combat/defend-radius of the feet, or nil. combat/striker is the same for combat/struck-ms."
@@ -458,43 +435,11 @@
                (<= (physics/distance (:player/pos world) (:entity/pos e)) combat/defend-radius))
       [id e])))
 
-(defn mob-cost
-  "{:t ms :cost health} after the bot kills mob m, having spent t ms on the ones before: it needs a
-   swing per per damage of m's health (mob/kinds) and takes a hit through the armour of
-   combat/hit-damage (plus the after-effect) every mob-hit-every ms until m is dead. {:cost ##Inf}
-   for a kind with no known hit or health."
-  [world per {:keys [t cost]} m]
-  (let [k (entity/kind m)
-        hit (combat/hit-damage k)
-        health (get-in mob/kinds [k :health])
-        t' (+ t (* combat/swing-every (math/ceil (/ (or health 0.0) per))))
-        one (+ (psense/hit-through world (or hit 0.0)) (after-effect k 0.0))]
-    (cond (not (and hit health)) {:t t :cost ##Inf}
-          :else {:t t' :cost (+ cost (* one (math/ceil (/ t' mob-hit-every))))})))
-
-(defn can-beat?
-  "Does the bot, at its health and in the armour it wears, kill the striker (entity e, id eid) and
-   every other hostile within combat/defend-radius, one after another, the striker first, and keep
-   win-margin health? Each needs a swing per damage of the best sword held (sword-damage, combat/sword;
-   a fist is 1) of its health, swing-every apart, and hits the bot meanwhile (mob-cost). A kind with
-   no known hit or health cannot be beaten. Pure."
-  [world eid e]
-  (let [[_ sword] (combat/sword world)
-        per (get sword-damage sword 1.0)
-        pos (:player/pos world)
-        others (->> (entity/hostiles world)
-                    (remove (fn [[id _]] (= id eid)))
-                    (map val)
-                    (filter #(<= (physics/distance pos (:entity/pos %)) combat/defend-radius))
-                    (sort-by #(physics/distance pos (:entity/pos %))))
-        total (reduce (partial mob-cost world per) {:t 0.0 :cost 0.0} (cons e others))]
-    (>= (- (:player/health world 20.0) (:cost total)) win-margin)))
-
 (defn tunnel-answer
   "The intent that answers a melee mob that has struck the bot within strike-hold-ms while it bores
    out of the fortress (fortress-escaping?, can-tunnel-out?), or nil: the striker (striker-held)
-   is not a ranged kind. At or over the danger-line (combat/danger-line) and when the bot can-beat?
-   it, a :fight held where the bot stands (:intent/hold?, :intent/yield?: it ends under
+   is not a ranged kind. At or over the danger-line (combat/danger-line) and when combat/winnable? holds for
+   the striker, a :fight held where the bot stands (:intent/hold?, :intent/yield?: it ends under
    retreat-health); otherwise the cover (combat/cover: a block laid between, a meal), never the
    fight and never the wait that ends the plan, while the striker is in the sword's reach
    (combat/in-reach?). The hunt answers wither skeletons and hoglins itself (combat/answering),
@@ -504,7 +449,7 @@
     (when-let [[eid e] (striker-held world)]
       (when-not (contains? pparams/ranged-kinds (entity/kind e))
         (let [fight? (and (>= (:player/health world 20.0) (combat/danger-line world))
-                          (can-beat? world eid e))
+                          (combat/winnable? world eid e))
               cover (when (and (not fight?) (combat/in-reach? world e)) (combat/cover world e))]
           (cond fight?
                 {:intent/kind :fight :intent/target eid :intent/hold? true :intent/yield? true}
