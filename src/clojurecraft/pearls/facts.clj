@@ -207,13 +207,16 @@
                             (and (f :home)
                                  (<= (physics/distance (f :pos) (physics/centre (f :home)))
                                      pparams/provoke-home-reach))))
-   ;; an open-ground fight is weighed (combat/winnable?, the burrow counted); with no pickaxe there is
-   ;; no burrow to dig, but a lost fight is still lost: cover, and the fight only when there is none
+   ;; an open-ground fight is weighed (combat/winnable?, the burrow counted); a lost one is not taken
+   ;; when a burrow can be had (dug, or walked home to), with no pickaxe there is none to dig but
+   ;; a lost fight is still lost: cover, and the fight only when there is none
    :open-cover (fn [f w] (combat/cover w (f :e)))
+   :burrow-available? (fn [f _] (boolean (or (f :digs?) (and (f :home) (f :home-routable?)))))
    :at-hand-worth-fighting? (fn [f w]
                               (or (combat/winnable? w [(f :eid) (f :e)])
                                   (and (not (f :pickaxe?))
-                                       (= {:plan/wait :cornered} (f :open-cover)))))
+                                       (= {:plan/wait :cornered} (f :open-cover)))
+                                  (and (f :pickaxe?) (not (f :burrow-available?)))))
    :ce-fightable? (fn [f w] (not (psense/unfightable? w (f :ceid) (f :ce))))
    :pickaxe? (fn [_ w] (pupkeep/pickaxe? w))
    :home-fallback (fn [f w]

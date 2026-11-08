@@ -177,11 +177,13 @@
     (is (= {:intent/kind :burrow :intent/dir [-1 0] :intent/for :pearls}
            (plan/next-intent near ps/row plan/goals))
         "a pickaxe held and one at hand not coming: a burrow away from it, not a blow in the open")
-    (is (= {:intent/kind :fight :intent/target 7 :intent/for :pearls}
-           (plan/next-intent (assoc-in near [:world/entities 7 :entity/creepy?] true)
-                             ps/row
-                             plan/goals))
-        "one at hand already coming is fought: there is no time to dig")
+    (is
+     (=
+      {:intent/kind :burrow :intent/dir [-1 0] :intent/for :pearls}
+      (plan/next-intent (assoc-in near [:world/entities 7 :entity/creepy?] true) ps/row plan/goals))
+     "one at hand already coming, and the fight not winnable in the open (the iron sword, no armour: it
+         takes 7 a second and 40 health is 7 swings): a burrow away from it where one can be dug, not a blow in the
+         open (sim R4/1, issue #263); fought where none can")
     (is (= {:intent/kind :lookout :intent/for :pearls}
            (plan/next-intent (assoc (ps/burrowed [8.5 61.0 8.5] {7 far}) :player/health 6.0)
                              ps/row

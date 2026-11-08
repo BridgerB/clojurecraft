@@ -897,7 +897,11 @@
         one (fn [hp]
               (-> (standing {7 (angry [10.0 64.0 8.5])})
                   kitted
-                  (assoc :player/health hp :plan/goals #{:ender-pearls})))
+                  (assoc :player/health hp
+                         :plan/goals #{:ender-pearls}
+                         :time/now 100
+                         :player/attacker 7
+                         :player/struck-at 100)))
         e7 (fn [w] [7 (get-in w [:world/entities 7])])
         two (-> (one 20.0)
                 (assoc-in [:world/entities 8] (angry [8.5 64.0 11.0])))
