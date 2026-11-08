@@ -5,7 +5,7 @@ type: reference
 tags: [bot, tooling, race]
 aliases: [race.clj, claims.clj, run-bot!, race.yml, ci/race.edn, claims channel, board]
 status: verified
-lastUpdated: 2026-11-07
+lastUpdated: 2026-11-08
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/main.clj#defn run-bot!
@@ -38,6 +38,8 @@ sourceRefs:
   - src/clojurecraft/race_facts.clj#defn bot-timeout-ms
   - bb/clojurecraft/churn.clj#defn batch!
   - bb/clojurecraft/fleet.clj#defn decide
+  - bb/clojurecraft/inspect.clj#defn busiest-threads
+  - test-bb/clojurecraft/inspect_test.clj#a-sample-names-the-busiest-processes-and-threads
   - bb/clojurecraft/fleet.clj#defn victims
   - bb/clojurecraft/fleet.clj#defn refills
   - bb/clojurecraft/churn.clj#defn grown
@@ -102,6 +104,8 @@ Where and with what a bot begins is one table, `resources/clojurecraft/starts.ed
 
 ## Capacity
 How many racers a runner carries was measured once, by ramping a race on all twenty runners and judging each load after a two-minute settle (healthy: server p95 under 50 ms, the slowest tenth of bots at 19 ticks/s or better, none cut off, no swap). The numbers it gave are the sizes in `ci/race.edn` (bots a server, servers a runner, heaps). The race's server runs with no compression (`COMPRESSION_THRESHOLD` -1: the bots are on the same machine) and `sync-chunk-writes` off (`bb/clojurecraft/server.clj`). The race's `sampler!` writes the race's health as a fact every 15 s (`sample`: bots joined, landed, playing, ended, cut off; the playing bots' ticks per second as median, p10 and least; milestones; the server's tick times; the bots' heap). The ramp tooling is gone; it is in the history before this change.
+
+Where the runner's CPU goes is sampled beside the race, never touching play (`bb inspect`, `bb/clojurecraft/inspect.clj`; on 2026-11-08 the servers ticked 150 to 450 ms under ten bots each). `bb inspect sample data/race/inspect` writes a line every 30 s to `cpu.edn` (`sample`: the load and run queue, the CPU split with steal, the busiest processes' share of a core with their role in the lane, `server-k`, `race-k` or `convert`, and each such JVM's busiest thread pools by name) plus `machine.txt` and a `jstat -gcutil` log per server and race JVM; `bb inspect profile` profiles each server at minutes 5 and 30 of the race (server k two minutes after k-1): `debug start`/`debug stop`, `perf start`, a 60 s JFR recording with its `jfr view` summaries and the tick query before and after, under `data/race/inspect/s<k>-min<m>/`. Every server and race JVM also logs its GCs (`-Xlog:gc`: `s<k>/server-gc.log`, `s<k>/gc.log`).
 
 ## Per-server settings (an A/B inside a lane)
 A runner carries `:race/servers` servers; `ci/race.edn`'s `:race/server-overrides` maps a server's number (the 1-based `--server k`) to settings it takes instead of the defaults in `clojurecraft.servers` (`settings`, `simulation-distance`): today server 2 runs a simulation distance of 3 and server 1 the default 4. `race.yml` starts each server with `SERVER_INDEX=k`, and `bb server` writes the override into `server.properties` (`server/with-overrides`); the world caches are keyed by `ci/gym.edn` and `ci/world-key.edn` alone, so the setting never rebuilds a world. Each race sample carries `:sample/simulation-distance` with its `:sample/server-tick`, and a batch's row has `:servers` (`page/servers-under`): for each server its simulation distance and the mean tick (avg, p50, p95, p99) over the samples taken with bots playing, so a round's two servers can be compared.

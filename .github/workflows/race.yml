@@ -99,6 +99,7 @@ jobs:
       MAX_PLAYERS: '80'                  # vanilla seats 20; the race seats its bots with room to reconnect
       COMPRESSION_THRESHOLD: '-1'        # bots on the same machine: zlib would be only CPU, both ends
       SYNC_CHUNK_WRITES: 'false'         # a thrown-away world: no synchronous write per saved chunk
+      SERVER_JAVA_OPTS: '-Xlog:gc:file=gc.log:time,uptime'  # every GC and its pause, in the world dir (Pack keeps it)
     steps:
       - uses: actions/checkout@v7
       - name: Which landing set
@@ -164,13 +165,24 @@ jobs:
             start=""
             if [ -n "$START" ]; then start="--start $START"; fi
             # shellcheck disable=SC2086 # $server and $start are two words or none
-            clojure -J-Xmx${{ needs.plan.outputs.bot-heap }}m -M:race --config ci/race.edn --port $((25564 + k)) \
+            clojure -J-Xmx${{ needs.plan.outputs.bot-heap }}m "-J-Xlog:gc:file=$dir/gc.log:time,uptime" -M:race --config ci/race.edn --port $((25564 + k)) \
               --rcon-port $((25574 + k)) --rcon-pass "$RCON_PASS" --record-dir "$dir" --commit "$GITHUB_SHA" \
               --seed "${{ steps.set.outputs.set }}" --runner ${{ matrix.runner }} $server $start \
               --landings "cache/worlds/${{ steps.set.outputs.set }}/landings.edn" \
               --landing-offset $(( ${{ steps.set.outputs.first }} + (k - 1) * BOTS )) \
               > "$dir/race.log" 2>&1 &
             races="$races $!"
+          done
+          # where the runner's CPU goes (bb inspect, bb/clojurecraft/inspect.clj): a sample every 30 s
+          # of the load, steal and every process's and JVM thread pool's share of a core, a jstat per
+          # JVM, and each server profiled twice (its debug profiler, perf and a JFR recording), server
+          # k two minutes after server k-1. All under data/race/inspect; it never touches play
+          mkdir -p data/race/inspect
+          bb inspect sample data/race/inspect > data/race/inspect/sample.log 2>&1 &
+          echo $! > work/inspect.pid
+          for k in $(seq 1 "$SERVERS"); do
+            bb inspect profile "$k" $((25574 + k)) "$RCON_PASS" "$PWD/work/world-$k" data/race/inspect \
+              $((5 + 2 * (k - 1))) $((30 + 2 * (k - 1))) > "data/race/inspect/profile-$k.log" 2>&1 &
           done
           code_at=$(git show -s --format=%cI "$GITHUB_SHA")
           report() {
@@ -238,6 +250,7 @@ jobs:
           if [ -f work/races.pids ]; then
             while read -r p; do kill "$p" 2>/dev/null || true; done < work/races.pids
           fi
+          if [ -f work/inspect.pid ]; then kill "$(cat work/inspect.pid)" 2>/dev/null || true; fi
       - name: Last report
         # the bots that ended since the last batch, the cut ones among them; a cancel (a merge's push)
         # runs it too, so nothing a round played is lost to the next round. Its conversions stop
@@ -273,6 +286,7 @@ jobs:
         run: |
           for f in data/race/s*/*.edn; do [ -f "$f" ] && [ "$(basename "$f")" != summary.edn ] && zstd -q -3 -T0 --rm "$f"; done
           for k in $(seq 1 "$SERVERS"); do cp "work/world-$k/server.log" "data/race/s$k/server.log" 2>/dev/null || true; done
+          for k in $(seq 1 "$SERVERS"); do cp "work/world-$k/gc.log" "data/race/s$k/server-gc.log" 2>/dev/null || true; done
           for k in $(seq 1 "$SERVERS"); do cp -r "work/world-$k/crash-reports" "data/race/s$k/" 2>/dev/null || true; done
       - uses: actions/upload-artifact@v7
         if: always()              # a cancelled round's artifact too; the snapshots the issues name are in the evidence releases

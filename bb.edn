@@ -17,6 +17,7 @@
               [clojurecraft.botlogs-test]
               [clojurecraft.evidence-test]
               [clojurecraft.fleet-test]
+              [clojurecraft.inspect-test]
               [clojurecraft.lanes-test]
               [clojurecraft.server-test]
               [clojurecraft.page-test]
@@ -26,6 +27,7 @@
                                                   'clojurecraft.botlogs-test
                                                   'clojurecraft.evidence-test
                                                   'clojurecraft.fleet-test
+                                                  'clojurecraft.inspect-test
                                                   'clojurecraft.lanes-test
                                                   'clojurecraft.server-test
                                                   'clojurecraft.page-test
@@ -76,6 +78,11 @@
           "A vanilla 26.1.2 server: bb server start|stop, set up by PORT RCON_PORT RCON_PASS WORLD"
           :requires ([clojurecraft.server :as server])
           :task (server/command! (first *command-line-args*) (server/env-opts))}
+  inspect
+  {:doc
+   "Where a race runner's CPU goes: bb inspect sample <out-dir> | profile <k> <rcon-port> <pass> <world> <out-dir> <minute>..."
+   :requires ([clojurecraft.inspect :as inspect])
+   :task (apply inspect/-main *command-line-args*)}
   page
   {:doc
    "The results' data (issue #116): round <dir> <kind> <run> <commit> <at> | wall <dir> | publish <round.edn>"
