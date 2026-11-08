@@ -16,6 +16,7 @@
    Babashka runs this; nothing here requires the bot."
   (:require [babashka.fs :as fs]
             [babashka.process :as p]
+            [clojure.java.io :as io]
             [clojure.math :as math]
             [clojure.string :as str]))
 
@@ -159,9 +160,11 @@
 ;;;; I/O: /proc, jstat, RCON, jcmd and jfr ;;;;
 
 (defn slurp-or-nil
-  "The file's text, or nil when it cannot be read (a process that ended)."
+  "The file's text, or nil when it cannot be read (a process that ended). Read line by line:
+   /proc's files have size 0, and bb's slurp of /proc/stat throws Invalid argument (probe
+   42512007362)."
   [f]
-  (try (slurp (str f)) (catch Exception _ nil)))
+  (try (with-open [r (io/reader (str f))] (str/join "\n" (line-seq r))) (catch Exception _ nil)))
 
 (defn read-proc!
   "{pid {:comm :ticks :threads :rss-pages :role}} of every process this user can read."
@@ -194,8 +197,8 @@
   (let [procs (read-proc!)]
     {:at (System/currentTimeMillis)
      :cpus (.availableProcessors (Runtime/getRuntime))
-     :cpu (cpu-times (slurp "/proc/stat"))
-     :loadavg (slurp "/proc/loadavg")
+     :cpu (cpu-times (slurp-or-nil "/proc/stat"))
+     :loadavg (slurp-or-nil "/proc/loadavg")
      :procs procs
      :threads (read-threads! (keep (fn [[pid m]]
                                      (when (some->> (:role m)
@@ -247,10 +250,11 @@
     (loop [before (reading!)
            attached #{}]
       (Thread/sleep every-ms)
-      (let [after (reading!)
+      (let [after (try (reading!) (catch Exception e (println "reading:" (ex-message e)) before))
             attached' (try (attach-jstat! out (:procs after) attached)
                            (catch Exception e (println "jstat:" (ex-message e)) attached))]
-        (try (spit f (str (pr-str (sample before after hz)) "\n") :append true)
+        (try (when (> (:at after) (:at before))
+               (spit f (str (pr-str (sample before after hz)) "\n") :append true))
              (catch Exception e (println "sample:" (ex-message e))))
         (recur after attached')))))
 
