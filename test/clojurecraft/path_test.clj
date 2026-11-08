@@ -539,3 +539,17 @@
           r (path/plan w [8 64 8] {:goal/kind :block :goal/pos [10 64 8]} {:path/max-nodes 400})]
       (is (= :found (:path/status r)))
       (is (not-any? #{[9 64 8]} (:path/waypoints r)) "round the fire, not through it"))))
+
+(deftest a-crimson-forest-biome-costs-a-route-before-any-nylium-is-seen
+  ;; Sim R2/21 (probes wide-st3-R2-21, issue #263): hoglins killed three of nine runs crossing a
+  ;; crimson forest. The biome of a loaded chunk is known before its floor; id 7 is the crimson forest
+  ;; (probe biomes-R1), the others (2 deltas, 34 wastes, 49 soul sand valley, 59 warped forest) are free.
+  (let [w (world-of {} [8.5 64.0 8.5])
+        in-biome
+        (fn [id]
+          (assoc-in w
+           [:world/chunks [0 0]]
+           (assoc (world/column {}) :chunk/min-y 0 :chunk/biomes (vec (repeat 16 {:single id})))))]
+    (is (= (path/biome-wary 7) (path/wary-cost (in-biome 7) [8 64 8])) "crimson forest: its cost")
+    (doseq [id [2 34 49 59]]
+      (is (zero? (path/wary-cost (in-biome id) [8 64 8])) (str "biome " id " is free")))))
