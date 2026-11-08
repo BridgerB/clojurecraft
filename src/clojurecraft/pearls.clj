@@ -2410,10 +2410,13 @@
 
 (defn fortress-escaping?
   "Is the bot leaving the fortress via sealed tunnel-out: inside/near the fortress,
-   or still surfacing underground while escaping?"
+   or still surfacing underground while escaping? Never in a warped forest (in-forest?): the hunt
+   is there. Sim R4/1 seed 1 (probe wide-st2-R4-1, issue #263) was in its forest from minute 8.7,
+   81 endermen in sight, and still tunnelled the fortress exit at minute 47."
   [world]
   (boolean (and (= dimension/nether (dimension/of world))
                 (seq (fortress-points world))
+                (not (in-forest? world))
                 (fortress-tunnel-target world))))
 
 (defn fortress-tunnel-out

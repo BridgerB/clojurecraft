@@ -4531,3 +4531,23 @@
                          (assoc base :plan/intent {:intent/kind :lookout :intent/status :active}))
                         :pearls/watch))
         "no held target running: nothing watched")))
+
+(deftest a-bot-in-a-warped-forest-is-no-longer-escaping-the-fortress
+  ;; Logged state, sim R4/1 seed 1 (probe wide-st2-R4-1, issue #263): in its forest from minute 8.7
+  ;; with 81 endermen in sight, the exit tunnel still ran at minute 47 (fortress-escaping? stayed true,
+  ;; and the exit outranks the hunt). A forest known at the feet ends the escape.
+  (let [w (-> (standing {})
+              (assoc :player/dimension nether :player/pos [-163.5 38.0 221.5])
+              (memory/observe [-176 70 219] blaze/spawner)
+              (memory/observe [-164 40 221] (blocks/default-state :nether_bricks))
+              (assoc-in [:player/inventory 1] (item :iron_pickaxe 1)))
+        forest (memory/remember-forest w
+                                       {:forest/chunk [-11 13]
+                                        :forest/kind :warped
+                                        :forest/count 20
+                                        :forest/pos [-163 38 221]
+                                        :forest/at 0
+                                        :forest/dimension nether})]
+    (is (pearls/fortress-escaping? w) "near the fortress, no forest: escaping")
+    (is (pearls/in-forest? forest) "the feet are in a warped chunk")
+    (is (not (pearls/fortress-escaping? forest)) "in a forest: the escape is over")))
