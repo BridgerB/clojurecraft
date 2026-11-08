@@ -1,6 +1,6 @@
 (ns clojurecraft.pearls.reach-test
   "The hunt's way to a forest when nothing else finds one: the held heading, what it turns toward,
-   the rule that gives up a held target the feet do not near, and the fortress escape that ends in
+   the stuck-pocket rule (net displacement over a window), and the fortress escape that ends in
    a forest (issue #263)."
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [clojurecraft.avoided :as avoided]
@@ -9,6 +9,7 @@
             [clojurecraft.fixtures :as fx]
             [clojurecraft.fortress-exit :as fexit]
             [clojurecraft.game :as game]
+            [clojurecraft.intent :as intent]
             [clojurecraft.memory :as memory]
             [clojurecraft.pearls-support :as ps]
             [clojurecraft.pearls.move :as pmove]
@@ -92,26 +93,6 @@
     (is (= i (pmove/reach-heading (pmove/reach-heading-hold held)))
         "the same leg at the next act")))
 
-(deftest a-fortress-exit-whose-tunnel-failed-is-given-up
-  ;; Logged state, sim R1/17 seed 1 (probes rh5-20 and rh5-33, issue #263): :tunnel-to [938 75 -209]
-  ;; failed :blocked in 50 ms and was chosen again: 107 attempts by minute 20, a thirty-second
-  ;; :retrying wait between each, forty minutes with no intent running. A first failure is not the end
-  ;; (R4/1 reached its forest through exits that failed once); a lack of progress is: the column the
-  ;; exit was abandoned at (watch-progress) is not a target again, and the exit ends.
-  (let [w (-> (ps/standing {})
-              (assoc :player/dimension ps/nether :player/pos [-163.5 38.0 221.5])
-              (memory/observe [-176 70 219] blaze/spawner)
-              (memory/observe [-164 40 221] (blocks/default-state :nether_bricks))
-              (assoc-in [:player/inventory 1] (ps/item :iron_pickaxe 1)))
-        target (fexit/fortress-tunnel-target w)
-        failed (assoc w :plan/exit-columns #{[(first target) (last target)]})
-        once (assoc w :plan/blacklist #{target})]
-    (is (some? target) "an exit target is chosen")
-    (is (fexit/fortress-escaping? w))
-    (is (some? (fexit/fortress-tunnel-target once)) "one failure: the exit goes on")
-    (is (nil? (fexit/fortress-tunnel-target failed)) "abandoned: not that column again")
-    (is (not (fexit/fortress-escaping? failed)) "the exit is over: the other movers apply")))
-
 (deftest a-far-end-a-walk-failed-toward-is-not-chosen-again
   ;; The same bug as the exit's (issue #263, probes rh5-20 and rh5-33): a target that ignores
   ;; :plan/blacklist is chosen again after it failed. A far end whose walk failed is left out.
@@ -123,52 +104,6 @@
     (is (some? end) "an open world has far ends")
     (is (not-any? #(= end (second %)) (pmove/far-ends failed 0 #{}))
         "the end a walk failed toward is not an end again")))
-
-(deftest a-held-target-the-feet-do-not-near-is-given-up
-  ;; One rule for every held target (progress-table), from the stalls it ends: the exit that failed
-  ;; :blocked every 30 s for forty minutes (sim R1/17, probes rh5-20 and rh5-33), the heading's leg,
-  ;; the forest tunnel that stood still at [-96 65 466] (R2/21, wide-br-R2-21) and the relocation
-  ;; shuttling between two cells. Not nearer by :blocks within :ms: the intent fails :no-progress.
-  (let [base (-> (ps/standing {} {})
-                 (assoc :player/dimension ps/nether :time/now 0))
-        running
-        (fn [w kind for target]
-          (assoc w
-                 :plan/intent
-                 {:intent/kind kind :intent/for for :intent/target target :intent/status :active}))
-        kinds {:exit (-> (running base :tunnel-to :pearls [8 64 -60])
-                         (assoc :pearls/exit-target [8 64 -60]))
-               :heading (-> (running base :tunnel-to :pearls [8 64 -60])
-                            (assoc :pearls/heading
-                                   {:dir [0 -1] :from [8 64 8] :target [8 64 -60] :turns 0}))
-               :forest (running base :tunnel-to :pearls [8 64 -60])
-               :relocate (running base :walk :relocate [8 64 -60])}
-        later (fn [w ms] (assoc w :time/now ms))]
-    (doseq [[kind w] kinds
-            :let [rule (pparams/progress kind)
-                  started (pmove/watch-progress w)
-                  waiting (pmove/watch-progress (later started (dec (:ms rule))))
-                  given-up (pmove/watch-progress (later started (:ms rule)))
-                  nearer (pmove/watch-progress (-> (later started (dec (:ms rule)))
-                                                   (assoc :player/pos
-                                                          [8.5 64.0 (- 8.5 (:blocks rule) 1.0)])))
-                  then-waiting (pmove/watch-progress (later nearer
-                                                            (+ (dec (:ms rule)) (:ms rule) -1)))]]
-      (testing (name kind)
-        (is (= kind (pmove/held-class started (:plan/intent started))) "the class of the target")
-        (is (avoided/noted? given-up :blacklist [8 64 -60]) "not nearer in the time: avoided")
-        (is (= (= kind :exit) (avoided/noted? given-up :exit-columns [8 -60]))
-            "the exit's column too")
-        (is (not (avoided/noted? waiting :blacklist [8 64 -60])) "within the time: not")
-        (is (not (contains? given-up :pearls/watch)))
-        (is (not (avoided/noted? nearer :blacklist [8 64 -60]))
-            "nearer by the blocks: the clock restarts")
-        (is (not (avoided/noted? then-waiting :blacklist [8 64 -60]))
-            "and a full time again is allowed")))
-    (is (not (contains? (pmove/watch-progress
-                         (assoc base :plan/intent {:intent/kind :lookout :intent/status :active}))
-                        :pearls/watch))
-        "no held target running: nothing watched")))
 
 (deftest a-bot-in-a-warped-forest-is-no-longer-escaping-the-fortress
   ;; Logged state, sim R4/1 seed 1 (probe wide-st2-R4-1, issue #263): in its forest from minute 8.7
@@ -211,28 +146,81 @@
       (is (contains? #{[0 1] [0 -1]} sideways) "a blocked leg turns a quarter")
       (is (= [0 -1] sideways) "to the side with the more unseen ground"))))
 
-(deftest an-exit-that-flips-between-two-cells-is-one-held-target
-  ;; Logged state, sim R2/21 on the port (probe meas-mp-R2-21, issue #263): from minute 30 to 60
-  ;; the exit's target alternated [-99 56 403] and [-100 56 403] every 350 ms, each a :tunnel-to that
-  ;; got nowhere, and every flip restarted the progress clock, so it never gave up. Targets within
-  ;; watch-same are one held target; the column it is given up at covers its neighbour.
-  (let [base (-> (ps/standing {} {})
-                 (assoc :player/dimension ps/nether :time/now 0))
-        at (fn [w target t]
-             (assoc w
-                    :time/now t
-                    :pearls/exit-target target
-                    :plan/intent
-                    {:intent/kind :tunnel-to
-                     :intent/for :pearls
-                     :intent/target target
-                     :intent/status :active}))
-        rule (:exit pparams/progress)
-        w0 (pmove/watch-progress (at base [8 64 -60] 0))
-        flipped (pmove/watch-progress (at w0 [7 64 -60] 350))
-        late (pmove/watch-progress (at flipped [8 64 -60] (:ms rule)))]
-    (is (= 0 (:at (:pearls/watch flipped))) "one cell over is the same target: the clock goes on")
-    (is (avoided/noted? late :blacklist [8 64 -60]) "given up after the time, flips or not")
-    (is (avoided/noted? late :exit-columns [8 -60]))
-    (is (fexit/given-up-column? late [7 64 -60]) "the neighbouring cell is that column too")
-    (is (not (fexit/given-up-column? late [20 64 -60])) "a column far off is not")))
+
+(defn sitting
+  "w with the bot at pos, watched by watch-stuck at every `every` ms from `from` to `to`."
+  [w pos from to every]
+  (reduce (fn [w ms] (pmove/watch-stuck (assoc w :time/now ms :player/pos pos)))
+          w
+          (range from (inc to) every)))
+
+(deftest a-pocket-the-bot-nets-no-ground-in-is-stuck-whatever-its-movers-did
+  ;; Logged states, sim R2/21 (probe meas-wf-R2-21, issue #263): two tunnels, the exit and the
+  ;; heading, passed targets back and forth at x -97 to -100, z 456 to 459 for 47 minutes; R1/17:
+  ;; tunnels and stairs about [925 98 -74] for the hour. Net displacement over five minutes under
+  ;; twelve blocks is the one test.
+  (doseq [pos [[-99.5 56.0 457.5] [925.5 98.0 -73.5]]]
+    (let [window (:window-ms pparams/stuck)
+          w (-> (ps/standing {} {})
+                (assoc :player/dimension ps/nether
+                       :pearls/heading {:dir [0 -1] :from [0 0 0] :target [0 56 -64] :turns 0}))
+          before (sitting w pos 0 (- window 5000) 5000)
+          stuck (sitting before pos window window 5000)
+          region (psense/region-of (intent/feet stuck))]
+      (is (not (avoided/noted? before :pocket-regions region)) "not yet: the window is not over")
+      (is (contains? (avoided/all-of stuck :pocket-regions) region) "the pocket's region is noted")
+      (is (contains? (avoided/mark-of stuck :pocket-regions region) [0 -1])
+          "with the heading tried")
+      (is (nil? (:pearls/heading stuck)) "the held heading is dropped")
+      (is (empty? (:pearls/trail stuck)) "and the clock starts again")
+      (is (psense/in-stuck-pocket? stuck))
+      (let [again (pmove/reach-heading-hold stuck)]
+        (is (some? (:pearls/heading again)) "a new heading is picked")
+        (is (not= [0 -1] (:dir (:pearls/heading again))) "not the one that got nowhere")))))
+
+(deftest a-bot-that-moves-on-is-not-stuck-and-a-flip-changes-nothing
+  (let [w (-> (ps/standing {} {})
+              (assoc :player/dimension ps/nether))
+        window (:window-ms pparams/stuck)
+        walking (reduce (fn [w ms]
+                          (pmove/watch-stuck
+                           (assoc w :time/now ms :player/pos [(+ 8.5 (* 0.01 ms)) 64.0 8.5])))
+                        w
+                        (range 0 (inc window) 5000))
+        flipping (reduce (fn [w ms]
+                           (pmove/watch-stuck
+                            (assoc w
+                                   :time/now ms
+                                   :player/pos [8.5 64.0 8.5]
+                                   :pearls/exit-target
+                                   (if (even? (quot ms 350)) [8 64 -60] [7 64 -60]))))
+                         w
+                         (range 0 (inc window) 350))]
+    (is (empty? (avoided/all-of walking :pocket-regions))
+        "three blocks a second for the window: free")
+    (is (seq (avoided/all-of flipping :pocket-regions)) "targets flipping, no movement: stuck")))
+
+(deftest the-fortress-exit-is-over-in-a-stuck-pocket
+  (let [w (-> (ps/standing {})
+              (assoc :player/dimension ps/nether :player/pos [-163.5 38.0 221.5])
+              (memory/observe [-176 70 219] blaze/spawner)
+              (memory/observe [-164 40 221] (blocks/default-state :nether_bricks))
+              (assoc-in [:player/inventory 1] (ps/item :iron_pickaxe 1)))
+        pocket (avoided/mark w :pocket-regions (psense/region-of (intent/feet w)) #{[1 0]})]
+    (is (fexit/fortress-escaping? w) "near the fortress, no pocket: escaping")
+    (is (not (fexit/fortress-escaping? pocket)) "in a stuck pocket: the exit was tried")
+    (is (nil? (fexit/fortress-tunnel-target pocket)))))
+
+(deftest a-leg-over-an-open-air-cavern-is-not-taken
+  ;; sim R2/21: the bot stood in an air cavern whose floor was a few placed blocks, and the heading
+  ;; bridged over air at 26 blocks a minute. A leg end with no ground under it in the y band is not
+  ;; a direction; an unloaded column is not held against it.
+  (let [w (-> (ps/standing {} {})
+              (assoc :player/dimension ps/nether :player/pos [8.5 64.0 8.5]))
+        cavern (assoc-in w
+                [:world/chunks [4 0]]
+                (world/column (into {} (for [y (range 30 72)] [[8 y 8] ps/air]))))]
+    (is (pmove/ground-under? w [8 64 8]) "stone under the feet")
+    (is (pmove/ground-under? w [200 64 8]) "an unloaded column: nothing against it")
+    (is (not (pmove/ground-under? cavern [72 70 8]))
+        "a loaded column of air from y 70 down to the band's floor: no ground")))

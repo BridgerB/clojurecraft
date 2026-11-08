@@ -168,4 +168,6 @@
             :forest {:blocks 6.0 :ms 240000}
             :relocate {:blocks 6.0 :ms 240000}}
  ;; blocks from the feet a heavy hostile is looked for on a route: past its tracking range, the walk starts out of reach and ends in it
- :heavy-look 64.0}
+ :heavy-look 64.0
+ ;; a stuck pocket (move/watch-stuck): the bot's net displacement over :window-ms is under :blocks, whatever the movers did; positions are kept :every-ms apart; its region is :region blocks square
+ :stuck {:window-ms 300000 :blocks 12.0 :every-ms 5000 :region 16}}

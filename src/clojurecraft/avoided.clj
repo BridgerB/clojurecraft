@@ -13,7 +13,8 @@
    standing in. :boxed-route cells such a search visited. :unreached log targets no route found.
    :retreat-unreachable cells a retreat walk found no route to. :cornered entities a back-off
    could not get away from. :trunk-failures [x z] column -> failures counted against a trunk.
-   :exit-columns [x z] columns the fortress exit's held target was given up at for want of progress.
+   :pocket-regions [rx rz] 16x16 region -> the set of headings tried from it: a pocket the bot sat in
+   for five minutes without netting ten blocks (pearls.move/watch-stuck).
    :given-up entity -> ms a fight gave it up at. :backed-off entity -> {:pos :times} of back-offs."
   {:blacklist :set
    :boxed-at :set
@@ -21,7 +22,7 @@
    :unreached :set
    :retreat-unreachable :set
    :cornered :set
-   :exit-columns :set
+   :pocket-regions :map
    :trunk-failures :map
    :given-up :map
    :backed-off :map})

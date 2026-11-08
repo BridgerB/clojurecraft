@@ -197,8 +197,8 @@
                                                                      (uncovered-log
                                                                       (fexit/fortress-exit-log
                                                                        (fexit/fortress-exit-hold
-                                                                        (pmove/watch-progress
-                                                                         (pmove/reach-heading-hold
+                                                                        (pmove/reach-heading-hold
+                                                                         (pmove/watch-stuck
                                                                           (pmove/track-seen
                                                                            world)))))))))))
                 (psense/shot-at? world) (assoc :pearls/shot-at-ms (:time/now world 0))
@@ -246,23 +246,10 @@
 
 (defmethod intent/still-wanted? :hunt/fight-coming-held [world i] (not (held-idle? world i)))
 
-(defn target-avoided?
-  "Is the target of running intent i one the hunt has given up (avoided :blacklist: a failure, or
-   pmove/watch-progress for want of progress)? Then the intent is stale."
-  [world i]
-  (boolean (and (:intent/target i) (avoided/noted? world :blacklist (:intent/target i)))))
-
 (defmethod intent/still-wanted? :hunt/relocate
-  ;; the relocation walk ends when the relocation does (arrived, far enough, or timed out), or its
-  ;; target is given up for want of progress
-  [world i]
-  (and (some? (:pearls/relocate world)) (not (target-avoided? world i))))
-
-(defmethod intent/still-wanted? :hunt/escape-tunnel-out [world i] (not (target-avoided? world i)))
-
-(defmethod intent/still-wanted? :hunt/travel [world i] (not (target-avoided? world i)))
-
-(defmethod intent/still-wanted? :hunt/heading [world i] (not (target-avoided? world i)))
+  ;; the relocation walk ends when the relocation does (arrived, far enough, or timed out)
+  [world _]
+  (some? (:pearls/relocate world)))
 
 (defmethod plan/held-goal? :pearls
   ;; with an angry enderman within hold-radius and a burrow held, the hunt waits inside: the stuck

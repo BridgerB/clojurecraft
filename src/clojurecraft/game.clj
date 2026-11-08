@@ -328,8 +328,8 @@
               :plan/trail
               :pearls/exit-target
               :pearls/heading
-              :pearls/watch
-              :plan/exit-columns)
+              :pearls/trail
+              :plan/pocket-regions)
       (emit {:packet/name :client-command :action (p/value :client-command :perform-respawn)})))
 
 (defmethod on-packet [:play :set-health]
