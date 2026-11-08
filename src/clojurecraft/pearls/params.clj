@@ -236,3 +236,5 @@
 (def reserve-digs (:reserve-digs thresholds))
 
 (def reserve-stems (:reserve-stems thresholds))
+
+(def heavy-look (:heavy-look thresholds))

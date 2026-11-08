@@ -148,4 +148,6 @@
  ;; digs a held pickaxe may fall to before the hunt cuts the stems for its successor: twice spare-digs
  :reserve-digs 64
  ;; warped stems held that make a table, sticks and a pickaxe's planks
- :reserve-stems 6}
+ :reserve-stems 6
+ ;; blocks from the feet a heavy hostile is looked for on a route: past its tracking range, the walk starts out of reach and ends in it
+ :heavy-look 64.0}

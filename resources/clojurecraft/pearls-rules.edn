@@ -113,8 +113,15 @@
    :rule/then [:fact :cut-out-or-lookout]}
   {:rule/id :hunt/fight-at-hand
    :rule/phase :fight
-   :rule/when [:near? [:not :in?] [:not :at-hand-unfightable?] :at-hand-fightable-kind?]
+   :rule/when [:near? [:not :in?] [:not :at-hand-unfightable?] :at-hand-fightable-kind?
+               :at-hand-worth-fighting?]
    :rule/then [:intent {:intent/kind :fight :intent/target [:fact :eid] :intent/for :pearls}]}
+  ;; an open fight that is not winnable, with no pickaxe to dig a burrow with: the cover (a wall, a pillar, a nook) at once
+  {:rule/id :hunt/cover-from-open-fight
+   :rule/phase :fight
+   :rule/when [:near? [:not :in?] [:not :at-hand-unfightable?] :at-hand-fightable-kind?
+               [:not :pickaxe?]]
+   :rule/then [:fact :open-cover]}
   {:rule/id :hunt/meal :rule/phase :survive :rule/when [:meal] :rule/then [:fact :meal]}
   {:rule/id :hunt/lookout-hurt-or-blocked
    :rule/phase :survive

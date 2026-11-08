@@ -5,6 +5,7 @@
             [clojurecraft.combat :as combat]
             [clojurecraft.dimension :as dimension]
             [clojurecraft.entity :as entity]
+            [clojurecraft.fortress :as fortress]
             [clojurecraft.fortress-exit :as fexit]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
@@ -467,25 +468,77 @@
            :intent/for :pearls}
           :else walk)))
 
+(defn segment-distance
+  "The distance in blocks from point p to the segment a-b ([x y z] each)."
+  [a b p]
+  (let [ab (mapv - b a)
+        ap (mapv - p a)
+        len2 (reduce + (map * ab ab))
+        t (if (zero? len2) 0.0 (max 0.0 (min 1.0 (/ (reduce + (map * ap ab)) (double len2)))))
+        q (mapv (fn [x d] (+ x (* t d))) a ab)]
+    (physics/distance q p)))
+
+(defn heavy-on-route?
+  "Does the route of walk i from the feet pass within the follow range of a heavy hostile
+   (psense/heavy?, its :follow in mob-kinds.edn), tracked now? The route is planned once, only when a
+   heavy hostile is tracked within heavy-look, and its waypoints (the straight line when it has none)
+   are taken a segment at a time (segment-distance). Decided before the walk starts, not at the
+   distance the bot stands from it now: sim R1/17 seed 1 (issue #263) walked 40 blocks at hoglins 24
+   to 32 blocks off, their follow range 16, into four of them."
+  [world i]
+  (let [feet (intent/feet world)
+        heavies (for [[_ e] (entity/hostiles world)
+                      :when (and (psense/heavy? e)
+                                 (<= (physics/distance (:player/pos world) (:entity/pos e))
+                                     pparams/heavy-look))]
+                  [(:entity/pos e)
+                   (get-in combat/kinds [(entity/kind e) :follow] combat/reach-follow)])]
+    (boolean (when (seq heavies)
+               (let [r (path/plan world
+                                  (path/feet-cell (:player/pos world))
+                                  (intent/goal-of i)
+                                  {:path/max-nodes pparams/vantage-nodes})
+                     pts (vec (cons feet (or (seq (:path/waypoints r)) [(:intent/target i)])))]
+                 (some (fn [[a b]]
+                         (some (fn [[hp follow]] (<= (segment-distance a b hp) follow)) heavies))
+                       (map vector pts (rest pts))))))))
+
+(defn tunnel-past-heavy
+  "The intent i for the way to a forest, a :walk replaced by a sealed :tunnel-to to the same target
+   when its route passes within a heavy hostile's follow range (heavy-on-route?) and a pickaxe is
+   held: the hunt does not walk in the open through hoglins. Any other intent, and a walk with a
+   clear route, as it is."
+  [world i]
+  (if (and (= :walk (:intent/kind i)) (pupkeep/pickaxe? world) (heavy-on-route? world i))
+    {:intent/kind :tunnel-to
+     :intent/target (:intent/target i)
+     :intent/reach 1.5
+     :intent/steps fortress/steps-per-tunnel
+     :intent/seal-behind? true
+     :intent/for :pearls}
+    i))
+
 (defn travel
   "The way to a warped forest (forest-way: a walk, or a sealed tunnel when no walk reaches it), or
    nil: none in the Nether when the bot is in one (in-forest?); to the cell over the nylium nearest
    of the nearest known forest chunk (nearest-forest), else explore for one."
   [world]
   (when (and (= dimension/nether (dimension/of world)) (not (psense/in-forest? world)))
-    (cond (and (fexit/fortress-escaping? world) (fexit/can-tunnel-out? world))
-          (fexit/fortress-tunnel-out world)
-          (and (fexit/fortress-escaping? world) (not (fexit/can-tunnel-out? world)))
-          (if-let [pos (psense/nearest-forest world)]
-            (forest-way world (fexit/room-waypoint world (update pos 1 inc)))
-            (explore world))
-          :else
-          (if-let [pos (psense/nearest-forest world)]
-            (forest-way world
-                        (if (fexit/near-fortress? world)
-                          (fexit/room-waypoint world (update pos 1 inc))
-                          (update pos 1 inc)))
-            (explore world)))))
+    (tunnel-past-heavy world
+                       (cond (and (fexit/fortress-escaping? world) (fexit/can-tunnel-out? world))
+                             (fexit/fortress-tunnel-out world)
+                             (and (fexit/fortress-escaping? world)
+                                  (not (fexit/can-tunnel-out? world)))
+                             (if-let [pos (psense/nearest-forest world)]
+                               (forest-way world (fexit/room-waypoint world (update pos 1 inc)))
+                               (explore world))
+                             :else
+                             (if-let [pos (psense/nearest-forest world)]
+                               (forest-way world
+                                           (if (fexit/near-fortress? world)
+                                             (fexit/room-waypoint world (update pos 1 inc))
+                                             (update pos 1 inc)))
+                               (explore world))))))
 
 (defn travel-caged?
   "Is the bot in the Nether, in no warped forest, with no enderman tracked, and no walk to or toward
