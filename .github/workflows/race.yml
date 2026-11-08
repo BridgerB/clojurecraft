@@ -118,7 +118,7 @@ jobs:
         with:
           path: cache/worlds/${{ steps.set.outputs.set }}
           # world.yml's key, the same expression: a matrix of world.yml calls returns no key per set
-          key: world-${{ steps.set.outputs.set }}-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj') }}
+          key: world-${{ steps.set.outputs.set }}-${{ hashFiles('ci/gym.edn', 'ci/world-key.edn') }}
           fail-on-cache-miss: true
       - uses: actions/setup-java@v6
         with:

@@ -41,7 +41,7 @@ You never run a test locally; the PR's `unit / unit` runs them all in 2-4 minute
 | `issue.yml` | PR from `fix/*` | `check`: the issues the PR names; snapshots a PR adds are judged on base (must recur) and head (must not); plus `unit / unit` | step summary: JUDGE and STORY lines |
 | `probe.yml` | hand | one command on a branch with the sim worlds asked for | `probe-<id>`: files under `out/` |
 | `gym.yml` | hand | N trials of one goal on real servers, judged by RESULT + truth commands | recordings and logs |
-| `world.yml`, `simworld.yml` | hand when a key changes | build a landing set's world / capture sim worlds and each set's Nether once | caches |
+| `world.yml`, `simworld.yml` | hand when `ci/gym.edn` or `ci/world-key.edn` changes | build a landing set's world / capture sim worlds and each set's Nether once | caches |
 | `pages.yml` | each report | builds the results site from main over `gh-pages`'s data, adds new gym runs, deploys | Pages |
 
 - A push does not judge snapshots; a probe with `--judge` before the PR does.
