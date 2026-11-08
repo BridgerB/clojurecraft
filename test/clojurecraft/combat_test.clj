@@ -887,12 +887,13 @@
          [7 (hoglin [40.5 64.0 8.5])])
         "hostiles far past their follow range are not counted")))
 
-(deftest an-open-ground-fight-with-an-enderman-is-weighed-and-a-burrow-one-is-not
+(deftest an-enderman-fight-is-weighed-in-the-open-and-in-a-burrow-one-at-the-mouth
   ;; Logged states, sim R4/1 seeds 1 and 2 (probe wide-bo4-R4-1, issue #263): one fight at 12.9
   ;; health against an enderman that teleported in and hit for 4 through the kit (died holding 11
   ;; pearls), one at 15.9 until a second enderman came (died holding 1). Both in the open. The fight is
-  ;; weighed: the kit takes 4 a second from an enderman, 40 health is 7 swings, 4.6 s. From the burrow's end
-  ;; (:pearls/shelter) the tall one cannot enter and deals nothing.
+  ;; weighed: the kit takes 4 a second from an enderman, 40 health is 7 swings, 4.6 s. A burrow does not
+  ;; stop the hits (17 of 38 sim-18f enderman deaths on main were inside one, six hits each from one at the
+  ;; mouth): at the burrow's end (:pearls/shelter) one attacker stands at the mouth, at full damage.
   (let [angry #(assoc (mob :enderman % 40.0) :entity/creepy? true)
         one (fn [hp]
               (-> (standing {7 (angry [10.0 64.0 8.5])})
@@ -910,13 +911,16 @@
     (is (not (combat/winnable? (one 12.9) (e7 (one 12.9)))) "seed 1: 12.9, lost")
     (is (not (combat/winnable? (one 15.9) (e7 (one 15.9)))) "seed 2's first hit: 15.9, lost")
     (is (not (combat/winnable? two (e7 two))) "two angry at once: lost")
-    (is (combat/winnable? (burrow (one 12.9)) (e7 (burrow (one 12.9))))
-        "from the burrow: nothing reaches it")
-    (is (combat/winnable? (burrow two) (e7 (burrow two))) "even two")
+    (is (not (combat/winnable? (burrow (one 12.9)) (e7 (burrow (one 12.9)))))
+        "from the burrow at 12.9: the same loss, the burrow stops nothing")
+    (is (combat/winnable? (burrow two) (e7 (burrow two)))
+        "two at the burrow at full health: one at the mouth at a time, as one")
+    (is (not (combat/winnable? two (e7 two))) "the same two in the open: lost")
     (testing "the :defend row covers or backs off at once, not fights"
       (is (= :back-off (:intent/kind (plan/next-intent (one 12.9) (row :defend) plan/goals)))
           "in the open at 12.9: not a fight")
       (is (= :fight (:intent/kind (plan/next-intent (one 20.0) (row :defend) plan/goals)))
           "at full health, one: a fight")
-      (is (= :fight (:intent/kind (plan/next-intent (burrow (one 12.9)) (row :defend) plan/goals)))
-          "from the burrow: a fight"))))
+      (is (= :back-off
+             (:intent/kind (plan/next-intent (burrow (one 12.9)) (row :defend) plan/goals)))
+          "from the burrow at 12.9: not a fight either"))))

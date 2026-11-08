@@ -20,8 +20,6 @@
          :ghast {:never-fought? true}
          :enderman {:teleports? true :pumpkin-safe? true}
          :creeper {:radius 6.0}}
- ;; height of a mob's box from which it cannot enter a two-high burrow: the enderman's 2.9 (combat/winnable? counts none of its damage at the burrow's end)
- :burrow-clearance 2.5
  ;; {biome registry id extra}: the move cost a route pays for entering a cell of the biome (path/wary-cost). Ids as the captured Nether has them (probe biomes-R1): 2 basalt deltas, 7 crimson forest (where hoglins spawn: 163,000 crimson nylium blocks under it), 34 nether wastes, 49 soul sand valley, 59 warped forest
  :biome-wary {7 4.0}
  ;; blocks a hostile of no :follow in mob-kinds.edn is taken to come from

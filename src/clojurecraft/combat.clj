@@ -500,31 +500,22 @@
           [0 0.0]
           (range 4)))
 
-(def burrow-clearance
-  "Height of a mob's box from which it cannot enter a two-high burrow (threats.edn)."
-  (:burrow-clearance threat/data))
-
 (defn burrowed?
   "Does the bot stand at its burrow's end (:pearls/shelter), the cell the hunt fights from?"
   [world]
   (let [s (:pearls/shelter world)] (boolean (and s (= s (intent/feet world))))))
 
-(defn tall?
-  "Is the box of entity e's kind (mob/kinds :box) burrow-clearance or more high: an enderman's 2.9?"
-  [e]
-  (>= (double (second (get-in mob/kinds [(entity/kind e) :box] [0.0 0.0]))) burrow-clearance))
-
 (defn hostile-dps
   "Damage a second the melee hostile e deals at hand to the bot through the armour it wears: its
    melee-damage on Normal taken through worn-armour (mob/absorbed, the vanilla formula), over its
    :every ticks (a second's twenty, mob/kinds), 0.0 for a kind that has no melee hit (a ranged one,
-   an unknown one), and for a tall kind (tall?) while the bot is in its burrow (burrowed?), which it cannot enter. The iron kit takes a hoglin's 6 to 3.4, as probe rh6-R1-17 measured (3.0 to 3.3)."
+   an unknown one), enter. The iron kit takes a hoglin's 6 to 3.4, as probe rh6-R1-17 measured (3.0 to 3.3)."
   [world e]
   (let [kind (entity/kind e)
         dmg (melee-damage kind)
         every (get-in mob/kinds [kind :every] 20)
         [points toughness] (worn-armour world)]
-    (cond (or (nil? dmg) (and (burrowed? world) (tall? e))) 0.0
+    (cond (nil? dmg) 0.0
           :else (/ (mob/absorbed (double dmg) points toughness) (/ (double every) 20.0)))))
 
 (def reach-follow
@@ -544,14 +535,16 @@
   "Is the fight with entity e [eid entity] one the bot wins: the time to kill e (kill-ms) under the
    time to die, the health over the summed hostile-dps (through the armour worn) of every hostile (entity/hostiles, and e)
    that can reach the feet within the time to kill (can-reach-by?)? Pure over the world and mob
-   data; Sim R1/17 seed 1
+   data (a burrowed bot counts the one attacker at the mouth, at full damage). Sim R1/17 seed 1
    (probe rh6-R1-17, issue #263) took a fight with one hoglin at 17.5 health, a second joined in 0.75 s: 4.6 s to
    kill the first against 1.5 s to die, dead in six seconds."
   [world [eid e]]
   (let [ms (kill-ms world e)
         pool (assoc (entity/hostiles world) eid e)
-        dps
-        (reduce + 0.0 (for [[_ o] pool :when (can-reach-by? world o ms)] (hostile-dps world o)))]
+        dpss (for [[_ o] pool :when (can-reach-by? world o ms)] (hostile-dps world o))
+        ;; in a burrow one attacker at a time stands at the mouth, at full damage: the burrow is a
+        ;; place to fight from, not a wall (17 of 38 sim-18f enderman deaths on main were inside one)
+        dps (if (burrowed? world) (reduce max 0.0 dpss) (reduce + 0.0 dpss))]
     (or (zero? dps) (< ms (* 1000.0 (/ (double (:player/health world 20.0)) dps))))))
 
 (defn breathed-on?

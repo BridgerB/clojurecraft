@@ -223,7 +223,7 @@
  "clojurecraft.pearls/comment: rules, read from the game's classes (EnderMan, End"
  "   rules, read from the game's classes (EnderMan, EndermanLookForPlayerGoal, the same probe):"
  clojurecraft.combat/winnable?
- "Sim R1/17 seed 1 (probe rh6-R1-17, issue #263) fought one hoglin at 17.5 health and a second joined 0.75 s later: 4.6 s to kill against 1.5 s to die, dead in six seconds. R4/1 seeds 1 and 2 (probe wide-bo4-R4-1) died holding 11 and 1 pearls to enderman fights in the open at 12.9 and 15.9 health. The fight is weighed through the armour worn; from the burrow's end a tall mob deals nothing."
+ "Sim R1/17 seed 1 (probe rh6-R1-17, issue #263) fought one hoglin at 17.5 health and a second joined 0.75 s later: 4.6 s to kill against 1.5 s to die, dead in six seconds. R4/1 seeds 1 and 2 (probe wide-bo4-R4-1) died holding 11 and 1 pearls to enderman fights in the open at 12.9 and 15.9 health. The fight is weighed through the armour worn; a burrow stops nothing (17 of 38 sim-18f enderman deaths on main were inside one): one attacker stands at the mouth at full damage."
  clojurecraft.pearls.move/heavy-on-route?
  "Sim R1/17 seed 1 walked 40 blocks at hoglins 24 to 32 blocks off, their follow range 16, into four of them (rh6-R1-17)."
  clojurecraft.pearls.move/reach-heading
