@@ -217,9 +217,11 @@
     (is (pcover/placing? (assoc failed :time/now (+ 1000 pparams/cover-place-hold-ms 1)))
         "and after the hold, blocks may be laid again")
     (let [begun (fn [n]
-                  (reduce #(memory/remember-intention %1
-                                                      {:intent/id (+ 950 %2) :intent/kind :place}
-                                                      :started)
+                  (reduce #(-> %1
+                               (assoc :time/now (+ 1000 (* 10 %2)))
+                               (memory/remember-intention {:intent/id (+ 950 %2)
+                                                           :intent/kind :place}
+                                                          :started))
                           w
                           (range n)))]
       (is (pcover/placing? (begun (dec pparams/cover-place-max))) "a wall of two levels is laid")
