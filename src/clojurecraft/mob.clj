@@ -230,6 +230,32 @@
         d (mapv (fn [v a b] (max 0.0 (- a v) (- v b))) p lo hi)]
     (math/sqrt (reduce + (map * d d)))))
 
+(defn occupies?
+  "Does a mob of kind standing at pos (feet centre) overlap the unit cube of cell [cx cy cz]? Its
+   box is the kind's [width height] (kinds), centred on pos and resting on its y; an unknown kind
+   has a player's."
+  [kind pos [cx cy cz]]
+  (let [[w h] (:box (kinds kind) [0.6 1.8])
+        [x y z] pos
+        hw (/ w 2.0)]
+    (and (< (- x hw) (inc cx))
+         (> (+ x hw) cx)
+         (< y (inc cy))
+         (> (+ y h) cy)
+         (< (- z hw) (inc cz))
+         (> (+ z hw) cz))))
+
+(defn occupied?
+  "Is any living entity of entities (id -> entity, as :world/entities) standing in cell? A block
+   laid there is refused by the server. Drops and the dead take no room."
+  [entities cell]
+  (boolean (some (fn [e]
+                   (let [k (blocks/entity-names (:entity/type e))]
+                     (and (contains? kinds k)
+                          (not (contains? e :entity/died-at))
+                          (occupies? k (:entity/pos e) cell))))
+                 (vals entities))))
+
 (defn facing
   "[x z], the unit vector on the plane from the dragon's body toward its head for its yaw in
    degrees: EnderDragon.aiStep puts the head part at (sin yaw · 6.5, −cos yaw · 6.5) from the

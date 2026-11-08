@@ -167,6 +167,8 @@
 (def struck-health (:struck-health thresholds))
 
 (def swarm-radius (:swarm-radius thresholds))
+(def cover-place-hold-ms (:cover-place-hold-ms thresholds))
+(def cover-place-max (:cover-place-max thresholds))
 
 ; blocks from the feet within which a monster counts toward a swarm
 (def ranged-kinds
@@ -191,8 +193,6 @@
   "Hostile kinds that hit too hard to fight at hand with no burrow, whether mob/kinds holds them or
    not: a piglin's blade, a hoglin's tusks, a blaze and a ghast's fire."
   #{:piglin :piglin_brute :hoglin :zoglin :wither_skeleton :blaze :ghast :vindicator :evoker})
-
-(def neighbours [[1 0 0] [-1 0 0] [0 0 1] [0 0 -1] [0 1 0] [0 -1 0]])
 
 (def explore-memory (:explore-memory thresholds))
 
