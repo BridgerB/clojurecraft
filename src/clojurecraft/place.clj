@@ -16,6 +16,7 @@
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
             [clojurecraft.memory :as memory]
+            [clojurecraft.mob :as mob]
             [clojurecraft.packet :as packet]
             [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
@@ -514,6 +515,7 @@
                                :intent/niche at
                                :intent/child (intent/child-dig at))
           (and given (inside-player? world at) (< nudges max-nudges)) (nudge-off world nudges)
+          (and given (mob/occupied? (:world/entities world) at)) (intent/fail world :occupied)
           given (settle-at world at against face)
           at (intent/fail world :no-support)
           target (settle-at world target from :up)

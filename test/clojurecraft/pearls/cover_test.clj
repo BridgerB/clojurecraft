@@ -9,8 +9,10 @@
             [clojurecraft.intent :as intent]
             [clojurecraft.make]
             [clojurecraft.memory :as memory]
+            [clojurecraft.mob :as mob]
             [clojurecraft.pearls-support :as ps]
             [clojurecraft.pearls.cover :as pcover]
+            [clojurecraft.pearls.params :as pparams]
             [clojurecraft.pearls.sense :as psense]
             [clojurecraft.plan :as plan]
             [clojurecraft.world :as world]))
@@ -182,3 +184,35 @@
       (when-let [i (pcover/leave-sight w)]
         (is (= :cover (:intent/for i))
             "must be :cover to ensure standing-walks centres in the cell")))))
+
+(def line-floor
+  "Stone at y 64 along x 9 to 13 at z 8: cells over it have a solid neighbour to lay against."
+  (into {} (for [x (range 9 14)] [[x 64 8] ps/stone])))
+
+(deftest a-block-is-not-laid-in-a-cell-a-mob-stands-in
+  ;; the server refuses a block into a mob: four of six real fortress deaths placed again and
+  ;; again into the cell a wither skeleton stood in while hp ran out
+  (let [ghast (ps/mob :ghast [14.5 64.0 8.5])
+        open (ps/standing {7 ghast} line-floor)
+        cell (pcover/line-cell open ghast)
+        zombie (assoc (ps/mob :zombie [0 0 0])
+                      :entity/pos
+                      [(+ (first cell) 0.5) (second cell) (+ (nth cell 2) 0.5)])
+        crowded (assoc open :world/entities {7 ghast 8 zombie})
+        next-cell (pcover/line-cell crowded ghast)]
+    (is (some? cell) "a cell on the line to lay against")
+    (is (not= cell next-cell) "not the cell the mob stands in")
+    (is (not (mob/occupied? (:world/entities crowded) next-cell)))))
+
+(deftest cover-lays-no-block-again-after-a-place-failed
+  (let [w (-> (ps/standing {7 (ps/mob :ghast [14.5 64.0 8.5])} line-floor)
+              (assoc :time/now 1000)
+              (assoc-in [:player/inventory 3] (ps/item :cobblestone 64)))
+        failed (memory/remember-intention w
+                                          {:intent/id 900 :intent/kind :place :intent/wall? true}
+                                          :failed)]
+    (is (pcover/placing? w) "nothing failed: blocks may be laid")
+    (is (not (pcover/placing? failed)) "a place just failed: none now")
+    (is (not= :place (:intent/kind (pcover/cover-from failed))) "the next rung answers")
+    (is (pcover/placing? (assoc failed :time/now (+ 1000 pparams/cover-place-hold-ms 1)))
+        "and after the hold, blocks may be laid again")))

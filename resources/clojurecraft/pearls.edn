@@ -166,4 +166,7 @@
  :progress {:exit {:blocks 6.0 :ms 180000}
             :heading {:blocks 6.0 :ms 180000}
             :forest {:blocks 6.0 :ms 240000}
-            :relocate {:blocks 6.0 :ms 240000}}}
+            :relocate {:blocks 6.0 :ms 240000}}
+ ;; ms after a :place failed in which cover lays no block again: a refused block is not retried
+ ;; under fire, the next rung (dig, walk, back off, fight) answers
+ :cover-place-hold-ms 6000}

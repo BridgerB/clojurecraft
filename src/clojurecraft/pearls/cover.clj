@@ -1,6 +1,7 @@
 (ns clojurecraft.pearls.cover
   "Cover from shooters and swarms: the cell out of sight, the block between, the wall."
   (:require [clojure.math :as math]
+            [clojurecraft.avoided :as avoided]
             [clojurecraft.blaze :as blaze]
             [clojurecraft.combat :as combat]
             [clojurecraft.entity :as entity]
@@ -8,6 +9,7 @@
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.memory :as memory]
+            [clojurecraft.mob :as mob]
             [clojurecraft.path :as path]
             [clojurecraft.pearls.params :as pparams]
             [clojurecraft.pearls.place :as pplace]
@@ -38,7 +40,8 @@
   (when-let [item (filler/pick world 2)]
     (some (fn [dy]
             (when-let [c (cell-toward world to dy)]
-              (when-not (pplace/solid-or-unloaded? world c)
+              (when-not (or (pplace/solid-or-unloaded? world c)
+                            (mob/occupied? (:world/entities world) c))
                 {:intent/kind :place
                  :intent/item item
                  :intent/cell c
@@ -167,6 +170,8 @@
               (let [c (combat/cell (mapv (fn [a b] (+ a (* t (/ (- b a) d)))) eye aim))]
                 (when (and (not (own c))
                            (not (pplace/solid-or-unloaded? world c))
+                           (not (mob/occupied? (:world/entities world) c))
+                           (not (avoided/noted? world :blacklist c))
                            (some #(pplace/solid-or-unloaded? world (mapv + c %))
                                  pparams/neighbours))
                   c)))
@@ -206,6 +211,13 @@
                   {:intent/kind :dig :intent/target c :intent/for :pearls})))
             [0 1]))))
 
+(defn placing?
+  "May cover lay a block now: no :place failed within cover-place-hold-ms? A block the server
+   refuses is not tried again under fire, whether the cell or the next one: the rungs that dig,
+   walk, back off or fight answer instead."
+  [world]
+  (not (memory/failed-within? world :place pparams/cover-place-hold-ms)))
+
 (defn cover-from
   "The intent that covers the bot from the swarm: from a shooter in sight (shot-at?, never fought,
    never out-ranged) a walk to a cell beside the feet out of its sight (hide-cell; :intent/for
@@ -214,8 +226,9 @@
    anything to lay against, a block at the feet's level and one over it on its side (wall-toward:
    the line to a shooter a little above is at the head's height), else a dig into the solid side
    away from it (dig-away) to stand in; from the others what combat/cover gives for the nearest
-   (meal, a block between, a pillar, a nook dug under the feet). Nil when it only waits (cover's
-   :plan/wait ends the plan) or nothing can be done."
+   (meal, a block between, a pillar, a nook dug under the feet). No block is laid for cover-place-hold-ms
+   after a :place failed (placing?). Nil when it only waits (cover's :plan/wait ends the plan) or
+   nothing can be done."
   [world]
   (if (psense/shot-at? world)
     (when-let [[_ e] (entity/nearest (into {}
@@ -227,7 +240,8 @@
                                      (:player/pos world))]
       (let [item (filler/pick world 1)
             hide (hide-cell world e)
-            line (when item (line-cell world e))]
+            placing (placing? world)
+            line (when (and item placing) (line-cell world e))]
         (cond hide {:intent/kind :walk :intent/target hide :intent/for :cover :intent/wall? true}
               line
               {:intent/kind :place
@@ -236,9 +250,11 @@
                :intent/for :pearls
                :intent/wall? true}
               :else
-              (or (wall-toward world (:entity/pos e) [0 1])
+              (or (when placing (wall-toward world (:entity/pos e) [0 1]))
                   (dig-away world e)
                   (when-let [c (combat/nook-cell world)]
                     {:intent/kind :dig :intent/target c :intent/for :pearls})))))
     (when-let [[_ e] (entity/nearest (psense/swarm world) (:player/pos world))]
-      (let [c (combat/cover world e)] (when (:intent/kind c) (assoc c :intent/for :pearls))))))
+      (let [c (combat/cover world e)]
+        (when (and (:intent/kind c) (or (placing? world) (not= :place (:intent/kind c))))
+          (assoc c :intent/for :pearls))))))
