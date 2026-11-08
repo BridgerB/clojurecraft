@@ -474,6 +474,86 @@
           (or (empty? hits) (some nil? hits)) retreat-health
           :else (min retreat-health (+ danger-margin (reduce + hits))))))
 
+(defn weapon-damage
+  "The damage of one swing of the best sword held (sword), the hand's when none is."
+  [world]
+  (mob/weapon-damage (some->> (first (sword world))
+                              (get (:player/inventory world))
+                              :item)))
+
+(defn kill-ms
+  "Ms to kill entity e with swings of weapon-damage, swing-every apart: its health (the server's, else
+   the kind's in mob/kinds) over the damage, rounded up, times swing-every. Infinite for a target
+   of no known health."
+  [world e]
+  (if-let [hp (or (:entity/health e) (get-in mob/kinds [(entity/kind e) :health]))]
+    (* swing-every (math/ceil (/ (double hp) (double (weapon-damage world)))))
+    Double/POSITIVE_INFINITY))
+
+(defn worn-armour
+  "[points toughness] of the armour the bot wears (armour/worn over the four slots, mob/armour-points
+   summed), [0 0.0] bare."
+  [world]
+  (reduce (fn [[pt tg] n]
+            (let [[dp dt] (get mob/armour-points (armour/worn world n) [0 0.0])]
+              [(+ pt dp) (+ tg dt)]))
+          [0 0.0]
+          (range 4)))
+
+(def burrow-clearance
+  "Height of a mob's box from which it cannot enter a two-high burrow (threats.edn)."
+  (:burrow-clearance threat/data))
+
+(defn burrowed?
+  "Does the bot stand at its burrow's end (:pearls/shelter), the cell the hunt fights from?"
+  [world]
+  (let [s (:pearls/shelter world)] (boolean (and s (= s (intent/feet world))))))
+
+(defn tall?
+  "Is the box of entity e's kind (mob/kinds :box) burrow-clearance or more high: an enderman's 2.9?"
+  [e]
+  (>= (double (second (get-in mob/kinds [(entity/kind e) :box] [0.0 0.0]))) burrow-clearance))
+
+(defn hostile-dps
+  "Damage a second the melee hostile e deals at hand to the bot through the armour it wears: its
+   melee-damage on Normal taken through worn-armour (mob/absorbed, the vanilla formula), over its
+   :every ticks (a second's twenty, mob/kinds), 0.0 for a kind that has no melee hit (a ranged one,
+   an unknown one), and for a tall kind (tall?) while the bot is in its burrow (burrowed?), which it cannot enter. The iron kit takes a hoglin's 6 to 3.4, as probe rh6-R1-17 measured (3.0 to 3.3)."
+  [world e]
+  (let [kind (entity/kind e)
+        dmg (melee-damage kind)
+        every (get-in mob/kinds [kind :every] 20)
+        [points toughness] (worn-armour world)]
+    (cond (or (nil? dmg) (and (burrowed? world) (tall? e))) 0.0
+          :else (/ (mob/absorbed (double dmg) points toughness) (/ (double every) 20.0)))))
+
+(def reach-follow
+  "Blocks a hostile of no :follow in mob-kinds.edn is taken to come from (threats.edn)."
+  (:reach-follow threat/data))
+
+(defn can-reach-by?
+  "Can hostile e, walking at its mob/kinds :speed (blocks a tick), be within attack-reach of the
+   feet within ms, and is it within the range it follows from (:follow)?"
+  [world e ms]
+  (let [k (get mob/kinds (entity/kind e))
+        d (physics/distance (:player/pos world) (:entity/pos e))]
+    (and (<= d (get k :follow reach-follow))
+         (<= d (+ attack-reach (* (get k :speed 0.2) 20.0 (/ ms 1000.0)))))))
+
+(defn winnable?
+  "Is the fight with entity e [eid entity] one the bot wins: the time to kill e (kill-ms) under the
+   time to die, the health over the summed hostile-dps (through the armour worn) of every hostile (entity/hostiles, and e)
+   that can reach the feet within the time to kill (can-reach-by?)? Pure over the world and mob
+   data; Sim R1/17 seed 1
+   (probe rh6-R1-17, issue #263) took a fight with one hoglin at 17.5 health, a second joined in 0.75 s: 4.6 s to
+   kill the first against 1.5 s to die, dead in six seconds."
+  [world [eid e]]
+  (let [ms (kill-ms world e)
+        pool (assoc (entity/hostiles world) eid e)
+        dps
+        (reduce + 0.0 (for [[_ o] pool :when (can-reach-by? world o ms)] (hostile-dps world o)))]
+    (or (zero? dps) (< ms (* 1000.0 (/ (double (:player/health world 20.0)) dps))))))
+
 (defn breathed-on?
   "Does the bot stand in the dragon's breath (entity/in-breath?) in the End? A fight there is the
    bot's death: gym chain-w11 runs 3 and 4 fought an enderman inside a cloud, six health every
@@ -1002,10 +1082,16 @@
   ;; between, a pillar), never the fight under that line (#577).
   ;; A zombified piglin (pack-neutral?) is backed away from even at full health: the first swing
   ;; angers the pack (gym blaze-wall-b run 1). A wither skeleton (avoided) is fought alone and at
-  ;; avoided-health or more only.
+  ;; avoided-health or more only. In the pearl hunt a neutral mob whose fight is not winnable (winnable?: the
+  ;; time to kill against the time to die, every angry one counted, none from a burrow) is covered
+  ;; against or backed away from at once, as under the danger-line: sim R4/1 (issue #263) lost two runs
+  ;; with 11 and 1 pearls to fights in the open at 12.9 and 15.9 health.
   [world _ _]
   (when-let [[eid e] (defend-target world (threats world))]
-    (let [hurt? (< (:player/health world 20.0) (danger-line world))
+    (let [hurt? (or (< (:player/health world 20.0) (danger-line world))
+                    (and (contains? (:plan/goals world #{}) :ender-pearls)
+                         (contains? entity/neutral (entity/kind e))
+                         (not (winnable? world [eid e]))))
           shelter (when hurt? (teleport-cover world e))]
       (cond (and (not= :creeper (entity/kind e)) hurt? (back-off-pointless? world e))
             (intent/why :defend/and-not-creeper-entity-kind-e-hurt?-back-off-poi (cover world e))

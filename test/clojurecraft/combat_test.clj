@@ -6,6 +6,7 @@
             [clojure.test.check :as tc]
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]
+            [clojurecraft.armour :as armour]
             [clojurecraft.blaze]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.bytes :as b]
@@ -843,3 +844,75 @@
                                             :no-support 99500)
                                     [9 64 8]))
         "a wall with no support a moment ago: no wall")))
+
+(defn kitted
+  "w wearing the pearl kit (iron helmet, chestplate and leggings, golden boots: 14 points, as the
+   logged hoglin hits of 3.0 to 3.3 imply) and holding an iron sword."
+  [w]
+  (-> w
+      (assoc-in [:player/inventory 0] (item :iron_sword 1))
+      (assoc-in [:player/inventory (armour/worn-slot 0)] (item :iron_helmet 1))
+      (assoc-in [:player/inventory (armour/worn-slot 1)] (item :iron_chestplate 1))
+      (assoc-in [:player/inventory (armour/worn-slot 2)] (item :iron_leggings 1))
+      (assoc-in [:player/inventory (armour/worn-slot 3)] (item :golden_boots 1))))
+
+(deftest a-fight-is-taken-only-when-it-is-winnable
+  ;; Logged state, sim R1/17 seed 1 (probe rh6-R1-17, issue #263): :fight on a hoglin at 17.5 health,
+  ;; a second hoglin 2 to 3 blocks off hitting 0.75 s later, hits of 3.0 to 3.3 through the pearl kit:
+  ;; 4.6 s to kill the first, 2.6 s to die to two, dead in six seconds. The fight is judged on the time
+  ;; to kill against the time to die, the damage taken through the armour worn (the vanilla formula).
+  (let [hoglin #(mob :hoglin % 40.0)
+        one #(-> (standing {7 (hoglin [10.5 64.0 8.5])})
+                 kitted
+                 (assoc :player/health %))
+        two (-> (standing {7 (hoglin [10.5 64.0 8.5]) 8 (hoglin [8.5 64.0 11.0])})
+                kitted
+                (assoc :player/health 17.5))
+        e7 (fn [w] [7 (get-in w [:world/entities 7])])
+        zombie (kitted (standing {7 (mob :zombie [10.5 64.0 8.5] 20.0)}))]
+    (is (< 3.0 (combat/hostile-dps two (get-in two [:world/entities 7])) 3.6) "3.4 through the kit")
+    (is (> (combat/hostile-dps (standing {7 (hoglin [10.5 64.0 8.5])}) (hoglin [10.5 64.0 8.5]))
+           5.9)
+        "6 bare")
+    (is (combat/winnable? (one 20.0) (e7 (one 20.0)))
+        "the kit against one hoglin at 20: a close fight, won")
+    (is (combat/winnable? (one 17.5) (e7 (one 17.5))) "and at 17.5")
+    (is (not (combat/winnable? (one 12.0) (e7 (one 12.0)))) "and not at 12")
+    (is (not (combat/winnable? two (e7 two))) "the kit against two hoglins at 17.5: no fight")
+    (is (combat/winnable? zombie (e7 zombie)) "one zombie at 20 health: a fight")
+    (is (not (combat/winnable? (assoc zombie :player/health 2.0) (e7 zombie)))
+        "the same zombie at 2 health: no fight")
+    (is (combat/winnable?
+         (assoc two :world/entities {7 (hoglin [40.5 64.0 8.5]) 8 (hoglin [8.5 64.0 50.0])})
+         [7 (hoglin [40.5 64.0 8.5])])
+        "hostiles far past their follow range are not counted")))
+
+(deftest an-open-ground-fight-with-an-enderman-is-weighed-and-a-burrow-one-is-not
+  ;; Logged states, sim R4/1 seeds 1 and 2 (probe wide-bo4-R4-1, issue #263): one fight at 12.9
+  ;; health against an enderman that teleported in and hit for 4 through the kit (died holding 11
+  ;; pearls), one at 15.9 until a second enderman came (died holding 1). Both in the open. The fight is
+  ;; weighed: the kit takes 4 a second from an enderman, 40 health is 7 swings, 4.6 s. From the burrow's end
+  ;; (:pearls/shelter) the tall one cannot enter and deals nothing.
+  (let [angry #(assoc (mob :enderman % 40.0) :entity/creepy? true)
+        one (fn [hp]
+              (-> (standing {7 (angry [10.0 64.0 8.5])})
+                  kitted
+                  (assoc :player/health hp :plan/goals #{:ender-pearls})))
+        e7 (fn [w] [7 (get-in w [:world/entities 7])])
+        two (-> (one 20.0)
+                (assoc-in [:world/entities 8] (angry [8.5 64.0 11.0])))
+        burrow (fn [w] (assoc w :pearls/shelter (intent/feet w)))]
+    (is (combat/winnable? (one 20.0) (e7 (one 20.0))) "one at full health: won")
+    (is (not (combat/winnable? (one 12.9) (e7 (one 12.9)))) "seed 1: 12.9, lost")
+    (is (not (combat/winnable? (one 15.9) (e7 (one 15.9)))) "seed 2's first hit: 15.9, lost")
+    (is (not (combat/winnable? two (e7 two))) "two angry at once: lost")
+    (is (combat/winnable? (burrow (one 12.9)) (e7 (burrow (one 12.9))))
+        "from the burrow: nothing reaches it")
+    (is (combat/winnable? (burrow two) (e7 (burrow two))) "even two")
+    (testing "the :defend row covers or backs off at once, not fights"
+      (is (= :back-off (:intent/kind (plan/next-intent (one 12.9) (row :defend) plan/goals)))
+          "in the open at 12.9: not a fight")
+      (is (= :fight (:intent/kind (plan/next-intent (one 20.0) (row :defend) plan/goals)))
+          "at full health, one: a fight")
+      (is (= :fight (:intent/kind (plan/next-intent (burrow (one 12.9)) (row :defend) plan/goals)))
+          "from the burrow: a fight"))))
