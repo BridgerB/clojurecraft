@@ -285,3 +285,17 @@
     (is (= (window/tossable (w 36 sand) (window/view (w 36 sand) :inventory))
            (window/reserve-slot (w 36 sand) 1))
         "one free slot is what tossable asks")))
+
+(deftest a-full-inventory-with-a-loaded-cursor-throws-junk-too
+  ;; Logged state, sim R4/1 seed 1 on the stall branch (probe wide-st2-R4-1, issue #263): 36 slots
+  ;; held, building stacks beyond the filler kept among them, a stack on the cursor and no free
+  ;; slot: the craft failed :inventory-full, ending the run at minute 48 with endermen in sight. A
+  ;; stack of junk is thrown to make room for the cursor's, as when it is the grid that waits.
+  (let [sand (recipe/item-id :sand)
+        full (-> (in-play)
+                 (assoc :world/chunks {[0 0] (world/column {})}
+                        :player/on-ground? true
+                        :window/cursor {:item sand :count 1})
+                 (update :player/inventory into (for [p (range 1 36)] [p {:item sand :count 64}])))
+        [_ fx] (fx/fold step full [(tick 50) (tick 100) (tick 150)])]
+    (is (= [[(inventory/toss-click main-0) 5]] (clicks fx)) "junk thrown, the craft not failed")))
