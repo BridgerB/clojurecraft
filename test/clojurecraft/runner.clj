@@ -67,13 +67,36 @@
               (if (seq vs) (eftest/run-tests vs (assoc opts :multithread? multithread?)) {}))]
     (merge-with (fn [x y] (if (number? x) (+ x y) y)) (run alone false) (run others true))))
 
+(defn roots
+  "{var function} for every function and multimethod of the clojurecraft namespaces loaded now:
+   the roots a with-redefs may replace, taken to find one left replaced after the run."
+  []
+  (into {}
+        (for [n (all-ns)
+              :when (str/starts-with? (str (ns-name n)) "clojurecraft.")
+              [_ v] (ns-interns n)
+              :when (bound? v)
+              :let [x @v]
+              :when (or (fn? x) (instance? clojure.lang.MultiFn x))]
+          [v x])))
+
+(defn leaked
+  "The vars of before (roots) whose root is no longer the function it was: a redefinition a test
+   left in place. A report, not a verdict: instrumenting a namespace later changes roots too."
+  [before]
+  (sort-by str (for [[v x] before :when (not (identical? x @v))] v)))
+
 (defn -main
   "Run the selected tests in parallel and exit with the verdict."
   [& args]
   (let [vars (selected (parse args))
         _ (fixtures/instrument!)
+        before (roots)
         {:keys [fail error] :as result}
         (run-split vars {:report eftest.report.pretty/report :test-warn-time 60000})]
+    (when-let [vs (seq (leaked before))]
+      (println "REPLACED ROOTS after the run (a with-redefs left in place, or a later instrument):"
+               (str/join " " vs)))
     (println (str/join " "
                        (for [[k v] (select-keys result [:test :pass :fail :error :duration])]
                          (str (name k) " " v))))
