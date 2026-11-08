@@ -55,6 +55,6 @@
         with-blocks (assoc-in w [:player/inventory 9] (ps/item :cobblestone 64))]
     (is (not (combat/winnable? w [7 angry])) "lost at 12.9")
     (is (not= :fight (:intent/kind (rules/decide with-blocks)))
-        "blocks held: a cover, not the fight")
+        (str "blocks held: a cover, not the fight; the row is " (rules/row-of with-blocks)))
     (is (= :fight (:intent/kind (rules/decide w)))
         "nothing to lay, dig or eat: the fight is all there is")))

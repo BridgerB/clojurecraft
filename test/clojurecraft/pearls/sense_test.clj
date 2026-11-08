@@ -443,11 +443,12 @@
         "a calm one three off, not given up on: the burrow it is met from, as before")
     (is (= {:intent/kind :lookout :intent/for :pearls} (plan/next-intent ghost ps/row plan/goals))
         "the same one given up on (:unprovoked): no burrow for it, the hunt looks for another")
-    (is (= :fight
-           (:intent/kind (plan/next-intent (assoc-in ghost [:world/entities 7 :entity/creepy?] true)
-                                           ps/row
-                                           plan/goals)))
-        "an angry one given up on at hand is fought, as before")
+    (is
+     (= :burrow
+        (:intent/kind (plan/next-intent (assoc-in ghost [:world/entities 7 :entity/creepy?] true)
+                                        ps/row
+                                        plan/goals)))
+     "an angry one given up on at hand: a burrow where one can be dug, the open fight (the iron sword, no armour: not winnable) only where none can (sim R4/1, issue #263)")
     ;; batch pearls-warped7-a (plan run 39714009099, probe 39720871893) run 4: three endermen in
     ;; one spot 3.8 off, two blacklisted and one not; the blacklisted one nearest by a hair got
     ;; no burrow, and the walk to the other, within reach, was planned 18,760 times in fifteen
