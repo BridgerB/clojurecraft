@@ -525,18 +525,23 @@
                  (some (fn [[_ e]] (and (entity/hostile? e) (heavy? e))) sw)
                  (shot-at? world)))))
 
-(defn enderman-hit
-  "The damage one enderman hit does the bot through the armour it wears (armour/worn over the four
-   slots, mob/armour-points, mob/absorbed) of the 7 it does on Normal (mob/kinds :melee): 5.74
-   through an iron helmet and chestplate."
-  [world]
+(defn hit-through
+  "The damage a hit of damage does the bot through the armour it wears (armour/worn over the four
+   slots, mob/armour-points, mob/absorbed): 7 is 5.74 through an iron helmet and chestplate."
+  [world damage]
   (let [[points toughness] (reduce (fn [[pt tg] n]
                                      (let [[dp dt]
                                            (get mob/armour-points (armour/worn world n) [0 0.0])]
                                        [(+ pt dp) (+ tg dt)]))
                                    [0 0.0]
                                    (range 4))]
-    (mob/absorbed (:melee (mob/kinds :enderman)) points toughness)))
+    (mob/absorbed damage points toughness)))
+
+(defn enderman-hit
+  "The damage one enderman hit does the bot through the armour it wears (hit-through) of the 7 it
+   does on Normal (mob/kinds :melee): 5.74 through an iron helmet and chestplate."
+  [world]
+  (hit-through world (:melee (mob/kinds :enderman))))
 
 (defn provoke-line
   "The health under which no enderman is provoked: provoke-margin over two of its hits

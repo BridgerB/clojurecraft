@@ -1,6 +1,7 @@
 (ns clojurecraft.fortress-exit-test
   "The exit from the blaze fortress into the pearl hunt."
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
+            [clojurecraft.armour :as armour]
             [clojurecraft.blaze :as blaze]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.fixtures :as fx]
@@ -755,3 +756,65 @@
       (let [near (assoc w :player/pos [20.5 70.0 8.5])]
         (is (fexit/escape-near? near))
         (is (some? (fexit/fortress-tunnel-target near)))))))
+
+(defn- struck-on-the-way-out
+  "A bot boring out of a fortress at health hp holding sword (a name or nil) and wearing the
+   armour pieces (names), a wither skeleton at 1.4 blocks that struck it ago ms before now, and
+   skeletons more of the same at the same distance."
+  [{:keys [hp sword armour ago more] :or {hp 15.2 ago 1000 more 0}}]
+  (let [skeleton (fn [x]
+                   {:entity/type (blocks/entity-types :wither_skeleton)
+                    :entity/pos [x 60.0 -202.5]
+                    :entity/seen-at 0
+                    :entity/health 20.0})
+        spawner-pos [889 60 -206]
+        others
+        (into {} (map (fn [n] [(+ 20 n) (skeleton (+ 890.5 (* 0.3 n)))])) (range 1 (inc more)))]
+    (-> (ps/standing (assoc others 9 (skeleton 890.5)))
+        (assoc :player/dimension "minecraft:the_nether"
+               :player/pos [890.5 60.0 -203.9]
+               :player/health hp
+               :time/now 100000
+               :player/attacker 9
+               :player/struck-at (- 100000 ago))
+        (assoc-in [:player/inventory 1] (ps/item :iron_pickaxe 1))
+        (cond-> sword (assoc-in [:player/inventory 2] (ps/item sword 1)))
+        (as-> w
+          (reduce-kv (fn [w n piece]
+                       (assoc-in w [:player/inventory (armour/worn-slot n)] (ps/item piece 1)))
+                     w
+                     (vec armour)))
+        (memory/observe spawner-pos blaze/spawner)
+        (assoc :fortress/trail {:trail/target spawner-pos :trail/cells []}))))
+
+(def iron-kit [:iron_helmet :iron_chestplate :iron_leggings])
+
+(deftest a-wither-skeleton-the-bot-can-beat-is-fought-not-covered-from
+  ;; real-18 (24e4a24) Clj_r14, Clj_r02, Clj_r06: one hit under 18 health sent the old rule to cover
+  ;; (a block, a pillar, a one-block nook the tunnel interrupted), 0 swings, dead in 12-20 s
+  (let [w (struck-on-the-way-out {:sword :iron_sword :armour iron-kit})
+        i (fexit/tunnel-answer w)]
+    (is (fexit/can-beat? w 9 (get-in w [:world/entities 9])) "iron sword and iron armour at 15.2")
+    (is (= :fight (:intent/kind i)) "the skeleton is fought")
+    (is (= 9 (:intent/target i)))
+    (is (true? (:intent/hold? i)) "held where the bot stands")))
+
+(deftest a-wither-skeleton-it-cannot-beat-is-covered-from
+  (testing "no sword and no armour: twenty swings at a fist"
+    (let [i (fexit/tunnel-answer (struck-on-the-way-out {}))] (is (not= :fight (:intent/kind i)))))
+  (testing "an iron sword, no armour: three hits of six outlast 15.2"
+    (let [i (fexit/tunnel-answer (struck-on-the-way-out {:sword :iron_sword}))]
+      (is (not= :fight (:intent/kind i)))))
+  (testing "three skeletons at once, even in a kit"
+    (let [w (struck-on-the-way-out {:sword :iron_sword :armour iron-kit :more 2})]
+      (is (not (fexit/can-beat? w 9 (get-in w [:world/entities 9]))))
+      (is (not= :fight (:intent/kind (fexit/tunnel-answer w)))))))
+
+(deftest the-answer-to-a-strike-holds-between-a-skeletons-hits
+  ;; a wither skeleton strikes about every four seconds and combat/struck-ms is four: the answer
+  ;; lapsed between hits and tunnel-to took the bot back each time
+  (let [kit {:sword :iron_sword :armour iron-kit}]
+    (is (= :fight
+           (:intent/kind (fexit/tunnel-answer (struck-on-the-way-out (assoc kit :ago 6000))))))
+    (is (nil? (fexit/tunnel-answer (struck-on-the-way-out (assoc kit :ago 13000))))
+        "a strike older than strike-hold-ms is over")))
