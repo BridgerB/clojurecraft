@@ -145,7 +145,12 @@
         jumped? (and prev (:sim/on-ground? sim) (not ground?) (> y py))
         swum (if (and prev (eye-under? sim)) (physics/distance prev pos) 0.0)]
     (-> sim
-        (assoc :sim/player-pos pos :sim/on-ground? ground?)
+        (assoc :sim/player-pos pos
+               :sim/on-ground? ground?
+               :sim/fall-distance
+               (cond ground? 0.0
+                     (and prev (< y py)) (+ (:sim/fall-distance sim 0.0) (- py y))
+                     :else (:sim/fall-distance sim 0.0)))
         (cond-> jumped? (add-exhaustion (hunger/exhaustion :jump))
                 (pos? swum) (add-exhaustion (* hunger/swim-per-block swum)))
         stream)))
@@ -159,7 +164,8 @@
 
 (defmethod on-packet [:play :move-player-status-only]
   [sim {:keys [flags]}]
-  (assoc sim :sim/on-ground? (on-ground-flag? flags)))
+  (cond-> (assoc sim :sim/on-ground? (on-ground-flag? flags))
+    (on-ground-flag? flags) (assoc :sim/fall-distance 0.0)))
 
 (defmethod on-packet [:play :move-player-rot]
   [sim {:keys [yaw pitch flags]}]

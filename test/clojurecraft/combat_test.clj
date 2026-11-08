@@ -48,12 +48,34 @@
              :player/inventory {0 (item :stone_sword 1)}
              :world/entities entities)))
 
+(defn low-roof
+  "world with a block two over the head's cell, so the bot cannot jump: a 2-high burrow."
+  [world]
+  (assoc world :world/chunks {[0 0] (world/column {[8 66 8] (blocks/default-state :stone)})}))
+
 (defn fighting
-  "standing with a zombie (eid 7) d blocks east and a :fight on it running."
+  "standing with a zombie (eid 7) d blocks east and a :fight on it running, under a low roof (no
+   jump, so the swings are timed by the gap alone)."
+  [d]
+  (low-roof (assoc (standing {7 (mob :zombie [(+ 8.5 d) 64.0 8.5] 20.0)})
+                   :plan/intent
+                   {:intent/kind :fight :intent/target 7 :intent/status :active})))
+
+(defn in-the-open
+  "standing with a zombie (eid 7) d blocks east and a :fight on it, nothing over the head."
   [d]
   (assoc (standing {7 (mob :zombie [(+ 8.5 d) 64.0 8.5] 20.0)})
          :plan/intent
          {:intent/kind :fight :intent/target 7 :intent/status :active}))
+
+(defn moves
+  "[[ms packet] ...] of the movement packets (position or status) in fx."
+  [fx]
+  (filterv #(contains? #{:move-player-pos-rot :move-player-pos :move-player-status-only}
+                       (:packet/name (second %)))
+           (fx/sent fx)))
+
+(defn on-ground-flag [p] (pos? (bit-and (long (or (:flags p) 0)) 1)))
 
 (defn tick [t] {:event/kind :tick :event/now t :event/rand 0.5})
 
@@ -104,6 +126,33 @@
     (is (= [150 3400 6650] (mapv first hits)) "3250 ms apart: 13 ticks of 250 ms")
     (is (= 3250 (combat/swing-gap slow)))
     (is (= 650 (combat/swing-gap (fighting 2.0))) "a server at 20 ticks a second: as before")))
+
+(deftest a-fight-in-the-open-attacks-falling-for-the-critical-hit
+  ;; a critical hit (1.5 times the damage) wants the attacker off the ground and falling: the
+  ;; bot jumps a lead before the swing is due and attacks on the way down
+  (let [[_ fx] (fx/fold intent-step (in-the-open 2.0) (map tick (range 50 4050 50)))
+        sent (fx/sent fx)
+        before-attack (fn [i]
+                        (last (filter #(contains? #{:move-player-pos-rot :move-player-pos
+                                                    :move-player-status-only}
+                                                  (:packet/name %))
+                                      (map second (take i sent)))))
+        idx (keep-indexed (fn [i [_ p]] (when (= :attack (:packet/name p)) i)) sent)]
+    (is (seq idx) "it attacked")
+    (is (some #(< 64.0 (or (:y (second %)) 0.0)) (moves fx)) "it jumped")
+    (doseq [i idx]
+      (is (not (on-ground-flag (before-attack i))) "every attack goes out off the ground")
+      (is (= 7 (:entity-id (second (nth sent i))))))
+    (is (every? (fn [[a b]] (<= 600 (- b a))) (partition 2 1 (map first (attacks fx))))
+        "the swing gap is kept")))
+
+(deftest a-fight-under-a-low-roof-does-not-jump
+  ;; a 2-high burrow: no room for the jump, so the fight falls back to the plain swings
+  (let [[_ fx] (fx/fold intent-step (fighting 2.0) (map tick (range 50 2050 50)))]
+    (is (seq (attacks fx)) "it attacked")
+    (is (every? #(<= (:y (second %) 64.0) 64.0) (moves fx)) "it never left the floor")
+    (is (every? #(on-ground-flag (second %)) (moves fx))
+        "every movement packet says on the ground")))
 
 (deftest a-hovering-target-out-of-reach-is-pressed-in-on
   ;; issue #262: a blaze two over the floor, three off on the plane, has its aim 3.3 from the eye,

@@ -21,4 +21,6 @@
          :enderman {:teleports? true :pumpkin-safe? true}
          :creeper {:radius 6.0}}
  ;; the order combat/cover tries its measures in against a threat that no back-off helps: a meal far from it, a meal out of its reach, a block between, a pillar, a meal, a hole under the feet
+ ;; critical hits (combat/crit): jump :lead-ms before the swing is due, attack falling, attack anyway :patience-ms after it was due; :headroom clear cells over the head are needed to jump
+ :crit {:lead-ms 350 :patience-ms 600 :headroom 2}
  :cover-ladder [:far-rest :eat-out-of-reach :wall :pillar :eat :nook]}

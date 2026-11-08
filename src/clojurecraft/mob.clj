@@ -143,6 +143,16 @@
 
 (def hand-damage 1.0)                 ; the player's own attack damage attribute
 
+(def crit-factor
+  "The multiplier of a critical hit (Player.attack): the attacker falling, off the ground and not in water."
+  1.5)
+
+(defn critical?
+  "Is an attack by a player whose last movement packet said on-ground? and who has fallen fall
+   blocks since a critical hit: off the ground, falling, not in water?"
+  [on-ground? fall in-water?]
+  (boolean (and (not on-ground?) (pos? fall) (not in-water?))))
+
 (defn weapon-damage
   "The damage one hit with item id does (the attack damage attribute the item gives the player):
    a sword 4 to 8 by material, an axe 7 to 10, a pickaxe 2 to 6, a shovel 2.5 to 6.5, anything

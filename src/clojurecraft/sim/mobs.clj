@@ -285,7 +285,8 @@
               (> (mob/box-distance (physics/eye player) (:type m) (:pos m)) mob/attack-reach))
           sim
           :else
-          (let [dmg (mob/weapon-damage (held-item sim))]
+          (let [crit? (mob/critical? (:sim/on-ground? sim true) (:sim/fall-distance sim 0.0) false)
+                dmg (* (mob/weapon-damage (held-item sim)) (if crit? mob/crit-factor 1.0))]
             (-> sim
                 (add-exhaustion (hunger/exhaustion :attack))
                 wear-weapon

@@ -932,3 +932,11 @@
     (is (= [{:packet/name :rotate-head :entity-id eid :head-yaw 64}]
            (filter #(= eid (:entity-id %)) (said later :rotate-head)))
         "it looks along -x at the player, told once while the look holds")))
+
+(deftest a-critical-hit-wants-the-attacker-falling-off-the-ground-and-dry
+  (is (mob/critical? false 0.3 false) "falling")
+  (is (not (mob/critical? true 0.0 false)) "on the ground")
+  (is (not (mob/critical? false 0.0 false)) "rising: nothing fallen yet")
+  (is (not (mob/critical? false 0.3 true)) "in water")
+  (is (= 9.0 (* 1.5 (mob/weapon-damage (recipe/item-id :iron_sword))))
+      "an iron sword's 6 becomes 9"))

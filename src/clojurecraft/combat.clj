@@ -145,6 +145,33 @@
         (intent/assoc-intent :intent/next-swing (+ now (swing-gap world))
                              :intent/swings (inc (:intent/swings (:plan/intent world) 0))))))
 
+(def crit
+  "{:lead-ms :patience-ms :headroom}: how a fight lands critical hits (resources/clojurecraft/threats.edn).
+   A critical hit does 1.5 times the damage: the attacker off the ground and falling. A jump begins
+   :lead-ms before the swing is due; an attack goes out anyway :patience-ms after it was due; the
+   jump needs :headroom clear cells over the feet."
+  (:crit threat/data))
+
+(defn headroom?
+  "Are the :headroom cells over the feet's cell (the jump's rise) all clear of solids?"
+  [world]
+  (let [[fx fy fz] (intent/feet world)]
+    (every? #(not (place/solid-at? world [fx (+ fy 1 %) fz])) (range 1 (inc (:headroom crit))))))
+
+(defn crit-ready?
+  "Is the bot falling now: off the ground, fallen some blocks since it left it, not in water? The
+   server counts an attack a critical hit on those, from the last movement packet."
+  [world]
+  (mob/critical? (:player/on-ground? world)
+                 (:player/fall-distance world 0.0)
+                 (:player/in-water? world)))
+
+(defn can-jump?
+  "May the bot jump for a critical hit: standing on the ground or already airborne, not in water,
+   with headroom over it?"
+  [world]
+  (and (not (:player/in-water? world)) (headroom? world)))
+
 (defmulti fight-stage
   "Advance a :fight intent one tick in its :intent/stage (:arm :approach :engage :retreat), the
    target e alive in the world. Called only when no window-0 click is unanswered."
@@ -395,10 +422,17 @@
                (> (- now (if (pos? next-swing) (- next-swing (swing-gap world)) since))
                   (if hold? hold-timeout-ms approach-timeout-ms)))
           (intent/fail world :unreachable)
-          (and (>= now next-swing)
-               (<= (physics/distance eye (aim e)) attack-reach)
+          (and (<= (physics/distance eye (aim e)) attack-reach)
                (<= (yaw-off yaw (first (:player/look world))) aimed-within))
-          (attack world target)
+          (cond (not (can-jump? world)) (cond-> world (>= now next-swing) (attack target))
+                (and (>= now next-swing)
+                     (or (crit-ready? world) (>= now (+ next-swing (:patience-ms crit)))))
+                (attack world target)
+                (and (>= now (- next-swing (:lead-ms crit)))
+                     (:player/on-ground? world)
+                     (not (pressing? world e)))
+                (assoc-in world [:player/controls :control/jump?] true)
+                :else world)
           :else world)))
 
 (defmethod fight-stage :retreat

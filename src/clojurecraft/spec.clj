@@ -829,6 +829,7 @@
 (s/def :sim/food-timer nat-int?)                         ; ticks on the heal or starve clock
 (s/def :sim/sent-health (s/tuple number? int? boolean?)) ; health, food, saturation zero? last told
 (s/def :sim/on-ground? boolean?)                         ; the last movement packet's flag
+(s/def :sim/fall-distance number?)                      ; blocks fallen since the last on-ground packet (a critical hit wants it over 0)
 (s/def :sim/eaten nat-int?)                              ; foods the player finished eating
 (s/def :sim.eating/slot int?)
 (s/def :sim.eating/item int?)
