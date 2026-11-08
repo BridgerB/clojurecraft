@@ -36,8 +36,7 @@ jobs:
           fetch-depth: 0                # git diff between a lane's commit and main
       - name: Install Babashka
         run: |
-          curl -fsSL https://raw.githubusercontent.com/babashka/babashka/master/install -o /tmp/bb.sh
-          sudo bash /tmp/bb.sh --version 1.13.225
+          for i in 1 2 3 4 5 6; do curl -fsSL https://raw.githubusercontent.com/babashka/babashka/master/install -o /tmp/bb.sh && sudo bash /tmp/bb.sh --version 1.13.225 && break; [ "$i" = 6 ] && exit 1; sleep $((i * 15)); done
       - name: Fleet
         env:
           GH_TOKEN: ${{ github.token }}
