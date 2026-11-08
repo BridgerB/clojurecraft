@@ -54,6 +54,11 @@
    :rule/phase :leave-fortress
    :rule/when [[:not :in?] :room-exit]
    :rule/then [:fact :room-exit]}
+  ;; an angry enderman within the sword's reach is fought, not walked away from: it teleports
+  {:rule/id :hunt/fight-adjacent
+   :rule/phase :fight
+   :rule/when [:adj-id [:not :hurt?] [:not :in?]]
+   :rule/then [:intent {:intent/kind :fight :intent/target [:fact :adj-id] :intent/for :pearls}]}
   {:rule/id :hunt/walk-home
    :rule/phase :survive
    :rule/when [:home [:not :in?] :home-pressed? :home-routable?]
@@ -66,6 +71,20 @@
    :rule/phase :survive
    :rule/when [:swarmed? :in?]
    :rule/then [:fact :swarm-in-burrow]}
+  ;; hurt in the burrow with an enderman at the mouth (never fight under danger-health): one block
+  ;; toward the mouth shuts out a teleporter, then eat and wait, then dig it out
+  {:rule/id :hunt/seal-mouth
+   :rule/phase :survive
+   :rule/when [:hurt? :in? :aid-or-angry-within? [:not :sealed?] :seal-block]
+   :rule/then [:fact :seal-block]}
+  {:rule/id :hunt/heal-sealed
+   :rule/phase :survive
+   :rule/when [:in? :sealed? :healing?]
+   :rule/then [:fact :meal-or-lookout]}
+  {:rule/id :hunt/unseal-healed
+   :rule/phase :survive
+   :rule/when [:in? :sealed? [:not :healing?] :unseal]
+   :rule/then [:fact :unseal]}
   {:rule/id :hunt/hurt-in-burrow
    :rule/phase :survive
    :rule/when [:hurt? :in?]
@@ -90,6 +109,16 @@
    :rule/phase :survive
    :rule/when [:hurt? [:not :in?]]
    :rule/then [:fact :meal-or-lookout]}
+  ;; struck in the burrow above danger-health: the in-burrow twin of fight-striker
+  {:rule/id :hunt/fight-adjacent-in-burrow
+   :rule/phase :fight
+   :rule/when [:in? :adj-id [:not :hurt?]]
+   :rule/then [:intent
+               {:intent/kind :fight
+                :intent/target [:fact :adj-id]
+                :intent/hold? true
+                :intent/yield? true
+                :intent/for :pearls}]}
   {:rule/id :hunt/fight-from-burrow
    :rule/phase :fight
    :rule/when [:in? :fight-id]

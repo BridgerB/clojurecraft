@@ -66,6 +66,15 @@
    :tid (fn [f _] (first (f :threat)))
    :te (fn [f _] (second (f :threat)))
    :struck-by (fn [_ w] (psense/struck-by w))
+   :adjacent (fn [_ w] (psense/adjacent-angry w))
+   :adj-id (fn [f _] (first (f :adjacent)))
+   ;; the burrow's mouth sealed by a block laid toward it (unseal finds the solid cell), one laid
+   ;; now (a place not refused lately), and healing: health under the line to resume at
+   :sealed? (fn [f _] (boolean (and (f :mouth) (f :in?) (f :unseal))))
+   :seal-block (fn [f w]
+                 (when (and (f :mouth) (pcover/placing? w))
+                   (pcover/wall-toward w (physics/centre (f :mouth)) [0 1])))
+   :healing? (fn [_ w] (< (:player/health w 20.0) pparams/resume-hp))
    :sid (fn [f _] (first (f :struck-by)))
    :swarmed? (fn [_ w] (psense/swarmed? w))
    :cornered? (fn [f w] (and (f :near?) (f :eid) (avoided/noted? w :cornered (f :eid))))

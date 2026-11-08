@@ -273,7 +273,8 @@
 (defmethod plan/interrupts? :pearls
   ;; the trigger x exemption matrix (see plan/interrupts? for why it is not ranks). Triggers: a
   ;; blaze refuge to take, an angry enderman at hand (beset?) or near the mouth for a walk out
-  ;; (out-walk?, angry-near), the bot struck, a tunnel answer, a shot, a threat over a lookout.
+  ;; (out-walk?, angry-near), an angry enderman within the sword's reach (adjacent-angry, at the
+  ;; burrow's end too, or hurt there with one near), a tunnel answer, a shot, a threat over a lookout.
   ;; Exemptions: what answers (answers-to-hand), a wall, the walk home, the burrow's end, an eat or
   ;; fight for the refuge, and a replacement that is the same choice or a hollow pocket. The two
   ;; stale cases, a held fight gone idle and a relocation walk after the relocation, are
@@ -286,13 +287,18 @@
                 (not (:intent/wall? i))
                 (not (and (= :walk (:intent/kind i))
                           (= (:intent/target i) (:pearls/shelter world))))
-                (not= (:pearls/shelter world) (intent/feet world))
+                (or (not= (:pearls/shelter world) (intent/feet world))
+                    (some? (first (psense/adjacent-angry world)))
+                    (and (< (:player/health world 20.0) pparams/danger-health)
+                         (psense/angry-within? world pparams/hold-radius)))
                 (or (psense/beset? world)
                     (and (out-walk? world i)
                          (some? (pplace/shelter world))
                          (or (some? (psense/angry-near world))
                              (psense/angry-within? world pparams/hold-radius)))
-                    (some? (first (psense/struck-by world)))
+                    (some? (first (psense/adjacent-angry world)))
+                    (and (< (:player/health world 20.0) pparams/danger-health)
+                         (psense/angry-within? world pparams/hold-radius))
                     (some? (fexit/tunnel-answer world))
                     (psense/shot-at? world)
                     (and (= :lookout (:intent/kind i)) (some? (first (psense/threat world)))))

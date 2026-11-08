@@ -427,22 +427,28 @@
   (let [{:intent/keys [kind for status]} (:plan/last world)]
     (and (= :walk kind) (= :shelter for) (= :done status))))
 
-(defn struck-by
+(defn adjacent-angry
   "[eid e] of the nearest angry enderman (entity/creepy?) within the sword's reach (combat/in-reach?)
-   and strike-range of the feet while health is under struck-health, fought out or not, or nil.
-   One that has hit the bot and stands where the sword reaches it is fought back, never walked
-   away from."
+   and strike-range of the feet, fought out or not, or nil. One that stands where the sword reaches
+   it and is angry hits the bot next: it is fought, never walked away from (it teleports) or stood
+   before."
   [world]
-  (when (< (:player/health world 20.0) pparams/struck-health)
-    (let [pos (:player/pos world)]
-      (entity/nearest (into {}
-                            (filter (fn [[_ e]]
-                                      (and (entity/creepy? e)
-                                           (<= (physics/distance pos (:entity/pos e))
-                                               pparams/strike-range)
-                                           (combat/in-reach? world e))))
-                            (endermen (avoided/forget world :blacklist) pparams/strike-range))
-                      pos))))
+  (let [pos (:player/pos world)]
+    (entity/nearest (into {}
+                          (filter (fn [[_ e]]
+                                    (and (entity/creepy? e)
+                                         (<= (physics/distance pos (:entity/pos e))
+                                             pparams/strike-range)
+                                         (combat/in-reach? world e))))
+                          (endermen (avoided/forget world :blacklist) pparams/strike-range))
+                    pos)))
+
+(defn struck-by
+  "[eid e] of the nearest angry enderman within the sword's reach (adjacent-angry) while health is
+   under struck-health, fought out or not, or nil. One that has hit the bot and stands where the
+   sword reaches it is fought back, never walked away from."
+  [world]
+  (when (< (:player/health world 20.0) pparams/struck-health) (adjacent-angry world)))
 
 (defn swarm
   "{eid entity} of the monsters (blocks/mobs category) alive within swarm-radius of pos (the feet when
