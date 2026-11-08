@@ -240,6 +240,10 @@
            {:result r :world final})
          (finally ((:close! c)))))) ; however the run ends: a race refills the slot, so a socket left open is a leak
 
+(def known-options
+  "The options -main reads (cli/options rejects any other)."
+  #{:host :port :name :until :timeout-ms :hold-ms :events :record :commit :telemetry :chain})
+
 (defn -main
   "Connect, run until the goal, a failed plan, the deadline or a closed socket, print RESULT,
    hold for an outside judge, and exit 0 when ok else 1."
@@ -251,7 +255,7 @@
               until "wood"
               timeout-ms "120000"
               hold-ms "0"}}
-        (cli/options args)
+        (cli/options args known-options)
         queue (when (= events "stdin") (async/chan 16))
         world* (atom (game/init {:host host :port (Long/parseLong port) :name name}))
         watcher (some->> telemetry

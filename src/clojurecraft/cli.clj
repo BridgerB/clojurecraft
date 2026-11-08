@@ -7,17 +7,33 @@
 
 (set! *warn-on-reflection* true)
 
+(defn unknown-options
+  "The keys of options (a map from options) that known (a set of keywords) does not name, sorted."
+  [options known]
+  (vec (sort (remove known (keys options)))))
+
 (defn options
-  "--key value pairs → {:key \"value\"}; values stay strings, a trailing lone flag is dropped."
-  [args]
-  (into {} (map (fn [[k v]] [(keyword (subs k 2)) v])) (partition 2 args)))
+  "--key value pairs → {:key \"value\"}; values stay strings, a trailing lone flag is dropped.
+   With known, a set of the keywords an entry point reads, any other --key throws an ex-info that
+   lists the keys it knows, so a misspelt or retired option is never ignored in silence."
+  ([args] (into {} (map (fn [[k v]] [(keyword (subs k 2)) v])) (partition 2 args)))
+  ([args known]
+   (let [o (options args)
+         unknown (unknown-options o known)]
+     (when (seq unknown)
+       (throw (ex-info (str "unknown option " (str/join ", " (map #(str "--" (name %)) unknown))
+                            "; known: " (str/join " " (map #(str "--" (name %)) (sort known))))
+                       {:cli/unknown unknown :cli/known (vec (sort known))})))
+     o)))
 
 (defn split-options
-  "[options words]: the leading --key value pairs as options (see options), and every argument
-   after them, in order (a command's own words, as rcon takes them)."
-  [args]
-  (let [[flags words] (split-with (fn [[k _]] (str/starts-with? k "--")) (partition-all 2 args))]
-    [(options (apply concat flags)) (apply concat words)]))
+  "[options words]: the leading --key value pairs as options (see options, with known when given),
+   and every argument after them, in order (a command's own words, as rcon takes them)."
+  ([args] (split-options args nil))
+  ([args known]
+   (let [[flags words] (split-with (fn [[k _]] (str/starts-with? k "--")) (partition-all 2 args))]
+     [(if known (options (apply concat flags) known) (options (apply concat flags)))
+      (apply concat words)])))
 
 ;;;; I/O: stderr and other processes ;;;;
 

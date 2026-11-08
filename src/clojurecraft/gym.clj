@@ -802,6 +802,11 @@
   [dir]
   (mapv :row (located-in dir #{"result.edn"})))
 
+(def known-options
+  "The options -main reads (cli/options rejects any other), for every command."
+  #{:goals :runs :goal :run :set :plan :port :rcon-port :rcon-pass :host :out :dir :strict :landings
+    :commit :name})
+
 (defn -main
   "clojure -M:gym <command> --key value ...
      plan     --goals wood,table --runs N       the trial matrix as JSON
@@ -813,7 +818,7 @@
   (let [{:keys [goals runs goal run set plan port rcon-port rcon-pass host out dir strict landings
                 commit]
          :as opts}
-        (cli/options args)]
+        (cli/options args known-options)]
     (case command
       "plan" (println (plan-matrix (str/split goals #",") (parse-long runs)))
       "landings"

@@ -98,10 +98,14 @@
   [host port pass f]
   (let [c (connect! host port pass)] (try (f c) (finally (close! c)))))
 
+(def known-options
+  "The options -main reads before the command's own words (cli/split-options rejects any other)."
+  #{:host :port :pass})
+
 (defn -main
   "clojure -M:rcon --host H --port P --pass S <command...>"
   [& args]
-  (let [[{:keys [host port pass]} words] (cli/split-options args)
+  (let [[{:keys [host port pass]} words] (cli/split-options args known-options)
         cmd (str/join " " words)]
     (println
      (with-rcon (or host "127.0.0.1") (Long/parseLong (or port "25575")) pass #(command! % cmd)))
