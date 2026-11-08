@@ -215,7 +215,16 @@
     (is (not (pcover/placing? failed)) "a place just failed: none now")
     (is (not= :place (:intent/kind (pcover/cover-from failed))) "the next rung answers")
     (is (pcover/placing? (assoc failed :time/now (+ 1000 pparams/cover-place-hold-ms 1)))
-        "and after the hold, blocks may be laid again")))
+        "and after the hold, blocks may be laid again")
+    (let [begun (fn [n]
+                  (reduce #(memory/remember-intention %1
+                                                      {:intent/id (+ 950 %2) :intent/kind :place}
+                                                      :started)
+                          w
+                          (range n)))]
+      (is (pcover/placing? (begun (dec pparams/cover-place-max))) "a wall of two levels is laid")
+      (is (not (pcover/placing? (begun pparams/cover-place-max)))
+          "one more at the same spot is not"))))
 
 (deftest a-cell-only-a-table-supports-is-no-place-for-cover
   ;; place/support refuses a block a click opens: a cover cell it cannot click against fails

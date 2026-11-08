@@ -169,4 +169,7 @@
             :relocate {:blocks 6.0 :ms 240000}}
  ;; ms after a :place failed in which cover lays no block again: a refused block is not retried
  ;; under fire, the next rung (dig, walk, back off, fight) answers
- :cover-place-hold-ms 6000}
+ :cover-place-hold-ms 6000
+ ;; blocks cover lays within that window at most (a wall of two levels): a third is no answer to a
+ ;; ranged threat, whose fireballs a block at the same spot does not stop; the way out of its line is
+ :cover-place-max 2}

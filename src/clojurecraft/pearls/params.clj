@@ -168,6 +168,7 @@
 
 (def swarm-radius (:swarm-radius thresholds))
 (def cover-place-hold-ms (:cover-place-hold-ms thresholds))
+(def cover-place-max (:cover-place-max thresholds))
 
 ; blocks from the feet within which a monster counts toward a swarm
 (def ranged-kinds

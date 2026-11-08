@@ -215,11 +215,14 @@
             [0 1]))))
 
 (defn placing?
-  "May cover lay a block now: no :place failed within cover-place-hold-ms? A block the server
-   refuses is not tried again under fire, whether the cell or the next one: the rungs that dig,
-   walk, back off or fight answer instead."
+  "May cover lay a block now: no :place failed within cover-place-hold-ms, and fewer than
+   cover-place-max begun in it? A block the server refuses is not tried again under fire, nor one
+   more at the same spot while fireballs land: the rungs that dig, walk out of the line, back off
+   or fight answer instead."
   [world]
-  (not (memory/failed-within? world :place pparams/cover-place-hold-ms)))
+  (and (not (memory/failed-within? world :place pparams/cover-place-hold-ms))
+       (< (memory/started-count-within? world :place pparams/cover-place-hold-ms)
+          pparams/cover-place-max)))
 
 (defn cover-from
   "The intent that covers the bot from the swarm: from a shooter in sight (shot-at?, never fought,
