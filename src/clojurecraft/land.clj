@@ -637,6 +637,22 @@
                                 (+ x lava-clear-radius) (+ y 3) (+ z lava-clear-radius)])
                      " minecraft:netherrack replace minecraft:lava")))
 
+(defn interior-clear-command
+  "The RCON fill that turns the cells a bot stands and looks in at the pad [x z y] to air: the 3x3
+   round the pad from its feet to two over them, never the floor under the feet. The pad is built
+   once and landed on by every bot of its slot, so what a bot that ended there placed, or the
+   lava clear turned to netherrack, would otherwise bury the next one (in_wall damage)."
+  [[x z y]]
+  (in-dimension
+   dimension/nether
+   (str "fill " (str/join " " [(dec x) y (dec z) (inc x) (+ y 2) (inc z)]) " minecraft:air")))
+
+(defn pad-clear-commands
+  "The RCON commands run on the pad [x z y] before a bot is teleported onto it, in order: its
+   lava cleared (lava-clear-command), the cells it will stand and look in cleared (interior-clear-command)."
+  [pad]
+  [(lava-clear-command pad) (interior-clear-command pad)])
+
 (defn build-pad!
   "Build the pad [x z y] (fortress-pad-open) in the Nether with no bot: the square round it
    forceloaded and waited for, the commands, the forceload released. The first build of a Nether
@@ -813,7 +829,7 @@
     (with-loaded rc
                  [(- (first pad) lava-clear-radius) (- (second pad) lava-clear-radius)
                   (+ (first pad) lava-clear-radius) (+ (second pad) lava-clear-radius)]
-                 #(cli/log "pad lava:" (rcon/command! rc (lava-clear-command pad))))
+                 #(doseq [c (pad-clear-commands pad)] (cli/log "pad clear:" (rcon/command! rc c))))
     (cli/log "tp:" (rcon/command! rc (tp-command name pad)))
     (when (wait-in! rc name dimension/nether)
       (rcon/command! rc (str "clear " name))
