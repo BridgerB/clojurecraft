@@ -1,10 +1,12 @@
 (ns clojurecraft.pearls.move
   "The pearl hunt's movers: roam, wander, explore, travel to a forest, relocate, and the cuts out of a pocket that no walk leaves."
-  (:require [clojurecraft.avoided :as avoided]
+  (:require [clojure.math :as math]
+            [clojurecraft.avoided :as avoided]
             [clojurecraft.blaze :as blaze]
             [clojurecraft.combat :as combat]
             [clojurecraft.dimension :as dimension]
             [clojurecraft.entity :as entity]
+            [clojurecraft.fortress :as fortress]
             [clojurecraft.fortress-exit :as fexit]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
@@ -394,7 +396,7 @@
 (defn far-ends
   "Where each of the eight headings' routes (path/plan toward ground wander-reach out, from index
    start in headings) ends, as [status end gain] with gain the end's octile distance from the feet:
-   the ends roam-reach or more away and not in spent, nor within roam-reach of where one of the
+   the ends roam-reach or more away, not in spent or avoided (a walk to it failed), nor within roam-reach of where one of the
    last explore-memory walks arrived (an end near one already walked to is not new ground),
    :found first, then the farthest."
   [world start spent]
@@ -412,6 +414,7 @@
                    :when (and to
                               (not= to feet)
                               (not (contains? spent to))
+                              (not (avoided/noted? world :blacklist to))
                               (not-any? #(< (path/octile to %) pparams/roam-reach) visited))]
                [(:path/status r) to (path/octile feet to)])
         far (filter #(>= (nth % 2) pparams/roam-reach) ends)]
@@ -668,3 +671,151 @@
           (avoided/note :blacklist (:eid c2))
           (dissoc :pearls/chase))
       world)))
+
+;;;; The heading: one long way when no forest is known and every other mover finds nothing
+
+(defn leg-from
+  "The [x y z] cell heading-leg blocks ahead of feet along dir [dx dz], at the feet's own y held to
+   heading-min-y to heading-max-y (and over lava-floor)."
+  [world [fx fy fz] [dx dz]]
+  [(+ fx (* pparams/heading-leg dx))
+   (long (max (max pparams/heading-min-y (pplace/lava-floor world)) (min pparams/heading-max-y fy)))
+   (+ fz (* pparams/heading-leg dz))])
+
+(defn heading-target
+  "The leg's target [x y z] held in :pearls/heading (:target), or nil with no heading held. It is
+   held, not recomputed from the feet: a target heading-leg ahead of the feet moves at every act."
+  [world]
+  (:target (:pearls/heading world)))
+
+(defn reach-heading
+  "The sealed :tunnel-to along the held heading (:pearls/heading) toward its held leg target
+   (heading-target): a long leg, the same target at every act, for a bot in the Nether with no
+   forest known that travel, relocate, wander and the cage-break cuts find nothing for (the hunt's
+   :hunt/heading row comes after them: ahead of them it kept R4/1 from its forest, which they
+   reach in two minutes). Nil with no heading held."
+  [world]
+  (when-let [t (heading-target world)]
+    {:intent/kind :tunnel-to
+     :intent/target t
+     :intent/reach 1.5
+     :intent/steps fortress/steps-per-tunnel
+     :intent/seal-behind? true
+     :intent/for :pearls}))
+
+(defn track-seen
+  "The world with :pearls/seen, the chunk keys that have been loaded in the Nether, grown by the
+   chunks loaded now, once a second. Chunks unload as the bot moves on; the heading wants to know
+   where it has not been."
+  [world]
+  (if (and (= dimension/nether (dimension/of world)) (zero? (mod (:time/tick world 0) 20)))
+    (update world :pearls/seen (fnil into #{}) (keys (:world/chunks world)))
+    world))
+
+(defn unseen-ahead
+  "How many chunks of the seen-corridor along dir [dx dz] from the feet are not in :pearls/seen
+   nor loaded now: the ground a heading that way would cover that no one has looked at."
+  [world [dx dz]]
+  (let [[fx _ fz] (intent/feet world)
+        cx (math/floor-div (long fx) 16)
+        cz (math/floor-div (long fz) 16)
+        {:keys [near far width]} pparams/seen-corridor
+        known (:pearls/seen world #{})
+        loaded (:world/chunks world {})]
+    (count (for [d (range near (inc far))
+                 w (range (- width) (inc width))
+                 :let [k [(+ cx (* d dx) (* w (abs dz))) (+ cz (* d dz) (* w (abs dx)))]]
+                 :when (not (or (contains? known k) (contains? loaded k)))]
+             k))))
+
+(defn most-unseen-dir
+  "The first of dirs (axes [dx dz], the preferred first) with the most unseen chunks ahead
+   (unseen-ahead): a tie goes to the earlier one."
+  [world dirs]
+  (reduce (fn [best d] (if (> (unseen-ahead world d) (unseen-ahead world best)) d best))
+          (first dirs)
+          (rest dirs)))
+
+(defn reach-heading-hold
+  "The world with :pearls/heading {:dir [dx dz] :from feet :target leg-target :turns n} held while
+   the bot is in the Nether with no warped forest known: picked once, the axis with the most
+   unseen ground ahead (most-unseen-dir; a tie goes to away from the fortress, fexit/fortress-exit-dir
+   rounded to the nearer axis), its leg target kept at every act. A new leg target (leg-from, from
+   the feet) only when the feet are within heading-arrived of it; when it is avoided (a leg
+   blocked) the heading turns a quarter, to the less-seen side, first; and after heading-span
+   blocks along the heading it is picked again. Dropped once a forest is known or off the Nether.
+   The world as it was otherwise."
+  [world]
+  (let [nether? (= dimension/nether (dimension/of world))
+        h (:pearls/heading world)
+        feet (intent/feet world)
+        [x _ z] feet
+        pick (fn []
+               (let [[ex ez] (fexit/fortress-exit-dir world)
+                     away
+                     (if (>= (abs ex) (abs ez)) [(if (neg? ex) -1 1) 0] [0 (if (neg? ez) -1 1)])
+                     dir (most-unseen-dir world
+                                          (cons away (remove #{away} [[1 0] [-1 0] [0 1] [0 -1]])))]
+                 {:dir dir :from feet :target (leg-from world feet dir) :turns 0}))
+        t (:target h)]
+    (cond (or (not nether?) (seq (memory/warped-chunks world))) (dissoc world :pearls/heading)
+          (or (nil? h)
+              (> (math/sqrt (+ (math/pow (- x (first (:from h))) 2.0)
+                               (math/pow (- z (last (:from h))) 2.0)))
+                 pparams/heading-span))
+          (assoc world :pearls/heading (pick))
+          (avoided/noted? world :blacklist t)
+          (let [[dx dz] (:dir h)
+                dir (most-unseen-dir world [[(- dz) dx] [dz (- dx)]])]
+            (assoc world
+                   :pearls/heading
+                   (assoc h :dir dir :target (leg-from world feet dir) :turns (inc (:turns h)))))
+          (<= (physics/horizontal-distance feet t) pparams/heading-arrived)
+          (assoc-in world [:pearls/heading :target] (leg-from world feet (:dir h)))
+          :else world)))
+
+(defn held-class
+  "Which held target (pparams/progress) the running intent i goes to, or nil: :exit (the held exit
+   target), :heading (the heading's leg target), :relocate (a relocation's walk), :forest (any
+   other tunnel of the hunt)."
+  [world i]
+  (let [t (:intent/target i)]
+    (cond (nil? t) nil
+          (= t (:pearls/exit-target world)) :exit
+          (= t (heading-target world)) :heading
+          (and (= :walk (:intent/kind i)) (= :relocate (:intent/for i))) :relocate
+          (and (= :tunnel-to (:intent/kind i)) (= :pearls (:intent/for i))) :forest
+          :else nil)))
+
+(defn watch-progress
+  "The world with :pearls/watch {:target :best :at} kept for the running intent's held target
+   (held-class): the nearest the feet have been to it and when (targets within watch-same of each other are one:
+   the exit flipped between two cells a block apart every 350 ms for thirty minutes in sim R2/21 and each flip restarted the clock). When the feet have not come
+   (:blocks pparams/progress) nearer than that in :ms, the target is avoided (:blacklist, and for
+   the exit its [x z] column under :exit-columns), so the intent is no longer wanted (the
+   still-wanted? methods of the rows that hold a target) and the next mover takes over. One rule
+   for the exit that failed :blocked every thirty seconds for forty minutes (sim R1/17), the exit
+   and heading targets that flipped, and the forest tunnel that stood still (R2/21). The world as
+   it was with no held target running."
+  [world]
+  (let [i (:plan/intent world)
+        cls (when (= :active (:intent/status i)) (held-class world i))
+        t (:intent/target i)
+        now (:time/now world 0)
+        w (:pearls/watch world)
+        rule (pparams/progress cls)]
+    (cond (nil? cls) (dissoc world :pearls/watch)
+          (or (nil? w) (> (physics/distance t (:target w)) pparams/watch-same))
+          (assoc world
+                 :pearls/watch
+                 {:target t :best (physics/distance (intent/feet world) t) :at now})
+          :else
+          (let [d (physics/distance (intent/feet world) t)]
+            (cond (<= d (- (:best w) (:blocks rule)))
+                  (assoc world :pearls/watch {:target t :best d :at now})
+                  (>= (- now (:at w)) (:ms rule))
+                  (cond-> (-> world
+                              (avoided/note :blacklist t)
+                              (dissoc :pearls/watch))
+                    (= :exit cls) (avoided/note :exit-columns [(first t) (last t)]))
+                  :else world)))))
