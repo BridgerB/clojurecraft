@@ -2656,6 +2656,45 @@
      :intent/seal-behind? true
      :intent/for :pearls}))
 
+(def seen-corridor
+  "The chunks a heading's unexplored ground is counted in, along an axis from the feet's chunk:
+   from :near to :far chunks out, :width chunks either side. Past the view distance (6), where the
+   next forest is."
+  {:near 7 :far 16 :width 2})
+
+(defn track-seen
+  "The world with :pearls/seen, the chunk keys that have been loaded in the Nether, grown by the
+   chunks loaded now, once a second. Chunks unload as the bot moves on; the heading wants to
+   know where it has not been."
+  [world]
+  (if (and (= dimension/nether (dimension/of world)) (zero? (mod (:time/tick world 0) 20)))
+    (update world :pearls/seen (fnil into #{}) (keys (:world/chunks world)))
+    world))
+
+(defn unseen-ahead
+  "How many chunks of the seen-corridor along dir [dx dz] from the feet are not in :pearls/seen
+   nor loaded now: the ground a heading that way would cover that no one has looked at."
+  [world [dx dz]]
+  (let [[fx _ fz] (intent/feet world)
+        cx (math/floor-div (long fx) 16)
+        cz (math/floor-div (long fz) 16)
+        {:keys [near far width]} seen-corridor
+        known (:pearls/seen world #{})
+        loaded (:world/chunks world {})]
+    (count (for [d (range near (inc far))
+                 w (range (- width) (inc width))
+                 :let [k [(+ cx (* d dx) (* w (abs dz))) (+ cz (* d dz) (* w (abs dx)))]]
+                 :when (not (or (contains? known k) (contains? loaded k)))]
+             k))))
+
+(defn most-unseen-dir
+  "The first of dirs (axes [dx dz], the preferred first) with the most unseen chunks ahead
+   (unseen-ahead): a tie goes to the earlier one."
+  [world dirs]
+  (reduce (fn [best d] (if (> (unseen-ahead world d) (unseen-ahead world best)) d best))
+          (first dirs)
+          (rest dirs)))
+
 (defn reach-heading-hold
   "The world with :pearls/heading {:dir [dx dz] :from feet :target leg-target :turns n} held while
    the bot is in the Nether with no warped forest known: picked once, away from the fortress
@@ -2671,8 +2710,10 @@
         [x _ z] feet
         pick (fn []
                (let [[ex ez] (fortress-exit-dir world)
-                     dir
-                     (if (>= (abs ex) (abs ez)) [(if (neg? ex) -1 1) 0] [0 (if (neg? ez) -1 1)])]
+                     away
+                     (if (>= (abs ex) (abs ez)) [(if (neg? ex) -1 1) 0] [0 (if (neg? ez) -1 1)])
+                     dir (most-unseen-dir world
+                                          (cons away (remove #{away} [[1 0] [-1 0] [0 1] [0 -1]])))]
                  {:dir dir :from feet :target (leg-from world feet dir) :turns 0}))
         t (:target h)]
     (cond (or (not nether?) (seq (memory/warped-chunks world))) (dissoc world :pearls/heading)
@@ -2682,7 +2723,8 @@
                  heading-span))
           (assoc world :pearls/heading (pick))
           (contains? (:plan/blacklist world #{}) t)
-          (let [dir ((fn [[dx dz]] [(- dz) dx]) (:dir h))]
+          (let [[dx dz] (:dir h)
+                dir (most-unseen-dir world [[(- dz) dx] [dz (- dx)]])]
             (assoc world
                    :pearls/heading
                    (assoc h :dir dir :target (leg-from world feet dir) :turns (inc (:turns h)))))
@@ -3534,7 +3576,8 @@
                                                                               (fortress-exit-hold
                                                                                (watch-progress
                                                                                 (reach-heading-hold
-                                                                                 world))))))))))
+                                                                                 (track-seen
+                                                                                  world)))))))))))
                 (shot-at? world) (assoc :pearls/shot-at-ms (:time/now world 0))
                 (sealed-full? world) (assoc :pearls/refuge-done true))]
     (cond (or (nil? look)

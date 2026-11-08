@@ -378,6 +378,9 @@
    [:pearls/abandoned
     "columns [x z] the fortress exit's held target was given up at (no progress): the exit is over there, the heading takes over; dropped at a death"
     "pearls/watch-progress"]
+   [:pearls/seen
+    "the chunk keys [cx cz] loaded in the Nether so far, grown once a second: where the bot has looked, for the heading to turn toward the ground it has not"
+    "pearls/track-seen"]
    [:pearls/exit-target
     "the fortress tunnel-out target held until reached or failed, so the bore does not flip between targets as the feet move: [x y z], dropped once clear"
     "pearls/fortress-exit-hold"]

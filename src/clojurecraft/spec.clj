@@ -204,6 +204,7 @@
 (s/def :watch/at int?)
 (s/def :pearls/watch (s/keys :req-un [:watch/target :watch/best :watch/at]))
 (s/def :pearls/abandoned (s/coll-of (s/tuple int? int?) :kind set?))
+(s/def :pearls/seen (s/coll-of (s/tuple int? int?) :kind set?))
 (s/def :pearls/exit-target (s/tuple int? int? int?))
 (s/def :angry/since int?)
 (s/def :angry/best number?)

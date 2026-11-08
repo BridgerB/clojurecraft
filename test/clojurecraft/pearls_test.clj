@@ -4551,3 +4551,30 @@
     (is (pearls/fortress-escaping? w) "near the fortress, no forest: escaping")
     (is (pearls/in-forest? forest) "the feet are in a warped chunk")
     (is (not (pearls/fortress-escaping? forest)) "in a forest: the escape is over")))
+
+(deftest a-heading-turns-toward-ground-it-has-not-seen
+  ;; The sim worlds hold a warped forest 170 to 485 blocks from the fortress start (probe
+  ;; forest-reach2, issue #263) and the bot sees 96: moving is not searching. With the corridor
+  ;; ahead on the heading away from the fortress already seen, the heading goes where it has not
+  ;; looked; a blocked leg turns to the less-seen side.
+  (let [w (-> (standing {} {})
+              (assoc :player/dimension nether :player/pos [8.5 64.0 8.5])
+              (memory/observe [2 60 8] blaze/spawner))
+        {:keys [near far width]} pearls/seen-corridor
+        corridor (fn [[dx dz]]
+                   (set (for [d (range near (inc far))
+                              k (range (- width) (inc width))]
+                          [(+ 0 (* d dx) (* k (abs dz))) (+ 0 (* d dz) (* k (abs dx)))])))
+        away (:dir (:pearls/heading (pearls/reach-heading-hold w)))
+        seen (assoc w :pearls/seen (corridor away))
+        turned (:dir (:pearls/heading (pearls/reach-heading-hold seen)))]
+    (is (= [1 0] away) "nothing seen: away from the spawner at x 2")
+    (is (= [0 0] [(pearls/unseen-ahead seen away) 0]) "the corridor east is all seen")
+    (is (not= away turned) "the heading goes where it has not looked")
+    (is (pos? (pearls/unseen-ahead seen turned)))
+    (let [h (:pearls/heading (pearls/reach-heading-hold seen))
+          blocked (assoc seen :pearls/heading h)
+          blocked (assoc blocked :plan/blacklist #{(:target h)} :pearls/seen (corridor [0 1]))
+          sideways (:dir (:pearls/heading (pearls/reach-heading-hold blocked)))]
+      (is (contains? #{[0 1] [0 -1]} sideways) "a blocked leg turns a quarter")
+      (is (= [0 -1] sideways) "to the side with the more unseen ground"))))
