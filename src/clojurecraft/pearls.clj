@@ -1943,7 +1943,7 @@
 (defn far-ends
   "Where each of the eight headings' routes (path/plan toward ground wander-reach out, from index
    start in headings) ends, as [status end gain] with gain the end's octile distance from the feet:
-   the ends roam-reach or more away and not in spent, nor within roam-reach of where one of the
+   the ends roam-reach or more away, not in spent or :plan/blacklist (a walk to it failed), nor within roam-reach of where one of the
    last explore-memory walks arrived (an end near one already walked to is not new ground: in sim
    R1/17 under the roof, probe 42374244659, the bot shuttled for forty minutes between the two ends of
    its own tunnels, [1013 120 -205] and [1015 120 -165], with a pickaxe at 131 digs unused),
@@ -1963,6 +1963,7 @@
                    :when (and to
                               (not= to feet)
                               (not (contains? spent to))
+                              (not (contains? (:plan/blacklist world #{}) to))
                               (not-any? #(< (path/octile to %) roam-reach) visited))]
                [(:path/status r) to (path/octile feet to)])
         far (filter #(>= (nth % 2) roam-reach) ends)]
@@ -2395,10 +2396,17 @@
    fortress), however long a target has been held. A fresh target is bore-reach ahead of the feet
    and a blocked step turns the bore round, so re-derived each act it flipped between two
    targets four blocks apart for an hour of :tunnel-to, wearing the pickaxe out (sim
-   d3ce99b R1-24-1: [-188 78 163] and [-188 78 160], 620 :tunnel-to intents, no pearl)."
+   d3ce99b R1-24-1: [-188 78 163] and [-188 78 160], 620 :tunnel-to intents, no pearl). Nil too
+   when its column [x z] is one the exit was abandoned at (:pearls/abandoned, watch-progress): the
+   hunt's other movers (the held heading) take over. In sim R1/17 seed 1 (probes rh5-20 and rh5-33,
+   issue #263) :tunnel-to [938 75 -209] failed :blocked in 50 ms and was chosen again every thirty
+   seconds for forty minutes, 107 attempts by minute 20; a first failure is not the end of an exit
+   (R4/1 reached its forest through exits that failed once), so a lack of progress is."
   [world]
   (when (seq (fortress-points world))
-    (when-let [fresh (fresh-tunnel-target world)] (or (held-exit-target world) fresh))))
+    (when-let [fresh (fresh-tunnel-target world)]
+      (let [t (or (held-exit-target world) fresh)]
+        (when-not (contains? (:pearls/abandoned world #{}) [(first t) (last t)]) t)))))
 
 (defn fortress-escaping?
   "Is the bot leaving the fortress via sealed tunnel-out: inside/near the fortress,
@@ -2608,6 +2616,129 @@
           t (assoc world :pearls/exit-target t)
           :else (dissoc world :pearls/exit-target))))
 
+(def heading-leg 64) ; blocks ahead on the held heading that a reach-heading tunnel aims at
+(def heading-span 300.0) ; blocks along a heading, at most, before it is picked again
+(def heading-min-y 40) ; the heading's tunnels stay in y 40 to 90: over the lava sea, under the roof
+(def heading-max-y 90)
+
+(def heading-arrived 3.0) ; blocks from a leg's target within which the leg is over and the next is picked
+
+(defn leg-from
+  "The [x y z] cell heading-leg blocks ahead of feet along dir [dx dz], at the feet's own y held to
+   heading-min-y to heading-max-y (and over lava-floor)."
+  [world [fx fy fz] [dx dz]]
+  [(+ fx (* heading-leg dx))
+   (long (max (max heading-min-y (lava-floor world)) (min heading-max-y fy)))
+   (+ fz (* heading-leg dz))])
+
+(defn heading-target
+  "The leg's target [x y z] held in :pearls/heading (:target), or nil with no heading held. It is
+   held, not recomputed from the feet: a target heading-leg ahead of the feet moves at every act."
+  [world]
+  (:target (:pearls/heading world)))
+
+(defn reach-heading
+  "The sealed :tunnel-to along the held heading (:pearls/heading) toward its held leg target
+   (heading-target): a long leg, the same target at every act, for a bot in the Nether with no
+   forest known that explore finds no end for. Nil with no heading held. In sim R2/21 (probe
+   stall-R2-21, 42383622038) it stood caged with 131 digs and no forest, 170 to 485 blocks from
+   the nearest."
+  [world]
+  (when-let [t (heading-target world)]
+    {:intent/kind :tunnel-to
+     :intent/target t
+     :intent/reach 1.5
+     :intent/steps fortress/steps-per-tunnel
+     :intent/seal-behind? true
+     :intent/for :pearls}))
+
+(defn reach-heading-hold
+  "The world with :pearls/heading {:dir [dx dz] :from feet :target leg-target :turns n} held while
+   the bot is in the Nether with no warped forest known: picked once, away from the fortress
+   (fortress-exit-dir, rounded to the nearer axis), its leg target kept at every act. A new leg
+   target (leg-from, from the feet) only when the feet are within heading-arrived of it; when it
+   is blacklisted (a leg blocked) the heading turns a quarter first; and after heading-span blocks
+   along the heading it is picked again. Dropped once a forest is known or off the Nether. The
+   world as it was otherwise."
+  [world]
+  (let [nether? (= dimension/nether (dimension/of world))
+        h (:pearls/heading world)
+        feet (intent/feet world)
+        [x _ z] feet
+        pick (fn []
+               (let [[ex ez] (fortress-exit-dir world)
+                     dir
+                     (if (>= (abs ex) (abs ez)) [(if (neg? ex) -1 1) 0] [0 (if (neg? ez) -1 1)])]
+                 {:dir dir :from feet :target (leg-from world feet dir) :turns 0}))
+        t (:target h)]
+    (cond (or (not nether?) (seq (memory/warped-chunks world))) (dissoc world :pearls/heading)
+          (or (nil? h)
+              (> (math/sqrt (+ (math/pow (- x (first (:from h))) 2.0)
+                               (math/pow (- z (last (:from h))) 2.0)))
+                 heading-span))
+          (assoc world :pearls/heading (pick))
+          (contains? (:plan/blacklist world #{}) t)
+          (let [dir ((fn [[dx dz]] [(- dz) dx]) (:dir h))]
+            (assoc world
+                   :pearls/heading
+                   (assoc h :dir dir :target (leg-from world feet dir) :turns (inc (:turns h)))))
+          (<= (physics/horizontal-distance feet t) heading-arrived)
+          (assoc-in world [:pearls/heading :target] (leg-from world feet (:dir h)))
+          :else world)))
+
+(def progress-table
+  "{class {:blocks n :ms m}}: how much nearer a held target must bring the feet within m ms, or
+   it is given up (watch-progress). One table for every held target: the fortress exit, the heading's
+   leg, the tunnel to a forest, the relocation's walk."
+  {:exit {:blocks 6.0 :ms 180000}
+   :heading {:blocks 6.0 :ms 180000}
+   :forest {:blocks 6.0 :ms 240000}
+   :relocate {:blocks 6.0 :ms 240000}})
+
+(defn held-class
+  "Which held target (progress-table) the running intent i goes to, or nil: :exit (the held exit
+   target), :heading (the heading's leg target), :relocate (a relocation's walk), :forest (any other
+   tunnel of the hunt)."
+  [world i]
+  (let [t (:intent/target i)]
+    (cond (nil? t) nil
+          (= t (:pearls/exit-target world)) :exit
+          (= t (heading-target world)) :heading
+          (and (= :walk (:intent/kind i)) (= :relocate (:intent/for i))) :relocate
+          (and (= :tunnel-to (:intent/kind i)) (= :pearls (:intent/for i))) :forest
+          :else nil)))
+
+(defn watch-progress
+  "The world with :pearls/watch {:target :best :at} kept for the running intent's held target
+   (held-class): the nearest the feet have been to it and when. When the feet have not come
+   (:blocks progress-table) nearer than that in :ms, the intent fails :no-progress and the planner
+   blacklists its target, so the next mover takes over. The same rule for the exit that failed
+   :blocked every thirty seconds for forty minutes (sim R1/17, probes rh5-20 and rh5-33), the exit
+   and heading targets that flipped, and the forest tunnel that stood still (R2/21). The world as
+   it was with no held target running."
+  [world]
+  (let [i (:plan/intent world)
+        cls (when (= :active (:intent/status i)) (held-class world i))
+        t (:intent/target i)
+        now (:time/now world 0)
+        w (:pearls/watch world)
+        rule (progress-table cls)]
+    (cond (nil? cls) (dissoc world :pearls/watch)
+          (not= t (:target w))
+          (assoc world
+                 :pearls/watch
+                 {:target t :best (physics/distance (intent/feet world) t) :at now})
+          :else
+          (let [d (physics/distance (intent/feet world) t)]
+            (cond (<= d (- (:best w) (:blocks rule)))
+                  (assoc world :pearls/watch {:target t :best d :at now})
+                  (>= (- now (:at w)) (:ms rule))
+                  (cond-> (-> world
+                              (intent/fail :no-progress)
+                              (dissoc :pearls/watch))
+                    (= :exit cls) (update :pearls/abandoned (fnil conj #{}) [(first t) (last t)]))
+                  :else world)))))
+
 (defn fortress-exit-log
   "The world with one log line when the fortress exit choice is made or changed."
   [world]
@@ -2728,14 +2859,14 @@
                              (and (fortress-escaping? world) (not (can-tunnel-out? world)))
                              (if-let [pos (nearest-forest world)]
                                (forest-way world (room-waypoint world (update pos 1 inc)))
-                               (explore world))
+                               (or (explore world) (reach-heading world)))
                              :else
                              (if-let [pos (nearest-forest world)]
                                (forest-way world
                                            (if (near-fortress? world)
                                              (room-waypoint world (update pos 1 inc))
                                              (update pos 1 inc)))
-                               (explore world))))))
+                               (or (explore world) (reach-heading world)))))))
 
 (defn travel-caged?
   "Is the bot in the Nether, in no warped forest, with no enderman tracked, and no walk to or toward
@@ -3440,7 +3571,9 @@
                                                                             (uncovered-log
                                                                              (fortress-exit-log
                                                                               (fortress-exit-hold
-                                                                               world))))))))
+                                                                               (watch-progress
+                                                                                (reach-heading-hold
+                                                                                 world))))))))))
                 (shot-at? world) (assoc :pearls/shot-at-ms (:time/now world 0))
                 (sealed-full? world) (assoc :pearls/refuge-done true))]
     (cond (or (nil? look)

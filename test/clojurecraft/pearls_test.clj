@@ -4402,3 +4402,152 @@
     (is (= walk (pearls/tunnel-past-heavy bare walk)) "no pickaxe: the walk")
     (is (< (pearls/segment-distance [0 0 0] [10 0 0] [5 3 0]) 3.01))
     (is (> (pearls/segment-distance [0 0 0] [10 0 0] [20 0 0]) 9.99))))
+(deftest a-caged-bot-with-no-forest-known-tunnels-one-held-heading
+  ;; Logged state, sim R2/21 (probe stall-R2-21, 42383622038, issue #263): caged at [-106 59 462] with
+  ;; 131 digs, no forest known (the nearest 170 to 485 blocks off), explore nil: lookouts to the cap,
+  ;; 106 blocks from where it began. It holds one heading and tunnels long legs along it.
+  (let [netherrack (blocks/default-state :netherrack)
+        rock (into {} (for [x (range 0 16) y (range 50 70) z (range 0 16)] [[x y z] netherrack]))
+        w (-> (standing {} rock)
+              (assoc :player/dimension nether :player/pos [8.5 60.0 8.5])
+              (assoc-in [:player/inventory 1] (item :iron_pickaxe 1))
+              (memory/observe [2 60 2] blaze/spawner))
+        held (pearls/reach-heading-hold w)
+        h (:pearls/heading held)
+        i (pearls/reach-heading held)
+        moved (pearls/reach-heading-hold (assoc held :player/pos [8.5 60.0 20.5]))]
+    (is (some? h) "a heading is picked")
+    (is (= [1 0] (:dir h)) "away from the spawner at [2 60 2]")
+    (is (= :tunnel-to (:intent/kind i)))
+    (is (>= (- (first (:intent/target i)) 8) pearls/heading-leg) "a long leg along the heading")
+    (is (<= pearls/heading-min-y (second (:intent/target i)) pearls/heading-max-y))
+    (is (= h (:pearls/heading moved))
+        "the same heading and leg target at the next act, from other feet")
+    (is (= (:intent/target i) (:intent/target (pearls/reach-heading moved)))
+        "the same target from two different feet along the leg")
+    (testing "a new leg target once the feet are within 3 of it"
+      (let [near (pearls/reach-heading-hold (assoc held :player/pos [(+ 8.5 62) 60.0 8.5]))]
+        (is (= [(+ 8 62 pearls/heading-leg) 60 8] (:target (:pearls/heading near))))))
+    (testing "a blocked leg turns a quarter and goes on"
+      (let [blocked (assoc moved :plan/blacklist #{(:intent/target i)})
+            turned (:pearls/heading (pearls/reach-heading-hold blocked))]
+        (is (= [0 1] (:dir turned)) "blocked after the bot moved: the held target still matches")
+        (is (= 1 (:turns turned)))))
+    (testing "picked again after heading-span blocks"
+      (is (= [(+ 8 400) 60 8]
+             (:from (:pearls/heading (pearls/reach-heading-hold
+                                      (assoc held :player/pos [(+ 408.5) 60.0 8.5])))))))
+    (testing "dropped once a forest is known, and at a death"
+      (is (not (contains? (pearls/reach-heading-hold (memory/remember-forest
+                                                      held
+                                                      {:forest/chunk [60 60]
+                                                       :forest/kind :warped
+                                                       :forest/count 20
+                                                       :forest/pos [960 60 960]
+                                                       :forest/at 0
+                                                       :forest/dimension nether}))
+                          :pearls/heading)))
+      (is (not (contains? (game/die held) :pearls/heading))))))
+
+(deftest a-bot-above-the-climb-ceiling-with-no-mover-tunnels-down-along-its-heading
+  ;; Logged state, sim R1/17 seed 1 (probe p2facts 42402292588, issue #263): at [961 104 -144] in the
+  ;; Nether, health 20, fortress exit done, no forest known, can-tunnel-out? true, 5 hoglins 25 to 30
+  ;; blocks off. travel, explore, wander, cage-break and relocate all nil: 55 minutes of
+  ;; :hunt/else lookouts, above nether-climb-ceiling (100) where no climb or route goes. The held
+  ;; heading's leg target is held to y 90 and under, so the tunnel goes down and along.
+  (let [netherrack (blocks/default-state :netherrack)
+        pocket #{[8 104 8] [8 105 8]}
+        rock (into {}
+                   (for [x (range 0 16)
+                         y (range 80 112)
+                         z (range 0 16)
+                         :when (not (contains? pocket [x y z]))]
+                     [[x y z] netherrack]))
+        w (-> (standing {} rock)
+              (assoc :player/dimension nether :player/pos [8.5 104.0 8.5])
+              (assoc-in [:player/inventory 1] (item :iron_pickaxe 1))
+              (assoc :plan/status :active :plan/goals #{:ender-pearls} :plan/active [row]))
+        held (pearls/reach-heading-hold w)
+        i (pearls/travel held)]
+    (is (> 104 pearls/nether-climb-ceiling) "above the ceiling")
+    (is (some? (:pearls/heading held)) "a heading is held with no forest known")
+    (is (= :tunnel-to (:intent/kind i)) "the hunt's mover is the heading's tunnel")
+    (is (<= (second (:intent/target i)) pearls/heading-max-y) "down to y 90 and under")
+    (is (= i (pearls/travel (pearls/reach-heading-hold held))) "the same leg at the next act")))
+
+(deftest a-fortress-exit-whose-tunnel-failed-is-given-up
+  ;; Logged state, sim R1/17 seed 1 (probes rh5-20 and rh5-33, issue #263): :tunnel-to [938 75 -209]
+  ;; failed :blocked in 50 ms and was chosen again: 107 attempts by minute 20, a thirty-second
+  ;; :retrying wait between each, forty minutes with no intent running. A first failure is not the end
+  ;; (R4/1 reached its forest through exits that failed once); a lack of progress is: the column the
+  ;; exit was abandoned at (watch-progress) is not a target again, and the exit ends.
+  (let [w (-> (standing {})
+              (assoc :player/dimension nether :player/pos [-163.5 38.0 221.5])
+              (memory/observe [-176 70 219] blaze/spawner)
+              (memory/observe [-164 40 221] (blocks/default-state :nether_bricks))
+              (assoc-in [:player/inventory 1] (item :iron_pickaxe 1)))
+        target (pearls/fortress-tunnel-target w)
+        failed (assoc w :pearls/abandoned #{[(first target) (last target)]})
+        once (assoc w :plan/blacklist #{target})]
+    (is (some? target) "an exit target is chosen")
+    (is (pearls/fortress-escaping? w))
+    (is (some? (pearls/fortress-tunnel-target once)) "one failure: the exit goes on")
+    (is (nil? (pearls/fortress-tunnel-target failed)) "abandoned: not that column again")
+    (is (not (pearls/fortress-escaping? failed)) "the exit is over: the other movers apply")))
+
+(deftest a-far-end-a-walk-failed-toward-is-not-chosen-again
+  ;; The same bug as the exit's (issue #263, probes rh5-20 and rh5-33): a target that ignores
+  ;; :plan/blacklist is chosen again after it failed. A far end whose walk failed is left out.
+  (let [w (-> (wide (standing {}))
+              (assoc :player/dimension nether
+                     :player/inventory {0 (item :iron_sword 1) 1 (item :iron_pickaxe 1)}))
+        end (second (first (pearls/far-ends w 0 #{})))
+        failed (assoc w :plan/blacklist #{end})]
+    (is (some? end) "an open world has far ends")
+    (is (not-any? #(= end (second %)) (pearls/far-ends failed 0 #{}))
+        "the end a walk failed toward is not an end again")))
+
+(deftest a-held-target-the-feet-do-not-near-is-given-up
+  ;; One rule for every held target (progress-table), from the stalls it ends: the exit that failed
+  ;; :blocked every 30 s for forty minutes (sim R1/17, probes rh5-20 and rh5-33), the heading's leg,
+  ;; the forest tunnel that stood still at [-96 65 466] (R2/21, wide-br-R2-21) and the relocation
+  ;; shuttling between two cells. Not nearer by :blocks within :ms: the intent fails :no-progress.
+  (let [base (-> (standing {} {})
+                 (assoc :player/dimension nether :time/now 0))
+        running
+        (fn [w kind for target]
+          (assoc w
+                 :plan/intent
+                 {:intent/kind kind :intent/for for :intent/target target :intent/status :active}))
+        kinds {:exit (-> (running base :tunnel-to :pearls [8 64 -60])
+                         (assoc :pearls/exit-target [8 64 -60]))
+               :heading (-> (running base :tunnel-to :pearls [8 64 -60])
+                            (assoc :pearls/heading
+                                   {:dir [0 -1] :from [8 64 8] :target [8 64 -60] :turns 0}))
+               :forest (running base :tunnel-to :pearls [8 64 -60])
+               :relocate (running base :walk :relocate [8 64 -60])}
+        later (fn [w ms] (assoc w :time/now ms))]
+    (doseq [[kind w] kinds
+            :let [rule (pearls/progress-table kind)
+                  started (pearls/watch-progress w)
+                  waiting (pearls/watch-progress (later started (dec (:ms rule))))
+                  given-up (pearls/watch-progress (later started (:ms rule)))
+                  nearer (pearls/watch-progress (-> (later started (dec (:ms rule)))
+                                                    (assoc :player/pos
+                                                           [8.5 64.0 (- 8.5 (:blocks rule) 1.0)])))
+                  then-waiting (pearls/watch-progress (later nearer
+                                                             (+ (dec (:ms rule)) (:ms rule) -1)))]]
+      (testing (name kind)
+        (is (= kind (pearls/held-class started (:plan/intent started))) "the class of the target")
+        (is (= :active (:intent/status (:plan/intent waiting))) "within the time: kept")
+        (is (= :failed (:intent/status (:plan/intent given-up))) "not nearer in the time: failed")
+        (is (= :no-progress (:intent/reason (:plan/intent given-up))))
+        (is (not (contains? given-up :pearls/watch)))
+        (is (= :active (:intent/status (:plan/intent nearer)))
+            "nearer by the blocks: the clock restarts")
+        (is (= :active (:intent/status (:plan/intent then-waiting)))
+            "and a full time again is allowed")))
+    (is (not (contains? (pearls/watch-progress
+                         (assoc base :plan/intent {:intent/kind :lookout :intent/status :active}))
+                        :pearls/watch))
+        "no held target running: nothing watched")))

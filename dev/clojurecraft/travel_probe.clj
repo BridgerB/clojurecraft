@@ -8,10 +8,15 @@
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.pprint :as pp]
+            [clojurecraft.blocks :as blocks]
             [clojurecraft.capture :as capture]
+            [clojurecraft.fortress :as fortress]
+            [clojurecraft.intent :as intent]
             [clojurecraft.memory :as memory]
             [clojurecraft.recipe :as recipe]
+            [clojurecraft.senses :as senses]
             [clojurecraft.simrace :as simrace]
+            [clojurecraft.terrain :as terrain]
             [clojurecraft.why :as why]))
 
 (set! *warn-on-reflection* true)
@@ -33,14 +38,35 @@
 
 (defn -main
   "Play the world at file with seed from the rods checkpoint to its cap, then print the answers."
-  [file seed]
+  [file seed & [minutes]]
   (let [config (edn/read-string (slurp "ci/simrace.edn"))
         [max-ms _] (simrace/cap-max-ms config "rods" (* 60000 simrace/default-max-minutes))
+        max-ms (if minutes (* 60000 (parse-long minutes)) max-ms)
         r (simrace/run (world-of file) (parse-long seed) (:simrace/until config) max-ms)
         w (:run/end r)]
+    (io/make-parents "out/events.edn")
+    (senses/write-events! "out/events.edn" (:run/events r) 0)
     (println "RESULT" (pr-str (select-keys r [:ok :reason :run/ms :run/signature])))
     (println "POS" (pr-str (:player/pos w)))
     (println "HELD" (pr-str (recipe/counts (:player/inventory w))))
     (println "FORESTS" (pr-str (memory/warped-chunks w)))
     (pp/pprint (why/answers w))
+    (println "HELD-EXIT" (pr-str (:pearls/exit-target w)) "HEADING" (pr-str (:pearls/heading w)))
+    (println "PLAN"
+             (pr-str (select-keys w
+                                  [:plan/status :plan/attempts :plan/intent :plan/last
+                                   :plan/blacklist :plan/boxed-at :plan/wait])))
+    (let [feet (intent/feet w)
+          target (or (:pearls/exit-target w) feet)]
+      (println "REFUSALS feet" (pr-str feet) "target" (pr-str target))
+      (doseq [m (fortress/moves feet target 0)]
+        (println "MOVE" (pr-str m)
+                 "opens"
+                 (pr-str (mapv (fn [c] [c
+                                        (some-> (terrain/block-at w c)
+                                                blocks/name-of)])
+                               (fortress/opens feet m)))
+                 "lava-beside" (pr-str (fortress/lava-beside w feet m))
+                 "safe?" (pr-str (fortress/safe? w feet m))
+                 "infested" (pr-str (fortress/infested? w (mapv + feet m))))))
     (shutdown-agents)))
