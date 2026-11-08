@@ -8,28 +8,35 @@
 (defn server
   "A stand-in RCON connection ({:answer f}, no socket) and the commands it was sent, in an atom.
    Each spread puts the bot on the next of floors ([x y z] doubles); the fortress locate names
-   fortress-at ([x z]) wherever it is asked."
-  [floors fortress-at]
-  (let [sent (atom [])
-        at (atom -1)]
-    {:sent sent
-     :rc {:answer (fn [c]
-                    (swap! sent conj c)
-                    (cond (str/includes? c "run spreadplayers")
-                          (do (swap! at inc)
-                              "Spread 1 player around 0.0, 0.0 with an average distance of 1")
-                          (str/includes? c " Pos")
-                          (let [[x y z] (nth floors (min @at (dec (count floors))))]
-                            (str "Clj_t has the following entity data: [" x "d, " y "d, " z "d]"))
-                          (str/includes? c "if biome") "Test passed"
-                          (str/includes? c "cave_air") "Test failed"
-                          (str/includes? c "locate structure minecraft:fortress")
-                          (str "The nearest minecraft:fortress is at ["
-                               (first fortress-at)
-                               ", ~, "
-                               (second fortress-at)
-                               "] (30 blocks away)")
-                          :else "ok"))}}))
+   fortress-at ([x z]) wherever it is asked; mobs ({index kind-name}) are the mobs a floor has
+   within range, by the index of the spread that put the bot there (:default: every spread)."
+  ([floors fortress-at] (server floors fortress-at {}))
+  ([floors fortress-at mobs]
+   (let [sent (atom [])
+         at (atom -1)]
+     {:sent sent
+      :rc {:answer
+           (fn [c]
+             (swap! sent conj c)
+             (cond (str/includes? c "run spreadplayers")
+                   (do (swap! at inc)
+                       "Spread 1 player around 0.0, 0.0 with an average distance of 1")
+                   (str/includes? c " Pos")
+                   (let [[x y z] (nth floors (min @at (dec (count floors))))]
+                     (str "Clj_t has the following entity data: [" x "d, " y "d, " z "d]"))
+                   (str/includes? c "if biome") "Test passed"
+                   (str/includes? c "cave_air") "Test failed"
+                   (str/includes? c "if entity @e[type=")
+                   (if (str/includes? c (str "type=" (get mobs @at (get mobs :default "none"))))
+                     "Test passed"
+                     "Test failed")
+                   (str/includes? c "locate structure minecraft:fortress")
+                   (str "The nearest minecraft:fortress is at ["
+                        (first fortress-at)
+                        ", ~, "
+                        (second fortress-at)
+                        "] (30 blocks away)")
+                   :else "ok"))}})))
 
 (deftest a-forest-floor-beside-a-fortress-is-refused
   (let [{:keys [sent rc]} (server [[430.5 57.0 941.5]] [450 930])]
@@ -56,3 +63,15 @@
 (deftest no-fortress-located-is-not-near
   (let [rc {:answer (fn [_] "Could not find a minecraft:fortress within reasonable distance")}]
     (is (false? (land/fortress-near? rc [0 64 0])))))
+
+(deftest a-floor-locate-calls-clear-is-refused-when-a-fortress-mob-is-beside-it
+  ;; locate named fortresses hundreds of blocks off for landings whose bricks were beside them
+  (let [{:keys [rc]} (server [[10.5 61.0 286.5] [900.5 70.0 -300.5]]
+                             [5000 5000]
+                             {0 "minecraft:wither_skeleton"})]
+    (is (false? (land/fortress-near? rc [10 61 286])) "locate says clear")
+    (is (= [900 70 -301] (land/warped-floor! rc "Clj_t" [10 0 286]))
+        "the first floor has a wither skeleton in range and is refused; the second is taken"))
+  (let [{:keys [rc sent]} (server [[10.5 61.0 286.5]] [5000 5000] {:default "minecraft:blaze"})]
+    (is (nil? (land/warped-floor! rc "Clj_t" [10 0 286])) "a blaze in range refuses it too")
+    (is (some #(str/includes? % "type=minecraft:blaze,distance=..48") @sent))))
