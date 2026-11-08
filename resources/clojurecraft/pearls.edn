@@ -6,6 +6,9 @@
  :stare-range 64.0
  ;; Never stare nearer: an angry enderman stared at within 4 blocks teleports away
  :stare-from 6.0
+ ;; Blocks to the head past which no provoke stares: the cone of a stare narrows with distance, and
+ ;; a server's enderman past this stays calm
+ :provoke-range 36.0
  ;; Blocks from the burrow's end within which an enderman is provoked from outside the mouth
  :provoke-home-reach 3.0
  ;; Health under which no enderman is provoked from the mouth or anywhere (rests in burrow first)
@@ -53,8 +56,14 @@
  :roam-turn-ms 10000
  ;; blocks from the feet, height counted, within which an enderman is at hand (forage/strike-range: past a walk's reach)
  :strike-range 4.5
- ;; ms a provoke stares at most before the enderman says it has a target (creepy)
+ ;; ms a provoke stares at most before the enderman says it has a target (creepy), on a server at
+ ;; 20 ticks a second
  :stare-ms 3000
+ ;; Server ticks a provoke stares at most: the enderman needs the stare to hold over several of the
+ ;; server's goal passes, so on a slow server (:server/tick-ms) the stare lasts this many ticks
+ :stare-ticks 16
+ ;; ms past which no provoke stares, however slow the server
+ :stare-max-ms 8000
  ;; stairs down a burrow cuts: from the third, the ground roofs a tunnel two high
  :burrow-depth 3
  ;; tunnel steps past the stairs: two keep the bot out of an enderman's reach from the last stair
