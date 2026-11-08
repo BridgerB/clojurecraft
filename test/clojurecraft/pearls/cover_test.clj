@@ -236,3 +236,27 @@
         tables (ps/standing {7 ghast} (into {} (for [x (range 9 14)] [[x 64 8] table])))]
     (is (nil? (pcover/line-cell tables ghast)))
     (is (some? (pcover/line-cell (ps/standing {7 ghast} line-floor) ghast)) "stone it can click")))
+
+(deftest a-cell-out-of-sight-is-never-the-one-the-bot-stands-at
+  ;; real-18 (24e4a24) Clj_r11: the walk to the cell out of a blaze's sight was done as soon as it
+  ;; began (the bot stood at it, and was shot there) and was planned again every half second, the
+  ;; cover-from-swarm pillar between: the bot never moved. The cell it stands
+  ;; at is no way out of sight.
+  (let [blaze {:entity/type (blocks/entity-types :blaze)
+               :entity/pos [14.5 64.0 8.5]
+               :entity/seen-at 0
+               :entity/health 20.0}
+        stone (blocks/default-state :stone)
+        floor (into {} (for [x (range 0 16) z (range 0 16)] [[x 63 z] stone]))
+        wall (into {} (for [y (range 64 68) z (range 6 11)] [[5 y z] stone]))
+        behind (-> (ps/standing {9 blaze})
+                   (assoc :world/chunks {[0 0] (world/column (merge floor wall))}
+                          :player/pos [3.5 64.0 8.5]))
+        feet [3 64 8]]
+    (is (psense/unseen-from? behind [blaze] feet) "the bot stands out of the blaze's sight")
+    (is (not= feet (pcover/near-cover-cell behind)) "so the cell it stands at is not the answer")
+    (is (not (pcover/at-feet? behind (pcover/near-cover-cell behind))))
+    (is (nil? (pcover/out-of-sight-cell (assoc behind :plan/trail [feet])))
+        "a trail whose newest cell is the feet's has no way out")
+    (is (= [0 64 8] (pcover/out-of-sight-cell (assoc behind :plan/trail [[0 64 8] feet])))
+        "an older cell, farther off, is")))

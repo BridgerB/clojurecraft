@@ -100,17 +100,30 @@
   [world]
   (concat (reverse (:trail/cells (:fortress/trail world))) (rseq (:plan/trail world []))))
 
+(def arrived-radius
+  "Blocks from the feet's cell centre within which a walk is over (a walk for :pearls ends within
+   reach of its target): a cell this near is where the bot already is."
+  1.5)
+
+(defn at-feet?
+  "Is cell c within arrived-radius of the feet? A walk to it would end where it began and be
+   planned again: a cover that is not a move. Pure."
+  [world c]
+  (<= (physics/distance (:player/pos world) (physics/centre c)) arrived-radius))
+
 (defn out-of-sight-cell
   "The newest cell of the fortress trail (:fortress/trail, then :plan/trail) outside every blaze
    room from which no entity of shooters has a clear line to a standing eye, or nil.
    The way back out of a blaze room is the way the bot tunnelled or walked in: the race's rod bots
-   had no other walk and died in it."
+   had no other walk and died in it. Never a cell the bot stands at (at-feet?): the walk ended
+   where it began and was planned again, a blaze shooting the bot all the while."
   [world]
   (let [ss (vals (psense/shooters world))
         boxes (room-boxes world)]
     (when (seq ss)
       (->> (trail-cells world)
            (remove #(in-room? boxes %))
+           (remove #(at-feet? world %))
            (filter #(psense/unseen-from? world ss %))
            first))))
 
@@ -118,7 +131,7 @@
   "The nearest cell within cover-reach (the plane, two up or down) that the feet could stand on
    (path/standable?) and that no entity of shooters has a clear line to, or nil: the way out of a
    shooter's sight when the trail has no cell for it (a bot that tunnelled in a different way,
-   or a trail reset by another tunnel)."
+   or a trail reset by another tunnel). Never one the bot stands at (at-feet?)."
   [world]
   (let [ss (vals (psense/shooters world))
         feet (intent/feet world)
@@ -129,6 +142,7 @@
                  dy (range -2 3)]
              [(+ fx dx) (+ fy dy) (+ fz dz)])
            (filter #(path/standable? world %))
+           (remove #(at-feet? world %))
            (sort-by #(path/octile feet %))
            (filter #(psense/unseen-from? world ss %))
            first))))
