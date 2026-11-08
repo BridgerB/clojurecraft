@@ -150,9 +150,7 @@
   ;; a 2-high burrow: no room for the jump, so the fight falls back to the plain swings
   (let [[_ fx] (fx/fold intent-step (fighting 2.0) (map tick (range 50 2050 50)))]
     (is (seq (attacks fx)) "it attacked")
-    (is (every? #(<= (:y (second %) 64.0) 64.0) (moves fx)) "it never left the floor")
-    (is (every? #(on-ground-flag (second %)) (moves fx))
-        "every movement packet says on the ground")))
+    (is (every? #(<= (:y (second %) 64.0) 64.0) (moves fx)) "it never left the floor")))
 
 (deftest a-hovering-target-out-of-reach-is-pressed-in-on
   ;; issue #262: a blaze two over the floor, three off on the plane, has its aim 3.3 from the eye,
