@@ -18,9 +18,11 @@
    floor nor clear, so routes go around them. Nothing here reads a clock or the atom."
   (:require [clojure.math :as math]
             [clojurecraft.blocks :as blocks]
+            [clojurecraft.chunk :as chunk]
             [clojurecraft.memo :as memo]
             [clojurecraft.physics :as physics]
-            [clojurecraft.terrain :as terrain]))
+            [clojurecraft.terrain :as terrain]
+            [clojurecraft.threat :as threat]))
 
 (set! *warn-on-reflection* true)
 
@@ -404,17 +406,24 @@
    Modest, so a route still crosses one when there is no other way."
   {:crimson_nylium 1.0 :crimson_fungus 1.0 :crimson_roots 1.0 :nether_wart_block 1.0})
 
+(def biome-wary
+  "{biome registry id extra}: the move cost added for entering a cell whose biome is one a route
+   would rather go round (resources/clojurecraft/threats.edn :biome-wary): the crimson forest, id 7,
+   where hoglins spawn. The biome of every loaded chunk is known before a block of its floor is seen."
+  (:biome-wary threat/data))
+
 (def wary-states
   "The state ids of wary-extra's blocks, to the extra cost."
   (into {} (for [[k extra] wary-extra s (blocks/states-of k)] [s extra])))
 
 (defn wary-cost
   "The extra move cost of entering [x y z]: the larger of the floor block's and the cell's own
-   wary-states entry, 0.0 when neither is in wary-extra. Nil blocks (unloaded) cost nothing, and a world with no chunks (the End's void in a test) costs nothing."
+   wary-states entry, 0.0 when neither is in wary-extra, plus its biome's biome-wary entry. Nil blocks (unloaded) cost nothing, and a world with no chunks (the End's void in a test) costs nothing."
   [world [x y z]]
   (if (:world/chunks world)
-    (max (get wary-states (terrain/block-at world [x (dec y) z]) 0.0)
-         (get wary-states (terrain/block-at world [x y z]) 0.0))
+    (+ (max (get wary-states (terrain/block-at world [x (dec y) z]) 0.0)
+            (get wary-states (terrain/block-at world [x y z]) 0.0))
+       (get biome-wary (chunk/biome-at (:world/chunks world) [x y z]) 0.0))
     0.0))
 
 (def lava-trap-reach 4)                ; cells on the plane round a lava trap's column a mine leaves alone
