@@ -688,20 +688,51 @@
   [world]
   (:target (:pearls/heading world)))
 
+(defn open-safe?
+  "Is the open safe to walk in: no ghast or blaze in sight (psense/shot-at?) or lately
+   (recently-shot?), no heavy hostile tracked (psense/heavy?: a hoglin, a piglin, a wither
+   skeleton), and health at or over danger-health? The hunt's own threat facts, nothing new."
+  [world]
+  (and (not (psense/shot-at? world))
+       (not (psense/recently-shot? world))
+       (not-any? (fn [[_ e]] (psense/heavy? e)) (entity/hostiles world))
+       (>= (:player/health world 20.0) pparams/danger-health)))
+
+(defn heading-walk
+  "A :walk along the held heading, or nil: when the open is safe (open-safe?) and a route (path/plan
+   within the :far budget, the roam-goal of heading-leg blocks along :dir) reaches ground
+   roam-reach or more out, the walk to the end of that route. A walk makes 150 to 170 blocks a
+   minute, a tunnel 22 to 35: R1/17's nearest forest is 903 blocks out, which no tunnel reaches in an
+   hour (measurement of main and pearl-reach, issue #263). Nil on no route or an unsafe open, so
+   reach-heading falls back to the sealed tunnel."
+  [world]
+  (when-let [{:keys [dir]} (:pearls/heading world)]
+    (when (open-safe? world)
+      (let [feet (intent/feet world)
+            r (path/plan world
+                         (path/feet-cell (:player/pos world))
+                         (roam-goal feet dir pparams/heading-leg)
+                         {:path/max-nodes (path/budget :far)})
+            to (last (:path/waypoints r))]
+        (when (and to (not= to feet) (>= (path/octile feet to) pparams/roam-reach))
+          {:intent/kind :walk :intent/target to :intent/for :pearls})))))
+
 (defn reach-heading
-  "The sealed :tunnel-to along the held heading (:pearls/heading) toward its held leg target
+  "A walk along the held heading when one is safe and has a route (heading-walk), else the sealed
+   :tunnel-to toward its held leg target
    (heading-target): a long leg, the same target at every act, for a bot in the Nether with no
    forest known that travel, relocate, wander and the cage-break cuts find nothing for (the hunt's
    :hunt/heading row comes after them: ahead of them it kept R4/1 from its forest, which they
    reach in two minutes). Nil with no heading held."
   [world]
   (when-let [t (heading-target world)]
-    {:intent/kind :tunnel-to
-     :intent/target t
-     :intent/reach 1.5
-     :intent/steps fortress/steps-per-tunnel
-     :intent/seal-behind? true
-     :intent/for :pearls}))
+    (or (heading-walk world)
+        {:intent/kind :tunnel-to
+         :intent/target t
+         :intent/reach 1.5
+         :intent/steps fortress/steps-per-tunnel
+         :intent/seal-behind? true
+         :intent/for :pearls})))
 
 (defn track-seen
   "The world with :pearls/seen, the chunk keys that have been loaded in the Nether, grown by the

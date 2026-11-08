@@ -9,7 +9,9 @@
             [clojurecraft.fixtures :as fx]
             [clojurecraft.fortress-exit :as fexit]
             [clojurecraft.game :as game]
+            [clojurecraft.intent :as intent]
             [clojurecraft.memory :as memory]
+            [clojurecraft.path :as path]
             [clojurecraft.pearls-support :as ps]
             [clojurecraft.pearls.move :as pmove]
             [clojurecraft.pearls.params :as pparams]
@@ -236,3 +238,25 @@
     (is (avoided/noted? late :exit-columns [8 -60]))
     (is (fexit/given-up-column? late [7 64 -60]) "the neighbouring cell is that column too")
     (is (not (fexit/given-up-column? late [20 64 -60])) "a column far off is not")))
+
+(deftest a-heading-walks-on-open-ground-and-tunnels-where-the-open-is-not-safe
+  ;; A walk makes 150 to 170 blocks a minute and a tunnel 22 to 35 (measurement of main and
+  ;; pearl-reach on R1/17 and R2/21, issue #263); R1/17's nearest forest is 903 blocks out. The
+  ;; heading walks when a route runs along it and the open is safe, and tunnels otherwise.
+  (let [w (-> (ps/wide (ps/standing {} {}))
+              (assoc :player/dimension ps/nether)
+              (assoc-in [:player/inventory 1] (ps/item :iron_pickaxe 1))
+              (memory/observe [2 60 8] blaze/spawner))
+        held (pmove/reach-heading-hold w)
+        hoglin (assoc-in held [:world/entities 7] (ps/mob :hoglin [20.5 64.0 8.5]))
+        hurt (assoc held :player/health 5.0)]
+    (is (= [1 0] (:dir (:pearls/heading held))) "east, away from the spawner")
+    (is (= :walk (:intent/kind (pmove/reach-heading held))) "open floor: a walk")
+    (is (>= (path/octile (intent/feet held) (:intent/target (pmove/reach-heading held)))
+            pparams/roam-reach)
+        "to ground well along the heading")
+    (is (= :tunnel-to (:intent/kind (pmove/reach-heading hoglin)))
+        "a heavy mob in sight: the sealed tunnel")
+    (is (= :tunnel-to (:intent/kind (pmove/reach-heading hurt))) "hurt: the sealed tunnel")
+    (is (not (pmove/open-safe? hoglin)))
+    (is (pmove/open-safe? held))))
