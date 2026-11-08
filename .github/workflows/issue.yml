@@ -151,8 +151,7 @@ jobs:
       - name: Install the Clojure CLI
         if: steps.which.outputs.files != ''
         run: |
-          curl -fsSL https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh -o /tmp/clj.sh
-          sudo bash /tmp/clj.sh
+          for i in 1 2 3 4 5 6; do curl -fsSL https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh -o /tmp/clj.sh && sudo bash /tmp/clj.sh && break; [ "$i" = 6 ] && exit 1; sleep $((i * 15)); done
       - uses: actions/cache@v6
         if: steps.which.outputs.files != ''
         with:
