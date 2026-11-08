@@ -1144,6 +1144,12 @@
       (println "SIMRACE" (pr-str (tally runs))))
     (shutdown-agents)))
 
+(def known-options
+  "The options -main reads (cli/options rejects any other): the runs' own, the three jobs (--judge with --expect, --from-landing, --from-recording with the snapshot's --signature, --name, --round, --bot), and --start."
+  #{:worlds :world :runs :seed :seeds :until :threads :out :runner :runners :commit :max-minutes
+    :budget-minutes :food :start :judge :expect :from-landing :from-recording :signature :name
+    :round :bot})
+
 (defn -main
   "Play the worlds under --worlds (directories, comma-separated; this runner's share of them with
    --runner k --runners n) on --threads threads (the cores when absent): each world with seeds
@@ -1165,7 +1171,7 @@
    (real/from-recordings!: --signature, --out, --name n1,n2, --seed, --round), each kept only when
    it recurs."
   [& args]
-  (let [o (cli/options args)]
+  (let [o (cli/options args known-options)]
     (cond (get o :judge)
           (let [results (mapv judge! (str/split (get o :judge) #","))
                 expect (get o :expect)
