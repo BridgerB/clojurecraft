@@ -300,12 +300,22 @@
   (let [solid? (terrain/solid-fn world)] (fn [[x y z]] (solid? x y z))))
 
 (defn provokable?
-  "Can a stare from where the bot stands provoke enderman e: its head within stare-range of the
+  "Can a stare from where the bot stands provoke enderman e: its head within provoke-range of the
    eye and no nearer than stare-from, with a clear line to it?"
   [world e]
   (let [eye (game/eye world)
         d (physics/distance eye (head e))]
-    (and (<= pparams/stare-from d pparams/stare-range) (mob/sight? (sight-fn world) eye (head e)))))
+    (and (<= pparams/stare-from d pparams/provoke-range)
+         (mob/sight? (sight-fn world) eye (head e)))))
+
+(defn stare-budget
+  "The ms a provoke stares at most in world: stare-ms on a server at 20 ticks a second, and
+   stare-ticks of the server's own ticks (:server/tick-ms, as game reads them) when that is
+   longer, never past stare-max-ms. The enderman turns once the stare has held over its goal
+   passes, which a slow server spaces further apart."
+  [world]
+  (let [tick (:server/tick-ms world game/server-tick-ms)]
+    (long (min pparams/stare-max-ms (max pparams/stare-ms (* pparams/stare-ticks tick))))))
 
 (defn reaches?
   "Can enderman e reach cell to on foot: within danger-radius (16 blocks: past 16 it teleports,

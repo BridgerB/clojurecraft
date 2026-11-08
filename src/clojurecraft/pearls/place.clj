@@ -51,7 +51,7 @@
           (-> world
               (assoc :player/controls (psense/look-at world (combat/aim e)))
               intent/done)
-          (> (- now (:intent/since i)) pparams/stare-ms)
+          (> (- now (:intent/since i)) (psense/stare-budget world))
           (-> world
               (assoc :player/controls {})
               (intent/fail :unprovoked))
