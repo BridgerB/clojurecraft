@@ -273,8 +273,9 @@
 (defmethod plan/interrupts? :pearls
   ;; the trigger x exemption matrix (see plan/interrupts? for why it is not ranks). Triggers: a
   ;; blaze refuge to take, an angry enderman at hand (beset?) or near the mouth for a walk out
-  ;; (out-walk?, angry-near), the enderman that just hit the bot in the sword's reach (struck-adjacent,
-  ;; at the burrow's end too, or hurt there with one near), a tunnel answer, a shot, a threat over a lookout.
+  ;; (out-walk?, angry-near), the bot struck (struck-by), the enderman that just hit it in the
+  ;; sword's reach (struck-adjacent: at the burrow's end too, or hurt there with one near), a tunnel
+  ;; answer, a shot, a threat over a lookout.
   ;; Exemptions: what answers (answers-to-hand), a wall, the walk home, the burrow's end, an eat or
   ;; fight for the refuge, and a replacement that is the same choice or a hollow pocket. The two
   ;; stale cases, a held fight gone idle and a relocation walk after the relocation, are
@@ -288,6 +289,7 @@
                 (not (and (= :walk (:intent/kind i))
                           (= (:intent/target i) (:pearls/shelter world))))
                 (or (not= (:pearls/shelter world) (intent/feet world))
+                    (some? (first (psense/struck-by world)))
                     (some? (first (psense/struck-adjacent world)))
                     (and (< (:player/health world 20.0) pparams/danger-health)
                          (psense/angry-within? world pparams/hold-radius)))
