@@ -545,17 +545,23 @@
           (is (nil? (:pearls/chase tracked))))))))
 
 (deftest the-fortress-exit-never-searches-routes
-  ;; explore's eight route searches ran in every fortress-exit-dir, several a tick through
-  ;; fortress-escaping?, and froze real rod bots 2 to 19 s a tick (Clj_r08, lane 42202999306
-  ;; b1, profile probe 42210270571): the exit is away from the spawner with no search
+  ;; the exit is away from the spawner by geometry alone: a route search (explore's, eight of them
+  ;; in every fortress-exit-dir, several a tick through fortress-escaping?) froze real rod bots for
+  ;; seconds a tick. Its answer must not depend on the terrain a search would find, and the
+  ;; namespace must not name the searches
   (let [w (-> (ps/standing {})
               (assoc :player/dimension "minecraft:the_nether" :player/pos [120.5 59.0 100.5])
               (assoc-in [:player/inventory 1] (ps/item :iron_pickaxe 1))
-              (memory/observe [100 64 100] blaze/spawner))]
-    (with-redefs [pmove/explore (fn [_] (throw (ex-info "searched" {})))
-                  pmove/far-ends (fn [& _] (throw (ex-info "searched" {})))]
-      (is (= [1.0 0.0] (fexit/fortress-exit-dir w)) "away from the spawner, east")
-      (is (fexit/fortress-escaping? w)))))
+              (memory/observe [100 64 100] blaze/spawner))
+        open-north (update w
+                           :world/chunks
+                           into
+                           (for [cx (range 4 9) cz (range -3 7)] [[cx cz] (world/column {})]))]
+    (is (= [1.0 0.0] (fexit/fortress-exit-dir w)) "away from the spawner, east")
+    (is (= [1.0 0.0] (fexit/fortress-exit-dir open-north)) "whatever ground lies round it")
+    (is (fexit/fortress-escaping? w))
+    (is (not (re-find #"pmove/(explore|far-ends)" (slurp "src/clojurecraft/fortress_exit.clj")))
+        "the exit asks neither of the route searches")))
 
 (deftest the-way-to-a-forest-no-walk-reaches-is-a-sealed-tunnel
   ;; real-18 Clj_r09 (4f317da lane 8): boxed in, eleven walks to one forest in four seconds, each
