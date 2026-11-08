@@ -54,7 +54,9 @@
           (:window/cursor world)
           (if-let [s (window/free-slot world v)]
             (window/click world v (inventory/left-click s))
-            (intent/fail world :inventory-full))
+            (if-let [p (window/tossable world v)]
+              (window/toss world v p)
+              (intent/fail world :inventory-full)))
           (window/tossable world v) (window/toss world v (window/tossable world v))
           (dirty-grid-slot v) (window/click world v (inventory/shift-click (dirty-grid-slot v)))
           :else
