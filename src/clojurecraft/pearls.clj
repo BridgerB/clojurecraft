@@ -2639,7 +2639,9 @@
 (defn reach-heading
   "The sealed :tunnel-to along the held heading (:pearls/heading) toward its held leg target
    (heading-target): a long leg, the same target at every act, for a bot in the Nether with no
-   forest known that explore finds no end for. Nil with no heading held. In sim R2/21 (probe
+   forest known that explore, wander, relocate and the cage-break cuts find nothing for (the hunt's
+   heading-walk comes after them: ahead of them it kept R4/1 from its forest, which they reach in
+   two minutes, wide set 2). Nil with no heading held. In sim R2/21 (probe
    stall-R2-21, 42383622038) it stood caged with 131 digs and no forest, 170 to 485 blocks from
    the nearest."
   [world]
@@ -2805,14 +2807,14 @@
           (and (fortress-escaping? world) (not (can-tunnel-out? world)))
           (if-let [pos (nearest-forest world)]
             (forest-way world (room-waypoint world (update pos 1 inc)))
-            (or (explore world) (reach-heading world)))
+            (explore world))
           :else
           (if-let [pos (nearest-forest world)]
             (forest-way world
                         (if (near-fortress? world)
                           (room-waypoint world (update pos 1 inc))
                           (update pos 1 inc)))
-            (or (explore world) (reach-heading world))))))
+            (explore world)))))
 
 (defn travel-caged?
   "Is the bot in the Nether, in no warped forest, with no enderman tracked, and no walk to or toward
@@ -3207,6 +3209,15 @@
                                       (not (menaced? world))
                                       (empty? (endermen world seek-radius)))
                              (travel world)))
+        heading-walk (delay (when (and (not hurt?)
+                                       (not tracked?)
+                                       (not swarmed?)
+                                       (not (recently-shot? world))
+                                       (not (menaced? world))
+                                       (empty? (endermen world seek-radius))
+                                       (= dimension/nether (dimension/of world))
+                                       (not (in-forest? world)))
+                              (reach-heading world)))
         relocate-now (delay (when (and (:pearls/relocate world)
                                        (not hurt?)
                                        (not swarmed?)
@@ -3329,6 +3340,7 @@
       @relocate-now (intent/why :hunt/relocate-now @relocate-now)
       @wander-walk (intent/why :hunt/wander-walk @wander-walk)
       @cage-break (intent/why :hunt/cage-break @cage-break)
+      @heading-walk (intent/why :hunt/heading-walk @heading-walk)
       (and csite @csite-walk) (intent/why :hunt/and-csite-csite-walk @csite-walk)
       digs? (intent/why :hunt/digs? {:intent/kind :burrow :intent/dir dir :intent/for :pearls})
       (and site @site-walk) (intent/why :hunt/and-site-site-walk @site-walk)

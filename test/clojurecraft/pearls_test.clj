@@ -4448,9 +4448,12 @@
         i (pearls/travel held)]
     (is (> 104 pearls/nether-climb-ceiling) "above the ceiling")
     (is (some? (:pearls/heading held)) "a heading is held with no forest known")
-    (is (= :tunnel-to (:intent/kind i)) "the hunt's mover is the heading's tunnel")
+    (is (= :tunnel-to (:intent/kind i)) "the heading's tunnel")
+    (is (nil? (pearls/travel held)) "travel finds nothing: the heading is not one of its ends")
+    (is (= :tunnel-to (:intent/kind (pearls/hunt held))) "the hunt's last mover, after the others")
     (is (<= (second (:intent/target i)) pearls/heading-max-y) "down to y 90 and under")
-    (is (= i (pearls/travel (pearls/reach-heading-hold held))) "the same leg at the next act")))
+    (is (= i (pearls/reach-heading (pearls/reach-heading-hold held)))
+        "the same leg at the next act")))
 
 (deftest a-fortress-exit-whose-tunnel-failed-is-given-up
   ;; Logged state, sim R1/17 seed 1 (probes rh5-20 and rh5-33, issue #263): :tunnel-to [938 75 -209]
