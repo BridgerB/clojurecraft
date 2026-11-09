@@ -1,9 +1,10 @@
 (ns clojurecraft.fleet-test
   "The fleet's choice of lanes to replace for their code (bb fleet): a lane on code main has
-   replaced plays its minimum time first, a queued one goes at once, and one on current code
-   stays; and after a lane is given back for need, the fleet fills only to its floor for the
-   cooldown. Babashka runs these (bb test:bb)."
-  (:require [clojure.test :refer [deftest is testing]]
+   replaced plays its kind's minimum time first (a real lane, by default, its whole job), a
+   queued one goes at once, and one on current code stays; and after a lane is given back for
+   need, the fleet fills only to its floor for the cooldown. Babashka runs these (bb test:bb)."
+  (:require [clojure.edn :as edn]
+            [clojure.test :refer [deftest is testing]]
             [clojurecraft.fleet :as fleet]))
 
 (def now (.toEpochMilli (java.time.Instant/parse "2026-10-17T12:00:00Z")))
@@ -32,7 +33,7 @@
    :fleet/floor {:real 2 :sim 2}
    :fleet/max {:real 8 :sim 8}
    :fleet/dispatch-grace-s 180
-   :fleet/stale-after-minutes 120
+   :fleet/stale-after-minutes {:real nil :sim 120}
    :fleet/cooldown-s 1200})
 
 (defn run
@@ -80,3 +81,36 @@
       (is (= 7
              (:gave-back
               (fleet/remember {:gave-back 7} {:cancel [] :dispatch []} runs config now)))))))
+
+(deftest a-merge-replaces-sim-lanes-and-lets-real-lanes-run-out
+  (let [old (fn [r] (assoc r :sha "old"))
+        runs [(old (run :real 1 300 1)) (old (run :real 2 150 2)) (old (run :sim 1 150 3))
+              (old (run :sim 2 30 4))]
+        d (fleet/decide (assoc (look runs {} {}) :stale-shas #{"old"}))]
+    (testing "only the sim lane past its time is cancelled for its code"
+      (is (= [3] (map :id (:cancel d)))))
+    (testing "a queued real lane on old code still goes: it holds no runner"
+      (is (= [5]
+             (map :id
+                  (:cancel (fleet/decide
+                            (assoc (look [(assoc (old (run :real 3 1 5)) :status "queued")] {} {})
+                                   :stale-shas
+                                   #{"old"})))))))
+    (testing "a real threshold, when set, replaces a real lane on code that old"
+      (is (= [1 3]
+             (map :id
+                  (:cancel (fleet/decide (-> (look runs {} {})
+                                             (assoc :stale-shas #{"old"})
+                                             (assoc-in [:config :fleet/stale-after-minutes]
+                                                       {:real 240 :sim 120}))))))))))
+
+(deftest stale-after-reads-a-kind-or-one-number
+  (is (nil? (fleet/stale-after config :real)) "real: never")
+  (is (= 120 (fleet/stale-after config :sim)))
+  (is (= 90 (fleet/stale-after {:fleet/stale-after-minutes 90} :real)) "one number for both")
+  (is (nil? (fleet/stale-after {} :sim)) "none: never")
+  (is (not (fleet/stale? (lane 500 "old") #{"old"} nil now)) "running, no threshold: kept")
+  (testing "the shipped fleet lets real lanes run out and replaces sim lanes"
+    (let [shipped (edn/read-string (slurp "ci/fleet.edn"))]
+      (is (nil? (fleet/stale-after shipped :real)))
+      (is (pos-int? (fleet/stale-after shipped :sim))))))

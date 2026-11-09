@@ -4,9 +4,9 @@
 ;; fleet does it: every :fleet/every-s seconds it counts the jobs running and queued across the
 ;; repository; while another workflow's job is queued and no runner is free, it cancels the newest
 ;; lane (a lane's cancel still runs its last report and uploads); while nothing waits and runners
-;; are free, it dispatches lanes, the kind with fewer first. Lanes on code older than main are
+;; are free, it dispatches lanes, the kind with fewer first. Sim lanes on code older than main are
 ;; cancelled and replaced once they have run :fleet/stale-after-minutes (a merge restarts the
-;; rounds, but not every half hour).
+;; rounds, but not every half hour); real lanes run their whole job on the code they started with.
 {:fleet/cap 20                 ; GitHub Free's concurrent jobs on standard hosted runners
  :fleet/floor {:real 6 :sim 2} ; lanes never given back, so the rounds always make progress; a real bot needs most of an hour to reach the fortress
  :fleet/max {:real 8 :sim 8}   ; lanes 1..8 a kind, as ci/race.edn and ci/simrace.edn
@@ -15,4 +15,7 @@
  :fleet/patience-s 90 ; a job queued less than this is not yet a reason to give a lane back (pages deploys, bursts)
  :fleet/dispatch-grace-s 180 ; a dispatched lane not yet listed still counts this long
  :fleet/cooldown-s 1200 ; after a lane is given back for need, no lane above the floor for this long: a lane cancelled soon after it starts reports nothing
- :fleet/stale-after-minutes 120} ; a lane on replaced code runs this long first: a real run needs about 30 minutes to reach the Nether
+ ;; a running lane on replaced code plays this long first, by kind; nil: never replaced for its
+ ;; code. A real bot's cap counts server ticks and at ~250 ms a tick a real run needs hours, so a
+ ;; real lane runs out its job; a number here (e.g. 240) would replace one on code that old
+ :fleet/stale-after-minutes {:real nil :sim 120}}
