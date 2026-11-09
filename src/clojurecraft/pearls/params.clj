@@ -178,6 +178,8 @@
   "{kind {:radius :alone :min-health :hold? :yield?}}: the lone melee foes the hunt fights rather than covers from
    (pearls.edn :at-hand, cover/lone-fight)."
   (:at-hand thresholds))
+; blocks a bot under danger-health tunnels away from a baby hoglin at hand (cover/leave-baby)
+(def leave-reach (:leave-reach thresholds))
 (def cover-place-hold-ms (:cover-place-hold-ms thresholds))
 (def cover-place-max (:cover-place-max thresholds))
 

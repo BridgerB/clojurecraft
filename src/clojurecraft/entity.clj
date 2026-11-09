@@ -20,6 +20,12 @@
 (def item-index 8)                    ; ItemEntity.DATA_ITEM, an item stack: what a drop holds
 (def phase-index 16)                  ; EnderDragon.DATA_PHASE, an int: its EnderDragonPhase id (gym dragon-a's recording: 0 circling, 3 landing, 6 sitting)
 (def creepy-index 17)                 ; EnderMan.DATA_CREEPY, a boolean: it has a target
+(def baby-index 16)                   ; AgeableMob.DATA_BABY_ID, a boolean: a baby (a hoglin's hit is then 0.5, Hoglin.BABY_ATTACK_DAMAGE)
+
+(def ageable
+  "The kinds whose baby flag the bot reads at baby-index: an AgeableMob's first field (Mob's one
+   field is 15). A piglin's flag is its own and sits elsewhere, so it is not here."
+  #{:hoglin :zoglin})
 (def radius-index 8)                  ; AreaEffectCloud.DATA_RADIUS, a float: a dragon's breath cloud grows from 3 to 7 (gym dragon-d's recordings)
 (def death-status 3)                  ; an entity-event's status for a living entity's death (EntityEvent.DEATH)
 (def on-fire-bit 0x01)                ; in the shared flags: burning (a blaze's state, a mob in lava)
@@ -69,7 +75,7 @@
    another shape there (no server sends one) is left out. The same health index is an interaction's
    height and a boat's hurt direction, so health is never read off a type the game gives no health;
    the same item index is a fireball's look; for an enderman only, its creepy flag at creepy-index;
-   for the dragon only, its phase at phase-index; for an area effect cloud only, its radius at
+   for a kind of ageable only, its baby flag at baby-index; for the dragon only, its phase at phase-index; for an area effect cloud only, its radius at
    radius-index (the same index as a drop's stack: a dragon's breath grows, and the bot keeps out of
    all of it). An index the skim did not reach is simply absent: what was known stays."
   [type-id metadata]
@@ -77,6 +83,7 @@
         health (get metadata health-index)
         stack (get metadata item-index)
         creepy (get metadata creepy-index)
+        baby (get metadata baby-index)
         phase (get metadata phase-index)
         radius (get metadata radius-index)]
     (cond-> {}
@@ -89,6 +96,8 @@
       (assoc :entity/item (:item stack))
       (and (= :enderman (blocks/entity-names type-id)) (boolean? creepy))
       (assoc :entity/creepy? creepy)
+      (and (contains? ageable (blocks/entity-names type-id)) (boolean? baby))
+      (assoc :entity/baby? baby)
       (and (= :ender_dragon (blocks/entity-names type-id)) (int? phase))
       (assoc :entity/phase phase))))
 
@@ -102,6 +111,11 @@
    most likely the bot that stared at it or hit it."
   [e]
   (true? (:entity/creepy? e)))
+
+(defn baby?
+  "Has the server said e is a baby (:entity/baby?, an ageable kind's flag)?"
+  [e]
+  (true? (:entity/baby? e)))
 
 (defn hostile?
   "Would the entity attack the bot: alive, of the game's monster category, and not one of the

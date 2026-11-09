@@ -14,6 +14,16 @@
    :rule/phase :fire
    :rule/when [:fire]
    :rule/then [:intent {:intent/kind :dig :intent/target [:fact :fire]}]}
+  ;; a hoglin at hand, adult or baby, is fought ahead of the refuge it follows into, at or over
+  ;; danger-health; under it a baby is left by a sealed tunnel away (an adult falls to the cover rows)
+  {:rule/id :hunt/fight-hoglin-at-hand
+   :rule/phase :survive
+   :rule/when [:lone-fight-over-refuge]
+   :rule/then [:fact :lone-fight-over-refuge]}
+  {:rule/id :hunt/leave-baby-hoglin
+   :rule/phase :survive
+   :rule/when [:leave-baby]
+   :rule/then [:fact :leave-baby]}
   {:rule/id :hunt/blaze-refuge
    :rule/phase :survive
    :rule/when [:blaze-refuge]

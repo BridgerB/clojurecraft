@@ -167,6 +167,8 @@
    :blaze-refuge (fn [_ w] (fexit/blaze-refuge w))
    :come-down (fn [_ w] (pplace/come-down w))
    :lone-fight (fn [_ w] (pcover/lone-fight w))
+   :lone-fight-over-refuge (fn [_ w] (pcover/lone-fight w (pcover/over-refuge pparams/at-hand)))
+   :leave-baby (fn [_ w] (pcover/leave-baby w))
    :meal-unshot (fn [f w]
                   (and (f :meal)
                        (or (empty? (filter #(combat/seen? w (val %)) (psense/shooters w)))
