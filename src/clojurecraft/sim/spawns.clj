@@ -202,6 +202,13 @@
   [sim]
   (try-floor-spawn sim mob/crimson-spot? mob/crimson-kinds 1))
 
+(defn try-deltas-spawn
+  "Every mob/spawn-every ticks in the Nether, a pack of mob/deltas-pack magma cubes of a size
+   rolled (mob/deltas-kinds) on a basalt delta's floor (mob/deltas-spot?). A column with none
+   spawns nothing."
+  [sim]
+  (try-floor-spawn sim mob/deltas-spot? mob/deltas-kinds mob/deltas-pack))
+
 (defn spawner-cells
   "The set of cells holding a spawner block in the decoded columns within one chunk of the
    player's column (a spawner wakes within 16 blocks, never farther than the next column)."
@@ -336,7 +343,8 @@
   "One game tick of the mobs: the day moves on (:sim/day-time), chunks coming near get their
    animals (populate), a hostile is tried for (try-spawn), the Nether's warped forests spawn
    their endermen (try-nether-spawn), its fortresses a wither skeleton or a magma cube
-   (try-fortress-spawn), its crimson forests a hoglin (try-crimson-spawn), and its spawners run
+   (try-fortress-spawn), its crimson forests a hoglin (try-crimson-spawn), its basalt deltas magma
+   cubes (try-deltas-spawn), and its spawners run
    (tick-spawners), every mob acts in id order (act-mob), and far hostiles despawn (despawn). A
    model with no difficulty and no mobs only keeps its day."
   [sim]
@@ -349,6 +357,7 @@
                         try-nether-spawn
                         try-fortress-spawn
                         try-crimson-spawn
+                        try-deltas-spawn
                         tick-spawners)]
             (despawn (reduce (fn [sim eid] (face-player (act-mob sim eid) eid))
                              sim
