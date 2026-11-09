@@ -324,9 +324,13 @@
                       (pos? (+ (* dx (- (math/sin r))) (* dz (math/cos r))))))))))
 
 (defn blocked
-  "The model after the raised shield took a blow: counted in :sim/blocked, the player not hurt."
-  [sim]
-  (update sim :sim/blocked (fnil inc 0)))
+  "The model after the raised shield took a blow from a mob of kind, how it came (:melee, :blast,
+   :arrow, :fireball): counted in :sim/blocked and by [kind how] in :sim/blocked-by, the player not
+   hurt."
+  [sim kind how]
+  (-> sim
+      (update :sim/blocked (fnil inc 0))
+      (update-in [:sim/blocked-by [kind how]] (fnil inc 0))))
 
 (defmethod on-packet [:play :player-action]
   ;; a release of the use key stops eating and lowers a shield (ServerPlayerGameMode's
@@ -613,7 +617,8 @@
    this blow is the one that reaches zero. Every blow that lands is also appended to
    :sim/hit-log (hit-logged) with its cause, how, attacker (the mob eid that dealt it, or nil),
    what it dealt and the health left. A blow that exhausts (a mob's hit, a shot, a blast) is
-   counted in :sim/struck, beside the ones a shield took (:sim/blocked)."
+   counted in :sim/struck and by [cause how] (how :melee for a blow with none) in :sim/struck-by,
+   beside the ones a shield took (:sim/blocked, :sim/blocked-by)."
   ([sim amount exhausting?] (hurt sim amount exhausting? :unknown nil nil))
   ([sim amount exhausting? cause] (hurt sim amount exhausting? cause nil nil))
   ([sim amount exhausting? cause how] (hurt sim amount exhausting? cause how nil))
@@ -638,7 +643,9 @@
                           :health health})
                  (cond-> (<= health 0.0) (record-death cause how)
                          exhausting? (add-exhaustion (hunger/exhaustion :hurt))
-                         exhausting? (update :sim/struck (fnil inc 0)))))))))
+                         exhausting? (update :sim/struck (fnil inc 0))
+                         exhausting?
+                         (update-in [:sim/struck-by [cause (or how :melee)]] (fnil inc 0)))))))))
 
 (defn heal
   "The model after a living player heals amount, up to max-health."

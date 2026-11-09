@@ -384,6 +384,7 @@
         fresh (ticks (raised (arena shield-held east skel) 0) 1)
         none (ticks (raised (arena {} east skel) 1000) 1)]
     (is (= 20.0 (:sim/health facing)) "the eight blocked")
+    (is (= {[:wither_skeleton :melee] 1} (:sim/blocked-by facing)) "counted by kind and how")
     (is (= 1 (:sim/blocked facing)))
     (is (nil? (:sim/wither facing)) "no wither from a blow that never landed")
     (is (= 12.0 (:sim/health behind)) "a blow from behind lands")
@@ -411,6 +412,7 @@
     (is (= 20.0 (:sim/health blocked)))
     (is (nil? (:sim/fire blocked)) "not alight")
     (is (empty? (:sim/fireballs blocked)) "spent on the shield")
+    (is (= {[:blaze :fireball] 1} (:sim/blocked-by blocked)))
     (is (= 15.0 (:sim/health hit)) "down, it lands")))
 
 (deftest the-offhand-use-raises-the-shield-and-the-release-lowers-it

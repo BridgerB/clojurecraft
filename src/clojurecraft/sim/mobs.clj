@@ -203,7 +203,8 @@
     (cond (not (and (pos? dmg)
                     (mob/sight? (solid-fn sim) (mob/head type pos) (physics/eye player))))
           (remove-mob sim eid)
-          (sim-protocol/shield-blocks? sim pos) (sim-protocol/blocked (remove-mob sim eid))
+          (sim-protocol/shield-blocks? sim pos)
+          (sim-protocol/blocked (remove-mob sim eid) type :blast)
           :else
           (-> sim
               (remove-mob eid)
@@ -602,7 +603,7 @@
           (-> sim
               (assoc-in [:sim/mobs eid :attack-at]
                         (+ now (* (or (:contact-every k) (:every k)) physics/tick-ms)))
-              sim-protocol/blocked)
+              (sim-protocol/blocked type :melee))
           :else
           (let [before (:sim/health sim)
                 sim (-> sim
@@ -703,7 +704,7 @@
           (sim-protocol/shield-blocks? sim pos)
           (-> sim
               (assoc-in [:sim/mobs eid :attack-at] (+ now (* (:every k) physics/tick-ms)))
-              sim-protocol/blocked)
+              (sim-protocol/blocked type (or (:projectile k) :shot)))
           :else
           (-> sim
               (assoc-in [:sim/mobs eid :attack-at] (+ now (* (:every k) physics/tick-ms)))
@@ -867,7 +868,7 @@
                              (update :sim/fireballs dissoc fid)
                              (send {:packet/name :remove-entities :ids [fid]})))]
               (cond (and (= :hit what) (sim-protocol/shield-blocks? sim at))
-                    (sim-protocol/blocked (gone sim))
+                    (sim-protocol/blocked (gone sim) kind :fireball)
                     (= :hit what)
                     (-> sim
                         gone
