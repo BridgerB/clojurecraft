@@ -793,3 +793,66 @@
                         :player/food 17
                         :player/inventory {1 (ps/item :iron_pickaxe 1)})))
         "hurt with no way to heal: a wait would never end, the bore goes on")))
+
+(deftest an-exit-on-a-column-in-open-air-bridges-toward-its-surface
+  ;; Issue #263, real stage-18 lanes: nine of ten :blocked endings were the exit tunnel, and the
+  ;; ones folded to the failing tick stood on a column of their own blocks in a Nether cavern, the surface target fifty blocks along and
+  ;; sixteen up. Every level and up step had an air floor with nothing to lay an up step against,
+  ;; and no-down? refused the two steps down, so no step was left: :blocked from the same stand
+  ;; for fifteen minutes until the plan stalled. The exit bridges the cavern as the way to the
+  ;; fortress does. Cells shifted: feet [0 64 0] on [0 63 0], ground at y 40, target [50 80 0].
+  (let [netherrack (blocks/default-state :netherrack)
+        air (blocks/default-state :air)
+        cavern {:world/chunks {}
+                :world/blocks
+                (merge (into {}
+                             (for [x (range -4 61) y (range 41 86) z (range -4 5)] [[x y z] air]))
+                       (into {} (for [x (range -4 61) z (range -4 5)] [[x 40 z] netherrack]))
+                       {[0 63 0] netherrack [0 62 0] netherrack})
+                :player/pos [0.5 64.0 0.5]
+                :player/on-ground? true
+                :player/health 20.0
+                :player/inventory {0 (ps/item :cobblestone 64)}}
+        feet [0 64 0]
+        target [50 80 0]
+        exit (-> (ps/standing {})
+                 (assoc :player/dimension "minecraft:the_nether" :player/pos [8.5 64.0 8.5])
+                 (assoc-in [:player/inventory 1] (ps/item :iron_pickaxe 1))
+                 (memory/observe [8 64 8] blaze/spawner))
+        i (fexit/fortress-tunnel-out exit)
+        step (fn [bridge?]
+               (fortress/next-move cavern
+                                   feet
+                                   target
+                                   (:intent/climb i)
+                                   false
+                                   #{}
+                                   bridge?
+                                   (:intent/no-down? i)))]
+    (is (= :tunnel-to (:intent/kind i)))
+    (is (true? (:intent/bridge? i)) "the exit tunnel bridges a cavern")
+    (is (true? (:intent/no-down? i)) "and still never steps down")
+    (is (nil? (step false)) "without the bridge no step is left: the :blocked of the real lanes")
+    (is (= [1 0 0] (step (:intent/bridge? i))) "with it, the level step toward the target")))
+
+(deftest a-fresh-exit-passes-over-a-given-up-target
+  ;; Issue #263, real stage-18 lanes: after an exit tunnel failed, its target was blacklisted, but
+  ;; the fresh exit derived from the same feet was that target again (or a block off it). The hunt
+  ;; started it, the planner cut it a tick later as no longer wanted, and the retry walked back.
+  ;; Bot 72 blocks east of the spawner at y 50, under the surface (the spawner's y 64): the
+  ;; surfacing exit is [132 64 8], 52 along the heading east.
+  (let [w (-> (ps/standing {})
+              (assoc :player/dimension "minecraft:the_nether" :player/pos [80.5 50.0 8.5])
+              (assoc-in [:player/inventory 1] (ps/item :iron_pickaxe 1))
+              (memory/observe [8 64 8] blaze/spawner))]
+    (is (= [132 64 8] (fexit/fortress-tunnel-target w)) "the surfacing exit, nothing given up")
+    (is (= [140 64 8] (fexit/fortress-tunnel-target (assoc w :plan/blacklist #{[132 64 8]})))
+        "that target given up: the next exit along the heading")
+    (is (= [140 64 8] (fexit/fortress-tunnel-target (assoc w :plan/blacklist #{[131 64 9]})))
+        "a target a block off the given-up one is the same exit, passed over too")
+    (is (= [132 64 8] (fexit/fortress-tunnel-target (assoc w :plan/blacklist #{7})))
+        "an entity id on the blacklist (a chase given up) is no cell: nothing passed over")
+    (let [all (set (for [d (range 52 125 8)] [(+ 80 d) 64 8]))
+          none (assoc w :plan/blacklist all)]
+      (is (nil? (fexit/fortress-tunnel-target none)) "every exit given up: none")
+      (is (not (fexit/fortress-escaping? none)) "and the hunt's other ways out take over"))))

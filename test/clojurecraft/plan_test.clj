@@ -2620,3 +2620,18 @@
     (is (= plan/choices-kept (count (:plan/choices w3))))
     (is (= :g39 (:choice/goal (peek (:plan/choices w3)))))
     (is (= :g38 (:choice/over (:plan/choice w3))))))
+
+(deftest a-retry-never-walks-a-no-down-tunnel-back-down
+  ;; Issue #263, real stage-18 lanes: the fortress exit (no-down?) climbed two cells, failed
+  ;; :blocked, and the retry walked the bot to the newest trail cell, the stand it had climbed
+  ;; from; the next tunnel climbed the same cells and failed the same way, eleven to twenty-three
+  ;; times a minute.
+  (let [w {:plan/trail [[0 60 0] [1 61 0] [1 62 0] [2 62 0]]}
+        feet [2 63 0]
+        tunnel {:intent/kind :tunnel-to :intent/target [50 80 0] :intent/no-down? true}]
+    (is (= [2 62 0] (plan/retreat-cell w (dissoc tunnel :intent/no-down?) feet))
+        "a tunnel that may step down retreats to the newest trail cell, as before")
+    (is (nil? (plan/retreat-cell w tunnel feet)) "a no-down? tunnel: no cell under the feet")
+    (is (nil? (plan/retreat-cell w {:intent/plan tunnel} feet)) "read from the planned form too")
+    (is (= [3 63 0] (plan/retreat-cell (update w :plan/trail conj [3 63 0]) tunnel feet))
+        "a cell at the feet's height is still a retreat")))

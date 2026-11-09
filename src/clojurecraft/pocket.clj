@@ -484,11 +484,16 @@
   ;; {:intent/kind :seal}: place seal-item in every open side of the pocket at the feet, at the feet
   ;; and the head, and over the head when it has no roof, standing in it; the cells are noted in the
   ;; held site (:pocket/placed) from the first tick, so sealed? and the unseal know them. Done when
-  ;; they are all solid. No cell (steer has dropped :pocket/site, or it never had one) fails
+  ;; they are all solid. With :intent/site (combat's roof against a jumper) that site is held
+  ;; first, unless the world already holds one of its cell. No cell (steer has dropped :pocket/site, or it never had one) fails
   ;; :no-cell: seal-cells would call pocket/plus on nil and kill the bot's loop (z16 fold,
   ;; probes 41303425892 and 41304181213).
   [world i event]
-  (let [site (:pocket/site world)
+  (let [given (:intent/site i)
+        world (cond-> world
+                (and given (not= (:pocket/cell given) (:pocket/cell (:pocket/site world))))
+                (assoc :pocket/site given))
+        site (:pocket/site world)
         cell (:pocket/cell site)]
     (if-not cell
       (-> world
