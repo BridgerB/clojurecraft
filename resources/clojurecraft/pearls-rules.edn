@@ -18,6 +18,12 @@
    :rule/phase :survive
    :rule/when [:blaze-refuge]
    :rule/then [:fact :blaze-refuge]}
+  ;; a piglin brute within brute-radius: walk off its ground, before any cover, meal or fight
+  ;; beside it (it strikes any player for about 9 through iron and keeps to its bastion)
+  {:rule/id :hunt/leave-brutes
+   :rule/phase :survive
+   :rule/when [:leave-brutes]
+   :rule/then [:fact :leave-brutes]}
   {:rule/id :hunt/come-down
    :rule/phase :survive
    :rule/when [[:not :hurt?] :come-down]

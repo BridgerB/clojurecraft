@@ -604,3 +604,46 @@
          (remove #(contains? bl (update % 1 inc)))
          (sort-by #(path/octile feet %))
          first)))
+
+;; ---------------------------------------------------------------- piglin brutes
+
+(defn brutes
+  "{eid entity} of the live entities of pparams/brute-kinds the bot tracks."
+  [world]
+  (into {}
+        (filter (fn [[_ e]]
+                  (and (contains? pparams/brute-kinds (entity/kind e)) (not (entity/dead? e)))))
+        (:world/entities world)))
+
+(defn brute-zone
+  "The [gx gz] square, pparams/brute-grid blocks on a side, the point [x y z] stands in."
+  [[x _ z]]
+  [(long (math/floor (/ (double x) pparams/brute-grid)))
+   (long (math/floor (/ (double z) pparams/brute-grid)))])
+
+(defn track-brutes
+  "The world with the square of every tracked brute (brutes) noted under :brute-zones: a brute
+   keeps to its bastion, so where one was seen is its ground after it is out of tracking range."
+  [world]
+  (let [zones (map (comp brute-zone :entity/pos) (vals (brutes world)))]
+    (cond-> world (seq zones) (avoided/note-all :brute-zones zones))))
+
+(defn near-brute-zone?
+  "Is cell (or point) c within pparams/brute-clear on the plane of the middle of a square a brute
+   was seen in (:brute-zones), or of a tracked brute's own square?"
+  [world [x _ z]]
+  (let [g (double pparams/brute-grid)
+        zones (into (avoided/all-of world :brute-zones)
+                    (map (comp brute-zone :entity/pos))
+                    (vals (brutes world)))]
+    (boolean (some (fn [[gx gz]]
+                     (<= (math/hypot (- (+ 0.5 (double x)) (* g (+ gx 0.5)))
+                                     (- (+ 0.5 (double z)) (* g (+ gz 0.5))))
+                         pparams/brute-clear))
+                   zones))))
+
+(defn brute-near
+  "[eid entity] of the nearest tracked brute (brutes) within pparams/brute-radius of the feet, or
+   nil."
+  [world]
+  (when-let [pos (:player/pos world)] (entity/nearest (brutes world) pos pparams/brute-radius)))

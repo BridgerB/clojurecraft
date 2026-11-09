@@ -18,7 +18,7 @@
          :piglin {:hit 7.0}
          :zombified_piglin {:hit 7.0 :pack-neutral? true}
          :hoglin {:hit 6.0}
-         :piglin_brute {:hit 8.0}
+         :piglin_brute {:hit 13.0} ; 7 and a golden axe's 6: the 9.1 a real brute dealt through iron and gold boots (armour 14)
          :ghast {:never-fought? true}
          :enderman {:teleports? true :pumpkin-safe? true}
          :creeper {:radius 6.0}

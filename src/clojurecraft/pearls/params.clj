@@ -202,6 +202,15 @@
 
 (def explore-memory (:explore-memory thresholds))
 
+(def brute-kinds
+  "Kinds that strike any player on sight, gold worn or not, and keep to their bastion: the hunt
+   leaves their ground (sense/brute-near, move/leave-brutes) and never comes back to it."
+  #{:piglin_brute})
+
+(def brute-radius (:brute-radius thresholds))
+(def brute-clear (:brute-clear thresholds))
+(def brute-grid (:brute-grid thresholds))
+
 (def forest-reach (:forest-reach thresholds))
 
 (def fortress-escape-reach
