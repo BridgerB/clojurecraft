@@ -16,7 +16,8 @@
             [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
             [clojurecraft.recipe :as recipe]
-            [clojurecraft.terrain :as terrain]))
+            [clojurecraft.terrain :as terrain]
+            [clojurecraft.threat :as threat]))
 
 (set! *warn-on-reflection* true)
 
@@ -88,6 +89,17 @@
    :eyes-in-water? (boolean (:player/eye-in-water? world))})
 
 (def never-dug #{:obsidian})          ; a portal frame is never a dig target (ruststeve dug its own frame)
+
+(defn guarded-cell?
+  "Is cell a block piglins guard with a guard near it (threat/guarded?: the game's
+   guarded_by_piglins blocks, a piglin or a brute within the radius threats.edn gives)? A dig of
+   it fails :guarded, as breaking it would anger them all."
+  [world cell]
+  (threat/guarded? (some-> (terrain/block-at world cell)
+                           blocks/name-of)
+                   (physics/centre cell)
+                   (:world/entities world)
+                   entity/kind))
 
 (def falling-reach 16)                ; gravel or sand stacked over a cell that a fluid on top is looked for through
 
@@ -571,6 +583,7 @@
           (or (contains? never-dug (blocks/name-of at-target))
               (and (not exposes-ok?) (exposes-fluid? world target)))
           (fail world :unsafe)
+          (guarded-cell? world target) (fail world :guarded)
           (or (and (>= still 3) (> (- now since) settle-ms)) (> (- now since) settle-deadline))
           (let [seq (inc (:bot/sequence world))
                 face (face-toward eye target)

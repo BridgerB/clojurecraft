@@ -90,46 +90,56 @@
   (= dimension/nether (:sim/dimension sim)))
 
 (defn wild-spawning?
-  "Does the Nether's own spawning run: a difficulty above peaceful, in the Nether? Vanilla
-   spawns the Nether's hostiles by biome; the model spawns a warped forest's (mob/warped-kinds)."
+  "Does the Nether's own spawning run: a difficulty above peaceful, in the Nether? It spawns by
+   biome, as vanilla does (try-nether-spawn)."
   [sim]
   (boolean (and (#{:easy :normal :hard} (:sim/difficulty sim)) (in-nether? sim))))
+
+(defn biome-of
+  "The biome (a name, mob/biome-names) at cell pos in the model's columns, or nil where it has
+   no column or the column no biomes."
+  [sim pos]
+  (let [k (column-key pos)]
+    (when-let [column (column-of sim k)]
+      (some-> (chunk/biome-at {k column} pos)
+              mob/biome-names))))
 
 (defn spawn-pack
   "The model with a pack of n of kind walked out from [x y z]: each member mob/pack-step off
    the last on x and on z (four wild-rolls), at the pack's height, placed where it stands (spot?
-   of the cell, mob/nether-spot? when none is given, and no nearer the player than mob/spawn-near)
-   and skipped where it does not, as NaturalSpawner.spawnCategoryForPosition walks and skips them."
-  ([sim kind pos n] (spawn-pack sim kind pos n mob/nether-spot?))
-  ([sim kind [x y z] n spot?]
-   (let [player (:sim/player-pos sim)
-         at #(block-at sim %)
-         free? (free-fn sim)]
-     (first (reduce (fn [[sim x z] _]
-                      (let [[sim a] (wild-roll sim)
-                            [sim b] (wild-roll sim)
-                            [sim c] (wild-roll sim)
-                            [sim d] (wild-roll sim)
-                            x (+ x (mob/pack-step a b))
-                            z (+ z (mob/pack-step c d))
-                            pos [(+ x 0.5) (double y) (+ z 0.5)]]
-                        [(cond-> sim
-                           (and (spot? at free? [x y z])
-                                (>= (physics/distance pos player) mob/spawn-near))
-                           (add-mob kind pos {})) x z]))
-                    [sim x z]
-                    (range n))))))
+   of the cell, and no nearer the player than mob/spawn-near) and skipped where it does not, as
+   NaturalSpawner.spawnCategoryForPosition walks and skips them."
+  [sim kind [x y z] n spot?]
+  (let [player (:sim/player-pos sim)
+        at #(block-at sim %)
+        free? (free-fn sim)]
+    (first (reduce (fn [[sim x z] _]
+                     (let [[sim a] (wild-roll sim)
+                           [sim b] (wild-roll sim)
+                           [sim c] (wild-roll sim)
+                           [sim d] (wild-roll sim)
+                           x (+ x (mob/pack-step a b))
+                           z (+ z (mob/pack-step c d))
+                           pos [(+ x 0.5) (double y) (+ z 0.5)]]
+                       [(cond-> sim
+                          (and (spot? at free? [x y z])
+                               (>= (physics/distance pos player) mob/spawn-near))
+                          (add-mob kind pos {})) x z]))
+                   [sim x z]
+                   (range n)))))
 
 (defn try-nether-spawn
   "Every mob/spawn-every ticks in the Nether (wild-spawning?, under mob/hostile-cap), one try
-   at a warped forest's pack: a column rolled in the ring mob/spawn-near to mob/spawn-far round
-   the player as try-spawn rolls one, its spots within mob/spawn-band of the player's feet
-   (mob/nether-spots: warped nylium under the feet, an enderman's three cells free, any light),
-   one of them rolled, a kind rolled by weight (mob/warped-kinds) and a pack of
-   mob/enderman-pack walked out from it (spawn-pack). A column with no warped floor spawns
-   nothing: the Nether's other biomes' hostiles are not modelled. Every roll is a wild-roll,
-   so the overworld's night rule rolls as it did, and a fortress's spawners too until an
-   enderman spawns (its turns roll from mob-roll)."
+   at a pack by the biome's monster list: a column rolled in the ring mob/spawn-near to
+   mob/spawn-far round the player as try-spawn rolls one, its spots within mob/spawn-band of the
+   player's feet (mob/floor-spots: a spawn floor under the feet, an enderman's three cells free,
+   any light), one of them rolled, a row of its biome's list rolled by weight (mob/biome-spawns,
+   the jar's) and, when the row's kind is one the model spawns so (mob/biome-kinds), a pack of
+   the row's group size walked out from it (spawn-pack), each member where its own biome lists
+   the kind (mob/biome-spot?). A row of a kind not modelled spawns nothing: a nether wastes try
+   rolls the enderman one time in 168. Every roll is a wild-roll, so the overworld's night rule
+   rolls as it did, and a fortress's spawners too until an enderman spawns (its turns roll from
+   mob-roll)."
   [sim]
   (let [player (:sim/player-pos sim)]
     (cond (not (and player
@@ -146,18 +156,30 @@
                 x (long (math/floor (+ px (* dist (math/cos angle)))))
                 z (long (math/floor (+ pz (* dist (math/sin angle)))))
                 fy (long (math/floor py))
-                spots (vec (mob/nether-spots #(block-at sim %)
-                                             (free-fn sim)
-                                             x
-                                             z
-                                             (- fy mob/spawn-band)
-                                             (+ fy mob/spawn-band)))]
+                spots (vec (mob/floor-spots #(block-at sim %)
+                                            (free-fn sim)
+                                            (mob/tall :enderman)
+                                            x
+                                            z
+                                            (- fy mob/spawn-band)
+                                            (+ fy mob/spawn-band)))]
             (cond (empty? spots) sim
                   :else
                   (let [[sim r3] (wild-roll sim)
                         [sim r4] (wild-roll sim)
-                        spot (spots (min (dec (count spots)) (long (* r3 (count spots)))))]
-                    (spawn-pack sim (mob/pick mob/warped-kinds r4) spot mob/enderman-pack)))))))
+                        spot (spots (min (dec (count spots)) (long (* r3 (count spots)))))
+                        row (mob/pick-row (mob/biome-spawns (biome-of sim spot)) r4)
+                        kind (first row)]
+                    (cond (not (contains? mob/biome-kinds kind)) sim
+                          :else
+                          (let [[sim r5] (if (= (nth row 2) (nth row 3)) [sim 0.0] (wild-roll sim))]
+                            (spawn-pack
+                             sim
+                             kind
+                             spot
+                             (mob/group-size row r5)
+                             (fn [at free? c]
+                               (mob/biome-spot? at free? #(biome-of sim %) kind c)))))))))))
 
 (defn try-floor-spawn
   "One try, on try-nether-spawn's cadence and cap, at a pack of n from kinds on the floors

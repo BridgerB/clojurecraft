@@ -809,6 +809,11 @@
    hits for 5 and withers, and a fortress holds them in threes."
   (kinds-with :avoided?))
 
+(def fled
+  "Kinds the :defend row never fights, at any health (threats.edn :fled?): a piglin brute, fifty
+   health and a golden axe's 13, is backed away from."
+  (kinds-with :fled?))
+
 (def avoided-health 18.0) ; health a fight with one of avoided is begun at
 
 (def hold-margin 3.0)                 ; blocks past defend-radius the target of a running :defend fight stays a threat (held-target)
@@ -1090,6 +1095,7 @@
   ;; the back-off would end at once (back-off-pointless?) or e teleports and a cover is held
   ;; (teleport-cover): then the cover (a meal, a block laid
   ;; between, a pillar), never the fight under that line (#577).
+  ;; A piglin brute (fled) is backed away from at any health, never fought.
   ;; A zombified piglin (pack-neutral?) is backed away from even at full health: the first swing
   ;; angers the pack (gym blaze-wall-b run 1). A wither skeleton (avoided) is fought alone and at
   ;; avoided-health or more only.
@@ -1102,6 +1108,7 @@
             shelter (intent/why :defend/shelter shelter)
             (or (pack-neutral? e)
                 (= :creeper (entity/kind e))
+                (contains? fled (entity/kind e))
                 hurt?
                 (and (contains? avoided (entity/kind e))
                      (not (avoided/noted? world :cornered eid))

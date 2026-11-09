@@ -20,8 +20,9 @@
    arrow's flight (the damage lands when the skeleton fires), a blast breaking blocks, an enderman's
    teleports out of water, rain, daylight or a non-living hurt (its teleports at its target are,
    toward-aim and away-aim), spiders climbing, mobs swimming, armour wearing out, a magma cube's
-   hop as a motion (its three sizes are kinds with their health, box, armour and hit, and the hop
-   is a reach upward, hop-reach?; one climbs a ledge no higher than any mob does) and a hoglin's
+   hop as a flight through the air (its three sizes are kinds with their health, box, armour and
+   hit; the hop lifts it onto a ledge as high as its whole blocks, climb, and reaches a player
+   over it, hop-reach?, but it never sails over a gap) and a hoglin's
    swing landing anywhere from 3 to 8 (the row uses 6). The armour the player wears takes its share of a mob's
    hit. A wither skeleton's wither does not (wither-tick)."
   (:require [clojure.edn :as edn]
@@ -36,7 +37,7 @@
 ;; ---------------------------------------------------------------- the kinds, as data
 
 (def mob-table
-  "The mobs file, as read (resources/clojurecraft/mob-kinds.edn): {:mob/kinds :mob/equipment :mob/passive :mob/warped :mob/fortress :mob/crimson}."
+  "The mobs file, as read (resources/clojurecraft/mob-kinds.edn): {:mob/kinds :mob/equipment :mob/passive :mob/fortress :mob/crimson :mob/deltas}."
   (edn/read-string (slurp (io/resource "clojurecraft/mob-kinds.edn"))))
 
 (def kinds
@@ -53,7 +54,7 @@
    route round what stops its straight walk (route); :teleports teleports at its target as an
    enderman does (toward-aim, away-aim). :entity the entity type told when it is not the kind's
    own name (a magma cube's sizes); :armour points that take their share of the player's hit
-   (mob-hit); :hop how high its jump lifts its feet (hop-reach?); :split [kind lo hi] what it
+   (mob-hit); :hop how high its jump lifts its feet (hop-reach?, climb); :split [kind lo hi] what it
    leaves where it dies."
   (:mob/kinds mob-table))
 
@@ -359,6 +360,18 @@
   [free? [x y z] n]
   (every? #(free? [x (+ y %) z]) (range n)))
 
+(defn climb-to
+  "The rise, 1 to climb blocks, of the lowest ledge a body n cells tall at cell here can jump onto
+   in cell there: there's n cells free that many blocks up, and the cells over here's head free
+   up to that height (it rises in its own column, then moves over); nil when none is."
+  [free? here [cx cy cz] n climb]
+  (let [[hx hy hz] here]
+    (some (fn [dy]
+            (when (and (stands-in? free? [cx (+ cy dy) cz] n)
+                       (every? #(free? [hx (+ hy n %) hz]) (range dy)))
+              dy))
+          (range 1 (inc climb)))))
+
 (defn keep-off-walls
   "pos with a body of kind (n cells tall, tall) held its half width off each of the four
    neighbouring columns of its cell it could neither walk into (stands-in? at its height) nor
@@ -366,20 +379,22 @@
    a box out of the blocks round it: an enderman pressed against a tunnel two high stands with its
    centre 0.3 back from the opening, not at it. A neighbour it could walk or jump into leaves that
    side as it was, so a step of one block is still climbed. A body wider than a cell (a hoglin, a
-   big magma cube) is held at its cell's middle at most, never pushed into the next cell."
-  [free? kind pos n]
-  (let [hw (min 0.5 (/ (first (:box (kinds kind) [0.6 1.8])) 2.0))
-        [cx cy cz] (cell-of pos)
-        head-clear? (free? [cx (+ cy n) cz])
-        open? (fn [dx dz]
-                (or (stands-in? free? [(+ cx dx) cy (+ cz dz)] n)
-                    (and head-clear? (stands-in? free? [(+ cx dx) (inc cy) (+ cz dz)] n))))
-        side (fn [v c lo hi]
-               (cond (and (< (- v c) hw) (not lo)) (+ c hw)
-                     (and (> (- v c) (- 1.0 hw)) (not hi)) (- (+ c 1.0) hw)
-                     :else v))
-        [x y z] pos]
-    [(side x cx (open? -1 0) (open? 1 0)) y (side z cz (open? 0 -1) (open? 0 1))]))
+   big magma cube) is held at its cell's middle at most, never pushed into the next cell. With a
+   climb (a magma cube's hop, climb) a ledge that high is a side it can jump onto (climb-to), as
+   step-toward climbs it, so the hop is not held off the ledge it is to take."
+  ([free? kind pos n] (keep-off-walls free? kind pos n 1))
+  ([free? kind pos n climb]
+   (let [hw (min 0.5 (/ (first (:box (kinds kind) [0.6 1.8])) 2.0))
+         [cx cy cz :as here] (cell-of pos)
+         open? (fn [dx dz]
+                 (or (stands-in? free? [(+ cx dx) cy (+ cz dz)] n)
+                     (some? (climb-to free? here [(+ cx dx) cy (+ cz dz)] n climb))))
+         side (fn [v c lo hi]
+                (cond (and (< (- v c) hw) (not lo)) (+ c hw)
+                      (and (> (- v c) (- 1.0 hw)) (not hi)) (- (+ c 1.0) hw)
+                      :else v))
+         [x y z] pos]
+     [(side x cx (open? -1 0) (open? 1 0)) y (side z cz (open? 0 -1) (open? 0 1))])))
 
 (defn fall
   "pos come down onto what is under it: the feet on the top of the first cell below that is not
@@ -392,23 +407,31 @@
 
 (defn step-toward
   "A mob at pos one tick on toward target at speed blocks a tick, stopping stop short of it on
-   the plane: the straight step when the body stands there, one block up when a single block is
-   in the way and the head clears it (a mob jumps it), else it stays; then it falls (fall). A
-   body n cells tall (tall; two when not given) stands and jumps only where its n cells are free."
+   the plane: the straight step when the body stands there, up onto a ledge when one is in the
+   way that its jump clears (climb-to: one block for a walker, as high as its :hop for a magma
+   cube, climb), else it stays; then it falls (fall). A body n cells tall (tall; two when not
+   given) stands and jumps only where its n cells are free."
   ([free? pos target speed stop] (step-toward free? pos target speed stop 2))
-  ([free? pos target speed stop n]
+  ([free? pos target speed stop n] (step-toward free? pos target speed stop n 1))
+  ([free? pos target speed stop n climb]
    (let [[x y z] pos
          d (flat-distance pos target)
          k (min speed (max 0.0 (- d stop)))
          [tx _ tz] target
          nx (if (pos? d) (+ x (* k (/ (- tx x) d))) x)
          nz (if (pos? d) (+ z (* k (/ (- tz z) d))) z)
-         [cx cy cz] (cell-of [nx y nz])]
+         [cx cy cz] (cell-of [nx y nz])
+         up (when (pos? k) (climb-to free? (cell-of pos) [cx cy cz] n climb))]
      (cond (zero? k) pos
            (stands-in? free? [cx cy cz] n) (fall free? [nx y nz])
-           (and (stands-in? free? [cx (inc cy) cz] n) (free? (update (cell-of pos) 1 + n)))
-           [nx (double (inc cy)) nz]
+           up [nx (double (+ cy up)) nz]
            :else pos))))
+
+(defn climb
+  "How many blocks up a mob of kind steps onto a ledge: its :hop's whole blocks (a magma cube's
+   jump), one for any other."
+  [kind]
+  (max 1 (long (math/floor (:hop (kinds kind) 1.0)))))
 
 (defn in-reach?
   "Is a mob of kind at pos near enough to close on a player at target: on the plane within its
@@ -646,11 +669,27 @@
 
 ;; ---------------------------------------------------------------- the Nether's own spawns
 
-(def warped-kinds
-  "The kinds a warped forest's monster list spawns, with their weights: the enderman alone
-   (weight 1, in packs of enderman-pack), as vanilla's warped_forest biome lists them. The
-   Nether spawns by biome; the model tells a warped forest by its floor (warped-floor?)."
-  (:mob/warped mob-table))
+(def biome-ids
+  "{biome-kw registry-id}: every biome by name with the id a chunk's biome container holds
+   (chunk/biome-at), the jar's (resources/clojurecraft/biomes.edn, generated by bb datagen)."
+  (edn/read-string (slurp (io/resource "clojurecraft/biomes.edn"))))
+
+(def biome-names
+  "{registry-id biome-kw}: biome-ids turned round."
+  (into {} (map (fn [[k v]] [v k])) biome-ids))
+
+(def biome-spawns
+  "{biome-kw [[kind weight min max] ...]}: each biome's monster spawn list as the jar's
+   worldgen/biome files give it (resources/clojurecraft/biome-spawns.edn, generated by bb
+   datagen): the kinds, their weights and their group sizes."
+  (edn/read-string (slurp (io/resource "clojurecraft/biome-spawns.edn"))))
+
+(def biome-kinds
+  "The kinds of a Nether biome's monster list the model spawns by the list: the enderman. A kind
+   rolled that is not here spawns nothing (zombified piglins, ghasts, piglins, skeletons are not
+   modelled so); the fortress, the crimson forest's hoglin and the delta's magma cubes spawn by
+   their floors (fortress-kinds, crimson-kinds, deltas-kinds)."
+  #{:enderman})
 
 (def fortress-kinds
   "The kinds a fortress's brick floor spawns, with their weights, beside the blaze spawner:
@@ -670,19 +709,7 @@
 
 (def deltas-pack 3)                   ; magma cubes a basalt delta's spawn tries for at once (the biome's group: 2 to 5)
 
-(def enderman-pack 4)                 ; endermen a warped forest's spawn tries for at once (the biome's spawner: minCount and maxCount both 4)
 (def pack-walk 6)                     ; each pack member steps nextInt(6) - nextInt(6) on x and on z from the last (NaturalSpawner.spawnCategoryForPosition)
-
-(def warped-floor-states
-  "The states of warped nylium: the warped forest's floor, where the model spawns its endermen.
-   The captured Nether's biome containers are kept (:chunk/biomes) but the model does not read
-   them, so the floor is the forest's sign, as it is the bot's."
-  (blocks/states-of :warped_nylium))
-
-(defn warped-floor?
-  "Is state id a warped forest's floor (warped nylium)?"
-  [id]
-  (contains? warped-floor-states id))
 
 (defn on-floor?
   "May a mob n cells tall spawn with its feet in cell [x y z]: floor? of the block under them
@@ -690,13 +717,37 @@
   [floor? n at free? [x y z :as cell]]
   (let [below (at [x (dec y) z])] (boolean (and below (floor? below) (stands-in? free? cell n)))))
 
-(defn nether-spot?
-  "May an enderman spawn with its feet in cell [x y z]: warped nylium under them and its tall
-   cells free? Any light: the model's light is 0 everywhere, under the Nether's limit of 7
-   (the dimension's monster_spawn_light_level) that vanilla's Monster.checkMonsterSpawnRules
+(defn spawn-floor?
+  "May a monster stand on state id to spawn: a solid block that is not bedrock (vanilla refuses a
+   spawn on bedrock and barriers, and on what is not a full face up)."
+  [id]
+  (and (blocks/solid? id) (not= :bedrock (blocks/name-of id))))
+
+(defn biome-lists?
+  "Does biome (a name) list kind among its monsters (biome-spawns)?"
+  [biome kind]
+  (boolean (some #(= kind (first %)) (biome-spawns biome))))
+
+(defn biome-spot?
+  "May kind spawn with its feet in cell [x y z]: a spawn floor under them (spawn-floor?), its tall
+   cells free, and the cell's biome (biome-of a cell, a name or nil) listing kind, as vanilla asks
+   the biome at each pack member's place (NaturalSpawner.canSpawnMobAt). Any light: the model's
+   light is 0 everywhere, under the Nether's limit of 7 that Monster.checkMonsterSpawnRules
    tests, so the shroomlit cells it would refuse are not told apart."
-  [at free? cell]
-  (on-floor? warped-floor? (tall :enderman) at free? cell))
+  [at free? biome-of kind cell]
+  (and (biome-lists? (biome-of cell) kind) (on-floor? spawn-floor? (tall kind) at free? cell)))
+
+(defn pick-row
+  "The row of weighted [[k w & more] ...] that a roll r in [0, 1) lands on, or nil when there is
+   none (pick's choice, its whole row)."
+  [weighted r]
+  (let [k (when (seq weighted) (pick weighted r))] (some #(when (= k (first %)) %) weighted)))
+
+(defn group-size
+  "How many of a spawn row [kind weight lo hi] a pack tries for, a roll r in [0, 1): lo to hi,
+   evenly (vanilla's minCount + nextInt(maxCount - minCount + 1))."
+  [[_ _ lo hi] r]
+  (+ (long lo) (long (math/floor (* r (inc (- (long hi) (long lo))))))))
 
 (def fortress-floor-states
   "The states of a fortress's brick: nether bricks, their fence and their stairs, the floor
@@ -745,10 +796,11 @@
   [at free? cell]
   (on-floor? deltas-floor? (tall :magma_cube_big) at free? cell))
 
-(defn nether-spots
-  "The cells of column x z from lo to hi an enderman may spawn in (nether-spot?), lowest first."
-  [at free? x z lo hi]
-  (for [y (range lo (inc hi)) :when (nether-spot? at free? [x y z])] [x y z]))
+(defn floor-spots
+  "The cells of column x z from lo to hi a body n cells tall may stand in on a spawn floor
+   (spawn-floor?), lowest first: where a spawn try may begin, before its biome's list is rolled."
+  [at free? n x z lo hi]
+  (for [y (range lo (inc hi)) :when (on-floor? spawn-floor? n at free? [x y z])] [x y z]))
 
 (defn pack-step
   "How far the next pack member stands from the last on one axis for rolls r1 and r2 in

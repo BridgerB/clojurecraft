@@ -225,6 +225,14 @@
        (< (memory/started-count-within? world :place pparams/cover-place-hold-ms)
           pparams/cover-place-max)))
 
+(defn hide-ok?
+  "May cover-from walk to a hide cell now: no walk begun within hide-hold-ms? From a cell hidden
+   from one shooter a second one sees the bot, and the next hide cell is a step back: a real rod
+   bot under two blazes walked between three cells every 0.3 s for nine seconds, burning, until
+   it died. Within the hold the cover is made where it stands (a block on the line, a wall, a dig)."
+  [world]
+  (zero? (memory/started-count-within? world :walk pparams/hide-hold-ms)))
+
 (defn cover-from
   "The intent that covers the bot from the swarm: from a shooter in sight (shot-at?, never fought,
    never out-ranged) a walk to a cell beside the feet out of its sight (hide-cell; :intent/for
@@ -246,7 +254,7 @@
                                            (psense/swarm world))
                                      (:player/pos world))]
       (let [item (filler/pick world 1)
-            hide (hide-cell world e)
+            hide (when (hide-ok? world) (hide-cell world e))
             placing (placing? world)
             line (when (and item placing) (line-cell world e))]
         (cond hide {:intent/kind :walk :intent/target hide :intent/for :cover :intent/wall? true}

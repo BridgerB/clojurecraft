@@ -331,6 +331,7 @@
 (s/def :plan/backed-off ; creeper entity id → where it stood when first backed away from, and how often
   (s/map-of int? (s/keys :req-un [:backed-off/pos :backed-off/times])))
 (s/def :plan/cornered (s/coll-of int? :kind set?)) ; entity ids a back-off ended on its clock beside
+(s/def :plan/brute-zones (s/coll-of (s/tuple int? int?) :kind set?)) ; squares a piglin brute was seen in
 (s/def :plan/given-up (s/map-of int? int?)) ; entity id → ms a fight gave it up as unreachable
 (s/def :plan/surfaced (s/tuple ::block-pos int?)) ; where and when the last climb out came out
 (s/def :plan/goals (s/coll-of keyword? :kind set?))
@@ -400,7 +401,8 @@
            :window/state-id :window/grid :window/cursor :window/open :player/held-slot :plan/intent
            :plan/status :plan/blacklist :plan/trunk-failures :plan/chain? :plan/reached
            :plan/boxed-at :plan/boxed-route :plan/retreat-unreachable :plan/unreached
-           :plan/unwalkable :plan/backed-off :plan/cornered :plan/given-up :plan/exit-columns]))
+           :plan/unwalkable :plan/backed-off :plan/cornered :plan/given-up :plan/exit-columns
+           :plan/brute-zones]))
 
 (s/fdef game/step
   :args
@@ -742,6 +744,7 @@
 (s/def :sample/server-tick (s/map-of #{:avg :p50 :p95 :p99} number?))
 (s/def :sample/simulation-distance (s/nilable pos-int?))
 (s/def :sample/runner-servers (s/nilable pos-int?))
+(s/def :sample/runner-bots (s/nilable nat-int?))
 (s/def :sample/bot-heap-mb nat-int?)
 (s/def :sample/threads nat-int?)
 (s/def :milestone/runner (s/nilable int?))
