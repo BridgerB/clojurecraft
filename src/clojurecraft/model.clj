@@ -327,6 +327,9 @@
    [:plan/cornered
     "entity ids a back-off could not get away from: it ended on its clock, or the way away was a drop no landing survives, with the target still nearer than back-off-to; :defend fights them to the end (combat/cornered, issues #161 and #514)"
     "after a back-off ended on its clock or at a drop"]
+   [:plan/brute-zones
+    "[gx gz] squares, pearls/brute-grid blocks on a side, a piglin brute was seen standing in (sense/track-brutes): the hunt's walks end brute-clear or more from each (sense/near-brute-zone?), as a brute strikes any player and keeps to its bastion"
+    "after the hunt first tracked a brute"]
    [:plan/given-up
     "per entity id the ms a fight gave it up as unreachable (not strikable, no route): no act picks it again for combat/give-up-ms while its aim stays out of reach (combat/given-up, issues #69, #62, #582 and #161)"
     "after a fight's engage gave its target up"]

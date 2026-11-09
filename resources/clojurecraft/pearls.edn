@@ -183,4 +183,11 @@
  :cover-place-hold-ms 6000
  ;; blocks cover lays within that window at most (a wall of two levels): a third is no answer to a
  ;; ranged threat, whose fireballs a block at the same spot does not stop; the way out of its line is
- :cover-place-max 2}
+ :cover-place-max 2
+ ;; blocks from the feet within which a piglin brute sends the hunt away (leave-brutes): a brute
+ ;; strikes any player, gold or none, about 9 through iron in a hit, and stays in its bastion
+ :brute-radius 24.0
+ ;; blocks a walk's end, a roam's end and the leave's end keep from every place a brute was seen
+ :brute-clear 32.0
+ ;; blocks on a side of the squares a brute's place is remembered in (one note a square)
+ :brute-grid 8}
