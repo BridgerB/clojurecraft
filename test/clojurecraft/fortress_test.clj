@@ -1634,7 +1634,8 @@
     (is (nil? (filler/pick (w :cobblestone 1 :blackstone 2 :stick 6) 1))
         "three stone of two kinds together: kept")
     (is (= :cobblestone (filler/pick (w :cobblestone 4 :stick 6) 1)) "one over the three: laid")
-    (is (= :netherrack (filler/pick (w :cobblestone 3 :netherrack 50) 1)) "another filler first")
+    (is (= :netherrack (filler/pick (w :cobblestone 3 :stick 6 :netherrack 50) 1))
+        "the last three kept, another filler first")
     (is (= :cobblestone
            (filler/pick (w :cobblestone 3 :stick 6 :stone_pickaxe 1 :iron_pickaxe 1) 1))
         "two pickaxes held: the stone is spent")
