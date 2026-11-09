@@ -726,7 +726,7 @@
         (is (= skeleton-id (:intent/target i)))
         (is (true? (:intent/hold? i)))))
     (testing "with no sword in hand the answer is not the fight: twenty swings at a fist"
-      (let [i (fexit/tunnel-answer (update base :player/inventory dissoc 4))]
+      (let [i (fexit/tunnel-answer (update base :player/inventory dissoc 0 4))]
         (is (some? i) (pr-str i))
         (is (not= :fight (:intent/kind i)) (pr-str i))))
     (testing "at 12 the three hits it takes to win leave under win-margin: the cover"
