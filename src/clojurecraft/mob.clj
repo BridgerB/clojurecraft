@@ -359,6 +359,28 @@
   [free? [x y z] n]
   (every? #(free? [x (+ y %) z]) (range n)))
 
+(defn keep-off-walls
+  "pos with a body of kind (n cells tall, tall) held its half width off each of the four
+   neighbouring columns of its cell it could neither walk into (stands-in? at its height) nor
+   jump into (a block up, its head clear, as step-toward jumps), as the server's collision keeps
+   a box out of the blocks round it: an enderman pressed against a tunnel two high stands with its
+   centre 0.3 back from the opening, not at it. A neighbour it could walk or jump into leaves that
+   side as it was, so a step of one block is still climbed. A body wider than a cell (a hoglin, a
+   big magma cube) is held at its cell's middle at most, never pushed into the next cell."
+  [free? kind pos n]
+  (let [hw (min 0.5 (/ (first (:box (kinds kind) [0.6 1.8])) 2.0))
+        [cx cy cz] (cell-of pos)
+        head-clear? (free? [cx (+ cy n) cz])
+        open? (fn [dx dz]
+                (or (stands-in? free? [(+ cx dx) cy (+ cz dz)] n)
+                    (and head-clear? (stands-in? free? [(+ cx dx) (inc cy) (+ cz dz)] n))))
+        side (fn [v c lo hi]
+               (cond (and (< (- v c) hw) (not lo)) (+ c hw)
+                     (and (> (- v c) (- 1.0 hw)) (not hi)) (- (+ c 1.0) hw)
+                     :else v))
+        [x y z] pos]
+    [(side x cx (open? -1 0) (open? 1 0)) y (side z cz (open? 0 -1) (open? 0 1))]))
+
 (defn fall
   "pos come down onto what is under it: the feet on the top of the first cell below that is not
    free (free? of a cell), at most 32 blocks, as a falling body ends a tick's fall."
@@ -426,6 +448,31 @@
          (<= (abs (- z tz)) (+ (/ w 2.0) physics/half-width))
          (<= y (+ ty physics/height))
          (<= ty (+ y h)))))
+
+(def attack-pad (- (math/sqrt 2.04) 0.6)) ; blocks a walking mob's box grows sideways to make its attack box, never up or down (Mob.DEFAULT_ATTACK_REACH, getAttackBoundingBox)
+
+(defn attack-box-meets?
+  "Does the attack box of a mob of kind at pos (feet centre) meet the box of a player with feet at
+   target, as Mob.isWithinMeleeAttackRange tests it: the mob's box grown attack-pad on x and z and
+   not at all on y, intersecting the player's (AABB.intersects, strict on every axis). Per axis,
+   not a radius: on the diagonal it reaches farther than straight on."
+  [kind pos target]
+  (let [[w h] (:box (kinds kind) [0.6 1.8])
+        [x y z] pos
+        [tx ty tz] target
+        across (+ (/ w 2.0) attack-pad physics/half-width)]
+    (and (< (abs (- x tx)) across)
+         (< (abs (- z tz)) across)
+         (< ty (+ y h))
+         (< y (+ ty physics/height)))))
+
+(defn melee-reaches?
+  "May a walking melee mob of kind at pos hit a player with feet at target: its attack box meets
+   the player's (attack-box-meets?) and the line from its head to the player's eye is clear
+   (sight?), the pair MeleeAttackGoal.canPerformAttack asks (isWithinMeleeAttackRange and
+   Sensing.hasLineOfSight)."
+  [solid? kind pos target]
+  (and (attack-box-meets? kind pos target) (sight? solid? (head kind pos) (physics/eye target))))
 
 (defn can-strike?
   "May a flier at pos strike a player at target: the boxes touch (touches?) and nothing solid
