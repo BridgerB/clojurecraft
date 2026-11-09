@@ -589,3 +589,10 @@
                 {:iron_sword 1}
                 :forest)))
         "a Nether with no forest: the world is out of a forest race")))
+
+(deftest an-overworld-start-plays-the-chain-from-its-goal
+  ;; the :gear start (starts.edn): its run goes on from the gear step, not from the wood
+  (is (= :gear
+         (first (:go/goals (simrace/go-of (assoc two-columns :capture/goal :gear) "nether")))))
+  (is (= (plan/through "nether") (:go/goals (simrace/go-of two-columns "nether")))
+      "no goal named: the whole chain"))

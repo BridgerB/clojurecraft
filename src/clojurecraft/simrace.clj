@@ -226,12 +226,13 @@
 
 (defn go-of
   "The :go a run of w to until is given once its bot is loaded: the chain to until (from the blaze
-   rods when the run starts at a fortress, start/goals-from) and the start (:go/at)."
+   rods when the run starts at a fortress, start/goals-from; from an overworld start's goal,
+   :capture/goal, when it names one) and the start (:go/at)."
   [w until]
   {:event/kind :go
    :go/goals (if-let [f (:capture/fortress w)]
                (start/goals-from (:checkpoint/goal f :blaze-rods) until)
-               (plan/through until))
+               (start/goals-from (:capture/goal w) until))
    :go/chain? true
    :go/at (spawn-of w)})
 
@@ -1108,6 +1109,8 @@
                          nether (nether-of path)]
                      (cond-> w
                        (and (not (start/nether? begin)) (seq kit)) (assoc :capture/kit kit)
+                       (and (not (start/nether? begin)) (:start/goal begin))
+                       (assoc :capture/goal (:start/goal begin))
                        nether (with-nether nether path)
                        (and nether (start/nether? begin))
                        (-> (with-fortress kit (when (start/forest? begin) :forest))
