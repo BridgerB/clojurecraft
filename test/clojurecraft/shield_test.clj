@@ -498,3 +498,27 @@
     (is (plan/done-by (at-shield 18.0 5000) (row :shield-hold))))
   (testing "nothing in reach: done, the meal may come"
     (is (plan/done-by (update (at-shield 5.0 5000) :world/entities dissoc 9) (row :shield-hold)))))
+
+(deftest burning-or-trapped-outranks-the-shield-hold
+  (let [w (assoc (at-shield 5.0 5000) :player/on-fire? true)]
+    (is (plan/done-by w (row :shield-hold)) "burning: the fire's answer first")
+    (is (not= :shield-hold (:goal/id (plan/choose w plan/goals)))))
+  (let [ids (mapv :goal/id plan/goals)
+        at #(.indexOf ^java.util.List ids %)]
+    (is (< (at :escape-water) (at :shield-hold)) "the water escape stands before it")
+    (is (< (at :escape-lava) (at :shield-hold)) "the lava escape stands before it")))
+
+(deftest a-fight-under-the-danger-line-hands-over-to-the-block
+  ;; a held :defend fight whose health falls under the danger-line used to break off and walk away,
+  ;; the shield down; with its target at the shield it ends, and the :shield-hold row blocks
+  (let [i {:intent/kind :fight
+           :intent/target 9
+           :intent/goal :defend
+           :intent/status :active
+           :intent/stage :engage
+           :intent/since 9000}
+        [w _] (fx/fold intent-step (assoc (at-shield 5.0 5000) :plan/intent i) [(tick 10050)])]
+    (is (intent/done? (:plan/intent w)) "ended, not broken off")
+    (is (not= :retreat (:intent/stage (:plan/intent w))))
+    (is (not (:control/forward? (:player/controls w))) "no walk")
+    (is (= :shield-hold (:goal/id (plan/choose (dissoc w :plan/intent) plan/goals))))))

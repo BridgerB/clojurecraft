@@ -534,6 +534,8 @@
   [world]
   (shield/hold world (guard? world (:plan/intent world))))
 
+(declare guarded-against)
+
 (defmethod intent/run :fight
   ;; {:intent/kind :fight :intent/target eid}: done when the target is gone (a kill); below
   ;; retreat-health it breaks off and walks away (done once away: a fight left is not a failure).
@@ -558,7 +560,12 @@
          world (assoc world :plan/intent i)]
      (cond (or (entity/gone? world (:intent/target i))
                (breathed-on? world)
-               (and (:intent/yield? i) (< (:player/health world 20.0) retreat-health)))
+               (and (:intent/yield? i) (< (:player/health world 20.0) retreat-health))
+               ;; under the danger-line with its target at the shield (guarded-against): done,
+               ;; for the :shield-hold row to block in place, never a break-off on foot
+               (and (not= :hunt (:intent/for i))
+                    (some? (:intent/target i))
+                    (= (:intent/target i) (first (guarded-against world)))))
            (-> world
                (assoc :player/controls {})
                intent/done)
@@ -906,10 +913,14 @@
 (defn guarded-against
   "[eid entity] of the melee hostile at the shield (adjacent) while a shield is held and the
    health is under the danger-line: the bot holds the shield toward it (a :block) and neither walks
-   nor eats, for a walk or a meal lowers it. Nil otherwise: no shield, health enough to fight it
-   (pressing), or none in reach and in sight (walled off)."
+   nor eats, for a walk or a meal lowers it; a fight on it under that line ends (intent/run :fight)
+   and hands over to the block rather than walk off. Nil otherwise: no shield, health enough to fight
+   it (pressing), none in reach and in sight (walled off), or the bot burning (:player/on-fire?:
+   the fire's answer, a row's own, comes before any shield, as the water and lava escapes do by
+   standing before :shield-hold in the table)."
   [world]
   (when (and (:player/pos world)
+             (not (:player/on-fire? world))
              (shield/held? world)
              (< (:player/health world 20.0) (danger-line world)))
     (adjacent world)))
