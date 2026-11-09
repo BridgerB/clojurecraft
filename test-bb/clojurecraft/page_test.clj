@@ -270,3 +270,28 @@
     (is (= servers (:servers (page/batch (round {:round/servers servers})))) "it reaches the row")
     (is (not (contains? (page/batch (round {})) :servers)) "and is absent without samples")
     (is (= {:samples 0} (first (page/servers-of [{:sample/playing 0}]))) "a one-server runner")))
+
+(deftest a-batch-row-names-the-servers-its-runner-carried
+  (let [sample (fn [server runner-servers]
+                 {:sample/server server
+                  :sample/runner-servers runner-servers
+                  :sample/simulation-distance 3
+                  :sample/playing 10
+                  :sample/server-tick {:avg 100.0 :p50 90.0 :p95 200.0 :p99 250.0}})
+        one (page/servers-of [(sample nil 1) (sample nil 1)])
+        two (page/servers-of [(sample 1 2) (sample 2 2)])
+        row (fn [servers] (page/batch (round {:round/servers servers})))]
+    (is (= [{:samples 2
+             :simulation-distance 3
+             :runner-servers 1
+             :tick {:avg 100.0 :p50 90.0 :p95 200.0 :p99 250.0}}]
+           one)
+        "a one-server runner: one entry with no server number")
+    (is (= [2 2] (map :runner-servers two)))
+    (is (= 1 (:runner-servers (row one))) "the one-server arm")
+    (is (= 2 (:runner-servers (row two))) "the two-server arm")
+    (is (not (contains? (row (page/servers-of [{:sample/playing 1}])) :runner-servers))
+        "samples from before it was recorded name no arm")
+    (is (= 1 (:runner-servers (page/combine [(row one) (row one)]))) "a run's batches agree")
+    (is (not (contains? (page/combine [(row one) (row two)]) :runner-servers))
+        "a day's batches of both arms name neither")))

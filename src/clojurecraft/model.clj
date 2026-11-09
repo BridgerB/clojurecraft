@@ -715,6 +715,9 @@
    [:sample/server-tick "the server's tick times, ms: avg, p50, p95, p99" "a race sample"]
    [:sample/simulation-distance
     "the simulation distance, in chunks, the sampled server runs with (ci/race.edn's :race/server-overrides)"
+    "a race sample"]
+   [:sample/runner-servers
+    "how many servers the sampled server's runner carries (ci/race.edn's :race/servers, its lane's :race/lane-overrides over it)"
     "a race sample"] [:sample/bot-heap-mb "the bots' JVM heap in use" "a race sample"]
    [:sample/threads
     "the bots' JVM live threads: a bot's socket threads end with it, so a count that only grows as slots refill is a leak"
