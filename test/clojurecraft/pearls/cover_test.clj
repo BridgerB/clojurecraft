@@ -236,3 +236,22 @@
         tables (ps/standing {7 ghast} (into {} (for [x (range 9 14)] [[x 64 8] table])))]
     (is (nil? (pcover/line-cell tables ghast)))
     (is (some? (pcover/line-cell (ps/standing {7 ghast} line-floor) ghast)) "stone it can click")))
+
+(deftest a-nook-is-dug-once-never-again-from-inside-it
+  ;; Issue #263, a real stage-18 bot under a swarm: the cover dug the nook under its feet, then the
+  ;; nook under that, a block deeper at every cover, four cells down; a pillar laid them back and
+  ;; the nooks dug them out again, about seventy-five times each in an hour. A zombie two blocks
+  ;; off, a pickaxe held and nothing to lay or eat: the cover is the nook under the feet.
+  (let [zombie {7 (ps/mob :zombie [10.5 64.0 8.5])}
+        held {0 (ps/item :iron_sword 1) 1 (ps/item :iron_pickaxe 1)}
+        open (-> (ps/standing zombie {[8 62 8] ps/stone})
+                 (assoc :player/inventory held))
+        walls {[9 64 8] ps/stone [7 64 8] ps/stone [8 64 9] ps/stone [8 64 7] ps/stone}
+        hole (-> (ps/standing zombie (assoc walls [8 62 8] ps/stone))
+                 (assoc :player/inventory held))]
+    (is (not (psense/shot-at? open)) "the swarm's branch, not a shooter's")
+    (is (not (pcover/in-hole? open)))
+    (is (= {:intent/kind :dig :intent/target [8 63 8] :intent/for :pearls} (pcover/cover-from open))
+        "on open ground: the nook a block deep")
+    (is (pcover/in-hole? hole) "walled on four sides at the feet: standing in a hole")
+    (is (nil? (pcover/cover-from hole)) "from inside it, no nook under it: no shaft")))

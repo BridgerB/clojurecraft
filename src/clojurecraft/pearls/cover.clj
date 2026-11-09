@@ -214,6 +214,15 @@
                   {:intent/kind :dig :intent/target c :intent/for :pearls})))
             [0 1]))))
 
+(defn in-hole?
+  "Do the feet stand in a hole: the four cells beside them at their own level solid or unloaded
+   (pplace/solid-or-unloaded?)? A nook (combat/nook-cell) is a hole a block deep; dug again from
+   inside it, it is a shaft, a block deeper at every cover, the pickaxe worn for no more cover."
+  [world]
+  (let [[fx fy fz] (intent/feet world)]
+    (every? (fn [[dx dz]] (pplace/solid-or-unloaded? world [(+ fx dx) fy (+ fz dz)]))
+            [[1 0] [-1 0] [0 1] [0 -1]])))
+
 (defn placing?
   "May cover lay a block now: no :place failed within cover-place-hold-ms, and fewer than
    cover-place-max begun in it? A block the server refuses is not tried again under fire, nor one
@@ -232,7 +241,8 @@
    anything to lay against, a block at the feet's level and one over it on its side (wall-toward:
    the line to a shooter a little above is at the head's height), else a dig into the solid side
    away from it (dig-away) to stand in; from the others what combat/cover gives for the nearest
-   (meal, a block between, a pillar, a nook dug under the feet). No block is laid for cover-place-hold-ms
+   (meal, a block between, a pillar, a nook dug under the feet, never a nook dug from inside one,
+   in-hole?). No block is laid for cover-place-hold-ms
    after a :place failed (placing?). Nil when it only waits (cover's :plan/wait ends the plan) or
    nothing can be done."
   [world]
@@ -258,9 +268,11 @@
               :else
               (or (when placing (wall-toward world (:entity/pos e) [0 1]))
                   (dig-away world e)
-                  (when-let [c (combat/nook-cell world)]
+                  (when-let [c (when-not (in-hole? world) (combat/nook-cell world))]
                     {:intent/kind :dig :intent/target c :intent/for :pearls})))))
     (when-let [[_ e] (entity/nearest (psense/swarm world) (:player/pos world))]
       (let [c (combat/cover world e)]
-        (when (and (:intent/kind c) (or (placing? world) (not= :place (:intent/kind c))))
+        (when (and (:intent/kind c)
+                   (or (placing? world) (not= :place (:intent/kind c)))
+                   (not (and (= :dig (:intent/kind c)) (in-hole? world))))
           (assoc c :intent/for :pearls))))))

@@ -23,6 +23,7 @@
             [clojure.string :as str]
             [clojurecraft.armour :as armour]
             [clojurecraft.avoided :as avoided]
+            [clojurecraft.blocks :as blocks]
             [clojurecraft.dimension :as dimension]
             [clojurecraft.eat :as eat]
             [clojurecraft.entity :as entity]
@@ -899,6 +900,18 @@
                (= :solid (path/classify world [fx (- fy 2) fz])))
       below)))
 
+(defn pillar-room?
+  "Is there room over the feet for a pillar to top: every cell from two over the feet to one over
+   top replaceable (blocks/replaceable?, loaded)? The climb fails :boxed at the first level whose
+   cell two over the feet is not, after laying the blocks under it: under a low roof a pillar
+   chosen for cover filled the hole the nook had dug, failed :boxed, and the nook dug it out again
+   once pillar-memory-ms had passed, the same cells laid and dug for an hour."
+  [world top]
+  (let [[fx fy fz] (intent/feet world)]
+    (every? #(some-> (terrain/block-at world [fx % fz])
+                     blocks/replaceable?)
+            (range (+ (long fy) 2) (+ (long top) 2)))))
+
 (def pillar-memory-ms 30000) ; ms a failed pillar (or a wall with no support) is not chosen again: start-intent forgets :plan/failed, so the story is asked
 
 (defn wall-failed?
@@ -925,7 +938,7 @@
    meal when food is held and the bar can take one, else the wait :resting; otherwise the meal
    when food is held, the bar can take one and e is out of attack-reach, else a block laid
    between (wall-cell, a filler of filler/pick), else a pillar of pillar-height when
-   pillar-fill filler is held, else the meal, else the dig of a nook under the feet (nook-cell,
+   pillar-fill filler is held and there is room over the head for it (pillar-room?), else the meal, else the dig of a nook under the feet (nook-cell,
    a pickaxe held) to stand in. Only with nothing at all held the wait :cornered, which ENDS THE
    PLAN after wait-ticks: the one choice here that is a death or a failure, taken with nothing
    to eat, lay or dig with. Gym chain-w13 dragon run 2 chose a back-off from an enderman every
@@ -940,7 +953,9 @@
              :near? (<= (physics/distance (game/eye world) (aim e)) attack-reach)
              :wall wall
              :filler (filler/pick world wall-fill)
-             :pillar (when-not (pillar-failed? world) (filler/pick world pillar-fill))
+             :pillar (when (and (not (pillar-failed? world))
+                                (pillar-room? world (+ fy pillar-height)))
+                       (filler/pick world pillar-fill))
              :top (+ fy pillar-height)
              :nook (nook-cell world)}]
     (threat/shelter world

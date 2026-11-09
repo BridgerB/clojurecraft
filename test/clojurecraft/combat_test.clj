@@ -854,3 +854,16 @@
                                             :no-support 99500)
                                     [9 64 8]))
         "a wall with no support a moment ago: no wall")))
+
+(deftest a-pillar-is-chosen-only-with-room-over-the-head
+  ;; Issue #263: under a low roof the cover's pillar laid the blocks of the hole the nook had dug,
+  ;; failed :boxed at the roof, and the nook dug them out again. The climb fails :boxed at the
+  ;; first level with no replaceable cell two over the feet; the pillar to top needs every cell
+  ;; from two over the feet to one over top.
+  (let [open (standing {})
+        roofed (assoc-in open
+                [:world/chunks [0 0]]
+                (world/column {[8 68 8] (blocks/default-state :stone)}))]
+    (is (combat/pillar-room? open 67) "open air over the feet: room")
+    (is (not (combat/pillar-room? roofed 67)) "a roof at top + 1: the climb would end :boxed")
+    (is (combat/pillar-room? roofed 66) "a lower top fits under it")))
