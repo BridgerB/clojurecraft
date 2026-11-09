@@ -843,6 +843,11 @@
    hits for 5 and withers, and a fortress holds them in threes."
   (kinds-with :avoided?))
 
+(def fled
+  "Kinds the :defend row never fights, at any health (threats.edn :fled?): a piglin brute, fifty
+   health and a golden axe's 13, is backed away from."
+  (kinds-with :fled?))
+
 (def avoided-health 18.0) ; health a fight with one of avoided is begun at
 
 (def hold-margin 3.0)                 ; blocks past defend-radius the target of a running :defend fight stays a threat (held-target)
@@ -1108,23 +1113,16 @@
     (when-let [eid (some (fn [[id x]] (when (= x e) id)) (:world/entities world))]
       {:intent/kind :block :intent/target eid})))
 
-(defn cover
-  "The intent for a bot under retreat-health that no back-off from entity e would help
-   (back-off-pointless?), never a fight (#577, danger-health): first, when e shoots at it from
-   where it is and a shield is held, a :block behind the shield (block-intent): a skeleton's
-   arrows fall on a meal eaten in its sight, and no eating is done with a shield up. Then, with
-   e back-off-to or more away, the
-   meal when food is held and the bar can take one, else the wait :resting; otherwise the meal
-   when food is held, the bar can take one and e is out of attack-reach, else a block laid
-   between (wall-cell, a filler of filler/pick), else a pillar of pillar-height when
-   pillar-fill filler is held, else the meal, else the dig of a nook under the feet (nook-cell,
-   a pickaxe held) to stand in. Against a jumper (jumpers: a magma cube hops 4.15 blocks, over
-   any pillar) the :jumper-ladder instead: the feet's cell walled two high and roofed first (a
-   :seal of roof-site), the rest as above, never a pillar. Only with nothing at all held the wait :cornered, which ENDS THE
-   PLAN after wait-ticks: the one choice here that is a death or a failure, taken with nothing
-   to eat, lay or dig with. Gym chain-w13 dragon run 2 chose a back-off from an enderman every
-   50 ms for a second and died standing in it."
-  [world e]
+(defn cover-by
+  "The first measure of ladder (threat/measure: :block :roof :far-rest :eat-out-of-reach :wall
+   :pillar :eat :nook) that answers entity e, else the wait :cornered, which ENDS THE PLAN after
+   wait-ticks. The measures read one context: the meal held when the bar can take one, whether e
+   is back-off-to away and whether it is within attack-reach, the wall cell between (wall-cell,
+   not one a :place failed at) and its filler, the filler of a pillar (none after a pillar
+   failed), the pillar's top (pillar-height over the feet), the nook under the feet (nook-cell)
+   and, against a jumper, the roofed pocket of the feet's cell (roof-site); and the :block behind
+   the shield of a shooter in sight (block-intent)."
+  [world e ladder]
   (let [food (when (< (:player/food world 20) 20) (eat/food-held world))
         wall (let [w (wall-cell world e)] (when-not (wall-failed? world w) w))
         [_ fy _] (intent/feet world)
@@ -1139,12 +1137,31 @@
              :top (+ fy pillar-height)
              :nook (nook-cell world)
              :roof (when (contains? jumpers (entity/kind e)) (roof-site world))}]
-    (threat/shelter world
-                    ctx
-                    (if (contains? jumpers (entity/kind e))
-                      (:jumper-ladder threat/data)
-                      (:cover-ladder threat/data))
-                    (intent/why :cover/else {:plan/wait :cornered}))))
+    (threat/shelter world ctx ladder (intent/why :cover/else {:plan/wait :cornered}))))
+
+(defn cover
+  "The intent for a bot under retreat-health that no back-off from entity e would help
+   (back-off-pointless?), never a fight (#577, danger-health): first, when e shoots at it from
+   where it is and a shield is held, a :block behind the shield (block-intent): a skeleton's
+   arrows fall on a meal eaten in its sight, and no eating is done with a shield up. Then, with e
+   back-off-to or more away, the meal when food is held and the bar can take one, else the wait
+   :resting; otherwise the meal
+   when food is held, the bar can take one and e is out of attack-reach, else a block laid
+   between (wall-cell, a filler of filler/pick), else a pillar of pillar-height when
+   pillar-fill filler is held, else the meal, else the dig of a nook under the feet (nook-cell,
+   a pickaxe held) to stand in. Against a jumper (jumpers: a magma cube hops 4.15 blocks, over
+   any pillar) the :jumper-ladder instead: the feet's cell walled two high and roofed first (a
+   :seal of roof-site), the rest as above, never a pillar. Only with nothing at all held the wait
+   :cornered, which ENDS THE PLAN after wait-ticks: the one choice here that is a death or a
+   failure, taken with nothing to eat, lay or dig with. Gym chain-w13 dragon run 2 chose a
+   back-off from an enderman every 50 ms for a second and died standing in it. The ladders are
+   threats.edn's (cover-by)."
+  [world e]
+  (cover-by world
+            e
+            (if (contains? jumpers (entity/kind e))
+              (:jumper-ladder threat/data)
+              (:cover-ladder threat/data))))
 
 (defmethod threat/measure :block [_ {:keys [block]} _] (when block (intent/why :cover/block block)))
 
@@ -1233,6 +1250,7 @@
   ;; the back-off would end at once (back-off-pointless?) or e teleports and a cover is held
   ;; (teleport-cover): then the cover (a meal, a block laid
   ;; between, a pillar), never the fight under that line (#577).
+  ;; A piglin brute (fled) is backed away from at any health, never fought.
   ;; A zombified piglin (pack-neutral?) is backed away from even at full health: the first swing
   ;; angers the pack (gym blaze-wall-b run 1). A wither skeleton (avoided) is fought alone and at
   ;; avoided-health or more only. A standoff at the shield (pressing) is fought first, whatever
@@ -1250,6 +1268,7 @@
             shelter (intent/why :defend/shelter shelter)
             (or (pack-neutral? e)
                 (= :creeper (entity/kind e))
+                (contains? fled (entity/kind e))
                 hurt?
                 (and (contains? avoided (entity/kind e))
                      (not (avoided/noted? world :cornered eid))

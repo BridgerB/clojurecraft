@@ -229,4 +229,6 @@
  clojurecraft.pearls.move/watch-progress
  "One rule for the exit that failed :blocked every thirty seconds for forty minutes (sim R1/17, probes rh5-20 and rh5-33: 107 attempts by minute 20), the exit and heading targets that flipped (d3ce99b R1-24-1, 620 :tunnel-to intents), and the forest tunnel that stood still at [-96 65 466] (R2/21). An exit given up on its first failure lost R4/1's forests (leave-one-out, wide set 2): no progress is the evidence, not one failure."
  clojurecraft.fortress-exit/fortress-escaping?
- "Sim R4/1 seed 1 (probe wide-st2-R4-1) was in its forest from minute 8.7, 81 endermen in sight, and still tunnelled the fortress exit at minute 47."}
+ "Sim R4/1 seed 1 (probe wide-st2-R4-1) was in its forest from minute 8.7, 81 endermen in sight, and still tunnelled the fortress exit at minute 47."
+ clojurecraft.pearls.cover/pack-answer
+ "real-18 on 54d5444 (botlogs-2026-11-09-09, asset 42590490110-r1-b1): four of six deaths in one batch were wither skeletons, each a pack of two to four in melee, twenty health to none in 3.5 to 5 s. Clj_r12 kept a :hunt/travel walk 13 s under four of them with no new intent (the hunt's interrupt had no trigger for a pack, only an enderman's strike); Clj_r05 was in a cage-break :tunnel; Clj_r13 held its blaze-refuge pocket while two stood at it; Clj_r14 laid one block between while a second came round it. A fight against a lone striker (the dropped wither-answer branch) changed none of the four."}

@@ -48,7 +48,8 @@
    had the walk's minutes to spawn into. Never one of the two ends the last walks arrived at
    (memory/newest-dones), and never a spent end when an enderman is tracked within
    descend-radius (the hunt cuts toward it with dig-out instead). With both refused the hunt
-   digs out or rests where it stands."
+   digs out or rests where it stands. No end within brute-clear of a brute's ground
+   (sense/near-brute-zone?) is walked to at all."
   [world]
   (let [feet (intent/feet world)
         start (mod (quot (:time/now world 0) pparams/roam-turn-ms) (count pparams/headings))
@@ -66,7 +67,9 @@
         ;; every route planned once: the first pass wanted the first unspent end a route
         ;; reaches, the second the farthest ends of those same routes, and planning the
         ;; twenty-four routes twice over spent the tick on searches already searched
-        planned (mapv plan-to tries)]
+        planned (into []
+                      (remove (fn [[_ to]] (and to (psense/near-brute-zone? world to))))
+                      (map plan-to tries))]
     (or (some (fn [[status to]]
                 (when (and (= :found status) to (not (contains? spent to))) (walk to)))
               planned)
@@ -396,7 +399,8 @@
 (defn far-ends
   "Where each of the eight headings' routes (path/plan toward ground wander-reach out, from index
    start in headings) ends, as [status end gain] with gain the end's octile distance from the feet:
-   the ends roam-reach or more away, not in spent or avoided (a walk to it failed), nor within roam-reach of where one of the
+   the ends roam-reach or more away, not in spent or avoided (a walk to it failed), nor on a
+   brute's ground (sense/near-brute-zone?), nor within roam-reach of where one of the
    last explore-memory walks arrived (an end near one already walked to is not new ground),
    :found first, then the farthest."
   [world start spent]
@@ -415,6 +419,7 @@
                               (not= to feet)
                               (not (contains? spent to))
                               (not (avoided/noted? world :blacklist to))
+                              (not (psense/near-brute-zone? world to))
                               (not-any? #(< (path/octile to %) pparams/roam-reach) visited))]
                [(:path/status r) to (path/octile feet to)])
         far (filter #(>= (nth % 2) pparams/roam-reach) ends)]
@@ -429,6 +434,20 @@
   [world start spent]
   (when-let [best (first (far-ends world start spent))]
     {:intent/kind :walk :intent/target (second best) :intent/for :pearls}))
+
+(defn leave-brutes
+  "The hunt's way off a brute's ground when one is within brute-radius (sense/brute-near): a walk
+   to the end of far-ends (none on a brute's ground) farthest on the plane from it, else a
+   :back-off from it; nil with none near. A brute strikes any player, gold worn or not, for
+   about 9 a hit through iron, and keeps to its bastion: hiding beside it is waiting for it."
+  [world]
+  (when-let [[eid b] (psense/brute-near world)]
+    (let [ends (far-ends world 0 #{})
+          best (when (seq ends)
+                 (apply max-key #(physics/horizontal-distance (second %) (:entity/pos b)) ends))]
+      (if best
+        {:intent/kind :walk :intent/target (second best) :intent/for :pearls}
+        {:intent/kind :back-off :intent/target eid :intent/for :pearls}))))
 
 (defn wander
   "A far-walk from the heading the clock picks, nothing spent. Not roam: it refuses an end already

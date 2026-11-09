@@ -200,7 +200,8 @@
                                                                         (pmove/watch-progress
                                                                          (pmove/reach-heading-hold
                                                                           (pmove/track-seen
-                                                                           world)))))))))))
+                                                                           (psense/track-brutes
+                                                                            world))))))))))))
                 (psense/shot-at? world) (assoc :pearls/shot-at-ms (:time/now world 0))
                 (fexit/sealed-full? world) (assoc :pearls/refuge-done true))]
     (cond (or (nil? look)
@@ -293,6 +294,7 @@
                          (or (some? (psense/angry-near world))
                              (psense/angry-within? world pparams/hold-radius)))
                     (some? (first (psense/struck-by world)))
+                    (psense/pack-at-hand? world)
                     (some? (fexit/tunnel-answer world))
                     (psense/shot-at? world)
                     (and (= :lookout (:intent/kind i)) (some? (first (psense/threat world)))))

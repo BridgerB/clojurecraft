@@ -186,10 +186,6 @@
                  :piglin {:mainhand :crossbow}}
  ;; The animals a chunk is given when it is first loaded, in a fixed order.
  :mob/passive [:chicken :cow :pig :sheep]
- ;; The kinds a warped forest's monster list spawns, with their weights: the enderman alone (weight
- ;; 1, in packs of enderman-pack), as vanilla's warped_forest biome lists them. The Nether spawns by
- ;; biome; the model tells a warped forest by its floor (warped-floor?).
- :mob/warped [[:enderman 1]]
  ;; The kinds a fortress's brick floor spawns, with their weights, beside the blaze spawner: wither
  ;; skeleton 8 and magma cube 3, the structure's spawn_overrides (fortress.json), the cube's 3 shared
  ;; evenly by its three sizes (Slime.finalizeSpawn: 1 << nextInt(3)). Blazes stay the spawner's. One

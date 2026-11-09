@@ -6,6 +6,7 @@
 ;;   :pack-neutral?   hitting one angers the pack: one that has struck is backed away from, never swung at
 ;;   :pumpkin-safe?   not provoked by a look while a carved pumpkin is worn: only a hit makes it a threat
 ;;   :radius          blocks within which it is a threat, in place of the defend radius
+;;   :fled?           never fought, at any health: backed away from (fifty health and a golden axe; a sword needs a dozen hits)
 ;;   :jumper?         hops higher than a pillar (a big magma cube rises 4.15 blocks, its box 2.08 over that): covered against by
 ;;                    :jumper-ladder, a roofed pocket first and never a pillar
 {:kinds {:silverfish {:hit 1.0}
@@ -18,7 +19,7 @@
          :piglin {:hit 7.0}
          :zombified_piglin {:hit 7.0 :pack-neutral? true}
          :hoglin {:hit 6.0}
-         :piglin_brute {:hit 8.0}
+         :piglin_brute {:hit 13.0 :fled? true} ; 7 and a golden axe's 6: the 9.1 a real brute dealt through iron and gold boots (armour 14)
          :ghast {:never-fought? true}
          :enderman {:teleports? true :pumpkin-safe? true}
          :creeper {:radius 6.0}
@@ -27,4 +28,14 @@
  :cover-ladder [:block :far-rest :eat-out-of-reach :wall :pillar :eat :nook]
  ;; the same against a jumper: the feet's cell walled two high and roofed over the head first (a :seal of it), and no pillar,
  ;; which a hop reaches at any height a bot can raise under a hit
- :jumper-ladder [:roof :far-rest :eat-out-of-reach :wall :eat :nook]}
+ ;; what piglins guard (the game's guarded_by_piglins tag): one broken or opened while a guard kind
+ ;; stands within :radius of it angers every one of them that sees it, gold worn or not. A dig of
+ ;; one fails :guarded then, and so does an open (a real bot broke nether gold ore in its tunnel and
+ ;; the piglins round it turned on it at once)
+ :guarded {:blocks #{:barrel :chest :ender_chest :gilded_blackstone :gold_block :nether_gold_ore
+                     :raw_gold_block :trapped_chest}
+           :by #{:piglin :piglin_brute}
+           :radius 16.0}
+ :jumper-ladder [:roof :far-rest :eat-out-of-reach :wall :eat :nook]
+ ;; the order the pack answer (pearls.cover/pack-answer) tries against a melee pack, never a fight (#577) and never a meal in reach: up out of every reach on a pillar of three, else a block between (a hole under the feet is still in reach)
+ :pack-ladder [:pillar :wall]}

@@ -75,3 +75,30 @@
   (let [{:keys [rc sent]} (server [[10.5 61.0 286.5]] [5000 5000] {:default "minecraft:blaze"})]
     (is (nil? (land/warped-floor! rc "Clj_t" [10 0 286])) "a blaze in range refuses it too")
     (is (some #(str/includes? % "type=minecraft:blaze,distance=..48") @sent))))
+
+(defn with-bastion
+  "rc answering a bastion remnant's locate with one at [bx bz], every other command as rc does."
+  [rc [bx bz]]
+  {:answer
+   (fn [c]
+     (if (str/includes? c "locate structure minecraft:bastion_remnant")
+       (str "The nearest minecraft:bastion_remnant is at [" bx ", ~, " bz "] (5 blocks away)")
+       ((:answer rc) c)))})
+
+(deftest a-forest-floor-beside-a-bastion-is-refused
+  ;; a bastion's piglin brutes strike any player, gold worn or not: five forest-start bots died to
+  ;; them within thirty blocks of their landing
+  (let [{:keys [rc]} (server [[430.5 57.0 941.5] [900.5 70.0 -300.5]] [5000 5000])]
+    (is (= [900 70 -301] (land/warped-floor! (with-bastion rc [440 950]) "Clj_t" [430 0 941]))
+        "the first floor is beside the bastion, the second is far from it"))
+  (let [near? (fn [cell]
+                (land/bastion-near? (with-bastion {:answer (constantly "ok")} [100 100]) cell))]
+    (is (near? [100 64 (+ 100 land/bastion-clear)]) "at the clear")
+    (is (not (near? [100 64 (+ 101 land/bastion-clear)])) "past it")))
+
+(deftest a-forest-floor-with-a-brute-in-range-is-refused
+  (let [{:keys [rc]}
+        (server [[10.5 61.0 286.5] [900.5 70.0 -300.5]] [5000 5000] {0 "minecraft:piglin_brute"})]
+    (is (false? (land/bastion-near? rc [10 61 286])) "no bastion located")
+    (is (= [900 70 -301] (land/warped-floor! rc "Clj_t" [10 0 286]))
+        "the first floor has a brute in range and is refused; the second is taken")))

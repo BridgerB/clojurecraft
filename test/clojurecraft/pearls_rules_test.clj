@@ -47,3 +47,17 @@
   (let [ids (mapv :rule/id rules/all-rules)
         at (fn [id] (.indexOf ^java.util.List ids id))]
     (is (< -1 (at :hunt/tunnel-answer) (at :hunt/pocket-bore)))))
+
+(deftest a-brute-within-reach-sends-the-hunt-off-its-ground
+  ;; a piglin brute strikes any player, gold worn or not, about 9 through iron in a hit, and keeps
+  ;; to its bastion: five real forest-start bots hid beside one and died in three hits
+  (let [brute (fn [x] (ps/mob :piglin_brute [x 64.0 8.5]))
+        near (ps/standing {9 (brute 14.5)})
+        i (rules/decide near)]
+    (is (= :hunt/leave-brutes (rules/row-of near)))
+    (is (contains? #{:walk :back-off} (:intent/kind i)) (pr-str i))
+    (is (not= :hunt/leave-brutes (rules/row-of (ps/standing {9 (brute 40.5)})))
+        "one past brute-radius is not chased off from")
+    (is (not= :hunt/leave-brutes
+              (rules/row-of (ps/standing {9 (assoc (brute 14.5) :entity/died-at 0)})))
+        "a dead one is nothing")))

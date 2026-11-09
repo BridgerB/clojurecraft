@@ -288,6 +288,33 @@
                        :dimension/coordinate-scale (double (get d "coordinate_scale"))}))
        vec))
 
+(defn biomes
+  "{name-kw id} for every biome in the inner jar's data/minecraft/worldgen/biome/*.json, by name,
+   which is the registry order the server syncs biomes in (as dimension types): a chunk's biome
+   container holds these ids (chunk/biome-at)."
+  [entries]
+  (->> (for [[p _] entries
+             :when (str/starts-with? p "data/minecraft/worldgen/biome/")]
+         (keyword (file-stem p)))
+       sort
+       (map-indexed (fn [i k] [k i]))
+       (into (sorted-map))))
+
+(defn biome-spawns
+  "{name-kw [[kind-kw weight min max] ...]} for every biome in the inner jar's
+   data/minecraft/worldgen/biome/*.json that lists monsters: its spawners' monster category as the
+   file lists it, each entry's type, weight, minCount and maxCount. The spawn costs are not read."
+  [entries]
+  (into (sorted-map)
+        (for [[p j] entries
+              :when (str/starts-with? p "data/minecraft/worldgen/biome/")
+              :let [ms (get-in (json/read-str j) ["spawners" "monster"])]
+              :when (seq ms)]
+          [(keyword (file-stem p))
+           (mapv (fn [m] [(name-kw (get m "type")) (get m "weight") (get m "minCount")
+                          (get m "maxCount")])
+                 ms)])))
+
 (defn mobs
   "{entity-kw {:max-health h :category kw}} from the probe's JSON: every living entity type, keyed
    like entity-types.edn, with the game's own maximum health and MobCategory."
@@ -352,7 +379,7 @@
 
 (defn inner-jar-entries
   "{path json-string} for version.json and every
-   data/minecraft/{recipe,loot_table/blocks,tags/item,tags/block,dimension_type}/*.json in the
+   data/minecraft/{recipe,loot_table/blocks,tags/item,tags/block,dimension_type,damage_type,worldgen/biome}/*.json in the
    inner jar."
   [server-jar]
   (with-open [outer (ZipInputStream. (io/input-stream server-jar))]
@@ -371,7 +398,7 @@
                  (or
                   (= n "version.json")
                   (re-matches
-                   #"data/minecraft/(recipe/[^/]+|loot_table/blocks/[^/]+|dimension_type/[^/]+|damage_type/[^/]+|tags/(item|block)/.+)\.json"
+                   #"data/minecraft/(recipe/[^/]+|loot_table/blocks/[^/]+|dimension_type/[^/]+|damage_type/[^/]+|worldgen/biome/[^/]+|tags/(item|block)/.+)\.json"
                    n))
                  (assoc acc n (String. (.readAllBytes z) "UTF-8"))
                  acc)))
@@ -416,8 +443,13 @@
         (write-map (io/file out "drops.edn") jar-hdr (drops entries))
         (write-rows (io/file out "dimensions.edn") jar-hdr (dimensions entries))
         (write-map (io/file out "damage-types.edn") jar-hdr (damage-types entries))
-        (println "wrote"
-                 (str out "/{version,item-tags,recipes,harvest,smelting,drops,dimensions}.edn"))))
+        (write-map (io/file out "biomes.edn") jar-hdr (biomes entries))
+        (write-map (io/file out "biome-spawns.edn") jar-hdr (biome-spawns entries))
+        (println
+         "wrote"
+         (str
+          out
+          "/{version,item-tags,recipes,harvest,smelting,drops,dimensions,biomes,biome-spawns}.edn"))))
     (when probe-json
       (let [probe (json/read-str (slurp probe-json))]
         (write-map (io/file out "hardness.edn") probe-hdr (hardness probe (blocks reports)))

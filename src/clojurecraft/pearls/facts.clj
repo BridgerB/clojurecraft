@@ -56,6 +56,7 @@
                 (and (f :near?)
                      (<= (physics/distance (game/eye w) (combat/aim (f :e))) combat/attack-reach)))
    :hurt? (fn [_ w] (< (:player/health w 20.0) pparams/danger-health))
+   :leave-brutes (fn [_ w] (pmove/leave-brutes w))
    :tracked? (fn [_ w] (psense/angry-tracked? w pparams/hold-radius))
    :rested? (fn [_ w] (>= (:player/health w 20.0) (psense/provoke-line w)))
    :meal (fn [f w] (when-not (f :rested?) (blaze/meal w)))
@@ -166,6 +167,8 @@
    ;; conditions of single rules
    :blaze-refuge (fn [_ w] (fexit/blaze-refuge w))
    :come-down (fn [_ w] (pplace/come-down w))
+   :pack-answer (fn [_ w] (pcover/pack-answer w))
+   :pack-hold (fn [_ w] (pcover/pack-hold w))
    :meal-unshot (fn [f w]
                   (and (f :meal)
                        (or (empty? (filter #(combat/seen? w (val %)) (psense/shooters w)))
