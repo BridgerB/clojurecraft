@@ -814,7 +814,7 @@
         "a target a block off the given-up one is the same exit, passed over too")
     (is (= [132 64 8] (fexit/fortress-tunnel-target (assoc w :plan/blacklist #{7})))
         "an entity id on the blacklist (a chase given up) is no cell: nothing passed over")
-    (let [all (set (for [d (range 52 121 8)] [(+ 80 d) 64 8]))
+    (let [all (set (for [d (range 52 125 8)] [(+ 80 d) 64 8]))
           none (assoc w :plan/blacklist all)]
       (is (nil? (fexit/fortress-tunnel-target none)) "every exit given up: none")
       (is (not (fexit/fortress-escaping? none)) "and the hunt's other ways out take over"))))

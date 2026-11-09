@@ -311,8 +311,9 @@
 (defn fortress-exit-horizontal
   "A 2D point [exit-x exit-z] along dir that is > fortress-escape-reach from every
    known exit anchor (exit-anchors: the spawners, else the fortress points), the first of the
-   candidates 52 blocks out and every 8 after, up to 120 (taken there whatever its distance from
-   the anchors). With ok?, only a candidate ok? holds for is taken, and nil when none to 120 is."
+   candidates 52 blocks out and every 8 after, the last the first at 120 or more (taken whatever
+   its distance from the anchors). With ok?, only a candidate ok? holds for is taken, and nil when
+   none to the last is."
   ([world feet dir] (fortress-exit-horizontal world feet dir (constantly true)))
   ([world [fx fz] [dir-x dir-z] ok?]
    (let [pts (exit-anchors world)]
