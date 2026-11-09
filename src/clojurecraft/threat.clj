@@ -9,8 +9,8 @@
 (set! *warn-on-reflection* true)
 
 (def data
-  "{:kinds {kind facts} :cover-ladder [measure ...] :jumper-ladder [measure ...] :guarded {:blocks
-   :by :radius}}: resources/clojurecraft/threats.edn."
+  "{:kinds {kind facts} :cover-ladder [measure ...] :jumper-ladder [measure ...] :pack-ladder
+   [measure ...] :guarded {:blocks :by :radius}}: resources/clojurecraft/threats.edn."
   (edn/read-string (slurp (io/resource "clojurecraft/threats.edn"))))
 
 (defmulti measure

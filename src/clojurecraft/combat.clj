@@ -987,20 +987,15 @@
   (or (= :pillar (:intent/kind (:plan/failed world)))
       (memory/failed-within? world :pillar pillar-memory-ms)))
 
-(defn cover
-  "The intent for a bot under retreat-health that no back-off from entity e would help
-   (back-off-pointless?), never a fight (#577, danger-health): with e back-off-to or more away, the
-   meal when food is held and the bar can take one, else the wait :resting; otherwise the meal
-   when food is held, the bar can take one and e is out of attack-reach, else a block laid
-   between (wall-cell, a filler of filler/pick), else a pillar of pillar-height when
-   pillar-fill filler is held, else the meal, else the dig of a nook under the feet (nook-cell,
-   a pickaxe held) to stand in. Against a jumper (jumpers: a magma cube hops 4.15 blocks, over
-   any pillar) the :jumper-ladder instead: the feet's cell walled two high and roofed first (a
-   :seal of roof-site), the rest as above, never a pillar. Only with nothing at all held the wait :cornered, which ENDS THE
-   PLAN after wait-ticks: the one choice here that is a death or a failure, taken with nothing
-   to eat, lay or dig with. Gym chain-w13 dragon run 2 chose a back-off from an enderman every
-   50 ms for a second and died standing in it."
-  [world e]
+(defn cover-by
+  "The first measure of ladder (threat/measure: :roof :far-rest :eat-out-of-reach :wall :pillar
+   :eat :nook) that answers entity e, else the wait :cornered, which ENDS THE PLAN after
+   wait-ticks. The measures read one context: the meal held when the bar can take one, whether e
+   is back-off-to away and whether it is within attack-reach, the wall cell between (wall-cell,
+   not one a :place failed at) and its filler, the filler of a pillar (none after a pillar
+   failed), the pillar's top (pillar-height over the feet), the nook under the feet (nook-cell)
+   and, against a jumper, the roofed pocket of the feet's cell (roof-site)."
+  [world e ladder]
   (let [food (when (< (:player/food world 20) 20) (eat/food-held world))
         wall (let [w (wall-cell world e)] (when-not (wall-failed? world w) w))
         [_ fy _] (intent/feet world)
@@ -1014,12 +1009,28 @@
              :top (+ fy pillar-height)
              :nook (nook-cell world)
              :roof (when (contains? jumpers (entity/kind e)) (roof-site world))}]
-    (threat/shelter world
-                    ctx
-                    (if (contains? jumpers (entity/kind e))
-                      (:jumper-ladder threat/data)
-                      (:cover-ladder threat/data))
-                    (intent/why :cover/else {:plan/wait :cornered}))))
+    (threat/shelter world ctx ladder (intent/why :cover/else {:plan/wait :cornered}))))
+
+(defn cover
+  "The intent for a bot under retreat-health that no back-off from entity e would help
+   (back-off-pointless?), never a fight (#577, danger-health): with e back-off-to or more away, the
+   meal when food is held and the bar can take one, else the wait :resting; otherwise the meal
+   when food is held, the bar can take one and e is out of attack-reach, else a block laid
+   between (wall-cell, a filler of filler/pick), else a pillar of pillar-height when
+   pillar-fill filler is held, else the meal, else the dig of a nook under the feet (nook-cell,
+   a pickaxe held) to stand in. Against a jumper (jumpers: a magma cube hops 4.15 blocks, over
+   any pillar) the :jumper-ladder instead: the feet's cell walled two high and roofed first (a
+   :seal of roof-site), the rest as above, never a pillar. Only with nothing at all held the wait
+   :cornered, which ENDS THE PLAN after wait-ticks: the one choice here that is a death or a
+   failure, taken with nothing to eat, lay or dig with. Gym chain-w13 dragon run 2 chose a
+   back-off from an enderman every 50 ms for a second and died standing in it. The ladders are
+   threats.edn's (cover-by)."
+  [world e]
+  (cover-by world
+            e
+            (if (contains? jumpers (entity/kind e))
+              (:jumper-ladder threat/data)
+              (:cover-ladder threat/data))))
 
 (defmethod threat/measure :far-rest
   [_ {:keys [far? food]} _]
