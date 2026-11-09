@@ -16,7 +16,6 @@
    Babashka runs this; nothing here requires the bot."
   (:require [babashka.fs :as fs]
             [babashka.process :as p]
-            [clojure.java.io :as io]
             [clojure.math :as math]
             [clojure.string :as str]))
 
@@ -27,7 +26,6 @@
 (def profile-s 60)                        ; the server's debug profile and the JFR recording beside it
 (def perf-s 20)                           ; perf start records 10 s and writes its zip after
 (def cpu-kinds [:user :nice :system :idle :iowait :irq :softirq :steal])
-(def watched #"^(server|race)-|^convert$") ; roles whose threads a sample reads
 (def jstat-roles #"^(server|race)-")      ; roles jstat is attached to
 (def jfr-views ["hot-methods" "gc-pauses" "gc" "cpu-load" "thread-cpu-load" "allocation-by-class"])
 
@@ -48,7 +46,7 @@
   "Each kind's percent of all CPU time between two cpu-times readings a and b, 100 in all; {} when
    no time passed. :steal is time the hypervisor gave another guest."
   [a b]
-  (let [d (into {} (map (fn [k] [k (- (b k 0) (a k 0))])) cpu-kinds)
+  (let [d (into {} (map (fn [k] [k (- (get b k 0) (get a k 0))])) cpu-kinds)
         total (reduce + (vals d))]
     (cond (pos? total) (update-vals d #(round1 (/ (* 100.0 %) total)))
           :else {})))
@@ -135,7 +133,7 @@
   "One sample as a value from two readings dt-ms apart ({:at :cpu :loadavg :procs :threads}),
    hz clock ticks a second: the time, the load, the CPU split, the busiest processes' share of a
    core (100 is one core, the runner has :cpus) with their role, threads and resident MB, and the
-   busiest threads of each watched JVM."
+   busiest threads of each server, race and conversion JVM."
   [before after hz]
   (let [dt (- (:at after) (:at before))
         cpu (shares (ticks-of (:procs before)) (ticks-of (:procs after)) dt hz)]
@@ -157,54 +155,58 @@
             :inspect/threads (busiest-threads before after dt hz)}
            (update-keys (load-avg (:loadavg after)) #(keyword "inspect" (name %))))))
 
-;;;; I/O: /proc, jstat, RCON, jcmd and jfr ;;;;
+(def dump-script
+  "The shell that dumps /proc in one go, a line each: S the machine's cpu line, L the load,
+   /proc/<pid>/stat:<line> every process, A <pid> <args> every command line, and for each server,
+   race and conversion JVM C <pid> <cwd> and /proc/<pid>/task/<tid>/stat:<line> every thread.
+   A shell, not bb: bb reads /proc/stat as nothing, by slurp (Invalid argument, probe 42512007362)
+   or by a reader (nil, probe 42520554997). The brackets keep pgrep from finding this script."
+  (str
+   "echo \"S $(head -n1 /proc/stat)\"\n" "echo \"L $(cat /proc/loadavg)\"\n"
+   "grep -s '' /proc/[0-9]*/stat\n" "ps -eo pid=,args= | sed 's/^ */A /'\n"
+   "for p in $(pgrep -f 'server-26[.]1[.]2[.]jar|clojurecraft[.]race|clojurecraft[.]simrace'); do\n"
+   "  echo \"C $p $(readlink /proc/$p/cwd)\"\n"
+   "  grep -s '' /proc/$p/task/[0-9]*/stat\n" "done\n"))
 
-(defn slurp-or-nil
-  "The file's text, or nil when it cannot be read (a process that ended). Read line by line:
-   /proc's files have size 0, and bb's slurp of /proc/stat throws Invalid argument (probe
-   42512007362)."
-  [f]
-  (try (with-open [r (io/reader (str f))] (str/join "\n" (line-seq r))) (catch Exception _ nil)))
+(defn parse-dump
+  "A reading {:at :cpus :cpu :loadavg :procs :threads} from dump-script's text, taken at ms at on a
+   machine of cpus: :procs {pid {:comm :ticks :threads :rss-pages :role}} (role from its args and
+   cwd), :threads {[pid tid] {:comm :ticks}}. A line that does not read is dropped (a process that
+   ended between the shell's steps)."
+  [text at cpus]
+  (let [lines (str/split-lines text)
+        matches (fn [re] (keep #(re-matches re %) lines))
+        tagged (fn [tag] (some #(when (str/starts-with? % (str tag " ")) (subs % 2)) lines))
+        args (into {}
+                   (map (fn [[_ pid a]] [(parse-long pid) (str/split a #"\s+")]))
+                   (matches #"A (\d+) ?(.*)"))
+        cwd (into {} (map (fn [[_ pid c]] [(parse-long pid) c])) (matches #"C (\d+) ?(.*)"))
+        stat (fn [line] (try (proc-stat line) (catch Exception _ nil)))]
+    {:at at
+     :cpus cpus
+     :cpu (some-> (tagged "S")
+                  cpu-times)
+     :loadavg (tagged "L")
+     :procs (into {}
+                  (keep (fn [[_ pid line]]
+                          (let [p (parse-long pid)]
+                            (some-> (stat line)
+                                    (assoc :role (role (args p []) (cwd p)))))))
+                  (matches #"/proc/(\d+)/stat:(.*)"))
+     :threads (into {}
+                    (keep (fn [[_ pid tid line]]
+                            (some->> (stat line)
+                                     (#(select-keys % [:comm :ticks]))
+                                     (vector [(parse-long pid) (parse-long tid)]))))
+                    (matches #"/proc/(\d+)/task/(\d+)/stat:(.*)"))}))
 
-(defn read-proc!
-  "{pid {:comm :ticks :threads :rss-pages :role}} of every process this user can read."
-  []
-  (into {}
-        (keep (fn [d]
-                (let [pid (parse-long (fs/file-name d))
-                      stat (slurp-or-nil (fs/file d "stat"))
-                      args (some-> (slurp-or-nil (fs/file d "cmdline"))
-                                   (str/split #"\u0000"))
-                      cwd (try (str (fs/read-link (fs/path d "cwd"))) (catch Exception _ nil))]
-                  (when stat
-                    (try [pid (assoc (proc-stat stat) :role (role (vec args) cwd))]
-                         (catch Exception _ nil))))))
-        (filter #(re-matches #"\d+" (fs/file-name %)) (fs/list-dir "/proc"))))
-
-(defn read-threads!
-  "{[pid tid] {:comm :ticks}} of every thread of the processes pids."
-  [pids]
-  (into {}
-        (for [pid pids
-              t (try (fs/list-dir (fs/path "/proc" (str pid) "task")) (catch Exception _ nil))
-              :let [stat (slurp-or-nil (fs/file t "stat"))]
-              :when stat]
-          [[pid (parse-long (fs/file-name t))] (select-keys (proc-stat stat) [:comm :ticks])])))
+;;;; I/O: the dump, jstat, RCON, jcmd and jfr ;;;;
 
 (defn reading!
-  "The machine now: {:at :cpus :cpu :loadavg :procs :threads}."
+  "The machine now (parse-dump of dump-script run once)."
   []
-  (let [procs (read-proc!)]
-    {:at (System/currentTimeMillis)
-     :cpus (.availableProcessors (Runtime/getRuntime))
-     :cpu (cpu-times (slurp-or-nil "/proc/stat"))
-     :loadavg (slurp-or-nil "/proc/loadavg")
-     :procs procs
-     :threads (read-threads! (keep (fn [[pid m]]
-                                     (when (some->> (:role m)
-                                                    (re-find watched))
-                                       pid))
-                                   procs))}))
+  (let [r (p/shell {:out :string :err :string :continue true} "bash" "-c" dump-script)]
+    (parse-dump (:out r) (System/currentTimeMillis) (.availableProcessors (Runtime/getRuntime)))))
 
 (defn sh-out!
   "A command's output and error as one string; never throws."
@@ -219,7 +221,7 @@
   (spit (str (fs/file out "machine.txt"))
         (str/join "\n"
                   [(sh-out! "lscpu") (sh-out! "free" "-m") (sh-out! "uname" "-a")
-                   (str "cpu.max " (slurp-or-nil "/sys/fs/cgroup/cpu.max"))])))
+                   (sh-out! "cat" "/sys/fs/cgroup/cpu.max")])))
 
 (defn attach-jstat!
   "A jstat -gcutil per server and race JVM in procs not in attached (a set of pids), its lines to
@@ -247,13 +249,13 @@
   (machine! out)
   (let [hz (parse-long (str/trim (sh-out! "getconf" "CLK_TCK")))
         f (str (fs/file out "cpu.edn"))]
-    (loop [before (reading!)
+    (loop [before (try (reading!) (catch Exception e (println "reading:" (ex-message e)) {:at 0}))
            attached #{}]
       (Thread/sleep every-ms)
       (let [after (try (reading!) (catch Exception e (println "reading:" (ex-message e)) before))
             attached' (try (attach-jstat! out (:procs after) attached)
                            (catch Exception e (println "jstat:" (ex-message e)) attached))]
-        (try (when (> (:at after) (:at before))
+        (try (when (and (:cpu before) (:cpu after) (> (:at after) (:at before)))
                (spit f (str (pr-str (sample before after hz)) "\n") :append true))
              (catch Exception e (println "sample:" (ex-message e))))
         (recur after attached')))))

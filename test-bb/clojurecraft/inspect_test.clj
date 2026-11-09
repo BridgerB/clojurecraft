@@ -77,3 +77,27 @@
         "busiest first, a role only where the lane has one")
     (is (= {"server-1" [["Server thread" 100.0] ["Worker-Main-#" 50.0]]} (:inspect/threads s))
         "the workers summed as one pool")))
+
+(def dump
+  "What dump-script prints for a server with one thread and a shell, plus a line that ended."
+  (str
+   "S cpu  100 0 50 800 10 0 0 40 0 0\n"
+   "L 3.90 4.20 4.00 6/512 9999\n"
+   "/proc/4242/stat:"
+   stat-line
+   "\n"
+   "/proc/7/stat:7 (bash) S 1 7 7 0 -1 0 0 0 0 0 3 1 0 0 20 0 1 0 1 1000 256 0\n"
+   "/proc/9/stat:9 (gone\n"
+   "A 4242 java -Xmx3072M -jar /r/data/local-server/server-26.1.2.jar nogui\n" "A 7 bash -c x\n"
+   "C 4242 /r/work/world-1\n"
+   "/proc/4242/task/4243/stat:4243 (Server thread) S 1 4242 4242 0 -1 0 0 0 0 0 900 100 0 0 20 0 85 0 300 0 0 0\n"))
+
+(deftest a-dump-reads-as-a-reading
+  (let [r (inspect/parse-dump dump 5000 4)]
+    (is (= 5000 (:at r)))
+    (is (= 100 (get-in r [:cpu :user])))
+    (is (= "3.90 4.20 4.00 6/512 9999" (:loadavg r)))
+    (is (= #{4242 7} (set (keys (:procs r)))) "a line cut short is dropped")
+    (is (= "server-1" (get-in r [:procs 4242 :role])) "role from args and cwd")
+    (is (nil? (get-in r [:procs 7 :role])))
+    (is (= {[4242 4243] {:comm "Server thread" :ticks 1000}} (:threads r)))))
