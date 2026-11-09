@@ -402,7 +402,12 @@
 (defn fortress-tunnel-out
   "The :tunnel-to that leaves the fortress via a sealed tunnel,
    retracing the inbound path through enclosed cells, boring parallel to open corridors
-   at the same y, never stepping down through a floor, and surfacing beyond 48 blocks."
+   at the same y, never stepping down through a floor, and surfacing beyond 48 blocks.
+   It bridges a cavern as the way to the fortress does (:intent/bridge?, fortress/bridge-over-void?:
+   a level step floored from the block under the feet, over ground, never hurt or short of blocks):
+   on a column or ledge in open Nether air every level and up step has an air floor and no-down?
+   refuses the steps down, so without the bridge no step is left and the tunnel fails :blocked
+   from the same stand until the plan stalls."
   [world]
   (when-let [target (fortress-tunnel-target world)]
     {:intent/kind :tunnel-to
@@ -410,6 +415,7 @@
      :intent/reach 1.5
      :intent/climb 0
      :intent/no-down? true
+     :intent/bridge? true
      :intent/steps fortress/steps-per-tunnel
      :intent/seal-behind? true
      :intent/for :pearls}))

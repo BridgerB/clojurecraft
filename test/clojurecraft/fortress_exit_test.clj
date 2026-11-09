@@ -755,3 +755,44 @@
       (let [near (assoc w :player/pos [20.5 70.0 8.5])]
         (is (fexit/escape-near? near))
         (is (some? (fexit/fortress-tunnel-target near)))))))
+
+(deftest an-exit-on-a-column-in-open-air-bridges-toward-its-surface
+  ;; Issue #263, real stage-18 lanes: nine of ten :blocked endings were the exit tunnel standing on
+  ;; a column of its own blocks in a Nether cavern, the surface target fifty blocks along and
+  ;; sixteen up. Every level and up step had an air floor with nothing to lay an up step against,
+  ;; and no-down? refused the two steps down, so no step was left: :blocked from the same stand
+  ;; for fifteen minutes until the plan stalled. The exit bridges the cavern as the way to the
+  ;; fortress does. Cells shifted: feet [0 64 0] on [0 63 0], ground at y 40, target [50 80 0].
+  (let [netherrack (blocks/default-state :netherrack)
+        air (blocks/default-state :air)
+        cavern {:world/chunks {}
+                :world/blocks
+                (merge (into {}
+                             (for [x (range -4 61) y (range 41 86) z (range -4 5)] [[x y z] air]))
+                       (into {} (for [x (range -4 61) z (range -4 5)] [[x 40 z] netherrack]))
+                       {[0 63 0] netherrack [0 62 0] netherrack})
+                :player/pos [0.5 64.0 0.5]
+                :player/on-ground? true
+                :player/health 20.0
+                :player/inventory {0 (ps/item :cobblestone 64)}}
+        feet [0 64 0]
+        target [50 80 0]
+        exit (-> (ps/standing {})
+                 (assoc :player/dimension "minecraft:the_nether" :player/pos [8.5 64.0 8.5])
+                 (assoc-in [:player/inventory 1] (ps/item :iron_pickaxe 1))
+                 (memory/observe [8 64 8] blaze/spawner))
+        i (fexit/fortress-tunnel-out exit)
+        step (fn [bridge?]
+               (fortress/next-move cavern
+                                   feet
+                                   target
+                                   (:intent/climb i)
+                                   false
+                                   #{}
+                                   bridge?
+                                   (:intent/no-down? i)))]
+    (is (= :tunnel-to (:intent/kind i)))
+    (is (true? (:intent/bridge? i)) "the exit tunnel bridges a cavern")
+    (is (true? (:intent/no-down? i)) "and still never steps down")
+    (is (nil? (step false)) "without the bridge no step is left: the :blocked of the real lanes")
+    (is (= [1 0 0] (step (:intent/bridge? i))) "with it, the level step toward the target")))
