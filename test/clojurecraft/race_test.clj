@@ -160,27 +160,32 @@
     (is (= {:ok true :reason :goal} (facts/marked {:ok true :reason :goal}))
         "a pass is unchanged")))
 
-(deftest a-bot-is-cut-by-its-cap-or-the-job-whichever-comes-first
-  (is (= 3600000 (facts/bot-timeout-ms 20000000 1000 3600000)) "the cap, when it comes first")
-  (is (= 5000 (facts/bot-timeout-ms 10000 5000 3600000)) "the job's end, when it does")
-  (is (= 1000 (facts/bot-timeout-ms 100 5000 nil)) "at least a second")
-  (is (= 19000 (facts/bot-timeout-ms 20000 1000 nil)) "no cap: the job's end"))
+(deftest the-clock-stops-a-bot-only-at-the-jobs-end
+  (is (= 19999000 (facts/bot-timeout-ms 20000000 1000))
+      "a capped bot too: its cap is game time, held by run-bot!")
+  (is (= 1000 (facts/bot-timeout-ms 100 5000)) "at least a second"))
 
 (deftest a-capped-bot-is-filed-and-the-jobs-end-is-cut
   (let [r {:ok false
            :until "pearls-12"
            :reason :timeout
            :plan {:plan/status :running :plan/reached #{:wood}}}
-        cap 3600000
-        own (facts/marked (facts/capped r 20000000 0 cap))
-        job (facts/marked (facts/capped r 3000000 0 cap))]
+        cap 72000
+        own (facts/marked (facts/capped r 72000 cap))
+        job (facts/marked (facts/capped r 14060 cap))]
     (is (= :bot-timeout (:reason own)))
     (is (not (:run/cut? own)) "its own cap is a failure of the stage")
     (is (not (:run/infra? own)) "bb failures files it")
     (is (= :bot-timeout (second (:run/signature own))))
-    (is (:run/cut? job) "the job's end before the cap is still a cut")
-    (is (= :timeout (:reason job)))
-    (is (= :timeout (:reason (facts/capped r 20000000 0 nil))) "no cap, no change")))
+    (is (:run/cut? job) "the job's end before the cap's game time is still a cut")
+    (is (= :timeout (:reason job))
+        "an hour of a server at 256 ms a tick is 14,060 ticks: not the cap, the clock")
+    (is (= :timeout (:reason (facts/capped r 72000 nil))) "no cap, no change")))
+
+(deftest a-cap-counts-the-servers-ticks-not-the-clock
+  (is (= 0 (game/server-ticks {})) "none before the first set-time")
+  (is (= 11240 (game/server-ticks {:stats/heard {:set-time 562}}))
+      "20 server ticks a set-time, whatever the clock between: an hour at 320 ms a tick"))
 
 (deftest a-slot-backs-off-while-its-bots-never-play
   (let [quick (dec facts/quick-ms)]

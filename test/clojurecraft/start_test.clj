@@ -40,4 +40,7 @@
   (is (= 3600000 (start/cap-ms (start/start-of :rods))))
   (is (= 3600000 (start/cap-ms (start/start-of :forest))))
   (is (nil? (start/cap-ms (start/start-of :fortress))))
-  (is (nil? (start/cap-ms (start/start-of :spawn)))))
+  (is (nil? (start/cap-ms (start/start-of :spawn))))
+  (is (= 72000 (start/cap-ticks (start/start-of :rods))) "an hour of game time, 20 ticks a second")
+  (is (= 72000 (start/cap-ticks (start/start-of :forest))))
+  (is (nil? (start/cap-ticks (start/start-of :fortress)))))
