@@ -166,7 +166,7 @@
    ;; conditions of single rules
    :blaze-refuge (fn [_ w] (fexit/blaze-refuge w))
    :come-down (fn [_ w] (pplace/come-down w))
-   :blaze-fight (fn [_ w] (pcover/blaze-fight w))
+   :lone-fight (fn [_ w] (pcover/lone-fight w))
    :meal-unshot (fn [f w]
                   (and (f :meal)
                        (or (empty? (filter #(combat/seen? w (val %)) (psense/shooters w)))

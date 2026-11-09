@@ -1,5 +1,6 @@
-(ns clojurecraft.pearls.blaze-at-hand-test
-  "A lone blaze at hand is fought, never covered from; two or more are covered from."
+(ns clojurecraft.pearls.lone-fight-test
+  "A lone blaze or wither skeleton at hand is fought, never covered from; two of a kind are
+   covered from."
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.pearls-support :as ps]
@@ -25,7 +26,7 @@
   ;; real-18 on c770630: Clj_r10 and Clj_r04 dug and laid cover from one blaze at 1.3 to 2.9
   ;; blocks for 11 and 14 s, 0 swings, and died of its touches
   (let [w (kit (ps/standing {5 (ps/mob :blaze [10.5 64.5 8.5])}))
-        i (pcover/blaze-fight w)]
+        i (pcover/lone-fight w)]
     (is (= :fight (:intent/kind i)))
     (is (= 5 (:intent/target i)))
     (is (true? (:intent/yield? i)) "it yields under retreat-health")
@@ -35,9 +36,25 @@
     (is (not (plan/interrupts? w ps/row (assoc i :intent/goal :ender-pearls)))
         "the fight is not cut in turn")
     (testing "under danger-health it is never fought (#577)"
-      (is (nil? (pcover/blaze-fight (assoc w :player/health 8.0)))))
+      (is (nil? (pcover/lone-fight (assoc w :player/health 8.0)))))
     (testing "two blazes are covered from, not fought"
-      (is (nil? (pcover/blaze-fight (kit (ps/standing {5 (ps/mob :blaze [10.5 64.5 8.5])
-                                                       6 (ps/mob :blaze [8.5 65.5 13.5])}))))))
+      (is (nil? (pcover/lone-fight (kit (ps/standing {5 (ps/mob :blaze [10.5 64.5 8.5])
+                                                      6 (ps/mob :blaze [8.5 65.5 13.5])}))))))
     (testing "one five blocks off is not at hand"
-      (is (nil? (pcover/blaze-fight (kit (ps/standing {5 (ps/mob :blaze [13.5 64.5 8.5])}))))))))
+      (is (nil? (pcover/lone-fight (kit (ps/standing {5 (ps/mob :blaze [13.5 64.5 8.5])}))))))))
+
+(deftest a-lone-wither-skeleton-at-hand-is-fought
+  ;; sim R1/11 (probe 42616393208): one wither skeleton took a tunnelling bot from 15 to 0 in 4 s
+  ;; while it raised a pillar, laid the same block three times and dug, never swinging
+  (let [w (kit (ps/standing {7 (ps/mob :wither_skeleton [9.5 64.0 8.5])}))
+        i (pcover/lone-fight w)]
+    (is (= :fight (:intent/kind i)))
+    (is (= 7 (:intent/target i)))
+    (is (= :fight (:intent/kind (plan/next-intent w ps/row plan/goals))))
+    (testing "two wither skeletons are a pack: never fought"
+      (is (nil? (pcover/lone-fight (kit (ps/standing {7 (ps/mob :wither_skeleton [9.5 64.0 8.5])
+                                                      8 (ps/mob :wither_skeleton
+                                                                [8.5 64.0 13.5])}))))))
+    (testing "a lone zombified piglin is no kind of the table"
+      (is (nil? (pcover/lone-fight (kit (ps/standing {7 (ps/mob :zombified_piglin
+                                                                [9.5 64.0 8.5])}))))))))
