@@ -416,8 +416,8 @@
 
 (def strike-hold-ms
   "ms a strike stays the answer on the way out: a wither skeleton strikes about every four
-   seconds (combat/struck-ms is four), so the answer lapsed between its hits and the tunnel
-   took the bot back every time (real-18, three wither deaths in 12-20 s, 0 swings)."
+   seconds and combat/struck-ms is four, so an answer held only that long lapses between its hits
+   and the tunnel takes the bot back before it swings."
   12000)
 
 (defn striker-held

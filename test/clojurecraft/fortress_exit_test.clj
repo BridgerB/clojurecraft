@@ -135,22 +135,10 @@
                         :plan/active [ps/row]
                         :player/attacker blaze-id)
                  (memory/observe spawner-pos blaze/spawner)
-                 (update :player/inventory
-                         assoc
-                         1
-                         (ps/item :cooked_beef 12)
-                         2
-                         (ps/item :cobblestone 64)
-                         3
-                         (ps/item :iron_pickaxe 1)
-                         4
-                         (ps/item :iron_sword 1)
-                         (armour/worn-slot 0)
-                         (ps/item :iron_helmet 1)
-                         (armour/worn-slot 1)
-                         (ps/item :iron_chestplate 1)
-                         (armour/worn-slot 2)
-                         (ps/item :iron_leggings 1)))]
+                 (update :player/inventory assoc
+                         1 (ps/item :cooked_beef 12)
+                         2 (ps/item :cobblestone 64)
+                         3 (ps/item :iron_pickaxe 1)))]
     (testing
       "actively shot at by a blaze, the rod bot covers from the shooter, not tunneling in the line of fire"
       (is (fexit/near-fortress? base) "near the fortress")
@@ -717,9 +705,20 @@
                         :plan/reached #{:blaze-rods}
                         :plan/active [ps/row])
                  (memory/observe spawner-pos blaze/spawner)
-                 (update :player/inventory assoc
-                         2 (ps/item :cobblestone 64)
-                         3 (ps/item :iron_pickaxe 1)))]
+                 (update :player/inventory
+                         assoc
+                         2
+                         (ps/item :cobblestone 64)
+                         3
+                         (ps/item :iron_pickaxe 1)
+                         4
+                         (ps/item :iron_sword 1)
+                         (armour/worn-slot 0)
+                         (ps/item :iron_helmet 1)
+                         (armour/worn-slot 1)
+                         (ps/item :iron_chestplate 1)
+                         (armour/worn-slot 2)
+                         (ps/item :iron_leggings 1)))]
     (is (fexit/can-tunnel-out? base) "a pickaxe held and no lava round: the bore is the plan")
     (testing "healthy and alone, the striker is fought where the bot stands"
       (let [i (plan/next-intent base ps/row plan/goals)]
