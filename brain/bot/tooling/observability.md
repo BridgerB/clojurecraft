@@ -81,7 +81,7 @@ The bot's whole mind is one world value, so everything a reader needs about a ru
 
 - **Hits:** each damage-event on the bot is kept in `:player/hits`, the last 20, named by damage type (`registry/damage-type` over the generated `damage-types.edn`: `:mob_attack`, `:lava`, `:in_fire`, `:fall` ...) with the attacker's id and kind (`game/hit-of`).
 - **hear.clj:**
-  - hurt flashes (`:entity/hurt-at`: our swing landed);
+  - hurt flashes (`:entity/hurt-at`: our swing landed), set by the damage-event that names the mob (`game.clj`): a real server never sends a mob's hurt-animation, only the bot's own, so the ledger counted every real swing as missed until the damage-event set it (the sim sends the same damage-event, source `:player_attack` 34);
   - mob swings (`:entity/swung-at`);
   - the fight bracket (`:player/in-combat?`);
   - effects (`:player/effects`);
