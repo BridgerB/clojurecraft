@@ -647,6 +647,13 @@
     (cond (contains? #{:unknown :decode-error :closed} n) world
           :else (update-in world [:stats/heard n] (fnil inc 0)))))
 
+(defn server-ticks
+  "The server ticks the bot has seen since it logged in: 20 for each set-time packet heard (the
+   server sends one every 20 of its ticks), 0 before the first. Game time, not the clock: on a
+   server ticking at 300 ms an hour of the clock is 12,000 of these, not 72,000."
+  [world]
+  (* 20 (get-in world [:stats/heard :set-time] 0)))
+
 (defmethod on-event :packet [world {:event/keys [packet]}] (on-packet (heard world packet) packet))
 (defmethod on-event :tick [world event] (on-tick world event))
 (defmethod on-event :closed [world {:event/keys [reason]}] (assoc world :bot/closed reason))
