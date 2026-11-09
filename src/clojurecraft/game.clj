@@ -357,21 +357,27 @@
 
 (defmethod on-packet [:play :damage-event]
   [w {:keys [entity-id source-type source-cause source-direct]}]
-  (if (= entity-id (:player/entity-id w))
-    (let [attacker (if (pos? (long (or source-direct 0)))
-                     (dec (long source-direct))
-                     (when (pos? (long (or source-cause 0))) (dec (long source-cause))))]
-      ;; :player/hurt-at is in ticks (the dragon's rules read it); :player/struck-at is the same
-      ;; moment in ms (:time/now), which combat/striker ages against struck-ms. :player/hits keeps
-      ;; each hit named (hit-of): the damage type was decoded and dropped before
-      (cond-> (-> w
-                  (assoc :player/hurt-at (:time/tick w 0) :player/struck-at (:time/now w 0))
-                  (update :player/hits
-                          (fn [hs]
-                            (vec (take-last hits-kept
-                                            (conj (or hs []) (hit-of w source-type attacker)))))))
-        attacker (assoc :player/attacker attacker)))
-    w))
+  (cond (= entity-id (:player/entity-id w))
+        (let [attacker (if (pos? (long (or source-direct 0)))
+                         (dec (long source-direct))
+                         (when (pos? (long (or source-cause 0))) (dec (long source-cause))))]
+          ;; :player/hurt-at is in ticks (the dragon's rules read it); :player/struck-at is the same
+          ;; moment in ms (:time/now), which combat/striker ages against struck-ms. :player/hits keeps
+          ;; each hit named (hit-of): the damage type was decoded and dropped before
+          (cond-> (-> w
+                      (assoc :player/hurt-at (:time/tick w 0) :player/struck-at (:time/now w 0))
+                      (update :player/hits
+                              (fn [hs]
+                                (vec (take-last hits-kept
+                                                (conj (or hs [])
+                                                      (hit-of w source-type attacker)))))))
+            attacker (assoc :player/attacker attacker)))
+        ;; another entity hurt: the server shows every client a mob's hurt by this packet, never by
+        ;; hurt-animation (that one only ever names the bot's own entity), so a swing that landed is
+        ;; told here (:entity/hurt-at, senses' ledger)
+        (get-in w [:world/entities entity-id])
+        (assoc-in w [:world/entities entity-id :entity/hurt-at] (:time/now w 0))
+        :else w))
 
 (defmethod on-packet [:play :container-set-content]
   [w {:keys [window-id state-id items carried]}]

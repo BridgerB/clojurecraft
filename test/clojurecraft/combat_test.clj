@@ -18,8 +18,10 @@
             [clojurecraft.packet :as p]
             [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
+            [clojurecraft.pocket :as pocket]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.sim :as sim]
+            [clojurecraft.threat :as threat]
             [clojurecraft.world :as world]))
 
 (use-fixtures :once fx/instrumented)
@@ -854,3 +856,80 @@
                                             :no-support 99500)
                                     [9 64 8]))
         "a wall with no support a moment ago: no wall")))
+
+(deftest a-re-armed-fight-waits-out-the-charge-before-its-first-attack
+  ;; the server begins a swing's charge again when the item in the hand changes and with every
+  ;; attack: a fight that put its sword in the hand after a pickaxe dig and attacked at once dealt
+  ;; a weak hit (a magma cube took 0.7 where a charged hit takes 3.8)
+  (let [armed (-> (fighting 2.0)
+                  (assoc :player/inventory {0 (item :stone_pickaxe 1) 1 (item :stone_sword 1)}))
+        [w fx] (fx/fold intent-step armed (map tick (range 50 2050 50)))
+        hits (attacks fx)]
+    (is (some #{:set-carried-item} (fx/names fx)) "the sword put in the hand")
+    (is (= 1 (:player/held-slot w)))
+    (is (= [700 1350 2000] (mapv first hits)) "the first a full swing-gap after the arm"))
+  (testing "a fight begun just after an attack waits for the rest of the charge"
+    (let [[_ fx] (fx/fold intent-step
+                          (assoc (fighting 2.0) :player/charge-from 0)
+                          (map tick (range 50 1050 50)))]
+      (is (= 650 (ffirst (attacks fx))))))
+  (testing "a hand that never changed and never attacked is charged"
+    (is (combat/charged? (assoc (standing {}) :time/now 50)))))
+
+(deftest the-target-of-a-defend-fight-stays-a-threat-while-it-is-held
+  ;; a magma cube knocked back past defend-radius by the bot's own hit, or over over-feet at the
+  ;; top of its jump, left :defend done; the pearl hunt preempted the fight, the cube came back,
+  ;; and two real bots got one swing in a fight, three and seven in all, and died
+  (let [at (fn [x y]
+             (assoc (standing {7 (mob :zombie [x y 8.5] 20.0)}) :time/now 1000 :time/tick 20))
+        fight {:intent/kind :fight :intent/target 7 :intent/goal :defend :intent/status :active}
+        held (fn [w] (assoc w :plan/intent fight))]
+    (is (empty? (combat/threats (at 14.0 64.0))) "five and a half blocks off, no fight: none")
+    (is (= #{7} (set (keys (combat/threats (held (at 14.0 64.0))))))
+        "the same, the defend fight running on it: held")
+    (is (not (plan/done-by (held (at 14.0 64.0)) (row :defend))) ":defend stays undone")
+    (is (= #{7} (set (keys (combat/threats (held (at 10.5 68.0))))))
+        "over over-feet at the top of a jump: held")
+    (is (empty? (combat/threats (held (at 16.0 64.0))))
+        "past defend-radius plus hold-margin: let go")
+    (is (= #{7}
+           (set (keys (combat/threats
+                       (assoc (held (at 16.0 64.0)) :player/attacker 7 :player/struck-at 900)))))
+        "farther, but it struck a moment ago: held")
+    (is (empty? (combat/threats
+                 (assoc (at 14.0 64.0) :plan/intent (assoc fight :intent/goal :ender-pearls))))
+        "another row's fight holds nothing here")
+    (is (empty? (combat/threats
+                 (assoc (at 14.0 64.0) :plan/intent (assoc fight :intent/status :failed))))
+        "a fight that ended holds nothing")))
+
+(deftest against-a-jumper-the-cover-is-a-roofed-cell-never-a-pillar
+  ;; a magma cube hops 4.15 blocks with a box 2.08 tall: two real bots raised pillars and laid
+  ;; walls under one and were hit to death on them. The cell the feet stand in, walled two high
+  ;; and roofed, is the cover; a pillar is never offered
+  (let [stone (blocks/default-state :stone)
+        trench (into {[9 66 8] stone}
+                     (for [c [[9 64 8] [9 65 8] [7 64 8] [7 65 8] [8 64 9] [8 65 9]]] [c stone]))
+        kit {0 (item :iron_pickaxe 1) 1 (item :cobblestone 64)}
+        at (fn [k]
+             (assoc (standing {7 (mob k [8.5 64.0 6.5] 4.0)})
+                    :world/chunks {[0 0] (world/column trench)}
+                    :player/health 6.0
+                    :player/food 20
+                    :player/inventory kit
+                    :time/now 100000))
+        cube (at :magma_cube)
+        c (combat/cover cube (get-in cube [:world/entities 7]))]
+    (is (= :seal (:intent/kind c)) (pr-str c))
+    (is (= [8 64 8] (get-in c [:intent/site :pocket/cell])) "the feet's own cell")
+    (is (= #{[8 64 7] [8 65 7] [8 66 8]} (set (pocket/open-seal-cells cube [8 64 8])))
+        "the open side two high, and the roof")
+    (is (not= :seal
+              (:intent/kind (combat/cover (at :zombie) (get-in (at :zombie) [:world/entities 7]))))
+        "a zombie, which does not hop, gets the old ladder")
+    (is (= :roof (first (:jumper-ladder threat/data))))
+    (is (not-any? #{:pillar} (:jumper-ladder threat/data)) "never a pillar against a jumper")
+    (testing "a seal that failed a moment ago is not offered again"
+      (is (not= :seal
+                (:intent/kind (combat/cover (assoc cube :pocket/seal-failed-at 99000)
+                                            (get-in cube [:world/entities 7]))))))))
