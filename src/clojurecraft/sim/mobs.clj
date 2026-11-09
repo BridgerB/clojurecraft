@@ -276,9 +276,14 @@
                          :last-hit amount)
               (cond-> by-player? (anger eid))
               (send (health-data eid left))
-              ;; the hurt flash the server shows every client (hurt-animation): the bot tells a
-              ;; swing that landed by it (hear.clj, :entity/hurt-at)
-              (send {:packet/name :hurt-animation :entity-id eid :yaw 0.0})
+              ;; the hurt the server shows every client tracking the mob (a damage-event naming
+              ;; the mob, never hurt-animation, which names only the player's own entity): the
+              ;; bot tells a swing that landed by it (game.clj, :entity/hurt-at)
+              (send {:packet/name :damage-event
+                     :entity-id eid
+                     :source-type (get mob/damage-source (if by-player? :player_attack :on_fire))
+                     :source-cause (if by-player? (inc (player-eid-of sim)) 0)
+                     :source-direct (if by-player? (inc (player-eid-of sim)) 0)})
               (cond-> (<= left 0.0) (die-mob eid by-player?))))))
 
 (defn wear-weapon

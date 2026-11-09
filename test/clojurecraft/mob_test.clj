@@ -224,6 +224,10 @@
     (is (= [{:entity-id eid :status entity/death-status}]
            (map #(select-keys % [:entity-id :status]) (said dead :entity-event))))
     (is (= 246 (get-in dead [:sim/inv 36 :durability])) "the sword wore one a hit")
+    (is (= [{:entity-id eid :source-type 34}]
+           (map #(select-keys % [:entity-id :source-type]) (said (attack sim eid) :damage-event)))
+        "a hit told as the server tells it: a damage-event naming the mob, player_attack")
+    (is (empty? (said (attack sim eid) :hurt-animation)) "never a mob's hurt-animation")
     (testing "removed once its death is over"
       (let [gone (ticks dead 21)]
         (is (nil? (get-in gone [:sim/mobs eid])))
