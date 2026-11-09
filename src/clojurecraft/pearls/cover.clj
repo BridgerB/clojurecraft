@@ -282,23 +282,23 @@
   "The :fight on a lone melee foe at hand, or nil: for a kind of pparams/at-hand, the nearest of
    it within :radius of the feet that the bot can fight from where it walks (combat/hittable? and
    combat/approachable?), no other of its kind within :alone, and the health at :min-health and
-   danger-health or more (#577: never a fight under it). To its end, yielding under
-   retreat-health. Covered from, a blaze at hand follows the bot into each cover and touches it
+   danger-health or more (#577: never a fight begun under it). To its end; held where the bot
+   stands with the row's :hold?, and breaking off under retreat-health with its :yield?. Covered from, a blaze at hand follows the bot into each cover and touches it
    there, and a wither skeleton hits through the blocks a tunnel lays: real bots dug and laid
    cover from one blaze for 11 and 14 s and sim bots from one skeleton for 4 s, never swinging,
    and died of their hits, where four swings kill either."
   [world]
   (let [pos (:player/pos world)
         hp (:player/health world 20.0)]
-    (some (fn [[kind {:keys [radius alone min-health]}]]
-            (when (and (>= hp pparams/danger-health)
-                       (>= hp min-health)
-                       (= 1 (count (kind-within world kind alone))))
-              (when-let [[eid e] (entity/nearest (kind-within world kind radius) pos)]
-                (when (and (combat/hittable? world e) (combat/approachable? world e))
-                  {:intent/kind :fight
-                   :intent/target eid
-                   :intent/to-the-end? true
-                   :intent/yield? true
-                   :intent/for :pearls}))))
-          (sort-by key pparams/at-hand))))
+    (some
+     (fn [[kind {:keys [radius alone min-health hold? yield?]}]]
+       (when (and (>= hp pparams/danger-health)
+                  (>= hp min-health)
+                  (= 1 (count (kind-within world kind alone))))
+         (when-let [[eid e] (entity/nearest (kind-within world kind radius) pos)]
+           (when (and (combat/hittable? world e) (combat/approachable? world e))
+             (cond->
+               {:intent/kind :fight :intent/target eid :intent/to-the-end? true :intent/for :pearls}
+               hold? (assoc :intent/hold? true)
+               yield? (assoc :intent/yield? true))))))
+     (sort-by key pparams/at-hand))))

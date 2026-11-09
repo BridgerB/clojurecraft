@@ -711,25 +711,31 @@
         (is (= :fight (:intent/kind i)))
         (is (= skeleton-id (:intent/target i)))
         (is (true? (:intent/hold? i)))))
-    (testing "a wither skeleton is fought only from avoided-health: at 12 the cover"
+    (testing "a lone wither skeleton is fought from danger-health (pearls.edn :at-hand): at 12 too"
       (let [i (plan/next-intent (assoc base :player/health 12.0) ps/row plan/goals)]
-        (is (not (contains? #{:fight :tunnel-to :dig} (:intent/kind i))))))
+        (is (= :fight (:intent/kind i)))))
     (testing "two wither skeletons at full health: the cover, not the fight"
       (let [w (-> base
                   (assoc :player/health 20.0)
                   (assoc-in [:world/entities 43] (assoc skeleton :entity/pos [7.5 64.0 8.5])))
             i (plan/next-intent w ps/row plan/goals)]
         (is (not (contains? #{:fight :tunnel-to :dig} (:intent/kind i))))))
-    (testing "healthy at 18 and alone, the fight yields under retreat-health"
+    (testing "healthy at 18 and alone, the fight goes to its end: broken off, the skeleton kills"
       (let [i (plan/next-intent (assoc base :player/health 18.0) ps/row plan/goals)]
         (is (= :fight (:intent/kind i)))
-        (is (true? (:intent/yield? i)))))
+        (is (true? (:intent/to-the-end? i)))
+        (is (not (:intent/yield? i)))))
     (testing "hurt under the danger line, a block is laid between: not the fight, not the bore"
       (let [i (plan/next-intent (assoc base :player/health 5.0) ps/row plan/goals)]
         (is (not (contains? #{:fight :tunnel-to :dig} (:intent/kind i))))
         (is (contains? #{:place :pillar :eat} (:intent/kind i)))))
-    (testing "a strike long past leaves the bore going"
-      (let [i (plan/next-intent (assoc base :player/struck-at 0 :time/now 20000) ps/row plan/goals)]
+    (testing "a strike long past, the skeleton out of hand, leaves the bore going"
+      (let [i (plan/next-intent (-> base
+                                    (assoc :player/struck-at 0 :time/now 20000)
+                                    (assoc-in [:world/entities skeleton-id :entity/pos]
+                                              [8.5 64.0 13.5]))
+                                ps/row
+                                plan/goals)]
         (is (= :tunnel-to (:intent/kind i)))))))
 
 (deftest the-tunnel-out-ends-clear-of-the-spawner-however-far-the-fortress-runs

@@ -175,7 +175,7 @@
 (def swarm-radius (:swarm-radius thresholds))
 
 (def at-hand
-  "{kind {:radius :alone :min-health}}: the lone melee foes the hunt fights rather than covers from
+  "{kind {:radius :alone :min-health :hold? :yield?}}: the lone melee foes the hunt fights rather than covers from
    (pearls.edn :at-hand, cover/lone-fight)."
   (:at-hand thresholds))
 (def cover-place-hold-ms (:cover-place-hold-ms thresholds))
