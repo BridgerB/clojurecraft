@@ -142,6 +142,7 @@
     (-> world
         (game/emit {:packet/name :attack :entity-id eid})
         (game/emit {:packet/name :swing :hand (packet/value :hand :main-hand)})
+        (assoc :player/charge-from now)
         (intent/assoc-intent :intent/next-swing (+ now (swing-gap world))
                              :intent/swings (inc (:intent/swings (:plan/intent world) 0))))))
 
@@ -151,11 +152,29 @@
   {:arglists '([world intent e])}
   (fn [_world i _e] (:intent/stage i)))
 
+(defn held-item
+  "The item id in the hand (the held hotbar slot), or nil for an empty hand."
+  [world]
+  (get-in world [:player/inventory (:player/held-slot world) :item]))
+
+(defn charged?
+  "Has the attack charge had swing-gap since it last began again (:player/charge-from: the last
+   attack, or the fight's arm putting another item in the hand)? The server resets a swing's
+   charge on both, so an attack before it is weak: a magma cube a re-armed sword hit at once took
+   0.7 where a charged hit takes 3.8. True when the charge never began again."
+  [world]
+  (let [from (:player/charge-from world)]
+    (or (nil? from) (>= (:time/now world) (+ from (swing-gap world))))))
+
 (defmethod fight-stage :arm
-  ;; the best sword in hand (place/equip), or the hand when none is held
+  ;; the best sword in hand (place/equip), or the hand when none is held. While the hand holds
+  ;; something else the charge is begun again (:player/charge-from) every tick: the server resets
+  ;; it when the item in the hand changes, which a hotbar select does at once and a swap from the
+  ;; main inventory does when its click is answered
   [world _ _]
   (if-let [[_ n] (sword world)]
-    (place/equip world n :approach)
+    (cond-> (place/equip world n :approach)
+      (not= (recipe/item-id n) (held-item world)) (assoc :player/charge-from (:time/now world)))
     (intent/assoc-intent world :intent/stage :approach)))
 
 (defn face
@@ -396,6 +415,7 @@
                   (if hold? hold-timeout-ms approach-timeout-ms)))
           (intent/fail world :unreachable)
           (and (>= now next-swing)
+               (charged? world)
                (<= (physics/distance eye (aim e)) attack-reach)
                (<= (yaw-off yaw (first (:player/look world))) aimed-within))
           (attack world target)
@@ -790,9 +810,33 @@
 
 (def avoided-health 18.0) ; health a fight with one of avoided is begun at
 
+(def hold-margin 3.0)                 ; blocks past defend-radius the target of a running :defend fight stays a threat (held-target)
+
+(defn held-target
+  "[eid entity] of the target of the :defend row's :fight while it runs and is held: alive, and
+   within defend-radius plus hold-margin of the feet or the one that struck the bot within
+   struck-ms (striker), or nil. Its :defend stays undone (threats) so no other row preempts the
+   fight: a magma cube knocked back past defend-radius by the bot's own hit, or in the air over
+   over-feet at the top of its jump, left :defend done, the pearl hunt took the next tick, and the
+   cube came back to hit; two real bots got three and seven swings in, one each fight, and died."
+  [world]
+  (let [{:intent/keys [kind goal target status]} (:plan/intent world)
+        e (get-in world [:world/entities target])
+        [sid] (striker world)]
+    (when (and (= :fight kind)
+               (= :defend goal)
+               (= :active status)
+               e
+               (not (entity/gone? world target))
+               (or (= sid target)
+                   (<= (physics/distance (:player/pos world) (:entity/pos e))
+                       (+ defend-radius hold-margin))))
+      [target e])))
+
 (defn threats
   "{eid entity} of the hostiles (entity/hostiles) the :defend row answers, plus whoever last
-   struck (striker) while that strike is fresh: within defend-radius of the feet, a creeper
+   struck (striker) while that strike is fresh, plus the target of its running fight while held
+   (held-target: any distance, sight and footing rules aside): within defend-radius of the feet, a creeper
    within the creeper's radius (threats.edn), either less once shunned (reach); none the plan blacklisted (a ghost),
    none of a kind a row in play answers itself (answered-kinds), only what can be fought from
    here (hittable?) and come to (approachable?: a mob in water two blocks below is seen but
@@ -806,6 +850,7 @@
         bl (avoided/all-of world :blacklist)
         left (answered-kinds world)
         [aid ae] (striker world)
+        [hid he] (held-target world)
         pool (cond-> (entity/hostiles world) ae (assoc aid ae))
         pumpkin? (= :carved_pumpkin (armour/worn world 0))
         hurt? (and (:player/hurt-at world)
@@ -824,11 +869,13 @@
                       (not (:pumpkin-safe? (kind-facts (entity/kind e))))
                       (= eid (:player/attacker world))
                       (and hurt? (<= (physics/distance pos (:entity/pos e)) 3.5)))
-                  (<= (physics/distance pos (:entity/pos e))
-                      (reach world eid e (:radius (kind-facts (entity/kind e)) defend-radius)))
-                  (hittable? world e)
-                  (approachable? world e))))
-          pool)))
+                  (or (= eid hid)
+                      (and
+                       (<= (physics/distance pos (:entity/pos e))
+                           (reach world eid e (:radius (kind-facts (entity/kind e)) defend-radius)))
+                       (hittable? world e)
+                       (approachable? world e))))))
+          (cond-> pool he (assoc hid he)))))
 
 (defmethod plan/done-by :safe? [world _] (or (nil? (:player/pos world)) (empty? (threats world))))
 

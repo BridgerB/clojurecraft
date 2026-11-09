@@ -103,6 +103,9 @@
    [:player/struck-at
     "ms (:time/now) of the last damage-event on the bot, beside :player/hurt-at in ticks: combat/striker ages the strike against struck-ms. A zombified piglin that hit is angry, and a hit angers its pack"
     "after a damage-event on the bot"]
+   [:player/charge-from
+    "ms (:time/now) the attack charge last began again: an attack sent (combat/attack) or a fight putting another item in the hand (combat's :arm). The server counts a swing's charge from either, so an attack sent before combat/swing-gap after it is a weak one"
+    "after the first attack or fight arm"]
    [:player/hits
     "the last game/hits-kept hits on the bot, oldest first, each {:at ms :type damage-type name :hp health before} with :by and :by-kind when a mob dealt it (game/hit-of)"
     "after the first damage-event on the bot"]
