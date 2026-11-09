@@ -10,8 +10,8 @@
    it last had, so the look is set a tick before (the movement packet carries it on the next
    tick, game/movement-packets) and an attack goes out only once the eyes face the target.
 
-   Swings are paced by the clock, as a deadline on the intent (:intent/next-swing, swing-every
-   650 ms after the last): ruststeve's swings, paced by ticks that collapsed under the packet
+   Swings are paced by the clock, as a deadline on the intent (:intent/next-swing, swing-gap: swing-every
+   650 ms at 20 ticks a second, longer on a loaded server, after the last): ruststeve's swings, paced by ticks that collapsed under the packet
    flood, sent forty in 66 ms, all but one inside the mob's 10-tick hurt invulnerability. A kill
    is the target gone (entity/gone?: removed, or dead by the server's word); a target that
    survives max-swings swings in reach is a ghost (ruststeve tasks/nether.rs), failed :ghost and
@@ -124,6 +124,13 @@
         far (+ retreat-distance 2.0)]
     [(+ px (* far ux)) py (+ pz (* far uz))]))
 
+(defn swing-gap
+  "Milliseconds between two attacks: swing-every at 20 server ticks a second, stretched by the
+   server's slowdown (intent/slowdown). The charge of a sword (12.5 ticks) and a mob's hurt
+   immunity (10 ticks) count in server ticks, so a loaded server needs the longer wait."
+  [world]
+  (long (* swing-every (intent/slowdown world))))
+
 (defn attack
   "Send one attack on eid, then the arm's swing, as the vanilla client sends them
    (MultiPlayerGameMode.attack, then the swing); the next swing swing-every from now, the swing
@@ -135,7 +142,7 @@
     (-> world
         (game/emit {:packet/name :attack :entity-id eid})
         (game/emit {:packet/name :swing :hand (packet/value :hand :main-hand)})
-        (intent/assoc-intent :intent/next-swing (+ now swing-every)
+        (intent/assoc-intent :intent/next-swing (+ now (swing-gap world))
                              :intent/swings (inc (:intent/swings (:plan/intent world) 0))))))
 
 (defmulti fight-stage
@@ -385,7 +392,7 @@
                       intent/done)))
           (>= swings max-swings) (intent/fail world :ghost)
           (and since
-               (> (- now (if (pos? next-swing) (- next-swing swing-every) since))
+               (> (- now (if (pos? next-swing) (- next-swing (swing-gap world)) since))
                   (if hold? hold-timeout-ms approach-timeout-ms)))
           (intent/fail world :unreachable)
           (and (>= now next-swing)

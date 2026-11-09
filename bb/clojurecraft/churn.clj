@@ -56,8 +56,11 @@
 (def real-heap "-J-Xmx3g")             ; the conversion's JVM, beside two 3 GB servers and two 2 GB races on a 16 GB runner
 (def sim-heap "-J-Xmx2g")              ; the judge's JVM, beside the sim race's (ci/simrace.edn's heap)
 (def one-core "-J-XX:ActiveProcessorCount=1") ; a conversion's or judge's JVM sized to one core (its GC, its compilers): the race keeps the rest
-(def real-nice 0)                      ; the conversion's nice level: an equal share beside the servers and bots (see convert!)
-(def sim-nice 0)                       ; the judge's, as real-nice: at 19 beside a sim race on every core it starves
+(def real-nice 19)                     ; the conversion's nice level: what the servers leave (see convert!)
+(def real-io ["ionice" "-c3"])           ; and the disk only when idle: the servers' tick comes first
+(def real-per-batch 1)                   ; failures a real batch folds (to-convert)
+(def sim-nice 0)                       ; the judge's: at 19 beside a sim race on every core it starves
+(def sim-io [])                          ; the judge's disk: a sim lane has no server to yield to
 
 ;; ---------------------------------------------------------------- a batch, as values
 
@@ -140,6 +143,12 @@
        (mapcat #(map-indexed vector (take per-signature (sort-by (fn [r] (:run/bytes r 0)) %))))
        (sort-by (fn [[i r]] [i (:run/bytes r 0)]))
        (map second)))
+
+(defn to-convert
+  "What a real batch folds of its runs: the first real-per-batch of convertible, the smallest
+   recording of a signature first, the one most likely to fold inside the budget at nice 19."
+  [runs]
+  (take real-per-batch (convertible runs)))
 
 (defn snapshot-name
   "The file a real run's snapshot is kept in: real-<runner>-<server dir>-<bot>.edn.gz, one bot of
@@ -298,10 +307,13 @@
     (spit (str (fs/file data-dir held-file)) (pr-str (vec left)))))
 
 (defn budgeted!
-  "Run clojure with args at nice level (under the lane's own work), its output to log, stopped at
-   budget (ms: what it did not reach stays unreproduced, never filed); returns the log's lines."
-  [log level budget args]
-  (let [proc (apply p/process {:out log :err :inherit} "nice" "-n" (str level) "clojure" args)]
+  "Run clojure with args under the io prefix (a command vector, [] for none) at nice level, its
+   output to log, stopped at budget (ms: what it did not reach stays unreproduced, never filed);
+   returns the log's lines."
+  [log io level budget args]
+  (let [proc (apply p/process
+                    {:out log :err :inherit}
+                    (concat io ["nice" "-n" (str level) "clojure"] args))]
     (when-not (.waitFor ^Process (:proc proc)
                         (long budget)
                         java.util.concurrent.TimeUnit/MILLISECONDS)
@@ -315,28 +327,36 @@
   (str (fs/path data-dir (:run/dir r) (str (:run/bot r) ".edn"))))
 
 (defn convert!
-  "Turn a real batch's failures (convertible, each recording's size read first) into snapshots:
+  "Turn a real batch's failures (to-convert, each recording's size read first) into snapshots:
    one clojure -M:simrace --from-recording over their recordings, its heap held to real-heap and
-   its JVM to one core (one-core), at real-nice, writing <data-dir>/snapshots (gaps under its
+   its JVM to one core (one-core), at real-nice with the disk idle-only (real-io), writing <data-dir>/snapshots (gaps under its
    gaps/) and its lines to snapshots/convert-<n>.log (budgeted!). Returns the REAL and GAP lines
    it printed (line-of).
 
-   Not at nice 19: beside the race's servers and bots a fold at 19 gets the scraps of a busy
+   Once at nice 0, for this: beside the race's servers and bots a fold at 19 gets the scraps of a busy
    runner. Race 38962774798 (lane 8) folded Clj_r04 in 197 s and Clj_r08 in 140 s there, and four
    of its five batches ran out of the 10 minutes with nothing kept; the same two fold in 27 and
    37 s on an idle runner, 65 and 97 s at nice 0 beside four CPU-bound loops (probe 38982758264),
    78 and 100 s with the JVM held to one core (probe 38983529740), 300 and 416 s at nice 10
-   (probe 38982746654), and 1055 and 1464 s at nice 19 beside those loops (probe 38982735367)."
+   (probe 38982746654), and 1055 and 1464 s at nice 19 beside those loops (probe 38982735367).
+
+   Now at nice 19, one a batch: at nice 0 it cost the servers' tick and kept nothing. Six lanes on
+   2026-11-08 (races 42485782377, 42496378221, 42481579977, 42482168539, 42482170145,
+   42495941433) ran 23 conversions of up to 4 recordings each, a fifth JVM on a core for about 10
+   minutes of every 30: 16 ran out of time with nothing, 7 folded one recording (30 to 402 s) into a
+   model gap, and none kept a snapshot. Lane 7's servers ticked 170 and 132 ms during them against
+   139 and 106 outside them."
   [{:keys [data-dir run runner budget]} n runs]
-  (let [todo (convertible (mapv #(cond-> %
-                                   (and (:run/dir %) (fs/exists? (recording data-dir %)))
-                                   (assoc :run/bytes (fs/size (recording data-dir %))))
-                                runs))
+  (let [todo (to-convert (mapv #(cond-> %
+                                  (and (:run/dir %) (fs/exists? (recording data-dir %)))
+                                  (assoc :run/bytes (fs/size (recording data-dir %))))
+                               runs))
         out (fs/path data-dir snapshots-dir)]
     (when (seq todo)
       (fs/create-dirs out)
       (let [lines (vec (keep line-of
                              (budgeted! (fs/file out (str "convert-" n ".log"))
+                                        real-io
                                         real-nice
                                         budget
                                         [real-heap one-core "-M:simrace" "--from-recording"
@@ -358,6 +378,7 @@
       (fs/create-dirs out)
       (let [lines (vec (keep judge-line-of
                              (budgeted! (fs/file out (str "judge-" n ".log"))
+                                        sim-io
                                         sim-nice
                                         budget
                                         [sim-heap one-core "-M:simrace" "--judge"
@@ -426,7 +447,8 @@
                                   :at (page/instant code-at)
                                   :runner runner
                                   :batch n
-                                  :issues (page/issue-numbers runs)}
+                                  :issues (page/issue-numbers runs)
+                                  :servers (page/servers-under dir)}
                                  senses
                                  (page/run-times run)))]
     (println "churn:" head ":" (count runs) "runs")

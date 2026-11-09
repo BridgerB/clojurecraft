@@ -124,6 +124,39 @@
     (is (= [:failed :unprovoked] ((juxt :intent/status :intent/reason) (:plan/intent ignored)))
         "one that never turns is given up")))
 
+(deftest a-slow-server-gets-a-longer-stare
+  ;; the enderman turns after its goal passes, which a loaded server spaces apart: at 400 ms a tick
+  ;; the answer came 3 to 5 s after the stare began, past a 3 s give-up
+  (let [stare-for (fn [tick-ms ms]
+                    (let [w (assoc (ps/standing {7 (ps/enderman [8.5 64.0 15.5])})
+                                   :plan/intent
+                                   {:intent/kind :provoke :intent/target 7 :intent/status :active}
+                                   :server/tick-ms tick-ms)
+                          [w' _] (fx/fold ps/intent-step w (map ps/tick (range 50 (+ ms 50) 50)))]
+                      (:intent/status (:plan/intent w'))))]
+    (is (= 3000 (psense/stare-budget (assoc (ps/standing {}) :server/tick-ms 50.0)))
+        "a fast server: the base stare")
+    (is (= 3000 (psense/stare-budget (ps/standing {}))) "no reading yet: the base stare")
+    (is (= 4000 (psense/stare-budget (assoc (ps/standing {}) :server/tick-ms 250.0))))
+    (is (= 6400 (psense/stare-budget (assoc (ps/standing {}) :server/tick-ms 400.0))))
+    (is (= pparams/stare-max-ms
+           (psense/stare-budget (assoc (ps/standing {}) :server/tick-ms 2000.0)))
+        "capped")
+    (is (= :active (stare-for 400.0 5500)) "still staring at 5.5 s on a 400 ms server")
+    (is (= :failed (stare-for 400.0 6600)) "given up past the budget")
+    (is (= :failed (stare-for 50.0 3500)) "a fast server's stare is as it was")))
+
+(deftest a-stare-from-far-off-is-no-provoke
+  ;; a clear line over loaded ground all the way: only the range says no
+  (let [col (world/column {})
+        w (-> (ps/standing {})
+              (update :world/chunks into (for [cz (range 1 6)] [[0 cz] col])))
+        at (fn [z] (ps/enderman [8.5 64.0 z]))]
+    (is (psense/provokable? w (at 30.5)) "22 blocks off, in sight")
+    (is (psense/provokable? w (at (+ 8.5 (- pparams/provoke-range 1.0)))) "just inside the range")
+    (is (not (psense/provokable? w (at (+ 8.5 pparams/provoke-range 4.0))))
+        "past provoke-range, in sight")))
+
 (deftest the-hunt-digs-a-burrow-provokes-from-its-mouth-and-fights-from-its-end
   (let [far (ps/enderman [0.5 64.0 8.5])
         coming (assoc far :entity/creepy? true)]
@@ -938,6 +971,9 @@
     (is (= 64.0 (:seek-radius t) pparams/seek-radius))
     (is (= 64.0 (:stare-range t) pparams/stare-range))
     (is (= 6.0 (:stare-from t) pparams/stare-from))
+    (is (= 36.0 (:provoke-range t) pparams/provoke-range))
+    (is (= 16 (:stare-ticks t) pparams/stare-ticks))
+    (is (= 8000 (:stare-max-ms t) pparams/stare-max-ms))
     (is (= 3.0 (:provoke-home-reach t) pparams/provoke-home-reach))
     (is (= 18.0 (:provoke-health t) pparams/provoke-health))
     (is (= 3.0 (:provoke-margin t) pparams/provoke-margin))

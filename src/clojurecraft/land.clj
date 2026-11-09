@@ -38,6 +38,12 @@
 
 (def locate-offsets [256 512])        ; blocks off the landing's eighth, along each axis, another warped forest is located from when the nearest gives no floor
 
+(def fortress-clear 128)               ; blocks from a located fortress's start within which a forest floor is refused: a fortress reaches about 80 from its start, so a pad inside the clear is in or beside it (wither skeletons and blazes at the landing)
+
+(def fortress-mobs ["minecraft:wither_skeleton" "minecraft:blaze"]) ; the mobs only a fortress holds: any within fortress-mobs-clear of a floor is the danger itself
+
+(def fortress-mobs-clear 48)          ; blocks round a floor within which one of fortress-mobs refuses it
+
 (def spread-under 120)                ; the height a Nether spread scans down from: under the roof's rock (y 123 up), over the forest's highest floors
 
 (def dimensions
@@ -254,6 +260,48 @@
   [[x y z]]
   (str "execute in " dimension/nether " if biome " x " " y " " z " minecraft:warped_forest"))
 
+(defn fortress-locate
+  "The command that locates the Nether fortress nearest the Nether point x z."
+  [x z]
+  (str "execute in "
+       dimension/nether
+       " positioned "
+       x
+       " 64 "
+       z
+       " run locate structure minecraft:fortress"))
+
+(defn fortress-near?
+  "Does the server locate a Nether fortress within fortress-clear blocks, on the plane, of cell
+   [x y z]? Its reply names the fortress's start; none located is not near. A forest floor that
+   overlaps a fortress passes the biome test (warped?), which asks no structure."
+  [rc [x _ z]]
+  (let [[fx fz] (fixture/parse-located (rcon/command! rc (fortress-locate x z)))]
+    (boolean (and fx (<= (math/hypot (- fx x) (- fz z)) fortress-clear)))))
+
+(defn fortress-mob-near?
+  "Does the server report a wither skeleton or a blaze within fortress-mobs-clear blocks of cell
+   [x y z]? The bot stands there, so its chunks are loaded and the fortress's own mobs are in
+   them: the danger asked directly, where locate (fortress-near?) can name a fortress far off from
+   one whose bricks are beside the floor."
+  [rc [x y z]]
+  (boolean (some (fn [mob]
+                   (fixture/passed? (rcon/command! rc
+                                                   (str "execute in "
+                                                        dimension/nether
+                                                        " positioned "
+                                                        x
+                                                        " "
+                                                        y
+                                                        " "
+                                                        z
+                                                        " if entity @e[type="
+                                                        mob
+                                                        ",distance=.."
+                                                        fortress-mobs-clear
+                                                        "]"))))
+                 fortress-mobs)))
+
 (defmethod land! :near-stronghold
   [rc _row name [x z _]]
   (let [reply (rcon/command!
@@ -319,8 +367,10 @@
 (defn warped-floor!
   "The cell [x y z] a floor in the warped forest round the located point [bx _ bz] stands on, or
    nil: the bot named name spread onto one (spread) at each of warped-ranges, nearer first,
-   warped-tries times each, until the server says where it stands is warped forest (warped?) and
-   not the air of a carved cave (pocket?). The bot is left there."
+   warped-tries times each, until the server says where it stands is warped forest (warped?),
+   not the air of a carved cave (pocket?), no fortress is located within fortress-clear
+   (fortress-near?) and none of its mobs is within fortress-mobs-clear (fortress-mob-near?). The
+   bot is left there."
   [rc name [bx _ bz]]
   (some (fn [r]
           (let [spread-reply (str (rcon/command! rc (spread bx bz r name)))
@@ -329,7 +379,9 @@
             (cli/log "spread:" r spread-reply c)
             (when (and c
                        (fixture/passed? (rcon/command! rc (warped? c)))
-                       (not (fixture/passed? (rcon/command! rc (pocket? c)))))
+                       (not (fixture/passed? (rcon/command! rc (pocket? c))))
+                       (not (fortress-near? rc c))
+                       (not (fortress-mob-near? rc c)))
               c)))
         (mapcat #(repeat warped-tries %) warped-ranges)))
 
@@ -351,8 +403,8 @@
   ;; the warped forest nearest the landing's Nether coordinates (an eighth of the overworld's, so
   ;; each landing has its own), and a floor in it: the bot spread onto one round the located point
   ;; (spread), nearer ranges first, until the server says where it stands is warped forest (warped?)
-  ;; and not the air of a carved cave (pocket?), then stood on that cell with the row's setup round
-  ;; it. A forest with no floor found is left for the one nearest the next of warped-origins, each
+  ;; and not the air of a carved cave (pocket?) no fortress located within fortress-clear and none of
+  ;; its mobs within fortress-mobs-clear, then stood on that cell with the row's setup round it. A forest with no floor found is left for the one nearest the next of warped-origins, each
   ;; located forest tried once. Batches d, e and f stood two landings in three forty minutes in a
   ;; cave pocket the spread had put them in
   [rc row name [x z _]]
@@ -637,6 +689,22 @@
                                 (+ x lava-clear-radius) (+ y 3) (+ z lava-clear-radius)])
                      " minecraft:netherrack replace minecraft:lava")))
 
+(defn interior-clear-command
+  "The RCON fill that turns the cells a bot stands and looks in at the pad [x z y] to air: the 3x3
+   round the pad from its feet to two over them, never the floor under the feet. The pad is built
+   once and landed on by every bot of its slot, so what a bot that ended there placed, or the
+   lava clear turned to netherrack, would otherwise bury the next one (in_wall damage)."
+  [[x z y]]
+  (in-dimension
+   dimension/nether
+   (str "fill " (str/join " " [(dec x) y (dec z) (inc x) (+ y 2) (inc z)]) " minecraft:air")))
+
+(defn pad-clear-commands
+  "The RCON commands run on the pad [x z y] before a bot is teleported onto it, in order: its
+   lava cleared (lava-clear-command), the cells it will stand and look in cleared (interior-clear-command)."
+  [pad]
+  [(lava-clear-command pad) (interior-clear-command pad)])
+
 (defn build-pad!
   "Build the pad [x z y] (fortress-pad-open) in the Nether with no bot: the square round it
    forceloaded and waited for, the commands, the forceload released. The first build of a Nether
@@ -813,7 +881,7 @@
     (with-loaded rc
                  [(- (first pad) lava-clear-radius) (- (second pad) lava-clear-radius)
                   (+ (first pad) lava-clear-radius) (+ (second pad) lava-clear-radius)]
-                 #(cli/log "pad lava:" (rcon/command! rc (lava-clear-command pad))))
+                 #(doseq [c (pad-clear-commands pad)] (cli/log "pad clear:" (rcon/command! rc c))))
     (cli/log "tp:" (rcon/command! rc (tp-command name pad)))
     (when (wait-in! rc name dimension/nether)
       (rcon/command! rc (str "clear " name))

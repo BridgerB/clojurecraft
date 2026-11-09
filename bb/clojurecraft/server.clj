@@ -9,12 +9,15 @@
    The environment (`bb server`): PORT RCON_PORT RCON_PASS WORLD, required for start (WORLD for
    stop); JAVA (default: java on PATH, else the flake's), HEAP_MB (2048), JAR (data/local-server/
    server-26.1.2.jar, downloaded and sha1-checked when missing), LEVEL_SEED (typecraft),
-   DIFFICULTY (peaceful)."
+   DIFFICULTY (peaceful), SERVER_INDEX (a race's server number: ci/race.edn's :race/server-overrides
+   for it, as clojurecraft.servers reads them)."
   (:require [babashka.fs :as fs]
             [babashka.http-client :as http]
             [babashka.process :as p]
+            [clojure.edn :as edn]
             [clojure.java.io :as io]
-            [clojure.string :as str])
+            [clojure.string :as str]
+            [clojurecraft.servers :as servers])
   (:import [java.security MessageDigest]))
 
 (def jar-url
@@ -39,16 +42,18 @@
    race's bots are on the same machine, where zlib is only CPU, the server deflating every chunk
    for every bot and each bot inflating it). sync-chunk-writes: vanilla's true unless
    SYNC_CHUNK_WRITES says (false: a race's world is thrown away, and a synchronous write per
-   saved chunk is time the server's one tick thread waits)."
+   saved chunk is time the server's one tick thread waits). simulation-distance: 4 chunks unless a
+   race's server overrides it (with-overrides)."
   [{:keys [port rcon-port rcon-pass level-seed difficulty max-tick-time max-players
-           compression-threshold sync-chunk-writes]}]
+           compression-threshold sync-chunk-writes simulation-distance]}]
   [["online-mode" false] ["allow-flight" true] ["level-seed" level-seed]
    ["level-type" "minecraft:normal"] ["difficulty" difficulty] ["gamemode" "survival"] ["pvp" false]
-   ["spawn-protection" 0] ["view-distance" 6] ["simulation-distance" 4] ["server-port" port]
-   ["server-ip" "127.0.0.1"] ["pause-when-empty-seconds" 0] ["enable-rcon" true]
-   ["rcon.port" rcon-port] ["rcon.password" rcon-pass] ["enforce-secure-profile" false]
-   ["motd" "clojurecraft"] ["max-tick-time" (or max-tick-time 60000)]
-   ["max-players" (or max-players 20)]
+   ["spawn-protection" 0] ["view-distance" 6]
+   ["simulation-distance" (or simulation-distance (:simulation-distance servers/defaults))]
+   ["server-port" port] ["server-ip" "127.0.0.1"] ["pause-when-empty-seconds" 0]
+   ["enable-rcon" true] ["rcon.port" rcon-port] ["rcon.password" rcon-pass]
+   ["enforce-secure-profile" false] ["motd" "clojurecraft"]
+   ["max-tick-time" (or max-tick-time 60000)] ["max-players" (or max-players 20)]
    ["network-compression-threshold" (or compression-threshold 256)]
    ["sync-chunk-writes" (or sync-chunk-writes true)]])
 
@@ -66,6 +71,15 @@
         (loop [] (let [n (.read in buf)] (when (pos? n) (.update digest buf 0 n) (recur))))))
     (str/join (map #(format "%02x" %) (.digest digest)))))
 
+(defn with-overrides
+  "opts with the settings of server number (:server-index, a string or nil) under config
+   (ci/race.edn's value) merged in: :simulation-distance, the default's or the server's own."
+  [opts config]
+  (merge opts
+         (servers/settings config
+                           (some-> (:server-index opts)
+                                   parse-long))))
+
 ;;;; I/O: the jar, the world directory, the server process ;;;;
 
 (defn java-bin!
@@ -77,6 +91,11 @@
         :else
         (str (str/trim (:out (p/shell {:out :string} (str root "/scripts/nix-tool") "jdk")))
              "/java")))
+
+(defn race-config!
+  "ci/race.edn, read: the race's settings, among them :race/server-overrides."
+  []
+  (edn/read-string (slurp (str root "/ci/race.edn"))))
 
 (defn ensure-jar!
   "The server jar at path, downloaded when missing or not the published jar."
@@ -106,7 +125,9 @@
   (ensure-jar! jar)
   (fs/create-dirs world)
   (spit (fs/file world "eula.txt") "eula=true\n")
-  (spit (fs/file world "server.properties") (properties-text (properties opts)))
+  (spit (fs/file world "server.properties")
+        (properties-text (properties (cond-> opts
+                                       (:server-index opts) (with-overrides (race-config!))))))
   (let [log (fs/file world "server.log")
         proc (apply p/process
                     {:dir world :out log :err :out}
@@ -156,7 +177,8 @@
      :max-players (env "MAX_PLAYERS")
      :compression-threshold (env "COMPRESSION_THRESHOLD")
      :sync-chunk-writes (env "SYNC_CHUNK_WRITES")
-     :java-opts (env "SERVER_JAVA_OPTS")}))
+     :java-opts (env "SERVER_JAVA_OPTS")
+     :server-index (env "SERVER_INDEX")}))
 
 (defn local-opts
   "This Mac's server: its ports, a random RCON password kept in data/local-server/rcon.pass

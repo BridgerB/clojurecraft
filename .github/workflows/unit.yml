@@ -13,7 +13,7 @@ on:
 jobs:
   unit:
     runs-on: ubuntu-26.04
-    timeout-minutes: 15
+    timeout-minutes: 25             # the suite takes about 5 min and bb check about 4; a loaded runner doubles both
     env:
       FOREST_TRIALS: '0'               # test.yml's forests jobs run them
     steps:

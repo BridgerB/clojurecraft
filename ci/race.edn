@@ -10,4 +10,5 @@
  :race/run-minutes 330 ; how long each runner plays, near GitHub's 6 h job cap
  :race/stagger-ms 3000 ; between bots joining a server
  :race/server-heap-mb 3072 ; each server's JVM
- :race/bot-heap-mb 2048} ; each race process's JVM
+ :race/bot-heap-mb 2048 ; each race process's JVM
+ :race/server-overrides {2 {:simulation-distance 3}}} ; server 2 of a runner runs 3 chunks of simulation, server 1 the default 4: an A/B of the tick

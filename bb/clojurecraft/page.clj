@@ -83,6 +83,39 @@
   (when (str/starts-with? line "MILESTONE ")
     (try (edn/read-string {:default (fn [_ v] v)} (subs line 10)) (catch Exception _ nil))))
 
+(defn sample-of-line
+  "The sample a race log's SAMPLE line carries, or nil."
+  [line]
+  (when (str/starts-with? line "SAMPLE ")
+    (try (edn/read-string {:default (fn [_ v] v)} (subs line 7)) (catch Exception _ nil))))
+
+(defn mean
+  "The mean of xs rounded to a tenth, or nil for none."
+  [xs]
+  (when (seq xs) (/ (math/round (* 10.0 (/ (reduce + xs) (count xs)))) 10.0)))
+
+(defn servers-of
+  "One entry for each server the samples (the SAMPLE facts of a batch's race logs) name, by server
+   number: {:server k :simulation-distance d :samples n :tick {:avg :p50 :p95 :p99}}, the tick the
+   mean of the samples taken with bots playing (an empty server's tick says nothing about the
+   load). :server and :simulation-distance are absent when the sample had none. Nil without samples."
+  [samples]
+  (not-empty (vec (for [[k ss] (sort-by (comp str key) (group-by :sample/server samples))
+                        :let [ss (vec ss)
+                              loaded (filter (fn [s] (pos? (:sample/playing s 0))) ss)
+                              tick (into {}
+                                         (for [q [:avg :p50 :p95 :p99]
+                                               :let [m (mean (keep #(get-in %
+                                                                            [:sample/server-tick q])
+                                                                   loaded))]
+                                               :when m]
+                                           [q m]))]]
+                    (cond-> {:samples (count loaded)}
+                      k (assoc :server k)
+                      (some :sample/simulation-distance ss)
+                      (assoc :simulation-distance (some :sample/simulation-distance ss))
+                      (seq tick) (assoc :tick tick))))))
+
 (defn reached
   "How many runs reached each milestone: a run's RESULT carries :plan/reached."
   [runs milestones]
@@ -158,7 +191,7 @@
    server refused it or was gone) is no run of the bot's: it is kept out of every count and
    counted alone as :round/unplayed."
   [all marks milestones
-   {:keys [kind run commit at started ended issues runner batch senses coverage observed]}]
+   {:keys [kind run commit at started ended issues runner batch senses coverage observed servers]}]
   (let [runs (remove failures/unplayed? all)
         {:keys [deaths died]} (deaths runs)]
     (cond-> {:round/run run
@@ -181,6 +214,7 @@
       (seq issues) (assoc :round/issues issues)
       coverage (assoc :round/coverage coverage :round/senses (or senses {}))
       observed (assoc :round/observed observed)
+      (seq servers) (assoc :round/servers servers)
       (leader runs marks milestones) (assoc :round/leader (leader runs marks milestones)))))
 
 (defn wall
@@ -244,7 +278,8 @@
       (:round/first-at r) (assoc :first (:round/first-at r))
       (:round/leader r) (assoc :leader (:round/leader r))
       (:round/coverage r) (assoc :coverage (:round/coverage r) :senses (:round/senses r {}))
-      (:round/observed r) (assoc :observed (:round/observed r)))))
+      (:round/observed r) (assoc :observed (:round/observed r))
+      (seq (:round/servers r)) (assoc :servers (:round/servers r)))))
 
 (defn day-of
   "The UTC day a batch belongs to, yyyy-mm-dd: its run's start's, else its commit's, else its
@@ -516,6 +551,15 @@
         :out
         (re-find #"github\.com[:/](.+?)(?:\.git)?\s*$")
         second)))
+
+(defn servers-under
+  "The servers of the race logs under dir (servers-of their SAMPLE lines), for a batch row."
+  [dir]
+  (servers-of (into []
+                    (comp (filter #(= "race.log" (fs/file-name %)))
+                          (mapcat #(str/split-lines (slurp (fs/file %))))
+                          (keep sample-of-line))
+                    (fs/glob dir "**"))))
 
 (defn marks-under
   "Every MILESTONE fact in the race logs under dir."

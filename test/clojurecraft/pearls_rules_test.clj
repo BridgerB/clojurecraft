@@ -39,3 +39,11 @@
 (deftest the-phase-of-a-hunt-is-the-first-not-done
   (is (= :set-up (rules/phase (ps/standing {}))))
   (is (= :provoke (rules/phase (ps/burrowed [8.5 61.0 8.5] {})))))
+
+(deftest a-strike-on-the-way-out-is-answered-before-the-pocket-is-sealed
+  ;; Logged state, sim R1/17 seed 2 (probe wide-bo2-R1-17, issue #263): the pocket was sealed and
+  ;; held (:seal, :pocket-hold) while a wither skeleton at 0.7 blocks hit the bot four times, 20
+  ;; health to none in four seconds, because the pocket-bore row came before the tunnel answer.
+  (let [ids (mapv :rule/id rules/all-rules)
+        at (fn [id] (.indexOf ^java.util.List ids id))]
+    (is (< -1 (at :hunt/tunnel-answer) (at :hunt/pocket-bore)))))

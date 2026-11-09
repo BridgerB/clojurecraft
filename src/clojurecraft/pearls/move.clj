@@ -460,17 +460,19 @@
   "The way to target, a cell over a warped forest's nylium: a walk when a route reaches it
    (intent/routable?), else, with a pickaxe held, a sealed tunnel toward it (a :tunnel-to, sealing
    behind as the fortress exit bores; it climbs and descends to the target's height), else the walk
-   (a walk with no route fails :no-path, and the hunt chooses again)."
-  [world target]
-  (let [walk {:intent/kind :walk :intent/target target :intent/for :pearls}]
-    (cond (intent/routable? world (assoc walk :intent/max-nodes pparams/vantage-nodes)) walk ; a capped test: travel is asked several times a tick (#766)
-          (pupkeep/pickaxe? world)
-          {:intent/kind :tunnel-to
-           :intent/target target
-           :intent/reach 1.5
-           :intent/seal-behind? true
-           :intent/for :pearls}
-          :else walk)))
+   (a walk with no route fails :no-path, and the hunt chooses again). routable? (world, intent) is
+   the route test: intent/routable? unless a caller passes its own."
+  ([world target] (forest-way world target intent/routable?))
+  ([world target routable?]
+   (let [walk {:intent/kind :walk :intent/target target :intent/for :pearls}]
+     (cond (routable? world (assoc walk :intent/max-nodes pparams/vantage-nodes)) walk ; a capped test: travel is asked several times a tick (#766)
+           (pupkeep/pickaxe? world)
+           {:intent/kind :tunnel-to
+            :intent/target target
+            :intent/reach 1.5
+            :intent/seal-behind? true
+            :intent/for :pearls}
+           :else walk))))
 
 (defn travel
   "The way to a warped forest (forest-way: a walk, or a sealed tunnel when no walk reaches it), or

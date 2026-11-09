@@ -121,8 +121,14 @@
                 "b" (assoc playing :time/tick 300 :plan/reached #{:wood :kit})
                 "c" {:bot/phase :play :bot/disconnected "gone" :player/pos [0 64 0]}
                 "d" (assoc playing :time/tick 100 :plan/status :done)}
-        s (facts/sample {:runner 3} worlds {"a" 100 "b" 100 "d" 100} 15000 {:p95 5.0} 900 1000)]
+        s (facts/sample {:runner 3 :server 2 :simulation-distance 3}
+                        worlds
+                        {"a" 100 "b" 100 "d" 100}
+                        15000 {:p95 5.0}
+                        900 1000)]
     (is (= 4 (:sample/joined s)))
+    (is (= [2 3] ((juxt :sample/server :sample/simulation-distance) s))
+        "the sample names its server and its distance")
     (is (= 2 (:sample/playing s)))
     (is (= 1 (:sample/cut-off s)))
     (is (= 4 (:sample/milestones s)))
@@ -290,6 +296,42 @@
     (is (= (land/pad-of fortress (facts/slot-index 3 10))
            (land/pad-of fortress (facts/slot-index 13 10)))
         "the serial after a slot's bot lands on the same pad")))
+
+(defn refills
+  "Simulate slots slots refilled in an order a seeded generator picks, each new bot taking the next
+   serial: [[slot serial] ...] of the bots alive after n refills, serials from 1."
+  [slots n seed]
+  (let [rng (java.util.Random. (long seed))]
+    (loop [alive (into {} (for [s (range slots)] [s (inc s)]))
+           serial slots
+           left n]
+      (if (zero? left)
+        (vec alive)
+        (let [s (.nextInt rng (int slots))]
+          (recur (assoc alive s (inc serial)) (inc serial) (dec left)))))))
+
+(deftest two-bots-alive-at-once-never-land-on-one-pad
+  ;; serials are drawn by whichever slot refills next, so (serial - 1) mod slots is not the slot of
+  ;; the bot that ended: two live bots shared a pad, and the second was teleported into the blocks
+  ;; the first had placed
+  (doseq [seed (range 20)
+          :let [alive (refills 10 60 seed)]]
+    (is (apply distinct? (map (fn [[slot serial]] (facts/landing-slot slot (dec serial) 10)) alive))
+        "by slot: ten live bots on ten pads")
+    (is (= (count alive) (count (set (map first alive)))))))
+
+(deftest by-serial-two-live-bots-do-share-a-pad
+  ;; the rule before: it collides within a few refills
+  (is (some (fn [seed]
+              (let [alive (refills 10 60 seed)]
+                (not (apply distinct?
+                            (map (fn [[_ serial]] (facts/slot-index (dec serial) 10)) alive)))))
+            (range 20))))
+
+(deftest the-first-bots-land-on-their-slots-pad
+  (is (= [0 1 9] (map #(facts/landing-slot % % 10) [0 1 9])))
+  (is (= 3 (facts/landing-slot 3 20 10)) "a refill takes its slot's pad, not its serial's")
+  (is (= 0 (facts/landing-slot nil 20 10)) "no slot known: by serial"))
 
 (deftest a-pad-is-pregenerated-within-one-forceload
   ;; a forceload takes at most 256 chunks; pad-view blocks each side of a pad, however the square

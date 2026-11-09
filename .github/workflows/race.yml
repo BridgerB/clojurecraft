@@ -145,7 +145,7 @@ jobs:
           for k in $(seq 1 "$SERVERS"); do
             echo "server $k: set ${{ steps.set.outputs.set }}, $BOTS bots from landing $(( ${{ steps.set.outputs.first }} + (k - 1) * BOTS ))"
             cp -r "cache/worlds/${{ steps.set.outputs.set }}" "work/world-$k"   # the seed is the set's own, in its level.dat
-            PORT=$((25564 + k)) RCON_PORT=$((25574 + k)) WORLD="$PWD/work/world-$k" bb server start
+            PORT=$((25564 + k)) RCON_PORT=$((25574 + k)) WORLD="$PWD/work/world-$k" SERVER_INDEX="$k" bb server start
           done
       - name: Race
         env:
