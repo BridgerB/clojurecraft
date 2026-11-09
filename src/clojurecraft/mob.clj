@@ -20,8 +20,9 @@
    arrow's flight (the damage lands when the skeleton fires), a blast breaking blocks, an enderman's
    teleports out of water, rain, daylight or a non-living hurt (its teleports at its target are,
    toward-aim and away-aim), spiders climbing, mobs swimming, armour wearing out, a magma cube's
-   hop as a motion (its three sizes are kinds with their health, box, armour and hit, and the hop
-   is a reach upward, hop-reach?; one climbs a ledge no higher than any mob does) and a hoglin's
+   hop as a flight through the air (its three sizes are kinds with their health, box, armour and
+   hit; the hop lifts it onto a ledge as high as its whole blocks, climb, and reaches a player
+   over it, hop-reach?, but it never sails over a gap) and a hoglin's
    swing landing anywhere from 3 to 8 (the row uses 6). The armour the player wears takes its share of a mob's
    hit. A wither skeleton's wither does not (wither-tick)."
   (:require [clojure.edn :as edn]
@@ -53,7 +54,7 @@
    route round what stops its straight walk (route); :teleports teleports at its target as an
    enderman does (toward-aim, away-aim). :entity the entity type told when it is not the kind's
    own name (a magma cube's sizes); :armour points that take their share of the player's hit
-   (mob-hit); :hop how high its jump lifts its feet (hop-reach?); :split [kind lo hi] what it
+   (mob-hit); :hop how high its jump lifts its feet (hop-reach?, climb); :split [kind lo hi] what it
    leaves where it dies."
   (:mob/kinds mob-table))
 
@@ -368,25 +369,45 @@
         (reduce (fn [fy dy] (if (free? [cx (- cy dy) cz]) (- cy dy) (reduced fy))) cy (range 1 33))]
     [x (double (min y floor-y)) z]))
 
+(defn climb-to
+  "The rise, 1 to climb blocks, of the lowest ledge a body n cells tall at cell here can jump onto
+   in cell there: there's n cells free that many blocks up, and the cells over here's head free
+   up to that height (it rises in its own column, then moves over); nil when none is."
+  [free? here [cx cy cz] n climb]
+  (let [[hx hy hz] here]
+    (some (fn [dy]
+            (when (and (stands-in? free? [cx (+ cy dy) cz] n)
+                       (every? #(free? [hx (+ hy n %) hz]) (range dy)))
+              dy))
+          (range 1 (inc climb)))))
+
 (defn step-toward
   "A mob at pos one tick on toward target at speed blocks a tick, stopping stop short of it on
-   the plane: the straight step when the body stands there, one block up when a single block is
-   in the way and the head clears it (a mob jumps it), else it stays; then it falls (fall). A
-   body n cells tall (tall; two when not given) stands and jumps only where its n cells are free."
+   the plane: the straight step when the body stands there, up onto a ledge when one is in the
+   way that its jump clears (climb-to: one block for a walker, as high as its :hop for a magma
+   cube, climb), else it stays; then it falls (fall). A body n cells tall (tall; two when not
+   given) stands and jumps only where its n cells are free."
   ([free? pos target speed stop] (step-toward free? pos target speed stop 2))
-  ([free? pos target speed stop n]
+  ([free? pos target speed stop n] (step-toward free? pos target speed stop n 1))
+  ([free? pos target speed stop n climb]
    (let [[x y z] pos
          d (flat-distance pos target)
          k (min speed (max 0.0 (- d stop)))
          [tx _ tz] target
          nx (if (pos? d) (+ x (* k (/ (- tx x) d))) x)
          nz (if (pos? d) (+ z (* k (/ (- tz z) d))) z)
-         [cx cy cz] (cell-of [nx y nz])]
+         [cx cy cz] (cell-of [nx y nz])
+         up (when (pos? k) (climb-to free? (cell-of pos) [cx cy cz] n climb))]
      (cond (zero? k) pos
            (stands-in? free? [cx cy cz] n) (fall free? [nx y nz])
-           (and (stands-in? free? [cx (inc cy) cz] n) (free? (update (cell-of pos) 1 + n)))
-           [nx (double (inc cy)) nz]
+           up [nx (double (+ cy up)) nz]
            :else pos))))
+
+(defn climb
+  "How many blocks up a mob of kind steps onto a ledge: its :hop's whole blocks (a magma cube's
+   jump), one for any other."
+  [kind]
+  (max 1 (long (math/floor (:hop (kinds kind) 1.0)))))
 
 (defn in-reach?
   "Is a mob of kind at pos near enough to close on a player at target: on the plane within its

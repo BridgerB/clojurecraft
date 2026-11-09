@@ -457,15 +457,19 @@
         stop (cond (or (:melee k) (and (:contact k) (not (:flies k)))) (* 0.8 (:reach k))
                    (:shoot k) (:keep k)
                    :else 1.0)]
-    (cond
-      (not (pos? (:speed k 0.0))) sim
-      (:flies k) (fly sim eid)
-      (:paths k) (trail sim eid stop)
-      :else
-      (move-mob
-       sim
-       eid
-       (mob/step-toward (free-fn sim) pos (:sim/player-pos sim) (:speed k) stop (mob/tall type))))))
+    (cond (not (pos? (:speed k 0.0))) sim
+          (:flies k) (fly sim eid)
+          (:paths k) (trail sim eid stop)
+          :else
+          (move-mob sim
+                    eid
+                    (mob/step-toward (free-fn sim)
+                                     pos
+                                     (:sim/player-pos sim)
+                                     (:speed k)
+                                     stop
+                                     (mob/tall type)
+                                     (mob/climb type))))))
 
 (defn teleport-rolls
   "[sim' rs]: the next n rolls of the mobs' own stream (mob-roll), in order."
