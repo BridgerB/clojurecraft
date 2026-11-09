@@ -46,11 +46,16 @@
 
 (defn stone-kept
   "The stone (stone-materials, together) no filler lays: pickaxe-cobble while fewer than
-   pickaxe-spares pickaxes are held, else 0. Two real stage-18 bots on 4170b7d wore out their last
-   pickaxe holding a table and sticks and no cobblestone, deepslate or blackstone: every block of
-   it had gone into floors, seals and cover."
+   pickaxe-spares pickaxes are held and the rest of one is at hand (two sticks, or a crafting
+   table), else 0. Two real stage-18 bots on 4170b7d wore out their last pickaxe holding a table
+   and sticks and no cobblestone, deepslate or blackstone: every block of it had gone into
+   floors, seals and cover. A bot with neither (the first stone of a run, before any pickaxe is
+   made) lays what it holds."
   [held]
-  (if (< (pickaxes-held held) pickaxe-spares) pickaxe-cobble 0))
+  (if (and (< (pickaxes-held held) pickaxe-spares)
+           (or (>= (get held :stick 0) 2) (pos? (get held :crafting_table 0))))
+    pickaxe-cobble
+    0))
 
 (defn spendable?
   "May n of item be laid from the held item counts: it is no stone material, or the stone left
