@@ -327,8 +327,9 @@
   "One bot's whole life in a slot: the next serial's name (serials, an atom shared by the slots),
    its own atom and queue, on the board (live) and watched for milestones while it plays, landed on
    landing serial - 1 of the set (land-bot!), and played until its goal, its plan failing, a crash
-   or the job's end (deadline); a bot whose start has a cap (start/cap-ms) also stops at it,
-   a :bot-timeout, filed (capped), where the job's end is a cut. Its RESULT line is printed as it ends, marked
+   or the job's end (deadline); a bot whose start has a cap (start/cap-ticks, game time: the
+   server ticks it saw) also stops at it, a :bot-timeout, filed (capped), where the job's end is a
+   cut. Its RESULT line is printed as it ends, marked
    cut (failure/cut) when the job's end stopped it. Its senses (senses/senses!: a line a second of
    what it sensed and decided, and the loop's slowest event) are written beside its recording as
    <name>.senses.edn the moment before its RESULT, so a batch that counts the RESULT has them,
@@ -341,7 +342,7 @@
   [{:keys [server ch centre serials live watcher prefix record-dir commit deadline slot]}]
   (let [n (swap! serials inc)
         start (System/currentTimeMillis)
-        cap (start/cap-ms (:start server))
+        cap (start/cap-ticks (:start server))
         name (bot-name prefix n)
         queue (async/chan events-buffer)
         world* (atom (game/init {:host (:host server) :port (:port server) :name name}))
@@ -372,32 +373,34 @@
               :until (:until server)
               :chain true
               :end-on-death? (start/nether? (:start server))
-              :timeout-ms (bot-timeout-ms deadline start cap)
+              :timeout-ms (bot-timeout-ms deadline start)
+              :cap-ticks cap
               :record (str (io/file record-dir (str name ".edn")))
               :commit commit
               :events queue
               :world* world*
               :on-ms (fn [ms] (swap! slowest max ms))
-              :on-result
-              (fn [r]
-                (write-senses!)
-                (try (spit (str (io/file record-dir (str name ".serverlog.txt")))
-                           (serverlog-text (:server-log server) name))
-                     (catch Exception e (cli/log name "server log not kept:" e)))
-                (deliver truth (truth! server name))
-                (when-let [pos (:pos r)]
-                  (try (spit (str (io/file record-dir (str name ".server.txt")))
-                             (near-truth! server
-                                          name
-                                          pos
-                                          (or (:player/dimension @world*) "minecraft:overworld")))
-                       (catch Exception e (cli/log name "near truth not written:" e))))
-                (println "RESULT"
-                         name
-                         (pr-str (marked
-                                  (capped (with-death-message server name r) deadline start cap)))) ; what bb failures groups by
-                (flush))})]
-        {:name name :result (capped r deadline start cap) :truth @truth})
+              :on-result (fn [r]
+                           (write-senses!)
+                           (try (spit (str (io/file record-dir (str name ".serverlog.txt")))
+                                      (serverlog-text (:server-log server) name))
+                                (catch Exception e (cli/log name "server log not kept:" e)))
+                           (deliver truth (truth! server name))
+                           (when-let [pos (:pos r)]
+                             (try (spit (str (io/file record-dir (str name ".server.txt")))
+                                        (near-truth! server
+                                                     name
+                                                     pos
+                                                     (or (:player/dimension @world*)
+                                                         "minecraft:overworld")))
+                                  (catch Exception e (cli/log name "near truth not written:" e))))
+                           (println "RESULT"
+                                    name
+                                    (pr-str (marked (capped (with-death-message server name r)
+                                                            (game/server-ticks @world*)
+                                                            cap)))) ; what bb failures groups by
+                           (flush))})]
+        {:name name :result (capped r (game/server-ticks @world*) cap) :truth @truth})
       (catch Exception e
         (cli/log name "failed:" e)
         (write-senses!)
@@ -499,7 +502,9 @@
         runner (get o :runner)
         which (get o :server) ; which of the runner's servers (--server); server below is the one connected to
         landings-file (get o :landings)
-        config (edn/read-string (slurp config))
+        config (servers/for-lane (edn/read-string (slurp config))
+                                 (some-> runner
+                                         parse-long))
         {:race/keys [bots prefix until]} config
         t0 (System/currentTimeMillis)
         server (cond-> {:host host
@@ -519,8 +524,9 @@
                                parse-long)
                :server (some-> which
                                parse-long)}
-        where
-        (assoc where :simulation-distance (servers/simulation-distance config (:server where)))
+        where (assoc where
+                     :simulation-distance (servers/simulation-distance config (:server where))
+                     :runner-servers (servers/servers-of config))
         done (promise)
         live (atom {})
         ctx {:server server

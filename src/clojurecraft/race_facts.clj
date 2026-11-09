@@ -92,18 +92,20 @@
       timeout-ms))
 
 (defn bot-timeout-ms
-  "How long a bot may play, ms, started at now: until the job's deadline, or its own cap (ms, nil
-   for none) when that comes first; at least 1000."
-  [deadline now cap]
-  (max 1000 (min (- deadline now) (or cap Long/MAX_VALUE))))
+  "How long a bot may play by the clock, ms, started at now: until the job's deadline, at least
+   1000. Its own cap is game time (start/cap-ticks, held by main/run-bot!), never the clock's, so
+   the job's end is the only clock that stops it."
+  [deadline now]
+  (max 1000 (- deadline now)))
 
 (defn capped
-  "A RESULT r of a bot that was stopped by its own cap (cap-ms, nil for none; started at start,
-   the job ending at deadline) rather than the job's end: a :timeout becomes :bot-timeout, a
-   stage's failure (no pearls in the time) that is filed. Any other RESULT is unchanged."
-  [r deadline start cap]
+  "A RESULT r of a bot that saw ticks server ticks (game/server-ticks) and was stopped by its own
+   cap (cap-ticks, nil for none) rather than the job's end: a :timeout at ticks of at least
+   cap-ticks becomes :bot-timeout, a stage's failure (no pearls in the game time) that is filed.
+   Any other RESULT is unchanged."
+  [r ticks cap-ticks]
   (cond-> r
-    (and (= :timeout (:reason r)) cap (< (+ start cap) deadline)) (assoc :reason :bot-timeout)))
+    (and (= :timeout (:reason r)) cap-ticks (>= ticks cap-ticks)) (assoc :reason :bot-timeout)))
 
 (defn marked
   "A RESULT as the race prints it: marked for bb failures (failure/mark), cut (failure/cut) when
@@ -155,6 +157,7 @@
     {:sample/runner (:runner race)
      :sample/server (:server race)
      :sample/simulation-distance (:simulation-distance race)
+     :sample/runner-servers (:runner-servers race)
      :sample/at now
      :sample/joined (count (filter (comp :player/pos val) worlds))
      :sample/landed (count (filter (comp :plan/go-at val) worlds))
