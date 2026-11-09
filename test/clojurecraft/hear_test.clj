@@ -74,6 +74,27 @@
                       [:world/entities hoglin :entity/swung-at]))
         "not a main-hand swing")))
 
+(deftest a-mobs-hurt-is-told-by-the-damage-event-that-names-it
+  ;; a real 26.1.2 server shows a mob the bot hit as a damage-event naming the mob, source
+  ;; player_attack and the bot as cause (its id + 1), and sends no hurt-animation for it: a
+  ;; magma cube taking five such swings to its death was counted none landed
+  (let [w (heard (playing)
+                 {:packet/name :damage-event
+                  :entity-id hoglin
+                  :source-type (id-of registry/damage-types :player_attack)
+                  :source-cause 6
+                  :source-direct 6})]
+    (is (= 1000 (get-in w [:world/entities hoglin :entity/hurt-at])) "the swing landed")
+    (is (nil? (:player/hits w)) "not a hit on the bot")
+    (is (nil? (:player/hurt-at w)))
+    (is
+     (=
+      (playing)
+      (heard
+       (playing)
+       {:packet/name :damage-event :entity-id 77 :source-type 34 :source-cause 6 :source-direct 6}))
+     "an entity the bot does not track is left alone")))
+
 (deftest the-fight-bracket-effects-and-armour-are-the-servers-word
   (let [wither (id-of registry/mob-effects :wither)
         armor (id-of registry/attributes :armor)

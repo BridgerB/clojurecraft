@@ -185,7 +185,7 @@
     "ms the server said the entity died (entity-event status 3); the body is removed after"
     "inside :world/entities, after a death"]
    [:entity/hurt-at
-    "ms the server last showed the entity hurt (hurt-animation, hear.clj): a swing that landed"
+    "ms the server last showed the entity hurt (a damage-event naming it, game.clj; or hurt-animation, hear.clj): a swing that landed"
     "inside :world/entities, after its first hurt flash"]
    [:entity/swung-at
     "ms the server last showed the entity swing its main hand (animate, hear.clj): a strike coming"
