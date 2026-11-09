@@ -509,12 +509,14 @@
            :sim/respawns 1
            :sim/hit-log [hit-1 hit-2 hit-3]
            :sim/mobs {5 {:type :blaze :pos [3.0 64.0 0.0] :health 20.0}
-                      6 {:type :enderman :pos [4.0 64.0 0.0] :health 40.0}}}
+                      6 {:type :enderman :pos [4.0 64.0 0.0] :health 40.0}
+                      7 {:type :cow :pos [5.0 64.0 0.0] :health 10.0}}}
         t (simrace/truth s)
         by-eid (into {} (map (juxt :eid identity)) (:mobs t))]
     (is (= 4000 (:t t)))
     (is (true? (:targets? (by-eid 5))) "a blaze in its follow range targets the player")
     (is (false? (:targets? (by-eid 6))) "a neutral enderman not yet angered does not")
+    (is (false? (:targets? (by-eid 7))) "an animal has no follow range: it targets nothing")
     (is (= 2.0 (:dealt (by-eid 5))) "this life's damage only: the blow of life 0 is not counted")
     (is (= 0.0 (:dealt (by-eid 6))))
     (is (= [hit-1 hit-2 hit-3] (:hits t)) "the model's own cause for each blow")
