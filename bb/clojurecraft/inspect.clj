@@ -191,7 +191,8 @@
                   (keep (fn [[_ pid line]]
                           (let [p (parse-long pid)]
                             (some-> (stat line)
-                                    (assoc :role (role (args p []) (cwd p)))))))
+                                    (assoc :role (role (args p []) (cwd p)))
+                                    (#(vector p %))))))
                   (matches #"/proc/(\d+)/stat:(.*)"))
      :threads (into {}
                     (keep (fn [[_ pid tid line]]
