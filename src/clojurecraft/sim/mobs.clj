@@ -210,10 +210,32 @@
               (remove-mob eid)
               (hurt (armoured sim (mob/scaled dmg (:sim/difficulty sim))) true type nil eid)))))
 
+(defn split
+  "The model with what a mob of kind dying at pos leaves (:split [kind lo hi]): lo to hi of kind,
+   rolled from the mobs' stream (mob/loot-count), each a quarter of the dead one's width off its
+   feet on x and on z by its place in the litter (Slime.remove: 2 + nextInt(3), offsets of a
+   quarter of the size), facing the player as any hostile; none for a kind with no :split."
+  [sim kind [x y z]]
+  (let [[child lo hi] (:split (mob/kinds kind))
+        q (/ (first (:box (mob/kinds kind))) 4.0)]
+    (cond (nil? child) sim
+          :else
+          (let [[sim r] (mob-roll sim)
+                n (mob/loot-count [child lo hi] r)]
+            (reduce (fn [sim i]
+                      (add-mob sim
+                               child
+                               [(+ x (* q (dec (* 2 (mod i 2))))) y
+                                (+ z (* q (dec (* 2 (mod (quot i 2) 2)))))]
+                               {}))
+                    sim
+                    (range n))))))
+
 (defn die-mob
   "Mob eid at zero health: a crystal blasts (blast); any other dies, the client told
-   (entity-event entity/death-status), its loot dropped when the player killed it (drop-loot), and it is
-   removed once its death is over (act-mob)."
+   (entity-event entity/death-status), its loot dropped when the player killed it (drop-loot), what
+   it splits into standing where it died (split, a magma cube's), and it is removed once its death
+   is over (act-mob)."
   [sim eid by-player?]
   (let [{:keys [type pos]} (get-in sim [:sim/mobs eid])]
     (cond (:crystal (mob/kinds type)) (blast sim eid)
@@ -221,7 +243,8 @@
           (-> sim
               (assoc-in [:sim/mobs eid :dead-at] (:sim/now sim))
               (send {:packet/name :entity-event :entity-id eid :status entity/death-status})
-              (cond-> by-player? (drop-loot type pos))))))
+              (cond-> by-player? (drop-loot type pos))
+              (split type pos)))))
 
 (defn anger
   "The model with mob eid turned on the player (:angry?). An enderman shows it as the server does
@@ -258,9 +281,14 @@
                          :last-hit amount)
               (cond-> by-player? (anger eid))
               (send (health-data eid left))
-              ;; the hurt flash the server shows every client (hurt-animation): the bot tells a
-              ;; swing that landed by it (hear.clj, :entity/hurt-at)
-              (send {:packet/name :hurt-animation :entity-id eid :yaw 0.0})
+              ;; the hurt the server shows every client tracking the mob (a damage-event naming
+              ;; the mob, never hurt-animation, which names only the player's own entity): the
+              ;; bot tells a swing that landed by it (game.clj, :entity/hurt-at)
+              (send {:packet/name :damage-event
+                     :entity-id eid
+                     :source-type (get mob/damage-source (if by-player? :player_attack :on_fire))
+                     :source-cause (if by-player? (inc (player-eid-of sim)) 0)
+                     :source-direct (if by-player? (inc (player-eid-of sim)) 0)})
               (cond-> (<= left 0.0) (die-mob eid by-player?))))))
 
 (defn wear-weapon
@@ -279,7 +307,8 @@
 
 (defmethod on-packet [:play :attack]
   ;; the player's hit (775's attack packet): a living mob whose box is in reach of the eye
-  ;; (mob/attack-reach) is hurt by the held item (mob/weapon-damage), the item worn, the hit's
+  ;; (mob/attack-reach) is hurt by the held item (mob/weapon-damage) less its armour's share
+  ;; (mob/mob-hit), the item worn, the hit's
   ;; exhaustion spent; out of reach, dead or unknown, nothing, as the server ignores it
   [sim {:keys [entity-id]}]
   (let [m (get-in sim [:sim/mobs entity-id])
@@ -290,7 +319,7 @@
               (> (mob/box-distance (physics/eye player) (:type m) (:pos m)) mob/attack-reach))
           sim
           :else
-          (let [dmg (mob/weapon-damage (held-item sim))]
+          (let [dmg (mob/mob-hit (:type m) (mob/weapon-damage (held-item sim)))]
             (-> sim
                 (add-exhaustion (hunger/exhaustion :attack))
                 wear-weapon
@@ -336,7 +365,8 @@
   "Mob eid of a kind that finds its way (:paths, the enderman) a tick on toward the player,
    stopping stop short of it on the plane: along its route (:route) while it has one, a cell
    dropped once its feet stand on that cell's centre and the route dropped when a step there
-   leaves it where it stood; with none, straight (mob/step-toward). A straight step that leaves
+   leaves it where it stood; with none, straight (mob/step-toward); each step held off the walls
+   by its half width (mob/keep-off-walls). A straight step that leaves
    it where it stood with the player out of its reach (mob/in-reach?: a wall, a drop, the player
    above or below) searches a route toward the player (mob/route), at most once every
    mob/route-every ticks (:route-at), walked from the next tick."
@@ -350,7 +380,7 @@
         [wx wy wz :as w] (first route)]
     (cond w
           (let [centre [(+ wx 0.5) (double wy) (+ wz 0.5)]
-                to (mob/step-toward free? pos centre speed 0.0 n)
+                to (mob/keep-off-walls free? type (mob/step-toward free? pos centre speed 0.0 n) n)
                 left (cond (and (= w (mob/cell-of to)) (< (mob/flat-distance to centre) 1e-3))
                            (subvec route 1)
                            (= to pos) []
@@ -359,7 +389,7 @@
               (seq left) (assoc-in [:sim/mobs eid :route] left)
               (empty? left) (update-in [:sim/mobs eid] dissoc :route)))
           :else
-          (let [to (mob/step-toward free? pos player speed stop n)
+          (let [to (mob/keep-off-walls free? type (mob/step-toward free? pos player speed stop n) n)
                 stuck? (and (= to pos)
                             (not (mob/in-reach? type pos player))
                             (>= now (+ (or route-at 0) (* mob/route-every physics/tick-ms))))
@@ -422,7 +452,8 @@
                   :else sim)))))
 
 (defn walk
-  "Mob eid a tick on toward the player (mob/step-toward), stopping where its kind fights from: a
+  "Mob eid a tick on toward the player (mob/step-toward, held off the walls by its half width:
+   mob/keep-off-walls), stopping where its kind fights from: a
    melee mob inside its reach, a shooter at :keep, a creeper a block off; one that does not walk
    (a blaze hovers) stays; one that finds its way (:paths) walks round what stops it (trail)."
   [sim eid]
@@ -433,15 +464,19 @@
         stop (cond (or (:melee k) (and (:contact k) (not (:flies k)))) (* 0.8 (:reach k))
                    (:shoot k) (:keep k)
                    :else 1.0)]
-    (cond
-      (not (pos? (:speed k 0.0))) sim
-      (:flies k) (fly sim eid)
-      (:paths k) (trail sim eid stop)
-      :else
-      (move-mob
-       sim
-       eid
-       (mob/step-toward (free-fn sim) pos (:sim/player-pos sim) (:speed k) stop (mob/tall type))))))
+    (cond (not (pos? (:speed k 0.0))) sim
+          (:flies k) (fly sim eid)
+          (:paths k) (trail sim eid stop)
+          :else
+          (let [free? (free-fn sim)
+                n (mob/tall type)]
+            (move-mob sim
+                      eid
+                      (mob/keep-off-walls
+                       free?
+                       type
+                       (mob/step-toward free? pos (:sim/player-pos sim) (:speed k) stop n)
+                       n))))))
 
 (defn teleport-rolls
   "[sim' rs]: the next n rolls of the mobs' own stream (mob-roll), in order."
@@ -583,8 +618,11 @@
                 (tell-damage :wither nil))))))
 
 (defn strike
-  "A melee mob with the player in reach (on the plane within its :reach, feet within 1.5 in
-   height) hits it every :every ticks for its damage scaled by the difficulty. A flier's strike is
+  "A melee mob (:melee) whose attack box meets the player's with a clear line from its head
+   (mob/melee-reaches?, vanilla's box grown attack-pad sideways, not a radius) hits it every
+   :every ticks for its damage scaled by the difficulty; a jumper (:hop, a magma cube) as high
+   as its hop with a clear line (mob/hop-reach?); any other ground :contact mob within its :reach
+   on the plane, feet within 1.5 in height (mob/in-reach?). A flier's strike is
    its :contact (a blaze's 6 every :contact-every ticks) and only when the boxes touch with a
    clear line (mob/can-strike?): a separate key, because the bot's own tables read :melee as a
    kind it fights in a pack (combat/melee-damage), and a reach of two through a wall is not a hit.
@@ -595,9 +633,10 @@
         k (mob/kinds type)
         player (:sim/player-pos sim)
         now (:sim/now sim)
-        can? (if (:flies k)
-               (mob/can-strike? (solid-fn sim) type pos player)
-               (mob/in-reach? type pos player))]
+        can? (cond (:flies k) (mob/can-strike? (solid-fn sim) type pos player)
+                   (:melee k) (mob/melee-reaches? (solid-fn sim) type pos player)
+                   (:hop k) (mob/hop-reach? (solid-fn sim) type pos player)
+                   :else (mob/in-reach? type pos player))]
     (cond (not (and (or (:melee k) (:contact k)) can? (>= now (or attack-at 0)))) sim
           (sim-protocol/shield-blocks? sim pos)
           (-> sim

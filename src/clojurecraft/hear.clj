@@ -1,7 +1,9 @@
 (ns clojurecraft.hear
   "What the server says about a fight beyond the health and the damage-event, kept as facts in the
    world (the observability plan, part A: the bot heard none of it before): an entity's hurt flash
-   (:entity/hurt-at, so a swing that landed is told from one that missed), a mob's arm swing
+   (:entity/hurt-at, so a swing that landed is told from one that missed; a real server shows a
+   mob's hurt only by a damage-event naming it, game.clj, and hurt-animation only for the bot's
+   own entity, which is left out here), a mob's arm swing
    (:entity/swung-at, a strike coming), the server's fight bracket (:player/in-combat?), the
    effects on the bot (:player/effects: wither, poison, fire resistance) and its attributes
    (:player/armor, :player/max-health: whether the armour is worn is the server's word, not a

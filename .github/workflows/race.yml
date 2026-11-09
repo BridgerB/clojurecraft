@@ -2,9 +2,9 @@ name: race
 
 # The race (issue #17): every runner the repo has, each with ci/race.edn's servers on one of the
 # race's pregenerated landing sets (the same worlds and landings every commit), each server
-# carrying ci/race.edn's bots from landings of their own to the target (clojure -M:race). A code
-# merge has the fleet cancel and replace the lanes: the races always run what is merged, and
-# there is no second branch to keep in step.
+# carrying ci/race.edn's bots from landings of their own to the target (clojure -M:race). A lane
+# runs its whole job on the code it started with (a real run needs hours of wall time); the next
+# lane runs what is merged, and there is no second branch to keep in step.
 # Each server stays full the whole job (issue #127): a bot that ends is replaced at once by a
 # fresh one, no bot waits for another, and a bot still playing when the job ends is cut, never
 # filed. The board (BOARD lines in the Race step's log) shows the bots playing each minute. Every
@@ -17,8 +17,9 @@ name: race
 # Lanes (fleet.yml, ci/fleet.edn): each run is one lane, the runner k of the old matrix, one job's
 # worth (GitHub caps a job at 6 h). The fleet dispatches lanes into free runners, cancels the newest
 # when another workflow's job waits for a runner (GitHub has no preemption of its own), and cancels
-# and replaces lanes whose code main has replaced. A cancelled lane still stops its races, reports
-# and uploads (the always() steps). The repository variable RACE_CONTINUOUS=false stops new lanes.
+# and replaces sim lanes whose code main has replaced; a real lane runs its whole job on the code
+# it started with (ci/fleet.edn :fleet/stale-after-minutes). A cancelled lane still stops its
+# races, reports and uploads (the always() steps). The repository variable RACE_CONTINUOUS=false stops new lanes.
 
 on:
   workflow_dispatch:                    # by the fleet (fleet.yml), one lane a run

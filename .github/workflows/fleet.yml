@@ -3,8 +3,8 @@ name: fleet
 # The fleet (ci/fleet.edn, bb fleet): one small job that keeps the runners full of race and
 # sim-race lanes and gives a runner back the moment another workflow's job waits for one. GitHub
 # has no job priority or preemption, so this job looks every minute: a queued job with no runner
-# free cancels the newest lane; free runners with nothing waiting get new lanes on main; lanes on
-# code main has replaced are cancelled and replaced. The job runs :fleet/minutes and then
+# free cancels the newest lane; free runners with nothing waiting get new lanes on main; sim lanes
+# on code main has replaced are cancelled and replaced, real lanes run out their job. The job runs :fleet/minutes and then
 # dispatches the next fleet run, which waits as the group's one pending run and starts when this
 # one ends; the schedule is a backstop should that hand-over not happen. To stop the rounds, set
 # the repository variable RACE_CONTINUOUS=false: the fleet then dispatches no lanes and the
