@@ -229,10 +229,10 @@
    the sword's reach (combat/in-reach?), blacklisted or not and not fought out (psense/fought-out?:
    struck-by answers that one once it has hurt the bot), while the bot stands farther than
    answer-home-reach from its burrow's end or has none (pplace/shelter); nil otherwise. The hunt
-   answers it where the bot stands (fought over danger-health, a meal or a wall under it), never
-   with a walk home or a back-off: an enderman walks as fast as the bot and never teleports from a
-   player's hit, so a walk with one at hand takes its hits with no swing back, five or six of
-   them to a death."
+   covers from it where the bot stands (combat/cover), never with a fight, a walk home or a
+   back-off: an enderman walks as fast as the bot and never teleports from a player's hit, so a
+   walk with one at hand takes its hits with no swing back, and a sword in the open needs seven
+   swings, four and a half seconds, against its hit a second."
   [world]
   (let [home (pplace/shelter world)
         pos (:player/pos world)

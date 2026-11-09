@@ -210,15 +210,12 @@
     (is (= {:intent/kind :burrow :intent/dir [-1 0] :intent/for :pearls}
            (plan/next-intent near ps/row plan/goals))
         "a pickaxe held and one at hand not coming: a burrow away from it, not a blow in the open")
-    (is (= {:intent/kind :fight
-            :intent/target 7
-            :intent/hold? true
-            :intent/yield? true
-            :intent/for :pearls}
-           (plan/next-intent (assoc-in near [:world/entities 7 :entity/creepy?] true)
-                             ps/row
-                             plan/goals))
-        "one at hand already coming is fought where the bot stands: there is no time to dig")
+    (is
+     (let [i (plan/next-intent (assoc-in near [:world/entities 7 :entity/creepy?] true)
+                               ps/row
+                               plan/goals)]
+       (and (:intent/wall? i) (not= :fight (:intent/kind i))))
+     "one at hand already coming is covered from where the bot stands: no time to dig, no fight in the open")
     (is (= {:intent/kind :lookout :intent/for :pearls}
            (plan/next-intent (assoc (ps/burrowed [8.5 61.0 8.5] {7 far}) :player/health 6.0)
                              ps/row
@@ -634,31 +631,23 @@
            (plan/next-intent at-mouth ps/row plan/goals))
         "and it walks home")
     (is (empty? (combat/threats no-burrow)) "with no burrow near the attacker is not :defend's")
-    (is (= {:intent/kind :fight
-            :intent/target 9
-            :intent/hold? true
-            :intent/yield? true
-            :intent/for :pearls}
-           (plan/next-intent no-burrow ps/row plan/goals))
-        "the hunt fights it where the bot stands")
+    (is (let [i (plan/next-intent no-burrow ps/row plan/goals)]
+          (and (:intent/wall? i) (not= :fight (:intent/kind i))))
+        "the hunt covers from it where the bot stands")
     (is (empty? (combat/threats (hit (ps/burrowed [8.5 61.0 8.5]
                                                   {9 (assoc angry :entity/pos [5.5 61.0 8.5])}))))
         "in the burrow's end it stays the hunt's: a held fight")))
 
-(deftest an-enderman-at-hand-out-of-the-burrows-reach-is-answered-where-the-bot-stands
+(deftest an-enderman-at-hand-out-of-the-burrows-reach-is-covered-from-where-the-bot-stands
   ;; the enderman deaths in the open in sim forest-start runs: struck eight blocks from the burrow,
   ;; the bot walked home with the enderman at hand and took five or six hits with no swing back
   (let [angry (assoc (ps/enderman [12.5 64.0 2.5]) :entity/creepy? true)
         out (assoc (ps/burrowed [14.5 64.0 2.5] {9 angry}) :player/attacker 9)
         home {:intent/kind :walk :intent/target [8 61 8] :intent/for :shelter}]
     (is (= [9 angry] (pcover/open-striker out)) "nine blocks from the burrow's end")
-    (is (= {:intent/kind :fight
-            :intent/target 9
-            :intent/hold? true
-            :intent/yield? true
-            :intent/for :pearls}
-           (plan/next-intent out ps/row plan/goals))
-        "fought where it stands, held: no walk, no retreat")
+    (is (let [i (plan/next-intent out ps/row plan/goals)]
+          (and (:intent/wall? i) (not= :fight (:intent/kind i))))
+        "covered from at full health: no fight in the open, no walk, no retreat")
     (is (plan/interrupts? out ps/row (assoc home :intent/goal :ender-pearls))
         "a walk home already begun is cut")
     (is (= :place
@@ -668,7 +657,7 @@
                                                          (ps/item :cobblestone 64)))
                                            ps/row
                                            plan/goals)))
-        "under danger-health a wall, never the fight")
+        "with blocks held, a block between")
     (is (nil? (pcover/open-striker (assoc out
                                           :player/pos [3.5 64.0 8.5]
                                           :world/entities
