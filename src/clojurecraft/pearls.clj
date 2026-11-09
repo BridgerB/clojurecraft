@@ -294,6 +294,7 @@
                          (or (some? (psense/angry-near world))
                              (psense/angry-within? world pparams/hold-radius)))
                     (some? (first (psense/struck-by world)))
+                    (psense/pack-at-hand? world)
                     (some? (fexit/tunnel-answer world))
                     (psense/shot-at? world)
                     (and (= :lookout (:intent/kind i)) (some? (first (psense/threat world)))))

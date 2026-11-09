@@ -173,6 +173,11 @@
 (def struck-health (:struck-health thresholds))
 
 (def swarm-radius (:swarm-radius thresholds))
+
+(def pack
+  "{:kinds :radius :near :clear}: what makes a melee pack (pearls.edn :pack, sense/pack-at-hand?)."
+  (:pack thresholds))
+
 (def cover-place-hold-ms (:cover-place-hold-ms thresholds))
 (def cover-place-max (:cover-place-max thresholds))
 

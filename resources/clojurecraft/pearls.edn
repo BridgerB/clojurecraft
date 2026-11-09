@@ -25,6 +25,8 @@
  :relocate-patience-ms 180000
  ;; Blocks from the feet within which a monster counts toward a swarm
  :swarm-radius 8.0
+ ;; a melee pack (sense/pack-at-hand?): :near or more of :kinds within :radius blocks of the feet on the plane that can reach the bot (its feet under :clear blocks over theirs), or one of them that struck and another within swarm-radius; answered at once in any intent (cover/pack-answer), never fought
+ :pack {:kinds #{:wither_skeleton} :radius 6.0 :near 2 :clear 3.0}
  ;; Blocks from the feet within which an angry enderman keeps the bot where it is:
  ;; the burrow is not given up (stale?) and no relocation begins while one stands this near
  :hold-radius 16.0

@@ -553,6 +553,15 @@
         (assoc world :pearls/refuge-since (:time/now world 0))
         :else world))
 
+(defn melee-at-hand?
+  "Is a hostile that is no ranged kind (a wither skeleton, a hoglin, a piglin) within the sword's
+   reach of the feet (combat/in-reach?)? A pocket with one in it or at its mouth is no refuge."
+  [world]
+  (boolean (some (fn [[_ e]]
+                   (and (not (contains? pparams/ranged-kinds (entity/kind e)))
+                        (combat/in-reach? world e)))
+                 (entity/hostiles world))))
+
 (defn blaze-refuge
   "The blaze row's survival intent after the rods, or nil once it has handed over: while the
    pearl stage is in play in the Nether near the spawner and the bot has not yet been sealed
@@ -560,7 +569,8 @@
    blaze row stays in charge — a committed fight at hand (blaze/commit-fight, never under
    danger health), the refuge (blaze/refuge-now), the way to the pocket (blaze/pocket-go) or
    a pocket sealed where it stands (blaze/here-intent); in the pocket, its hold (blaze/hold-intent:
-   seal, meal, hold), sealing first when it can. The pearl hunt has none of this, and took over
+   seal, meal, hold), sealing first when it can, and none with a melee hostile at hand there
+   (melee-at-hand?): the hunt's answers take over. The pearl hunt has none of this, and took over
    the tick the seventh rod was held, out of the pocket grabbing a rod, hurt and watched:
    14 sim rod bots on main and the pocket-bore branch died at the spawner within a minute,
    1.4 to 2.8 blocks from the rod. Reused, not copied: no blaze logic lives here."
@@ -577,7 +587,11 @@
                                        (physics/centre (blaze/nearest-spawner world)))
                      32.0)))
     (let [sp (blaze/nearest-spawner world)]
-      (if (pocket/in? world)
+      (cond
+        ;; a melee hostile in the sword's reach is in the pocket or at its mouth: it is no
+        ;; refuge, and the hunt's own answers (the pack's, the swarm's cover) take over
+        (and (pocket/in? world) (melee-at-hand? world)) nil
+        (pocket/in? world)
         (or (blaze/commit-fight world)
             (blaze/hold-intent world)
             ;; hold-intent is nil with a blaze in reach: the row strikes it (its fight
@@ -591,6 +605,7 @@
               {:intent/kind :seal})
             (blaze/meal world)
             {:intent/kind :pocket-hold :intent/heal-to 20.0})
+        :else
         ;; out of the pocket at full health and unwatched, the bore goes on from where
         ;; the bot stands (pocket-bore); hurt, burning or watched, the refuge comes first.
         ;; Watched alone counts, at full health too: the rod-7 bots of the 2026-11-04
