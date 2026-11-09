@@ -554,6 +554,8 @@
                     :inventory (:inventory fortress)
                     :respawn-in dimension/nether)
              (and (:capture/nether w) (not fortress)) (assoc :nether (:capture/nether w))
+             (and (not fortress) (seq (:capture/kit w)))
+             (assoc :inventory (kit->inventory (:capture/kit w)))
              food (assoc :food food)))
           #(stopped? % (boolean fortress))
           max-ms
@@ -1103,6 +1105,7 @@
                          path (nether-file f)
                          nether (nether-of path)]
                      (cond-> w
+                       (and (not (start/nether? begin)) (seq kit)) (assoc :capture/kit kit)
                        nether (with-nether nether path)
                        (and nether (start/nether? begin))
                        (-> (with-fortress kit (when (start/forest? begin) :forest))

@@ -5,7 +5,9 @@
 ;;                  its landing's fortress) or :warped-forest (the warped forest nearest that pad)
 ;;   :start/goal    the first target it plays, the chain from there to --until; nil plays the whole
 ;;                  chain from the wood
-;;   :start/kit     what it carries beyond :starts/base-kit, [[item count] ...]
+;;   :start/kit     what it carries beyond :starts/base-kit, [[item count] ...]; an overworld start
+;;                  carries it alone, what the stages before its goal hand over (:gear: the portal
+;;                  kit, the ingots the gear costs, gear/gear-cost, and the logs the chain has by then)
 ;;   :start/cap-min minutes of game time a bot may play before it is filed a :bot-timeout (1200
 ;;                  server ticks a minute, counted by the real race, simulated ms by the sim race);
 ;;                  absent for no cap
@@ -26,6 +28,12 @@
            :start/goal :ender-pearls
            :start/kit [[:blaze_rod 7]]
            :start/cap-min 60}
+          {:start/id :gear
+           :start/place :overworld
+           :start/goal :gear
+           :start/kit [[:flint_and_steel 1] [:water_bucket 1] [:bucket 1] [:iron_ingot 23]
+                       [:oak_log 2] [:crafting_table 1] [:stick 24] [:stone_pickaxe 2]
+                       [:cobblestone 64] [:coal 8] [:cooked_beef 8]]}
           {:start/id :forest
            :start/place :warped-forest
            :start/goal :ender-pearls

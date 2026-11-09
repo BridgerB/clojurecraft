@@ -1,6 +1,8 @@
 (ns clojurecraft.start-test
   "The starts table (resources/clojurecraft/starts.edn) as the real and the sim race read it."
-  (:require [clojure.test :refer [deftest is]]
+  (:require [clojure.string :as str]
+            [clojure.test :refer [deftest is]]
+            [clojurecraft.gear :as gear]
             [clojurecraft.plan :as plan]
             [clojurecraft.start :as start]))
 
@@ -44,3 +46,19 @@
   (is (= 72000 (start/cap-ticks (start/start-of :rods))) "an hour of game time, 20 ticks a second")
   (is (= 72000 (start/cap-ticks (start/start-of :forest))))
   (is (nil? (start/cap-ticks (start/start-of :fortress)))))
+
+(deftest the-gear-start-hands-over-what-the-stages-before-it-made
+  ;; an overworld start at the gear step: the chain from there to the Nether, carrying the portal
+  ;; kit, the ingots the whole gear costs and a little wood; the probe that proves a chained run
+  ;; enters the Nether with a shield starts here
+  (let [gear (start/start-of :gear)
+        kit (start/kit-map gear)]
+    (is (not (start/nether? gear)))
+    (is (= :gear (first (start/goals gear "nether"))))
+    (is (= (last (plan/through "nether")) (last (start/goals gear "nether"))))
+    (is (= 1 (:flint_and_steel kit) (:water_bucket kit) (:bucket kit)) "the portal kit")
+    (is (= (reduce + (map second (gear/pieces))) (:iron_ingot kit)) "every piece's ingots")
+    (is (nil? (:shield kit)) "the shield is the gear step's to make")
+    (is (= "minecraft:iron_ingot 23"
+           (some #(when (str/includes? % "iron_ingot") %) (start/kit-commands gear)))
+        "the real race gives the same kit")))

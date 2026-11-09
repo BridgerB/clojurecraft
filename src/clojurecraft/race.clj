@@ -174,6 +174,11 @@
                       landings
                       (fixture/land-at! rc name (land/landing-of landings (or landing-offset 0) i))
                       :else (land! rc ch name @centre i)))]
+          ;; an overworld start's kit (start/kit: the stages before its goal), given once landed;
+          ;; a Nether start's was given by its landing
+          (when (and at (not (start/nether? begin)))
+            (doseq [item (start/kit-commands begin)]
+              (rcon/command! rc (str "give " name " " item))))
           (when at
             (rcon/command! rc
                            (spawn-command

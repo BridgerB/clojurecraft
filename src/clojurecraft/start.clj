@@ -35,9 +35,12 @@
 
 (defn kit
   "What a bot at start carries, in the order it is given: [[item count] ...] with the start's own
-   items first, then the base kit. Empty for a start in the overworld, which gives nothing."
+   items first, then the base kit, for a start in the Nether. A start in the overworld gives its
+   own items alone (none for the spawn): what the stages before its goal hand over."
   [start]
-  (if (nether? start) (into (vec (:start/kit start)) (:starts/base-kit table)) []))
+  (if (nether? start)
+    (into (vec (:start/kit start)) (:starts/base-kit table))
+    (vec (:start/kit start))))
 
 (defn kit-commands
   "The kit of start as give-command words, [\"minecraft:item count\" ...], in kit's order."
