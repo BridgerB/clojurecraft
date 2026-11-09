@@ -173,6 +173,16 @@
 (def struck-health (:struck-health thresholds))
 
 (def swarm-radius (:swarm-radius thresholds))
+
+(def at-hand
+  "{kind {:radius :alone :min-health :hold? :yield?}}: the lone melee foes the hunt fights rather than covers from
+   (pearls.edn :at-hand, cover/lone-fight)."
+  (:at-hand thresholds))
+
+(def pack
+  "{:kinds :radius :near :clear}: what makes a melee pack (pearls.edn :pack, sense/pack-at-hand?)."
+  (:pack thresholds))
+
 (def cover-place-hold-ms (:cover-place-hold-ms thresholds))
 (def cover-place-max (:cover-place-max thresholds))
 

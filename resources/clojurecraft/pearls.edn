@@ -25,6 +25,11 @@
  :relocate-patience-ms 180000
  ;; Blocks from the feet within which a monster counts toward a swarm
  :swarm-radius 8.0
+ ;; a lone melee foe at hand (cover/lone-fight), by kind: one within :radius blocks of the feet that can be fought from here, no other of its kind within :alone, is fought at :min-health or more (never under danger-health), not covered from; :hold? fights where the bot stands, :yield? breaks off under retreat-health (always, #577). A blaze follows the bot into any cover and touches it there; a wither skeleton hits through any cover a tunnel can lay in the four seconds it needs to kill. Its fight is four swings, two or three of its hits at 4.8 and the wither: begun at 18 it ends over the danger line, begun lower it is broken off two swings from its end
+ :at-hand {:blaze {:radius 3.5 :alone 8.0 :min-health 10.0 :hold? false :yield? true}
+           :wither_skeleton {:radius 3.5 :alone 8.0 :min-health 18.0 :hold? true :yield? true}}
+ ;; a melee pack (sense/pack-at-hand?): :near or more of :kinds within :radius blocks of the feet on the plane that can reach the bot (its feet under :clear blocks over theirs), or one of them that struck and another within swarm-radius; answered at once in any intent (cover/pack-answer), never fought
+ :pack {:kinds #{:wither_skeleton} :radius 6.0 :near 2 :clear 3.0}
  ;; Blocks from the feet within which an angry enderman keeps the bot where it is:
  ;; the burrow is not given up (stale?) and no relocation begins while one stands this near
  :hold-radius 16.0

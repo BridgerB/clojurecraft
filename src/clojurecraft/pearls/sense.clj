@@ -535,6 +535,48 @@
                  (some (fn [[_ e]] (and (entity/hostile? e) (heavy? e))) sw)
                  (shot-at? world)))))
 
+(defn pack
+  "{eid entity} of the pack kinds ((:kinds pparams/pack)) alive within r blocks of the feet on the
+   plane, at any height: the wither skeletons of a fortress come two and three at a time."
+  [world r]
+  (let [pos (:player/pos world)]
+    (into {}
+          (filter (fn [[_ e]]
+                    (and (contains? (:kinds pparams/pack) (entity/kind e))
+                         (not (entity/dead? e))
+                         (<= (physics/horizontal-distance pos (:entity/pos e)) r))))
+          (:world/entities world))))
+
+(defn within-reach-height?
+  "Can entity e, a melee mob, reach the bot by height: are the feet less than (:clear pparams/pack)
+   blocks over its feet? A bot on a pillar of three stands over the attack box of every melee mob
+   of the Nether, which is no taller than the mob."
+  [world e]
+  (< (- (second (:player/pos world)) (second (:entity/pos e))) (:clear pparams/pack)))
+
+(defn pack-at-hand?
+  "Is a melee pack at hand: (:near pparams/pack) or more of the pack kinds within (:radius
+   pparams/pack) that can reach the bot (pack, within-reach-height?), or one of them that struck it
+   (combat/striker) with another within swarm-radius that can? Two wither skeletons strike twice
+   a second for four and five health each and the wither after: twenty health is gone in four
+   seconds, so the answer cannot wait for the walk or the dig under way to end."
+  [world]
+  (let [{:keys [radius near]} pparams/pack
+        n (fn [r] (count (filter #(within-reach-height? world %) (vals (pack world r)))))
+        [_ s] (combat/striker world)]
+    (boolean (or (>= (n radius) near)
+                 (and s
+                      (contains? (:kinds pparams/pack) (entity/kind s))
+                      (>= (n pparams/swarm-radius) near))))))
+
+(defn pack-below?
+  "Does the bot stand over a melee pack it is out of the reach of: one of the pack kinds within
+   (:radius pparams/pack) on the plane, none of them able to reach it (within-reach-height?)? The pillar the
+   pack answer raised holds while they are there."
+  [world]
+  (let [p (vals (pack world (:radius pparams/pack)))]
+    (boolean (and (seq p) (not-any? #(within-reach-height? world %) p)))))
+
 (defn enderman-hit
   "The damage one enderman hit does the bot through the armour it wears (armour/worn over the four
    slots, mob/armour-points, mob/absorbed) of the 7 it does on Normal (mob/kinds :melee): 5.74

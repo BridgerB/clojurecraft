@@ -36,4 +36,6 @@
                      :raw_gold_block :trapped_chest}
            :by #{:piglin :piglin_brute}
            :radius 16.0}
- :jumper-ladder [:roof :far-rest :eat-out-of-reach :wall :eat :nook]}
+ :jumper-ladder [:roof :far-rest :eat-out-of-reach :wall :eat :nook]
+ ;; the order the pack answer (pearls.cover/pack-answer) tries against a melee pack, never a fight (#577) and never a meal in reach: up out of every reach on a pillar of three, else a block between (a hole under the feet is still in reach)
+ :pack-ladder [:pillar :wall]}

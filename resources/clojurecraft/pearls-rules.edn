@@ -14,6 +14,17 @@
    :rule/phase :fire
    :rule/when [:fire]
    :rule/then [:intent {:intent/kind :dig :intent/target [:fact :fire]}]}
+  ;; a melee pack at hand is answered before anything else, the blaze refuge's pocket too: two
+  ;; wither skeletons take twenty health in four seconds, and real bots died in a travel walk, a
+  ;; cage-break tunnel and a held pocket with no answer at all
+  {:rule/id :hunt/pack-cover
+   :rule/phase :survive
+   :rule/when [:pack-answer]
+   :rule/then [:fact :pack-answer]}
+  {:rule/id :hunt/pack-hold
+   :rule/phase :survive
+   :rule/when [:pack-hold]
+   :rule/then [:fact :pack-hold]}
   {:rule/id :hunt/blaze-refuge
    :rule/phase :survive
    :rule/when [:blaze-refuge]
@@ -24,6 +35,12 @@
    :rule/phase :survive
    :rule/when [:leave-brutes]
    :rule/then [:fact :leave-brutes]}
+  ;; a lone blaze or wither skeleton at hand is fought before any cover from it: the cover rows dug
+  ;; and placed under its hits until it killed the bot, never swinging
+  {:rule/id :hunt/fight-lone-at-hand
+   :rule/phase :survive
+   :rule/when [:lone-fight]
+   :rule/then [:fact :lone-fight]}
   {:rule/id :hunt/come-down
    :rule/phase :survive
    :rule/when [[:not :hurt?] :come-down]
