@@ -11,7 +11,11 @@
 ;; never attacks; :hostile spawns by the night rule, :weight how often among them; :loot [[item lo
 ;; hi]], each item lo to hi when killed by the player; :paths finds a route round what stops its
 ;; straight walk (route); :teleports teleports at its target as an enderman does (toward-aim,
-;; away-aim).
+;; away-aim). :entity the entity type the client is told when it is not the kind's own name (a
+;; magma cube's sizes are kinds of their own); :armour the armour points that take their share of
+;; the player's hit (mob/absorbed); :hop how high its jump lifts its feet, so it strikes a player
+;; that far over it, the line from its head to the eye clear; :split [kind lo hi], lo to hi of
+;; kind where it died.
 {:mob/kinds
  {:zombie {:health 20.0
            :box [0.6 1.95]
@@ -87,7 +91,12 @@
   ;; a fortress's own hostiles (structure spawn_overrides: wither_skeleton weight 8, magma_cube 3).
   ;; No :weight: the overworld's night rule does not roll them (hostile-kinds). :melee is omitted
   ;; on the magma cube because combat/hit-damage reads it and the bot's line for a magma cube
-  ;; stays unknown; its hit is :contact, which only the model strikes with.
+  ;; stays unknown; its hit is :contact, which only the model strikes with. A magma cube is one of
+  ;; three sizes, each a kind told to the client as :magma_cube (MagmaCube.setSize): size s has
+  ;; s squared health, a box 0.52 s on a side, armour 3 s, a hit of s + 2 on Normal, a walk of
+  ;; 0.2 + 0.1 s (0.11 a tick at size 2), and a jump of 0.42 + 0.1 s a tick, which lifts the feet
+  ;; 1.84, 2.52 and 4.15 blocks (gravity 0.08, drag 0.98). One of size 2 or 4 splits where it dies
+  ;; into 2 to 4 of half the size (Slime.remove: 2 + nextInt(3)).
   :wither_skeleton {:health 20.0
                     :box [0.7 2.4]
                     :speed 0.137
@@ -99,15 +108,42 @@
                     :undead true
                     :hostile true
                     :loot [[:bone 0 2] [:coal 0 1]]}
+  :magma_cube_small {:entity :magma_cube
+                     :health 1.0
+                     :box [0.52 0.52]
+                     :speed 0.0825
+                     :follow 16.0
+                     :contact 3.0
+                     :every 20
+                     :reach 1.1
+                     :armour 3
+                     :hop 1.84
+                     :hostile true}
   :magma_cube {:health 4.0
-               :box [1.0 1.0]
+               :box [1.04 1.04]
                :speed 0.11
                :follow 16.0
                :contact 4.0
                :every 20
                :reach 1.5
+               :armour 6
+               :hop 2.52
+               :split [:magma_cube_small 2 4]
                :hostile true
                :loot [[:magma_cream 0 1]]}
+  :magma_cube_big {:entity :magma_cube
+                   :health 16.0
+                   :box [2.08 2.08]
+                   :speed 0.165
+                   :follow 16.0
+                   :contact 6.0
+                   :every 20
+                   :reach 2.4
+                   :armour 12
+                   :hop 4.15
+                   :split [:magma_cube 2 4]
+                   :hostile true
+                   :loot [[:magma_cream 0 1]]}
   :hoglin {:health 40.0
            :box [1.4 1.4]
            :speed 0.15
@@ -155,8 +191,13 @@
  ;; biome; the model tells a warped forest by its floor (warped-floor?).
  :mob/warped [[:enderman 1]]
  ;; The kinds a fortress's brick floor spawns, with their weights, beside the blaze spawner: wither
- ;; skeleton 8 and magma cube 3, the structure's spawn_overrides (fortress.json). Blazes stay the
- ;; spawner's. One mob a try, the model's rate, not the structure's minCount.
- :mob/fortress [[:wither_skeleton 8] [:magma_cube 3]]
+ ;; skeleton 8 and magma cube 3, the structure's spawn_overrides (fortress.json), the cube's 3 shared
+ ;; evenly by its three sizes (Slime.finalizeSpawn: 1 << nextInt(3)). Blazes stay the spawner's. One
+ ;; mob a try, the model's rate, not the structure's minCount.
+ :mob/fortress [[:wither_skeleton 8] [:magma_cube_small 1] [:magma_cube 1] [:magma_cube_big 1]]
+ ;; The kinds a basalt delta's floor (basalt, blackstone) spawns: vanilla's basalt_deltas monster list
+ ;; is the magma cube 100 and the ghast 40; the ghast is left out, as the warped forest's are. The
+ ;; three sizes evenly, in packs of mob/deltas-pack.
+ :mob/deltas [[:magma_cube_small 1] [:magma_cube 1] [:magma_cube_big 1]]
  ;; The kind a crimson forest's floor spawns: the hoglin, weight 1. Piglins are not modelled.
  :mob/crimson [[:hoglin 1]]}

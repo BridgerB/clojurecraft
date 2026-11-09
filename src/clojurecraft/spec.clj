@@ -501,6 +501,7 @@
 (s/def :player/corrected (s/keys :req-un [:corrected/d :corrected/at]))
 (s/def :player/ignitions (s/coll-of number? :kind vector? :max-count 3))
 (s/def :player/struck-at number?)
+(s/def :player/charge-from number?)
 (s/def :player/hits
   (s/coll-of (s/keys :req-un [::at ::type] :opt-un [::hp ::by ::by-kind]) :kind vector?))
 (s/def ::at number?)

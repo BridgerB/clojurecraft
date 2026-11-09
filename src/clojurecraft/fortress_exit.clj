@@ -310,26 +310,45 @@
 
 (defn fortress-exit-horizontal
   "A 2D point [exit-x exit-z] along dir that is > fortress-escape-reach from every
-   known exit anchor (exit-anchors: the spawners, else the fortress points)."
-  [world [fx fz] [dir-x dir-z]]
-  (let [pts (exit-anchors world)]
-    (loop [dist 52.0]
-      (let [candidate [(math/round (+ (double fx) (* (double dist) (double dir-x))))
-                       (math/round (+ (double fz) (* (double dist) (double dir-z))))]]
-        (if (or (>= dist 120.0)
-                (every? #(> (physics/horizontal-distance [(first candidate) 0 (second candidate)]
-                                                         [(first %) 0 (last %)])
-                            pparams/fortress-escape-reach)
-                        pts))
-          candidate
-          (recur (+ dist 8.0)))))))
+   known exit anchor (exit-anchors: the spawners, else the fortress points), the first of the
+   candidates 52 blocks out and every 8 after, the last the first at 120 or more (taken whatever
+   its distance from the anchors). With ok?, only a candidate ok? holds for is taken, and nil when
+   none to the last is."
+  ([world feet dir] (fortress-exit-horizontal world feet dir (constantly true)))
+  ([world [fx fz] [dir-x dir-z] ok?]
+   (let [pts (exit-anchors world)]
+     (loop [dist 52.0]
+       (let [candidate [(math/round (+ (double fx) (* (double dist) (double dir-x))))
+                        (math/round (+ (double fz) (* (double dist) (double dir-z))))]
+             last? (>= dist 120.0)
+             clear? (every? #(> (physics/horizontal-distance [(first candidate) 0
+                                                              (second candidate)]
+                                                             [(first %) 0 (last %)])
+                                pparams/fortress-escape-reach)
+                            pts)]
+         (cond (and (or last? clear?) (ok? candidate)) candidate
+               last? nil
+               :else (recur (+ dist 8.0))))))))
+
+(defn exit-avoided?
+  "Is target t within watch-same of a target the plan has given up (avoided :blacklist: a tunnel to
+   it failed, or watch-progress gave it up)? A fresh exit is derived from the feet, so from the
+   same stand it is the target that just failed, or one a block off it; the hunt started it, the
+   planner cut it a tick later as no longer wanted (target-avoided?), and the retry walked the bot
+   back down the cells it had climbed, over and over. The blacklist holds entity ids too (a chase
+   given up): only its cells are asked."
+  [world t]
+  (boolean (some #(and (vector? %) (<= (physics/distance t %) pparams/watch-same))
+                 (avoided/all-of world :blacklist))))
 
 (defn fresh-tunnel-target
   "The [x y z] target for the sealed fortress tunnel-out, derived from the feet now: the pocket bore along the fixed
    heading (pocket-bore-target) through solid rock at the same y, else a retrace of the inbound
    path through enclosed cells, boring parallel to open corridors at the same y. Once
    beyond 48 blocks from the fortress, surfaces to surface-y. Moves with the feet: the held
-   target of fortress-tunnel-target is what the hunt follows."
+   target of fortress-tunnel-target is what the hunt follows. The horizontal and surfacing exits
+   pass over a candidate near a given-up target (exit-avoided?) for the next one along the
+   heading, and are nil when none is left: the hunt's other ways out take over."
   [world]
   (let [pts (fortress-points world)]
     (when (seq pts)
@@ -338,20 +357,25 @@
             near? (escape-near? world)
             surface-y (fortress-surface-y world)
             ;; the exit only when a fallback needs it: the bore and the retrace answer first
-            exit (delay (fortress-exit-horizontal world
-                                                  [fx fz]
-                                                  (if-let [h (pocket-bore-heading world)]
-                                                    [(double (first h)) (double (second h))]
-                                                    (fortress-exit-dir world))))
+            dir (delay (if-let [h (pocket-bore-heading world)]
+                         [(double (first h)) (double (second h))]
+                         (fortress-exit-dir world)))
+            exit-at (fn [y]
+                      (when-let [[x z] (fortress-exit-horizontal
+                                        world
+                                        [fx fz]
+                                        @dir
+                                        (fn [[x z]] (not (exit-avoided? world [x y z]))))]
+                        [x y z]))
             bore (when near? (or (pocket-bore-target world) (fortress-retrace-target world)))]
         (cond
           ;; Bore from the pocket along the fixed heading through solid rock, else
           ;; retrace the inbound trail or side-bore parallel to an open corridor
           bore bore
           ;; Fallback horizontal tunnel away from fortress at current y level
-          near? [(first @exit) fy (second @exit)]
+          near? (exit-at fy)
           ;; Surface once beyond 48 blocks from fortress
-          (< (long fy) (long surface-y)) [(first @exit) surface-y (second @exit)]
+          (< (long fy) (long surface-y)) (exit-at surface-y)
           ;; Surfaced and clear of fortress
           :else nil)))))
 
@@ -394,7 +418,12 @@
 (defn fortress-tunnel-out
   "The :tunnel-to that leaves the fortress via a sealed tunnel,
    retracing the inbound path through enclosed cells, boring parallel to open corridors
-   at the same y, never stepping down through a floor, and surfacing beyond 48 blocks."
+   at the same y, never stepping down through a floor, and surfacing beyond 48 blocks.
+   It bridges a cavern as the way to the fortress does (:intent/bridge?, fortress/bridge-over-void?:
+   a level step floored from the block under the feet, over ground, never hurt or short of blocks):
+   on a column or ledge in open Nether air every level and up step has an air floor and no-down?
+   refuses the steps down, so without the bridge no step is left and the tunnel fails :blocked
+   from the same stand until the plan stalls."
   [world]
   (when-let [target (fortress-tunnel-target world)]
     {:intent/kind :tunnel-to
@@ -402,6 +431,7 @@
      :intent/reach 1.5
      :intent/climb 0
      :intent/no-down? true
+     :intent/bridge? true
      :intent/steps fortress/steps-per-tunnel
      :intent/seal-behind? true
      :intent/for :pearls}))

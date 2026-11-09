@@ -81,6 +81,54 @@
          [3.065 64.0 0.5]
          (mob/step-toward free? [2.95 64.0 0.5] [8.5 64.0 0.5] 0.115 1.12 (mob/tall :zombie))))))
 
+(deftest a-mobs-melee-is-vanillas-attack-box-not-a-radius
+  ;; Mob.isWithinMeleeAttackRange: its box grown sqrt(2.04) - 0.6 on x and z, none on y, meeting
+  ;; the player's box. An enderman (0.6 wide) reaches 1.428 on each axis, centre to centre
+  (is (< 0.828 mob/attack-pad 0.829) "about 0.83")
+  (is (mob/attack-box-meets? :enderman [1.9 64.0 0.5] [0.5 64.0 0.5]) "1.4 straight on")
+  (is (not (mob/attack-box-meets? :enderman [1.95 64.0 0.5] [0.5 64.0 0.5])) "1.45 is not")
+  (is (mob/attack-box-meets? :zombie [1.9 64.0 1.9] [0.5 64.0 0.5])
+      "on the diagonal it reaches farther than straight on: 1.98 off")
+  (is (mob/attack-box-meets? :enderman [1.5 62.0 0.5] [0.5 64.0 0.5])
+      "two under, its box still overlaps the player's legs")
+  (is (not (mob/attack-box-meets? :enderman [1.5 66.0 0.5] [0.5 64.0 0.5]))
+      "wholly above the player's head it cannot")
+  (is (mob/attack-box-meets? :spider [2.3 64.0 0.5] [0.5 64.0 0.5]) "a spider is 1.4 wide"))
+
+(deftest an-enderman-keeps-its-half-width-off-a-tunnels-roof
+  ;; a roof at y 66 over x 3 and on: the enderman's body (3 cells) cannot go into x 3, so its box
+  ;; stops at the opening and its centre 0.3 back from it; open sides are left as they were
+  (let [free? (floor-free? (set (for [x (range 3 10)] [x 66 0])))
+        at (mob/keep-off-walls free? :enderman [2.95 64.0 0.5] (mob/tall :enderman))]
+    (is (near? [2.7 64.0 0.5] at))
+    (is (= [2.5 64.0 0.9] (mob/keep-off-walls free? :enderman [2.5 64.0 0.9] 3)) "open beside")
+    (is (= [2.95 64.0 0.5] (mob/keep-off-walls free? :zombie [2.95 64.0 0.5] (mob/tall :zombie)))
+        "a zombie fits the tunnel")
+    (let [step (floor-free? (set (for [x (range 3 10)] [x 64 0])))]
+      (is (= [2.95 64.0 0.5] (mob/keep-off-walls step :enderman [2.95 64.0 0.5] 3))
+          "a ledge it can jump onto is no wall")
+      (is (= 65.0
+             (second (reduce (fn [p _]
+                               (mob/keep-off-walls
+                                step
+                                :enderman
+                                (mob/step-toward step p [8.5 64.0 0.5] 0.197 1.12 3)
+                                3))
+                             [1.5 64.0 0.5]
+                             (range 20))))
+          "and it still climbs onto it"))
+    (testing "from there it cannot hit a player two cells into the tunnel, nor one"
+      (let [solid? (complement free?)]
+        (is (not (mob/melee-reaches? solid? :enderman at [4.25 64.0 0.5]))
+            "two in, a quarter off the middle toward the mouth: 1.55 off")
+        (is (mob/in-reach? :enderman [2.99 64.0 0.5] [4.25 64.0 0.5])
+            "where the old radius had its centre at the opening, it hit a player so placed")
+        (is (mob/attack-box-meets? :enderman at [3.5 64.0 0.5]) "one in, the boxes meet")
+        (is (not (mob/melee-reaches? solid? :enderman at [3.5 64.0 0.5]))
+            "but the roof stands between its head and the player's eye")
+        (is (mob/melee-reaches? solid? :enderman at [2.0 64.0 1.5])
+            "a player outside the mouth it hits")))))
+
 (defn pit-free?
   "A free? over a stone floor under y 64 with solid cells added and the cells of pit dug out."
   [solid pit]
@@ -224,6 +272,10 @@
     (is (= [{:entity-id eid :status entity/death-status}]
            (map #(select-keys % [:entity-id :status]) (said dead :entity-event))))
     (is (= 246 (get-in dead [:sim/inv 36 :durability])) "the sword wore one a hit")
+    (is (= [{:entity-id eid :source-type 34}]
+           (map #(select-keys % [:entity-id :source-type]) (said (attack sim eid) :damage-event)))
+        "a hit told as the server tells it: a damage-event naming the mob, player_attack")
+    (is (empty? (said (attack sim eid) :hurt-animation)) "never a mob's hurt-animation")
     (testing "removed once its death is over"
       (let [gone (ticks dead 21)]
         (is (nil? (get-in gone [:sim/mobs eid])))
@@ -360,6 +412,25 @@
     (is (zero? (jumps sim eid 200)) "walking, within 16")
     (is (= 20.0 (:sim/health (ticks (update-in sim [:sim/mobs eid] dissoc :angry?) 200)))
         "one not angry stays where it is")))
+
+(deftest an-angry-enderman-cannot-hit-a-player-two-cells-into-a-tunnel
+  ;; issue #263's burrow: a stone block from x 4 to 6, z 7 to 9, y 64 to 66, a tunnel two high
+  ;; cut into it along x 5 and 6 at z 8, open at x 7. An enderman (2.9 tall) comes to the mouth
+  ;; and stops there; the player two cells in, a quarter off the middle toward the mouth, is out
+  ;; of its attack box. Outside the mouth the same enderman hits.
+  (let [tunnel #{[5 64 8] [5 65 8] [6 64 8] [6 65 8]}
+        stone (into {}
+                    (for [x (range 4 7)
+                          y (range 64 67)
+                          z (range 7 10)
+                          :when (not (contains? tunnel [x y z]))]
+                      [[x y z] 1]))
+        [sim eid] (angry-enderman stone [12.5 64.0 8.5])
+        inside (ticks (assoc sim :sim/player-pos [5.75 64.0 8.5]) 200)
+        outside (ticks (assoc sim :sim/player-pos [8.5 64.0 10.5]) 200)]
+    (is (< (first (get-in inside [:sim/mobs eid :pos])) 8.0) "it came to the mouth")
+    (is (= 20.0 (:sim/health inside)) "and never hit the player inside")
+    (is (< (:sim/health outside) 20.0) "the player outside it hits")))
 
 (deftest a-night-spawns-a-hostile-in-the-ring-and-a-day-does-not
   (let [play (fn [day]
@@ -511,8 +582,55 @@
   (is (= 14.0
          (:sim/health (ticks (arena {} {} nil night [{:type :hoglin :pos [1.5 64.0 0.5]}]) 1)))))
 
+(deftest a-magma-cube-is-one-of-three-sizes-armoured-splitting-and-hopping
+  ;; MagmaCube.setSize: size s has s squared health, a box 0.52 s, armour 3 s, a hit of s + 2; it
+  ;; jumps 0.42 + 0.1 s a tick; one of size 2 or 4 splits into 2 to 4 of half the size
+  (is (= [1.0 4.0 16.0]
+         (map #(:health (mob/kinds %)) [:magma_cube_small :magma_cube :magma_cube_big])))
+  (is (apply = (map mob/type-id [:magma_cube_small :magma_cube :magma_cube_big]))
+      "every size is told as the magma cube")
+  (is (= :magma_cube_big (mob/magma-kind 16.0)))
+  (is (= :magma_cube (mob/magma-kind 3.5)))
+  (is (= :magma_cube_small (mob/magma-kind 1.0)))
+  (is (close? 3.84 (mob/mob-hit :magma_cube_big 6.0)) "a charged iron sword through 12 points")
+  (let [sim (arena {} iron-sword nil night [{:type :magma_cube_big :pos [2.0 64.0 0.5]}])
+        [eid] (the-mob sim :magma_cube_big)]
+    (is (close? 12.16 (:health (get-in (attack sim eid) [:sim/mobs eid])))
+        "16 less the armoured 3.84"))
+  (testing "a cube that dies splits into two to four of half the size"
+    (let [sim (arena {} iron-sword nil night [{:type :magma_cube :pos [2.0 64.0 0.5]}])
+          [eid] (the-mob sim :magma_cube)
+          dead (attack sim eid)
+          small (filter #(= :magma_cube_small (:type %)) (vals (:sim/mobs dead)))]
+      (is (:dead-at (get-in dead [:sim/mobs eid])) "six through six points of armour kills four")
+      (is (<= 2 (count small) 4))
+      (is (every? #(< (mob/flat-distance (:pos %) [2.0 64.0 0.5]) 1.0) small) "where it died")))
+  (testing "its hop reaches a player on a pillar, not one in a roofed cell"
+    (let [stone (blocks/default-state :stone)
+          pillar (into {} (for [y [64 65 66]] [[0 y 0] stone]))
+          on-top (fn [kind]
+                   (-> (arena pillar {} :normal night [{:type kind :pos [1.6 64.0 0.5]}])
+                       (assoc :sim/player-pos [0.5 67.0 0.5])
+                       (ticks 2)
+                       :sim/health))
+          ;; inside the column (its cells are 0 to 15): the cell [2 64 2], walled and roofed
+          pocket (into {[2 66 2] stone}
+                       (for [[x z] [[3 2] [1 2] [2 3] [2 1]] y [64 65]] [[x y z] stone]))]
+      (is (< (on-top :magma_cube_big) 20.0) "a big one's 4.15 clears three blocks")
+      (is (< (on-top :magma_cube) 20.0) "a middle one's 2.52 and its box reach the feet at 3")
+      (is (= 20.0 (on-top :magma_cube_small)) "a small one's 1.84 does not")
+      (is (= 20.0
+             (:sim/health
+              (ticks (assoc
+                      (arena pocket {} :normal night [{:type :magma_cube_big :pos [4.0 64.0 2.5]}])
+                      :sim/player-pos
+                      [2.5 64.0 2.5])
+                     40)))
+          "walled two high and roofed: no line, no hit"))))
+
 (deftest the-overworlds-night-does-not-roll-a-fortress-mob
-  (is (not-any? #{:wither_skeleton :magma_cube :hoglin :blaze} (map first mob/hostile-kinds)))
+  (is (not-any? #{:wither_skeleton :magma_cube :magma_cube_small :magma_cube_big :hoglin :blaze}
+                (map first mob/hostile-kinds)))
   (is (every? pos-int? (map second mob/hostile-kinds))))
 
 (deftest a-warped-forest-spawns-packs-of-endermen-by-day-and-netherrack-spawns-nothing
@@ -545,7 +663,8 @@
   (let [fort (vals (:sim/mobs (nether-play brick-floor 7 500)))
         wood (vals (:sim/mobs (nether-play crimson-floor 7 500)))]
     (is (seq fort) "five tries, one mob each")
-    (is (every? #{:wither_skeleton :magma_cube} (map :type fort)) "the structure's two kinds")
+    (is (every? #{:wither_skeleton :magma_cube_small :magma_cube :magma_cube_big} (map :type fort))
+        "the structure's two kinds, the cube in its three sizes")
     (is (every? #(= :hoglin (:type %)) wood) "the crimson forest's hoglin")
     (is (seq wood))))
 

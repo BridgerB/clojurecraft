@@ -33,7 +33,7 @@ You never run a test locally; the PR's `unit / unit` runs them all in 2-4 minute
 
 | Workflow | Trigger | Does | Artifacts |
 |---|---|---|---|
-| `fleet.yml` | always on (hands over every 340 min), hourly backstop | keeps lanes in every free runner, cancels the newest when another job waits 90 s (floor 2+2), replaces lanes on replaced code | log lines `FLEET ...` |
+| `fleet.yml` | always on (hands over every 340 min), hourly backstop | keeps lanes in every free runner, cancels the newest when another job waits 90 s (floor 2+2), replaces sim lanes on replaced code (real lanes run out their job) | log lines `FLEET ...` |
 | `race.yml` | dispatched by the fleet, one lane a run (`race lane k`) | up to 8 lanes × 2 servers × 15 slots on pregenerated landings, refilled, 330 min; `bb churn batch` every 20 min | `race-<sha>-<runner>`: `s1/`,`s2/` with `race.log`, `server.log`, `samples.edn.zst`, `milestones.edn.zst`, a recording per bot; `snapshots/` with the real snapshots, `gaps/` and `convert-<n>.log` |
 | `simrace.yml` | same (`simrace lane k`) | up to 8 lanes, bot against the model in captured worlds, every core | `simrace-<sha>-<runner>`: `runs.edn`, `simrace.log`, `snapshots/` |
 | `test.yml` | every push, any branch | `unit` (via `unit.yml`), one forest shard of 250 (dispatch: 8), actionlint | none |

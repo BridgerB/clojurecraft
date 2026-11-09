@@ -868,6 +868,20 @@
                 (or (:intent/kind next) (:plan/wait next))
                 (< (rank-of goal next) (rank-of goal i)))))
 
+(defn retreat-cell
+  "The trail cell a retry walks back to from feet after failed, newest first, or nil: not the feet,
+   not blacklisted, within retreat-reach, and not under the feet when failed never stepped down
+   (:intent/no-down?, the fortress exit's climb): a walk back down undid the cells such a tunnel
+   had climbed, and the next one climbed them again and failed where the last had."
+  [world failed feet]
+  (let [no-down? (or (:intent/no-down? failed) (:intent/no-down? (:intent/plan failed)))]
+    (some #(when-not (or (= % feet)
+                         (contains? (avoided/all-of world :blacklist) %)
+                         (> (physics/distance % feet) retreat-reach)
+                         (and no-down? (< (long (second %)) (long (second feet)))))
+             %)
+          (rseq (:plan/trail world [])))))
+
 (defn plan-tick
   "One planning tick while :active. The goals are re-derived from the world every tick, even
    while an intent runs (docs/RICH-HICKEY.md: \"the planner runs every tick against the current
@@ -905,12 +919,7 @@
                        (or (identical-retry? next failed feet) (failed-before? world next feet)))
         danger? (or (:player/on-fire? world) (menaced? world))
         covering (when (and retrying? goal) (fire-cover world goal))
-        retreat-cell (when retrying?
-                       (some #(when-not (or (= % feet)
-                                            (contains? (avoided/all-of world :blacklist) %)
-                                            (> (physics/distance % feet) retreat-reach))
-                                %)
-                             (rseq (:plan/trail world []))))]
+        retreat-cell (when retrying? (retreat-cell world failed feet))]
     (cond (not active?) world
           (and i (or (nil? goal) preempt? cut?) (not (can-abandon? world)))
           (run-intent world i event table)
