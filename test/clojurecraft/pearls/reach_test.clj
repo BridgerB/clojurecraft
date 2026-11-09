@@ -195,7 +195,7 @@
                                    :pearls/exit-target
                                    (if (even? (quot ms 350)) [8 64 -60] [7 64 -60]))))
                          w
-                         (range 0 (inc window) 350))]
+                         (range 0 (+ window 700) 350))]
     (is (empty? (avoided/all-of walking :pocket-regions))
         "three blocks a second for the window: free")
     (is (seq (avoided/all-of flipping :pocket-regions)) "targets flipping, no movement: stuck")))
