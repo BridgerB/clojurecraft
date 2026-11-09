@@ -46,6 +46,14 @@
    :rule/phase :leave-fortress
    :rule/when [:fortress-escaping? :can-tunnel-out? :shot-at? :cover-from]
    :rule/then [:fact :cover-from]}
+  ;; hurt with a way to heal, burning, or out of a shooter's sight only a moment: the bore waits,
+  ;; eating when it can and standing still when it cannot (a real rod bot bored on at 1.7 health
+  ;; with food held for 26 s until a fireball; another left its cover for the bore every few
+  ;; seconds under two blazes)
+  {:rule/id :hunt/escape-heal
+   :rule/phase :leave-fortress
+   :rule/when [:fortress-escaping? :escape-hold?]
+   :rule/then [:fact :meal-or-lookout]}
   {:rule/id :hunt/escape-tunnel-out
    :rule/phase :leave-fortress
    :rule/when [:fortress-escaping? :can-tunnel-out?]

@@ -465,13 +465,15 @@
           :else
           (let [free? (free-fn sim)
                 n (mob/tall type)]
-            (move-mob sim
-                      eid
-                      (mob/keep-off-walls
-                       free?
-                       type
-                       (mob/step-toward free? pos (:sim/player-pos sim) (:speed k) stop n)
-                       n))))))
+            (move-mob
+             sim
+             eid
+             (mob/keep-off-walls
+              free?
+              type
+              (mob/step-toward free? pos (:sim/player-pos sim) (:speed k) stop n (mob/climb type))
+              n
+              (mob/climb type)))))))
 
 (defn teleport-rolls
   "[sim' rs]: the next n rolls of the mobs' own stream (mob-roll), in order."

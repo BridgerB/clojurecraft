@@ -142,6 +142,8 @@
  :cover-reach 5
  ;; ms after a ghast was last in sight that no walk goes elsewhere
  :shot-hold-ms 10000
+ ;; ms after a walk into cover from a shooter in which no other such walk is begun: the cover is held
+ :hide-hold-ms 5000
  ;; the hit (mob/kinds :melee) at or under which a mob is fought at hand with no burrow: a zombie's 3, a spider's 2
  :weak-melee 4.0
  ;; walks arrived at lately that an explore sets out away from, and a far-end is not within roam-reach of
