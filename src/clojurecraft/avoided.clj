@@ -14,7 +14,8 @@
    :retreat-unreachable cells a retreat walk found no route to. :cornered entities a back-off
    could not get away from. :trunk-failures [x z] column -> failures counted against a trunk.
    :exit-columns [x z] columns the fortress exit's held target was given up at for want of progress.
-   :given-up entity -> ms a fight gave it up at. :backed-off entity -> {:pos :times} of back-offs."
+   :given-up entity -> ms a fight gave it up at. :backed-off entity -> {:pos :times} of back-offs.
+   :brute-zones [gx gz] squares (pearls/brute-grid blocks on a side) a piglin brute was seen in."
   {:blacklist :set
    :boxed-at :set
    :boxed-route :set
@@ -22,6 +23,7 @@
    :retreat-unreachable :set
    :cornered :set
    :exit-columns :set
+   :brute-zones :set
    :trunk-failures :map
    :given-up :map
    :backed-off :map})

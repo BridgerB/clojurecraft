@@ -69,6 +69,29 @@
     (is (= [1.5 64.0 0.5] (mob/step-toward free? [1.5 64.0 0.5] [0.5 64.0 0.5] 0.115 1.0))
         "already at its stop")))
 
+(deftest a-magma-cube-hops-onto-a-ledge-as-high-as-its-jump
+  ;; vanilla's slime jumps 0.42 + 0.1 size a tick: a big cube rises 4.15 blocks, a middle one
+  ;; 2.52, a small one 1.84, so each climbs that many whole blocks in one hop where a walker
+  ;; climbs one; a real cube followed Clj_r11 up a staircase it cut out of the delta
+  (let [wall (fn [h] (floor-free? (set (for [y (range 64 (+ 64 h))] [8 y 0]))))
+        to [0.5 64.0 0.5]
+        step
+        (fn [free? kind]
+          (mob/step-toward free? [9.0 64.0 0.5] to 0.165 0.0 (mob/tall kind) (mob/climb kind)))]
+    (is (= [4 2 1] (map mob/climb [:magma_cube_big :magma_cube :magma_cube_small])))
+    (is (= 1 (mob/climb :zombie)) "a walker steps up one")
+    (is (near? [8.835 68.0 0.5] (step (wall 4) :magma_cube_big)) "four up, onto the ledge")
+    (is (near? [8.835 66.0 0.5] (step (wall 2) :magma_cube)) "two up")
+    (is (= [9.0 64.0 0.5] (step (wall 3) :magma_cube)) "three is past a middle one's hop")
+    (is (= [9.0 64.0 0.5] (step (wall 2) :magma_cube_small)) "two is past a small one's")
+    (is (= [9.0 64.0 0.5]
+           (mob/step-toward (floor-free? (into #{[9 66 0]} (for [y (range 64 66)] [8 y 0])))
+                            [9.0 64.0 0.5]
+                            to
+                            0.165 0.0
+                            2 2))
+        "a block over its head stops the hop")))
+
 (deftest an-enderman-stays-out-of-a-tunnel-two-high
   ;; issue #263: 2.9 tall, an enderman needs three free cells (mob/tall); a roof at y 66 over x 3
   ;; and on keeps it out where a zombie walks in

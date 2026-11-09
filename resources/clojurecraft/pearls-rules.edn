@@ -18,6 +18,12 @@
    :rule/phase :survive
    :rule/when [:blaze-refuge]
    :rule/then [:fact :blaze-refuge]}
+  ;; a piglin brute within brute-radius: walk off its ground, before any cover, meal or fight
+  ;; beside it (it strikes any player for about 9 through iron and keeps to its bastion)
+  {:rule/id :hunt/leave-brutes
+   :rule/phase :survive
+   :rule/when [:leave-brutes]
+   :rule/then [:fact :leave-brutes]}
   {:rule/id :hunt/come-down
    :rule/phase :survive
    :rule/when [[:not :hurt?] :come-down]
@@ -40,6 +46,14 @@
    :rule/phase :leave-fortress
    :rule/when [:fortress-escaping? :can-tunnel-out? :shot-at? :cover-from]
    :rule/then [:fact :cover-from]}
+  ;; hurt with a way to heal, burning, or out of a shooter's sight only a moment: the bore waits,
+  ;; eating when it can and standing still when it cannot (a real rod bot bored on at 1.7 health
+  ;; with food held for 26 s until a fireball; another left its cover for the bore every few
+  ;; seconds under two blazes)
+  {:rule/id :hunt/escape-heal
+   :rule/phase :leave-fortress
+   :rule/when [:fortress-escaping? :escape-hold?]
+   :rule/then [:fact :meal-or-lookout]}
   {:rule/id :hunt/escape-tunnel-out
    :rule/phase :leave-fortress
    :rule/when [:fortress-escaping? :can-tunnel-out?]
