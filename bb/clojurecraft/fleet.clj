@@ -8,12 +8,16 @@
 
    A lane is one run of race.yml or simrace.yml with input lane k (its run-name `race lane k`,
    `simrace lane k`): one job, the runner k of the old matrix. What a look decides (decide):
-     1. a lane on a commit whose code main has replaced is cancelled once it has run
+     1. a lane on a commit whose code main has replaced is cancelled once it has run its kind's
         :fleet/stale-after-minutes (a queued one at once; a docs-only merge, brain/ docs/ *.md,
-        never): new code preempts, but not before the lane's runs have had time to reach the late
-        stages. On 2026-10-17 the orchestrator merged a fix every half hour, and cancelling at
-        every merge cut 52 of 60 real lanes at a median 26 minutes, while a real run needs 29 to
-        reach the Nether: the late stages were never reached and cut runs are never filed;
+        never; a kind with none is never cancelled for its code once it runs): new code
+        preempts, but not before the lane's runs have had time to reach the late stages. On
+        2026-10-17 the orchestrator merged a fix every half hour, and cancelling at every merge
+        cut 52 of 60 real lanes at a median 26 minutes, while a real run needs 29 to reach the
+        Nether: the late stages were never reached and cut runs are never filed. Since a real
+        bot's cap counts server ticks, at about 250 ms a tick a real run needs hours of wall
+        time, and lanes cut at 1.5 to 2.5 h by the next merge never passed: a real lane now runs
+        its whole job on the code it started with, and only sim lanes are replaced;
      2. while another workflow's job is queued: queued lanes are cancelled, then the newest running
         lanes, as many as the queued jobs exceed the free runners, never a kind below its floor;
      3. while nothing waits: free runners get new lanes on main, the kind with fewer lanes first,
@@ -103,16 +107,25 @@
                 {:live live :used used :out []}
                 (range slots))))
 
+(defn stale-after
+  "The minutes a running lane of kind on replaced code plays before it is replaced, under config's
+   :fleet/stale-after-minutes (a map by kind, or one number for every kind); nil: never."
+  [config kind]
+  (let [m (:fleet/stale-after-minutes config)]
+    (cond (map? m) (get m kind)
+          :else m)))
+
 (defn stale?
   "Is lane l to be replaced for its code: a round of the old matrix (no lane number), or on a
    commit main has replaced (stale-shas) and either still queued (it holds no runner) or created
-   at least stale-after-minutes before now (ms)."
+   at least stale-after-minutes (nil: never) before now (ms)."
   [l stale-shas stale-after-minutes now]
   (or (nil? (:lane l))
       (and (stale-shas (:sha l))
            (or (= "queued" (:status l))
-               (>= (- now (.toEpochMilli (java.time.Instant/parse (:created l))))
-                   (* 60000 stale-after-minutes))))))
+               (and (some? stale-after-minutes)
+                    (>= (- now (.toEpochMilli (java.time.Instant/parse (:created l))))
+                        (* 60000 stale-after-minutes)))))))
 
 (defn decide
   "What one look does: {:cancel [lane ...] :dispatch [[kind lane] ...] :why {...}}, from the runs
@@ -123,7 +136,7 @@
    running count as runners on their way. :given-back is the lanes given back for need, which
    start the cooldown. Pure: rules 1 to 3 of the namespace doc."
   [{:keys [runs jobs stale-shas memory config now continuous]}]
-  (let [{:fleet/keys [cap floor dispatch-grace-s stale-after-minutes cooldown-s]} config
+  (let [{:fleet/keys [cap floor dispatch-grace-s cooldown-s]} config
         cooling? (boolean (some-> (:gave-back memory)
                                   (#(< (- now %) (* 1000 (or cooldown-s 0))))))
         maxes (cond cooling? (merge-with min (:fleet/max config) floor)
@@ -133,7 +146,7 @@
         ls (lanes runs)
         cancelling (:cancelling memory #{})
         live (remove #(cancelling (:id %)) ls)
-        stale (filter #(stale? % stale-shas (or stale-after-minutes 0) now) live)
+        stale (filter #(stale? % stale-shas (stale-after config (:kind %)) now) live)
         current (remove (set stale) live)
         recent (filter #(< (- now (:at %)) (* 1000 dispatch-grace-s)) (:dispatched memory))
         unseen (remove (fn [d] (some #(and (= (:kind d) (:kind %)) (= (:lane d) (:lane %))) ls))
