@@ -460,7 +460,7 @@
       (assoc :time/now 10000
              :player/look [-90.0 0.0]
              :player/health hp
-             :player/food 15
+             :player/food 18
              :player/shield-up-at up-at)))
 
 (deftest a-standoff-at-the-shield-becomes-a-fight
@@ -531,3 +531,9 @@
     (is (< 20.0 (combat/danger-line pack)) "the pack's line is over full health")
     (is (plan/done-by pack (row :shield-hold)) "full health: no hold")
     (is (not (plan/done-by (assoc pack :player/health 8.0) (row :shield-hold))) "hurt: the hold")))
+
+(deftest a-hold-that-cannot-heal-is-no-hold
+  ;; under eat/regen-food the health never comes back behind the shield, and a hold barred the
+  ;; meal for the rest of a sim run at 7.9 health: the defence's cover (a wall, a meal) answers
+  (is (not (plan/done-by (at-shield 5.0 5000) (row :shield-hold))) "food 18: the hold heals")
+  (is (plan/done-by (assoc (at-shield 5.0 5000) :player/food 15) (row :shield-hold))))
