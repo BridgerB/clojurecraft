@@ -36,6 +36,7 @@
             [clojurecraft.physics :as physics]
             [clojurecraft.place :as place]
             [clojurecraft.plan :as plan]
+            [clojurecraft.pocket :as pocket]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.threat :as threat]
@@ -883,6 +884,21 @@
   "Kinds a back-off never gets away from: they teleport to the bot."
   (kinds-with :teleports?))
 
+(def jumpers
+  "Kinds that hop higher than a pillar (threats.edn :jumper?): covered against by the
+   :jumper-ladder, a roofed pocket first, never a pillar."
+  (kinds-with :jumper?))
+
+(defn roof-site
+  "The pocket site that walls the feet's cell two high and roofs it (pocket/here-site), the one
+   the world holds when it is that cell (its failures noted), when pocket/can-seal? says the seal
+   can be made now; nil otherwise."
+  [world]
+  (let [held (:pocket/site world)
+        site
+        (if (and held (= (:pocket/cell held) (intent/feet world))) held (pocket/here-site world))]
+    (when (and site (pocket/can-seal? world site)) site)))
+
 (defn back-off-pointless?
   "Would a :back-off from entity e be done at once, getting the bot nowhere: it is already
    back-off-to away, the way straight away is a drop no landing survives (void-retreat?) or
@@ -973,7 +989,9 @@
    when food is held, the bar can take one and e is out of attack-reach, else a block laid
    between (wall-cell, a filler of filler/pick), else a pillar of pillar-height when
    pillar-fill filler is held, else the meal, else the dig of a nook under the feet (nook-cell,
-   a pickaxe held) to stand in. Only with nothing at all held the wait :cornered, which ENDS THE
+   a pickaxe held) to stand in. Against a jumper (jumpers: a magma cube hops 4.15 blocks, over
+   any pillar) the :jumper-ladder instead: the feet's cell walled two high and roofed first (a
+   :seal of roof-site), the rest as above, never a pillar. Only with nothing at all held the wait :cornered, which ENDS THE
    PLAN after wait-ticks: the one choice here that is a death or a failure, taken with nothing
    to eat, lay or dig with. Gym chain-w13 dragon run 2 chose a back-off from an enderman every
    50 ms for a second and died standing in it."
@@ -989,10 +1007,13 @@
              :filler (filler/pick world wall-fill)
              :pillar (when-not (pillar-failed? world) (filler/pick world pillar-fill))
              :top (+ fy pillar-height)
-             :nook (nook-cell world)}]
+             :nook (nook-cell world)
+             :roof (when (contains? jumpers (entity/kind e)) (roof-site world))}]
     (threat/shelter world
                     ctx
-                    (:cover-ladder threat/data)
+                    (if (contains? jumpers (entity/kind e))
+                      (:jumper-ladder threat/data)
+                      (:cover-ladder threat/data))
                     (intent/why :cover/else {:plan/wait :cornered}))))
 
 (defmethod threat/measure :far-rest
@@ -1020,6 +1041,10 @@
 (defmethod threat/measure :eat
   [_ {:keys [food]} _]
   (when food (intent/why :cover/food {:intent/kind :eat :intent/item food})))
+
+(defmethod threat/measure :roof
+  [_ {:keys [roof]} _]
+  (when roof (intent/why :cover/roof {:intent/kind :seal :intent/site roof})))
 
 (defmethod threat/measure :nook
   [_ {:keys [nook]} _]

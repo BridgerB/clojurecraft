@@ -567,8 +567,9 @@
    [:intent/next-swing "ms of the next arm swing, or of a :fight's next attack" "dig, fight"]
    [:intent/target-pos "where a :fight last saw its target; a hunt picks the drop up there"
     "fight, while its target is seen"]
-   [:intent/site "the pocket (a :pocket/site map) a :pocket digs out and walks into (issue #262)"
-    "pocket"]
+   [:intent/site
+    "the pocket (a :pocket/site map) a :pocket digs out and walks into (issue #262), or the one a :seal walls and roofs (combat's roof against a jumper)"
+    "pocket, seal"]
    [:intent/prepare?
     "true for a :pocket made ready ahead of the tunnel's last blocks: dug, not entered (issue #262)"
     "pocket"]

@@ -18,8 +18,10 @@
             [clojurecraft.packet :as p]
             [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
+            [clojurecraft.pocket :as pocket]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.sim :as sim]
+            [clojurecraft.threat :as threat]
             [clojurecraft.world :as world]))
 
 (use-fixtures :once fx/instrumented)
@@ -900,3 +902,34 @@
     (is (empty? (combat/threats
                  (assoc (at 14.0 64.0) :plan/intent (assoc fight :intent/status :failed))))
         "a fight that ended holds nothing")))
+
+(deftest against-a-jumper-the-cover-is-a-roofed-cell-never-a-pillar
+  ;; a magma cube hops 4.15 blocks with a box 2.08 tall: two real bots raised pillars and laid
+  ;; walls under one and were hit to death on them. The cell the feet stand in, walled two high
+  ;; and roofed, is the cover; a pillar is never offered
+  (let [stone (blocks/default-state :stone)
+        trench (into {[9 66 8] stone}
+                     (for [c [[9 64 8] [9 65 8] [7 64 8] [7 65 8] [8 64 9] [8 65 9]]] [c stone]))
+        kit {0 (item :iron_pickaxe 1) 1 (item :cobblestone 64)}
+        at (fn [k]
+             (assoc (standing {7 (mob k [8.5 64.0 6.5] 4.0)})
+                    :world/chunks {[0 0] (world/column trench)}
+                    :player/health 6.0
+                    :player/food 20
+                    :player/inventory kit
+                    :time/now 100000))
+        cube (at :magma_cube)
+        c (combat/cover cube (get-in cube [:world/entities 7]))]
+    (is (= :seal (:intent/kind c)) (pr-str c))
+    (is (= [8 64 8] (get-in c [:intent/site :pocket/cell])) "the feet's own cell")
+    (is (= #{[8 64 7] [8 65 7] [8 66 8]} (set (pocket/open-seal-cells cube [8 64 8])))
+        "the open side two high, and the roof")
+    (is (not= :seal
+              (:intent/kind (combat/cover (at :zombie) (get-in (at :zombie) [:world/entities 7]))))
+        "a zombie, which does not hop, gets the old ladder")
+    (is (= :roof (first (:jumper-ladder threat/data))))
+    (is (not-any? #{:pillar} (:jumper-ladder threat/data)) "never a pillar against a jumper")
+    (testing "a seal that failed a moment ago is not offered again"
+      (is (not= :seal
+                (:intent/kind (combat/cover (assoc cube :pocket/seal-failed-at 99000)
+                                            (get-in cube [:world/entities 7]))))))))
