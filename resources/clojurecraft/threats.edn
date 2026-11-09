@@ -28,4 +28,12 @@
  :cover-ladder [:far-rest :eat-out-of-reach :wall :pillar :eat :nook]
  ;; the same against a jumper: the feet's cell walled two high and roofed over the head first (a :seal of it), and no pillar,
  ;; which a hop reaches at any height a bot can raise under a hit
+ ;; what piglins guard (the game's guarded_by_piglins tag): one broken or opened while a guard kind
+ ;; stands within :radius of it angers every one of them that sees it, gold worn or not. A dig of
+ ;; one fails :guarded then, and so does an open (a real bot broke nether gold ore in its tunnel and
+ ;; the piglins round it turned on it at once)
+ :guarded {:blocks #{:barrel :chest :ender_chest :gilded_blackstone :gold_block :nether_gold_ore
+                     :raw_gold_block :trapped_chest}
+           :by #{:piglin :piglin_brute}
+           :radius 16.0}
  :jumper-ladder [:roof :far-rest :eat-out-of-reach :wall :eat :nook]}

@@ -946,3 +946,25 @@
               (:intent/kind
                (plan/next-intent (assoc w :player/health 6.0) (row :defend) plan/goals)))
         "nor under the line")))
+
+(deftest a-block-piglins-guard-is-never-broken-with-one-near
+  ;; nether gold ore broken in a tunnel turned every piglin that saw it on the bot, gold boots
+  ;; worn: with a piglin within threats.edn's guarded radius the dig fails :guarded
+  (let [ore {[9 64 8] (blocks/default-state :nether_gold_ore)}
+        dig {:intent/kind :dig :intent/target [9 64 8] :intent/status :active}
+        run (fn [entities]
+              (let [w (assoc (standing entities)
+                             :world/chunks {[0 0] (world/column ore)}
+                             :player/inventory {0 (item :iron_pickaxe 1)}
+                             :plan/intent dig)]
+                (:plan/intent (first (fx/fold intent-step w (map tick (range 50 1550 50)))))))]
+    (is (= [:failed :guarded]
+           ((juxt :intent/status :intent/reason) (run {7 (mob :piglin [12.5 64.0 8.5] 16.0)}))))
+    (is (not= :guarded (:intent/reason (run {}))) "no piglin: dug")
+    (is (not= :guarded (:intent/reason (run {7 (mob :piglin [30.5 64.0 8.5] 16.0)})))
+        "one past the radius: dug")
+    (is (intent/guarded-cell? (assoc (standing {7 (mob :piglin_brute [12.5 64.0 8.5] 50.0)})
+                                     :world/chunks
+                                     {[0 0] (world/column ore)})
+                              [9 64 8])
+        "a brute guards it too")))
