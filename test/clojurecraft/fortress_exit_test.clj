@@ -757,8 +757,8 @@
         (is (some? (fexit/fortress-tunnel-target near)))))))
 
 (deftest an-exit-on-a-column-in-open-air-bridges-toward-its-surface
-  ;; Issue #263, real stage-18 lanes: nine of ten :blocked endings were the exit tunnel standing on
-  ;; a column of its own blocks in a Nether cavern, the surface target fifty blocks along and
+  ;; Issue #263, real stage-18 lanes: nine of ten :blocked endings were the exit tunnel, and the
+  ;; ones folded to the failing tick stood on a column of their own blocks in a Nether cavern, the surface target fifty blocks along and
   ;; sixteen up. Every level and up step had an air floor with nothing to lay an up step against,
   ;; and no-down? refused the two steps down, so no step was left: :blocked from the same stand
   ;; for fifteen minutes until the plan stalled. The exit bridges the cavern as the way to the
@@ -796,3 +796,25 @@
     (is (true? (:intent/no-down? i)) "and still never steps down")
     (is (nil? (step false)) "without the bridge no step is left: the :blocked of the real lanes")
     (is (= [1 0 0] (step (:intent/bridge? i))) "with it, the level step toward the target")))
+
+(deftest a-fresh-exit-passes-over-a-given-up-target
+  ;; Issue #263, real stage-18 lanes: after an exit tunnel failed, its target was blacklisted, but
+  ;; the fresh exit derived from the same feet was that target again (or a block off it). The hunt
+  ;; started it, the planner cut it a tick later as no longer wanted, and the retry walked back.
+  ;; Bot 72 blocks east of the spawner at y 50, under the surface (the spawner's y 64): the
+  ;; surfacing exit is [132 64 8], 52 along the heading east.
+  (let [w (-> (ps/standing {})
+              (assoc :player/dimension "minecraft:the_nether" :player/pos [80.5 50.0 8.5])
+              (assoc-in [:player/inventory 1] (ps/item :iron_pickaxe 1))
+              (memory/observe [8 64 8] blaze/spawner))]
+    (is (= [132 64 8] (fexit/fortress-tunnel-target w)) "the surfacing exit, nothing given up")
+    (is (= [140 64 8] (fexit/fortress-tunnel-target (assoc w :plan/blacklist #{[132 64 8]})))
+        "that target given up: the next exit along the heading")
+    (is (= [140 64 8] (fexit/fortress-tunnel-target (assoc w :plan/blacklist #{[131 64 9]})))
+        "a target a block off the given-up one is the same exit, passed over too")
+    (is (= [132 64 8] (fexit/fortress-tunnel-target (assoc w :plan/blacklist #{7})))
+        "an entity id on the blacklist (a chase given up) is no cell: nothing passed over")
+    (let [all (set (for [d (range 52 125 8)] [(+ 80 d) 64 8]))
+          none (assoc w :plan/blacklist all)]
+      (is (nil? (fexit/fortress-tunnel-target none)) "every exit given up: none")
+      (is (not (fexit/fortress-escaping? none)) "and the hunt's other ways out take over"))))

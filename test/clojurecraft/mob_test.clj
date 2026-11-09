@@ -104,6 +104,54 @@
          [3.065 64.0 0.5]
          (mob/step-toward free? [2.95 64.0 0.5] [8.5 64.0 0.5] 0.115 1.12 (mob/tall :zombie))))))
 
+(deftest a-mobs-melee-is-vanillas-attack-box-not-a-radius
+  ;; Mob.isWithinMeleeAttackRange: its box grown sqrt(2.04) - 0.6 on x and z, none on y, meeting
+  ;; the player's box. An enderman (0.6 wide) reaches 1.428 on each axis, centre to centre
+  (is (< 0.828 mob/attack-pad 0.829) "about 0.83")
+  (is (mob/attack-box-meets? :enderman [1.9 64.0 0.5] [0.5 64.0 0.5]) "1.4 straight on")
+  (is (not (mob/attack-box-meets? :enderman [1.95 64.0 0.5] [0.5 64.0 0.5])) "1.45 is not")
+  (is (mob/attack-box-meets? :zombie [1.9 64.0 1.9] [0.5 64.0 0.5])
+      "on the diagonal it reaches farther than straight on: 1.98 off")
+  (is (mob/attack-box-meets? :enderman [1.5 62.0 0.5] [0.5 64.0 0.5])
+      "two under, its box still overlaps the player's legs")
+  (is (not (mob/attack-box-meets? :enderman [1.5 66.0 0.5] [0.5 64.0 0.5]))
+      "wholly above the player's head it cannot")
+  (is (mob/attack-box-meets? :spider [2.3 64.0 0.5] [0.5 64.0 0.5]) "a spider is 1.4 wide"))
+
+(deftest an-enderman-keeps-its-half-width-off-a-tunnels-roof
+  ;; a roof at y 66 over x 3 and on: the enderman's body (3 cells) cannot go into x 3, so its box
+  ;; stops at the opening and its centre 0.3 back from it; open sides are left as they were
+  (let [free? (floor-free? (set (for [x (range 3 10)] [x 66 0])))
+        at (mob/keep-off-walls free? :enderman [2.95 64.0 0.5] (mob/tall :enderman))]
+    (is (near? [2.7 64.0 0.5] at))
+    (is (= [2.5 64.0 0.9] (mob/keep-off-walls free? :enderman [2.5 64.0 0.9] 3)) "open beside")
+    (is (= [2.95 64.0 0.5] (mob/keep-off-walls free? :zombie [2.95 64.0 0.5] (mob/tall :zombie)))
+        "a zombie fits the tunnel")
+    (let [step (floor-free? (set (for [x (range 3 10)] [x 64 0])))]
+      (is (= [2.95 64.0 0.5] (mob/keep-off-walls step :enderman [2.95 64.0 0.5] 3))
+          "a ledge it can jump onto is no wall")
+      (is (= 65.0
+             (second (reduce (fn [p _]
+                               (mob/keep-off-walls
+                                step
+                                :enderman
+                                (mob/step-toward step p [8.5 64.0 0.5] 0.197 1.12 3)
+                                3))
+                             [1.5 64.0 0.5]
+                             (range 20))))
+          "and it still climbs onto it"))
+    (testing "from there it cannot hit a player two cells into the tunnel, nor one"
+      (let [solid? (complement free?)]
+        (is (not (mob/melee-reaches? solid? :enderman at [4.25 64.0 0.5]))
+            "two in, a quarter off the middle toward the mouth: 1.55 off")
+        (is (mob/in-reach? :enderman [2.99 64.0 0.5] [4.25 64.0 0.5])
+            "where the old radius had its centre at the opening, it hit a player so placed")
+        (is (mob/attack-box-meets? :enderman at [3.5 64.0 0.5]) "one in, the boxes meet")
+        (is (not (mob/melee-reaches? solid? :enderman at [3.5 64.0 0.5]))
+            "but the roof stands between its head and the player's eye")
+        (is (mob/melee-reaches? solid? :enderman at [2.0 64.0 1.5])
+            "a player outside the mouth it hits")))))
+
 (defn pit-free?
   "A free? over a stone floor under y 64 with solid cells added and the cells of pit dug out."
   [solid pit]
@@ -387,6 +435,25 @@
     (is (zero? (jumps sim eid 200)) "walking, within 16")
     (is (= 20.0 (:sim/health (ticks (update-in sim [:sim/mobs eid] dissoc :angry?) 200)))
         "one not angry stays where it is")))
+
+(deftest an-angry-enderman-cannot-hit-a-player-two-cells-into-a-tunnel
+  ;; issue #263's burrow: a stone block from x 4 to 6, z 7 to 9, y 64 to 66, a tunnel two high
+  ;; cut into it along x 5 and 6 at z 8, open at x 7. An enderman (2.9 tall) comes to the mouth
+  ;; and stops there; the player two cells in, a quarter off the middle toward the mouth, is out
+  ;; of its attack box. Outside the mouth the same enderman hits.
+  (let [tunnel #{[5 64 8] [5 65 8] [6 64 8] [6 65 8]}
+        stone (into {}
+                    (for [x (range 4 7)
+                          y (range 64 67)
+                          z (range 7 10)
+                          :when (not (contains? tunnel [x y z]))]
+                      [[x y z] 1]))
+        [sim eid] (angry-enderman stone [12.5 64.0 8.5])
+        inside (ticks (assoc sim :sim/player-pos [5.75 64.0 8.5]) 200)
+        outside (ticks (assoc sim :sim/player-pos [8.5 64.0 10.5]) 200)]
+    (is (< (first (get-in inside [:sim/mobs eid :pos])) 8.0) "it came to the mouth")
+    (is (= 20.0 (:sim/health inside)) "and never hit the player inside")
+    (is (< (:sim/health outside) 20.0) "the player outside it hits")))
 
 (deftest a-night-spawns-a-hostile-in-the-ring-and-a-day-does-not
   (let [play (fn [day]
