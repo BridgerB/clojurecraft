@@ -11,4 +11,13 @@
  :race/stagger-ms 3000 ; between bots joining a server
  :race/server-heap-mb 3072 ; each server's JVM
  :race/bot-heap-mb 2048 ; each race process's JVM
- :race/server-overrides {2 {:simulation-distance 3}}} ; server 2 of a runner runs 3 chunks of simulation, server 1 the default 4: an A/B of the tick
+ ;; per server (by --server k): settings over clojurecraft.servers/defaults (simulation distance 3)
+ :race/server-overrides {}
+ ;; per lane (race.yml's runner): race keys over this file's own. An A/B of servers a runner:
+ ;; lanes 1 3 6 8 carry one server with the two servers' heap, the others two, so each start
+ ;; (ci/lanes.edn: rods 1-4, forest 5-8) and each landing set (lane r on set (r-1) mod 4) has
+ ;; both arms. A lane's landings stay where the file's own sizes put them (landing-stride)
+ :race/lane-overrides {1 {:race/servers 1 :race/server-heap-mb 6144}
+                       3 {:race/servers 1 :race/server-heap-mb 6144}
+                       6 {:race/servers 1 :race/server-heap-mb 6144}
+                       8 {:race/servers 1 :race/server-heap-mb 6144}}}

@@ -485,6 +485,16 @@
          sort
          (mapv #(into {} (d/touch (d/entity db %)))))))
 
+(defn done-at?
+  "Has an intention of kind k on target t ended :done: the bot's own :place of a block at the cell t
+   (a table it set down, as against one it only saw)?"
+  [world k t]
+  (boolean (d/q '[:find ?e . :in $ ?k ?t :where [?e :intention/kind ?k] [?e :intention/event :done]
+                  [?e :intention/target ?t]]
+                (:world/facts world)
+                k
+                t)))
+
 (defn last-done
   "The newest :done fact of an intention of kind k (:walk), as a map of :intention/* keys; nil
    when none is. A Datalog over the facts: where the last walk that arrived ended is ground the
