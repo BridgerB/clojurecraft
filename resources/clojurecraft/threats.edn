@@ -21,4 +21,6 @@
          :enderman {:teleports? true :pumpkin-safe? true}
          :creeper {:radius 6.0}}
  ;; the order combat/cover tries its measures in against a threat that no back-off helps: a meal far from it, a meal out of its reach, a block between, a pillar, a meal, a hole under the feet
- :cover-ladder [:far-rest :eat-out-of-reach :wall :pillar :eat :nook]}
+ :cover-ladder [:far-rest :eat-out-of-reach :wall :pillar :eat :nook]
+ ;; the order the pack answer (pearls.cover/pack-answer) tries against a melee pack, never a fight (#577) and never a meal in reach: up out of every reach on a pillar of three, else a block between, else a hole under the feet
+ :pack-ladder [:pillar :wall :nook]}
