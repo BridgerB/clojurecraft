@@ -134,17 +134,17 @@
             and the meal in the End's lulls, done by nothing left to heal"
     (is (every? #(= :provided? (:goal/done? %)) (filter :goal/provides plan/targets)))
     (is (every? #(contains? #{:not-trapped-in :escaped-water? :built? :at-fortress? :nether-access?
-                              :fed? :dressed? :armoured? :shielded? :health-seen? :safe? :cleared?
-                              :provisioned? :armed? :geared? :regeared? :cooked? :rods-held?
-                              :thrown? :frames-seen? :in-portal-room? :portal-lit? :in-end?
-                              :crystals-gone? :dragon-dead? :healed? :spare-picks-stocked?
+                              :fed? :dressed? :armoured? :shielded? :unpressed? :health-seen? :safe?
+                              :cleared? :provisioned? :armed? :geared? :regeared? :cooked?
+                              :rods-held? :thrown? :frames-seen? :in-portal-room? :portal-lit?
+                              :in-end? :crystals-gone? :dragon-dead? :healed? :spare-picks-stocked?
                               :table-kept?}
                             (:goal/done? %))
                 (remove :goal/provides plan/targets)))
-    (is (= #{:needs :escape :wade :build :return-nether :fortress :eat :wear :armour :shield :watch
-             :defend :attack :hunt :sword :keep-table :gear :regear :cook :pearls :blaze-rods :eyes
-             :throw :stronghold :portal-room :end-portal :enter-end :eye-frame :crystals :dragon
-             :heal :spare-picks}
+    (is (= #{:needs :escape :wade :build :return-nether :fortress :eat :wear :armour :shield
+             :shield-hold :watch :defend :attack :hunt :sword :keep-table :gear :regear :cook
+             :pearls :blaze-rods :eyes :throw :stronghold :portal-room :end-portal :enter-end
+             :eye-frame :crystals :dragon :heal :spare-picks}
            ;; test rows (:test/...) register their own methods
            (set (remove #(= "test" (namespace %))
                         (keys (dissoc (methods plan/next-intent) :default))))))))

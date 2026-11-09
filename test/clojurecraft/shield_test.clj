@@ -448,3 +448,53 @@
                                         :y-rot east
                                         :x-rot 0.0})))
         "no shield in the offhand")))
+
+;; ---------------------------------------------------------------- a standoff at the shield
+
+(defn at-shield
+  "A bot with an iron sword and the shield in the offhand, looking east, a hoglin (eid 9) two
+   blocks east, health hp, the shield up since up-at."
+  [hp up-at]
+  (-> (standing {0 (item :iron_sword 1) inventory/offhand-slot (item :shield 1) 1 (item :bread 4)}
+                {9 (mob :hoglin [10.5 64.0 8.5] 40.0)})
+      (assoc :time/now 10000
+             :player/look [-90.0 0.0]
+             :player/health hp
+             :player/food 15
+             :player/shield-up-at up-at)))
+
+(deftest a-standoff-at-the-shield-becomes-a-fight
+  ;; shd forest R2/21 seed 2: a hoglin hit a raised shield sixty times in a minute of :lookout,
+  ;; and the bot died walking off from it at 10.9 health
+  (let [w (at-shield 18.0 5000)]
+    (is (= 9 (first (combat/pressing w))) "up five seconds toward it: a standoff")
+    (is (not (plan/done-by w (row :defend))))
+    (is (= {:intent/kind :fight :intent/target 9} (plan/next-intent w (row :defend) plan/goals))))
+  (testing "up a moment only: not yet" (is (nil? (combat/pressing (at-shield 18.0 8000)))))
+  (testing "no shield: no standoff"
+    (is (nil? (combat/pressing
+               (update (at-shield 18.0 5000) :player/inventory dissoc inventory/offhand-slot)))))
+  (testing "two hostiles near: not a lone striker"
+    (is (nil? (combat/pressing (assoc-in (at-shield 18.0 5000)
+                                [:world/entities 11]
+                                (mob :zombie [8.5 64.0 10.5] 20.0)))))))
+
+(deftest too-hurt-to-fight-the-shield-holds-and-the-bot-neither-walks-nor-eats
+  (let [w (at-shield 5.0 5000)]
+    (is (nil? (combat/pressing w)) "under the danger-line: no fight")
+    (is (not (plan/done-by w (row :shield-hold))))
+    (is (= {:intent/kind :block :intent/target 9}
+           (plan/next-intent w (row :shield-hold) plan/goals)))
+    (is (= :shield-hold (:goal/id (plan/choose w plan/goals)))
+        "chosen before the meal and the defence's back-off")
+    (let [i (assoc (plan/next-intent w (row :shield-hold) plan/goals) :intent/status :active)
+          [w2 fx] (fx/fold intent-step (assoc w :plan/intent i) (map tick (range 10050 10300 50)))]
+      (is (not-any? :control/forward? [(:player/controls w2)]) "standing, no walk")
+      (is (= []
+             (filter #(= :use-item (:packet/name %))
+                     (remove #(= (p/value :hand :off-hand) (:hand %)) (fx/packets fx))))
+          "no meal")))
+  (testing "healthy: the row is done, the fight takes it"
+    (is (plan/done-by (at-shield 18.0 5000) (row :shield-hold))))
+  (testing "nothing in reach: done, the meal may come"
+    (is (plan/done-by (update (at-shield 5.0 5000) :world/entities dissoc 9) (row :shield-hold)))))

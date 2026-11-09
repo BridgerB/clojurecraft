@@ -861,6 +861,67 @@
                        (+ defend-radius hold-margin))))
       [target e])))
 
+(def press-ms 3000)                   ; ms a shield held up toward a lone melee hostile in reach before that standoff becomes a fight
+(def guard-reach 3.5)                 ; blocks from the feet within which a melee hostile is at the shield: in its own reach
+
+(defn melee-kind?
+  "Is entity e of a kind that hits in melee (melee-damage) and neither shoots nor blows up?"
+  [e]
+  (let [k (entity/kind e)]
+    (boolean (and (melee-damage k) (not= :creeper k) (not (:shoot (mob/kinds k)))))))
+
+(defn adjacent
+  "[eid entity] of the nearest hostile (entity/hostiles) that hits in melee (melee-kind?) within
+   guard-reach of the feet, its aim in sight (seen?: a wall between keeps it off), or nil."
+  [world]
+  (entity/nearest
+   (into {} (filter (fn [[_ e]] (and (melee-kind? e) (seen? world e)))) (entity/hostiles world))
+   (:player/pos world)
+   guard-reach))
+
+(defn lone?
+  "Is at most one hostile within defend-radius of the feet?"
+  [world]
+  (<= (count (filter #(<= (physics/distance (:player/pos world) (:entity/pos %)) defend-radius)
+                     (vals (entity/hostiles world))))
+      1))
+
+(defn pressing
+  "[eid entity] of a lone (lone?) melee hostile at the shield (adjacent) that the shield has been
+   held up toward for press-ms or more (:player/shield-up-at), the health at the danger-line or
+   over: a standoff to turn into a fight, the shield up between its swings. A hoglin hit a raised
+   shield sixty times in a minute of :lookout, and the bot died the moment it walked off; nil
+   otherwise."
+  [world]
+  (let [[_ e :as p] (adjacent world)
+        at (:player/shield-up-at world)]
+    (when (and e
+               at
+               (shield/held? world)
+               (>= (- (:time/now world 0) at) press-ms)
+               (lone? world)
+               (>= (:player/health world 20.0) (danger-line world)))
+      p)))
+
+(defn guarded-against
+  "[eid entity] of the melee hostile at the shield (adjacent) while a shield is held and the
+   health is under the danger-line: the bot holds the shield toward it (a :block) and neither walks
+   nor eats, for a walk or a meal lowers it. Nil otherwise: no shield, health enough to fight it
+   (pressing), or none in reach and in sight (walled off)."
+  [world]
+  (when (and (:player/pos world)
+             (shield/held? world)
+             (< (:player/health world 20.0) (danger-line world)))
+    (adjacent world)))
+
+(defmethod plan/done-by :unpressed? [world _] (nil? (guarded-against world)))
+
+(defmethod plan/next-intent :shield-hold
+  ;; a :block toward it, block-ms at a time, until it leaves or the health is back to the danger-line
+  [world _ _]
+  (when-let [[eid _] (guarded-against world)]
+    (intent/why :shield-hold/adjacent {:intent/kind :block :intent/target eid})))
+
 (defn threats
   "{eid entity} of the hostiles (entity/hostiles) the :defend row answers, plus whoever last
    struck (striker) while that strike is fresh, plus the target of its running fight while held
@@ -879,6 +940,7 @@
         left (answered-kinds world)
         [aid ae] (striker world)
         [hid he] (held-target world)
+        [pid pe] (pressing world)
         pool (cond-> (entity/hostiles world) ae (assoc aid ae))
         pumpkin? (= :carved_pumpkin (armour/worn world 0))
         hurt? (and (:player/hurt-at world)
@@ -886,7 +948,9 @@
     (into {}
           (filter
            (fn [[eid e]]
-             (and (not (breathed-on? world))
+             (or (= eid pid)
+                 (and
+                  (not (breathed-on? world))
                   (not (contains? bl eid))
                   (not= :ender_dragon (entity/kind e))
                   (not (contains? never-fought (entity/kind e)))
@@ -902,8 +966,10 @@
                        (<= (physics/distance pos (:entity/pos e))
                            (reach world eid e (:radius (kind-facts (entity/kind e)) defend-radius)))
                        (hittable? world e)
-                       (approachable? world e))))))
-          (cond-> pool he (assoc hid he)))))
+                       (approachable? world e)))))))
+          (cond-> pool
+            he (assoc hid he)
+            pe (assoc pid pe)))))
 
 (defmethod plan/done-by :safe? [world _] (or (nil? (:player/pos world)) (empty? (threats world))))
 
@@ -1068,8 +1134,9 @@
 (defmethod threat/measure :block [_ {:keys [block]} _] (when block (intent/why :cover/block block)))
 
 (defmethod intent/run :block
-  ;; {:intent/kind :block :intent/target eid}: stand, face the shooter, the shield up
-  ;; (shield/hold), done when it is gone, no longer shooting from where it is (shooting?) or after
+  ;; {:intent/kind :block :intent/target eid}: stand, face the shooter or the melee hostile at the
+  ;; shield, the shield up (shield/hold), done when it is gone, no longer shooting from where it is
+  ;; (shooting?) nor at the shield (adjacent), or after
   ;; block-ms, so the planner looks again (a meal between two blocks, a wall, a fight)
   [world i _]
   (let [now (:time/now world)
@@ -1078,7 +1145,7 @@
         e (get-in world [:world/entities (:intent/target i)])]
     (cond (or (nil? e)
               (entity/gone? world (:intent/target i))
-              (not (shooting? world e))
+              (not (or (shooting? world e) (= (:intent/target i) (first (adjacent world)))))
               (> (- now (:intent/since i)) block-ms))
           (-> world
               (assoc :player/controls {})
@@ -1153,12 +1220,17 @@
   ;; between, a pillar), never the fight under that line (#577).
   ;; A zombified piglin (pack-neutral?) is backed away from even at full health: the first swing
   ;; angers the pack (gym blaze-wall-b run 1). A wither skeleton (avoided) is fought alone and at
-  ;; avoided-health or more only.
+  ;; avoided-health or more only. A standoff at the shield (pressing) is fought first, whatever
+  ;; the kind's other rules: the shield is up between the swings
   [world _ _]
-  (when-let [[eid e] (defend-target world (threats world))]
+  (when-let [[eid e] (let [ts (threats world)
+                           [pid] (pressing world)]
+                       (if (contains? ts pid) [pid (get ts pid)] (defend-target world ts)))]
     (let [hurt? (< (:player/health world 20.0) (danger-line world))
           shelter (when hurt? (teleport-cover world e))]
-      (cond (and (not= :creeper (entity/kind e)) hurt? (back-off-pointless? world e))
+      (cond (= eid (first (pressing world)))
+            (intent/why :defend/pressing {:intent/kind :fight :intent/target eid})
+            (and (not= :creeper (entity/kind e)) hurt? (back-off-pointless? world e))
             (intent/why :defend/and-not-creeper-entity-kind-e-hurt?-back-off-poi (cover world e))
             shelter (intent/why :defend/shelter shelter)
             (or (pack-neutral? e)

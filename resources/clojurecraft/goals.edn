@@ -36,6 +36,13 @@
   :goal/done? :not-trapped-in
   :goal/plan :escape
   :goal/act :flee}
+ {:goal/id :shield-hold
+  :goal/priority 0
+  :goal/target? true
+  :goal/always? true
+  :goal/doc "the shield held toward a melee hostile at it while too hurt to fight: no walk, no meal"
+  :goal/done? :unpressed?
+  :goal/plan :shield-hold}
  {:goal/id :defend
   :goal/priority 0
   :goal/target? true
