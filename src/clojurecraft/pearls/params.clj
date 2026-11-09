@@ -193,6 +193,8 @@
 
 (def shot-hold-ms (:shot-hold-ms thresholds))
 
+(def hide-hold-ms (:hide-hold-ms thresholds))
+
 (def weak-melee (:weak-melee thresholds))
 
 (def heavy-kinds
