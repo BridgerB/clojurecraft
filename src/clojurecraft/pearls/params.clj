@@ -51,6 +51,12 @@
 ; never stare nearer: an angry enderman stared at within 4 teleports away
 (def stare-ms (:stare-ms thresholds))
 
+(def stare-ticks (:stare-ticks thresholds))
+
+(def stare-max-ms (:stare-max-ms thresholds))
+
+(def provoke-range (:provoke-range thresholds))
+
 (def burrow-depth (:burrow-depth thresholds))
 
 (def burrow-length (:burrow-length thresholds))
