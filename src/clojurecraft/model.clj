@@ -489,7 +489,7 @@
    [:plan/wait "a planner answer meaning: nothing to do yet, for this reason"
     "returned by next-intent, never stored"]
    [:intent/kind
-    "executor: :walk :dig :collect :craft :place :open-container :stairs-down :stairs-up :tunnel :tunnel-to :smelt :redig :scoop :equip :build :pour :use-on :await :toss :eat :wear :fight :back-off :provoke :burrow :lookout :throw-eye :end-portal :portal-home :ambush :pillar :dig-down :strike :perch :hold :dragon-rest :camp :collect-drops :cross :flee :forage :rest :swim-out :wade :dodge :pocket :pocket-hold :seal :unseal"
+    "executor: :walk :dig :collect :craft :place :open-container :stairs-down :stairs-up :tunnel :tunnel-to :smelt :redig :scoop :equip :build :pour :use-on :await :toss :eat :wear :fight :block :back-off :provoke :burrow :lookout :throw-eye :end-portal :portal-home :ambush :pillar :dig-down :strike :perch :hold :dragon-rest :camp :collect-drops :cross :flee :forage :rest :swim-out :wade :dodge :pocket :pocket-hold :seal :unseal"
     "every intent"] [:intent/status ":active, :done or :failed" "every intent"]
    [:intent/top "feet height a :pillar climbs to (issue #267)" "a :pillar intent"]
    [:intent/plan
@@ -504,7 +504,7 @@
     "the feet cell a :tunnel-to ended in, kept when it is done: a tunnel that ends where the next one for the same target begins made no progress (issue #262)"
     "a done :tunnel-to"]
    [:intent/target
-    "block position it acts on or walks to; for a :fight, a :back-off or a :provoke (issue #263), the entity id it is after; for a :throw-eye, the eye it follows (issue #265); for a :tunnel for :bank or :lava, the water or the lava source it heads for (issue #130) (issue #259: a widening, a position is still one)"
+    "block position it acts on or walks to; for a :fight, a :block, a :back-off or a :provoke (issue #263), the entity id it is after; for a :throw-eye, the eye it follows (issue #265); for a :tunnel for :bank or :lava, the water or the lava source it heads for (issue #130) (issue #259: a widening, a position is still one)"
     "most intents"]
    [:intent/for
     "what the intent serves (:log, :log-hunt, a mining row's id), so chains continue only their own"
