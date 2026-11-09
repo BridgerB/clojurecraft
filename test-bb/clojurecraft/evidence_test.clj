@@ -74,4 +74,6 @@
               (run "c" [:ingots :boxed] 50) (run "d" [:portal :no-stand] 700)
               (run "e" [:portal :no-stand] 300) (run "f" [:fortress :no-path] 2000)]]
     (testing "two a signature, the smallest; every first before any second, smallest first"
-      (is (= ["c" "e" "f" "b" "d"] (map :run/bot (churn/convertible runs)))))))
+      (is (= ["c" "e" "f" "b" "d"] (map :run/bot (churn/convertible runs)))))
+    (testing "a batch folds one, the smallest of a signature"
+      (is (= ["c"] (map :run/bot (churn/to-convert runs)))))))
