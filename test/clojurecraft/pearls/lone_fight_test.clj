@@ -51,7 +51,9 @@
     (is (= :fight (:intent/kind i)))
     (is (= 7 (:intent/target i)))
     (is (true? (:intent/hold? i)) "held where the bot stands")
-    (is (not (:intent/yield? i)) "and to its end")
+    (is (true? (:intent/yield? i)) "and breaks off under retreat-health (#577)")
+    (is (nil? (pcover/lone-fight (assoc w :player/health 15.2)))
+        "begun only from 18: after the first strike, the cover")
     (is (= :fight (:intent/kind (plan/next-intent w ps/row plan/goals))))
     (testing "two wither skeletons are a pack: never fought"
       (is (nil? (pcover/lone-fight (kit (ps/standing {7 (ps/mob :wither_skeleton [9.5 64.0 8.5])

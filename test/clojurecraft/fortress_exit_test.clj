@@ -711,20 +711,21 @@
         (is (= :fight (:intent/kind i)))
         (is (= skeleton-id (:intent/target i)))
         (is (true? (:intent/hold? i)))))
-    (testing "a lone wither skeleton is fought from danger-health (pearls.edn :at-hand): at 12 too"
+    (testing
+      "a lone wither skeleton is fought only from its :min-health (pearls.edn :at-hand): at 12 the cover"
       (let [i (plan/next-intent (assoc base :player/health 12.0) ps/row plan/goals)]
-        (is (= :fight (:intent/kind i)))))
+        (is (not (contains? #{:fight :tunnel-to :dig} (:intent/kind i))))))
     (testing "two wither skeletons at full health: the cover, not the fight"
       (let [w (-> base
                   (assoc :player/health 20.0)
                   (assoc-in [:world/entities 43] (assoc skeleton :entity/pos [7.5 64.0 8.5])))
             i (plan/next-intent w ps/row plan/goals)]
         (is (not (contains? #{:fight :tunnel-to :dig} (:intent/kind i))))))
-    (testing "healthy at 18 and alone, the fight goes to its end: broken off, the skeleton kills"
+    (testing "healthy at 18 and alone, the fight is held and yields under retreat-health"
       (let [i (plan/next-intent (assoc base :player/health 18.0) ps/row plan/goals)]
         (is (= :fight (:intent/kind i)))
-        (is (true? (:intent/to-the-end? i)))
-        (is (not (:intent/yield? i)))))
+        (is (true? (:intent/hold? i)))
+        (is (true? (:intent/yield? i)))))
     (testing "hurt under the danger line, a block is laid between: not the fight, not the bore"
       (let [i (plan/next-intent (assoc base :player/health 5.0) ps/row plan/goals)]
         (is (not (contains? #{:fight :tunnel-to :dig} (:intent/kind i))))
