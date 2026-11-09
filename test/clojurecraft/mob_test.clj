@@ -224,6 +224,10 @@
     (is (= [{:entity-id eid :status entity/death-status}]
            (map #(select-keys % [:entity-id :status]) (said dead :entity-event))))
     (is (= 246 (get-in dead [:sim/inv 36 :durability])) "the sword wore one a hit")
+    (is (= [{:entity-id eid :source-type 34}]
+           (map #(select-keys % [:entity-id :source-type]) (said (attack sim eid) :damage-event)))
+        "a hit told as the server tells it: a damage-event naming the mob, player_attack")
+    (is (empty? (said (attack sim eid) :hurt-animation)) "never a mob's hurt-animation")
     (testing "removed once its death is over"
       (let [gone (ticks dead 21)]
         (is (nil? (get-in gone [:sim/mobs eid])))
@@ -511,8 +515,55 @@
   (is (= 14.0
          (:sim/health (ticks (arena {} {} nil night [{:type :hoglin :pos [1.5 64.0 0.5]}]) 1)))))
 
+(deftest a-magma-cube-is-one-of-three-sizes-armoured-splitting-and-hopping
+  ;; MagmaCube.setSize: size s has s squared health, a box 0.52 s, armour 3 s, a hit of s + 2; it
+  ;; jumps 0.42 + 0.1 s a tick; one of size 2 or 4 splits into 2 to 4 of half the size
+  (is (= [1.0 4.0 16.0]
+         (map #(:health (mob/kinds %)) [:magma_cube_small :magma_cube :magma_cube_big])))
+  (is (apply = (map mob/type-id [:magma_cube_small :magma_cube :magma_cube_big]))
+      "every size is told as the magma cube")
+  (is (= :magma_cube_big (mob/magma-kind 16.0)))
+  (is (= :magma_cube (mob/magma-kind 3.5)))
+  (is (= :magma_cube_small (mob/magma-kind 1.0)))
+  (is (close? 3.84 (mob/mob-hit :magma_cube_big 6.0)) "a charged iron sword through 12 points")
+  (let [sim (arena {} iron-sword nil night [{:type :magma_cube_big :pos [2.0 64.0 0.5]}])
+        [eid] (the-mob sim :magma_cube_big)]
+    (is (close? 12.16 (:health (get-in (attack sim eid) [:sim/mobs eid])))
+        "16 less the armoured 3.84"))
+  (testing "a cube that dies splits into two to four of half the size"
+    (let [sim (arena {} iron-sword nil night [{:type :magma_cube :pos [2.0 64.0 0.5]}])
+          [eid] (the-mob sim :magma_cube)
+          dead (attack sim eid)
+          small (filter #(= :magma_cube_small (:type %)) (vals (:sim/mobs dead)))]
+      (is (:dead-at (get-in dead [:sim/mobs eid])) "six through six points of armour kills four")
+      (is (<= 2 (count small) 4))
+      (is (every? #(< (mob/flat-distance (:pos %) [2.0 64.0 0.5]) 1.0) small) "where it died")))
+  (testing "its hop reaches a player on a pillar, not one in a roofed cell"
+    (let [stone (blocks/default-state :stone)
+          pillar (into {} (for [y [64 65 66]] [[0 y 0] stone]))
+          on-top (fn [kind]
+                   (-> (arena pillar {} :normal night [{:type kind :pos [1.6 64.0 0.5]}])
+                       (assoc :sim/player-pos [0.5 67.0 0.5])
+                       (ticks 2)
+                       :sim/health))
+          ;; inside the column (its cells are 0 to 15): the cell [2 64 2], walled and roofed
+          pocket (into {[2 66 2] stone}
+                       (for [[x z] [[3 2] [1 2] [2 3] [2 1]] y [64 65]] [[x y z] stone]))]
+      (is (< (on-top :magma_cube_big) 20.0) "a big one's 4.15 clears three blocks")
+      (is (< (on-top :magma_cube) 20.0) "a middle one's 2.52 and its box reach the feet at 3")
+      (is (= 20.0 (on-top :magma_cube_small)) "a small one's 1.84 does not")
+      (is (= 20.0
+             (:sim/health
+              (ticks (assoc
+                      (arena pocket {} :normal night [{:type :magma_cube_big :pos [4.0 64.0 2.5]}])
+                      :sim/player-pos
+                      [2.5 64.0 2.5])
+                     40)))
+          "walled two high and roofed: no line, no hit"))))
+
 (deftest the-overworlds-night-does-not-roll-a-fortress-mob
-  (is (not-any? #{:wither_skeleton :magma_cube :hoglin :blaze} (map first mob/hostile-kinds)))
+  (is (not-any? #{:wither_skeleton :magma_cube :magma_cube_small :magma_cube_big :hoglin :blaze}
+                (map first mob/hostile-kinds)))
   (is (every? pos-int? (map second mob/hostile-kinds))))
 
 (deftest a-warped-forest-spawns-packs-of-endermen-by-day-and-netherrack-spawns-nothing
@@ -545,7 +596,8 @@
   (let [fort (vals (:sim/mobs (nether-play brick-floor 7 500)))
         wood (vals (:sim/mobs (nether-play crimson-floor 7 500)))]
     (is (seq fort) "five tries, one mob each")
-    (is (every? #{:wither_skeleton :magma_cube} (map :type fort)) "the structure's two kinds")
+    (is (every? #{:wither_skeleton :magma_cube_small :magma_cube :magma_cube_big} (map :type fort))
+        "the structure's two kinds, the cube in its three sizes")
     (is (every? #(= :hoglin (:type %)) wood) "the crimson forest's hoglin")
     (is (seq wood))))
 
