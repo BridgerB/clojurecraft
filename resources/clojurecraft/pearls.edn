@@ -25,6 +25,8 @@
  :relocate-patience-ms 180000
  ;; Blocks from the feet within which a monster counts toward a swarm
  :swarm-radius 8.0
+ ;; a lone blaze at hand (cover/blaze-fight): one within :radius blocks of the feet, reachable, and no other blaze within :alone, is fought at danger-health or more, never covered from: it follows the bot into any cover and touches it in melee
+ :blaze-at-hand {:radius 3.5 :alone 8.0}
  ;; Blocks from the feet within which an angry enderman keeps the bot where it is:
  ;; the burrow is not given up (stale?) and no relocation begins while one stands this near
  :hold-radius 16.0

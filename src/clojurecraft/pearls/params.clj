@@ -173,6 +173,11 @@
 (def struck-health (:struck-health thresholds))
 
 (def swarm-radius (:swarm-radius thresholds))
+
+(def blaze-at-hand
+  "{:radius :alone}: the lone blaze the hunt fights rather than covers from (pearls.edn,
+   cover/blaze-fight)."
+  (:blaze-at-hand thresholds))
 (def cover-place-hold-ms (:cover-place-hold-ms thresholds))
 (def cover-place-max (:cover-place-max thresholds))
 

@@ -264,3 +264,26 @@
       (let [c (combat/cover world e)]
         (when (and (:intent/kind c) (or (placing? world) (not= :place (:intent/kind c))))
           (assoc c :intent/for :pearls))))))
+
+(defn blaze-fight
+  "The :fight on a lone blaze at hand, or nil: the nearest blaze within (:radius
+   pparams/blaze-at-hand) of the feet that the bot can fight from where it walks
+   (blaze/reachable?), no other blaze within (:alone pparams/blaze-at-hand), and the health at
+   danger-health or more (#577: never a fight under it). To its end, yielding under
+   retreat-health. A blaze at hand follows the bot into any cover and touches it there: real bots
+   dug and laid cover from one at two blocks for 11 and 14 s, never swinging, and died of its
+   touches, where four swings kill it."
+  [world]
+  (let [{:keys [radius alone]} pparams/blaze-at-hand
+        pos (:player/pos world)]
+    (when (and (>= (:player/health world 20.0) pparams/danger-health)
+               (= 1 (count (blaze/nearby-blazes world alone))))
+      (when-let [[eid e] (first (blaze/nearby-blazes world radius))]
+        (when (and (not (avoided/noted? world :blacklist eid))
+                   (<= (physics/distance pos (:entity/pos e)) radius)
+                   (blaze/reachable? world e))
+          {:intent/kind :fight
+           :intent/target eid
+           :intent/to-the-end? true
+           :intent/yield? true
+           :intent/for :pearls})))))

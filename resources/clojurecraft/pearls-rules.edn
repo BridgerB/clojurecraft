@@ -18,6 +18,12 @@
    :rule/phase :survive
    :rule/when [:blaze-refuge]
    :rule/then [:fact :blaze-refuge]}
+  ;; a lone blaze at hand is fought before any cover from it: it follows the bot into each cover
+  ;; and touches it there, and the cover-from-shooter rows dug and placed under its hits
+  {:rule/id :hunt/fight-blaze-at-hand
+   :rule/phase :survive
+   :rule/when [:blaze-fight]
+   :rule/then [:fact :blaze-fight]}
   {:rule/id :hunt/come-down
    :rule/phase :survive
    :rule/when [[:not :hurt?] :come-down]

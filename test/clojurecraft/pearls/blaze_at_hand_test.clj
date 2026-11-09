@@ -1,0 +1,43 @@
+(ns clojurecraft.pearls.blaze-at-hand-test
+  "A lone blaze at hand is fought, never covered from; two or more are covered from."
+  (:require [clojure.test :refer [deftest is testing use-fixtures]]
+            [clojurecraft.fixtures :as fx]
+            [clojurecraft.pearls-support :as ps]
+            [clojurecraft.pearls.cover :as pcover]
+            [clojurecraft.plan :as plan]))
+
+(use-fixtures :once fx/instrumented)
+
+(defn kit
+  "The world with the race kit's sword and a stack of cobblestone held."
+  [w]
+  (assoc w :player/inventory {0 (ps/item :iron_sword 1) 1 (ps/item :cobblestone 64)}))
+
+(def cover-dig
+  "The dig the real bots were in while a blaze at two blocks touched them (cover-from-shooter)."
+  {:intent/kind :dig
+   :intent/target [9 64 9]
+   :intent/for :pearls
+   :intent/goal :ender-pearls
+   :intent/why :hunt/cover-from-shooter})
+
+(deftest a-lone-blaze-at-hand-is-fought
+  ;; real-18 on c770630: Clj_r10 and Clj_r04 dug and laid cover from one blaze at 1.3 to 2.9
+  ;; blocks for 11 and 14 s, 0 swings, and died of its touches
+  (let [w (kit (ps/standing {5 (ps/mob :blaze [10.5 64.5 8.5])}))
+        i (pcover/blaze-fight w)]
+    (is (= :fight (:intent/kind i)))
+    (is (= 5 (:intent/target i)))
+    (is (true? (:intent/yield? i)) "it yields under retreat-health")
+    (is (= :fight (:intent/kind (plan/next-intent w ps/row plan/goals)))
+        "the hunt fights it before any cover")
+    (is (plan/interrupts? w ps/row cover-dig) "a cover dig under way is cut for it")
+    (is (not (plan/interrupts? w ps/row (assoc i :intent/goal :ender-pearls)))
+        "the fight is not cut in turn")
+    (testing "under danger-health it is never fought (#577)"
+      (is (nil? (pcover/blaze-fight (assoc w :player/health 8.0)))))
+    (testing "two blazes are covered from, not fought"
+      (is (nil? (pcover/blaze-fight (kit (ps/standing {5 (ps/mob :blaze [10.5 64.5 8.5])
+                                                       6 (ps/mob :blaze [8.5 65.5 13.5])}))))))
+    (testing "one five blocks off is not at hand"
+      (is (nil? (pcover/blaze-fight (kit (ps/standing {5 (ps/mob :blaze [13.5 64.5 8.5])}))))))))

@@ -277,9 +277,13 @@
   ;; Exemptions: what answers (answers-to-hand), a wall, the walk home, the burrow's end, an eat or
   ;; fight for the refuge, and a replacement that is the same choice or a hollow pocket. The two
   ;; stale cases, a held fight gone idle and a relocation walk after the relocation, are
-  ;; still-wanted? methods on their rule ids.
+  ;; still-wanted? methods on their rule ids. A lone blaze at hand (pcover/blaze-fight) cuts
+  ;; anything but a fight, cover and digs too, when the hunt would fight it.
   [world goal i]
-  (and (or (and (fexit/blaze-refuge world)
+  (and (or (and (not= :fight (:intent/kind i))
+                (some? (pcover/blaze-fight world))
+                (not (same-choice? i (plan/next-intent world goal plan/goals))))
+           (and (fexit/blaze-refuge world)
                 (not (contains? #{:eat :fight} (:intent/kind i)))
                 (not (same-choice? i (fexit/blaze-refuge world))))
            (and (not (contains? pparams/answers-to-hand (:intent/kind i)))
