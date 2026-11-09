@@ -1617,3 +1617,31 @@
     (is (contains? #{:active :done} (get-in out [:plan/intent :intent/status])))))
 
 
+
+(deftest the-last-stone-of-a-pickaxe-is-never-laid-while-pickaxes-are-short
+  ;; Issue #263, real stage-18 lanes on 4170b7d: two bots wore out their last pickaxe holding a
+  ;; crafting table and six sticks, and no cobblestone, deepslate or blackstone: filler/pick laid
+  ;; every block of it in seals, cover and pillars. The stone of one more pickaxe, all three
+  ;; materials together, stays while fewer than two pickaxes are held.
+  (let [w (fn [& items]
+            (assoc (rock {})
+                   :player/inventory
+                   (into {}
+                         (map-indexed (fn [i [item n]] [i {:item (recipe/item-id item) :count n}]))
+                         (partition 2 items))))]
+    (is (nil? (filler/pick (w :cobblestone 3 :stick 6 :crafting_table 1) 1))
+        "the last three cobblestone: no seal, no cover")
+    (is (nil? (filler/pick (w :cobblestone 1 :blackstone 2 :stick 6) 1))
+        "three stone of two kinds together: kept")
+    (is (= :cobblestone (filler/pick (w :cobblestone 4 :stick 6) 1)) "one over the three: laid")
+    (is (= :netherrack (filler/pick (w :cobblestone 3 :stick 6 :netherrack 50) 1))
+        "the last three kept, another filler first")
+    (is (= :cobblestone
+           (filler/pick (w :cobblestone 3 :stick 6 :stone_pickaxe 1 :iron_pickaxe 1) 1))
+        "two pickaxes held: the stone is spent")
+    (is (= :blackstone (filler/pick (w :blackstone 4 :crafting_table 1) 1))
+        "blackstone over three: laid")
+    (is (nil? (filler/pick (w :blackstone 3 :crafting_table 1) 1))
+        "the last three blackstone, a table held: kept")
+    (is (= :cobblestone (filler/pick (w :cobblestone 3) 1))
+        "no sticks and no table: the first stone of a run is laid")))

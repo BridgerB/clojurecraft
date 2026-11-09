@@ -16,6 +16,7 @@
             [clojurecraft.pearls.params :as pparams]
             [clojurecraft.pearls.place :as pplace]
             [clojurecraft.pearls.sense :as psense]
+            [clojurecraft.pearls.upkeep :as pupkeep]
             [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
@@ -1130,3 +1131,28 @@
     (is (= "hunt" (namespace (intent/why-of i))))
     (is (= (intent/why-of i)
            (:intention/why (memory/intention (assoc i :intent/id 3) :started 0))))))
+
+(deftest a-pickaxe-is-remade-from-held-stems-when-the-table-was-left-behind
+  ;; Issue #263, real stage-18 lanes on 4170b7d (lane 4, batch 5, Clj_r16): no pickaxe, six warped
+  ;; stems, ten sticks and 128 cobblestone held, its own table left standing behind it; the remake
+  ;; decided the walk to that table, the hunt refuses a walk, and the bot waited :no-pickaxe until
+  ;; the plan ended. The wood for a new table is held: planks and a table come from the stems.
+  (let [table-col (world/column {[12 64 8] (blocks/default-state :crafting_table)})
+        held (fn [inv]
+               (-> (ps/standing {})
+                   (assoc :world/chunks {[0 0] table-col})
+                   (memory/remember-column [0 0] table-col)
+                   (assoc :player/inventory inv)
+                   (memory/remember-intention {:intent/id 1 :intent/kind :burrow} :done)))
+        r16 (held {0 (ps/item :iron_sword 1)
+                   2 (ps/item :warped_stem 6)
+                   3 (ps/item :stick 10)
+                   4 (ps/item :cobblestone 128)})
+        kind #(:intent/kind (plan/next-intent % ps/row plan/goals))]
+    (is (pupkeep/table-wood? r16) "six stems: a table's planks")
+    (is (contains? #{:craft :place :open-container} (kind r16)) "the new table, not the walk")
+    (is (not (pupkeep/table-wood? (held {3 (ps/item :stick 10) 4 (ps/item :cobblestone 128)}))))
+    (is (some? (plan/next-intent (held {3 (ps/item :stick 10) 4 (ps/item :cobblestone 128)})
+                                 ps/row
+                                 plan/goals))
+        "no wood for one: an intent, the walk to the table left behind, never a wait")))

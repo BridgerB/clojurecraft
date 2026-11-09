@@ -143,6 +143,12 @@
                (not (psense/menaced? world)))
       (or (wood/continue-gather world) (wood/near-walk world)))))
 
+(defn table-wood?
+  "Can a crafting table be made from what is held: a log or stem (four planks), or four planks?"
+  [world]
+  (let [held (recipe/counts (:player/inventory world))]
+    (or (log-counted? world) (>= (recipe/have held (recipe/tags :planks)) 4))))
+
 (defn make-pickaxe
   "The intent that makes a pickaxe through the needs planner (a goal providing
    {:tag/pickaxes 1}, as blaze.clj's row asks), when that craft can start from here: one of
@@ -154,21 +160,29 @@
    wooden one without. With no pickaxe at all (pickaxe? false: the hands a death leaves empty),
    the log hunt for a trunk (:intent/for :log-hunt, wood/hunt) may start it too, as it may a
    bare-handed sword (make-sword). A worn pickaxe still held is replaced only as before, never by
-   a hunt for wood (wood/hunt is nil underground, so the Nether remake is unchanged)."
+   a hunt for wood (wood/hunt is nil underground, so the Nether remake is unchanged). A walk to a
+   remembered table gives way to a new table when the wood for one is held (table-wood?); with
+   none held and no pickaxe, the walk to it is taken."
   [world goal table]
   (let [bare? (not (pickaxe? world))
         decide
         (fn [w]
           (make/decide (for-pick-decide w) (assoc goal :goal/provides {:tag/pickaxes 1}) table))
         first-i (decide world)
-        ;; a remembered table no route reaches is replaced by a new one, not walked at: the walk
-        ;; to it is no craft, and the hunt in a rock pocket would stand still
-        i (if (and (= :walk (:intent/kind first-i)) (not (intent/routable? world first-i)))
+        walk? (= :walk (:intent/kind first-i))
+        ;; a remembered table is replaced by a new one, not walked at, when no route reaches it or
+        ;; the wood for one is held: the walk to it is no craft, and the hunt refuses it (a rock
+        ;; pocket stood still); a real stage-18 bot with no pickaxe, six warped stems, ten sticks
+        ;; and 128 cobblestone, its table left behind, waited :no-pickaxe until the plan ended
+        i (if (and walk? (or (not (intent/routable? world first-i)) (table-wood? world)))
             (decide (avoided/note world :blacklist (:intent/target first-i)))
             first-i)]
     (when (and (:intent/kind i)
                (not (and (log-counted? world) (= :log (:intent/for i))))
                (or (= :log (:intent/for i))
                    (and bare? (= :log-hunt (:intent/for i)))
-                   (contains? pparams/pick-acts (:intent/kind i))))
+                   (contains? pparams/pick-acts (:intent/kind i))
+                   ;; with no pickaxe and no wood for a table, the walk to the one remembered:
+                   ;; standing still ends the plan :no-pickaxe
+                   (and bare? walk? (= :walk (:intent/kind i)) (not (table-wood? world)))))
       i)))
