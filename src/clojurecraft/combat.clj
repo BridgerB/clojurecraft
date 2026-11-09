@@ -912,7 +912,8 @@
 
 (defn guarded-against
   "[eid entity] of the melee hostile at the shield (adjacent) while a shield is held and the
-   health is under the danger-line: the bot holds the shield toward it (a :block) and neither walks
+   health is under the danger-line and under retreat-health (a pack's outmatched-line is over
+   every health: a hold under it stood at full health for a whole run, no pearl taken): the bot holds the shield toward it (a :block) and neither walks
    nor eats, for a walk or a meal lowers it; a fight on it under that line ends (intent/run :fight)
    and hands over to the block rather than walk off. Nil otherwise: no shield, health enough to fight
    it (pressing), none in reach and in sight (walled off), or the bot burning (:player/on-fire?:
@@ -922,7 +923,7 @@
   (when (and (:player/pos world)
              (not (:player/on-fire? world))
              (shield/held? world)
-             (< (:player/health world 20.0) (danger-line world)))
+             (< (:player/health world 20.0) (min retreat-health (danger-line world))))
     (adjacent world)))
 
 (defmethod plan/done-by :unpressed? [world _] (nil? (guarded-against world)))

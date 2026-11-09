@@ -522,3 +522,12 @@
     (is (not= :retreat (:intent/stage (:plan/intent w))))
     (is (not (:control/forward? (:player/controls w))) "no walk")
     (is (= :shield-hold (:goal/id (plan/choose (dissoc w :plan/intent) plan/goals))))))
+
+(deftest a-pack-at-full-health-is-no-hold
+  ;; two hoglins make an outmatched pack, whose danger-line is over every health: a hold under it
+  ;; stood at full health for a whole sim run; the hold is for a bot under retreat-health
+  (let [pack
+        (assoc-in (at-shield 20.0 5000) [:world/entities 11] (mob :hoglin [8.5 64.0 10.5] 40.0))]
+    (is (< 20.0 (combat/danger-line pack)) "the pack's line is over full health")
+    (is (plan/done-by pack (row :shield-hold)) "full health: no hold")
+    (is (not (plan/done-by (assoc pack :player/health 8.0) (row :shield-hold))) "hurt: the hold")))
