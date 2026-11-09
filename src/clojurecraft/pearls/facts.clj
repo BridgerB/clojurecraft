@@ -56,6 +56,7 @@
                 (and (f :near?)
                      (<= (physics/distance (game/eye w) (combat/aim (f :e))) combat/attack-reach)))
    :hurt? (fn [_ w] (< (:player/health w 20.0) pparams/danger-health))
+   :leave-brutes (fn [_ w] (pmove/leave-brutes w))
    :tracked? (fn [_ w] (psense/angry-tracked? w pparams/hold-radius))
    :rested? (fn [_ w] (>= (:player/health w 20.0) (psense/provoke-line w)))
    :meal (fn [f w] (when-not (f :rested?) (blaze/meal w)))
@@ -169,6 +170,8 @@
    :lone-fight (fn [_ w] (pcover/lone-fight w))
    :lone-fight-over-refuge (fn [_ w] (pcover/lone-fight w (pcover/over-refuge pparams/at-hand)))
    :leave-baby (fn [_ w] (pcover/leave-baby w))
+   :pack-answer (fn [_ w] (pcover/pack-answer w))
+   :pack-hold (fn [_ w] (pcover/pack-hold w))
    :meal-unshot (fn [f w]
                   (and (f :meal)
                        (or (empty? (filter #(combat/seen? w (val %)) (psense/shooters w)))
@@ -180,6 +183,10 @@
    :shot-at? (fn [_ w] (psense/shot-at? w))
    :cover-from (fn [_ w] (pcover/cover-from w))
    :fortress-tunnel-out (fn [_ w] (fexit/fortress-tunnel-out w))
+   :escape-hold? (fn [f w]
+                   (or (and (f :hurt?) (blaze/heals? w))
+                       (boolean (:player/on-fire? w))
+                       (and (psense/recently-shot? w) (not (f :shot-at?)))))
    :leave-sight (fn [_ w] (pcover/leave-sight w))
    :room-exit (fn [_ w] (fexit/room-exit w))
    :home-pressed? (fn [f w]

@@ -16,7 +16,8 @@
             [clojurecraft.pearls.sense :as psense]
             [clojurecraft.pearls.upkeep :as pupkeep]
             [clojurecraft.physics :as physics]
-            [clojurecraft.place :as place]))
+            [clojurecraft.place :as place]
+            [clojurecraft.threat :as threat]))
 
 (set! *warn-on-reflection* true)
 
@@ -224,6 +225,14 @@
        (< (memory/started-count-within? world :place pparams/cover-place-hold-ms)
           pparams/cover-place-max)))
 
+(defn hide-ok?
+  "May cover-from walk to a hide cell now: no walk begun within hide-hold-ms? From a cell hidden
+   from one shooter a second one sees the bot, and the next hide cell is a step back: a real rod
+   bot under two blazes walked between three cells every 0.3 s for nine seconds, burning, until
+   it died. Within the hold the cover is made where it stands (a block on the line, a wall, a dig)."
+  [world]
+  (zero? (memory/started-count-within? world :walk pparams/hide-hold-ms)))
+
 (defn cover-from
   "The intent that covers the bot from the swarm: from a shooter in sight (shot-at?, never fought,
    never out-ranged) a walk to a cell beside the feet out of its sight (hide-cell; :intent/for
@@ -245,7 +254,7 @@
                                            (psense/swarm world))
                                      (:player/pos world))]
       (let [item (filler/pick world 1)
-            hide (hide-cell world e)
+            hide (when (hide-ok? world) (hide-cell world e))
             placing (placing? world)
             line (when (and item placing) (line-cell world e))]
         (cond hide {:intent/kind :walk :intent/target hide :intent/for :cover :intent/wall? true}
@@ -348,3 +357,37 @@
                :intent/seal-behind? true
                :intent/for :pearls}
               :else {:intent/kind :back-off :intent/target eid :intent/for :pearls})))))
+
+(defn pillar-room?
+  "Are the cells over the head clear (path/classify :clear) for a pillar of combat/pillar-height:
+   from two over the feet to the head's cell on its top? Not in a pocket or a corridor."
+  [world]
+  (let [[x y z] (intent/feet world)]
+    (every? #(= :clear (path/classify world [x % z]))
+            (range (+ y 2) (+ y 2 combat/pillar-height)))))
+
+(defn pack-answer
+  "The intent that answers a melee pack at hand (psense/pack-at-hand?) at once, or nil when there
+   is none or nothing can be done: against the nearest of it, the first of threats.edn
+   :pack-ladder (combat/cover-by) that applies: a pillar of three, up out of the reach of every
+   one of them (only with pillar-room?), else a block laid between. Never a nook under the feet,
+   which a melee box still reaches, never a fight (#577) and never a meal at hand. Marked :intent/wall?, so the hunt's
+   interrupt does not cut it."
+  [world]
+  (when (psense/pack-at-hand? world)
+    (when-let [[_ e] (entity/nearest (psense/pack world pparams/swarm-radius) (:player/pos world))]
+      (let [ladder (cond->> (:pack-ladder threat/data)
+                     (not (pillar-room? world)) (remove #{:pillar}))
+            c (combat/cover-by world e ladder)]
+        (when (:intent/kind c) (assoc c :intent/for :pearls :intent/wall? true))))))
+
+(defn pack-hold
+  "The intent of a bot perched on a pillar (pplace/perched?) over a melee pack it is out of the
+   reach of (psense/pack-below?), or nil: the meal it can take (blaze/meal), else standing where
+   it is and looking round. Never the come-down, which drops it into the pack. Only on a pillar:
+   a bot on a fortress bridge or a ledge over a pack walks on."
+  [world]
+  (when (and (pplace/perched? world) (psense/pack-below? world))
+    (or (some-> (blaze/meal world)
+                (assoc :intent/for :pearls))
+        {:intent/kind :lookout :intent/for :pearls})))

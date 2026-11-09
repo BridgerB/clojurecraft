@@ -2,6 +2,7 @@
   "The pearl hunt's perception: endermen, anger, menace, shooters."
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [clojurecraft.armour :as armour]
+            [clojurecraft.avoided :as avoided]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.combat :as combat]
             [clojurecraft.fixtures :as fx]
@@ -1098,3 +1099,15 @@
         (is (empty? (filter #(combat/seen? safe-world (val %)) (psense/shooters safe-world)))
             "shooters are blocked by the wall")
         (is (= :eat (:intent/kind i)) "eats meal to restore health before corridor travel")))))
+
+(deftest a-brutes-ground-is-remembered-and-kept-clear-of
+  (let [b (ps/standing {9 (ps/mob :piglin_brute [14.5 64.0 8.5])})
+        noted (psense/track-brutes b)
+        gone (assoc noted :world/entities {})]
+    (is (= 9 (first (psense/brute-near b))) "within brute-radius")
+    (is (= #{[1 1]} (avoided/all-of noted :brute-zones)) "its eight-block square")
+    (is (psense/near-brute-zone? gone [30 64 8]) "remembered once out of tracking")
+    (is (not (psense/near-brute-zone? gone [60 64 60])) "brute-clear past its square, free")
+    (is (= gone (psense/track-brutes gone)) "nothing tracked, nothing noted")
+    (is (nil? (psense/brute-near (ps/standing {9 (ps/mob :piglin [14.5 64.0 8.5])})))
+        "a piglin is no brute")))

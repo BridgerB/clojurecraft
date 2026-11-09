@@ -14,6 +14,17 @@
    :rule/phase :fire
    :rule/when [:fire]
    :rule/then [:intent {:intent/kind :dig :intent/target [:fact :fire]}]}
+  ;; a melee pack at hand is answered before anything else, the blaze refuge's pocket too: two
+  ;; wither skeletons take twenty health in four seconds, and real bots died in a travel walk, a
+  ;; cage-break tunnel and a held pocket with no answer at all
+  {:rule/id :hunt/pack-cover
+   :rule/phase :survive
+   :rule/when [:pack-answer]
+   :rule/then [:fact :pack-answer]}
+  {:rule/id :hunt/pack-hold
+   :rule/phase :survive
+   :rule/when [:pack-hold]
+   :rule/then [:fact :pack-hold]}
   ;; a hoglin at hand, adult or baby, is fought ahead of the refuge it follows into, at or over
   ;; danger-health; under it a baby is left by a sealed tunnel away (an adult falls to the cover rows)
   {:rule/id :hunt/fight-hoglin-at-hand
@@ -28,6 +39,12 @@
    :rule/phase :survive
    :rule/when [:blaze-refuge]
    :rule/then [:fact :blaze-refuge]}
+  ;; a piglin brute within brute-radius: walk off its ground, before any cover, meal or fight
+  ;; beside it (it strikes any player for about 9 through iron and keeps to its bastion)
+  {:rule/id :hunt/leave-brutes
+   :rule/phase :survive
+   :rule/when [:leave-brutes]
+   :rule/then [:fact :leave-brutes]}
   ;; a lone blaze or wither skeleton at hand is fought before any cover from it: the cover rows dug
   ;; and placed under its hits until it killed the bot, never swinging
   {:rule/id :hunt/fight-lone-at-hand
@@ -56,6 +73,14 @@
    :rule/phase :leave-fortress
    :rule/when [:fortress-escaping? :can-tunnel-out? :shot-at? :cover-from]
    :rule/then [:fact :cover-from]}
+  ;; hurt with a way to heal, burning, or out of a shooter's sight only a moment: the bore waits,
+  ;; eating when it can and standing still when it cannot (a real rod bot bored on at 1.7 health
+  ;; with food held for 26 s until a fireball; another left its cover for the bore every few
+  ;; seconds under two blazes)
+  {:rule/id :hunt/escape-heal
+   :rule/phase :leave-fortress
+   :rule/when [:fortress-escaping? :escape-hold?]
+   :rule/then [:fact :meal-or-lookout]}
   {:rule/id :hunt/escape-tunnel-out
    :rule/phase :leave-fortress
    :rule/when [:fortress-escaping? :can-tunnel-out?]

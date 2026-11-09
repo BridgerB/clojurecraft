@@ -180,6 +180,11 @@
   (:at-hand thresholds))
 ; blocks a bot under danger-health tunnels away from a baby hoglin at hand (cover/leave-baby)
 (def leave-reach (:leave-reach thresholds))
+
+(def pack
+  "{:kinds :radius :near :clear}: what makes a melee pack (pearls.edn :pack, sense/pack-at-hand?)."
+  (:pack thresholds))
+
 (def cover-place-hold-ms (:cover-place-hold-ms thresholds))
 (def cover-place-max (:cover-place-max thresholds))
 
@@ -200,6 +205,8 @@
 
 (def shot-hold-ms (:shot-hold-ms thresholds))
 
+(def hide-hold-ms (:hide-hold-ms thresholds))
+
 (def weak-melee (:weak-melee thresholds))
 
 (def heavy-kinds
@@ -208,6 +215,15 @@
   #{:piglin :piglin_brute :hoglin :zoglin :wither_skeleton :blaze :ghast :vindicator :evoker})
 
 (def explore-memory (:explore-memory thresholds))
+
+(def brute-kinds
+  "Kinds that strike any player on sight, gold worn or not, and keep to their bastion: the hunt
+   leaves their ground (sense/brute-near, move/leave-brutes) and never comes back to it."
+  #{:piglin_brute})
+
+(def brute-radius (:brute-radius thresholds))
+(def brute-clear (:brute-clear thresholds))
+(def brute-grid (:brute-grid thresholds))
 
 (def forest-reach (:forest-reach thresholds))
 

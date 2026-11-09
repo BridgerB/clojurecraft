@@ -35,18 +35,30 @@
   [config]
   (:race/servers config 1))
 
+(defn bots-of
+  "How many bots a runner carries under config (for-lane's value): its servers times :race/bots."
+  [config]
+  (* (servers-of config) (:race/bots config 0)))
+
+(defn landing-stride
+  "The landings apart lanes on one landing set start under config (ci/race.edn's value): the most
+   any lane takes (bots-of, over the file's own sizes and every lane's), so no two lanes on a set
+   overlap and a lane plays the same landings whichever arm of an A/B it is in."
+  [config]
+  (reduce max
+          (bots-of config)
+          (map #(bots-of (for-lane config %)) (keys (:race/lane-overrides config)))))
+
 (defn outputs
   "The race's sizes for lane n under config, as the lines race.yml's plan job appends to
    $GITHUB_OUTPUT: servers= sets= bots= server-heap= bot-heap= (sets as a JSON array of strings)
-   and landing-stride=, the landings each lane on a set takes under the file's own sizes (not the
-   lane's), so a lane plays the same landings whichever arm of an A/B it is in."
+   and landing-stride= (landing-stride)."
   [config n]
   (let [c (for-lane config n)]
     [(str "servers=" (servers-of c))
      (str "sets=[" (str/join "," (map pr-str (:race/landing-sets c))) "]")
      (str "bots=" (:race/bots c)) (str "server-heap=" (:race/server-heap-mb c))
-     (str "bot-heap=" (:race/bot-heap-mb c))
-     (str "landing-stride=" (* (servers-of config) (:race/bots config)))]))
+     (str "bot-heap=" (:race/bot-heap-mb c)) (str "landing-stride=" (landing-stride config))]))
 
 ;;;; I/O: the file and the command line ;;;;
 

@@ -763,6 +763,44 @@
         (is (fexit/escape-near? near))
         (is (some? (fexit/fortress-tunnel-target near)))))))
 
+(deftest the-exit-bore-waits-while-hurt-burning-or-just-out-of-sight
+  ;; Issue #263, real rod bots on c770630: one bored on at 1.7 health with food held for 26 s until
+  ;; a fireball killed it; another left its cover for the bore every few seconds under two blazes.
+  ;; The bot 72 blocks off the spawner, under its height: the exit surfaces, and the bore is the
+  ;; hunt's choice at full health. Hurt with a way to heal, burning, or a shooter in sight a
+  ;; moment ago, it is not: the meal when one can be begun, else a stand where it is.
+  (let [w (-> (ps/standing {})
+              (assoc :player/dimension "minecraft:the_nether"
+                     :plan/status :active
+                     :plan/goals #{:ender-pearls}
+                     :plan/reached #{:blaze-rods}
+                     :plan/active [ps/row]
+                     :pearls/refuge-done true
+                     :time/now 100000
+                     :time/tick 2000)
+              (assoc-in [:player/inventory 1] (ps/item :iron_pickaxe 1))
+              (assoc-in [:player/inventory 2] (ps/item :cooked_beef 8))
+              (memory/observe [-60 80 8] blaze/spawner))
+        kind #(:intent/kind (plan/next-intent % ps/row plan/goals))
+        why #(intent/why-of (plan/next-intent % ps/row plan/goals))]
+    (is (fexit/fortress-escaping? w) "far from the fortress, under it: the exit surfaces")
+    (is (= :tunnel-to (kind w)) "at full health, nothing near: the bore")
+    (let [hurt (assoc w :player/health 1.7 :player/food 17 :player/hurt-at 1990)]
+      (is (not= :tunnel-to (kind hurt)) "hurt a moment ago, food held: no bore")
+      (is (= :hunt/escape-heal (why hurt)) "the wait for the meal, standing")
+      (is (= :eat (kind (dissoc hurt :player/hurt-at))) "two seconds unhit: the meal"))
+    (is (not= :tunnel-to (kind (assoc w :player/on-fire? true))) "burning: no bore")
+    (let [shot (assoc w :pearls/shot-at-ms 95000)]
+      (is (= :hunt/escape-heal (why shot)) "a shooter in sight five seconds ago: the cover held")
+      (is (= :tunnel-to (kind (assoc shot :pearls/shot-at-ms 80000)))
+          "twenty seconds ago: the bore again"))
+    (is (= :tunnel-to
+           (kind (assoc w
+                        :player/health 1.7
+                        :player/food 17
+                        :player/inventory {1 (ps/item :iron_pickaxe 1)})))
+        "hurt with no way to heal: a wait would never end, the bore goes on")))
+
 (deftest an-exit-on-a-column-in-open-air-bridges-toward-its-surface
   ;; Issue #263, real stage-18 lanes: nine of ten :blocked endings were the exit tunnel, and the
   ;; ones folded to the failing tick stood on a column of their own blocks in a Nether cavern, the surface target fifty blocks along and

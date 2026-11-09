@@ -96,11 +96,11 @@
 
 (defn servers-of
   "One entry for each server the samples (the SAMPLE facts of a batch's race logs) name, by server
-   number: {:server k :simulation-distance d :runner-servers m :samples n :tick {:avg :p50 :p95
-   :p99}}, the tick the mean of the samples taken with bots playing (an empty server's tick says
-   nothing about the load), m the servers its runner carried (the arm of a servers-a-runner A/B).
-   :server, :simulation-distance and :runner-servers are absent when the samples had none. Nil
-   without samples."
+   number: {:server k :simulation-distance d :runner-servers m :runner-bots b :samples n :tick
+   {:avg :p50 :p95 :p99}}, the tick the mean of the samples taken with bots playing (an empty
+   server's tick says nothing about the load), m the servers and b the bot slots its runner
+   carried (the arms of a lane A/B). :server, :simulation-distance, :runner-servers and
+   :runner-bots are absent when the samples had none. Nil without samples."
   [samples]
   (not-empty
    (vec
@@ -117,7 +117,14 @@
         (some :sample/simulation-distance ss)
         (assoc :simulation-distance (some :sample/simulation-distance ss))
         (some :sample/runner-servers ss) (assoc :runner-servers (some :sample/runner-servers ss))
+        (some :sample/runner-bots ss) (assoc :runner-bots (some :sample/runner-bots ss))
         (seq tick) (assoc :tick tick))))))
+
+(defn runner-bots
+  "How many bot slots the runner of a batch's servers (servers-of's value) carried: their own
+   :runner-bots, else, for samples from before it was recorded, nil."
+  [servers]
+  (some :runner-bots servers))
 
 (defn runner-servers
   "How many servers the runner of a batch's servers (servers-of's value) carried: their own
@@ -290,7 +297,8 @@
       (:round/observed r) (assoc :observed (:round/observed r))
       (seq (:round/servers r)) (assoc :servers (:round/servers r))
       (runner-servers (:round/servers r))
-      (assoc :runner-servers (runner-servers (:round/servers r))))))
+      (assoc :runner-servers (runner-servers (:round/servers r)))
+      (runner-bots (:round/servers r)) (assoc :runner-bots (runner-bots (:round/servers r))))))
 
 (defn day-of
   "The UTC day a batch belongs to, yyyy-mm-dd: its run's start's, else its commit's, else its
@@ -365,7 +373,8 @@
    start and first reach, the latest end, the runners, the furthest leader; deaths only over the
    batches that counted them, with the runs they cover as :death-runs; the runs that never got
    into play (:unplayed, played) over the batches that kept them out; the observability rows
-   added (observed-sum); :runner-servers when every batch that names it names the same (one
+   added (observed-sum); :runner-servers and :runner-bots, each when every batch that names it
+   names the same (one
    arm of a servers-a-runner A/B)."
   [bs]
   (let [some-of (fn [k] (some k bs))
@@ -396,7 +405,8 @@
       (seq (keep :leader bs)) (assoc :leader (best-leader (keep :leader bs)))
       (seq (keep :observed bs)) (assoc :observed (observed-sum (keep :observed bs)))
       (= 1 (count (distinct (keep :runner-servers bs))))
-      (assoc :runner-servers (some-of :runner-servers)))))
+      (assoc :runner-servers (some-of :runner-servers))
+      (= 1 (count (distinct (keep :runner-bots bs)))) (assoc :runner-bots (some-of :runner-bots)))))
 
 (defn totals
   "A day's totals for one kind's batches (combine): the counts, times, first reaches and deaths;
