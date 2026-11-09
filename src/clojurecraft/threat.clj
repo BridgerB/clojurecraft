@@ -9,8 +9,8 @@
 (set! *warn-on-reflection* true)
 
 (def data
-  "{:kinds {kind facts} :cover-ladder [measure ...] :jumper-ladder [measure ...]}:
-   resources/clojurecraft/threats.edn."
+  "{:kinds {kind facts} :cover-ladder [measure ...] :jumper-ladder [measure ...] :guarded {:blocks
+   :by :radius}}: resources/clojurecraft/threats.edn."
   (edn/read-string (slurp (io/resource "clojurecraft/threats.edn"))))
 
 (defmulti measure
@@ -26,6 +26,23 @@
    its order is the policy."
   [world ctx ladder fallback]
   (or (some #(measure world ctx %) ladder) fallback))
+
+(defn guarded?
+  "Is block name n one piglins guard (threats.edn :guarded :blocks), with a live entity of a guard
+   kind (:by) within :radius of point p among entities ({eid entity}, each with :entity/pos and
+   its kind by kind-of)? Breaking or opening it angers every guard that sees it."
+  [n p entities kind-of]
+  (let [{:keys [blocks by radius]} (:guarded data)
+        [px py pz] p]
+    (boolean
+     (and (contains? blocks n)
+          (some (fn [[_ e]]
+                  (let [[x y z] (:entity/pos e)]
+                    (and (contains? by (kind-of e))
+                         (not (contains? e :entity/died-at))
+                         (<= (+ (* (- x px) (- x px)) (* (- y py) (- y py)) (* (- z pz) (- z pz)))
+                             (* radius radius)))))
+                entities)))))
 
 (defn nearest-safe
   "The cell of cells that exposed? is false of and that dist ranks lowest, or nil when every cell
