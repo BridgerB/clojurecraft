@@ -1,8 +1,11 @@
 (ns clojurecraft.armour
-  "Armour: an iron helmet and chestplate, made from the ingots left once the portal kit's iron is in
-   hand, and anything wearable held put on.
+  "Armour: a shield, an iron helmet and chestplate, made from the ingots left once the portal kit's
+   iron is in hand, and anything wearable held put on (a shield in the offhand).
 
-   Requiring this namespace registers two rows' rules. :wear-armour (an always row at priority 0,
+   Requiring this namespace registers three rows' rules. :shield (an always row at the portal kit's
+   priority, before :armour: one ingot buys a block of every frontal hit, which shield.clj raises)
+   is done by :shielded?, a shield held or none to be made without a trip, and planned by :shield
+   through the needs planner into its craft. :wear-armour (an always row at priority 0,
    after the meal) is done by :dressed?, no piece held unworn over an empty armour slot, and
    planned by :wear into a :wear intent: two clicks, so it preempts like the escapes. :armour (an
    always row at the portal kit's priority, after it: the moment the iron the portal needs is in
@@ -144,6 +147,31 @@
         spare (spare-ingots world)
         k (some (fn [[k cost]] (when (and (zero? (get c k 0)) (>= spare cost)) k)) made)]
     (when (and k (table-at-hand? world)) k)))
+
+(def shield-planks 6)                 ; planks a shield takes, beside one iron ingot
+(def log-planks 4)                    ; planks one log makes
+
+(defn shield-wanted?
+  "Is a shield to be made now: none held (counts: the offhand, a grid or the cursor count), an
+   ingot spare (spare-ingots), and the wood for it at hand, its six planks and a table's four when
+   no table is remembered near (make/near) or held, a log counted as four planks? An always row
+   whose needs send the bot after a tree would wait :no-log in the Nether."
+  [world]
+  (let [c (counts world)
+        wood (+ (recipe/have c (recipe/tags :planks))
+                (* log-planks (recipe/have c (recipe/tags :logs))))
+        table? (or (make/near world :crafting_table) (pos? (get c :crafting_table 0)))]
+    (and (zero? (get c :shield 0))
+         (pos? (spare-ingots world))
+         (>= wood (+ shield-planks (if table? 0 table-planks))))))
+
+(defmethod plan/done-by :shielded? [world _] (not (shield-wanted? world)))
+
+(defmethod plan/next-intent :shield
+  ;; the shield made through the needs planner, as if the row provided it
+  [world goal table]
+  (when (shield-wanted? world)
+    (make/decide world (assoc goal :goal/provides {:item/shield 1}) table)))
 
 (defmethod plan/done-by :dressed? [world _] (nil? (unworn world)))
 

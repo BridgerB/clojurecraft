@@ -16,7 +16,7 @@
                    [:cobblestone 256] [:netherrack 64] [:diorite 128] [:granite 64] [:andesite 64]
                    [:cobbled_deepslate 64] [:dirt 64] [:gravel 16] [:raw_copper 12]
                    [:lapis_lazuli 11] [:leather 6] [:bone 2] [:string 3] [:oak_planks 1] [:flint 1]
-                   [:sand 16] [:golden_boots 1] [:spruce_planks 1] [:white_wool 2]]
+                   [:sand 16] [:golden_boots 1] [:spruce_planks 1] [:white_wool 2] [:shield 1]]
  :starts [{:start/id :spawn :start/place :overworld :start/goal nil :start/kit []}
           {:start/id :fortress :start/place :fortress :start/goal :blaze-rods :start/kit []}
           {:start/id :rods

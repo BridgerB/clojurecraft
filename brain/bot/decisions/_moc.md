@@ -30,6 +30,7 @@ related:
 - [[any-log-species]] - gather the nearest log of any kind; the next plan picks the planks recipe.
 - [[pearls-rule-table]] - the pearl hunt as rows of pearls-rules.edn read by one function over named facts, by phase; its history in pearls-history.edn.
 - [[threats-as-data]] - per-kind threat facts and the cover ladder in threats.edn, measures as defmethods, one shelter search.
+- [[shield-up-standing]] - the shield up between swings and in a wait under fire, never on a walk; a planner tick lowers it first.
 
 ## See also
 - [[bot/_moc|Bot pillar]]

@@ -37,6 +37,7 @@
             [clojurecraft.place :as place]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
+            [clojurecraft.shield :as shield]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.threat :as threat]
             [clojurecraft.window :as window]))
@@ -133,13 +134,15 @@
 
 (defn attack
   "Send one attack on eid, then the arm's swing, as the vanilla client sends them
-   (MultiPlayerGameMode.attack, then the swing); the next swing swing-every from now, the swing
+   (MultiPlayerGameMode.attack, then the swing), a raised shield lowered first (shield/hold): the
+   vanilla client never swings with its use key held. The next swing swing-gap from now, the swing
    counted. Never the swing first, nor the held slot restated: gym attack-259a (run 38881958899)
    sent set-carried-item, swing, attack, and its stone sword took a NoAI husk's twenty health a
    point a hit, twenty-two hits for a kill, every one at the charge of a swing just begun."
   [world eid]
   (let [now (:time/now world)]
     (-> world
+        (shield/hold false)
         (game/emit {:packet/name :attack :entity-id eid})
         (game/emit {:packet/name :swing :hand (packet/value :hand :main-hand)})
         (intent/assoc-intent :intent/next-swing (+ now (swing-gap world))
@@ -488,6 +491,27 @@
   [world]
   (and (= dimension/end (:player/dimension world)) (entity/in-breath? world)))
 
+(defn guard?
+  "Does the :fight intent i, after its tick, want the shield up: still running, at its :approach or
+   :engage with no route walk (:intent/child), not for a hunt (an animal does not strike), the
+   controls standing (shield/standing?: a vanilla client walks at a fifth of its speed with it up),
+   and not in the tick a swing went out (attack lowered it for the swing; it goes up again the
+   next tick, so between two swings swing-gap apart it blocks for all but shield/raise-ticks)."
+  [world i]
+  (let [{:intent/keys [stage next-swing child]} i]
+    (boolean (and (not (intent/done? i))
+                  (not (intent/failed? i))
+                  (#{:approach :engage} stage)
+                  (nil? child)
+                  (not= :hunt (:intent/for i))
+                  (shield/standing? (:player/controls world))
+                  (or (nil? next-swing) (> (:time/now world) (- next-swing (swing-gap world))))))))
+
+(defn guarded
+  "The world after a :fight's tick with the shield held up or down as guard? says (shield/hold)."
+  [world]
+  (shield/hold world (guard? world (:plan/intent world))))
+
 (defmethod intent/run :fight
   ;; {:intent/kind :fight :intent/target eid}: done when the target is gone (a kill); below
   ;; retreat-health it breaks off and walks away (done once away: a fight left is not a failure).
@@ -500,36 +524,38 @@
   ;; fought again, to the end of the run (issue #178, sim race 39742404581, world R2/37).
   ;; With :intent/hold? the bot never walks: it waits for the target to come within approach-range,
   ;; never presses after it, and never breaks off (issue #263: the pearl hunt fights from a burrow
-  ;; an enderman cannot reach into, where a step out is the one way to be hit)
+  ;; an enderman cannot reach into, where a step out is the one way to be hit). Every tick ends
+  ;; with the shield as guard? asks (guarded): up while it stands at its target between swings
   [world i event]
-  (let [now (:time/now world)
-        e (get-in world [:world/entities (:intent/target i)])
-        i (cond-> i
-            (nil? (:intent/stage i)) (assoc :intent/stage :arm :intent/since now)
-            e (assoc :intent/target-pos (:entity/pos e)))
-        world (assoc world :plan/intent i)]
-    (cond (or (entity/gone? world (:intent/target i))
-              (breathed-on? world)
-              (and (:intent/yield? i) (< (:player/health world 20.0) retreat-health)))
-          (-> world
-              (assoc :player/controls {})
-              intent/done)
-          (and (not= :retreat (:intent/stage i))
-               (not (:intent/hold? i))
-               (not (and (:intent/to-the-end? i) (not (contains? entity/neutral (entity/kind e)))))
-               (not= :hunt (:intent/for i))
-               (< (:player/health world 20.0) (danger-line world)))
-          (-> world
-              (intent/dissoc-intent :intent/child)
-              (intent/assoc-intent :intent/stage :retreat :intent/since now))
-          (and (= :approach (:intent/stage i)) (:intent/child i)) (walk-on world i e event)
-          :else
-          (case (window/waiting world i)
-            :overdue (window/lost world i :arm)
-            :waiting world
-            (if (:intent/resync i)
-              (window/resync world (window/view world :inventory))
-              (fight-stage world i e))))))
+  (guarded
+   (let [now (:time/now world)
+         e (get-in world [:world/entities (:intent/target i)])
+         i (cond-> i
+             (nil? (:intent/stage i)) (assoc :intent/stage :arm :intent/since now)
+             e (assoc :intent/target-pos (:entity/pos e)))
+         world (assoc world :plan/intent i)]
+     (cond (or (entity/gone? world (:intent/target i))
+               (breathed-on? world)
+               (and (:intent/yield? i) (< (:player/health world 20.0) retreat-health)))
+           (-> world
+               (assoc :player/controls {})
+               intent/done)
+           (and (not= :retreat (:intent/stage i))
+                (not (:intent/hold? i))
+                (not (and (:intent/to-the-end? i) (not (contains? entity/neutral (entity/kind e)))))
+                (not= :hunt (:intent/for i))
+                (< (:player/health world 20.0) (danger-line world)))
+           (-> world
+               (intent/dissoc-intent :intent/child)
+               (intent/assoc-intent :intent/stage :retreat :intent/since now))
+           (and (= :approach (:intent/stage i)) (:intent/child i)) (walk-on world i e event)
+           :else
+           (case (window/waiting world i)
+             :overdue (window/lost world i :arm)
+             :waiting world
+             (if (:intent/resync i)
+               (window/resync world (window/view world :inventory))
+               (fight-stage world i e)))))))
 
 ;; ---------------------------------------------------------------- backing away
 

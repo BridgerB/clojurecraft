@@ -332,6 +332,14 @@
   :goal/doc "put on any armour held whose slot is empty"
   :goal/done? :dressed?
   :goal/plan :wear}
+ {:goal/id :shield
+  :goal/priority 13
+  :goal/target? true
+  :goal/always? true
+  :goal/until "shield"
+  :goal/doc "a shield from six planks and a spare ingot, before the armour"
+  :goal/done? :shielded?
+  :goal/plan :shield}
  {:goal/id :armour
   :goal/priority 13
   :goal/target? true

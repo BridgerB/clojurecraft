@@ -23,6 +23,7 @@
             [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
             [clojurecraft.recipe :as recipe]
+            [clojurecraft.shield :as shield]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.trap :as trap]
             [clojurecraft.window :as window]))
@@ -1013,8 +1014,9 @@
 (defn step-over
   "The planner over a goal table (docs/RICH-HICKEY.md: \"(plan world goals) → intent\"), as a reducer
    composed after game/step: :go begins a plan, :tick advances it. Nothing here reads a table
-   from anywhere but its argument. Each tick's controls are steered by the running intent's row
-   (steered)."
+   from anywhere but its argument. Each tick begins with the shield as the moment asks (shield/guard:
+   lowered before an intent that is no fight runs), and its controls are steered by the running
+   intent's row (steered)."
   [table world {:event/keys [kind] :as event}]
   (case kind
     :go
@@ -1024,7 +1026,8 @@
     :tick
     (case (:plan/status world)
       :active
-      (let [w (watch world table event)] (steered (chose w (plan-tick w event table) table) table))
+      (let [w (watch (shield/guard world) table event)]
+        (steered (chose w (plan-tick w event table) table) table))
       :landing (landing-tick world)
       world)
     world))

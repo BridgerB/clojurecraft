@@ -100,6 +100,9 @@
    [:player/using-item?
     "does the bot hold its use key: bit 0x01 of the living flags byte (metadata index 8) the server last sent for its own entity. A shield is raised while it is true with the shield in hand; a meal sets it too"
     "after the first living-flags set-entity-data of its own entity"]
+   [:player/shield-up-at
+    "ms (:time/now) the bot last raised its shield: a use-item with the offhand sent (shield/raise), the shield in the offhand. The server blocks with it from raise-ticks after that. Dropped when the bot lets the use key go (shield/lower)"
+    "while the bot holds its shield raised"]
    [:player/struck-at
     "ms (:time/now) of the last damage-event on the bot, beside :player/hurt-at in ticks: combat/striker ages the strike against struck-ms. A zombified piglin that hit is angry, and a hit angers its pack"
     "after a damage-event on the bot"]

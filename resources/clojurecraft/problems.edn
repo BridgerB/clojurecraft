@@ -345,7 +345,8 @@
   :problem/sources ["brain/siblings/sib-dimension-change.md"]}
  {:problem/stage :survival
   :problem/issue 259
-  :problem/goals [:eat :wear-armour :armour :defend :attack :hunt :sword :gear :regear :cook]
+  :problem/goals [:eat :wear-armour :shield :armour :defend :attack :hunt :sword :gear :regear
+                  :cook]
   :problem/statement
   "Normal difficulty brings hunger and night mobs to every stage. Food drains with every dig and jump, an empty bar stops healing and starves the bot to one heart, and zombies, skeletons and creepers find a bot that cannot hit back. The world value read the health from set-health and threw the food away; the bot could not eat, wear armour or attack."
   :problem/needs
@@ -362,6 +363,7 @@
    "A creeper backed away from twice that stood where it was is shunned: a threat only within 3 blocks, and within 1.5 after six back-offs, so a starving bot is not kept from its walk by a creeper that never closes in (issues #69, #62, #161)"
    "The sword is the :sword always row after the armour: iron from ingots the armour leaves, else stone from cobblestone, else wood from planks, never from a log, so it takes nothing the pickaxes need; until it is made the fights are by hand"
    "Armour is put on by two window-0 clicks (pick up, put down in the armour slot) and made only from ingots spare once the portal's iron is held, with a table at hand: it never sends the bot mining or after a tree"
+   "A shield is made before the armour from six planks and one spare ingot, with the wood at hand, and worn in the offhand by the same two clicks; it is up between a fight's swings and while the planner waits under a shooter's fire, never on a walk, and the planner lowers it before any other intent runs"
    "A fight for :hunt never breaks off, and fresh-kill needs its target gone: an animal does not strike back, and a starving bot under ten health that backed off made the hunt collect at a live cow, fail :not-picked-up and fight again to the end of the run (issue #178, world R2/37)"
    "A threat is judged from the floor it stands on or jumped from (combat/floor-pos), not the top of a jump: a stairs up lifting the bot a block and more at each step showed two zombies past a corner at the top of each jump only, and a fight began and ended every fourteen ticks, the stairs up preempted each time (issue #178, world R4/14)"
    "A target a fight gave up as unreachable (not strikable, no route: its engage ends done, issue #564) is recorded in :plan/given-up and not picked again for a minute while its aim stays out of reach, and :defend asks approachable? as the blaze acts do: a mob in water two blocks below was re-picked every 150 ms and the stage behind it timed out (issues #69, #62, #582, #161)"]

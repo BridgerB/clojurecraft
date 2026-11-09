@@ -255,10 +255,10 @@
 (defmethod on-packet [:play :respawn]
   [w p]
   ;; a new life, or a new dimension: fresh menus, no entities, at rest, lungs full; the teleport
-  ;; that follows places it
+  ;; that follows places it; a new player entity holds no use key, so no shield is up
   (-> w
       inventory/fresh-menus
-      (dissoc :player/dead? :player/death-text)
+      (dissoc :player/dead? :player/death-text :player/shield-up-at)
       (change-dimension (:dimension p))
       (assoc :world/entities {}
              :player/vel [0.0 0.0 0.0]

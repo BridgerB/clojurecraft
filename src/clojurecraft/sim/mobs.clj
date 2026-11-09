@@ -192,18 +192,22 @@
 (defn blast
   "Mob eid blows up with its kind's power (a creeper's fuse, a crystal hit): it is gone, and the
    player is hurt by the blast (mob/blast-damage by its distance from the mob's feet, scaled by
-   the difficulty) when the line from the mob's head to the player's eye is clear. A blast
-   breaks no blocks here (not modelled)."
+   the difficulty) when the line from the mob's head to the player's eye is clear, unless a
+   raised shield faces it (sim-protocol/shield-blocks?, counted blocked). A blast breaks no blocks
+   here (not modelled)."
   [sim eid]
   (let [{:keys [type pos]} (get-in sim [:sim/mobs eid])
         player (:sim/player-pos sim)
         dmg
         (if player (mob/blast-damage (:blast (mob/kinds type)) (physics/distance pos player)) 0.0)]
-    (-> sim
-        (remove-mob eid)
-        (cond-> (and (pos? dmg)
-                     (mob/sight? (solid-fn sim) (mob/head type pos) (physics/eye player)))
-                (hurt (armoured sim (mob/scaled dmg (:sim/difficulty sim))) true type nil eid)))))
+    (cond (not (and (pos? dmg)
+                    (mob/sight? (solid-fn sim) (mob/head type pos) (physics/eye player))))
+          (remove-mob sim eid)
+          (sim-protocol/shield-blocks? sim pos) (sim-protocol/blocked (remove-mob sim eid))
+          :else
+          (-> sim
+              (remove-mob eid)
+              (hurt (armoured sim (mob/scaled dmg (:sim/difficulty sim))) true type nil eid)))))
 
 (defn die-mob
   "Mob eid at zero health: a crystal blasts (blast); any other dies, the client told
@@ -582,7 +586,9 @@
    height) hits it every :every ticks for its damage scaled by the difficulty. A flier's strike is
    its :contact (a blaze's 6 every :contact-every ticks) and only when the boxes touch with a
    clear line (mob/can-strike?): a separate key, because the bot's own tables read :melee as a
-   kind it fights in a pack (combat/melee-damage), and a reach of two through a wall is not a hit."
+   kind it fights in a pack (combat/melee-damage), and a reach of two through a wall is not a hit.
+   A raised shield facing the mob takes the hit (sim-protocol/shield-blocks?): nothing lands,
+   counted blocked."
   [sim eid]
   (let [{:keys [type pos attack-at]} (get-in sim [:sim/mobs eid])
         k (mob/kinds type)
@@ -592,6 +598,11 @@
                (mob/can-strike? (solid-fn sim) type pos player)
                (mob/in-reach? type pos player))]
     (cond (not (and (or (:melee k) (:contact k)) can? (>= now (or attack-at 0)))) sim
+          (sim-protocol/shield-blocks? sim pos)
+          (-> sim
+              (assoc-in [:sim/mobs eid :attack-at]
+                        (+ now (* (or (:contact-every k) (:every k)) physics/tick-ms)))
+              sim-protocol/blocked)
           :else
           (let [before (:sim/health sim)
                 sim (-> sim
@@ -676,7 +687,8 @@
 (defn shoot
   "A shooter (a skeleton's arrow, a blaze's fireball) within its :range of the player, with a
    clear line from its head to the player's eye, hits every :every ticks for its damage scaled by
-   the difficulty; the shot's flight is not modelled, it lands as it is fired."
+   the difficulty; the shot's flight is not modelled, it lands as it is fired, or on a raised
+   shield facing the shooter (sim-protocol/shield-blocks?, counted blocked)."
   [sim eid]
   (let [{:keys [type pos attack-at]} (get-in sim [:sim/mobs eid])
         k (mob/kinds type)
@@ -688,6 +700,10 @@
                     (<= (physics/distance (mob/head type pos) eye) (:range k))
                     (mob/sight? (solid-fn sim) (mob/head type pos) eye)))
           sim
+          (sim-protocol/shield-blocks? sim pos)
+          (-> sim
+              (assoc-in [:sim/mobs eid :attack-at] (+ now (* (:every k) physics/tick-ms)))
+              sim-protocol/blocked)
           :else
           (-> sim
               (assoc-in [:sim/mobs eid :attack-at] (+ now (* (:every k) physics/tick-ms)))
@@ -838,7 +854,8 @@
 (defn tick-fireballs
   "One game tick of every small fireball in flight (fireball-path), each move told (tell-move): one
    that hits the player hurts it by its blaze's shot damage through the armour, sets it alight for
-   the blaze's :ignites and tells the damage; one that meets a block or is older than its life is
+   the blaze's :ignites and tells the damage, unless a raised shield faces it
+   (sim-protocol/shield-blocks?: gone, counted blocked); one that meets a block or is older than its life is
    gone, told to the client."
   [sim]
   (reduce (fn [sim [fid {:keys [pos dir owner born kind]}]]
@@ -849,7 +866,9 @@
                          (-> sim
                              (update :sim/fireballs dissoc fid)
                              (send {:packet/name :remove-entities :ids [fid]})))]
-              (cond (= :hit what)
+              (cond (and (= :hit what) (sim-protocol/shield-blocks? sim at))
+                    (sim-protocol/blocked (gone sim))
+                    (= :hit what)
                     (-> sim
                         gone
                         (hurt (armoured sim (mob/scaled (:shoot k) (:sim/difficulty sim)))

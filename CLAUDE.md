@@ -64,7 +64,8 @@ src/clojurecraft/pearls/upkeep.clj   the sword and pickaxe made again, the reser
 src/clojurecraft/fortress_exit.clj   the exit from the blaze fortress: sealed tunnel out, pocket bore, blaze refuge
 src/clojurecraft/eyes.clj     eyes of ender: the needs planner through the 2x2 craft rows, a wait that names the short stage (:no-pearls, :no-rods)
 src/clojurecraft/sword.clj    the :sword always row: the best sword the held items make without a trip, never from a log
-src/clojurecraft/armour.clj   the :wear-armour and :armour always rows: a piece held put on by two window-0 clicks; a helmet and chestplate from spare ingots
+src/clojurecraft/armour.clj   the :wear-armour, :shield and :armour always rows: a piece held put on by two window-0 clicks (a shield in the offhand); a shield, a helmet and chestplate from spare ingots
+src/clojurecraft/shield.clj   the shield raised and lowered: a use-item with the offhand, the release, the fight's guard and the planner's lowering
 src/clojurecraft/food.clj     the game's food as data: nutrition and eating time per item, for the bot and the server model
 src/clojurecraft/craft.clj    the :craft executor: settle, lay the grid with clicks, verify, take
 src/clojurecraft/smelt.clj    the :smelt executor: settle, lay the fuel and the input, cook, take, close; fuel in burn order

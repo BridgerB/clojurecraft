@@ -1,7 +1,8 @@
 (ns clojurecraft.sim.protocol
   "The model's conversation with the client, and the player in it: login and the chunks it streams, movement, digging and the drops, using an item (use-held), and the player's life (hurt, heal, hunger, drowning, pickup)."
   (:refer-clojure :exclude [send])
-  (:require [clojurecraft.blocks :as blocks]
+  (:require [clojure.math :as math]
+            [clojurecraft.blocks :as blocks]
             [clojurecraft.dimension :as dimension]
             [clojurecraft.entity :as entity]
             [clojurecraft.food :as food]
@@ -286,12 +287,58 @@
 
 (def release-use-item 5)              ; player-action status RELEASE_USE_ITEM: the use key let go (ServerboundPlayerActionPacket.Action)
 
+(def shield-delay-ms 250)             ; ms from a shield's use to its first block (the shield's blocks_attacks block_delay_seconds)
+(def using-flags 3)                   ; the living flags byte of a player using its offhand's item: 0x01 using, 0x02 the offhand
+
+(defn tell-using
+  "The model having told the client its own living flags (set-entity-data, entity/living-flags-index):
+   flags, using-flags while the shield is up, 0 when it is let go."
+  [sim flags]
+  (send sim
+        {:packet/name :set-entity-data
+         :entity-id (player-eid-of sim)
+         :metadata {entity/living-flags-index flags}}))
+
+(defn offhand-item
+  "The item id in the offhand (window-0's [:offhand] slot), or nil."
+  [sim]
+  (get-in sim [:sim/inv (inventory/slot [:offhand]) :item]))
+
+(defn shield-blocks?
+  "Does the player's raised shield block a blow from point src: a shield in the offhand, up
+   (:sim/blocking-at) for shield-delay-ms or more, and src in front of the player on the plane (the
+   look's yaw, :sim/player-look, within 90 degrees of the way to src: blocks_attacks'
+   horizontal_blocking_angle, LivingEntity.resolveBlockedDamage)? A blow from the player's own
+   column is not blocked."
+  [sim src]
+  (let [at (:sim/blocking-at sim)
+        [px _ pz] (:sim/player-pos sim)
+        [sx _ sz] src
+        [yaw _] (:sim/player-look sim)]
+    (boolean (when (and at src px yaw (= (recipe/item-id :shield) (offhand-item sim)))
+               (let [dx (- (double sx) (double px))
+                     dz (- (double sz) (double pz))
+                     r (math/to-radians (double yaw))]
+                 (and (>= (- (:sim/now sim) at) shield-delay-ms)
+                      (pos? (+ (* dx dx) (* dz dz)))
+                      (pos? (+ (* dx (- (math/sin r))) (* dz (math/cos r))))))))))
+
+(defn blocked
+  "The model after the raised shield took a blow: counted in :sim/blocked, the player not hurt."
+  [sim]
+  (update sim :sim/blocked (fnil inc 0)))
+
 (defmethod on-packet [:play :player-action]
-  ;; a release of the use key stops eating (ServerPlayerGameMode's releaseUsingItem)
+  ;; a release of the use key stops eating and lowers a shield (ServerPlayerGameMode's
+  ;; releaseUsingItem)
   [sim {:keys [status pos] :as p}]
   (cond (= status (packet/value :dig :start-destroy))
         (assoc sim :sim/dig {:pos pos :at (:sim/now sim)})
         (= status (packet/value :dig :stop-destroy)) (finish-dig sim p)
+        (and (= status release-use-item) (:sim/blocking-at sim))
+        (-> sim
+            (dissoc :sim/eating :sim/blocking-at)
+            (tell-using 0))
         (= status release-use-item) (dissoc sim :sim/eating)
         :else sim))
 
@@ -421,7 +468,7 @@
                  :sim/air max-air
                  :sim/player-pos [x y z]
                  :sim/dimension (if stays? here dimension/overworld))
-          (dissoc :sim/eating :sim/window :sim/view-at :sim/fire)
+          (dissoc :sim/eating :sim/blocking-at :sim/window :sim/view-at :sim/fire)
           (cond-> (:sim/difficulty sim) (sim-world/with-food-value hunger/fresh))
           (update :sim/respawns inc)
           (send (if stays?
@@ -516,10 +563,21 @@
               (swap-held (get blocks/items :bucket)))
           :else sim)))
 
+(defn use-offhand
+  "The model after a use-item with the offhand: a shield there goes up (:sim/blocking-at now,
+   the client told its living flags, tell-using); anything else does nothing here."
+  [sim]
+  (cond (= (recipe/item-id :shield) (offhand-item sim))
+        (-> sim
+            (assoc :sim/blocking-at (:sim/now sim))
+            (tell-using using-flags))
+        :else sim))
+
 (defmethod on-packet [:play :use-item]
-  ;; the held item used (use-held), then the ack
-  [sim {:keys [sequence y-rot x-rot]}]
-  (send (use-held sim [y-rot x-rot]) {:packet/name :block-changed-ack :sequence sequence}))
+  ;; the item in the hand named used (use-offhand, or use-held for the main hand), then the ack
+  [sim {:keys [hand sequence y-rot x-rot]}]
+  (send (if (= hand (packet/value :hand :off-hand)) (use-offhand sim) (use-held sim [y-rot x-rot]))
+        {:packet/name :block-changed-ack :sequence sequence}))
 
 (def hit-log-keep 64)                 ; hits the model remembers dealing the player (:sim/hit-log), the newest
 

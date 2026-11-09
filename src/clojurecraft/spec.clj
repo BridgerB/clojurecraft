@@ -494,6 +494,7 @@
 (s/def :player/saturation number?)
 (s/def :player/on-fire? boolean?)
 (s/def :player/using-item? boolean?)
+(s/def :player/shield-up-at number?)
 (s/def :knock/vel (s/coll-of number? :kind vector? :count 3))
 (s/def :knock/at number?)
 (s/def :player/knock (s/keys :req-un [:knock/vel :knock/at]))
@@ -831,6 +832,8 @@
 (s/def :sim/sent-health (s/tuple number? int? boolean?)) ; health, food, saturation zero? last told
 (s/def :sim/on-ground? boolean?)                         ; the last movement packet's flag
 (s/def :sim/eaten nat-int?)                              ; foods the player finished eating
+(s/def :sim/blocking-at int?)                       ; when the player raised its shield (a use-item with the offhand); absent once let go
+(s/def :sim/blocked nat-int?)                           ; blows the raised shield took
 (s/def :sim.eating/slot int?)
 (s/def :sim.eating/item int?)
 (s/def :sim.eating/at int?)
