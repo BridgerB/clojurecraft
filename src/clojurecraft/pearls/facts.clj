@@ -167,6 +167,7 @@
    ;; conditions of single rules
    :blaze-refuge (fn [_ w] (fexit/blaze-refuge w))
    :come-down (fn [_ w] (pplace/come-down w))
+   :lone-fight (fn [_ w] (pcover/lone-fight w))
    :pack-answer (fn [_ w] (pcover/pack-answer w))
    :pack-hold (fn [_ w] (pcover/pack-hold w))
    :meal-unshot (fn [f w]
