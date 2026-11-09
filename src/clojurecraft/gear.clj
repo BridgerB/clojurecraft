@@ -1,6 +1,6 @@
 (ns clojurecraft.gear
-  "The gear a bot takes into the Nether: an iron sword, iron helmet, chestplate and leggings, and
-   its raw meat cooked. The gym rows that get seven blaze rods in five minutes land with all of it;
+  "The gear a bot takes into the Nether: a shield, an iron sword, iron helmet, chestplate and
+   leggings, and its raw meat cooked. The gym rows that get seven blaze rods in five minutes land with all of it;
    the race bot reached the blazes with a stone sword, no armour and no food.
 
    Requiring this namespace registers four rows' rules. :gear (a step of the chain, after the
@@ -28,11 +28,17 @@
 
 (def sword-cost "The iron ingots an iron sword costs." 2)
 
+(def shield-cost "The iron ingots a shield costs (its wood beside)." 1)
+
 (defn pieces
-  "The pieces the gear is, in the order they are made, as [item-name ingots]: the armour's, then
-   the sword."
+  "The pieces the gear is, in the order they are made, as [item-name ingots]: the shield, the
+   armour's, then the sword. The shield is first: the :shield row makes it only with the wood at
+   hand, and the gear step, in the overworld, is where its planks are cut when none are held, so
+   the Nether is entered with one."
   []
-  (conj (vec armour/made) [:iron_sword sword-cost]))
+  (-> [[:shield shield-cost]]
+      (into armour/made)
+      (conj [:iron_sword sword-cost])))
 
 (defn missing
   "The pieces of the gear not held (armour/counts: worn, in a grid or on the cursor counts as

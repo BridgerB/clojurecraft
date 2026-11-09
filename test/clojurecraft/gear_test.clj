@@ -40,16 +40,36 @@
 
 (defn row "The goal row named id." [id] (first (filter #(= id (:goal/id %)) plan/goals)))
 
-(deftest the-gear-is-a-sword-and-three-pieces-of-armour
-  (is (= [[:iron_helmet 5] [:iron_chestplate 8] [:iron_leggings 7] [:iron_sword 2]] (gear/pieces)))
-  (is (= 22 (gear/gear-cost (standing kit))))
-  (is (= 15
+(def all-of-it
+  {3 (item :iron_helmet 1)
+   4 (item :iron_chestplate 1)
+   5 (item :iron_leggings 1)
+   6 (item :iron_sword 1)
+   7 (item :shield 1)})
+
+(deftest the-gear-is-a-shield-a-sword-and-three-pieces-of-armour
+  (is (= [[:shield 1] [:iron_helmet 5] [:iron_chestplate 8] [:iron_leggings 7] [:iron_sword 2]]
+         (gear/pieces)))
+  (is (= 23 (gear/gear-cost (standing kit))))
+  (is (= 16
          (gear/gear-cost (standing (merge kit {3 (item :iron_helmet 1) 4 (item :iron_sword 1)})))))
-  (is (zero? (gear/gear-cost (standing (merge kit
-                                              {3 (item :iron_helmet 1)
-                                               4 (item :iron_chestplate 1)
-                                               5 (item :iron_leggings 1)
-                                               6 (item :iron_sword 1)}))))))
+  (is (zero? (gear/gear-cost (standing (merge kit all-of-it))))))
+
+(deftest the-gear-step-makes-the-shield-before-the-nether
+  ;; the Nether starts' kit carries a shield: this is the overworld stage that hands one over. The
+  ;; :shield row waits for the wood at hand; the gear step, with its ingot held, goes for the wood
+  (let [w (standing (merge kit (dissoc all-of-it 7) {9 (item :iron_ingot 1)}))]
+    (is (= [[:shield 1]] (gear/missing w)))
+    (is (gear/wanted? w))
+    (is (not (armour/shield-wanted? w)) "no planks held: the always row does not make it")
+    (let [i (plan/next-intent w (row :gear) plan/goals)]
+      (is (some? (:intent/kind i)) (pr-str i))
+      (is (not (:plan/wait i)) "the gear step goes for the wood itself")))
+  (testing "with the planks held the always row makes it first, at its higher priority"
+    (let [w (standing
+             (merge kit (dissoc all-of-it 7) {9 (item :iron_ingot 1) 10 (item :oak_planks 6)}))]
+      (is (armour/shield-wanted? w))
+      (is (< (:goal/priority (row :shield)) (:goal/priority (row :gear)))))))
 
 (deftest the-gear-step-is-wanted-after-the-portal-kit-in-a-chain
   (testing "the portal kit reached, nothing worn: the step is undone"
@@ -58,13 +78,7 @@
   (testing "before the portal kit: not wanted yet, and not done either (it would be reached)"
     (is (not (gear/wanted? (standing {} #{:iron-kit}))))
     (is (not (plan/done-by (standing {} #{:iron-kit}) (row :gear)))))
-  (testing "all of it held: done"
-    (is (plan/done-by (standing (merge kit
-                                       {3 (item :iron_helmet 1)
-                                        4 (item :iron_chestplate 1)
-                                        5 (item :iron_leggings 1)
-                                        6 (item :iron_sword 1)}))
-                      (row :gear))))
+  (testing "all of it held: done" (is (plan/done-by (standing (merge kit all-of-it)) (row :gear))))
   (testing "a gym stage (no chain) never makes it"
     (is (plan/done-by (assoc (standing kit) :plan/chain? false) (row :gear))))
   (testing "gear-ms after the portal kit it is given up"
@@ -90,13 +104,7 @@
   ;; bot entered the Nether with a stone sword and no armour
   (let [w (standing {} #{})]
     (is (not (contains? (:plan/reached (plan/reach w plan/goals)) :gear)))
-    (is (contains? (:plan/reached (plan/reach (standing (merge kit
-                                                               {3 (item :iron_helmet 1)
-                                                                4 (item :iron_chestplate 1)
-                                                                5 (item :iron_leggings 1)
-                                                                6 (item :iron_sword 1)}))
-                                              plan/goals))
-                   :gear)
+    (is (contains? (:plan/reached (plan/reach (standing (merge kit all-of-it)) plan/goals)) :gear)
         "reached once it is held")))
 
 (deftest each-life-has-its-own-gear-time
