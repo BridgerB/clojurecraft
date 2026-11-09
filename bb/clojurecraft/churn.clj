@@ -53,7 +53,7 @@
 (def release-prefix "evidence-")       ; a release an hour holds the snapshots the hour's comments name
 (def repo-default "BridgerB/clojurecraft") ; gh's repository when the workflow does not say
 (def per-signature 2)                  ; failures a batch converts or judges of each signature: the most a fix's check judges (issue-check)
-(def real-heap "-J-Xmx3g")             ; the conversion's JVM, beside two 3 GB servers and two 2 GB races on a 16 GB runner
+(def real-heap "-J-Xmx3g")             ; the conversion's JVM, beside a 6 GB server and a 2-3 GB race on a 16 GB runner
 (def sim-heap "-J-Xmx2g")              ; the judge's JVM, beside the sim race's (ci/simrace.edn's heap)
 (def one-core "-J-XX:ActiveProcessorCount=1") ; a conversion's or judge's JVM sized to one core (its GC, its compilers): the race keeps the rest
 (def real-nice 19)                     ; the conversion's nice level: what the servers leave (see convert!)

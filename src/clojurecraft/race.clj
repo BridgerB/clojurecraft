@@ -531,7 +531,8 @@
                                parse-long)}
         where (assoc where
                      :simulation-distance (servers/simulation-distance config (:server where))
-                     :runner-servers (servers/servers-of config))
+                     :runner-servers (servers/servers-of config)
+                     :runner-bots (servers/bots-of config))
         done (promise)
         live (atom {})
         ctx {:server server

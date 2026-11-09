@@ -177,6 +177,10 @@
    :shot-at? (fn [_ w] (psense/shot-at? w))
    :cover-from (fn [_ w] (pcover/cover-from w))
    :fortress-tunnel-out (fn [_ w] (fexit/fortress-tunnel-out w))
+   :escape-hold? (fn [f w]
+                   (or (and (f :hurt?) (blaze/heals? w))
+                       (boolean (:player/on-fire? w))
+                       (and (psense/recently-shot? w) (not (f :shot-at?)))))
    :leave-sight (fn [_ w] (pcover/leave-sight w))
    :room-exit (fn [_ w] (fexit/room-exit w))
    :home-pressed? (fn [f w]
