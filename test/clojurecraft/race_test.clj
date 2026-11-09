@@ -121,14 +121,14 @@
                 "b" (assoc playing :time/tick 300 :plan/reached #{:wood :kit})
                 "c" {:bot/phase :play :bot/disconnected "gone" :player/pos [0 64 0]}
                 "d" (assoc playing :time/tick 100 :plan/status :done)}
-        s (facts/sample {:runner 3 :server 2 :simulation-distance 3}
+        s (facts/sample {:runner 3 :server 2 :simulation-distance 3 :runner-servers 2}
                         worlds
                         {"a" 100 "b" 100 "d" 100}
                         15000 {:p95 5.0}
                         900 1000)]
     (is (= 4 (:sample/joined s)))
-    (is (= [2 3] ((juxt :sample/server :sample/simulation-distance) s))
-        "the sample names its server and its distance")
+    (is (= [2 3 2] ((juxt :sample/server :sample/simulation-distance :sample/runner-servers) s))
+        "the sample names its server, its distance and how many servers its runner carries")
     (is (= 2 (:sample/playing s)))
     (is (= 1 (:sample/cut-off s)))
     (is (= 4 (:sample/milestones s)))
@@ -160,27 +160,32 @@
     (is (= {:ok true :reason :goal} (facts/marked {:ok true :reason :goal}))
         "a pass is unchanged")))
 
-(deftest a-bot-is-cut-by-its-cap-or-the-job-whichever-comes-first
-  (is (= 3600000 (facts/bot-timeout-ms 20000000 1000 3600000)) "the cap, when it comes first")
-  (is (= 5000 (facts/bot-timeout-ms 10000 5000 3600000)) "the job's end, when it does")
-  (is (= 1000 (facts/bot-timeout-ms 100 5000 nil)) "at least a second")
-  (is (= 19000 (facts/bot-timeout-ms 20000 1000 nil)) "no cap: the job's end"))
+(deftest the-clock-stops-a-bot-only-at-the-jobs-end
+  (is (= 19999000 (facts/bot-timeout-ms 20000000 1000))
+      "a capped bot too: its cap is game time, held by run-bot!")
+  (is (= 1000 (facts/bot-timeout-ms 100 5000)) "at least a second"))
 
 (deftest a-capped-bot-is-filed-and-the-jobs-end-is-cut
   (let [r {:ok false
            :until "pearls-12"
            :reason :timeout
            :plan {:plan/status :running :plan/reached #{:wood}}}
-        cap 3600000
-        own (facts/marked (facts/capped r 20000000 0 cap))
-        job (facts/marked (facts/capped r 3000000 0 cap))]
+        cap 72000
+        own (facts/marked (facts/capped r 72000 cap))
+        job (facts/marked (facts/capped r 14060 cap))]
     (is (= :bot-timeout (:reason own)))
     (is (not (:run/cut? own)) "its own cap is a failure of the stage")
     (is (not (:run/infra? own)) "bb failures files it")
     (is (= :bot-timeout (second (:run/signature own))))
-    (is (:run/cut? job) "the job's end before the cap is still a cut")
-    (is (= :timeout (:reason job)))
-    (is (= :timeout (:reason (facts/capped r 20000000 0 nil))) "no cap, no change")))
+    (is (:run/cut? job) "the job's end before the cap's game time is still a cut")
+    (is (= :timeout (:reason job))
+        "an hour of a server at 256 ms a tick is 14,060 ticks: not the cap, the clock")
+    (is (= :timeout (:reason (facts/capped r 72000 nil))) "no cap, no change")))
+
+(deftest a-cap-counts-the-servers-ticks-not-the-clock
+  (is (= 0 (game/server-ticks {})) "none before the first set-time")
+  (is (= 11240 (game/server-ticks {:stats/heard {:set-time 562}}))
+      "20 server ticks a set-time, whatever the clock between: an hour at 320 ms a tick"))
 
 (deftest a-slot-backs-off-while-its-bots-never-play
   (let [quick (dec facts/quick-ms)]

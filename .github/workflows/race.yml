@@ -2,9 +2,9 @@ name: race
 
 # The race (issue #17): every runner the repo has, each with ci/race.edn's servers on one of the
 # race's pregenerated landing sets (the same worlds and landings every commit), each server
-# carrying ci/race.edn's bots from landings of their own to the target (clojure -M:race). A code
-# merge has the fleet cancel and replace the lanes: the races always run what is merged, and
-# there is no second branch to keep in step.
+# carrying ci/race.edn's bots from landings of their own to the target (clojure -M:race). A lane
+# runs its whole job on the code it started with (a real run needs hours of wall time); the next
+# lane runs what is merged, and there is no second branch to keep in step.
 # Each server stays full the whole job (issue #127): a bot that ends is replaced at once by a
 # fresh one, no bot waits for another, and a bot still playing when the job ends is cut, never
 # filed. The board (BOARD lines in the Race step's log) shows the bots playing each minute. Every
@@ -17,8 +17,9 @@ name: race
 # Lanes (fleet.yml, ci/fleet.edn): each run is one lane, the runner k of the old matrix, one job's
 # worth (GitHub caps a job at 6 h). The fleet dispatches lanes into free runners, cancels the newest
 # when another workflow's job waits for a runner (GitHub has no preemption of its own), and cancels
-# and replaces lanes whose code main has replaced. A cancelled lane still stops its races, reports
-# and uploads (the always() steps). The repository variable RACE_CONTINUOUS=false stops new lanes.
+# and replaces sim lanes whose code main has replaced; a real lane runs its whole job on the code
+# it started with (ci/fleet.edn :fleet/stale-after-minutes). A cancelled lane still stops its
+# races, reports and uploads (the always() steps). The repository variable RACE_CONTINUOUS=false stops new lanes.
 
 on:
   workflow_dispatch:                    # by the fleet (fleet.yml), one lane a run
@@ -53,21 +54,19 @@ jobs:
       bots: ${{ steps.read.outputs.bots }}
       server-heap: ${{ steps.read.outputs.server-heap }}
       bot-heap: ${{ steps.read.outputs.bot-heap }}
+      landing-stride: ${{ steps.read.outputs.landing-stride }}
       start: ${{ steps.read.outputs.start }}
       kind: ${{ steps.read.outputs.kind }}
     steps:
       - uses: actions/checkout@v7
       - name: Read ci/race.edn
         id: read
+        # the lane's sizes: ci/race.edn's own with its :race/lane-overrides entry for the lane over
+        # them (clojurecraft.servers/for-lane), so lanes can differ as an A/B
         run: |
           for i in 1 2 3 4 5 6; do curl -fsSL https://raw.githubusercontent.com/babashka/babashka/master/install -o /tmp/bb.sh && sudo bash /tmp/bb.sh --version 1.13.225 && break; [ "$i" = 6 ] && exit 1; sleep $((i * 15)); done
-          bb -e '(let [r (clojure.edn/read-string (slurp "ci/race.edn"))]
-                   (println (str "runners=" (cheshire.core/generate-string [(parse-long "${{ inputs.lane }}")])))
-                   (println (str "servers=" (:race/servers r 1)))
-                   (println (str "sets=" (cheshire.core/generate-string (:race/landing-sets r))))
-                   (println (str "bots=" (:race/bots r)))
-                   (println (str "server-heap=" (:race/server-heap-mb r)))
-                   (println (str "bot-heap=" (:race/bot-heap-mb r))))' >> "$GITHUB_OUTPUT"
+          echo "runners=[${{ inputs.lane }}]" >> "$GITHUB_OUTPUT"
+          bb race-sizes "${{ inputs.lane }}" >> "$GITHUB_OUTPUT"
           bb lane real "${{ inputs.lane }}" >> "$GITHUB_OUTPUT"
           cat "$GITHUB_OUTPUT"
 
@@ -105,12 +104,13 @@ jobs:
         id: set
         env:
           SETS: ${{ needs.plan.outputs.sets }}
+          STRIDE: ${{ needs.plan.outputs.landing-stride }}  # the landings a lane on a set takes (servers x bots of ci/race.edn's own)
         run: |
           n=$(echo "$SETS" | jq length)
           r=${{ matrix.runner }}
           echo "set=$(echo "$SETS" | jq -r ".[$(( (r - 1) % n ))]")" >> "$GITHUB_OUTPUT"
           before=$(( (r - 1) / n ))   # runners on this set before this one (integer division)
-          echo "first=$(( before * SERVERS * BOTS ))" >> "$GITHUB_OUTPUT"   # this runner's first landing
+          echo "first=$(( before * STRIDE ))" >> "$GITHUB_OUTPUT"   # this runner's first landing, whatever its arm
           cat "$GITHUB_OUTPUT"
       - name: The pregenerated world (never built here)
         uses: actions/cache/restore@v6

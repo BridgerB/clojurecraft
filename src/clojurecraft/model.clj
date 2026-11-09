@@ -103,6 +103,9 @@
    [:player/struck-at
     "ms (:time/now) of the last damage-event on the bot, beside :player/hurt-at in ticks: combat/striker ages the strike against struck-ms. A zombified piglin that hit is angry, and a hit angers its pack"
     "after a damage-event on the bot"]
+   [:player/charge-from
+    "ms (:time/now) the attack charge last began again: an attack sent (combat/attack) or a fight putting another item in the hand (combat's :arm). The server counts a swing's charge from either, so an attack sent before combat/swing-gap after it is a weak one"
+    "after the first attack or fight arm"]
    [:player/hits
     "the last game/hits-kept hits on the bot, oldest first, each {:at ms :type damage-type name :hp health before} with :by and :by-kind when a mob dealt it (game/hit-of)"
     "after the first damage-event on the bot"]
@@ -185,7 +188,7 @@
     "ms the server said the entity died (entity-event status 3); the body is removed after"
     "inside :world/entities, after a death"]
    [:entity/hurt-at
-    "ms the server last showed the entity hurt (hurt-animation, hear.clj): a swing that landed"
+    "ms the server last showed the entity hurt (a damage-event naming it, game.clj; or hurt-animation, hear.clj): a swing that landed"
     "inside :world/entities, after its first hurt flash"]
    [:entity/swung-at
     "ms the server last showed the entity swing its main hand (animate, hear.clj): a strike coming"
@@ -564,8 +567,9 @@
    [:intent/next-swing "ms of the next arm swing, or of a :fight's next attack" "dig, fight"]
    [:intent/target-pos "where a :fight last saw its target; a hunt picks the drop up there"
     "fight, while its target is seen"]
-   [:intent/site "the pocket (a :pocket/site map) a :pocket digs out and walks into (issue #262)"
-    "pocket"]
+   [:intent/site
+    "the pocket (a :pocket/site map) a :pocket digs out and walks into (issue #262), or the one a :seal walls and roofs (combat's roof against a jumper)"
+    "pocket, seal"]
    [:intent/prepare?
     "true for a :pocket made ready ahead of the tunnel's last blocks: dug, not entered (issue #262)"
     "pocket"]
@@ -715,6 +719,9 @@
    [:sample/server-tick "the server's tick times, ms: avg, p50, p95, p99" "a race sample"]
    [:sample/simulation-distance
     "the simulation distance, in chunks, the sampled server runs with (ci/race.edn's :race/server-overrides)"
+    "a race sample"]
+   [:sample/runner-servers
+    "how many servers the sampled server's runner carries (ci/race.edn's :race/servers, its lane's :race/lane-overrides over it)"
     "a race sample"] [:sample/bot-heap-mb "the bots' JVM heap in use" "a race sample"]
    [:sample/threads
     "the bots' JVM live threads: a bot's socket threads end with it, so a count that only grows as slots refill is a leak"

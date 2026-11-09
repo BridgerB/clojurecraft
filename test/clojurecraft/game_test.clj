@@ -337,6 +337,7 @@
                    [(packet {:packet/name :set-time}) (packet {:packet/name :set-time})
                     (packet {:packet/name :unknown :packet/id 83})])]
     (is (= 2 (get-in w [:stats/heard :set-time])) "a decoded packet, handled or not")
+    (is (= 40 (game/server-ticks w)) "two set-times: 40 server ticks of game time")
     (is (nil? (get-in w [:stats/heard :unknown])) "an unknown one is counted apart")))
 
 (deftest a-mob-is-tracked-with-its-motion-health-and-death

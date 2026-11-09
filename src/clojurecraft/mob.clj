@@ -20,8 +20,9 @@
    arrow's flight (the damage lands when the skeleton fires), a blast breaking blocks, an enderman's
    teleports out of water, rain, daylight or a non-living hurt (its teleports at its target are,
    toward-aim and away-aim), spiders climbing, mobs swimming, armour wearing out, a magma cube's
-   other sizes (the row is the medium one: 4 health, 4 on Normal) and a hoglin's swing landing
-   anywhere from 3 to 8 (the row uses 6). The armour the player wears takes its share of a mob's
+   hop as a motion (its three sizes are kinds with their health, box, armour and hit, and the hop
+   is a reach upward, hop-reach?; one climbs a ledge no higher than any mob does) and a hoglin's
+   swing landing anywhere from 3 to 8 (the row uses 6). The armour the player wears takes its share of a mob's
    hit. A wither skeleton's wither does not (wither-tick)."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
@@ -50,8 +51,22 @@
    stared at; :passive never attacks; :hostile spawns by the night rule, :weight how often among
    them; :loot [[item lo hi]], each item lo to hi when killed by the player; :paths finds a
    route round what stops its straight walk (route); :teleports teleports at its target as an
-   enderman does (toward-aim, away-aim)."
+   enderman does (toward-aim, away-aim). :entity the entity type told when it is not the kind's
+   own name (a magma cube's sizes); :armour points that take their share of the player's hit
+   (mob-hit); :hop how high its jump lifts its feet (hop-reach?); :split [kind lo hi] what it
+   leaves where it dies."
   (:mob/kinds mob-table))
+
+(def magma-sizes
+  "The magma cube's kinds by the health that tells them apart, smallest first: size 1 has 1, size
+   2 has 4, size 4 has 16 (MagmaCube.setSize: size squared)."
+  [[1.0 :magma_cube_small] [4.0 :magma_cube] [16.0 :magma_cube_big]])
+
+(defn magma-kind
+  "The magma cube kind whose full health is the least at or over health (magma-sizes): a real cube
+   the bot saw at that health. A big one already hurt under 4 reads as the middle size."
+  [health]
+  (or (some (fn [[h k]] (when (<= (double health) h) k)) magma-sizes) :magma_cube_big))
 
 (def equipment
   "{kind {slot item}} what a kind holds when the server shows it (set-equipment, slot names as
@@ -60,9 +75,10 @@
   (:mob/equipment mob-table))
 
 (defn type-id
-  "The entity type id of kind (entity-types.edn), as add-entity carries it."
+  "The entity type id of kind (entity-types.edn), as add-entity carries it: its :entity when it
+   names one (a magma cube's sizes are all :magma_cube), else its own name."
   [kind]
-  (get blocks/entity-types kind))
+  (get blocks/entity-types (:entity (kinds kind) kind)))
 
 (def hostile-kinds
   "The kinds the night rule spawns, with their weights, in a fixed order so a roll replays.
@@ -205,6 +221,13 @@
         a (min 20.0 (max (* points 0.2) (- points (/ damage f))))]
     (* damage (- 1.0 (/ a 25.0)))))
 
+(defn mob-hit
+  "What is left of the player's hit of damage on a mob of kind once its armour (:armour points,
+   no toughness) takes its share (absorbed): a big magma cube's 12 points take a charged iron
+   sword's 6 to 3.84."
+  [kind damage]
+  (absorbed damage (:armour (kinds kind) 0) 0.0))
+
 (defn blast-damage
   "The damage a blast of power does to a player dist from its centre with a clear line
    (ServerExplosion: impact = 1 - dist / 2·power; damage = (impact² + impact) / 2 · 7 · 2·power
@@ -342,9 +365,10 @@
    jump into (a block up, its head clear, as step-toward jumps), as the server's collision keeps
    a box out of the blocks round it: an enderman pressed against a tunnel two high stands with its
    centre 0.3 back from the opening, not at it. A neighbour it could walk or jump into leaves that
-   side as it was, so a step of one block is still climbed."
+   side as it was, so a step of one block is still climbed. A body wider than a cell (a hoglin, a
+   big magma cube) is held at its cell's middle at most, never pushed into the next cell."
   [free? kind pos n]
-  (let [hw (/ (first (:box (kinds kind) [0.6 1.8])) 2.0)
+  (let [hw (min 0.5 (/ (first (:box (kinds kind) [0.6 1.8])) 2.0))
         [cx cy cz] (cell-of pos)
         head-clear? (free? [cx (+ cy n) cz])
         open? (fn [dx dz]
@@ -397,6 +421,20 @@
       (<= (physics/distance pos target) (:reach k 0.0))
       (and (<= (flat-distance pos target) (:reach k 0.0))
            (< (abs (- (second pos) (second target))) 1.5)))))
+
+(defn hop-reach?
+  "May a jumper of kind (:hop) at pos meet a player with feet at target: on the plane within its
+   :reach, the player's box between its feet and the top of its box at the top of the hop, and the
+   line clear (sight?) from its head lifted to the player's height (at most :hop) to the eye. A
+   pillar under the player is under the hop; a cell walled two high and roofed is not reached."
+  [solid? kind pos target]
+  (let [k (kinds kind)
+        [x y z] pos
+        dy (- (second target) y)
+        lift (min (:hop k 0.0) (max 0.0 dy))]
+    (and (<= (flat-distance pos target) (:reach k 0.0))
+         (< (- physics/height) dy (+ (:hop k 0.0) (second (:box k))))
+         (sight? solid? (head kind [x (+ y lift) z]) (physics/eye target)))))
 
 (defn touches?
   "Do the hitboxes of a mob of kind at pos and a player with feet at target meet? A blaze's
@@ -624,6 +662,14 @@
   "The kind a crimson forest's floor spawns: the hoglin, weight 1. Piglins are not modelled."
   (:mob/crimson mob-table))
 
+(def deltas-kinds
+  "The kinds a basalt delta's floor spawns, with their weights: the magma cube's three sizes
+   evenly (vanilla's basalt_deltas list: the magma cube 100, the ghast 40, which is not spawned
+   here), in packs of deltas-pack."
+  (:mob/deltas mob-table))
+
+(def deltas-pack 3)                   ; magma cubes a basalt delta's spawn tries for at once (the biome's group: 2 to 5)
+
 (def enderman-pack 4)                 ; endermen a warped forest's spawn tries for at once (the biome's spawner: minCount and maxCount both 4)
 (def pack-walk 6)                     ; each pack member steps nextInt(6) - nextInt(6) on x and on z from the last (NaturalSpawner.spawnCategoryForPosition)
 
@@ -683,6 +729,22 @@
   [at free? cell]
   (on-floor? crimson-floor? (tall :hoglin) at free? cell))
 
+(def deltas-floor-states
+  "The states of a basalt delta's floor: basalt, blackstone and magma blocks, where the model
+   spawns its magma cubes, told by the floor as the warped forest is."
+  (into #{} (mapcat blocks/states-of) [:basalt :blackstone :magma_block]))
+
+(defn deltas-floor?
+  "Is state id a basalt delta's floor (deltas-floor-states)?"
+  [id]
+  (contains? deltas-floor-states id))
+
+(defn deltas-spot?
+  "May a magma cube of any size spawn with its feet in cell: a delta's floor under them and the
+   big one's cells free?"
+  [at free? cell]
+  (on-floor? deltas-floor? (tall :magma_cube_big) at free? cell))
+
 (defn nether-spots
   "The cells of column x z from lo to hi an enderman may spawn in (nether-spot?), lowest first."
   [at free? x z lo hi]
@@ -735,8 +797,18 @@
    as seen in race f8b28e3's recordings (26.1.2): a small fireball 14, a mob's melee 28, burning 31,
    standing in fire 21, a fall 10, an arrow 0. Lava is 24, read from the registry order of an
    earlier version and the lava hits in those recordings (the registry itself is still undecoded).
-   A cause not here is generic (18); a wither tick is :wither (48, registry.clj's table)."
-  {:fireball 14 :mob_attack 28 :on_fire 31 :in_fire 21 :lava 24 :fall 10 :arrow 0 :wither 48})
+   A cause not here is generic (18); a wither tick is :wither (48, registry.clj's table). The
+   player's own melee on a mob is :player_attack (34, damage-types.edn), the damage-event the
+   server shows of a mob the player hit."
+  {:fireball 14
+   :mob_attack 28
+   :on_fire 31
+   :in_fire 21
+   :lava 24
+   :fall 10
+   :arrow 0
+   :wither 48
+   :player_attack 34})
 
 (def spawner-block
   "The state id of a spawner block: a fortress's makes blazes (every spawner the model's Nether
