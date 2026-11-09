@@ -136,11 +136,14 @@
 
 (defn mobs-of
   "The mobs the bot tracks that the model carries (mob/kinds), alive, {eid {:type :pos :health}}:
-   where the server last put them and their health as it told it, else their kind's full health."
+   where the server last put them and their health as it told it, else their kind's full health.
+   A magma cube is the size its health says (mob/magma-kind)."
   [world]
   (into {}
         (keep (fn [[eid e]]
-                (let [k (entity/kind e)]
+                (let [kind (entity/kind e)
+                      k (cond (= :magma_cube kind) (mob/magma-kind (:entity/health e 4.0))
+                              :else kind)]
                   (when (and (mob/kinds k) (not (entity/dead? e)) (:entity/pos e))
                     [eid
                      {:type k
