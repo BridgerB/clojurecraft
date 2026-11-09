@@ -836,6 +836,7 @@
 (s/def :sim/eaten nat-int?)                              ; foods the player finished eating
 (s/def :sim/blocking-at int?)                       ; when the player raised its shield (a use-item with the offhand); absent once let go
 (s/def :sim/blocked nat-int?)                           ; blows the raised shield took
+(s/def :sim/struck nat-int?)                            ; blows that landed on the player from a mob, a shot or a blast
 (s/def :sim.eating/slot int?)
 (s/def :sim.eating/item int?)
 (s/def :sim.eating/at int?)

@@ -459,7 +459,7 @@
    the model, at most max-ms of simulated time, rolling from seed. Returns its RESULT (main/result)
    with :run/world (its set and landing), :run/seed, :run/ms (simulated time), :run/violations (what
    a real server would have punished), :run/respawns and :run/eaten (the lives the model gave after
-   deaths and the foods it let the player eat), :run/blocked (the blows a raised shield took), :run/backoff-ms (how long the intent was :back-off),
+   deaths and the foods it let the player eat), :run/blocked and :run/struck (the blows a raised shield took, and those that landed from a mob, a shot or a blast), :run/backoff-ms (how long the intent was :back-off),
    :run/death-causes (the cause of each death: a mob's kind, :starve, :drown, :scheduled or
    :ender_dragon), :run/end (the world it stopped in), :run/last (the moment of the stopping tick)
    and :run/moments (the moments sim/play-from kept, every half minute, the last six minutes), from
@@ -578,6 +578,7 @@
             :run/respawns (:sim/respawns sim 0)
             :run/eaten (:sim/eaten sim 0)
             :run/blocked (:sim/blocked sim 0)
+            :run/struck (:sim/struck sim 0)
             :run/backoff-ms @backoff
             :run/death-causes (:sim/death-causes sim [])
             :run/end world

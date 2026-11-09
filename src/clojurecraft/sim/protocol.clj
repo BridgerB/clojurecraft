@@ -612,7 +612,8 @@
    told as player-combat-kill (how: the blow's kind, :fireball, :arrow, :wither, or nil), when
    this blow is the one that reaches zero. Every blow that lands is also appended to
    :sim/hit-log (hit-logged) with its cause, how, attacker (the mob eid that dealt it, or nil),
-   what it dealt and the health left."
+   what it dealt and the health left. A blow that exhausts (a mob's hit, a shot, a blast) is
+   counted in :sim/struck, beside the ones a shield took (:sim/blocked)."
   ([sim amount exhausting?] (hurt sim amount exhausting? :unknown nil nil))
   ([sim amount exhausting? cause] (hurt sim amount exhausting? cause nil nil))
   ([sim amount exhausting? cause how] (hurt sim amount exhausting? cause how nil))
@@ -636,7 +637,8 @@
                           :dealt dealt
                           :health health})
                  (cond-> (<= health 0.0) (record-death cause how)
-                         exhausting? (add-exhaustion (hunger/exhaustion :hurt)))))))))
+                         exhausting? (add-exhaustion (hunger/exhaustion :hurt))
+                         exhausting? (update :sim/struck (fnil inc 0)))))))))
 
 (defn heal
   "The model after a living player heals amount, up to max-health."

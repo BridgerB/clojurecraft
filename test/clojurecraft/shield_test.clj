@@ -216,12 +216,81 @@
            (keep #(when (= :use-item (get-in % [:effect/packet :packet/name]))
                     (get-in % [:effect/packet :hand]))
                  (:bot/effects g))))
-    (testing "a strike past struck-ms, or a mob that does not shoot: nothing"
-      (is (not (shield/raised? (shield/guard (assoc w :player/struck-at 0)))))
-      (is (not (shield/raised? (shield/guard (assoc-in w
-                                              [:world/entities 9 :entity/type]
-                                              (blocks/entity-types :zombie))))))
-      (is (contains? mob/kinds :skeleton)))))
+    (testing "a strike long past, the skeleton out of threat-reach: nothing"
+      (is (not (shield/raised? (shield/guard (assoc w :player/struck-at 0))))))
+    (testing "a zombie that struck a moment ago is the threat too (striker)"
+      (is (shield/raised? (shield/guard (assoc-in w
+                                         [:world/entities 9 :entity/type]
+                                         (blocks/entity-types :zombie)))))
+      (is (not (shield/raised? (shield/guard (-> w
+                                                 (assoc-in [:world/entities 9 :entity/type]
+                                                           (blocks/entity-types :zombie))
+                                                 (assoc :player/struck-at 2500)))))
+          "2.5 s ago, six blocks off: past melee-struck-ms and threat-reach"))))
+
+(defn still
+  "A bot with the shield in the offhand, looking along yaw, a zombie (eid 9) three blocks east,
+   running intent i."
+  [yaw i]
+  (-> (standing {inventory/offhand-slot (item :shield 1)} {9 (mob :zombie [11.5 64.0 8.5] 20.0)})
+      (assoc :time/now 5000 :player/look [yaw 0.0] :plan/intent i)))
+
+(defn effects-named
+  "The packet names of the world's queued effects, in order."
+  [w]
+  (mapv (comp :packet/name :effect/packet) (:bot/effects w)))
+
+(deftest a-still-intent-raises-the-shield-toward-a-hostile-in-reach
+  (testing "a lookout turns to face it, the shield up"
+    (let [g (shield/guard (still 90.0 {:intent/kind :lookout :intent/status :active}))
+          [yaw _] (get-in g [:player/controls :control/look])]
+      (is (shield/raised? g))
+      (is (< (abs (- -90.0 yaw)) 1.0) "facing east, at the zombie")))
+  (testing "a dig between breaks: up only when the zombie is in front, the look its own"
+    (let [i {:intent/kind :dig :intent/target [9 64 8] :intent/status :active}
+          front (shield/guard (still -90.0 i))
+          back (shield/guard (still 90.0 i))]
+      (is (shield/raised? front))
+      (is (= (:player/controls (still -90.0 i)) (:player/controls front))
+          "the dig's look is not turned")
+      (is (not (shield/raised? back)) "behind: the dig's look is not turned to it")))
+  (testing "a dig breaking a block: down"
+    (is (not (shield/raised?
+              (shield/guard
+               (still -90.0 {:intent/kind :dig :intent/stage :digging :intent/status :active}))))))
+  (testing "a burrow whose child digs: down"
+    (is (not (shield/raised? (shield/guard (still -90.0
+                                                  {:intent/kind :burrow
+                                                   :intent/status :active
+                                                   :intent/child {:intent/kind :dig
+                                                                  :intent/stage :digging}}))))))
+  (testing "a walk: down"
+    (is (not (shield/raised? (shield/guard (still -90.0
+                                                  {:intent/kind :walk :intent/status :active}))))))
+  (testing "no hostile near: down"
+    (is (not (shield/raised?
+              (shield/guard
+               (update (still -90.0 {:intent/kind :lookout}) :world/entities dissoc 9)))))))
+
+(deftest the-hand-lets-the-shield-go-just-before-it-is-used
+  (let [up (assoc (still -90.0 {:intent/kind :dig :intent/target [9 64 8] :intent/status :active})
+                  :player/shield-up-at 4000
+                  :bot/effects [])
+        dug (-> up
+                (game/emit {:packet/name :player-action
+                            :status (p/value :dig :start-destroy)
+                            :pos [9 64 8]
+                            :face 1
+                            :sequence 3})
+                (game/emit {:packet/name :swing :hand (p/value :hand :main-hand)})
+                shield/guard)]
+    (is (= [:player-action :player-action :swing] (effects-named dug)))
+    (is (= (p/value :dig :release-use-item)
+           (get-in (first (:bot/effects dug)) [:effect/packet :status]))
+        "the release goes first")
+    (is (not (shield/raised? dug)))
+    (is (shield/raised? (shield/guard (assoc dug :bot/effects [])))
+        "up again the next tick, the dig between breaks")))
 
 (deftest an-arrow-names-the-skeleton-that-loosed-it
   ;; the damage-event's attacker is the arrow, gone once it lands (a real race's soul sand valley
@@ -320,6 +389,15 @@
     (is (= 12.0 (:sim/health behind)) "a blow from behind lands")
     (is (= 12.0 (:sim/health fresh)) "up less than a quarter second: not yet a block")
     (is (= 12.0 (:sim/health none)) "no shield in the offhand")))
+
+(deftest a-raised-shield-takes-a-hoglins-swing-from-in-front
+  ;; knockback (a hoglin's throw) is not modelled: what the shield takes is the hit
+  (let [hog [{:type :hoglin :pos [1.5 64.0 0.5]}]
+        facing (ticks (raised (arena shield-held east hog) 1000) 1)
+        behind (ticks (raised (arena shield-held west hog) 1000) 1)]
+    (is (= 20.0 (:sim/health facing)))
+    (is (= 1 (:sim/blocked facing)))
+    (is (= 14.0 (:sim/health behind)) "six from behind")))
 
 (deftest a-raised-shield-takes-a-fireball-from-in-front
   (let [dir (mob/aim [4.5 65.4 0.5] [0.5 64.9 0.5] 0.5 0.5 0.5 0.5)
