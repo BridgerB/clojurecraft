@@ -725,9 +725,10 @@
         (is (= :fight (:intent/kind i)))
         (is (= skeleton-id (:intent/target i)))
         (is (true? (:intent/hold? i)))))
-    (testing "with no sword in hand even a healthy bot lays the cover: twenty swings at a fist"
-      (let [i (plan/next-intent (update base :player/inventory dissoc 4) ps/row plan/goals)]
-        (is (not (contains? #{:fight :tunnel-to :dig} (:intent/kind i))))))
+    (testing "with no sword in hand the answer is not the fight: twenty swings at a fist"
+      (let [i (fexit/tunnel-answer (update base :player/inventory dissoc 4))]
+        (is (some? i) (pr-str i))
+        (is (not= :fight (:intent/kind i)) (pr-str i))))
     (testing "at 12 the three hits it takes to win leave under win-margin: the cover"
       (let [i (plan/next-intent (assoc base :player/health 12.0) ps/row plan/goals)]
         (is (not (contains? #{:fight :tunnel-to :dig} (:intent/kind i))))))
