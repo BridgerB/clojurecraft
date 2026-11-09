@@ -278,8 +278,8 @@
   "The intent that answers a melee pack at hand (psense/pack-at-hand?) at once, or nil when there
    is none or nothing can be done: against the nearest of it, the first of threats.edn
    :pack-ladder (combat/cover-by) that applies: a pillar of three, up out of the reach of every
-   one of them (only with pillar-room?), else a block laid between, else a nook dug under the
-   feet. Never a fight (#577) and never a meal at hand. Marked :intent/wall?, so the hunt's
+   one of them (only with pillar-room?), else a block laid between. Never a nook under the feet,
+   which a melee box still reaches, never a fight (#577) and never a meal at hand. Marked :intent/wall?, so the hunt's
    interrupt does not cut it."
   [world]
   (when (psense/pack-at-hand? world)
@@ -290,11 +290,12 @@
         (when (:intent/kind c) (assoc c :intent/for :pearls :intent/wall? true))))))
 
 (defn pack-hold
-  "The intent of a bot over a melee pack it is out of the reach of (psense/pack-below?), or nil:
-   the meal it can take (blaze/meal), else standing where it is and looking round. Never the
-   come-down, which drops it into the pack."
+  "The intent of a bot perched on a pillar (pplace/perched?) over a melee pack it is out of the
+   reach of (psense/pack-below?), or nil: the meal it can take (blaze/meal), else standing where
+   it is and looking round. Never the come-down, which drops it into the pack. Only on a pillar:
+   a bot on a fortress bridge or a ledge over a pack walks on."
   [world]
-  (when (psense/pack-below? world)
+  (when (and (pplace/perched? world) (psense/pack-below? world))
     (or (some-> (blaze/meal world)
                 (assoc :intent/for :pearls))
         {:intent/kind :lookout :intent/for :pearls})))

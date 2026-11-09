@@ -76,7 +76,16 @@
     (is (nil? (pcover/pack-answer w)) "out of reach: no new cover")
     (is (= :lookout (:intent/kind (pcover/pack-hold w))) "it stands and looks round")
     (is (= :lookout (:intent/kind (plan/next-intent w ps/row plan/goals))) "never the come-down")
-    (is (nil? (pcover/pack-hold (assoc w :world/entities {}))) "with them gone, no hold")))
+    (is (nil? (pcover/pack-hold (assoc w :world/entities {}))) "with them gone, no hold")
+    (testing "on a ledge, not a pillar, over a pack the bot walks on"
+      ;; sim R2/5, R2/17 and R2/33 stood 460 to 660 lookouts over skeletons on a lower floor
+      (let [ledge
+            (-> (ps/standing
+                 {1 (skeleton [12.5 64.0 8.5]) 2 (skeleton [8.5 64.0 12.5])}
+                 (into {} (for [x (range 6 11) y (range 64 67) z (range 6 11)] [[x y z] ps/stone])))
+                held
+                (assoc :player/pos [8.5 67.0 8.5]))]
+        (is (nil? (pcover/pack-hold ledge)))))))
 
 (deftest a-pocket-with-a-melee-hostile-at-hand-is-no-refuge
   ;; real-18 Clj_r13 held its sealed pocket while two wither skeletons at it took 20 health in 5 s
