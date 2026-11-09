@@ -492,8 +492,9 @@
   (and (= dimension/end (:player/dimension world)) (entity/in-breath? world)))
 
 (defn guard?
-  "Does the :fight intent i, after its tick, want the shield up: still running, at its :approach or
-   :engage with no route walk (:intent/child), not for a hunt (an animal does not strike), the
+  "Does the :fight intent i, after its tick, want the shield up: still running, at its :engage, or at its
+   :approach when it holds its ground (:intent/hold?: an approach that does not hold walks the next
+   tick, and a shield up for one tick is a use and a release for nothing), with no route walk (:intent/child), not for a hunt (an animal does not strike), the
    controls standing (shield/standing?: a vanilla client walks at a fifth of its speed with it up),
    and not in the tick a swing went out (attack lowered it for the swing; it goes up again the
    next tick, so between two swings swing-gap apart it blocks for all but shield/raise-ticks)."
@@ -501,7 +502,7 @@
   (let [{:intent/keys [stage next-swing child]} i]
     (boolean (and (not (intent/done? i))
                   (not (intent/failed? i))
-                  (#{:approach :engage} stage)
+                  (or (= :engage stage) (and (= :approach stage) (:intent/hold? i)))
                   (nil? child)
                   (not= :hunt (:intent/for i))
                   (shield/standing? (:player/controls world))

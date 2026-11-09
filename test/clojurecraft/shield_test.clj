@@ -167,7 +167,7 @@
       (is (shield/blocking? (assoc w :time/now 1750))))))
 
 (deftest no-shield-held-sends-nothing-new
-  (let [plain (assoc-in (fighting 2.0) [:player/inventory inventory/offhand-slot] nil)
+  (let [plain (update (fighting 2.0) :player/inventory dissoc inventory/offhand-slot)
         [_ fx] (fx/fold intent-step plain (map tick (range 50 1550 50)))]
     (is (= [[150 :attack] [800 :attack] [1450 :attack]] (hands fx)))))
 
