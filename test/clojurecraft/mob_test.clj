@@ -104,6 +104,19 @@
     (is (= [2.5 64.0 0.9] (mob/keep-off-walls free? :enderman [2.5 64.0 0.9] 3)) "open beside")
     (is (= [2.95 64.0 0.5] (mob/keep-off-walls free? :zombie [2.95 64.0 0.5] (mob/tall :zombie)))
         "a zombie fits the tunnel")
+    (let [step (floor-free? (set (for [x (range 3 10)] [x 64 0])))]
+      (is (= [2.95 64.0 0.5] (mob/keep-off-walls step :enderman [2.95 64.0 0.5] 3))
+          "a ledge it can jump onto is no wall")
+      (is (= 65.0
+             (second (reduce (fn [p _]
+                               (mob/keep-off-walls
+                                step
+                                :enderman
+                                (mob/step-toward step p [8.5 64.0 0.5] 0.197 1.12 3)
+                                3))
+                             [1.5 64.0 0.5]
+                             (range 20))))
+          "and it still climbs onto it"))
     (testing "from there it cannot hit a player two cells into the tunnel, nor one"
       (let [solid? (complement free?)]
         (is (not (mob/melee-reaches? solid? :enderman at [4.25 64.0 0.5]))

@@ -338,14 +338,18 @@
 
 (defn keep-off-walls
   "pos with a body of kind (n cells tall, tall) held its half width off each of the four
-   neighbouring columns of its cell it could not stand in (stands-in?), as the server's collision
-   keeps a box out of the blocks round it: an enderman pressed against a tunnel two high stands
-   with its centre 0.3 back from the opening, not at it. A neighbour it could stand in leaves that
-   side as it was."
+   neighbouring columns of its cell it could neither walk into (stands-in? at its height) nor
+   jump into (a block up, its head clear, as step-toward jumps), as the server's collision keeps
+   a box out of the blocks round it: an enderman pressed against a tunnel two high stands with its
+   centre 0.3 back from the opening, not at it. A neighbour it could walk or jump into leaves that
+   side as it was, so a step of one block is still climbed."
   [free? kind pos n]
   (let [hw (/ (first (:box (kinds kind) [0.6 1.8])) 2.0)
         [cx cy cz] (cell-of pos)
-        open? (fn [dx dz] (stands-in? free? [(+ cx dx) cy (+ cz dz)] n))
+        head-clear? (free? [cx (+ cy n) cz])
+        open? (fn [dx dz]
+                (or (stands-in? free? [(+ cx dx) cy (+ cz dz)] n)
+                    (and head-clear? (stands-in? free? [(+ cx dx) (inc cy) (+ cz dz)] n))))
         side (fn [v c lo hi]
                (cond (and (< (- v c) hw) (not lo)) (+ c hw)
                      (and (> (- v c) (- 1.0 hw)) (not hi)) (- (+ c 1.0) hw)
