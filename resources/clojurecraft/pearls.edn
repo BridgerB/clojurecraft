@@ -25,9 +25,9 @@
  :relocate-patience-ms 180000
  ;; Blocks from the feet within which a monster counts toward a swarm
  :swarm-radius 8.0
- ;; a lone melee foe at hand (cover/lone-fight), by kind: one within :radius blocks of the feet that can be fought from here, no other of its kind within :alone, is fought at :min-health or more (never begun under danger-health), not covered from; :hold? fights where the bot stands, :yield? breaks off under retreat-health. A blaze follows the bot into any cover and touches it there; a wither skeleton hits through any cover a tunnel can lay in the four seconds it needs to kill, and a fight broken off two swings from its end is that death a little later
+ ;; a lone melee foe at hand (cover/lone-fight), by kind: one within :radius blocks of the feet that can be fought from here, no other of its kind within :alone, is fought at :min-health or more (never under danger-health), not covered from; :hold? fights where the bot stands, :yield? breaks off under retreat-health (always, #577). A blaze follows the bot into any cover and touches it there; a wither skeleton hits through any cover a tunnel can lay in the four seconds it needs to kill. Its fight is four swings, two or three of its hits at 4.8 and the wither: begun at 18 it ends over the danger line, begun lower it is broken off two swings from its end
  :at-hand {:blaze {:radius 3.5 :alone 8.0 :min-health 10.0 :hold? false :yield? true}
-           :wither_skeleton {:radius 3.5 :alone 8.0 :min-health 10.0 :hold? true :yield? false}
+           :wither_skeleton {:radius 3.5 :alone 8.0 :min-health 18.0 :hold? true :yield? true}
            ;; a hoglin, adult or baby, is fought ahead of the blaze refuge (:over-refuge?): it follows into any pocket or burrow, where real bots sat under its hits a minute, never swinging. An adult hits 3 to 8 (2.5 through iron), a charged iron sword kills one in seven swings; a baby hits for 0.5. Never under danger-health (#577): an adult is then covered from as before, and a baby is walked away from (leave-baby)
            :hoglin
            {:radius 3.5 :alone 8.0 :min-health 10.0 :hold? true :yield? true :over-refuge? true}
