@@ -168,6 +168,8 @@
    :blaze-refuge (fn [_ w] (fexit/blaze-refuge w))
    :come-down (fn [_ w] (pplace/come-down w))
    :lone-fight (fn [_ w] (pcover/lone-fight w))
+   :lone-fight-over-refuge (fn [_ w] (pcover/lone-fight w (pcover/over-refuge pparams/at-hand)))
+   :leave-baby (fn [_ w] (pcover/leave-baby w))
    :pack-answer (fn [_ w] (pcover/pack-answer w))
    :pack-hold (fn [_ w] (pcover/pack-hold w))
    :meal-unshot (fn [f w]

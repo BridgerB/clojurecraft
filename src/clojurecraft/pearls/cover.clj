@@ -274,14 +274,22 @@
         (when (and (:intent/kind c) (or (placing? world) (not= :place (:intent/kind c))))
           (assoc c :intent/for :pearls))))))
 
+(defn foe-kind
+  "The at-hand table's key for entity e: its kind, or baby_<kind> for a baby (entity/baby?), whose
+   hit and size are not its kind's (a baby hoglin hits for 0.5 and fits a cell one high)."
+  [e]
+  (let [k (entity/kind e)]
+    (cond (and k (entity/baby? e)) (keyword (str "baby_" (name k)))
+          :else k)))
+
 (defn kind-within
-  "{eid entity} of the entities of kind alive within r blocks of the feet, none blacklisted (a
-   ghost a fight gave up on)."
+  "{eid entity} of the entities alive within r blocks of the feet whose foe-kind is kind, none
+   blacklisted (a ghost a fight gave up on)."
   [world kind r]
   (let [pos (:player/pos world)]
     (into {}
           (filter (fn [[eid e]]
-                    (and (= kind (entity/kind e))
+                    (and (= kind (foe-kind e))
                          (not (entity/dead? e))
                          (not (avoided/noted? world :blacklist eid))
                          (<= (physics/distance pos (:entity/pos e)) r))))
@@ -295,22 +303,61 @@
    stands with the row's :hold?, and breaking off under retreat-health with its :yield?. Covered from, a blaze at hand follows the bot into each cover and touches it
    there, and a wither skeleton hits through the blocks a tunnel lays: real bots dug and laid
    cover from one blaze for 11 and 14 s and sim bots from one skeleton for 4 s, never swinging,
-   and died of their hits, where four swings kill either."
+   and died of their hits, where four swings kill either. A hoglin (:over-refuge?) is fought ahead
+   of the blaze refuge (over-refuge): one, or a baby, follows the bot into a pocket or a burrow,
+   and real bots held in one for a minute under its hits, never swinging. Given rows (the table
+   when not), only those are tried."
+  ([world] (lone-fight world pparams/at-hand))
+  ([world rows]
+   (let [pos (:player/pos world)
+         hp (:player/health world 20.0)]
+     (some (fn [[kind {:keys [radius alone min-health hold? yield?]}]]
+             (when (and (>= hp pparams/danger-health)
+                        (>= hp min-health)
+                        (= 1 (count (kind-within world kind alone))))
+               (when-let [[eid e] (entity/nearest (kind-within world kind radius) pos)]
+                 (when (and (combat/hittable? world e) (combat/approachable? world e))
+                   (cond-> {:intent/kind :fight
+                            :intent/target eid
+                            :intent/to-the-end? true
+                            :intent/for :pearls}
+                     hold? (assoc :intent/hold? true)
+                     yield? (assoc :intent/yield? true))))))
+           (sort-by key rows)))))
+
+(defn over-refuge
+  "The rows of the at-hand table fought ahead of the blaze refuge (:over-refuge?)."
+  [rows]
+  (into {} (filter (comp :over-refuge? val)) rows))
+
+(defn away-cell
+  "The cell leave-reach blocks from the feet at their height, along the straight heading nearest
+   the way from e to the feet (pplace/away)."
+  [world e]
+  (let [[x y z] (intent/feet world)
+        [dx dz] (pplace/away world e)]
+    [(+ x (* dx pparams/leave-reach)) y (+ z (* dz pparams/leave-reach))]))
+
+(defn leave-baby
+  "The way away from the nearest baby hoglin within its row's :radius (pparams/at-hand
+   :baby_hoglin) while health is under danger-health, where it is never fought (#577), or nil: a
+   tunnel sealed behind to away-cell with a pickaxe held (the pocket or burrow the bot sits in
+   has no other way out, and a baby cannot follow through the seal), else a back-off. A baby hits
+   for 0.5 through no armour, so the walk away is safe where a minute held beside it is not:
+   real bots sat in a pocket or a burrow under a baby's hits for a minute, 54 to 66 of them, to
+   death."
   [world]
-  (let [pos (:player/pos world)
-        hp (:player/health world 20.0)]
-    (some
-     (fn [[kind {:keys [radius alone min-health hold? yield?]}]]
-       (when (and (>= hp pparams/danger-health)
-                  (>= hp min-health)
-                  (= 1 (count (kind-within world kind alone))))
-         (when-let [[eid e] (entity/nearest (kind-within world kind radius) pos)]
-           (when (and (combat/hittable? world e) (combat/approachable? world e))
-             (cond->
-               {:intent/kind :fight :intent/target eid :intent/to-the-end? true :intent/for :pearls}
-               hold? (assoc :intent/hold? true)
-               yield? (assoc :intent/yield? true))))))
-     (sort-by key pparams/at-hand))))
+  (when (< (:player/health world 20.0) pparams/danger-health)
+    (when-let [r (get-in pparams/at-hand [:baby_hoglin :radius])]
+      (when-let [[eid e] (entity/nearest (kind-within world :baby_hoglin r) (:player/pos world))]
+        (cond (pupkeep/pickaxe? world)
+              {:intent/kind :tunnel-to
+               :intent/target (away-cell world e)
+               :intent/reach 1.5
+               :intent/seal-behind? true
+               :intent/for :pearls}
+              :else {:intent/kind :back-off :intent/target eid :intent/for :pearls})))))
+
 (defn pillar-room?
   "Are the cells over the head clear (path/classify :clear) for a pillar of combat/pillar-height:
    from two over the feet to the head's cell on its top? Not in a pocket or a corridor."
