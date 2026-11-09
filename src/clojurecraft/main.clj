@@ -54,6 +54,7 @@
     [clojurecraft.stronghold :as stronghold]
     [clojurecraft.swim]
     [clojurecraft.sword]
+    [clojurecraft.table]
     [clojurecraft.vein]
     [clojurecraft.watch :as watch]
     [clojurecraft.wood])
@@ -195,14 +196,15 @@
 (defn run-bot!
   "One bot's whole life: connect as name, fold the socket's packets, the clock's ticks and the
    events put on events (a bounded channel: a fixture's :go) into its own world atom until the
-   goal holds, a planned run fails, the deadline passes or the socket closes; record it when
+   goal holds, a planned run fails, the deadline passes, the server's ticks reach cap-ticks (game
+   time, game/server-ticks; nil for no cap) or the socket closes; record it when
    record names a file. Then (on-result result) while still connected, hold hold-ms for an
    outside judge (giving RCON time to read truth inventory before the bot leaves), and close, whatever the run ends with (a throw too). world* is the bot's atom (one is made when none is given;
    a watcher may be on it already). With no events channel and a plan, the run starts where it
    stands as soon as it is loaded. Returns {:result r :world final}. Nothing is shared with
    another bot: a race runs many of these, each its own atom and loop."
   [{:keys [host port name until timeout-ms hold-ms record commit chain events on-result world*
-           end-on-death? on-ms]
+           end-on-death? on-ms cap-ticks]
     :or {host "127.0.0.1" until "wood" timeout-ms 120000 hold-ms 0 on-result (fn [_])}}]
   (let [opts {:host host :port port :name name}
         deadline (+ (now) timeout-ms)
@@ -213,6 +215,7 @@
                 (or (goal? w)
                     (and planned (plan/failed? w))
                     (and end-on-death? (pos? (:stats/deaths w 0)))
+                    (and cap-ticks (>= (game/server-ticks w) cap-ticks))
                     (> (now) deadline)))
         tap (when record (record/tap! record (if commit {:record/commit commit} {}))) ; the code that made the run
         c (conn/open! opts)

@@ -63,8 +63,10 @@
     (is (gear/wanted? w))
     (is (not (armour/shield-wanted? w)) "no planks held: the always row does not make it")
     (let [i (plan/next-intent w (row :gear) plan/goals)]
-      (is (some? (:intent/kind i)) (pr-str i))
-      (is (not (:plan/wait i)) "the gear step goes for the wood itself")))
+      (is
+       (= :no-log (:plan/wait i))
+       "the gear step reaches for the shield's wood itself: a log (none is remembered in this
+           fixture, so it names the log it needs rather than walking to one)")))
   (testing "with the planks held the always row makes it first, at its higher priority"
     (let [w (standing
              (merge kit (dissoc all-of-it 7) {9 (item :iron_ingot 1) 10 (item :oak_planks 6)}))]

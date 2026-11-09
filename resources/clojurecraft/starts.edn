@@ -6,7 +6,9 @@
 ;;   :start/goal    the first target it plays, the chain from there to --until; nil plays the whole
 ;;                  chain from the wood
 ;;   :start/kit     what it carries beyond :starts/base-kit, [[item count] ...]
-;;   :start/cap-min minutes a bot may play before it is filed a :bot-timeout; absent for no cap
+;;   :start/cap-min minutes of game time a bot may play before it is filed a :bot-timeout (1200
+;;                  server ticks a minute, counted by the real race, simulated ms by the sim race);
+;;                  absent for no cap
 ;; A start in the Nether also carries :starts/base-kit; the start's own items are given first, so a
 ;; kit that overfills the 36 slots loses its last stack, never the rods.
 {:starts/default :fortress

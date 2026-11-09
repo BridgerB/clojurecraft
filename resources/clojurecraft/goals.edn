@@ -363,6 +363,13 @@
   :goal/doc "the best sword the held items make without a trip"
   :goal/done? :armed?
   :goal/plan :sword}
+ {:goal/id :keep-table
+  :goal/priority 15
+  :goal/target? true
+  :goal/always? true
+  :goal/doc "carry on the crafting table the bot placed, once its crafting is done"
+  :goal/done? :table-kept?
+  :goal/plan :keep-table}
  {:goal/id :blaze-rods
   :goal/priority 18
   :goal/target? true

@@ -5,6 +5,7 @@
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [clojurecraft.armour :as armour]
             [clojurecraft.blocks :as blocks]
+            [clojurecraft.combat :as combat]
             [clojurecraft.entity :as entity]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
@@ -221,6 +222,53 @@
                                               [:world/entities 9 :entity/type]
                                               (blocks/entity-types :zombie))))))
       (is (contains? mob/kinds :skeleton)))))
+
+(deftest an-arrow-names-the-skeleton-that-loosed-it
+  ;; the damage-event's attacker is the arrow, gone once it lands (a real race's soul sand valley
+  ;; deaths: every hit by-kind :arrow): the shooter is the nearest skeleton within its range
+  (let [w (-> (standing {inventory/offhand-slot (item :shield 1)}
+                        {9 (mob :skeleton [14.5 64.0 8.5] 20.0)
+                         11 (mob :skeleton [8.5 64.0 22.5] 20.0)})
+              (assoc :time/now 5000 :player/attacker 40 :player/struck-at 4500))]
+    (is (= 9 (first (shield/shooter w))) "the arrow gone: the nearer skeleton")
+    (is (= 9
+           (first (shield/shooter
+                   (assoc-in w [:world/entities 40] (mob :arrow [9.5 64.0 8.5] 0.0)))))
+        "the arrow still shown")
+    (is (shield/raised? (shield/guard w)))))
+
+(def archer
+  "A bot with the shield in the offhand and food, a skeleton (eid 9) six blocks east in sight."
+  (-> (standing {inventory/offhand-slot (item :shield 1) 0 (item :bread 3)}
+                {9 (mob :skeleton [14.5 64.0 8.5] 20.0)})
+      (assoc :time/now 5000 :player/food 15 :player/health 8.0)))
+
+(deftest the-cover-from-a-shooter-in-sight-is-the-shield-not-a-meal
+  ;; real race on main 54d5444, real-18: r1 Clj_r06 took 17 arrows in 44 s and r3 Clj_r02 11 in
+  ;; 49 s, both ending on a meal eaten in cover a skeleton could see
+  (let [e (get-in archer [:world/entities 9])]
+    (is (= {:intent/kind :block :intent/target 9} (combat/cover archer e)))
+    (is (= :eat
+           (:intent/kind
+            (combat/cover (update archer :player/inventory dissoc inventory/offhand-slot) e)))
+        "no shield: the meal, as before")
+    (is (not= :block
+              (:intent/kind (combat/cover (assoc-in archer
+                                           [:world/entities 9 :entity/type]
+                                           (blocks/entity-types :zombie))
+                                          (mob :zombie [14.5 64.0 8.5] 20.0))))
+        "a mob that does not shoot: no block")))
+
+(deftest a-block-faces-the-shooter-with-the-shield-up-for-a-while
+  (let [w (assoc archer :plan/intent {:intent/kind :block :intent/target 9 :intent/status :active})
+        [w2 fx] (fx/fold intent-step w (map tick (range 5050 5300 50)))
+        [yaw _] (get-in w2 [:player/controls :control/look])]
+    (is (= [[5050 :up]] (hands fx)) "raised once, held")
+    (is (< (abs (- -90.0 yaw)) 1.0) "facing the skeleton")
+    (is (= :active (:intent/status (:plan/intent w2))))
+    (let [[w3 _] (fx/fold intent-step w2 (map tick (range 5300 8200 50)))]
+      (is (intent/done? (:plan/intent w3)) "done after block-ms: the planner looks again")
+      (is (shield/raised? w3) "still up: the guard lowers it only before another intent"))))
 
 ;; ---------------------------------------------------------------- the model
 

@@ -131,7 +131,7 @@
 (def non-progress
   "What finishes without moving the run on: intents of these kinds or for these purposes are done
    but are not progress, so a loop of rests and retreats never keeps the stall clock fresh."
-  {:kind #{:rest :back-off :dodge :pocket-hold :lookout :eat}
+  {:kind #{:rest :back-off :dodge :pocket-hold :lookout :eat :block}
    :for #{:regroup :retreat :cover :explore}})
 (def max-unwalkable 12)               ; consecutive walks that failed :no-path before the plan fails
 (def wait-ticks 400)                  ; a goal that has nothing to do for this many planner ticks has failed: 20 s at 20 ticks a second

@@ -946,9 +946,30 @@
   (or (= :pillar (:intent/kind (:plan/failed world)))
       (memory/failed-within? world :pillar pillar-memory-ms)))
 
+(def block-ms 3000)                   ; ms one :block stands behind the shield before the planner looks again (a meal may come between)
+
+(defn shooting?
+  "Does entity e shoot (mob/kinds :shoot), with its aim in sight of the eye (seen?) within its
+   :range?"
+  [world e]
+  (let [k (mob/kinds (entity/kind e))]
+    (boolean
+     (and (:shoot k) (<= (physics/distance (game/eye world) (aim e)) (:range k)) (seen? world e)))))
+
+(defn block-intent
+  "A :block of entity e (its eid looked up in :world/entities) when a shield is held
+   (shield/held?) and e shoots at the bot from where it is (shooting?); nil otherwise."
+  [world e]
+  (when (and (shield/held? world) (shooting? world e))
+    (when-let [eid (some (fn [[id x]] (when (= x e) id)) (:world/entities world))]
+      {:intent/kind :block :intent/target eid})))
+
 (defn cover
   "The intent for a bot under retreat-health that no back-off from entity e would help
-   (back-off-pointless?), never a fight (#577, danger-health): with e back-off-to or more away, the
+   (back-off-pointless?), never a fight (#577, danger-health): first, when e shoots at it from
+   where it is and a shield is held, a :block behind the shield (block-intent): a skeleton's
+   arrows fall on a meal eaten in its sight, and no eating is done with a shield up. Then, with
+   e back-off-to or more away, the
    meal when food is held and the bar can take one, else the wait :resting; otherwise the meal
    when food is held, the bar can take one and e is out of attack-reach, else a block laid
    between (wall-cell, a filler of filler/pick), else a pillar of pillar-height when
@@ -962,6 +983,7 @@
         wall (let [w (wall-cell world e)] (when-not (wall-failed? world w) w))
         [_ fy _] (intent/feet world)
         ctx {:e e
+             :block (block-intent world e)
              :food food
              :far? (>= (horizontal world e) back-off-to)
              :near? (<= (physics/distance (game/eye world) (aim e)) attack-reach)
@@ -974,6 +996,29 @@
                     ctx
                     (:cover-ladder threat/data)
                     (intent/why :cover/else {:plan/wait :cornered}))))
+
+(defmethod threat/measure :block [_ {:keys [block]} _] (when block (intent/why :cover/block block)))
+
+(defmethod intent/run :block
+  ;; {:intent/kind :block :intent/target eid}: stand, face the shooter, the shield up
+  ;; (shield/hold), done when it is gone, no longer shooting from where it is (shooting?) or after
+  ;; block-ms, so the planner looks again (a meal between two blocks, a wall, a fight)
+  [world i _]
+  (let [now (:time/now world)
+        i (cond-> i (nil? (:intent/since i)) (assoc :intent/since now))
+        world (assoc world :plan/intent i)
+        e (get-in world [:world/entities (:intent/target i)])]
+    (cond (or (nil? e)
+              (entity/gone? world (:intent/target i))
+              (not (shooting? world e))
+              (> (- now (:intent/since i)) block-ms))
+          (-> world
+              (assoc :player/controls {})
+              intent/done)
+          :else
+          (-> world
+              (assoc :player/controls (face world e))
+              (shield/hold true)))))
 
 (defmethod threat/measure :far-rest
   [_ {:keys [far? food]} _]

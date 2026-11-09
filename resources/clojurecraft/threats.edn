@@ -20,5 +20,5 @@
          :ghast {:never-fought? true}
          :enderman {:teleports? true :pumpkin-safe? true}
          :creeper {:radius 6.0}}
- ;; the order combat/cover tries its measures in against a threat that no back-off helps: a meal far from it, a meal out of its reach, a block between, a pillar, a meal, a hole under the feet
- :cover-ladder [:far-rest :eat-out-of-reach :wall :pillar :eat :nook]}
+ ;; the order combat/cover tries its measures in against a threat that no back-off helps: the shield raised against a shooter in sight, a meal far from it, a meal out of its reach, a block between, a pillar, a meal, a hole under the feet
+ :cover-ladder [:block :far-rest :eat-out-of-reach :wall :pillar :eat :nook]}

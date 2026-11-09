@@ -7,7 +7,8 @@
    raised it in :player/shield-up-at.
 
    The :fight executor holds it up while it stands at its target and lowers it to swing
-   (combat/guarded). Everything else is guard, run by the planner at the start of each tick before
+   (combat/guarded), and combat's :block, the cover from a shooter in sight, holds it up facing
+   the shooter. Everything else is guard, run by the planner at the start of each tick before
    any intent: a shield up with no fight running is lowered before the next intent uses a hand,
    and while the planner waits, a shooter that struck a moment ago (struck-ms) is faced with the
    shield up. A raised shield is never carried on a walk: a vanilla client walks at a fifth of its
@@ -88,26 +89,48 @@
   [c]
   (not (or (:control/forward? c) (:control/jump? c) (:control/sneak? c))))
 
+(def projectiles
+  "Entity kinds a shot is: the damage-event names the arrow or the fireball as the attacker, not
+   the mob that loosed it."
+  #{:arrow :spectral_arrow :small_fireball :fireball})
+
+(defn shoots?
+  "Does entity e's kind shoot (mob/kinds :shoot)?"
+  [e]
+  (boolean (:shoot (mob/kinds (entity/kind e)))))
+
 (defn shooter
-  "[eid entity] of the mob that last struck the bot (:player/attacker) when it shoots (mob/kinds
-   :shoot), the strike (:player/struck-at) is under struck-ms old and it is still there; nil
-   otherwise."
+  "[eid entity] of what shot the bot, while the strike (:player/struck-at) is under struck-ms old:
+   the attacker (:player/attacker) when it shoots, or, when the attacker was a shot (projectiles,
+   or already gone, as an arrow is once it lands), the nearest living entity whose kind shoots
+   within its :range of the feet. Nil otherwise."
   [world]
   (let [id (:player/attacker world)
         at (:player/struck-at world)
-        e (get-in world [:world/entities id])]
-    (when (and e at (<= (- (:time/now world 0) at) struck-ms) (:shoot (mob/kinds (entity/kind e))))
-      [id e])))
+        e (get-in world [:world/entities id])
+        pos (:player/pos world)]
+    (cond (not (and at pos (<= (- (:time/now world 0) at) struck-ms))) nil
+          (and e (shoots? e)) [id e]
+          (or (nil? e) (contains? projectiles (entity/kind e)))
+          (->> (:world/entities world)
+               (filter (fn [[_ x]]
+                         (and (shoots? x)
+                              (not (entity/dead? x))
+                              (<= (physics/distance pos (:entity/pos x))
+                                  (:range (mob/kinds (entity/kind x)))))))
+               (sort-by (fn [[_ x]] (physics/distance pos (:entity/pos x))))
+               first)
+          :else nil)))
 
 (defn guard
   "The world at the start of a planner tick with the shield as the moment asks: left to a running
-   :fight (combat holds it); while the planner waits with no intent, up and facing the shooter
+   :fight or :block (combat holds it); while the planner waits with no intent, up and facing the shooter
    (shooter) that struck a moment ago, its middle looked at; otherwise down (hold false), so a
    shield left up by a fight that ended or was preempted is lowered before the next intent runs."
   [world]
   (let [i (:plan/intent world)
         [_ e] (when (and (nil? i) (:player/pos world)) (shooter world))]
-    (cond (= :fight (:intent/kind i)) world
+    (cond (#{:fight :block} (:intent/kind i)) world
           (and e (held? world))
           (-> world
               (assoc :player/controls

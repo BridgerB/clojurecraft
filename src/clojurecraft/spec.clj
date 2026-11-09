@@ -39,6 +39,7 @@
             [clojurecraft.stone :as stone]
             [clojurecraft.stronghold :as stronghold]
             [clojurecraft.sword]
+            [clojurecraft.table]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.window :as window]
             [clojurecraft.wood :as wood]))
@@ -740,6 +741,7 @@
 (s/def :sample/milestones nat-int?)
 (s/def :sample/server-tick (s/map-of #{:avg :p50 :p95 :p99} number?))
 (s/def :sample/simulation-distance (s/nilable pos-int?))
+(s/def :sample/runner-servers (s/nilable pos-int?))
 (s/def :sample/bot-heap-mb nat-int?)
 (s/def :sample/threads nat-int?)
 (s/def :milestone/runner (s/nilable int?))

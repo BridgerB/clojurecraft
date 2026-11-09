@@ -113,6 +113,11 @@
         :extra-paths ["src"]
         :requires ([clojurecraft.lanes :as lanes])
         :task (apply lanes/-main *command-line-args*)}
+  race-sizes
+  {:doc
+   "A lane's race sizes from ci/race.edn (its :race/lane-overrides), as workflow outputs: race-sizes <n>"
+   :requires ([clojurecraft.servers :as servers])
+   :task (apply servers/-main *command-line-args*)}
   fleet
   {:doc
    "The runners kept full of race and sim-race lanes, given back to any waiting job (fleet.yml): run | look"
