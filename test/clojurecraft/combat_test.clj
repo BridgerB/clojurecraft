@@ -933,3 +933,16 @@
       (is (not= :seal
                 (:intent/kind (combat/cover (assoc cube :pocket/seal-failed-at 99000)
                                             (get-in cube [:world/entities 7]))))))))
+
+(deftest a-piglin-brute-is-backed-away-from-never-fought
+  ;; fifty health and a golden axe's 13 (9.1 through iron): the :defend row backs away from one at
+  ;; full health, as from a creeper
+  (let [w (standing {7 (mob :piglin_brute [11.0 64.0 8.5] 50.0)})
+        i (plan/next-intent w (row :defend) plan/goals)]
+    (is (contains? combat/fled :piglin_brute))
+    (is (= 13.0 (combat/hit-damage :piglin_brute)))
+    (is (= {:intent/kind :back-off :intent/target 7} (select-keys i [:intent/kind :intent/target])))
+    (is (not= :fight
+              (:intent/kind
+               (plan/next-intent (assoc w :player/health 6.0) (row :defend) plan/goals)))
+        "nor under the line")))
