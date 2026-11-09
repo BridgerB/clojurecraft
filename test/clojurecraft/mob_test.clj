@@ -546,14 +546,18 @@
                        (assoc :sim/player-pos [0.5 67.0 0.5])
                        (ticks 2)
                        :sim/health))
-          pocket (into {[0 66 0] stone}
-                       (for [[x z] [[1 0] [-1 0] [0 1] [0 -1]] y [64 65]] [[x y z] stone]))]
+          ;; inside the column (its cells are 0 to 15): the cell [2 64 2], walled and roofed
+          pocket (into {[2 66 2] stone}
+                       (for [[x z] [[3 2] [1 2] [2 3] [2 1]] y [64 65]] [[x y z] stone]))]
       (is (< (on-top :magma_cube_big) 20.0) "a big one's 4.15 clears three blocks")
       (is (< (on-top :magma_cube) 20.0) "a middle one's 2.52 and its box reach the feet at 3")
       (is (= 20.0 (on-top :magma_cube_small)) "a small one's 1.84 does not")
       (is (= 20.0
              (:sim/health
-              (ticks (arena pocket {} :normal night [{:type :magma_cube_big :pos [2.0 64.0 0.5]}])
+              (ticks (assoc
+                      (arena pocket {} :normal night [{:type :magma_cube_big :pos [4.0 64.0 2.5]}])
+                      :sim/player-pos
+                      [2.5 64.0 2.5])
                      40)))
           "walled two high and roofed: no line, no hit"))))
 
