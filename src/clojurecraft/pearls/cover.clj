@@ -226,7 +226,8 @@
 
 (defn open-striker
   "[eid entity] of the nearest angry enderman (entity/creepy?) at hand, within strike-range and
-   the sword's reach (combat/in-reach?), blacklisted or not, while the bot stands farther than
+   the sword's reach (combat/in-reach?), blacklisted or not and not fought out (psense/fought-out?:
+   struck-by answers that one once it has hurt the bot), while the bot stands farther than
    answer-home-reach from its burrow's end or has none (pplace/shelter); nil otherwise. The hunt
    answers it where the bot stands (fought over danger-health, a meal or a wall under it), never
    with a walk home or a back-off: an enderman walks as fast as the bot and never teleports from a
@@ -235,8 +236,9 @@
   [world]
   (let [home (pplace/shelter world)
         pos (:player/pos world)
-        at-hand (fn [[_ e]]
+        at-hand (fn [[eid e]]
                   (and (entity/creepy? e)
+                       (not (psense/fought-out? world eid))
                        (<= (physics/distance pos (:entity/pos e)) pparams/strike-range)
                        (combat/in-reach? world e)))]
     (when-not (and home (<= (physics/distance (intent/feet world) home) pparams/answer-home-reach))

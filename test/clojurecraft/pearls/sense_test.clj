@@ -328,10 +328,10 @@
         "blacklisted or not")
     (is (not (plan/interrupts? w ps/row {:intent/kind :fight :intent/target 7}))
         "the fight goes on")
-    (is (not (plan/interrupts? (assoc w :pearls/shelter [3 61 8])
-                               ps/row
-                               {:intent/kind :walk :intent/target [3 61 8]}))
-        "and the walk home")
+    (is (plan/interrupts? (assoc w :pearls/shelter [3 61 8])
+                          ps/row
+                          {:intent/kind :walk :intent/target [3 61 8]})
+        "a walk home to no burrow in reach is cut too: answered where the bot stands")
     (is (not (plan/interrupts? (assoc-in w [:world/entities 7 :entity/pos] [20.5 64.0 8.5])
                                ps/row
                                {:intent/kind :tunnel}))

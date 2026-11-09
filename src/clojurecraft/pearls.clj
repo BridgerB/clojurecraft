@@ -332,9 +332,7 @@
   ;; piglin) during the pearls stage, the hunt claims it so the :defend row does not fight it with a
   ;; sword in the open.
   [world _ e]
-  (or (and (= :enderman (entity/kind e))
-           (fexit/pearls-stage? world)
-           (some? (pcover/open-striker world)))
+  (or (and (= :enderman (entity/kind e)) (some? (pcover/open-striker world)))
       (and (= :enderman (entity/kind e))
            (some? (pplace/shelter world))
            (or (= (pplace/shelter world) (intent/feet world))
