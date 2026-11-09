@@ -6,7 +6,7 @@
             [clojurecraft.dimension :as dimension]))
 
 (defn direct-section
-  [o cells]
+  [o cells biome]
   (b/write-i16 o (count cells))
   (b/write-i16 o 0)
   (b/write-u8 o 15)
@@ -18,16 +18,16 @@
         (aset longs li (bit-or (aget longs li) (bit-shift-left (long id) off)))))
     (dotimes [i 1024] (b/write-i64 o (aget longs i))))
   (b/write-u8 o 0)
-  (b/write-varint o 0))
+  (b/write-varint o biome))
 
 (defn single-section
-  [o id]
+  [o id biome]
   (b/write-i16 o 0)
   (b/write-i16 o 0)
   (b/write-u8 o 0)
   (b/write-varint o id)
   (b/write-u8 o 0)
-  (b/write-varint o 0))
+  (b/write-varint o biome))
 
 (def floor-y 64)                      ; the stone floor fills every cell below this
 
@@ -35,9 +35,10 @@
   "blocks: {[lx y lz] id} with world y; everything below y=64 is stone unless blocks says
    otherwise (a listed cell below the floor, e.g. air for a trench or water for a pond, wins).
    With a dimension name, a column of that dimension's height (16 sections from y 0 in the
-   Nether), else the overworld's."
+   Nether), else the overworld's; with a biome id too, every cell of that biome (else id 0)."
   ([blocks] (column-bytes blocks dimension/overworld))
-  ([blocks dim]
+  ([blocks dim] (column-bytes blocks dim 0))
+  ([blocks dim biome]
    (let [{:dimension/keys [min-y sections]} (dimension/by-name dim)]
      (b/with-out
       (fn [o]
@@ -54,8 +55,8 @@
                                     :when (< (+ y0 ly) floor-y)]
                                 [[lx ly lz] 1])))
                 cells (merge stone listed)]
-            (cond (seq cells) (direct-section o cells)
-                  (< y0 64) (single-section o 1)
-                  :else (single-section o 0)))))))))
+            (cond (seq cells) (direct-section o cells biome)
+                  (< y0 64) (single-section o 1 biome)
+                  :else (single-section o 0 biome)))))))))
 
 (defn column [blocks] (chunk/decode (column-bytes blocks)))
