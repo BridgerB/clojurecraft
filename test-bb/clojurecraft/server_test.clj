@@ -60,20 +60,31 @@
   (is (= ["servers=2" "sets=[\"R1\",\"R2\"]" "bots=10" "server-heap=3072" "bot-heap=2048"
           "landing-stride=20"]
          (servers/outputs race 2))
-      "the stride is the file's own servers x bots, whatever the lane's arm"))
+      "the stride is the most bots any lane takes, whatever the lane's arm"))
+
+(deftest the-stride-is-the-most-landings-any-lane-takes
+  (let [bots-ab {:race/servers 1
+                 :race/bots 10
+                 :race/lane-overrides {1 {:race/bots 14} 2 {:race/servers 1}}}]
+    (is (= 14 (servers/landing-stride bots-ab)) "a lane's 14 bots, over the file's 10")
+    (is (= 10 (servers/landing-stride (dissoc bots-ab :race/lane-overrides))) "no lanes: its own")
+    (is (= [14 10] (map #(servers/bots-of (servers/for-lane bots-ab %)) [1 2])))))
 
 (deftest the-shipped-lanes-split-each-start-and-set-into-both-arms
   (let [lanes-cfg (edn/read-string (slurp "ci/lanes.edn"))
+        gym (edn/read-string (slurp "ci/gym.edn"))
         sets (:race/landing-sets shipped)
         real (range 1 (inc (:race/runners shipped)))
-        arm (fn [n] (servers/servers-of (servers/for-lane shipped n)))
+        arm (fn [n] (servers/bots-of (servers/for-lane shipped n)))
         start (fn [n] (:lane/start (lanes/lane-of lanes-cfg :real n)))
         set-of (fn [n] (nth sets (mod (dec n) (count sets))))]
-    (is (= #{1 2} (set (map arm real))) "one-server and two-server lanes")
-    (doseq [[s ns] (group-by start real)] (is (= #{1 2} (set (map arm ns))) (str "start " s)))
-    (doseq [[s ns] (group-by set-of real)] (is (= #{1 2} (set (map arm ns))) (str "set " s)))
+    (is (= #{10 14} (set (map arm real))) "ten-bot and fourteen-bot lanes")
+    (doseq [[s ns] (group-by start real)] (is (= #{10 14} (set (map arm ns))) (str "start " s)))
+    (doseq [[s ns] (group-by set-of real)] (is (= #{10 14} (set (map arm ns))) (str "set " s)))
     (doseq [n real
             :let [c (servers/for-lane shipped n)]]
-      (is (= 10 (:race/bots c)) "every lane keeps ten bots a server")
-      (is (<= (* (servers/servers-of c) (:race/server-heap-mb c)) 6144)
-          "the servers' heap on a runner stays what two servers had"))))
+      (is (= 1 (servers/servers-of c)) "every lane carries one server")
+      (is (= 6144 (:race/server-heap-mb c)) "with the runner's server heap"))
+    (doseq [[s ns] (group-by set-of real)]
+      (is (<= (* (count ns) (servers/landing-stride shipped)) (get-in gym [:landing-sets s :n]))
+          (str "set " s " has a landing for every bot of its lanes, none shared")))))

@@ -720,6 +720,9 @@
    [:sample/simulation-distance
     "the simulation distance, in chunks, the sampled server runs with (ci/race.edn's :race/server-overrides)"
     "a race sample"]
+   [:sample/runner-bots
+    "how many bot slots the sampled server's runner carries, over all its servers (ci/race.edn's :race/servers x :race/bots, its lane's :race/lane-overrides over them)"
+    "a race sample"]
    [:sample/runner-servers
     "how many servers the sampled server's runner carries (ci/race.edn's :race/servers, its lane's :race/lane-overrides over it)"
     "a race sample"] [:sample/bot-heap-mb "the bots' JVM heap in use" "a race sample"]
