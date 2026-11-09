@@ -334,9 +334,10 @@
    it failed, or watch-progress gave it up)? A fresh exit is derived from the feet, so from the
    same stand it is the target that just failed, or one a block off it; the hunt started it, the
    planner cut it a tick later as no longer wanted (target-avoided?), and the retry walked the bot
-   back down the cells it had climbed, over and over."
+   back down the cells it had climbed, over and over. The blacklist holds entity ids too (a chase
+   given up): only its cells are asked."
   [world t]
-  (boolean (some #(<= (physics/distance t %) pparams/watch-same)
+  (boolean (some #(and (vector? %) (<= (physics/distance t %) pparams/watch-same))
                  (avoided/all-of world :blacklist))))
 
 (defn fresh-tunnel-target
