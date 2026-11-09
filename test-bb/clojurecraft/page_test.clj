@@ -295,3 +295,19 @@
     (is (= 1 (:runner-servers (page/combine [(row one) (row one)]))) "a run's batches agree")
     (is (not (contains? (page/combine [(row one) (row two)]) :runner-servers))
         "a day's batches of both arms name neither")))
+
+(deftest a-batch-row-names-the-bots-its-runner-carried
+  (let [sample (fn [bots]
+                 {:sample/runner-servers 1
+                  :sample/runner-bots bots
+                  :sample/playing bots
+                  :sample/server-tick {:avg 40.0 :p50 40.0 :p95 60.0 :p99 80.0}})
+        row (fn [bots] (page/batch (round {:round/servers (page/servers-of [(sample bots)])})))]
+    (is (= 14 (:runner-bots (first (page/servers-of [(sample 14)])))) "the entry names it")
+    (is (= [10 14] (map (comp :runner-bots row) [10 14])) "each arm's row")
+    (is (= 14 (:runner-bots (page/combine [(row 14) (row 14)]))) "a run's batches agree")
+    (is (not (contains? (page/combine [(row 10) (row 14)]) :runner-bots)) "both arms: neither")
+    (is (not (contains? (page/batch (round {:round/servers (page/servers-of [{:sample/playing
+                                                                              1}])}))
+                        :runner-bots))
+        "samples from before it was recorded name no arm")))
