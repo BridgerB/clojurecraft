@@ -44,6 +44,10 @@
 
 (def fortress-mobs-clear 48)          ; blocks round a floor within which one of fortress-mobs refuses it
 
+(def bastion-clear 96)                ; blocks from a located bastion remnant's start within which a forest floor is refused: a bastion reaches about 48 from its start, and its brutes strike any player, gold worn or not
+(def bastion-mobs ["minecraft:piglin_brute"]) ; the mob only a bastion holds: any within bastion-mobs-clear of a floor is the danger itself
+(def bastion-mobs-clear 48)           ; blocks round a floor within which a piglin brute refuses it
+
 (def spread-under 120)                ; the height a Nether spread scans down from: under the roof's rock (y 123 up), over the forest's highest floors
 
 (def dimensions
@@ -260,31 +264,36 @@
   [[x y z]]
   (str "execute in " dimension/nether " if biome " x " " y " " z " minecraft:warped_forest"))
 
-(defn fortress-locate
-  "The command that locates the Nether fortress nearest the Nether point x z."
-  [x z]
-  (str "execute in "
-       dimension/nether
-       " positioned "
-       x
-       " 64 "
-       z
-       " run locate structure minecraft:fortress"))
+(defn structure-locate
+  "The command that locates the structure (a name: minecraft:fortress, minecraft:bastion_remnant)
+   nearest the Nether point x z."
+  [structure x z]
+  (str "execute in " dimension/nether " positioned " x " 64 " z " run locate structure " structure))
+
+(defn structure-near?
+  "Does the server locate structure within clear blocks, on the plane, of cell [x y z]? Its reply
+   names the structure's start; none located is not near. A forest floor that overlaps a structure
+   passes the biome test (warped?), which asks no structure."
+  [rc structure clear [x _ z]]
+  (let [[fx fz] (fixture/parse-located (rcon/command! rc (structure-locate structure x z)))]
+    (boolean (and fx (<= (math/hypot (- fx x) (- fz z)) clear)))))
 
 (defn fortress-near?
-  "Does the server locate a Nether fortress within fortress-clear blocks, on the plane, of cell
-   [x y z]? Its reply names the fortress's start; none located is not near. A forest floor that
-   overlaps a fortress passes the biome test (warped?), which asks no structure."
-  [rc [x _ z]]
-  (let [[fx fz] (fixture/parse-located (rcon/command! rc (fortress-locate x z)))]
-    (boolean (and fx (<= (math/hypot (- fx x) (- fz z)) fortress-clear)))))
+  "Is a Nether fortress located within fortress-clear of cell (structure-near?)?"
+  [rc cell]
+  (structure-near? rc "minecraft:fortress" fortress-clear cell))
 
-(defn fortress-mob-near?
-  "Does the server report a wither skeleton or a blaze within fortress-mobs-clear blocks of cell
-   [x y z]? The bot stands there, so its chunks are loaded and the fortress's own mobs are in
-   them: the danger asked directly, where locate (fortress-near?) can name a fortress far off from
-   one whose bricks are beside the floor."
-  [rc [x y z]]
+(defn bastion-near?
+  "Is a bastion remnant located within bastion-clear of cell (structure-near?)? Its piglin brutes
+   strike any player, gold worn or not."
+  [rc cell]
+  (structure-near? rc "minecraft:bastion_remnant" bastion-clear cell))
+
+(defn mob-near?
+  "Does the server report one of mobs (entity type names) within clear blocks of cell [x y z]? The
+   bot stands there, so its chunks are loaded and their mobs are in them: the danger asked
+   directly, where locate can name a structure far off from one whose blocks are beside the floor."
+  [rc mobs clear [x y z]]
   (boolean (some (fn [mob]
                    (fixture/passed? (rcon/command! rc
                                                    (str "execute in "
@@ -298,9 +307,19 @@
                                                         " if entity @e[type="
                                                         mob
                                                         ",distance=.."
-                                                        fortress-mobs-clear
+                                                        clear
                                                         "]"))))
-                 fortress-mobs)))
+                 mobs)))
+
+(defn fortress-mob-near?
+  "Is a wither skeleton or a blaze within fortress-mobs-clear of cell (mob-near?)?"
+  [rc cell]
+  (mob-near? rc fortress-mobs fortress-mobs-clear cell))
+
+(defn bastion-mob-near?
+  "Is a piglin brute within bastion-mobs-clear of cell (mob-near?)?"
+  [rc cell]
+  (mob-near? rc bastion-mobs bastion-mobs-clear cell))
 
 (defmethod land! :near-stronghold
   [rc _row name [x z _]]
@@ -369,8 +388,9 @@
    nil: the bot named name spread onto one (spread) at each of warped-ranges, nearer first,
    warped-tries times each, until the server says where it stands is warped forest (warped?),
    not the air of a carved cave (pocket?), no fortress is located within fortress-clear
-   (fortress-near?) and none of its mobs is within fortress-mobs-clear (fortress-mob-near?). The
-   bot is left there."
+   (fortress-near?) and none of its mobs is within fortress-mobs-clear (fortress-mob-near?), and
+   no bastion remnant within bastion-clear (bastion-near?) nor a piglin brute within
+   bastion-mobs-clear (bastion-mob-near?). The bot is left there."
   [rc name [bx _ bz]]
   (some (fn [r]
           (let [spread-reply (str (rcon/command! rc (spread bx bz r name)))
@@ -381,7 +401,9 @@
                        (fixture/passed? (rcon/command! rc (warped? c)))
                        (not (fixture/passed? (rcon/command! rc (pocket? c))))
                        (not (fortress-near? rc c))
-                       (not (fortress-mob-near? rc c)))
+                       (not (fortress-mob-near? rc c))
+                       (not (bastion-near? rc c))
+                       (not (bastion-mob-near? rc c)))
               c)))
         (mapcat #(repeat warped-tries %) warped-ranges)))
 
@@ -404,7 +426,8 @@
   ;; each landing has its own), and a floor in it: the bot spread onto one round the located point
   ;; (spread), nearer ranges first, until the server says where it stands is warped forest (warped?)
   ;; and not the air of a carved cave (pocket?) no fortress located within fortress-clear and none of
-  ;; its mobs within fortress-mobs-clear, then stood on that cell with the row's setup round it. A forest with no floor found is left for the one nearest the next of warped-origins, each
+  ;; its mobs within fortress-mobs-clear, no bastion within bastion-clear and no brute within
+  ;; bastion-mobs-clear, then stood on that cell with the row's setup round it. A forest with no floor found is left for the one nearest the next of warped-origins, each
   ;; located forest tried once. Batches d, e and f stood two landings in three forty minutes in a
   ;; cave pocket the spread had put them in
   [rc row name [x z _]]
