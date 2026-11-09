@@ -685,6 +685,7 @@
           (if (> (- (now world) sent-at) answer-ms) (intent/fail world :no-window) world)
           (> (physics/distance eye (physics/centre target)) open-reach)
           (intent/fail world :out-of-reach)
+          (intent/guarded-cell? world target) (intent/fail world :guarded)
           :else
           (-> world
               (assoc :player/controls {:control/look (physics/look-at eye (physics/centre target))})

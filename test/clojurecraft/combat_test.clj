@@ -933,3 +933,38 @@
       (is (not= :seal
                 (:intent/kind (combat/cover (assoc cube :pocket/seal-failed-at 99000)
                                             (get-in cube [:world/entities 7]))))))))
+
+(deftest a-piglin-brute-is-backed-away-from-never-fought
+  ;; fifty health and a golden axe's 13 (9.1 through iron): the :defend row backs away from one at
+  ;; full health, as from a creeper
+  (let [w (standing {7 (mob :piglin_brute [11.0 64.0 8.5] 50.0)})
+        i (plan/next-intent w (row :defend) plan/goals)]
+    (is (contains? combat/fled :piglin_brute))
+    (is (= 13.0 (combat/hit-damage :piglin_brute)))
+    (is (= {:intent/kind :back-off :intent/target 7} (select-keys i [:intent/kind :intent/target])))
+    (is (not= :fight
+              (:intent/kind
+               (plan/next-intent (assoc w :player/health 6.0) (row :defend) plan/goals)))
+        "nor under the line")))
+
+(deftest a-block-piglins-guard-is-never-broken-with-one-near
+  ;; nether gold ore broken in a tunnel turned every piglin that saw it on the bot, gold boots
+  ;; worn: with a piglin within threats.edn's guarded radius the dig fails :guarded
+  (let [ore {[9 64 8] (blocks/default-state :nether_gold_ore)}
+        dig {:intent/kind :dig :intent/target [9 64 8] :intent/status :active}
+        run (fn [entities]
+              (let [w (assoc (standing entities)
+                             :world/chunks {[0 0] (world/column ore)}
+                             :player/inventory {0 (item :iron_pickaxe 1)}
+                             :plan/intent dig)]
+                (:plan/intent (first (fx/fold intent-step w (map tick (range 50 1550 50)))))))]
+    (is (= [:failed :guarded]
+           ((juxt :intent/status :intent/reason) (run {7 (mob :piglin [12.5 64.0 8.5] 16.0)}))))
+    (is (not= :guarded (:intent/reason (run {}))) "no piglin: dug")
+    (is (not= :guarded (:intent/reason (run {7 (mob :piglin [30.5 64.0 8.5] 16.0)})))
+        "one past the radius: dug")
+    (is (intent/guarded-cell? (assoc (standing {7 (mob :piglin_brute [12.5 64.0 8.5] 50.0)})
+                                     :world/chunks
+                                     {[0 0] (world/column ore)})
+                              [9 64 8])
+        "a brute guards it too")))

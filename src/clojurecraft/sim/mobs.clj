@@ -350,11 +350,14 @@
 
 (defn targets?
   "Does mob m have the player as its target: the player in its follow range, and, for a neutral
-   kind, only once hurt or stared at (:angry?)?"
+   kind, only once hurt or stared at (:angry?)? Never for a kind with no follow range (an animal:
+   a cow, a pig), which targets nothing."
   [sim {:keys [type pos angry?]}]
-  (let [k (mob/kinds type)]
-    (and (<= (physics/distance pos (:sim/player-pos sim)) (:follow k))
-         (or (not (:neutral k)) angry?))))
+  (let [k (mob/kinds type)
+        follow (:follow k)]
+    (boolean (and follow
+                  (<= (physics/distance pos (:sim/player-pos sim)) follow)
+                  (or (not (:neutral k)) angry?)))))
 
 (defn trail
   "Mob eid of a kind that finds its way (:paths, the enderman) a tick on toward the player,
@@ -465,13 +468,15 @@
           :else
           (let [free? (free-fn sim)
                 n (mob/tall type)]
-            (move-mob sim
-                      eid
-                      (mob/keep-off-walls
-                       free?
-                       type
-                       (mob/step-toward free? pos (:sim/player-pos sim) (:speed k) stop n)
-                       n))))))
+            (move-mob
+             sim
+             eid
+             (mob/keep-off-walls
+              free?
+              type
+              (mob/step-toward free? pos (:sim/player-pos sim) (:speed k) stop n (mob/climb type))
+              n
+              (mob/climb type)))))))
 
 (defn teleport-rolls
   "[sim' rs]: the next n rolls of the mobs' own stream (mob-roll), in order."

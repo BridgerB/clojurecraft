@@ -236,3 +236,20 @@
         tables (ps/standing {7 ghast} (into {} (for [x (range 9 14)] [[x 64 8] table])))]
     (is (nil? (pcover/line-cell tables ghast)))
     (is (some? (pcover/line-cell (ps/standing {7 ghast} line-floor) ghast)) "stone it can click")))
+
+(deftest a-hide-walk-is-not-followed-by-another-within-the-hold
+  ;; Issue #263, a real rod bot under two blazes on c770630: hidden from one, seen by the other,
+  ;; it walked between three cells every 0.3 s for nine seconds, burning, until it died. Within
+  ;; hide-hold-ms of a walk the cover is made where the bot stands.
+  (let [wall (into {} (for [y (range 64 70)] [[11 y 9] ps/stone]))
+        w (-> (ps/standing {7 (ps/mob :ghast [14.5 66.0 8.5])} wall)
+              (assoc :player/inventory {0 (ps/item :iron_sword 1)} :time/now 10000))
+        walked (memory/remember-intention w
+                                          {:intent/id 41 :intent/kind :walk :intent/target [8 64 9]}
+                                          :started)]
+    (is (pcover/hide-ok? w))
+    (is (= :walk (:intent/kind (pcover/cover-from w))) "no walk lately: the hide walk")
+    (is (not (pcover/hide-ok? walked)))
+    (is (not= :walk (:intent/kind (pcover/cover-from walked))) "a walk a moment ago: no other")
+    (is (pcover/hide-ok? (assoc walked :time/now (+ 10000 pparams/hide-hold-ms 1)))
+        "after the hold, a hide walk again")))

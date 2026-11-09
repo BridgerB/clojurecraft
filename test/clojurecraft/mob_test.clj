@@ -69,6 +69,29 @@
     (is (= [1.5 64.0 0.5] (mob/step-toward free? [1.5 64.0 0.5] [0.5 64.0 0.5] 0.115 1.0))
         "already at its stop")))
 
+(deftest a-magma-cube-hops-onto-a-ledge-as-high-as-its-jump
+  ;; vanilla's slime jumps 0.42 + 0.1 size a tick: a big cube rises 4.15 blocks, a middle one
+  ;; 2.52, a small one 1.84, so each climbs that many whole blocks in one hop where a walker
+  ;; climbs one; a real cube followed Clj_r11 up a staircase it cut out of the delta
+  (let [wall (fn [h] (floor-free? (set (for [y (range 64 (+ 64 h))] [8 y 0]))))
+        to [0.5 64.0 0.5]
+        step
+        (fn [free? kind]
+          (mob/step-toward free? [9.0 64.0 0.5] to 0.165 0.0 (mob/tall kind) (mob/climb kind)))]
+    (is (= [4 2 1] (map mob/climb [:magma_cube_big :magma_cube :magma_cube_small])))
+    (is (= 1 (mob/climb :zombie)) "a walker steps up one")
+    (is (near? [8.835 68.0 0.5] (step (wall 4) :magma_cube_big)) "four up, onto the ledge")
+    (is (near? [8.835 66.0 0.5] (step (wall 2) :magma_cube)) "two up")
+    (is (= [9.0 64.0 0.5] (step (wall 3) :magma_cube)) "three is past a middle one's hop")
+    (is (= [9.0 64.0 0.5] (step (wall 2) :magma_cube_small)) "two is past a small one's")
+    (is (= [9.0 64.0 0.5]
+           (mob/step-toward (floor-free? (into #{[9 66 0]} (for [y (range 64 66)] [8 y 0])))
+                            [9.0 64.0 0.5]
+                            to
+                            0.165 0.0
+                            2 2))
+        "a block over its head stops the hop")))
+
 (deftest an-enderman-stays-out-of-a-tunnel-two-high
   ;; issue #263: 2.9 tall, an enderman needs three free cells (mob/tall); a roof at y 66 over x 3
   ;; and on keeps it out where a zombie walks in
@@ -501,38 +524,59 @@
   (into {} (for [x (range 16) z (range 16)] [[x 63 z] nylium])))
 
 (defn nether-world
-  "Seven by seven Nether columns of the stone floor round [0 0], each topped by blocks."
-  [blocks]
-  (let [column (world/column-bytes blocks dimension/nether)]
-    (into {} (for [cx (range -3 4) cz (range -3 4)] [[cx cz] column]))))
+  "Seven by seven Nether columns of the stone floor round [0 0], each topped by blocks, every cell
+   of biome (a name; the crimson forest, whose list holds no kind the model spawns by biome, when
+   none is given)."
+  ([blocks] (nether-world blocks :crimson_forest))
+  ([blocks biome]
+   (let [column (world/column-bytes blocks dimension/nether (mob/biome-ids biome))]
+     (into {} (for [cx (range -3 4) cz (range -3 4)] [[cx cz] column])))))
 
 (def nether-spawn [0.5 64.0 0.5])
 
 (defn nether-play
   "A Normal model in play in the Nether over nether-world's columns, by the overworld's day
    (nothing to do with the Nether's spawns), after n ticks."
-  [blocks seed n]
-  (-> (sim/init {:columns (nether-world blocks)
-                 :spawn nether-spawn
-                 :dimension dimension/nether
-                 :difficulty :normal
-                 :day-time 1000
-                 :seed seed})
-      (assoc :sim/phase :play :sim/player-pos nether-spawn :sim/on-ground? true)
-      (ticks n)))
+  ([blocks seed n] (nether-play blocks seed n :crimson_forest))
+  ([blocks seed n biome]
+   (-> (sim/init {:columns (nether-world blocks biome)
+                  :spawn nether-spawn
+                  :dimension dimension/nether
+                  :difficulty :normal
+                  :day-time 1000
+                  :seed seed})
+       (assoc :sim/phase :play :sim/player-pos nether-spawn :sim/on-ground? true)
+       (ticks n))))
 
-(deftest an-enderman-spawns-on-warped-nylium-with-three-cells-of-room
+(deftest an-enderman-spawns-where-its-biome-lists-it-on-a-floor-with-three-cells-of-room
+  ;; issue #263: vanilla spawns the Nether's hostiles by the biome's monster list, read here from
+  ;; the jar's worldgen/biome files; the floor is any spawnable block, not the forest's nylium
   (let [floor (fn [[_ y _]]
                 (cond (= y 63) nylium
                       (< y 63) 1))
         rock (fn [[_ y _]] (cond (<= y 63) 1))
+        bedrock (fn [[_ y _]] (cond (<= y 63) (blocks/default-state :bedrock)))
         open (fn [c] (nil? (floor c)))
-        low (fn [[_ y _ :as c]] (and (open c) (< y 66)))]
-    (is (mob/nether-spot? floor open [3 64 3]) "nylium under the feet, the air above open")
-    (is (not (mob/nether-spot? rock open [3 64 3])) "netherrack or stone is no warped forest")
-    (is (not (mob/nether-spot? floor low [3 64 3])) "2.9 tall, it needs three cells (mob/tall)")
-    (is (not (mob/nether-spot? floor open [3 65 3])) "nothing under the feet")
-    (is (= [[3 64 3]] (mob/nether-spots floor open 3 3 48 80)))
+        low (fn [[_ y _ :as c]] (and (open c) (< y 66)))
+        warped (constantly :warped_forest)
+        crimson (constantly :crimson_forest)]
+    (is (mob/biome-lists? :warped_forest :enderman))
+    (is (mob/biome-lists? :nether_wastes :enderman))
+    (is (mob/biome-lists? :soul_sand_valley :enderman))
+    (is (not (mob/biome-lists? :crimson_forest :enderman)) "vanilla lists none in a crimson forest")
+    (is (mob/biome-spot? floor open warped :enderman [3 64 3])
+        "a warped forest's floor, room above")
+    (is (mob/biome-spot? rock open warped :enderman [3 64 3]) "its biome, not its nylium, decides")
+    (is (not (mob/biome-spot? floor open crimson :enderman [3 64 3])) "a biome that lists none")
+    (is (not (mob/biome-spot? bedrock open warped :enderman [3 64 3])) "never on bedrock")
+    (is (not (mob/biome-spot? floor low warped :enderman [3 64 3]))
+        "2.9 tall, it needs three cells (mob/tall)")
+    (is (not (mob/biome-spot? floor open warped :enderman [3 65 3])) "nothing under the feet")
+    (is (= [[3 64 3]] (mob/floor-spots floor open (mob/tall :enderman) 3 3 48 80)))
+    (is (= 4 (mob/group-size [:enderman 1 4 4] 0.99)) "the forest's pack of four")
+    (is (= 2 (mob/group-size [:x 1 2 5] 0.0)) "and lo to hi evenly")
+    (is (= 5 (mob/group-size [:x 1 2 5] 0.99)))
+    (is (= :enderman (first (mob/pick-row [[:zombified_piglin 100 4 4] [:enderman 1 4 4]] 0.999))))
     (is (= 5 (mob/pack-step 0.99 0.0)) "nextInt(6) - nextInt(6): five at most")
     (is (= -5 (mob/pack-step 0.0 0.99)))
     (is (= 0 (mob/pack-step 0.5 0.5)))))
@@ -633,23 +677,28 @@
                 (map first mob/hostile-kinds)))
   (is (every? pos-int? (map second mob/hostile-kinds))))
 
-(deftest a-warped-forest-spawns-packs-of-endermen-by-day-and-netherrack-spawns-nothing
+(deftest a-warped-forest-spawns-packs-of-endermen-by-day-and-a-crimson-forest-none
   ;; issue #263: vanilla spawns the Nether's hostiles by biome, the warped forest's list being
   ;; the enderman alone in packs of four, in any light the model tells (the overworld's night
   ;; rule would spawn nothing here by day, with no roof); the model tells the forest by its floor
-  (let [forest (nether-play warped-floor 7 500)
-        mobs (vals (:sim/mobs forest))]
-    (is (<= 1 (count mobs) (* 5 mob/enderman-pack))
+  (let [forest (nether-play warped-floor 7 500 :warped_forest)
+        mobs (vals (:sim/mobs forest))
+        pack (nth (first (mob/biome-spawns :warped_forest)) 3)]
+    (is (= [[:enderman 1 4 4]] (mob/biome-spawns :warped_forest)) "the jar's list: packs of four")
+    (is (<= 1 (count mobs) (* 5 pack))
         "five tries, a pack of up to four each, some despawned beyond 32")
     (is (every? #(= :enderman (:type %)) mobs) "the forest's one kind")
     (is (every? #(= 64.0 (second (:pos %))) mobs) "standing on the nylium")
     (is (every? #(<= mob/spawn-near (physics/distance (:pos %) nether-spawn)) mobs)
         "none nearer the player than 24")
     (is (every? #(<= (mob/flat-distance (:pos %) nether-spawn)
-                     (+ mob/spawn-far (* mob/enderman-pack (dec mob/pack-walk)) 1.0))
+                     (+ mob/spawn-far (* pack (dec mob/pack-walk)) 1.0))
                 mobs)
         "in the ring, a pack's walk past it at most")
-    (is (empty? (:sim/mobs (nether-play {} 7 500))) "a stone floor is no warped forest")))
+    (is (empty? (:sim/mobs (nether-play {} 7 500))) "a crimson forest lists no enderman")
+    (is (every? #(= :enderman (:type %)) (vals (:sim/mobs (nether-play {} 7 500 :warped_forest))))
+        "a warped forest's biome on a stone floor spawns its endermen too")
+    (is (seq (:sim/mobs (nether-play {} 7 500 :warped_forest))))))
 
 (def brick-floor
   "A column's top at y 63 of nether bricks: a fortress's floor, as the model tells one."
