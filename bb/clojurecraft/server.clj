@@ -42,7 +42,7 @@
    race's bots are on the same machine, where zlib is only CPU, the server deflating every chunk
    for every bot and each bot inflating it). sync-chunk-writes: vanilla's true unless
    SYNC_CHUNK_WRITES says (false: a race's world is thrown away, and a synchronous write per
-   saved chunk is time the server's one tick thread waits). simulation-distance: 4 chunks unless a
+   saved chunk is time the server's one tick thread waits). simulation-distance: 3 chunks unless a
    race's server overrides it (with-overrides)."
   [{:keys [port rcon-port rcon-pass level-seed difficulty max-tick-time max-players
            compression-threshold sync-chunk-writes simulation-distance]}]

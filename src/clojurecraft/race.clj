@@ -502,7 +502,9 @@
         runner (get o :runner)
         which (get o :server) ; which of the runner's servers (--server); server below is the one connected to
         landings-file (get o :landings)
-        config (edn/read-string (slurp config))
+        config (servers/for-lane (edn/read-string (slurp config))
+                                 (some-> runner
+                                         parse-long))
         {:race/keys [bots prefix until]} config
         t0 (System/currentTimeMillis)
         server (cond-> {:host host
@@ -522,8 +524,9 @@
                                parse-long)
                :server (some-> which
                                parse-long)}
-        where
-        (assoc where :simulation-distance (servers/simulation-distance config (:server where)))
+        where (assoc where
+                     :simulation-distance (servers/simulation-distance config (:server where))
+                     :runner-servers (servers/servers-of config))
         done (promise)
         live (atom {})
         ctx {:server server

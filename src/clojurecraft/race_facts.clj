@@ -157,6 +157,7 @@
     {:sample/runner (:runner race)
      :sample/server (:server race)
      :sample/simulation-distance (:simulation-distance race)
+     :sample/runner-servers (:runner-servers race)
      :sample/at now
      :sample/joined (count (filter (comp :player/pos val) worlds))
      :sample/landed (count (filter (comp :plan/go-at val) worlds))

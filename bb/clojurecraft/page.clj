@@ -96,25 +96,34 @@
 
 (defn servers-of
   "One entry for each server the samples (the SAMPLE facts of a batch's race logs) name, by server
-   number: {:server k :simulation-distance d :samples n :tick {:avg :p50 :p95 :p99}}, the tick the
-   mean of the samples taken with bots playing (an empty server's tick says nothing about the
-   load). :server and :simulation-distance are absent when the sample had none. Nil without samples."
+   number: {:server k :simulation-distance d :runner-servers m :samples n :tick {:avg :p50 :p95
+   :p99}}, the tick the mean of the samples taken with bots playing (an empty server's tick says
+   nothing about the load), m the servers its runner carried (the arm of a servers-a-runner A/B).
+   :server, :simulation-distance and :runner-servers are absent when the samples had none. Nil
+   without samples."
   [samples]
-  (not-empty (vec (for [[k ss] (sort-by (comp str key) (group-by :sample/server samples))
-                        :let [ss (vec ss)
-                              loaded (filter (fn [s] (pos? (:sample/playing s 0))) ss)
-                              tick (into {}
-                                         (for [q [:avg :p50 :p95 :p99]
-                                               :let [m (mean (keep #(get-in %
-                                                                            [:sample/server-tick q])
-                                                                   loaded))]
-                                               :when m]
-                                           [q m]))]]
-                    (cond-> {:samples (count loaded)}
-                      k (assoc :server k)
-                      (some :sample/simulation-distance ss)
-                      (assoc :simulation-distance (some :sample/simulation-distance ss))
-                      (seq tick) (assoc :tick tick))))))
+  (not-empty
+   (vec
+    (for [[k ss] (sort-by (comp str key) (group-by :sample/server samples))
+          :let [ss (vec ss)
+                loaded (filter (fn [s] (pos? (:sample/playing s 0))) ss)
+                tick (into {}
+                           (for [q [:avg :p50 :p95 :p99]
+                                 :let [m (mean (keep #(get-in % [:sample/server-tick q]) loaded))]
+                                 :when m]
+                             [q m]))]]
+      (cond-> {:samples (count loaded)}
+        k (assoc :server k)
+        (some :sample/simulation-distance ss)
+        (assoc :simulation-distance (some :sample/simulation-distance ss))
+        (some :sample/runner-servers ss) (assoc :runner-servers (some :sample/runner-servers ss))
+        (seq tick) (assoc :tick tick))))))
+
+(defn runner-servers
+  "How many servers the runner of a batch's servers (servers-of's value) carried: their own
+   :runner-servers, else, for samples from before it was recorded, nil."
+  [servers]
+  (some :runner-servers servers))
 
 (defn reached
   "How many runs reached each milestone: a run's RESULT carries :plan/reached."
@@ -279,7 +288,9 @@
       (:round/leader r) (assoc :leader (:round/leader r))
       (:round/coverage r) (assoc :coverage (:round/coverage r) :senses (:round/senses r {}))
       (:round/observed r) (assoc :observed (:round/observed r))
-      (seq (:round/servers r)) (assoc :servers (:round/servers r)))))
+      (seq (:round/servers r)) (assoc :servers (:round/servers r))
+      (runner-servers (:round/servers r))
+      (assoc :runner-servers (runner-servers (:round/servers r))))))
 
 (defn day-of
   "The UTC day a batch belongs to, yyyy-mm-dd: its run's start's, else its commit's, else its
@@ -354,7 +365,8 @@
    start and first reach, the latest end, the runners, the furthest leader; deaths only over the
    batches that counted them, with the runs they cover as :death-runs; the runs that never got
    into play (:unplayed, played) over the batches that kept them out; the observability rows
-   added (observed-sum)."
+   added (observed-sum); :runner-servers when every batch that names it names the same (one
+   arm of a servers-a-runner A/B)."
   [bs]
   (let [some-of (fn [k] (some k bs))
         sum (fn [k xs] (reduce + 0 (keep k xs)))
@@ -382,7 +394,9 @@
       (seq (keep :issues bs)) (assoc :issues (apply merge (keep :issues bs)))
       (seq (keep :first bs)) (assoc :first (apply merge-with earliest (keep :first bs)))
       (seq (keep :leader bs)) (assoc :leader (best-leader (keep :leader bs)))
-      (seq (keep :observed bs)) (assoc :observed (observed-sum (keep :observed bs))))))
+      (seq (keep :observed bs)) (assoc :observed (observed-sum (keep :observed bs)))
+      (= 1 (count (distinct (keep :runner-servers bs))))
+      (assoc :runner-servers (some-of :runner-servers)))))
 
 (defn totals
   "A day's totals for one kind's batches (combine): the counts, times, first reaches and deaths;
