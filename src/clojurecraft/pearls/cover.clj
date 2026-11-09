@@ -224,6 +224,28 @@
        (< (memory/started-count-within? world :place pparams/cover-place-hold-ms)
           pparams/cover-place-max)))
 
+(defn open-striker
+  "[eid entity] of the nearest angry enderman (entity/creepy?) at hand, within strike-range and
+   the sword's reach (combat/in-reach?), blacklisted or not, while the bot stands farther than
+   answer-home-reach from its burrow's end or has none (pplace/shelter); nil otherwise. The hunt
+   answers it where the bot stands (fought over danger-health, a meal or a wall under it), never
+   with a walk home or a back-off: an enderman walks as fast as the bot and never teleports from a
+   player's hit, so a walk with one at hand takes its hits with no swing back, five or six of
+   them to a death."
+  [world]
+  (let [home (pplace/shelter world)
+        pos (:player/pos world)
+        at-hand (fn [[_ e]]
+                  (and (entity/creepy? e)
+                       (<= (physics/distance pos (:entity/pos e)) pparams/strike-range)
+                       (combat/in-reach? world e)))]
+    (when-not (and home (<= (physics/distance (intent/feet world) home) pparams/answer-home-reach))
+      (entity/nearest (into {}
+                            (filter at-hand)
+                            (psense/endermen (avoided/forget world :blacklist)
+                                             pparams/strike-range))
+                      pos))))
+
 (defn cover-from
   "The intent that covers the bot from the swarm: from a shooter in sight (shot-at?, never fought,
    never out-ranged) a walk to a cell beside the feet out of its sight (hide-cell; :intent/for

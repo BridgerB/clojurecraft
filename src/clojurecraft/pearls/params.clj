@@ -158,6 +158,9 @@
 ; health under which the hunt never fights, provokes or goes toward an enderman: one enderman hit (7 on Normal, ns doc) plus a margin, the same line combat breaks a fight off at. At or under it the bot backs off, walks home, eats or rests where it stands until its health is back over it
 (def break-hp (:break-hp thresholds))
 
+; blocks from the burrow's end within which a bot struck at hand by an angry enderman walks home rather than answering it where it stands (pearls.edn)
+(def answer-home-reach (:answer-home-reach thresholds))
+
 (def resume-hp (:resume-hp thresholds))
 
 (def wander-lookouts (:wander-lookouts thresholds))

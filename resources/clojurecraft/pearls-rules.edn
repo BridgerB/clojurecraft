@@ -56,6 +56,22 @@
    :rule/phase :leave-fortress
    :rule/when [[:not :in?] :room-exit]
    :rule/then [:fact :room-exit]}
+  ;; an angry enderman at hand outside the burrow's reach (open-striker) is answered where the bot
+  ;; stands: fought over danger-health (held, ending under retreat-health), a meal or a wall under
+  ;; it (never a fight, #577); a walk home or a back-off takes its hits with no swing back
+  {:rule/id :hunt/fight-in-open
+   :rule/phase :survive
+   :rule/when [[:not :in?] [:not :hurt?] :osid]
+   :rule/then [:intent
+               {:intent/kind :fight
+                :intent/target [:fact :osid]
+                :intent/hold? true
+                :intent/yield? true
+                :intent/for :pearls}]}
+  {:rule/id :hunt/wall-in-open
+   :rule/phase :survive
+   :rule/when [[:not :in?] :hurt? :osid :meal-or-wall-off]
+   :rule/then [:fact :meal-or-wall-off]}
   {:rule/id :hunt/walk-home
    :rule/phase :survive
    :rule/when [:home [:not :in?] :home-pressed? :home-routable?]
@@ -156,7 +172,7 @@
    :rule/then [:fact :remaking]}
   {:rule/id :pearls/reserve-stems
    :rule/phase :upkeep
-   :rule/when [[:not :hurt?] :reserve-gather]
+   :rule/when [[:not :hurt?] [:not :tracked?] :reserve-gather]
    :rule/then [:fact :reserve-gather]}
   {:rule/id :pearls/seek-wood-for-pickaxe
    :rule/phase :upkeep

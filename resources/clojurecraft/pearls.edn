@@ -28,6 +28,8 @@
  ;; Blocks from the feet within which an angry enderman keeps the bot where it is:
  ;; the burrow is not given up (stale?) and no relocation begins while one stands this near
  :hold-radius 16.0
+ ;; blocks from the burrow's end within which a bot an angry enderman strikes at hand walks home rather than answering it where it stands: the mouth is 5.8 from the end (three stairs down, five along), and past the tunnel's mouth no enderman reaches the bot
+ :answer-home-reach 6.0
  ;; Health under which an open fight with a teleporter (enderman) breaks off
  :break-hp 15.0
  ;; Health to heal back up to before an open fight resumes after covering

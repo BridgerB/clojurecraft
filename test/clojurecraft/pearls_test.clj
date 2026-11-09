@@ -623,17 +623,55 @@
     (is (not= :defend
               (:goal/id (plan/choose (assoc at-mouth :plan/goals #{:ender-pearls}) plan/goals)))
         "the :defend row is done, so the hunt's walk home is not cut")
-    (is (= :defend
-           (:goal/id (plan/choose (assoc no-burrow :plan/goals #{:ender-pearls}) plan/goals)))
-        "and with no burrow it is :defend's turn as before")
+    (is (not= :defend
+              (:goal/id (plan/choose (assoc no-burrow :plan/goals #{:ender-pearls}) plan/goals)))
+        "with no burrow it is the hunt's too: :defend's fight retreats from a neutral one")
     (is (= {:intent/kind :walk :intent/target [8 61 8] :intent/for :shelter}
            (plan/next-intent at-mouth ps/row plan/goals))
         "and it walks home")
-    (is (= [9] (keys (combat/threats no-burrow)))
-        "with no burrow near the attacker is :defend's as before")
+    (is (empty? (combat/threats no-burrow)) "with no burrow near the attacker is not :defend's")
+    (is (= {:intent/kind :fight
+            :intent/target 9
+            :intent/hold? true
+            :intent/yield? true
+            :intent/for :pearls}
+           (plan/next-intent no-burrow ps/row plan/goals))
+        "the hunt fights it where the bot stands")
     (is (empty? (combat/threats (hit (ps/burrowed [8.5 61.0 8.5]
                                                   {9 (assoc angry :entity/pos [5.5 61.0 8.5])}))))
         "in the burrow's end it stays the hunt's: a held fight")))
+
+(deftest an-enderman-at-hand-out-of-the-burrows-reach-is-answered-where-the-bot-stands
+  ;; the enderman deaths in the open in sim forest-start runs: struck eight blocks from the burrow,
+  ;; the bot walked home with the enderman at hand and took five or six hits with no swing back
+  (let [angry (assoc (ps/enderman [12.5 64.0 2.5]) :entity/creepy? true)
+        out (assoc (ps/burrowed [14.5 64.0 2.5] {9 angry}) :player/attacker 9)
+        home {:intent/kind :walk :intent/target [8 61 8] :intent/for :shelter}]
+    (is (= [9 angry] (pcover/open-striker out)) "nine blocks from the burrow's end")
+    (is (= {:intent/kind :fight
+            :intent/target 9
+            :intent/hold? true
+            :intent/yield? true
+            :intent/for :pearls}
+           (plan/next-intent out ps/row plan/goals))
+        "fought where it stands, held: no walk, no retreat")
+    (is (plan/interrupts? out ps/row (assoc home :intent/goal :ender-pearls))
+        "a walk home already begun is cut")
+    (is (= :place
+           (:intent/kind (plan/next-intent (-> out
+                                               (assoc :player/health 8.0)
+                                               (assoc-in [:player/inventory 2]
+                                                         (ps/item :cobblestone 64)))
+                                           ps/row
+                                           plan/goals)))
+        "under danger-health a wall, never the fight")
+    (is (nil? (pcover/open-striker (assoc out
+                                          :player/pos [3.5 64.0 8.5]
+                                          :world/entities
+                                          {9 (assoc angry :entity/pos [4.5 64.0 8.5])})))
+        "at the burrow's mouth the walk home stands: past the tunnel's mouth it cannot reach")
+    (is (nil? (pcover/open-striker (assoc-in out [:world/entities 9 :entity/creepy?] false)))
+        "a calm one is no striker")))
 
 (deftest a-cornered-bot-under-danger-health-eats-or-walls-off
   ;; gym plan run 40747177526 run 1 (issue #263, pearls-12): 7.6 health, an angry enderman a block
@@ -664,9 +702,8 @@
              ps/row
              plan/goals)))
         "hungry with food held: the meal first")
-    (is (= :back-off
-           (:intent/kind (plan/next-intent (assoc w :plan/cornered #{}) ps/row plan/goals)))
-        "not cornered: backed off from as before")
+    (is (= :place (:intent/kind (plan/next-intent (assoc w :plan/cornered #{}) ps/row plan/goals)))
+        "not cornered, walled off too: a back-off from one at hand takes its hits")
     (is (plan/interrupts? w ps/row {:intent/kind :walk :intent/target [1 64 1] :intent/for :pearls})
         "an angry one at hand cuts a walk")
     (is (not (plan/interrupts? w ps/row (plan/next-intent w ps/row plan/goals)))

@@ -178,6 +178,8 @@
    :cover-from (fn [_ w] (pcover/cover-from w))
    :fortress-tunnel-out (fn [_ w] (fexit/fortress-tunnel-out w))
    :leave-sight (fn [_ w] (pcover/leave-sight w))
+   :open-striker (fn [_ w] (pcover/open-striker w))
+   :osid (fn [f _] (first (f :open-striker)))
    :room-exit (fn [_ w] (fexit/room-exit w))
    :home-pressed? (fn [f w]
                     (or (f :ce)

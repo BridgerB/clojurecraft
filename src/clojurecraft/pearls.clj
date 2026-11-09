@@ -285,7 +285,8 @@
            (and (not (contains? pparams/answers-to-hand (:intent/kind i)))
                 (not (:intent/wall? i))
                 (not (and (= :walk (:intent/kind i))
-                          (= (:intent/target i) (:pearls/shelter world))))
+                          (= (:intent/target i) (:pearls/shelter world))
+                          (nil? (pcover/open-striker world))))
                 (not= (:pearls/shelter world) (intent/feet world))
                 (or (psense/beset? world)
                     (and (out-walk? world i)
@@ -293,6 +294,7 @@
                          (or (some? (psense/angry-near world))
                              (psense/angry-within? world pparams/hold-radius)))
                     (some? (first (psense/struck-by world)))
+                    (some? (pcover/open-striker world))
                     (some? (fexit/tunnel-answer world))
                     (psense/shot-at? world)
                     (and (= :lookout (:intent/kind i)) (some? (first (psense/threat world)))))
@@ -324,11 +326,16 @@
 
 (defmethod combat/claims-attacker? :pearls
   ;; an enderman that hit the bot, with a burrow near and a way to it (or the bot in it), is the
-  ;; hunt's: its first branch walks home. Struck by a heavy hostile (blaze, ghast, wither skeleton,
+  ;; hunt's: its first branch walks home. One at hand with no burrow in reach is the hunt's too
+  ;; (pcover/open-striker): the :defend row's fight on a neutral kind retreats under the danger
+  ;; line, and an enderman follows a retreat at the bot's pace. Struck by a heavy hostile (blaze, ghast, wither skeleton,
   ;; piglin) during the pearls stage, the hunt claims it so the :defend row does not fight it with a
   ;; sword in the open.
   [world _ e]
   (or (and (= :enderman (entity/kind e))
+           (fexit/pearls-stage? world)
+           (some? (pcover/open-striker world)))
+      (and (= :enderman (entity/kind e))
            (some? (pplace/shelter world))
            (or (= (pplace/shelter world) (intent/feet world))
                (intent/routable?
