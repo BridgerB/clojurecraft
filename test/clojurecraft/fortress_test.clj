@@ -1509,8 +1509,11 @@
     (is
      (nil? (filler/building (w :cobblestone 3 :stick 8) 1))
      "with the sticks to make one the last three are a stone pickaxe's: z14 job 5 laid them all and ended with 8 sticks and no pickaxe")
-    (is (= :cobblestone (filler/building (w :cobblestone 3) 1))
-        "with no sticks they make no pickaxe: laid")
+    (is
+     (nil? (filler/building (w :cobblestone 3) 1))
+     "with no sticks and no pickaxe, still kept: sticks come from stems (issue #263, filler/stone-kept)")
+    (is (= :cobblestone (filler/building (w :cobblestone 3 :stone_pickaxe 2) 1))
+        "with two pickaxes held, laid")
     (is (= :dirt (filler/building (w :cobblestone 3 :stick 8 :dirt 4) 1))
         "another filler is laid before them")
     (is (= :cobblestone (filler/building (w :cobblestone 4 :stick 8) 1))
@@ -1617,3 +1620,25 @@
     (is (contains? #{:active :done} (get-in out [:plan/intent :intent/status])))))
 
 
+
+(deftest the-last-stone-of-a-pickaxe-is-never-laid-while-pickaxes-are-short
+  ;; Issue #263, real stage-18 lanes on 4170b7d: two bots wore out their last pickaxe holding a
+  ;; crafting table and six sticks, and no cobblestone, deepslate or blackstone: filler/pick laid
+  ;; every block of it in seals, cover and pillars. The stone of one more pickaxe, all three
+  ;; materials together, stays while fewer than two pickaxes are held.
+  (let [w (fn [& items]
+            (assoc (rock {})
+                   :player/inventory
+                   (into {}
+                         (map-indexed (fn [i [item n]] [i {:item (recipe/item-id item) :count n}]))
+                         (partition 2 items))))]
+    (is (nil? (filler/pick (w :cobblestone 3 :stick 6 :crafting_table 1) 1))
+        "the last three cobblestone: no seal, no cover")
+    (is (nil? (filler/pick (w :cobblestone 1 :blackstone 2 :stick 6) 1))
+        "three stone of two kinds together: kept")
+    (is (= :cobblestone (filler/pick (w :cobblestone 4 :stick 6) 1)) "one over the three: laid")
+    (is (= :netherrack (filler/pick (w :cobblestone 3 :netherrack 50) 1)) "another filler first")
+    (is (= :cobblestone (filler/pick (w :cobblestone 3 :stone_pickaxe 1 :iron_pickaxe 1) 1))
+        "two pickaxes held: the stone is spent")
+    (is (= :blackstone (filler/pick (w :blackstone 4) 1)) "blackstone over three: laid")
+    (is (nil? (filler/pick (w :blackstone 3) 1)) "the last three blackstone: kept")))

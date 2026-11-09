@@ -30,19 +30,48 @@
    loot gives and the soul sand a floor of the Nether is dug out as."
   [:polished_blackstone_bricks :cracked_polished_blackstone_bricks :soul_sand])
 
+(def pickaxe-cobble 3) ; cobblestone a building filler never lays: a stone pickaxe's, for the one a tunnel breaks
+
+(def stone-materials
+  "The blocks a stone pickaxe is made of (the item tag stone_tool_materials): what a filler keeps
+   back for one (stone-kept)."
+  #{:cobblestone :cobbled_deepslate :blackstone})
+
+(def pickaxe-spares 2) ; pickaxes under which the stone of one more is kept back (stone-kept)
+
+(defn pickaxes-held
+  "How many pickaxes of any kind the held item counts hold."
+  [held]
+  (reduce + 0 (keep (fn [[item c]] (when (str/ends-with? (name item) "_pickaxe") c)) held)))
+
+(defn stone-kept
+  "The stone (stone-materials, together) no filler lays: pickaxe-cobble while fewer than
+   pickaxe-spares pickaxes are held, else 0. Two real stage-18 bots on 4170b7d wore out their last
+   pickaxe holding a table and sticks and no cobblestone, deepslate or blackstone: every block of
+   it had gone into floors, seals and cover."
+  [held]
+  (if (< (pickaxes-held held) pickaxe-spares) pickaxe-cobble 0))
+
+(defn spendable?
+  "May n of item be laid from the held item counts: it is no stone material, or the stone left
+   after it (stone-materials together) is stone-kept or more."
+  [held item n]
+  (or (not (contains? stone-materials item))
+      (>= (- (reduce + 0 (vals (select-keys held stone-materials))) n) (stone-kept held))))
+
 (defn pick
-  "The first of fillers the inventory holds n or more of, else a planks item it holds n or more of,
-   else the first of last-resorts it holds n or more of, or nil. Planks and last-resorts are
-   fallbacks only: carried counts none of them, so a descent never spends them."
+  "The first of fillers the inventory holds n or more of and may lay (spendable?), else a planks
+   item it holds n or more of, else the first of last-resorts it holds n or more of, or nil.
+   Planks and last-resorts are fallbacks only: carried counts none of them, so a descent never
+   spends them."
   [world n]
   (let [held (recipe/counts (:player/inventory world))]
-    (or (first (filter #(>= (get held % 0) n) fillers))
+    (or (first (filter #(and (>= (get held % 0) n) (spendable? held % n)) fillers))
         (planks-of held n)
         (first (filter #(>= (get held % 0) n) last-resorts)))))
 
 (def cobble-reserve 8) ; cobblestone a building filler keeps for seals and cover: fireball-proof, and the one block the Nether does not give
 
-(def pickaxe-cobble 3) ; cobblestone a building filler never lays: a stone pickaxe's, for the one a tunnel breaks
 
 (defn pickaxe-reserve
   "The cobblestone kept back for a replacement pickaxe: pickaxe-cobble when the sticks to make one
@@ -55,13 +84,15 @@
    tunnel digs hundreds), then the rest of fillers in order, cobblestone only above n plus
    cobble-reserve, then any filler (cobblestone above n plus pickaxe-cobble), planks and the last
    resorts: a tunnel is not stopped for the reserve, but the cobblestone of one stone pickaxe is
-   never laid."
+   never laid, nor the last stone of one while pickaxes are short (spendable?)."
   [world n]
   (let [held (recipe/counts (:player/inventory world))
         need (fn [item] (if (= :cobblestone item) (+ n cobble-reserve) n))]
-    (or (first (filter #(>= (get held % 0) (need %))
+    (or (first (filter #(and (>= (get held % 0) (need %)) (spendable? held % n))
                        (cons :netherrack (remove #{:netherrack} fillers))))
-        (first (filter #(>= (get held % 0) (if (= :cobblestone %) (+ n (pickaxe-reserve held)) n))
+        (first (filter #(and (>= (get held % 0)
+                                 (if (= :cobblestone %) (+ n (pickaxe-reserve held)) n))
+                             (spendable? held % n))
                        fillers))
         (planks-of held n)
         (first (filter #(>= (get held % 0) n) last-resorts)))))

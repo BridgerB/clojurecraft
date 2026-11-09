@@ -3,7 +3,8 @@
    cobblestone and sticks of a stone pickaxe and no table to make it at is a bot that left its table
    behind.
 
-   Requiring this namespace registers the :keep-table row's rules: an always row in a chained run,
+   Requiring this namespace registers the rules of the :keep-table rows (:keep-table-2 today, its
+   dig and pick-up committed so no other row but an escape cuts them): an always row in a chained run,
    after the crafting rows of the table. It is pending right after a craft at a table the bot placed
    itself (a :place of it ended :done on that very cell), when no table is held, the table is in
    reach and the bag has room, and the row that would be worked next does not craft again
@@ -43,7 +44,7 @@
   "Does the row that would be worked next, without this one, craft again at once: its next intent
    a craft, the opening of a container, or a walk to the table? Then the table stays where it is."
   [world]
-  (let [others (into [] (remove #(= :keep-table (:goal/id %))) plan/goals)
+  (let [others (into [] (remove #(#{:keep-table :keep-table-2} (:goal/id %))) plan/goals)
         goal (plan/choose world others)
         i (when goal (plan/next-intent world goal others))]
     (boolean (and i

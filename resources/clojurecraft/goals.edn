@@ -361,7 +361,19 @@
   :goal/always? true
   :goal/doc "carry on the crafting table the bot placed, once its crafting is done"
   :goal/done? :table-kept?
-  :goal/plan :keep-table}
+  :goal/plan :keep-table
+  :goal/superseded-by :keep-table-2}
+ ;; :keep-table, its dig and pick-up committed: the pearl hunt cut the take-along in all 14
+ ;; no-pickaxe endings of the real stage-18 lanes on 4170b7d, and the dig is pending only within
+ ;; table/craft-gap-ms of the craft, so the table stayed where it was and the next pickaxe had none
+ {:goal/id :keep-table-2
+  :goal/priority 15
+  :goal/target? true
+  :goal/always? true
+  :goal/doc "carry on the crafting table the bot placed, once its crafting is done, uncut"
+  :goal/done? :table-kept?
+  :goal/plan :keep-table
+  :goal/commits #{:collect :collect-drops :dig :toss}}
  {:goal/id :blaze-rods
   :goal/priority 18
   :goal/target? true
