@@ -437,6 +437,18 @@
   (let [{:intent/keys [kind for status]} (:plan/last world)]
     (and (= :walk kind) (= :shelter for) (= :done status))))
 
+(defn home-striker
+  "[eid e] of the enderman that struck the bot within combat/struck-ms (combat/striker), still
+   within strike-range of the feet and the sword's reach (combat/in-reach?), or nil. The walk home
+   to the burrow is no answer to it: five real bots were struck three to six times on that walk,
+   from 11 to 20 health, never swung, and died short of the burrow."
+  [world]
+  (when-let [[_ e :as s] (combat/striker world)]
+    (when (and (= :enderman (entity/kind e))
+               (<= (physics/distance (:player/pos world) (:entity/pos e)) pparams/strike-range)
+               (combat/in-reach? world e))
+      s)))
+
 (defn struck-by
   "[eid e] of the nearest angry enderman (entity/creepy?) within the sword's reach (combat/in-reach?)
    and strike-range of the feet while health is under struck-health, fought out or not, or nil.

@@ -68,6 +68,7 @@
    :te (fn [f _] (second (f :threat)))
    :struck-by (fn [_ w] (psense/struck-by w))
    :sid (fn [f _] (first (f :struck-by)))
+   :home-sid (fn [_ w] (first (psense/home-striker w)))
    :swarmed? (fn [_ w] (psense/swarmed? w))
    :cornered? (fn [f w] (and (f :near?) (f :eid) (avoided/noted? w :cornered (f :eid))))
    :blocking (fn [f w] (when (f :at-end?) (psense/blocking w)))
