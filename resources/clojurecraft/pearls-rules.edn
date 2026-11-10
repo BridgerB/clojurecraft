@@ -97,6 +97,9 @@
    :rule/phase :leave-fortress
    :rule/when [[:not :in?] :room-exit]
    :rule/then [:fact :room-exit]}
+  ;; in the pit with an enderman pressing: heal there, and fight its legs from there only at
+  ;; resume-hp (pearls/pit)
+  {:rule/id :hunt/pit-hold :rule/phase :survive :rule/when [:pit-hold] :rule/then [:fact :pit-hold]}
   ;; struck by an enderman (on the way home too), the bot fights back where it stands, never walking on
   ;; under its hits; hurt, the walk home goes on (the burrow is the answer under danger-health)
   {:rule/id :hunt/fight-back-struck
@@ -109,6 +112,12 @@
    :rule/phase :survive
    :rule/when [:home [:not :in?] :home-pressed? :home-routable?]
    :rule/then [:fact :way-home]}
+  ;; under danger-health with an angry enderman at hand and no burrow to walk to: two cells down,
+  ;; out of its reach, never a meal, a wall or a pillar beside it (pearls/pit)
+  {:rule/id :hunt/pit-dig
+   :rule/phase :survive
+   :rule/when [[:not :in?] :pit-dig]
+   :rule/then [:fact :pit-dig]}
   {:rule/id :hunt/cover-from-swarm
    :rule/phase :survive
    :rule/when [:swarmed? [:not :in?] [:not :home] :cover-from]

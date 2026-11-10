@@ -330,12 +330,14 @@
     (into (comp (map (comp entity/kind val)) (remove pparams/shunned)) (entity/hostiles world))))
 
 (defmethod combat/claims-attacker? :pearls
-  ;; an enderman that hit the bot, with a burrow near and a way to it (or the bot in it), is the
-  ;; hunt's: its first branch walks home. Struck by a heavy hostile (blaze, ghast, wither skeleton,
+  ;; during the pearls stage an enderman that hit the bot is the hunt's, burrow or not: a :defend
+  ;; fight on it took turns with the hunt's burrow cut every second and neither finished. Before
+  ;; it, one with a burrow near and a way to it (or the bot in it) is the hunt's: it walks home. Struck by a heavy hostile (blaze, ghast, wither skeleton,
   ;; piglin) during the pearls stage, the hunt claims it so the :defend row does not fight it with a
   ;; sword in the open.
   [world _ e]
-  (or (and (= :enderman (entity/kind e))
+  (or (and (= :enderman (entity/kind e)) (fexit/pearls-stage? world))
+      (and (= :enderman (entity/kind e))
            (some? (pplace/shelter world))
            (or (= (pplace/shelter world) (intent/feet world))
                (intent/routable?

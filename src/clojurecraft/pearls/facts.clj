@@ -14,6 +14,7 @@
             [clojurecraft.pearls.cover :as pcover]
             [clojurecraft.pearls.move :as pmove]
             [clojurecraft.pearls.params :as pparams]
+            [clojurecraft.pearls.pit :as ppit]
             [clojurecraft.pearls.place :as pplace]
             [clojurecraft.pearls.sense :as psense]
             [clojurecraft.pearls.upkeep :as pupkeep]
@@ -69,6 +70,8 @@
    :struck-by (fn [_ w] (psense/struck-by w))
    :sid (fn [f _] (first (f :struck-by)))
    :home-sid (fn [_ w] (first (psense/home-striker w)))
+   :pit-dig (fn [_ w] (ppit/dig w))
+   :pit-hold (fn [_ w] (ppit/hold w))
    :swarmed? (fn [_ w] (psense/swarmed? w))
    :cornered? (fn [f w] (and (f :near?) (f :eid) (avoided/noted? w :cornered (f :eid))))
    :blocking (fn [f w] (when (f :at-end?) (psense/blocking w)))
