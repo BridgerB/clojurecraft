@@ -218,6 +218,16 @@
                                table-placed?
                                (and (fexit/near-fortress? world) (< k target-picks)))))))))
 
+(defn take-table-step
+  "The dig (or the toss before it) that takes the placed table along (make/take-table-along), or
+   nil: never its :inventory-full wait. With every slot full and nothing to throw (window/junk-slot)
+   the table stays where it is and the row is done (spare-intent nil): a planner wait ends the plan,
+   as it ended nine of the 11 inventory-full endings of the real stage-18 lanes on 2026-11-09,
+   each 20 s after the third spare pickaxe was crafted."
+  [world]
+  (let [i (make/take-table-along world)]
+    (when (:intent/kind i) (intent/why :picks/take-table-along i))))
+
 (defn spare-intent
   "The spare-picks row's next intent, or nil: nil when not pending?, and nil when pending? but
    none of its steps can start now (no toss, no pickup, no craft, no table to take). Its own
@@ -242,8 +252,7 @@
                                    (assoc goal :goal/provides {:item/stone_pickaxe 1})
                                    (filterv #(not= :stone-pickaxe (:goal/id %)) table))))
         ;; 4. Take the placed table along once crafted
-        (when (placed-table? world)
-          (intent/why :picks/take-table-along (make/take-table-along world)))
+        (when (placed-table? world) (take-table-step world))
         ;; 5. Collect dropped table if lying near
         (when-let [[_ e] (entity/nearest (table-drops-near world) (:player/pos world))]
           (intent/why :picks/collect-dropped-table

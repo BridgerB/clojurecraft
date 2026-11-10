@@ -299,3 +299,77 @@
                  (update :player/inventory into (for [p (range 1 36)] [p {:item sand :count 64}])))
         [_ fx] (fx/fold step full [(tick 50) (tick 100) (tick 150)])]
     (is (= [[(inventory/toss-click main-0) 5]] (clicks fx)) "junk thrown, the craft not failed")))
+
+(defn bag
+  "A player inventory of the stacks [item n] in slots 9 on (main first, then the hotbar), a count
+   over 64 split into stacks of 64."
+  [stacks]
+  (into {}
+        (map-indexed (fn [i [item n]] [(nth (concat (range 9 36) (range 0 9)) i)
+                                       {:item (recipe/item-id item) :count n}]))
+        (for [[item n] stacks
+              c (concat (repeat (quot n 64) 64) (when (pos? (rem n 64)) [(rem n 64)]))]
+          [item c])))
+
+(def r18-bag
+  "Clj_r18's inventory when its plan ended :inventory-full (real stage-18 lane 8, batch 3, on
+   354f7c9, issue #263): every slot full, nothing junk, no worn spare, every building block at or under
+   the 128 a kind keeps."
+  [[:granite 64] [:andesite 64] [:diorite 128] [:netherrack 128] [:cobbled_deepslate 64] [:dirt 64]
+   [:cobblestone 88] [:gravel 16] [:warped_nylium 4] [:warped_roots 5] [:weeping_vines 1]
+   [:warped_fungus 2] [:crimson_roots 1] [:warped_stem 1] [:crimson_stem 1] [:leather 6] [:bone 2]
+   [:string 3] [:coal 4] [:flint 1] [:oak_planks 1] [:spruce_planks 1] [:stick 6] [:blaze_rod 7]
+   [:cooked_beef 16] [:stone_pickaxe 1] [:stone_pickaxe 1] [:stone_pickaxe 1] [:iron_sword 1]
+   [:stone_sword 1] [:flint_and_steel 1] [:water_bucket 1] [:bucket 1]])
+
+(deftest a-stage-18-bag-holds-junk-to-throw
+  ;; issue #263: the 11 inventory-full endings of the real stage-18 lanes on 2026-11-09 each held
+  ;; this bag. The Nether forests' plants are junk, gravel and kill drops are junk at the pearls,
+  ;; and building blocks are kept all together, not 128 a kind
+  (let [inv (bag r18-bag)
+        late {:player/inventory inv :plan/goals #{:ender-pearls}}
+        name-at (fn [w]
+                  (some->> (window/junk-slot w)
+                           (get (:player/inventory w))
+                           :item
+                           recipe/item-name))]
+    (is (= 35 (count inv)) "35 stacks from the RESULT's counts")
+    (is (= :warped_nylium (name-at {:player/inventory inv}))
+        "at any stage the forest's floor and plants are junk; gravel is not")
+    (is (= :gravel (name-at late))
+        "at the pearls gravel is junk too, and it comes first in the bag")
+    (let [no-plants (assoc late
+                           :player/inventory
+                           (bag (remove #(#{:warped_nylium :warped_roots :weeping_vines
+                                            :warped_fungus :crimson_roots}
+                                           (first %))
+                                        r18-bag)))]
+      (is (= :gravel (name-at no-plants))
+          "with no plants: gravel and the kill drops, at the pearls")
+      (is
+       (= :granite (name-at (dissoc no-plants :plan/goals)))
+       "before the pearls gravel and the drops stay, and the building blocks kept together give room")
+      (is (= :granite
+             (name-at (assoc no-plants
+                             :player/inventory
+                             (bag (remove #(#{:warped_nylium :warped_roots :weeping_vines
+                                              :warped_fungus :crimson_roots :gravel :leather :bone
+                                              :string}
+                                             (first %))
+                                          r18-bag)))))
+          "then the least useful building block: about 600 held, 256 kept together"))
+    (is (not (window/junk? {:plan/goals #{:portal}} :gravel))
+        "before the rods gravel is an earlier stage's flint: kept")
+    (is (window/junk? {:plan/reached #{:blaze-rods}} :gravel) "past the rods: junk")))
+
+(deftest building-blocks-are-kept-together
+  (let [w (fn [& stacks] {:player/inventory (bag (partition 2 stacks))})]
+    (is (= 9 (window/junk-slot (w :granite 64 :cobblestone 128 :netherrack 128)))
+        "320 together: the granite stack goes, 256 stay")
+    (is (nil? (window/junk-slot (w :granite 64 :cobblestone 128 :netherrack 64)))
+        "256 together: nothing goes")
+    (is (= 11 (window/junk-slot (w :cobblestone 128 :andesite 64 :diorite 64 :dirt 64)))
+        "no granite: the andesite goes first, never the cobblestone (not in the order)")))
+
+(deftest every-late-junk-item-is-an-item-of-the-game
+  (is (every? recipe/item-id window/late-junk) (pr-str (remove recipe/item-id window/late-junk))))

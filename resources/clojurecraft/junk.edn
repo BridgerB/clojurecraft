@@ -1,0 +1,30 @@
+;; What a full inventory may throw away to make room, as data: read by clojurecraft.window
+;; (junk-slot). Hand-written. Every item here is an item of the game (craft_test holds it).
+{;; Always junk: what mining, walking and the Nether's tunnels and forests pick up that no stage
+ ;; asks for, no recipe the goals reach takes and no floor is laid from (filler/fillers). The
+ ;; fortress's own bricks and fences are junk too: a fortress dug through fills slots with them by
+ ;; the hundred (issue #580). The Nether forests' floor and plants (nylium, roots, fungi, vines,
+ ;; sprouts) filled two to five slots of every one of the 11 inventory-full endings of the real
+ ;; stage-18 lanes on 2026-11-09 (issue #263).
+ :junk/always #{:acacia_sapling :amethyst_shard :big_dripleaf :birch_sapling :calcite
+                :cherry_sapling :clay_ball :crimson_fungus :crimson_nylium :crimson_roots
+                :dark_oak_sapling :dripstone_block :gold_nugget :jungle_sapling :lantern
+                :lapis_lazuli :leaf_litter :magma_block :mangrove_propagule :moss_block :moss_carpet
+                :nether_brick_fence :nether_bricks :nether_sprouts :nether_wart_block :oak_sapling
+                :pointed_dripstone :quartz :raw_copper :red_sand :red_sandstone :redstone :sand
+                :sandstone :shroomlight :small_dripleaf :soul_sand :soul_soil :spruce_sapling
+                :tuff_bricks :twisting_vines :warped_fungus :warped_nylium :warped_roots
+                :warped_wart_block :weeping_vines :wheat_seeds :wildflowers}
+ ;; Junk once the run is past the stage named by :junk/late-after (reached, or the run's only goal
+ ;; the pearls): gravel (an earlier stage's flint), and what kills drop that no later stage takes.
+ ;; Every one of the 11 held gravel, bone, string, leather and most white wool, six slots.
+ :junk/late #{:bone :gravel :leather :string :white_wool}
+ :junk/late-after :blaze-rods
+ ;; Building blocks are also kept all together: a stack of one of :junk/filler-order (that order,
+ ;; the least useful first) may go while the building blocks held without it are
+ ;; :junk/filler-total or more. The 11 held about 600 in nine slots, each kind at or under the
+ ;; 128 a kind keeps on its own, so not one stack could go. Cobblestone is never in the order: it
+ ;; goes only above its own keep (window/filler-keep).
+ :junk/filler-total 256
+ :junk/filler-order [:granite :andesite :diorite :dirt :tuff :cobbled_deepslate :netherrack :basalt
+                     :blackstone]}
