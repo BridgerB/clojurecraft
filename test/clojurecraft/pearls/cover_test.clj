@@ -253,3 +253,15 @@
     (is (not= :walk (:intent/kind (pcover/cover-from walked))) "a walk a moment ago: no other")
     (is (pcover/hide-ok? (assoc walked :time/now (+ 10000 pparams/hide-hold-ms 1)))
         "after the hold, a hide walk again")))
+
+(deftest a-ghast-beyond-the-simulation-distance-is-no-shooter
+  ;; a ghast past the simulation distance is frozen: were it counted, each glimpse of it would keep
+  ;; :pearls/shot-at-ms fresh and hold the bot in escape-heal at full health
+  (let [ghast (ps/mob :ghast [8.5 64.0 44.5])
+        w (-> (ps/wide (ps/standing {7 ghast}))
+              (assoc :player/inventory {0 (ps/item :iron_sword 1) 1 (ps/item :iron_pickaxe 1)}))]
+    (is (psense/shot-at? (assoc w :server/simulation-distance 2)) "chunk 2: it ticks, it shoots")
+    (is (not (psense/shot-at? (assoc w :server/simulation-distance 1))) "chunk 2 under 1: frozen")
+    (is (empty? (psense/shooters (assoc w :server/simulation-distance 1))))
+    (is (nil? (pcover/cover-from (assoc w :server/simulation-distance 1)))
+        "nothing to cover from")))

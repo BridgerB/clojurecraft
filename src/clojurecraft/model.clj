@@ -77,6 +77,9 @@
    [:player/synced-at "ms of the last teleport" "from the first teleport"]
    [:server/time-at "ms the last set-time packet came (one every 20 server ticks)"
     "after the first set-time"]
+   [:server/simulation-distance
+    "chunks round a player the server ticks (the login packet's simulation-distance): an entity in a chunk farther than this from the bot's (entity/ticking?) is loaded and shown but frozen, never moving or attacking"
+    "after login"]
    [:server/tick-ms
     "how long the server's ticks take now, from the set-time packets' spacing; digs stretch by it (intent/slowdown)"
     "after the second set-time"]

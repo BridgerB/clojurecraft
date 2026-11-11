@@ -93,3 +93,12 @@
     (testing "it is a trial of its own, never a step of a run"
       (is (plan/aside? (first (filter #(= :entities (:goal/id %)) plan/goals))))
       (is (not-any? #{:entities} (plan/through (plan/current-until)))))))
+
+(deftest an-entity-beyond-the-simulation-distance-is-frozen
+  (let [ghast (fn [x z] (mob :ghast [x 70.0 z]))]
+    (is (entity/ticking? [8.5 64.0 8.5] 3 (ghast 60.0 8.5)) "chunk 3 east: within 3")
+    (is (not (entity/ticking? [8.5 64.0 8.5] 3 (ghast 70.0 8.5))) "chunk 4 east: frozen")
+    (is (not (entity/ticking? [8.5 64.0 8.5] 3 (ghast 8.5 -60.0))) "chunk -4 south of 0: frozen")
+    (is (entity/ticking? [8.5 64.0 8.5] 3 (ghast -40.0 -40.0)) "chunk -3 on both axes: within 3")
+    (is (entity/ticking? [8.5 64.0 8.5] nil (ghast 500.0 8.5)) "no simulation distance known")
+    (is (= [-1 2] (entity/column-of [-0.5 64.0 40.0])))))

@@ -48,6 +48,25 @@
 
 ;; ---------------------------------------------------------------- what an entity is
 
+(defn column-of
+  "The chunk column [cx cz] a position [x y z] is in."
+  [[x _ z]]
+  [(long (math/floor (/ (double x) 16.0))) (long (math/floor (/ (double z) 16.0)))])
+
+(defn ticking?
+  "Does the server tick entity e for a player at pos under simulation distance d (chunks)? Vanilla
+   ticks an entity only in a chunk at most d chunks (the larger of the two axes) from the player's;
+   one farther out is loaded and sent but frozen: a ghast there neither moves nor shoots, an enderman
+   never comes. True when d or either position is unknown."
+  [pos d e]
+  (let [at (:entity/pos e)]
+    (boolean (or (nil? d)
+                 (nil? pos)
+                 (nil? at)
+                 (let [[px pz] (column-of pos)
+                       [ex ez] (column-of at)]
+                   (<= (max (abs (- ex px)) (abs (- ez pz))) d))))))
+
 (defn kind
   "The entity's type name (:pig, :item, :blaze), from the generated entity types; nil for an id
    the table does not have."
