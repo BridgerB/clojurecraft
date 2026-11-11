@@ -1156,3 +1156,24 @@
                                  ps/row
                                  plan/goals))
         "no wood for one: an intent, the walk to the table left behind, never a wait")))
+
+(deftest a-caged-bot-with-no-pickaxe-and-no-makings-ends-at-once
+  ;; real rods timeouts on 4170b7d (Clj_r04 lane r1, Clj_r02 lane r3; folds 42973639653 and
+  ;; 42973657491): the last pickaxe wore out about 22 minutes in, before any burrow, so the
+  ;; :no-pickaxe wait (worn-out?: a burrow cut) never held; caged with every way out needing a
+  ;; pickaxe, each stood about 65 minutes of lookouts
+  (let [stuck (reduce (fn [w n]
+                        (memory/remember-intention (assoc w :time/now (* 1000 n))
+                                                   {:intent/id n
+                                                    :intent/kind (if (= 1 n) :walk :lookout)
+                                                    :intent/target (when (= 1 n) [9 64 8])}
+                                                   :done))
+                      (assoc (ps/standing {}) :player/dimension ps/nether)
+                      (range 1 (+ 2 pparams/stale-lookouts)))]
+    (is (= {:plan/wait :no-pickaxe} (plan/next-intent stuck ps/row plan/goals))
+        "a sword and nothing to make a pickaxe from: the run ends")
+    (is (not= {:plan/wait :no-pickaxe}
+              (plan/next-intent (assoc-in stuck [:player/inventory 1] (ps/item :iron_pickaxe 1))
+                                ps/row
+                                plan/goals))
+        "a pickaxe held: the hunt digs out")))

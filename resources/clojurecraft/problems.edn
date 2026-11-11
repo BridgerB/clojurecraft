@@ -95,7 +95,7 @@
                     "brain/siblings/sib-dig-down-safety.md"]}
  {:problem/stage :water-and-lava
   :problem/issue 5
-  :problem/goals [:escape-water :escape-lava :shore]
+  :problem/goals [:escape-water :escape-lava :escape-fire :shore]
   :problem/statement
   "The bot cannot tell it is in water or lava: liquids are passable air to the physics, nothing tracks breath, health or death, and the planner cannot interrupt a running intent, so a bot that walks into a pond sinks, walks the bottom and drowns without noticing."
   :problem/needs
@@ -105,7 +105,8 @@
    "A bank to swim to: nearest column with air at eye height and solid support"
    "Water and lava sightings in memory, plus water-trap facts left behind after an escape"]
   :problem/decisions
-  ["A swim pressed into the one water cell it would lay a bank into (the body covers it, so the server would refuse the block) backs off that shore and lays once the cell is free, instead of failing :stuck three times on a one-block bank (issue #351, swim/occupied-bank)"]
+  ["A swim pressed into the one water cell it would lay a bank into (the body covers it, so the server would refuse the block) backs off that shore and lays once the cell is free, instead of failing :stuck three times on a one-block bank (issue #351, swim/occupied-bank)"
+   "A fire block the body touches is every goal's to leave (:escape-fire, swim/fire-out: dig the fire, else walk out): fortress-start bots collecting their crafting table for :keep-table stood in a fire for 30 s, 24 to 54 in_fire hits, with the blaze and pearl rows' fire answers not in charge (issue #263)"]
   :problem/risks
   ["Jump in water gives almost no lift; only pressing into a bank fires the 0.3 wall impulse"
    "Swimming in an arbitrary heading goes deeper and drowns"

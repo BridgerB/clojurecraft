@@ -618,13 +618,24 @@
     (is (close? (dec (:sim/health armoured)) (:sim/health armoured-later))
         "and none of the wither's one")))
 
-(deftest a-magma-cube-hits-for-four-and-a-hoglin-for-six
-  ;; medium magma cube (the one row; large is 6, small is 3) and a hoglin's 6, the middle of
-  ;; vanilla's 3 to 8 on Normal
+(deftest a-magma-cube-hits-for-four-and-a-hoglin-for-three-to-eight-every-two-seconds
+  ;; medium magma cube (the one row; large is 6, small is 3); a hoglin rolls 3 to 8 on Normal
+  ;; (HoglinBase.hurtAndThrowTarget) every 40 ticks (HoglinAi.ATTACK_INTERVAL)
   (is (= 16.0
          (:sim/health (ticks (arena {} {} nil night [{:type :magma_cube :pos [1.2 64.0 0.5]}]) 1))))
-  (is (= 14.0
-         (:sim/health (ticks (arena {} {} nil night [{:type :hoglin :pos [1.5 64.0 0.5]}]) 1)))))
+  (is (= [3.0 3.0 5.0 8.0] (mapv #(mob/melee-hit :hoglin %) [0.0 0.1 0.4 0.99]))
+      "half of 6 plus a whole number under 6")
+  (is (= 3.0 (mob/melee-hit :zombie 0.7)) "a kind that does not roll hits its :melee")
+  (let [sim (arena {} {} nil night [{:type :hoglin :pos [1.5 64.0 0.5]}])
+        hits (fn [n]
+               (->> (reductions (fn [s _] (ticks s 1)) sim (range n))
+                    (map :sim/health)
+                    (partition 2 1)
+                    (filter (fn [[before after]] (< after before)))
+                    count))
+        first-hit (- 20.0 (:sim/health (ticks sim 1)))]
+    (is (<= 3.0 first-hit 8.0) "one hit, rolled")
+    (is (= 2 (hits 41)) "two hits in 41 ticks: one at once, the next 40 ticks on")))
 
 (deftest a-magma-cube-is-one-of-three-sizes-armoured-splitting-and-hopping
   ;; MagmaCube.setSize: size s has s squared health, a box 0.52 s, armour 3 s, a hit of s + 2; it

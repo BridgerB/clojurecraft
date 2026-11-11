@@ -620,7 +620,8 @@
 (defn strike
   "A melee mob (:melee) whose attack box meets the player's with a clear line from its head
    (mob/melee-reaches?, vanilla's box grown attack-pad sideways, not a radius) hits it every
-   :every ticks for its damage scaled by the difficulty; a jumper (:hop, a magma cube) as high
+   :every ticks for its damage scaled by the difficulty (a hoglin's rolled, mob/melee-hit, from
+   the mobs' stream); a jumper (:hop, a magma cube) as high
    as its hop with a clear line (mob/hop-reach?); any other ground :contact mob within its :reach
    on the plane, feet within 1.5 in height (mob/in-reach?). A flier's strike is
    its :contact (a blaze's 6 every :contact-every ticks) and only when the boxes touch with a
@@ -638,11 +639,12 @@
     (cond (not (and (or (:melee k) (:contact k)) can? (>= now (or attack-at 0)))) sim
           :else
           (let [before (:sim/health sim)
+                [sim r] (if (:roll k) (mob-roll sim) [sim 0.0])
                 sim (-> sim
                         (assoc-in [:sim/mobs eid :attack-at]
                                   (+ now (* (or (:contact-every k) (:every k)) physics/tick-ms)))
                         (hurt (armoured sim
-                                        (mob/scaled (or (:melee k) (:contact k))
+                                        (mob/scaled (or (:contact k) (mob/melee-hit type r))
                                                     (:sim/difficulty sim)))
                               true
                               type
