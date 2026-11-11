@@ -69,7 +69,8 @@
    in place of :column, a whole Nether, with optional :decoded, the same columns decoded once,
    :view-distance r, the chunks streamed round the player there, and :at, absent for where the
    server would link the portal: arrive) and :difficulty (:peaceful, :easy, :normal or :hard, as the
-   server's setting), and :mobs [{:type kind :pos [x y z]}] (a fixture's mobs, mob/kinds, sent at
+   server's setting), :simulation-distance d (chunks round the player the mobs tick in, told at
+   login: one farther out is frozen, as a server holds it; every mob ticks when absent), and :mobs [{:type kind :pos [x y z]}] (a fixture's mobs, mob/kinds, sent at
    login and never despawned), :stronghold [x y z] (where a thrown eye flies toward; absent, an eye
    is not thrown) and :end {:columns {[cx cz] bytes} :dragon [x y z] :dragon-yaw deg :crystals [[x y
    z] ...]} (the End an end portal leads to: its columns, a void when absent, where the dragon
@@ -77,7 +78,7 @@
    crystals, one on every spike when absent)."
   [{:keys [column columns decoded view-distance spawn keep-alive-every drop-clicks drop-breaks
            inventory lag-ticks slow-breaks respawn respawn-in seed tick-seed kill-at dimension
-           nether food difficulty day-time mobs stronghold end still-blazes?]
+           nether food difficulty day-time mobs stronghold end still-blazes? simulation-distance]
     :or {keep-alive-every keep-alive-every}}]
   (cond->
     {:sim/phase :handshake
@@ -117,6 +118,7 @@
     slow-breaks (assoc :sim/slow-breaks slow-breaks)
     tick-seed (assoc :sim/tick-seed tick-seed)
     view-distance (assoc :sim/view-distance view-distance)
+    simulation-distance (assoc :sim/simulation-distance simulation-distance)
     kill-at (assoc :sim/kill-at kill-at)
     dimension (assoc :sim/dimension dimension)
     respawn-in (assoc :sim/respawn-in respawn-in)
@@ -190,7 +192,7 @@
   (let [[x y z] (:sim/spawn sim)]
     (-> sim
         (assoc :sim/phase :play)
-        (send (login (:sim/dimension sim dimension/overworld)))
+        (send (login (:sim/dimension sim dimension/overworld) (:sim/simulation-distance sim)))
         (send {:packet/name :player-position
                :teleport-id 1
                :x x
