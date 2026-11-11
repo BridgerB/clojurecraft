@@ -496,7 +496,8 @@
 (defn swarm
   "{eid entity} of the monsters (blocks/mobs category) alive within swarm-radius of pos (the feet when
    not given) that are no enderman (the quarry, met its own way from the burrow): a zombified
-   piglin counts, hostile on sight or not, as it comes in packs and one hit angers them all."
+   piglin counts, hostile on sight or not, as it comes in packs and one hit angers them all. One the
+   server does not tick (entity/ticking?, beyond its simulation distance) is frozen and no threat."
   ([world] (swarm world (:player/pos world)))
   ([world pos]
    (into {}
@@ -504,6 +505,7 @@
                    (and (not (entity/dead? e))
                         (not= :enderman (entity/kind e))
                         (= :monster (:category (blocks/mobs (entity/kind e))))
+                        (entity/ticking? (:player/pos world) (:server/simulation-distance world) e)
                         (<= (physics/distance pos (:entity/pos e))
                             (or (:range (mob/kinds (entity/kind e))) pparams/swarm-radius))
                         ;; a blaze behind a wall hits nobody, and travel is gated on swarmed?
@@ -513,12 +515,14 @@
          (:world/entities world))))
 
 (defn shooters
-  "{eid entity} of the ranged-kinds alive within their :range of the feet, in sight or not."
+  "{eid entity} of the ranged-kinds alive within their :range of the feet, in sight or not, that the
+   server ticks (entity/ticking?): a ghast beyond its simulation distance is frozen and never shoots."
   [world]
   (into {}
         (filter (fn [[_ e]]
                   (and (not (entity/dead? e))
                        (contains? pparams/ranged-kinds (entity/kind e))
+                       (entity/ticking? (:player/pos world) (:server/simulation-distance world) e)
                        (<= (physics/distance (:player/pos world) (:entity/pos e))
                            (or (:range (mob/kinds (entity/kind e))) pparams/swarm-radius)))))
         (:world/entities world)))

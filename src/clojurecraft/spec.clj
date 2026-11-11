@@ -480,6 +480,7 @@
 (s/def :player/synced-at int?)
 (s/def :server/time-at int?)
 (s/def :server/tick-ms number?)
+(s/def :server/simulation-distance nat-int?)
 (s/def :player/health number?)
 (s/def :player/hurt-at int?)
 (s/def :player/attacker int?)

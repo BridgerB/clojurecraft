@@ -272,6 +272,8 @@
       inventory/fresh-menus
       (assoc :player/entity-id (:entity-id p))
       (cond-> (:dimension p) (assoc :player/dimension (:dimension p)))
+      (cond-> (nat-int? (:simulation-distance p))
+              (assoc :server/simulation-distance (:simulation-distance p)))
       (emit {:packet/name :client-information
              :locale "en_US"
              :view-distance 6
