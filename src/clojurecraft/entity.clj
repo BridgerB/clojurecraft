@@ -22,6 +22,13 @@
 (def creepy-index 17)                 ; EnderMan.DATA_CREEPY, a boolean: it has a target
 (def baby-index 16)                   ; AgeableMob.DATA_BABY_ID, a boolean: a baby (a hoglin's hit is then 0.5, Hoglin.BABY_ATTACK_DAMAGE)
 
+(def size-index 16)                   ; Slime.ID_SIZE, an int: a slime's or magma cube's size, 1, 2 or 4 (Mob's one field is 15)
+
+(def sized
+  "The kinds whose size the bot reads at size-index: a slime and a magma cube (MagmaCube extends
+   Slime). Their health, hit, box and hop all go by it."
+  #{:slime :magma_cube})
+
 (def ageable
   "The kinds whose baby flag the bot reads at baby-index: an AgeableMob's first field (Mob's one
    field is 15). A piglin's flag is its own and sits elsewhere, so it is not here."
@@ -75,7 +82,7 @@
    another shape there (no server sends one) is left out. The same health index is an interaction's
    height and a boat's hurt direction, so health is never read off a type the game gives no health;
    the same item index is a fireball's look; for an enderman only, its creepy flag at creepy-index;
-   for a kind of ageable only, its baby flag at baby-index; for the dragon only, its phase at phase-index; for an area effect cloud only, its radius at
+   for a kind of ageable only, its baby flag at baby-index; for a kind of sized only, its size at size-index; for the dragon only, its phase at phase-index; for an area effect cloud only, its radius at
    radius-index (the same index as a drop's stack: a dragon's breath grows, and the bot keeps out of
    all of it). An index the skim did not reach is simply absent: what was known stays."
   [type-id metadata]
@@ -84,6 +91,7 @@
         stack (get metadata item-index)
         creepy (get metadata creepy-index)
         baby (get metadata baby-index)
+        size (get metadata size-index)
         phase (get metadata phase-index)
         radius (get metadata radius-index)]
     (cond-> {}
@@ -98,6 +106,7 @@
       (assoc :entity/creepy? creepy)
       (and (contains? ageable (blocks/entity-names type-id)) (boolean? baby))
       (assoc :entity/baby? baby)
+      (and (contains? sized (blocks/entity-names type-id)) (int? size)) (assoc :entity/size size)
       (and (= :ender_dragon (blocks/entity-names type-id)) (int? phase))
       (assoc :entity/phase phase))))
 

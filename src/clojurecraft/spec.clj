@@ -173,6 +173,7 @@
 (s/def :entity/item int?)
 (s/def :entity/creepy? boolean?)
 (s/def :entity/baby? boolean?)
+(s/def :entity/size int?)
 (s/def :entity/phase int?)
 (s/def :entity/radius double?)
 (s/def :entity/yaw double?)

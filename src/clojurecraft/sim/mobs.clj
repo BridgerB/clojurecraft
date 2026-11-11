@@ -73,7 +73,8 @@
 
 (defn add-mob
   "The model with a mob of kind standing at pos: its own entity id and the kind's full health,
-   the client told (add-entity, then its health). With :persistent? in opts it never despawns
+   the client told (add-entity, then its health, and a sized kind's :size as the server tells a
+   slime's). With :persistent? in opts it never despawns
    (a fixture's, a chunk's animals); with :yaw it faces that way, told in the add-entity's
    rotation (the dragon's head, mob/bitten?)."
   [sim kind [x y z :as pos] {:keys [persistent? yaw]}]
@@ -93,6 +94,10 @@
          yaw
          (assoc :vel [0.0 0.0 0.0] :pitch 0 :yaw (yaw-byte yaw) :head-yaw (yaw-byte yaw) :data 0)))
       (send (health-data eid health))
+      (cond-> (:size (mob/kinds kind))
+              (send {:packet/name :set-entity-data
+                     :entity-id eid
+                     :metadata {entity/size-index (:size (mob/kinds kind))}}))
       (tell-gear eid kind))))
 
 (def face-radius 24.0)                ; blocks within which a mob turns its head to the player (and the client is told)

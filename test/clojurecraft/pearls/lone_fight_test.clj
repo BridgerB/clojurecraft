@@ -103,8 +103,9 @@
         "a baby is fought by the row ahead of the refuge")
     (is (= :fight (:intent/kind (pcover/lone-fight adult (pcover/over-refuge pparams/at-hand))))
         "a lone adult too")
-    (is (= #{:hoglin :baby_hoglin} (set (keys (pcover/over-refuge pparams/at-hand))))
-        "only the hoglins go ahead of the refuge")
+    (is (= #{:hoglin :baby_hoglin :magma_cube_small :magma_cube :magma_cube_big}
+           (set (keys (pcover/over-refuge pparams/at-hand))))
+        "only the hoglins and the magma cubes go ahead of the refuge")
     (testing "two adults are a pack: never fought, covered from as before"
       (is (nil? (pcover/lone-fight (kit (ps/standing {9 (ps/mob :hoglin [9.5 64.0 8.5])
                                                       10 (ps/mob :hoglin [8.5 64.0 13.5])}))))))
@@ -112,3 +113,27 @@
       (let [hurt (assoc adult :player/health 8.0)]
         (is (nil? (pcover/lone-fight hurt)))
         (is (nil? (pcover/leave-baby hurt)))))))
+
+(defn cube
+  "A magma cube of size at pos, its health its size squared."
+  [size pos]
+  (assoc (ps/mob :magma_cube pos) :entity/size size :entity/health (double (* size size))))
+
+(deftest a-magma-cube-at-hand-is-fought-by-its-size
+  ;; real Clj_r41 (botlogs 2026-11-10-17, 42812754059-r2-b7): sealed in the blaze refuge's pocket,
+  ;; a small cube of the split inside hit it 13 times in 5.7 s, 0 swings; real Clj_r48 (r2-b8) and
+  ;; nine more: a big cube's :defend fight broken off at two to five swings, then back-offs, dead
+  (is (= :magma_cube_big (pcover/foe-kind (cube 4 [9.5 64.0 8.5]))))
+  (is (= :magma_cube_small (pcover/foe-kind (cube 1 [9.5 64.0 8.5]))))
+  (is (= :magma_cube (pcover/foe-kind (ps/mob :magma_cube [9.5 64.0 8.5]))) "no size known")
+  (let [smalls (kit (ps/standing {9 (cube 1 [9.0 64.0 8.5]) 10 (cube 1 [8.5 64.0 9.6])}))
+        i (pcover/lone-fight smalls (pcover/over-refuge pparams/at-hand))]
+    (is (= :fight (:intent/kind i)) "one of a group of small cubes: one swing each, fought")
+    (is (true? (:intent/hold? i)))
+    (is (nil? (pcover/lone-fight (assoc smalls :player/health 8.0))) "never under danger-health"))
+  (let [big (kit (ps/standing {9 (cube 4 [10.0 64.0 8.5])}))]
+    (is (= :fight (:intent/kind (pcover/lone-fight big))) "a lone big cube at full health")
+    (is (nil? (pcover/lone-fight (assoc big :player/health 15.0)))
+        "a big cube under min-health 18 is covered from: its fight would end under the danger line")
+    (is (nil? (pcover/lone-fight (assoc-in big [:world/entities 10] (cube 4 [12.0 64.0 13.5]))))
+        "two big cubes: never fought")))
