@@ -407,6 +407,42 @@
          [x y z] pos]
      [(side x cx (open? -1 0) (open? 1 0)) y (side z cz (open? 0 -1) (open? 0 1))])))
 
+;; ---------------------------------------------------------------- a hit's knockback
+
+(def knock-strength
+  "The knockback of a hit from a source with a position, read from the 26.1.2 jar (javap):
+   LivingEntity.hurtServer calls knockback(0.4, source.x - x, source.z - z). knockback scales it by
+   1 - KNOCKBACK_RESISTANCE (none for a mob the model runs: the enderman's attributes add none),
+   and sets the velocity to half the old one less 0.4 along the line from the source on the plane,
+   and on the ground min(0.4, vy / 2 + 0.4) up. Player.attack adds causeExtraKnockback only for a
+   sprint (0.5) or a knockback enchantment, neither of which the bot has."
+  0.4)
+
+(defn knock-flight
+  "{:ticks n :distance d} of a body set moving at strength on the plane and strength up from the
+   ground, as LivingEntity.travel moves it: each tick the move, then y velocity (vy - 0.08) * 0.98
+   and the plane's * 0.91 in the air until it is back at its height, then * 0.546 (0.6 ground
+   friction times 0.91) on the ground until it stops (under 0.003 a tick)."
+  [strength]
+  (let [[t x _ vx] (reduce (fn [[t x y vx vy] _]
+                             (let [x (+ x vx)
+                                   y (+ y vy)]
+                               (if (<= y 0.0)
+                                 (reduced [(inc t) x y (* vx 0.91) vy])
+                                 [(inc t) x y (* vx 0.91) (* (- vy 0.08) 0.98)])))
+                           [0 0.0 0.0 strength strength]
+                           (range 100))
+        slide (reduce (fn [[x vx] _]
+                        (if (< vx 0.003) (reduced [x vx]) [(+ x (* vx 0.546)) (* vx 0.546)]))
+                      [x vx]
+                      (range 100))]
+    {:ticks t :distance (first slide)}))
+
+(def knock
+  "The flight of a hit's knockback, knock-flight of knock-strength: about 11 ticks in the air and
+   three blocks back."
+  (knock-flight knock-strength))
+
 (defn fall
   "pos come down onto what is under it: the feet on the top of the first cell below that is not
    free (free? of a cell), at most 32 blocks, as a falling body ends a tick's fall."
@@ -415,6 +451,33 @@
         floor-y
         (reduce (fn [fy dy] (if (free? [cx (- cy dy) cz]) (- cy dy) (reduced fy))) cy (range 1 33))]
     [x (double (min y floor-y)) z]))
+
+(defn knocked
+  "Where a body of kind at pos ends when knocked distance blocks straight away from point from on
+   the plane: it slides in steps of a tenth of a block while its n cells stand there (stands-in?),
+   a block higher where a ledge is in the way (the flight rises a block), and stops at the first
+   step that fits neither; then it falls (fall). Where from is over it, it stays."
+  [free? kind pos from distance]
+  (let [[px py pz] pos
+        [fx _ fz] from
+        dx (- px fx)
+        dz (- pz fz)
+        len (math/sqrt (+ (* dx dx) (* dz dz)))
+        n (tall kind)]
+    (cond (< len 1.0E-6) pos
+          :else
+          (let [ux (/ dx len)
+                uz (/ dz len)
+                end (reduce (fn [[x y z] i]
+                              (let [s (* 0.1 i)
+                                    q [(+ px (* ux s)) y (+ pz (* uz s))]
+                                    up [(first q) (inc y) (last q)]]
+                                (cond (stands-in? free? (cell-of q) n) q
+                                      (stands-in? free? (cell-of up) n) up
+                                      :else (reduced [x y z]))))
+                            [px py pz]
+                            (range 1 (inc (long (math/round (* 10.0 distance))))))]
+            (fall free? end)))))
 
 (defn step-toward
   "A mob at pos one tick on toward target at speed blocks a tick, stopping stop short of it on

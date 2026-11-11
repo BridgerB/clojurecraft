@@ -310,6 +310,23 @@
               (cond-> (not= kind :sword) (update :sim/inv wear slot))
               (sync-window :inventory before (:sim/cursor sim) false)))))
 
+(defn knock-back
+  "The model after mob eid, hit by the player, is knocked back (mob/knock, LivingEntity.knockback):
+   moved mob/knocked away from the player's feet by the flight's distance, the client told, and
+   in the air for the flight's ticks (:knocked-until), when it neither walks nor strikes (chase).
+   A dead one, a flier (a blaze hovers its own way), the dragon (EnderDragon takes its hits through
+   its parts, never knocked) and a crystal (no living body), or one with no position, stays."
+  [sim eid]
+  (let [{:keys [type pos dead-at]} (get-in sim [:sim/mobs eid])
+        k (mob/kinds type)
+        player (:sim/player-pos sim)]
+    (cond (or (nil? pos) (nil? player) dead-at (:flies k) (:perched k) (:crystal k)) sim
+          :else
+          (-> sim
+              (move-mob eid (mob/knocked (free-fn sim) type pos player (:distance mob/knock)))
+              (assoc-in [:sim/mobs eid :knocked-until]
+                        (+ (:sim/now sim) (* (:ticks mob/knock) physics/tick-ms)))))))
+
 (defmethod on-packet [:play :attack]
   ;; the player's hit (775's attack packet): a living mob whose box is in reach of the eye
   ;; (mob/attack-reach) is hurt by the held item (mob/weapon-damage) less its armour's share
@@ -324,11 +341,13 @@
               (> (mob/box-distance (physics/eye player) (:type m) (:pos m)) mob/attack-reach))
           sim
           :else
-          (let [dmg (mob/mob-hit (:type m) (mob/weapon-damage (held-item sim)))]
-            (-> sim
-                (add-exhaustion (hunger/exhaustion :attack))
-                wear-weapon
-                (hurt-mob entity-id dmg true))))))
+          (let [dmg (mob/mob-hit (:type m) (mob/weapon-damage (held-item sim)))
+                hit (-> sim
+                        (add-exhaustion (hunger/exhaustion :attack))
+                        wear-weapon
+                        (hurt-mob entity-id dmg true))
+                landed? (not= (get-in hit [:sim/mobs entity-id :hit-at]) (:hit-at m))]
+            (cond-> hit landed? (knock-back entity-id))))))
 
 (defn burn
   "An undead mob in the overworld's daylight with no roof over its head (mob/roofed?) burns:
@@ -798,10 +817,16 @@
                   (<= (physics/distance pos player) r)
                   (mob/stared? (solid-fn sim) (physics/eye player) look pos)))))
 
+(defn knocked?
+  "Is mob eid still in its knockback's flight (:knocked-until, knock-back)?"
+  [sim eid]
+  (< (:sim/now sim) (get-in sim [:sim/mobs eid :knocked-until] 0)))
+
 (defn chase
   "A hostile's turn at a living player: an enderman stared at turns (provoke); with the player as
    its target (targets?) it teleports by its kind (blink), then, unless it stands still for the
-   stare (frozen?), walks, then hits, shoots or swells by its kind."
+   stare (frozen?) or flies its knockback (knocked?), walks, then hits, shoots or swells by its
+   kind."
   [sim eid]
   (let [player (:sim/player-pos sim)
         sim (if player (provoke sim eid) sim)
@@ -810,7 +835,7 @@
     (cond (or (nil? player) (<= (:sim/health sim) 0.0) (not (targets? sim m))) sim
           :else
           (let [sim (step sim blink)]
-            (cond (frozen? sim eid) sim
+            (cond (or (frozen? sim eid) (knocked? sim eid)) sim
                   :else (reduce step sim [walk strike shoot swell]))))))
 
 (def dragon-heal-every 10)            ; game ticks between a crystal's heals of the dragon (EnderDragon.checkCrystals)
