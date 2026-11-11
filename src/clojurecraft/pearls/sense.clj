@@ -122,14 +122,6 @@
                                                             pparams/fight-giveup-ms))
                               pparams/fight-giveups)))))))
 
-(defn angry-wait-over?
-  "Has the bot stood angry-wait-lookouts lookouts or more since its last fight ended (or, with
-   none, since its burrow was cut: memory/done-since)? Then an angry enderman near that never came
-   holds it looking out no more, and the hunt goes on from the burrow."
-  [world]
-  (>= (or (memory/done-since world :lookout :fight) (memory/done-since world :lookout :burrow) 0)
-      pparams/angry-wait-lookouts))
-
 (defn lured-out?
   "Has the bot walked lure-tries times out to its burrow's mouth and back since the burrow was cut
    (memory/done-since: two :walk intentions done a lure, every walk since the burrow counted), so
@@ -210,6 +202,25 @@
                   (>= (- (:time/now world 0) (:closed-at o)) pparams/park-ms)
                   (> (physics/distance (:player/pos world) q) pparams/park-near)))))
 
+(defn waited-out?
+  "Have the angry endermen within hold-radius of the feet, one at least, all stopped coming: none
+   come close-gain nearer than its best for angry-wait-lookouts lookouts (lookout-ms each:
+   :pearls/angry's :closed-at)? Then they hold the bot looking out no more and keep its burrow
+   from going stale no more, as one lured-out would: one stood 15.8 blocks off, unhurt and
+   unseen, for 546 lookouts, the run's whole remainder. The bot never walks out to it."
+  [world]
+  (let [now (:time/now world 0)
+        p (:player/pos world)
+        held (for [[eid e] (endermen (avoided/forget world :blacklist) pparams/hold-radius)
+                   :when (and (entity/creepy? e)
+                              (<= (physics/distance p (:entity/pos e)) pparams/hold-radius))]
+               (get (:pearls/angry world) eid))]
+    (boolean (and (seq held)
+                  (every? #(and %
+                                (>= (- now (:closed-at %))
+                                    (* pparams/angry-wait-lookouts pparams/lookout-ms)))
+                          held)))))
+
 (defn live-menaced?
   "Is an angry enderman within danger-radius and danger-rise of the feet that is not parked
    (parked?)? Only that holds a wander in."
@@ -274,7 +285,7 @@
    (cut-out), never walked through it."
   [world]
   (boolean (and (>= (or (memory/done-since world :lookout :burrow) 0) pparams/stale-lookouts)
-                (or (nil? (angry-near world)) (blocked-out? world)))))
+                (or (nil? (angry-near world)) (blocked-out? world) (waited-out? world)))))
 
 ; hostile kinds no threat is: the enderman is the quarry, met its own way; a creeper is the :defend row's, backed away from, and a burrow is no place to back off in
 (defn threat

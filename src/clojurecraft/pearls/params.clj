@@ -171,8 +171,8 @@
 (def hold-patience-ms (:hold-patience-ms thresholds))
 
 (def angry-wait-lookouts
-  "Lookouts since the last fight after which an angry one that never came holds no more
-   (pearls.edn :angry-wait-lookouts)."
+  "Lookouts an angry one may go without coming nearer before it holds the bot no more
+   (pearls.edn :angry-wait-lookouts, sense/waited-out?)."
   (:angry-wait-lookouts thresholds))
 
 (def struck-health (:struck-health thresholds))

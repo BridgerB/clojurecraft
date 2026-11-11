@@ -148,9 +148,9 @@
  :wander-reach 64
  ;; ms a held fight waits with its target past strike-range before the hunt plans again (combat/hold-timeout-ms is a minute)
  :hold-patience-ms 12000
- ;; lookouts since the last fight ended (or the burrow was cut) after which an angry enderman that
- ;; never came no longer holds the bot looking out for it (sense/angry-wait-over?): one stood 15.8
- ;; blocks off, unhurt and unseen, for 546 lookouts, the run's whole remainder
+ ;; lookouts (lookout-ms each) an angry enderman within hold-radius may go without coming close-gain
+ ;; nearer before it holds the bot looking out, and its burrow from going stale, no more
+ ;; (sense/waited-out?): one stood 15.8 blocks off, unhurt and unseen, for 546 lookouts
  :angry-wait-lookouts 24
  ;; health under which an enderman at hand has landed a hit (7 on Normal off 20): fought back, fought out or not
  :struck-health 14.0

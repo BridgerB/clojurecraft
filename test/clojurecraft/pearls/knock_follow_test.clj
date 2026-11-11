@@ -21,8 +21,15 @@
         "never hit: patience from the fight's start, as before")))
 
 (deftest an-angry-one-that-never-comes-holds-the-bot-for-a-while
-  (let [angry (assoc (ps/enderman [24.0 61.0 8.5]) :entity/creepy? true)
-        w (ps/burrowed [8.5 61.0 8.5] {7 angry})]
-    (is (not (psense/angry-wait-over? (ps/looked w 3))))
-    (is (psense/angry-wait-over? (ps/looked w pparams/angry-wait-lookouts))
-        "angry-wait-lookouts lookouts with no fight since the burrow: it holds no more")))
+  ;; one stood 15.8 blocks off, unhurt and unseen, for 546 lookouts: the run's whole remainder
+  (let [angry (assoc (ps/enderman [20.5 61.0 8.5]) :entity/creepy? true)
+        span (* pparams/angry-wait-lookouts pparams/lookout-ms)
+        at (fn [closed now]
+             (-> (ps/burrowed [8.5 61.0 8.5] {7 angry})
+                 (assoc :time/now now :pearls/angry {7 {:since 0 :best 12.0 :closed-at closed}})))]
+    (is (not (psense/waited-out? (at 0 (dec span)))) "it came nearer within the span: it holds")
+    (is (psense/waited-out? (at 0 span)) "no nearer for the whole span: it holds no more")
+    (is (not (psense/waited-out? (at span (+ span 1000)))) "it came nearer again: it holds again")
+    (is (not (psense/waited-out? (assoc (at 0 span) :pearls/angry {}))) "untracked: no verdict")
+    (is (psense/stale? (assoc (ps/looked (at 0 span) pparams/stale-lookouts) :time/now span))
+        "waited out, the burrow can go stale as with none near")))

@@ -217,7 +217,7 @@
    :lured-out? (fn [_ w] (psense/lured-out? w))
    :lure? (fn [_ w] (psense/lure? w))
    :aid-or-angry-within? (fn [f w]
-                           (and (not (psense/angry-wait-over? w))
+                           (and (not (psense/waited-out? w))
                                 (or (f :aid) (psense/angry-within? w pparams/hold-radius))))
    :crowded? (fn [_ w] (psense/crowded? w))
    :vantage-or-lookout (fn [f w] (or (pplace/vantage w (f :far)) lookout))
