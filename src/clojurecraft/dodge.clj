@@ -138,4 +138,4 @@
       (-> world
           (assoc :player/controls {})
           intent/done)
-      (assoc world :player/controls (intent/toward world (physics/centre target) 0.0)))))
+      (assoc world :player/controls (intent/toward-safe world (physics/centre target) 0.0)))))
