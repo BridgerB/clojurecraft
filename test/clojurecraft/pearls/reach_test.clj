@@ -13,6 +13,7 @@
             [clojurecraft.pearls-support :as ps]
             [clojurecraft.pearls.move :as pmove]
             [clojurecraft.pearls.params :as pparams]
+            [clojurecraft.pearls.rules :as rules]
             [clojurecraft.pearls.sense :as psense]
             [clojurecraft.world :as world]))
 
@@ -236,3 +237,29 @@
     (is (avoided/noted? late :exit-columns [8 -60]))
     (is (fexit/given-up-column? late [7 64 -60]) "the neighbouring cell is that column too")
     (is (not (fexit/given-up-column? late [20 64 -60])) "a column far off is not")))
+
+(deftest a-way-on-through-rock-goes-under-fire-an-open-walk-waits
+  ;; a real rods bot (5d894db lane 2, Clj_r02, probe 43022030865) stood its hour of lookouts beside a
+  ;; shooter with a sealed tunnel to its known forest ready: every way out waited on the shot
+  (is (pmove/cover-move?
+       {:intent/kind :tunnel-to :intent/target [0 64 0] :intent/seal-behind? true}))
+  (is (pmove/cover-move? {:intent/kind :tunnel :intent/dir [1 0] :intent/length 4}))
+  (is (pmove/cover-move? {:intent/kind :stairs-up :intent/to-y 70 :intent/dir [1 0]}))
+  (is (not (pmove/cover-move? {:intent/kind :tunnel-to :intent/target [0 64 0]}))
+      "an open tunnel-to")
+  (is (not (pmove/cover-move? {:intent/kind :walk :intent/target [0 64 0]})) "a walk")
+  (let [netherrack (blocks/default-state :netherrack)
+        rock (into {} (for [x (range 0 16) y (range 50 70) z (range 0 16)] [[x y z] netherrack]))
+        w (-> (ps/standing {} rock)
+              (assoc :player/dimension ps/nether :player/pos [8.5 60.0 8.5] :time/now 100000)
+              (assoc-in [:player/inventory 1] (ps/item :iron_pickaxe 1)))
+        far (with-forest w [6 0])
+        shot (assoc far :pearls/shot-at-ms 95000)]
+    (testing "shot a moment ago, out of the line now: the sealed tunnel to the forest goes"
+      (let [i (rules/decide shot)]
+        (is (= :hunt/cover-dig (rules/row-of shot)) (pr-str i))
+        (is (pmove/cover-move? i))))
+    (testing "the shot long past: the hunt's own rows, not this one"
+      (is (not= :hunt/cover-dig
+                (rules/row-of
+                 (assoc shot :pearls/shot-at-ms (- 100000 pparams/shot-hold-ms 1000))))))))

@@ -97,6 +97,12 @@
   ;; shot within shot-hold-ms and out of the shooter's line now: the cover is held, the heal taken
   ;; behind it, and no walk (the hunt's search, a retreat) leaves it; real bots shot by blazes
   ;; walked out of cover every few seconds, each walk undoing it, and burned to death
+  ;; held by a shot, a way on through rock (move/cover-move?: a sealed tunnel, a tunnel, stairs) is
+  ;; cover itself and goes; an open walk waits the shot out under :hunt/hold-cover below
+  {:rule/id :hunt/cover-dig
+   :rule/phase :survive
+   :rule/when [:cover-dig [:not :in?]]
+   :rule/then [:fact :cover-dig]}
   {:rule/id :hunt/hold-cover
    :rule/phase :survive
    :rule/when [:cover-hold? [:not :in?]]

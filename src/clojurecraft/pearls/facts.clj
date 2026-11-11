@@ -189,6 +189,8 @@
                        (and (psense/recently-shot? w) (not (f :shot-at?)))))
    :leave-sight (fn [_ w] (pcover/leave-sight w))
    :cover-hold? (fn [f w] (and (psense/recently-shot? w) (not (f :shot-at?))))
+   :cover-dig
+   (fn [f w] (when (and (f :cover-hold?) (not (f :hurt?)) (not (f :swarmed?))) (pmove/cover-dig w)))
    :room-exit (fn [_ w] (fexit/room-exit w))
    :home-pressed? (fn [f w]
                     (or (f :ce)

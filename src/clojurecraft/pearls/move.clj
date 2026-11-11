@@ -522,6 +522,26 @@
                 (empty? (psense/endermen world pparams/seek-radius))
                 (nil? (travel world)))))
 
+(defn cover-move?
+  "Is intent i a way out that goes through rock, so a shooter has no line on the bot while it
+   runs: a sealed tunnel (:tunnel-to with :intent/seal-behind?), a :tunnel, or a staircase
+   (:stairs-up, :stairs-down)? Such a move is cover in itself; an open walk is not, and waits out
+   the shot (sense/recently-shot?, :hunt/hold-cover)."
+  [i]
+  (boolean (or (and (= :tunnel-to (:intent/kind i)) (:intent/seal-behind? i))
+               (contains? #{:tunnel :stairs-up :stairs-down} (:intent/kind i)))))
+
+(defn cover-dig
+  "The way on that is cover in itself (cover-move?) while the bot is held by a shot: the travel's
+   own (travel: a sealed tunnel to a known forest), else, caged or wandering, a tunnel-out or a
+   climb-out. Nil when none of them goes through rock. A real rods bot stood its hour in lookouts
+   beside a shooter with a sealed tunnel to its forest ready, every way out gated on the shot."
+  [world]
+  (first (filter cover-move?
+                 [(travel world)
+                  (when (or (wandering? world) (travel-caged? world))
+                    (or (tunnel-out world) (climb-out world)))])))
+
 (defn shelter-walk
   "A :walk for :shelter to target, or nil when target is nil or in :plan/blacklist (a walk to it
    failed, plan/fail-intent). A walk is tried once before it is known to fail: a fence between
