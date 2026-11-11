@@ -239,7 +239,7 @@
     (is (not (fexit/given-up-column? late [20 64 -60])) "a column far off is not")))
 
 (deftest a-way-on-through-rock-goes-under-fire-an-open-walk-waits
-  ;; a real rods bot (5d894db lane 2, Clj_r02, probe 43022030865) stood its hour of lookouts beside a
+  ;; a real rods bot (5d894db lane 2, Clj_r02) stood its hour of lookouts beside a
   ;; shooter with a sealed tunnel to its known forest ready: every way out waited on the shot
   (is (pmove/cover-move?
        {:intent/kind :tunnel-to :intent/target [0 64 0] :intent/seal-behind? true}))
