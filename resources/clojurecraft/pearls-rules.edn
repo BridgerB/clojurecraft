@@ -105,24 +105,16 @@
    :rule/phase :survive
    :rule/when [:pit-leave]
    :rule/then [:fact :pit-leave]}
-  ;; struck by an enderman (on the way home too), the bot fights back where it stands, never walking on
-  ;; under its hits; hurt, the walk home goes on (the burrow is the answer under danger-health)
-  {:rule/id :hunt/fight-back-struck
-   :rule/phase :survive
-   :rule/when [:home-sid [:not :hurt?] [:not :in?]]
-   :rule/then
-   [:intent
-    {:intent/kind :fight :intent/target [:fact :home-sid] :intent/yield? true :intent/for :pearls}]}
-  {:rule/id :hunt/walk-home
-   :rule/phase :survive
-   :rule/when [:home [:not :in?] :home-pressed? :home-routable?]
-   :rule/then [:fact :way-home]}
-  ;; under danger-health with an angry enderman at hand and no burrow to walk to: two cells down,
-  ;; out of its reach, never a meal, a wall or a pillar beside it (pearls/pit)
+  ;; under danger-health with an angry enderman at hand: two cells down, out of its reach, before
+  ;; the walk home under its hits, never a meal, a wall or a pillar beside it (pearls/pit)
   {:rule/id :hunt/pit-dig
    :rule/phase :survive
    :rule/when [[:not :in?] :pit-dig]
    :rule/then [:fact :pit-dig]}
+  {:rule/id :hunt/walk-home
+   :rule/phase :survive
+   :rule/when [:home [:not :in?] :home-pressed? :home-routable?]
+   :rule/then [:fact :way-home]}
   {:rule/id :hunt/cover-from-swarm
    :rule/phase :survive
    :rule/when [:swarmed? [:not :in?] [:not :home] :cover-from]
