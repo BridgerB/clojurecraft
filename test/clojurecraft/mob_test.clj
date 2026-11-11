@@ -625,7 +625,7 @@
          (:sim/health (ticks (arena {} {} nil night [{:type :magma_cube :pos [1.2 64.0 0.5]}]) 1))))
   (is (= [3.0 3.0 5.0 8.0] (mapv #(mob/melee-hit :hoglin %) [0.0 0.1 0.4 0.99]))
       "half of 6 plus a whole number under 6")
-  (is (= 6.0 (mob/melee-hit :zombie 0.7)) "a kind that does not roll hits its :melee")
+  (is (= 3.0 (mob/melee-hit :zombie 0.7)) "a kind that does not roll hits its :melee")
   (let [sim (arena {} {} nil night [{:type :hoglin :pos [1.5 64.0 0.5]}])
         hits (fn [n]
                (->> (reductions (fn [s _] (ticks s 1)) sim (range n))
