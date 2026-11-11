@@ -170,6 +170,10 @@
 
 (def hold-patience-ms (:hold-patience-ms thresholds))
 
+(def draw
+  "{:beyond :max}: how far place/draw-out lengthens the burrow (pearls.edn :draw)."
+  (:draw thresholds))
+
 (def angry-wait-lookouts
   "Lookouts an angry one may go without coming nearer before it holds the bot no more
    (pearls.edn :angry-wait-lookouts, sense/waited-out?)."

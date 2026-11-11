@@ -423,6 +423,77 @@
                                 intent/done)
                             :else (intent/fail w :no-shelter))))))))
 
+(defn parked-near
+  "{eid entity} of the angry endermen (entity/creepy?) within hold-radius of the feet, or nil
+   unless every one of them is parked out (psense/parked-out?) and out of the bot's sight (not
+   combat/seen?), at least one."
+  [world]
+  (let [p (:player/pos world)
+        near (into {}
+                   (filter (fn [[_ e]]
+                             (and (entity/creepy? e)
+                                  (<= (physics/distance p (:entity/pos e)) pparams/hold-radius))))
+                   (psense/endermen (avoided/forget world :blacklist) pparams/hold-radius))]
+    (when (and (seq near)
+               (every? (fn [[eid e]]
+                         (and (psense/parked-out? world eid) (not (combat/seen? world e))))
+                       near))
+      near)))
+
+(defn draw-out
+  "The :extend-burrow that draws the parked-out angry endermen near (parked-near) in, from the
+   burrow's end (:pearls/shelter at the feet), or nil: the tunnel lengthened one of the four
+   headings whose next cell is rock (feet and head solid) by the fewest cells, at most
+   (:max pparams/draw), that leave every one of them more than (:beyond pparams/draw) blocks off,
+   while one is within that of the feet.
+   Anger never ends while an enderman has the bot as its target (NeutralMob.updatePersistentAnger
+   restarts its timer every tick it has one; its target goal keeps the bot unseen), and past 16
+   blocks its target goal teleports it toward the bot (EndermanLookForPlayerGoal.tick:
+   distanceToSqr over 256, after 30 ticks): so it comes in at the burrow, where the held fight
+   takes it, never at a bot that walked out."
+  [world]
+  (let [feet (intent/feet world)
+        ps (some->> (parked-near world)
+                    vals
+                    (map :entity/pos))
+        {:keys [beyond max]} pparams/draw
+        [fx fy fz] feet]
+    (when (and (seq ps)
+               (= feet (:pearls/shelter world))
+               (some #(<= (physics/distance (physics/centre feet) %) beyond) ps))
+      (->> (for [[dx dz] stairs/directions
+                 :when (and (= :solid (path/classify world [(+ fx dx) fy (+ fz dz)]))
+                            (= :solid (path/classify world [(+ fx dx) (inc fy) (+ fz dz)])))
+                 n (range 1 (inc max))
+                 :let [end [(+ fx (* n dx)) fy (+ fz (* n dz))]]
+                 :when (every? #(> (physics/distance (physics/centre end) %) beyond) ps)]
+             [n [dx dz]])
+           (sort-by first)
+           first
+           ((fn [[n dir]]
+              (when dir
+                {:intent/kind :extend-burrow
+                 :intent/dir dir
+                 :intent/length n
+                 :intent/for :pearls})))))))
+
+(defmethod intent/run :extend-burrow
+  ;; {:intent/kind :extend-burrow :intent/dir [dx dz] :intent/length n}: the burrow's tunnel cut n
+  ;; cells on along dir (stairs/tunnel, refusing water, lava and drops); done standing in a
+  ;; shelter?, kept as the new :pearls/shelter (the mouth stays), failed :no-shelter otherwise
+  [world {:intent/keys [dir length] :as i} event]
+  (stone/link world
+              i
+              event
+              {:intent/kind :tunnel :intent/dir dir :intent/length length}
+              (fn [w _]
+                (let [feet (intent/feet w)]
+                  (cond (shelter? w feet)
+                        (-> w
+                            (assoc :pearls/shelter feet :player/controls {})
+                            intent/done)
+                        :else (intent/fail w :no-shelter))))))
+
 ;; ---------------------------------------------------------------- the lookout
 (defmethod intent/run :lookout
   ;; {:intent/kind :lookout}: stand, the eyes level and turning (lookout-turn), for lookout-ms,
