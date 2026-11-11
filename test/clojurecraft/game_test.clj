@@ -483,6 +483,13 @@
   (let [[w _] (run (game/init fx/opts)
                    [{:event/kind :start} (packet fx/login-finished)
                     (packet {:packet/name :finish-configuration})
-                    (packet {:packet/name :login :entity-id 7 :simulation-distance 3})])]
+                    (packet
+                     (assoc (sim-protocol/login "minecraft:overworld") :simulation-distance 3))])]
     (is (= 3 (:server/simulation-distance w))))
-  (is (not (contains? (in-play) :server/simulation-distance)) "a login that carries none"))
+  (is (not (contains? (in-play) :server/simulation-distance)) "a login that carries none")
+  (is (not (contains? (first (run (in-play)
+                                  [(packet (assoc (sim-protocol/login "minecraft:overworld")
+                                                  :simulation-distance
+                                                  -1))]))
+                      :server/simulation-distance))
+      "nor one no server sends"))
