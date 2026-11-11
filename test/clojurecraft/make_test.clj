@@ -441,9 +441,13 @@
   (let [kit (first (filter #(= :water-bucket (:goal/id %)) plan/goals))
         w (world-holding {:stone_pickaxe 2 :bucket 1} true)]
     (is (= :fill-bucket (:goal/id (make/next-row w kit plan/goals))))
+    (is
+     (= {:intent/kind :walk :intent/target [7 64 5] :intent/for :take-table :intent/pickup? true}
+        (make/decide w kit plan/goals))
+     "the table within reach, two blocks off, is walked to before the scoop goes out (make/beside?)")
     (is (= {:intent/kind :dig :intent/target [7 64 5] :intent/for :take-table}
-           (make/decide w kit plan/goals))
-        "the table within reach is dug up before the scoop goes out")
+           (make/decide (assoc w :player/pos [6.5 64.0 5.5]) kit plan/goals))
+        "and dug up from beside it")
     (is (not= :dig
               (:intent/kind (make/decide
                              (world-holding {:stone_pickaxe 2 :bucket 1 :crafting_table 1} true)
@@ -458,8 +462,12 @@
         full (into {} (for [p (range 36)] [p {:item (recipe/item-id :cobblestone) :count 64}]))]
     (is (= {:intent/kind :toss} (make/take-table-along (assoc w :player/inventory full)))
         "no slot free and filler to spare: throw it first")
-    (is (= :dig (:intent/kind (make/take-table-along (assoc w :player/inventory (dissoc full 3)))))
-        "a slot free: the dig")
+    (is (= :walk (:intent/kind (make/take-table-along (assoc w :player/inventory (dissoc full 3)))))
+        "a slot free: the walk to beside it (make/beside?)")
+    (is (= :dig
+           (:intent/kind (make/take-table-along
+                          (assoc w :player/inventory (dissoc full 3) :player/pos [6.5 64.0 5.5]))))
+        "a slot free, beside it: the dig")
     (is (= {:plan/wait :inventory-full}
            (make/take-table-along
             (assoc

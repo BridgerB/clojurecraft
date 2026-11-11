@@ -375,18 +375,34 @@
 
 (def table-drops #{(recipe/item-id :crafting_table)}) ; what digging a placed table drops: the table
 
+(defn beside?
+  "Do the feet stand beside cell pos where its drop lands in the pickup box: a neighbouring column
+   (diagonals too), pos at the feet's height or up to intent/pickup-rise above them? A table dug
+   from anywhere in reach dropped where no straight collect reached it: 3 blocks off through rock,
+   on a shelf a block up, down a pit 2 under the feet (real stage-18 Clj_r40, Clj_r30, Clj_r46 on
+   5d894db), 17 of the 20 tableless no-pickaxe endings."
+  [world [tx ty tz]]
+  (let [[fx fy fz] (intent/feet world)]
+    (and (<= (max (abs (- (long tx) (long fx))) (abs (- (long tz) (long fz)))) 1)
+         (not (and (= tx fx) (= tz fz)))
+         (<= 0 (- (long ty) (long fy)) intent/pickup-rise))))
+
 (defn take-table-along
   "A dig of the bot's placed crafting table, to carry it on, when no table is held and the
-   remembered one is within reach; nil otherwise. With every slot full the dig waits for a :toss of
-   junk (window/tossable), or for :inventory-full when none can go, the table left standing: the
-   table's drop needs an empty slot, and the pickaxe crafted at it took the one the table left."
+   remembered one is within reach; nil otherwise. From a stand beside it (beside?) only: else first
+   the walk there by a route (:intent/pickup?, chain-next digs and collects after it). With every
+   slot full the dig waits for a :toss of junk (window/tossable), or for :inventory-full when none
+   can go, the table left standing: the table's drop needs an empty slot, and the pickaxe crafted
+   at it took the one the table left."
   [world]
   (let [pos (near world :crafting_table)]
     (when (and pos
                (zero? (get (counts world) :crafting_table 0))
                (<= (physics/distance (game/eye world) (physics/centre pos)) intent/reach))
       (let [v (window/view world :inventory)]
-        (cond (window/free-slot world v)
+        (cond (and (window/free-slot world v) (not (beside? world pos)))
+              {:intent/kind :walk :intent/target pos :intent/for :take-table :intent/pickup? true}
+              (window/free-slot world v)
               {:intent/kind :dig :intent/target pos :intent/for :take-table}
               (window/tossable world v) {:intent/kind :toss}
               :else {:plan/wait :inventory-full})))))

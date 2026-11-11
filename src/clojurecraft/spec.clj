@@ -653,6 +653,7 @@
 (s/def :intent/child (s/keys :req [:intent/kind]))
 (s/def :intent/best-dist number?)
 (s/def :intent/best-tick int?)
+(s/def :intent/routed? boolean?)
 (s/def :intent/waypoints (s/coll-of ::block-pos :kind vector?))
 (s/def :intent/route #{:found :partial :none})
 (s/def :intent/max-nodes pos-int?)
