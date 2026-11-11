@@ -593,10 +593,11 @@
    sighting-radius, not given up on (distant-gave-up?), or nil. These are the sightings the
    hunt never acted on: on 0ace52e every first sighting of 23 real rod bots was 54 to 105
    blocks off, past hunt-radius 32, so endermen filtered it out before quarry or any fight
-   row could see it, and stare/provoke stayed 0 of 141."
+   row could see it, and stare/provoke stayed 0 of 141. Frozen or not (psense/seen-endermen): one
+   past the server's simulation distance wakes as the bot comes near."
   [world]
   (let [pos (:player/pos world)]
-    (->> (psense/endermen world pparams/sighting-radius)
+    (->> (psense/seen-endermen world pparams/sighting-radius)
          (filter (fn [[eid e]]
                    (and (> (physics/distance pos (:entity/pos e)) pparams/hunt-radius)
                         (not (distant-gave-up? world eid)))))
