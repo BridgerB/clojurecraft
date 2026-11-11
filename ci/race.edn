@@ -4,20 +4,21 @@
 {:race/runners 8 ; GitHub runners
  :race/servers 1 ; servers per runner, each its own world copy, race process and bots: one ticks 2-5x faster than two sharing the runner's two cores
  :race/landing-sets ["R1" "R2" "R3" "R4"] ; ci/gym.edn's race worlds: runner r races on set (r-1) mod 4
- :race/bots 10 ; bot slots per server, each refilled the moment its bot ends
+ :race/bots 14 ; bot slots per server, each refilled the moment its bot ends: 14 passed as often per lane-hour as 10, with fewer timeouts
  :race/prefix "Clj_r" ; bot names: Clj_r01, Clj_r02, ... one serial per server for the job
  :race/until "pearls-12" ; the target; a bot plays every step from its start up to it (plan/through)
  :race/run-minutes 330 ; how long each runner plays, near GitHub's 6 h job cap
  :race/stagger-ms 3000 ; between bots joining a server
  :race/server-heap-mb 6144 ; each server's JVM
- :race/bot-heap-mb 2048 ; each race process's JVM
+ :race/bot-heap-mb 3072 ; each race process's JVM
  ;; per server (by --server k): settings over clojurecraft.servers/defaults (simulation distance 3)
  :race/server-overrides {}
  ;; per lane (race.yml's runner): race keys over this file's own. An A/B of bots a server: lanes
- ;; 1 3 6 8 carry 14 bots (with a bigger race heap), the others 10, so each start (ci/lanes.edn:
- ;; rods 1-4, forest 5-8) and each landing set (lane r on set (r-1) mod 4) has both arms. Lanes on
- ;; a set are landing-stride apart, the most landings any lane takes, so none overlap
- :race/lane-overrides {1 {:race/bots 14 :race/bot-heap-mb 3072}
-                       3 {:race/bots 14 :race/bot-heap-mb 3072}
-                       6 {:race/bots 14 :race/bot-heap-mb 3072}
-                       8 {:race/bots 14 :race/bot-heap-mb 3072}}}
+ ;; 2 4 5 7 carry 18 bots (with a bigger race heap), the others 14, so each start (ci/lanes.edn:
+ ;; rods 1-4, forest 5-8) and each landing set (lane r on set (r-1) mod 4) has both arms, and the
+ ;; bigger arm sits on the other sets from the last A/B's. Lanes on a set are landing-stride
+ ;; apart, the most landings any lane takes, so none overlap
+ :race/lane-overrides {2 {:race/bots 18 :race/bot-heap-mb 4096}
+                       4 {:race/bots 18 :race/bot-heap-mb 4096}
+                       5 {:race/bots 18 :race/bot-heap-mb 4096}
+                       7 {:race/bots 18 :race/bot-heap-mb 4096}}}
