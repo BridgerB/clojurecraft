@@ -62,6 +62,10 @@
       (is (entity/creepy? (entity/metadata-facts (blocks/entity-types :enderman) {17 true})))
       (is (not (entity/creepy? (entity/metadata-facts (blocks/entity-types :enderman) {17 false}))))
       (is (= {} (entity/metadata-facts pig {17 true}))))
+    (testing "a hoglin says it is a baby at AgeableMob's first index, and a pig is not read"
+      (is (entity/baby? (entity/metadata-facts (blocks/entity-types :hoglin) {16 true})))
+      (is (not (entity/baby? (entity/metadata-facts (blocks/entity-types :hoglin) {16 false}))))
+      (is (= {} (entity/metadata-facts pig {16 true}))))
     (testing "a blaze's flags say it burns"
       (is (entity/on-fire? (merge (mob :blaze [0.0 0.0 0.0])
                                   (entity/metadata-facts (blocks/entity-types :blaze) {0 1})))))))

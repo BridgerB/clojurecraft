@@ -20,7 +20,7 @@
 
 (def at [9 64 8])
 
-(def row (first (filter #(= :keep-table (:goal/id %)) plan/goals)))
+(def row (first (filter #(= :keep-table-2 (:goal/id %)) plan/goals)))
 
 (defn beside-table
   "A bot in a chained run beside a crafting table at [9 64 8] it placed (a :place of it ended
@@ -33,7 +33,7 @@
              :player/on-ground? true
              :player/inventory inv
              :plan/chain? true
-             :plan/goals #{:keep-table}
+             :plan/goals #{:keep-table-2}
              :time/now 2000
              :plan/last {:intent/kind :craft :intent/window :table :intent/id 4}
              :plan/ended {:intent/kind :craft :ended/at 1000}
@@ -84,7 +84,7 @@
 
 (deftest a-craft-queued-keeps-the-table-where-it-is
   (testing "a stone pickaxe is made at the table next"
-    (let [w (assoc (beside-table spent) :plan/goals #{:keep-table :stone-pickaxe})]
+    (let [w (assoc (beside-table spent) :plan/goals #{:keep-table-2 :stone-pickaxe})]
       (is (table/queued-craft? w))
       (is (nil? (plan/next-intent w row plan/goals)))))
   (testing "the sword row would craft with what is left"
@@ -105,3 +105,18 @@
         i (make/decide w goal plan/goals)]
     (is (= :place (:intent/kind i)))
     (is (= :crafting_table (:intent/item i)))))
+
+(deftest the-take-along-is-held-against-the-hunt
+  ;; Issue #263: in all 14 no-pickaxe endings of the real stage-18 lanes on 4170b7d the pearl hunt
+  ;; cut the take-along dig, the table stayed where it was, and the next pickaxe had none. The
+  ;; :keep-table-2 row commits its dig, toss and pick-up: only an escape row cuts them.
+  (let [hunt (first (filter #(= :ender-pearls (:goal/id %)) plan/goals))
+        dig
+        {:intent/kind :dig :intent/target at :intent/for :take-table :intent/goal :keep-table-2}]
+    (is (= :keep-table-2 (plan/current-id plan/goals :keep-table)) "the old row stands for the new")
+    (is (not (plan/live? (first (filter #(= :keep-table (:goal/id %)) plan/goals)))))
+    (is (plan/held? plan/goals dig hunt) "the dig of the table runs on")
+    (is (plan/held? plan/goals (assoc dig :intent/kind :collect) hunt)
+        "and the pick-up of its drop")
+    (is (not (plan/held? plan/goals (assoc dig :intent/goal :keep-table) hunt))
+        "the old row's dig was cut, as on 4170b7d")))
