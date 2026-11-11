@@ -21,6 +21,7 @@ sourceRefs:
   - src/clojurecraft/make.clj#defn beside?
   - test/clojurecraft/drops_test.clj#a-drop-behind-a-wall-is-reached-by-a-route
   - test/clojurecraft/table_test.clj#the-table-is-dug-only-from-beside-it
+  - test/clojurecraft/table_test.clj#a-table-no-route-reaches-a-stand-beside-is-dug-from-here
   - src/clojurecraft/intent.clj#def collect-stall-ticks 20
   - src/clojurecraft/intent.clj#defn nearest-item
   - src/clojurecraft/game.clj#defmethod on-packet [:play :add-entity]
@@ -66,7 +67,7 @@ related:
 
 ## A route to a drop out of straight reach (issue #263)
 
-Both executors steer straight at the drop (`toward`), so a drop behind a block, on a shelf or down a pit was never reached: on 5d894db 17 of the 20 tableless `no-pickaxe` real stage-18 endings had dug their table from anywhere in reach (Clj_r40 3 blocks off through rock, Clj_r30 on a shelf a block up, Clj_r46 2 under the feet) and failed `:not-picked-up` four times each. Now a collect for a purpose in `route-fors` (the table taken along: other collects steer straight, so the recorded runs replay unchanged) that has made no progress for `collect-stall-ticks` with the drop still out of the pickup box (more than 0.4 off on the plane, or more than `leaf-drop` under the feet) walks a route to the drop's cell once (`route-stalled`, a child `pickup-route`: a `:walk` with `:intent/pickup?`), then collects again with its clock started over; `:intent/routed?` makes a second stall fail as before, and a route that fails fails the collect `:not-picked-up`. And the take-along digs the placed table only from a stand beside it (`make/beside?`), walking a route there first, so its drop lands in the pickup box.
+Both executors steer straight at the drop (`toward`), so a drop behind a block, on a shelf or down a pit was never reached: on 5d894db 17 of the 20 tableless `no-pickaxe` real stage-18 endings had dug their table from anywhere in reach (Clj_r40 3 blocks off through rock, Clj_r30 on a shelf a block up, Clj_r46 2 under the feet) and failed `:not-picked-up` four times each. Now a collect for a purpose in `route-fors` (the table taken along: other collects steer straight, so the recorded runs replay unchanged) that has made no progress for `collect-stall-ticks` with the drop still out of the pickup box (more than 0.4 off on the plane, or more than `leaf-drop` under the feet) walks a route to the drop's cell once (`route-stalled`, a child `pickup-route`: a `:walk` with `:intent/pickup?`), then collects again with its clock started over; `:intent/routed?` makes a second stall fail as before, and a route that fails fails the collect `:not-picked-up`. And the take-along digs the placed table only from a stand beside it (`make/beside?`), walking a route there first (`make/beside-walk`), so its drop lands in the pickup box; when no route reaches such a stand it digs from where it stands, as before, since a walk that fails `:no-path` blacklists the table and `make/near` forgets it (real Clj_r44 on 702221d).
 
 ## See also
 - [[walk-intent]] - the same steering, with detours.

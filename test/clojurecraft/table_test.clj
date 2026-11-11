@@ -147,9 +147,20 @@
     (is (= :dig (:intent/kind (make/take-table-along (from [8.5 63.0 7.5]))))
         "a block under it, diagonally: still in reach of its drop")
     (is (= walk (make/take-table-along (from [6.5 64.0 7.5]))) "3 off at its height, as Clj_r40")
-    (is (= walk (make/take-table-along (from [6.5 63.0 9.5])))
-        "a block under it and 3 off, as Clj_r30")
-    (is (= walk (make/take-table-along (from [9.5 66.0 9.5]))) "2 over it, as Clj_r46")
     (is (= {:intent/kind :dig :intent/target at :intent/for :take-table}
            (intent/chain-next walk :take-table make/table-drops {}))
         "after the walk the chain digs it")))
+
+(deftest a-table-no-route-reaches-a-stand-beside-is-dug-from-here
+  ;; Issue #263, real stage-18 Clj_r44 on 702221d: in its own stair 3 cells from the table, the
+  ;; walk to a stand beside it found no route and failed :no-path in 55 ms; the failure blacklisted
+  ;; the table, near forgot it, and the bot was left with 8 sticks and no table for the next
+  ;; pickaxe. With no route to a stand beside it, the table is dug from where the bot stands
+  (let [stone (blocks/default-state :stone)
+        walls (into {at table-id} (for [[x z] [[5 7] [7 7] [6 6] [6 8]] y [64 65]] [[x y z] stone]))
+        w (-> (beside-table crafted)
+              (assoc :world/chunks {[0 0] (world/column walls)} :player/pos [6.5 64.0 7.5]))]
+    (is (not (make/beside? w at)) "3 cells off")
+    (is (not (intent/routable? w (make/beside-walk at))) "walled in: no route to a stand beside it")
+    (is (= {:intent/kind :dig :intent/target at :intent/for :take-table} (make/take-table-along w))
+        "dug from here, in reach, never the walk that fails and loses the table")))
