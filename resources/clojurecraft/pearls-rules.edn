@@ -263,6 +263,13 @@
    :rule/phase :provoke
    :rule/when [:in? :crowded?]
    :rule/then [:fact :vantage-or-lookout]}
+  ;; in the burrow's end with an angry enderman alive within angry-hold: it waits there, never out to
+  ;; the mouth or the open while one is left angry (one left came back minutes later and killed a
+  ;; bot in the open); its fight comes first, and every escape
+  {:rule/id :hunt/wait-for-angry
+   :rule/phase :survive
+   :rule/when [:in? :angry-alive?]
+   :rule/then [:intent {:intent/kind :lookout :intent/for :pearls}]}
   {:rule/id :hunt/unseal-mouth
    :rule/phase :set-up
    :rule/when [:in? :mouth [:not :swarmed?] :unseal]

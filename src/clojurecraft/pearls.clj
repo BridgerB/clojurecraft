@@ -94,6 +94,23 @@
       [(first look) 90.0]
       look)))
 
+(defn freezing?
+  "Does the look [yaw pitch] stare from the eye (mob/stared?) at an angry enderman (entity/creepy?)
+   within its :freeze range (mob/kinds) of the feet and out of the sword's reach
+   (combat/in-reach?)? Stared at there it stands still and never comes
+   (EnderMan$EndermanFreezeWhenLookedAt): real bots held the stare from their burrows and their
+   angry endermen stood 10 to 15 blocks off for minutes, then killed them once they looked away."
+  [world look]
+  (let [eye (game/eye world)
+        solid? (psense/sight-fn world)
+        r (:freeze (mob/kinds :enderman))]
+    (boolean (some (fn [[_ e]]
+                     (and (entity/creepy? e)
+                          (<= (physics/distance (:player/pos world) (:entity/pos e)) r)
+                          (not (combat/in-reach? world e))
+                          (mob/stared? solid? eye look (:entity/pos e))))
+                   (psense/endermen (avoided/forget world :blacklist) r)))))
+
 (defn uncovered-log
   "The world with one log line naming the nearest shooter in sight, its position and the bot's, when a
    shooter is shooting (shot-at?) and cover-from finds no cover, every hundred ticks at most (five
@@ -173,10 +190,11 @@
           :else world)))
 
 (defmethod plan/steer :pearls
-  ;; out of the burrow's end, every look but a provoke's turned from a calm enderman's eyes
+  ;; every look but a provoke's that holds an angry enderman still (freezing?) turned down, the
+  ;; burrow's end too: one stared at within 16 stands where it is (EnderMan's freeze goal) and never
+  ;; comes to the sword. Out of the burrow's end, every look turned from a calm enderman's eyes too
   ;; (look-off): a walk steers by :control/yaw and a dig or a place is judged by distance, so the
-  ;; pitch is free. In the end a stare by chance is what the hunt wants: the enderman comes to the
-  ;; sword
+  ;; pitch is free
   [world _]
   (let [controls (:player/controls world)
         ;; a walk sets only :control/yaw: the look it leaves is that heading and the pitch the bot
@@ -204,10 +222,12 @@
                                                                             world))))))))))))
                 (psense/shot-at? world) (assoc :pearls/shot-at-ms (:time/now world 0))
                 (fexit/sealed-full? world) (assoc :pearls/refuge-done true))]
-    (cond (or (nil? look)
-              (= :provoke (:intent/kind (:plan/intent world)))
-              (and home (= home (intent/feet world))))
-          world
+    (cond (or (nil? look) (= :provoke (:intent/kind (:plan/intent world)))) world
+          ;; anywhere, the burrow's end too: a stare that holds an angry one still is broken, the
+          ;; look straight down at the same yaw, so it comes to the sword
+          (freezing? world look)
+          (assoc-in world [:player/controls :control/look] [(first look) 90.0])
+          (and home (= home (intent/feet world))) world
           :else
           (let [off (look-off world look)]
             (if (and (nil? (:control/look controls)) (= off look))

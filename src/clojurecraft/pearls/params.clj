@@ -113,6 +113,14 @@
 ;; ---------------------------------------------------------------- the kill and its drop
 (def fires #{:fire :soul_fire})
 
+(def angry-hold
+  "Blocks within which an angry enderman keeps the bot in its burrow (pearls.edn :angry-hold)."
+  (:angry-hold thresholds))
+
+(def angry-hold-stale
+  "Times stale-lookouts of lookouts after which an angry one no longer holds the burrow."
+  (:angry-hold-stale thresholds))
+
 (def hold-radius
   "Blocks from the feet within which an angry enderman keeps the bot where it is: the burrow is not
    given up (stale?) and no relocation begins while one stands this near."

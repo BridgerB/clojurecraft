@@ -40,6 +40,13 @@
  ;; Blocks from the feet within which an angry enderman keeps the bot where it is:
  ;; the burrow is not given up (stale?) and no relocation begins while one stands this near
  :hold-radius 16.0
+ ;; Blocks from the feet within which an angry enderman still alive keeps the bot in its burrow's end
+ ;; and the burrow from going stale: one left angry outside it came back minutes later and killed a
+ ;; bot in the open (cover/wait-for-angry, place/shelter)
+ :angry-hold 48.0
+ ;; lookouts since the burrow was cut after which an angry one within :angry-hold no longer holds the
+ ;; bot there (one that cannot reach the burrow): this many times stale-lookouts
+ :angry-hold-stale 4
  ;; Health under which an open fight with a teleporter (enderman) breaks off
  :break-hp 15.0
  ;; Health to heal back up to before an open fight resumes after covering

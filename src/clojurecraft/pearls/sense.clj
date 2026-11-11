@@ -414,6 +414,16 @@
                             (<= (abs (- (physics/y-of q) (physics/y-of p))) pparams/danger-rise))))
                    (endermen bl pparams/stare-range)))))
 
+(defn angry-holds?
+  "Does an angry enderman still alive within angry-hold of the feet (angry-within?) keep the bot
+   in its burrow: fewer than angry-hold-stale times stale-lookouts lookouts done since the burrow
+   was cut (memory/done-since), so one that cannot reach it lets the hunt go on in the end? One
+   left angry outside the burrow came back minutes later and killed real bots in the open."
+  [world]
+  (and (angry-within? world pparams/angry-hold)
+       (< (or (memory/done-since world :lookout :burrow) 0)
+          (* pparams/angry-hold-stale pparams/stale-lookouts))))
+
 (defn angry-tracked?
   "Does any angry enderman (entity/creepy?) stand within radius of the feet and danger-rise of
    their height, whatever the hunt thinks of it: blacklisted, fought out, lured out or given up

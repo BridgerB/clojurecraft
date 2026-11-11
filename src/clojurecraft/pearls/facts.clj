@@ -58,6 +58,7 @@
    :hurt? (fn [_ w] (< (:player/health w 20.0) pparams/danger-health))
    :leave-brutes (fn [_ w] (pmove/leave-brutes w))
    :tracked? (fn [_ w] (psense/angry-tracked? w pparams/hold-radius))
+   :angry-alive? (fn [_ w] (psense/angry-holds? w))
    :rested? (fn [_ w] (>= (:player/health w 20.0) (psense/provoke-line w)))
    :meal (fn [f w] (when-not (f :rested?) (blaze/meal w)))
    :home (fn [_ w] (pplace/shelter w))
