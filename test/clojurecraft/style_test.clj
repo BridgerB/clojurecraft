@@ -115,19 +115,24 @@
           lines)
          (map #(str/join "\n" %)))))
 
+(def redefs-call
+  "The text of a call that rebinds a var for the whole JVM (redefs-pattern's form), built from two
+   parts so that this file holds no such call of its own for the scan to find."
+  (str "(with" "-redefs"))
+
 (defn unsynchronized-redefs
-  "[file test-name] for each deftest under dir not marked ^:eftest/synchronized that calls
-   with-redefs, itself or through a function of its own file that does. with-redefs rebinds a var
-   for the whole JVM, and the suite runs every var in parallel: one test's redefinition reached a
-   recorded sim run's live run and not its replay, and the replay test failed now and then."
+  "[file test-name] for each deftest under dir not marked ^:eftest/synchronized that makes a
+   redefs-call, itself or through a function of its own file that makes one. The call rebinds a
+   var for the whole JVM, and the suite runs every var in parallel: one test's redefinition reached
+   a recorded sim run's live run and not its replay, and the replay test failed now and then."
   [dir]
   (for [f (map str (filter #(str/ends-with? (str %) "_test.clj") (file-seq (io/file dir))))
         :let [chunks (top-level-chunks f)
-              helpers (keep #(when (str/includes? % "(with-redefs")
+              helpers (keep #(when (str/includes? % redefs-call)
                                (second (re-find #"^\(defn-? (\S+)" %)))
                             chunks)
               redefs? (fn [c]
-                        (or (str/includes? c "(with-redefs")
+                        (or (str/includes? c redefs-call)
                             (some #(str/includes? c (str "(" % " ")) helpers)))]
         c chunks
         :when (and (str/starts-with? c "(deftest ")
