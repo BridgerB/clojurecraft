@@ -11,7 +11,10 @@
 ;; never attacks; :hostile spawns by the night rule, :weight how often among them; :loot [[item lo
 ;; hi]], each item lo to hi when killed by the player; :paths finds a route round what stops its
 ;; straight walk (route); :teleports teleports at its target as an enderman does (toward-aim,
-;; away-aim). :entity the entity type the client is told when it is not the kind's own name (a
+;; away-aim); :freeze how near (feet to feet) an angry one stared at by the player it targets stands
+;; still and does not strike (EnderMan$EndermanFreezeWhenLookedAt, goal priority 1 with the JUMP and
+;; MOVE flags: canUse when distanceToSqr is 256 or less and isBeingStaredBy, the stare's own cone;
+;; its MOVE flag holds off the priority-2 MeleeAttackGoal, while the target goal's teleports go on). :entity the entity type the client is told when it is not the kind's own name (a
 ;; magma cube's sizes are kinds of their own); :armour the armour points that take their share of
 ;; the player's hit (mob/absorbed); :hop how high its jump lifts its feet, so it strikes a player
 ;; that far over it, the line from its head to the eye clear; :split [kind lo hi], lo to hi of
@@ -74,6 +77,7 @@
              :weight 10
              :paths true
              :teleports true
+             :freeze 16.0
              :loot [[:ender_pearl 0 1]]}
   :blaze {:health 20.0
           :box [0.6 1.8]

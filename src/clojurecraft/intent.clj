@@ -163,6 +163,8 @@
 (def centre-tolerance 0.05)           ; horizontal distance from a drop below the feet at which a collect stops walking: over its cell, to fall in
 (def collect-stall-ticks 20)          ; blocked this long with no progress → name the blocker
 (def ledge-look 0.6)                  ; blocks ahead of the feet a collect looks for a floor before stepping
+(def lava-look 1.5)                   ; blocks ahead of the feet a straight walk looks for lava before stepping (lava-ahead?)
+(def lava-look-step 0.5)              ; blocks between the points lava-ahead? looks at
 
 (defn face-toward
   "The face of the block at target nearest the eye, as the packets number it (packet/value :face):
@@ -811,6 +813,49 @@
                            (nil? (path/landing world cell)))
                       (straddling-ahead? world unit))))))
 
+(defn lava-ahead?
+  "Would a straight step toward goal take the body into lava or beside it: a cell at the feet's
+   height on the plane, every lava-look-step out to lava-look toward goal (not the feet's own),
+   that is lava or has lava beside or under it (path/lava-near?), or one open with no floor
+   under it whose fall (path/landing, at most path/max-fall, never onto a cell beside lava) has
+   no end? Nil toward a goal on the feet's own column."
+  [world goal]
+  (let [[px _ pz] (:player/pos world)
+        [gx _ gz] goal
+        d (physics/horizontal-distance [px 0 pz] [gx 0 gz])
+        [_ fy _ :as at] (feet world)]
+    (when (pos? d)
+      (let [ux (/ (- gx px) d)
+            uz (/ (- gz pz) d)
+            ahead (distinct (for [k (range 1 (inc (long (/ lava-look lava-look-step))))
+                                  :let [s (min d (* k lava-look-step))]]
+                              [(long (math/floor (+ px (* s ux)))) fy
+                               (long (math/floor (+ pz (* s uz))))]))]
+        (boolean (some (fn [c]
+                         (and (not= c at)
+                              (or (= :lava (path/classify world c))
+                                  (path/lava-near? world c)
+                                  (and (= :clear (path/classify world c))
+                                       (not (path/floor? world (update c 1 dec)))
+                                       (nil? (path/landing world c))))))
+                       ahead))))))
+
+(defn unsafe-ahead?
+  "Would a straight step toward goal go over a drop with no landing (ledge-ahead?) or into or
+   beside lava (lava-ahead?)? What every straight mover but an escape asks before it walks."
+  [world goal]
+  (boolean (or (ledge-ahead? world goal) (lava-ahead? world goal))))
+
+(defn toward-safe
+  "The controls of toward, point and yaw-offset as there, unless a step that way is unsafe
+   (unsafe-ahead?): then only the look at point, standing. A fight's approach and press, a
+   retreat and a dodge walk straight, not along a route, so path's lava walls never see them:
+   real bots walked straight at an enderman off a ledge into lava (Clj_r34) and a cover's step
+   over an edge into it (Clj_r11)."
+  [world point yaw-offset]
+  (cond (unsafe-ahead? world point) {:control/look (physics/look-at (game/eye world) point)}
+        :else (toward world point yaw-offset)))
+
 (defmethod run :collect
   [world
    {:intent/keys [target since best-dist best-tick drops drops-before]
@@ -848,7 +893,7 @@
           (-> world
               (assoc :player/controls {})
               (fail :not-picked-up))
-          (and (> d 0.4) (ledge-ahead? world goal))
+          (and (> d 0.4) (unsafe-ahead? world goal))
           (-> world
               (assoc :player/controls {})
               (game/say (str "collect: a ledge ahead, the drop at " (mapv long goal) " is left"))

@@ -10,6 +10,7 @@
             [clojurecraft.main :as main]
             [clojurecraft.make :as make]
             [clojurecraft.memory :as memory]
+            [clojurecraft.pearls.params :as pparams]
             [clojurecraft.picks :as picks]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
@@ -332,3 +333,27 @@
     (is (plan/done-by base row) "and this row leaves it to the craft")
     (is (not (picks/craft-owed? crafted at)) "once a craft ended after the place")
     (is (picks/placed-table? crafted) "the table is taken along as before")))
+
+(deftest a-spare-never-takes-the-last-pickaxes-sticks
+  ;; Issue #263: 21 of the 43 no-pickaxe endings of the real stage-18 lanes on 5d894db held a
+  ;; crafting table and 99 to 209 cobblestone and no stick, plank or stem (r4-b8 Clj_r39: table 1,
+  ;; cobblestone 154, sticks 0): the spares took every stick, and the last pickaxe wore out with
+  ;; none to replace it. A spare is crafted only while the wood of the next one stays held
+  (let [bag (fn [& more]
+              (-> (standing-nether (into [(item :blaze_rod 7) (item :crafting_table 1)
+                                          (item :cobblestone 154) (item :cooked_beef 16)
+                                          (item :iron_sword 1) (item :stone_pickaxe 1)]
+                                         more))
+                  (assoc :plan/chain? true)))
+        row (first (filter #(= :spare-picks (:goal/id %)) plan/goals))]
+    (is (= 2 pparams/spare-wood-reserve) "two sticks' worth")
+    (is (not (picks/spare-wood? (bag (item :stick 2)))) "two sticks: the replacement's own")
+    (is (plan/done-by (bag (item :stick 2)) row) "so the spare row has nothing to craft")
+    (is (picks/spare-wood? (bag (item :stick 4))) "four sticks: a spare and the next one")
+    (is (not (plan/done-by (bag (item :stick 4)) row)) "and the spare is made")
+    (is (picks/spare-wood? (bag (item :stick 2) (item :warped_planks 1)))
+        "a plank is two sticks: the spare takes the sticks, the plank stays")
+    (is (picks/spare-wood? (bag (item :stick 2) (item :warped_stem 1))) "a stem is eight")
+    (is (= 8 (picks/wood-sticks (bag (item :crimson_stem 1)))))
+    (is (picks/spare-wood? (update (bag (item :stick 2)) :player/inventory dissoc 5))
+        "with no pickaxe held the next one is no spare: it takes what there is")))
