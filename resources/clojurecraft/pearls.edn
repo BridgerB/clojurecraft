@@ -152,6 +152,10 @@
  :wander-reach 64
  ;; ms a held fight waits with its target past strike-range before the hunt plans again (combat/hold-timeout-ms is a minute)
  :hold-patience-ms 12000
+ ;; lookouts (lookout-ms each) an angry enderman within hold-radius may go without coming close-gain
+ ;; nearer before it holds the bot looking out, and its burrow from going stale, no more
+ ;; (sense/waited-out?): one stood 15.8 blocks off, unhurt and unseen, for 546 lookouts
+ :angry-wait-lookouts 24
  ;; health under which an enderman at hand has landed a hit (7 on Normal off 20): fought back, fought out or not
  :struck-health 14.0
  ;; blocks round the feet within which a standable cell out of a shooter's sight is looked for

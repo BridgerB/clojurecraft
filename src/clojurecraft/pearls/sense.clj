@@ -202,6 +202,45 @@
                   (>= (- (:time/now world 0) (:closed-at o)) pparams/park-ms)
                   (> (physics/distance (:player/pos world) q) pparams/park-near)))))
 
+(defn parked-out?
+  "Has angry enderman eid gone angry-wait-lookouts lookouts (lookout-ms each) without coming
+   close-gain nearer than its best (:pearls/angry's :closed-at, track-angry)? Then it is no reason to
+   stay or to wait: it holds no lookout (waited-out?), keeps no burrow (place/shelter) and blocks no
+   provoke (coming?), as one lured out. A provoked one that stood 10 to 16 blocks off and never came
+   held real and sim bots for the rest of the hour. The bot never walks out to it. Untracked, no."
+  [world eid]
+  (let [o (get (:pearls/angry world) eid)]
+    (boolean (and o
+                  (>= (- (:time/now world 0) (:closed-at o))
+                      (* pparams/angry-wait-lookouts pparams/lookout-ms))))))
+
+(defn waited-out?
+  "Are the angry endermen within hold-radius of the feet, one at least, all parked out
+   (parked-out?)? Then they hold the bot looking out no more and keep its burrow from going stale
+   no more."
+  [world]
+  (let [p (:player/pos world)
+        held (for [[eid e] (endermen (avoided/forget world :blacklist) pparams/hold-radius)
+                   :when (and (entity/creepy? e)
+                              (<= (physics/distance p (:entity/pos e)) pparams/hold-radius))]
+               eid)]
+    (boolean (and (seq held) (every? #(parked-out? world %) held)))))
+
+(defn angry-holding?
+  "Does an angry enderman within radius of the feet hold the bot (angry-within?), one parked out
+   (parked-out?) aside?"
+  [world radius]
+  (let [p (:player/pos world)
+        bl (if (lured-out? world) world (avoided/forget world :blacklist))]
+    (boolean (some (fn [[eid e]]
+                     (let [q (:entity/pos e)]
+                       (and (entity/creepy? e)
+                            (not (parked-out? world eid))
+                            (not (and (lured-out? world) (unfightable? world eid e)))
+                            (<= (physics/distance p q) radius)
+                            (<= (abs (- (physics/y-of q) (physics/y-of p))) pparams/danger-rise))))
+                   (endermen bl pparams/stare-range)))))
+
 (defn live-menaced?
   "Is an angry enderman within danger-radius and danger-rise of the feet that is not parked
    (parked?)? Only that holds a wander in."
@@ -266,7 +305,7 @@
    (cut-out), never walked through it."
   [world]
   (boolean (and (>= (or (memory/done-since world :lookout :burrow) 0) pparams/stale-lookouts)
-                (or (nil? (angry-near world)) (blocked-out? world)))))
+                (or (nil? (angry-near world)) (blocked-out? world) (waited-out? world)))))
 
 ; hostile kinds no threat is: the enderman is the quarry, met its own way; a creeper is the :defend row's, backed away from, and a burrow is no place to back off in
 (defn threat
@@ -598,13 +637,13 @@
 
 (defn coming?
   "Is the nearest angry enderman (entity/creepy?) within stare-range one the hunt still fights
-   (not unfightable?: given up, fought out, cut or failed lately)? No other is provoked while it
-   is: one enderman at a time."
+   (not unfightable?: given up, fought out, cut or failed lately) and still waits for (not
+   parked-out?)? No other is provoked while it is: one enderman at a time."
   [world]
   (let [[ceid ce] (entity/nearest
                    (into {} (filter (comp entity/creepy? val)) (endermen world pparams/stare-range))
                    (:player/pos world))]
-    (boolean (and ce (not (unfightable? world ceid ce))))))
+    (boolean (and ce (not (unfightable? world ceid ce)) (not (parked-out? world ceid))))))
 
 (defn pearls-held
   "The ender pearls held."

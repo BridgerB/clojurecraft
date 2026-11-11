@@ -232,14 +232,18 @@
      (select-keys again [:intent/kind :intent/target])))
 
 (defn held-idle?
-  "Is intent i a held :fight (hold?) that has run hold-patience-ms or more with its target gone
-   or past strike-range of the feet?"
+  "Is intent i a held :fight (hold?) that has gone hold-patience-ms or more since it began or
+   since its target was last hit (:entity/hurt-at), whichever is later, with its target gone or
+   past strike-range of the feet? A hit knocks the target three blocks back (out of the burrow's
+   reach), and it walks in again: patience from the fight's start alone dropped a fight late in
+   it at every knockback."
   [world i]
-  (boolean (and (= :fight (:intent/kind i))
-                (:intent/hold? i)
-                (:intent/since i)
-                (> (- (:time/now world 0) (:intent/since i)) pparams/hold-patience-ms)
-                (let [e (get-in world [:world/entities (:intent/target i)])]
+  (let [e (get-in world [:world/entities (:intent/target i)])
+        from (max (or (:intent/since i) 0) (or (:entity/hurt-at e) 0))]
+    (boolean (and (= :fight (:intent/kind i))
+                  (:intent/hold? i)
+                  (:intent/since i)
+                  (> (- (:time/now world 0) from) pparams/hold-patience-ms)
                   (or (nil? e)
                       (> (physics/distance (:player/pos world) (:entity/pos e))
                          pparams/strike-range))))))

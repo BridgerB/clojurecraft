@@ -170,6 +170,11 @@
 
 (def hold-patience-ms (:hold-patience-ms thresholds))
 
+(def angry-wait-lookouts
+  "Lookouts an angry one may go without coming nearer before it holds the bot no more
+   (pearls.edn :angry-wait-lookouts, sense/waited-out?)."
+  (:angry-wait-lookouts thresholds))
+
 (def struck-health (:struck-health thresholds))
 
 (def swarm-radius (:swarm-radius thresholds))
