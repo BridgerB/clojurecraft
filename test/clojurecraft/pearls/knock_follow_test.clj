@@ -63,3 +63,17 @@
     (is (= 7 (:intent/length i)) "the fewest cells past 16.5")
     (is (nil? (pplace/draw-out (at (dec span)))) "not parked out yet: no draw")
     (is (nil? (pplace/draw-out (assoc (at span) :pearls/angry {}))) "untracked: no draw")))
+
+(deftest no-draw-to-an-end-no-teleport-lands-near
+  ;; sim forest R2/21 seed 1: the burrow was lengthened in rock, the parked one's teleports landed
+  ;; nowhere, and it stayed 10.3 blocks off for 55 minutes
+  (let [parked (assoc (ps/enderman [8.5 61.0 18.5]) :entity/creepy? true)
+        span (* pparams/angry-wait-lookouts pparams/lookout-ms)
+        rock (into {} (for [x (range 0 16) y (range 64 80) z (range 0 16)] [[x y z] ps/stone]))
+        at (fn [blocks]
+             (-> (ps/burrowed [8.5 61.0 8.5] {7 parked} blocks)
+                 (assoc :time/now span :pearls/angry {7 {:since 0 :best 10.0 :closed-at 0}})))]
+    (is (pplace/lands-near? (at {}) [8.5 61.0 18.5] [8 61 1]) "open ground over the end: it lands")
+    (is (some? (pplace/draw-out (at {}))))
+    (is (not (pplace/lands-near? (at rock) [8.5 61.0 18.5] [8 61 1])) "rock to y 80: nowhere")
+    (is (nil? (pplace/draw-out (at rock))) "so no draw")))
