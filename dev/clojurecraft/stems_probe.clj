@@ -43,18 +43,53 @@
          " intent "
          (pr-str (select-keys (:plan/intent w) [:intent/kind :intent/for :intent/target])))))
 
+
+
+(defn dig-starts
+  "How many block digs the effects start (player-action :start-destroy)."
+  [effects]
+  (count (filter #(and (= :send (:effect/kind %))
+                       (= :player-action (get-in % [:effect/packet :packet/name]))
+                       (= 0 (get-in % [:effect/packet :status])))
+                 effects)))
+
+(defn dig-key
+  "The intent a dig is counted against: [kind why child-kind] of the running intent."
+  [w]
+  (let [i (:plan/intent w)]
+    [(:intent/kind i) (intent/why-of i) (get-in i [:intent/child :intent/kind])]))
+
+(defn digs
+  "Fold the recording and print the digs started, by [kind why child-kind], most first."
+  [path]
+  (let [[counts _] (record/reduce-entries (fn [[counts w] e]
+                                            (if-not (:event/kind e)
+                                              [counts w]
+                                              (let [w' (main/step w e)
+                                                    n (dig-starts (:bot/effects w'))
+                                                    k (dig-key (if (:plan/intent w') w' w))]
+                                                [(cond-> counts (pos? n) (update k (fnil + 0) n))
+                                                 (assoc w' :bot/effects [])])))
+                                          [{} (game/init {:host "replay" :port 0 :name "Clj_digs"})]
+                                          path)
+        total (reduce + 0 (vals counts))]
+    (println "DIGS" path "total" total)
+    (doseq [[k n] (take 20 (sort-by (comp - val) counts))] (println " " n k))))
+
 (defn -main
-  "Fold the recording and print a line every every-ms."
+  "Fold the recording and print a line every every-ms; with every \"digs\", the digs by intent."
   [path & [every]]
-  (let [every (parse-long (or every "30000"))]
-    (record/reduce-entries (fn [[w next-at] e]
-                             (if-not (:event/kind e)
-                               [w next-at]
-                               (let [w (assoc (main/step w e) :bot/effects [])
-                                     now (:time/now w 0)]
-                                 (if (and (:player/pos w) (>= now next-at))
-                                   (do (println (line w)) [w (+ now every)])
-                                   [w next-at]))))
-                           [(game/init {:host "replay" :port 0 :name "Clj_stems"}) 0]
-                           path))
+  (cond (= "digs" every) (digs path)
+        :else
+        (let [every (parse-long (or every "30000"))]
+          (record/reduce-entries (fn [[w next-at] e]
+                                   (if-not (:event/kind e)
+                                     [w next-at]
+                                     (let [w (assoc (main/step w e) :bot/effects [])
+                                           now (:time/now w 0)]
+                                       (if (and (:player/pos w) (>= now next-at))
+                                         (do (println (line w)) [w (+ now every)])
+                                         [w next-at]))))
+                                 [(game/init {:host "replay" :port 0 :name "Clj_stems"}) 0]
+                                 path)))
   (shutdown-agents))
