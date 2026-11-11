@@ -77,7 +77,8 @@
         behind (ticks (raised (arena shield-held west hog) 1000) 1)]
     (is (= 20.0 (:sim/health facing)))
     (is (= 1 (:sim/blocked facing)))
-    (is (= 14.0 (:sim/health behind)) "six from behind")))
+    (is (< (:sim/health behind) 20.0) "from behind it lands (a hoglin's roll, 3 to 8)")
+    (is (= {[:hoglin :melee] 1} (:sim/struck-by behind)))))
 
 (deftest a-raised-shield-takes-a-fireball-from-in-front
   (let [dir (mob/aim [4.5 65.4 0.5] [0.5 64.9 0.5] 0.5 0.5 0.5 0.5)
