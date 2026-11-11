@@ -759,19 +759,37 @@
           (and (nil? fuse-at) (<= d (:swell k))) (assoc-in sim [:sim/mobs eid :fuse-at] now)
           :else sim)))
 
+(defn frozen?
+  "Does mob eid stand still for the player staring at it: a kind with a :freeze range (the
+   enderman), angry, within that range of the player's feet, and stared at (mob/stared?, from the
+   look the client last reported)? EnderMan$EndermanFreezeWhenLookedAt stops its walk and its
+   melee while the stare lasts; its teleports (blink) are another goal's and go on."
+  [sim eid]
+  (let [{:keys [type pos angry?]} (get-in sim [:sim/mobs eid])
+        r (:freeze (mob/kinds type))
+        player (:sim/player-pos sim)
+        look (:sim/player-look sim)]
+    (boolean (and r
+                  angry?
+                  player
+                  look
+                  (<= (physics/distance pos player) r)
+                  (mob/stared? (solid-fn sim) (physics/eye player) look pos)))))
+
 (defn chase
   "A hostile's turn at a living player: an enderman stared at turns (provoke); with the player as
-   its target (targets?) it teleports by its kind (blink), walks, then hits, shoots or swells by
-   its kind."
+   its target (targets?) it teleports by its kind (blink), then, unless it stands still for the
+   stare (frozen?), walks, then hits, shoots or swells by its kind."
   [sim eid]
   (let [player (:sim/player-pos sim)
         sim (if player (provoke sim eid) sim)
-        m (get-in sim [:sim/mobs eid])]
+        m (get-in sim [:sim/mobs eid])
+        step (fn [sim f] (if (get-in sim [:sim/mobs eid]) (f sim eid) sim))]
     (cond (or (nil? player) (<= (:sim/health sim) 0.0) (not (targets? sim m))) sim
           :else
-          (reduce (fn [sim f] (if (get-in sim [:sim/mobs eid]) (f sim eid) sim))
-                  sim
-                  [blink walk strike shoot swell]))))
+          (let [sim (step sim blink)]
+            (cond (frozen? sim eid) sim
+                  :else (reduce step sim [walk strike shoot swell]))))))
 
 (def dragon-heal-every 10)            ; game ticks between a crystal's heals of the dragon (EnderDragon.checkCrystals)
 
