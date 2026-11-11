@@ -167,6 +167,7 @@
    ;; conditions of single rules
    :blaze-refuge (fn [_ w] (fexit/blaze-refuge w))
    :come-down (fn [_ w] (pplace/come-down w))
+   :draw-out (fn [_ w] (pplace/draw-out w))
    :lone-fight (fn [_ w] (pcover/lone-fight w))
    :lone-fight-over-refuge (fn [_ w] (pcover/lone-fight w (pcover/over-refuge pparams/at-hand)))
    :leave-baby (fn [_ w] (pcover/leave-baby w))

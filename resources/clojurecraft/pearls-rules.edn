@@ -167,6 +167,12 @@
    :rule/phase :provoke
    :rule/when [:in? :aid [:not :lured-out?] :lure? :mouth-walk]
    :rule/then [:fact :mouth-walk]}
+  ;; parked-out angry ones near and out of sight: the burrow lengthened past 16 from them, so they
+  ;; teleport in at it (place/draw-out), never a walk out
+  {:rule/id :hunt/draw-parked
+   :rule/phase :survive
+   :rule/when [:in? :draw-out]
+   :rule/then [:fact :draw-out]}
   {:rule/id :hunt/lookout-angry-near
    :rule/phase :provoke
    :rule/when [:in? :aid-or-angry-within?]

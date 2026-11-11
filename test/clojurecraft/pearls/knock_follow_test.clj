@@ -48,3 +48,18 @@
     (is (not (psense/coming? (at span))) "parked out: the next one may be provoked")
     (is (some? (pplace/shelter (at (dec span)))) "within the span the burrow is held")
     (is (nil? (pplace/shelter (at span))) "parked out: the stale burrow is let go")))
+
+(deftest a-parked-out-one-is-drawn-in-by-lengthening-the-burrow
+  ;; anger never ends while an enderman has the bot as its target, and past 16 blocks it teleports
+  ;; toward the bot: the burrow lengthened away from a parked-out one brings it in at the burrow
+  (let [parked (assoc (ps/enderman [8.5 61.0 18.5]) :entity/creepy? true)
+        span (* pparams/angry-wait-lookouts pparams/lookout-ms)
+        at (fn [now]
+             (-> (ps/burrowed [8.5 61.0 8.5] {7 parked})
+                 (assoc :time/now now :pearls/angry {7 {:since 0 :best 10.0 :closed-at 0}})))
+        i (pplace/draw-out (at span))]
+    (is (= :extend-burrow (:intent/kind i)) (pr-str i))
+    (is (= [0 -1] (:intent/dir i)) "straight away from it")
+    (is (= 7 (:intent/length i)) "the fewest cells past 16.5")
+    (is (nil? (pplace/draw-out (at (dec span)))) "not parked out yet: no draw")
+    (is (nil? (pplace/draw-out (assoc (at span) :pearls/angry {}))) "untracked: no draw")))
