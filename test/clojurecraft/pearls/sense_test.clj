@@ -722,10 +722,11 @@
                                             9 (ps/mob :zombified_piglin [40.5 64.0 9.5])})))
         "the second is past swarm-radius")
     (testing "gym plan run 40839050567 job 5: two piglins shooting from past eight blocks"
-      (is (psense/swarmed? (ps/standing {8 (ps/mob :piglin [20.5 64.0 9.5])
-                                         9 (ps/mob :piglin [8.5 64.0 22.5])})))
-      (is (not (psense/swarmed? (ps/standing {8 (ps/mob :zombified_piglin [20.5 64.0 9.5])
-                                              9 (ps/mob :zombified_piglin [8.5 64.0 22.5])})))
+      ;; in the fixture's one loaded column, so in sight: a shooter counts only with a clear line
+      (is (psense/swarmed? (ps/standing {8 (ps/mob :piglin [0.5 64.0 0.5])
+                                         9 (ps/mob :piglin [15.5 64.0 15.5])})))
+      (is (not (psense/swarmed? (ps/standing {8 (ps/mob :zombified_piglin [0.5 64.0 0.5])
+                                              9 (ps/mob :zombified_piglin [15.5 64.0 15.5])})))
           "a zombified piglin has no bow"))))
 
 (deftest a-ghast-in-sight-is-covered-from-never-dug-under
