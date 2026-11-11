@@ -22,6 +22,19 @@
 
 (set! *warn-on-reflection* true)
 
+(defn boxed-here?
+  "Is the feet's cell one a staircase or tunnel was boxed from (:plan/boxed-at), unless the
+   newest staircase or tunnel failure (memory/failed-within?, any reason) is boxed-memory-ms or
+   more old? A box remembered for ever kept a caged bot with digs to spare and a climb heading
+   open from every way out of the hunt; an old one is tried again. A box noted with no such
+   failure in the story (a retreat's, a dead end's) holds as before."
+  [world]
+  (let [kinds [:stairs-up :stairs-down :tunnel]
+        ever? (some #(memory/failed-within? world % (inc (:time/now world 0))) kinds)
+        recent? (some #(memory/failed-within? world % pparams/boxed-memory-ms) kinds)]
+    (boolean (and (contains? (avoided/all-of world :boxed-at) (intent/feet world))
+                  (or (not ever?) recent?)))))
+
 ; how far a roam looks for an end not yet walked to, nearest first: sixteen, thirty-two, forty-eight, sixty-four blocks
 (defn roam-goal
   "The path goal of a roam along heading [dx dz] from the feet, reach blocks out (roam-reach
@@ -153,8 +166,7 @@
   [world ms]
   (let [pos (:player/pos world)
         fy (physics/y-of (path/feet-cell pos))]
-    (when (and (pupkeep/spare? world)
-               (not (contains? (avoided/all-of world :boxed-at) (intent/feet world))))
+    (when (and (pupkeep/spare? world) (not (boxed-here? world)))
       (->> ms
            (sort-by (fn [[_ e]] (physics/distance pos (:entity/pos e))))
            (take pparams/candidates)
@@ -184,7 +196,7 @@
   (let [pos (:player/pos world)
         fy (physics/y-of (path/feet-cell pos))]
     (when (and (pupkeep/spare? world)
-               (not (contains? (avoided/all-of world :boxed-at) (intent/feet world)))
+               (not (boxed-here? world))
                (not-any? (fn [[_ e]] (pplace/level? world e)) ms))
       (->> ms
            (sort-by (fn [[_ e]] (physics/distance pos (:entity/pos e))))
@@ -213,7 +225,7 @@
         [_ e] (entity/nearest ms pos)]
     (when (and e
                (pupkeep/spare? world)
-               (not (contains? (avoided/all-of world :boxed-at) feet))
+               (not (boxed-here? world))
                (< (abs (- (physics/y-of (:entity/pos e)) (physics/y-of feet))) pparams/descend-drop)
                (pplace/within-cut-reach? world e)
                (>= (path/octile feet (combat/cell (:entity/pos e))) pparams/bore-length))
@@ -247,9 +259,7 @@
   (let [pos (:player/pos world)
         feet (path/feet-cell pos)
         [_ e] (entity/nearest (psense/endermen world pparams/descend-radius) pos)]
-    (when (and e
-               (pupkeep/spare? world)
-               (not (contains? (avoided/all-of world :boxed-at) (intent/feet world))))
+    (when (and e (pupkeep/spare? world) (not (boxed-here? world)))
       (let [c (combat/cell (:entity/pos e))
             i {:intent/kind :walk :intent/target c :intent/for :pearls}
             to (or (last (:path/waypoints (path/plan world feet (intent/goal-of i) {}))) feet)
@@ -320,7 +330,7 @@
    past a burrow's (spare?), or a staircase boxed from these feet (:plan/boxed-at)."
   [world]
   (let [feet (intent/feet world)]
-    (when (and (pupkeep/spare? world) (not (contains? (avoided/all-of world :boxed-at) feet)))
+    (when (and (pupkeep/spare? world) (not (boxed-here? world)))
       (when-let [dir (when (< (physics/y-of feet) (dec (roof-cap world (physics/y-of feet))))
                        (climb-heading world feet))]
         {:intent/kind :stairs-up
@@ -341,7 +351,7 @@
         n (pplace/floored-length world feet dir pparams/bore-length)]
     (when (and (= dimension/nether (dimension/of world))
                (pupkeep/spare? world)
-               (not (contains? (avoided/all-of world :boxed-at) feet))
+               (not (boxed-here? world))
                (pos? n)
                (pplace/solid-cut? world :tunnel feet dir n))
       {:intent/kind :tunnel :intent/dir dir :intent/length n :intent/for :pearls})))
@@ -358,7 +368,7 @@
   [world]
   (let [feet (intent/feet world)
         mouth (:pearls/mouth world)]
-    (when (and mouth (pupkeep/spare? world) (not (contains? (avoided/all-of world :boxed-at) feet)))
+    (when (and mouth (pupkeep/spare? world) (not (boxed-here? world)))
       (let [[fx _ fz] feet
             [mx _ mz] mouth
             dx (- fx mx)

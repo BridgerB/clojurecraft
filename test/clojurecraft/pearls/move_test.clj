@@ -1,6 +1,7 @@
 (ns clojurecraft.pearls.move-test
   "The pearl hunt's movers: roam, wander, explore, travel, relocate and the cuts out of a pocket."
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
+            [clojurecraft.avoided :as avoided]
             [clojurecraft.blaze :as blaze]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.fixtures :as fx]
@@ -599,3 +600,21 @@
                   (pmove/far-ends after 0 #{}))
         "no end is left within roam-reach of a visited one")
     (is (< (count (pmove/far-ends after 0 #{})) (count ends)) "the ends walked to are gone")))
+
+(deftest a-box-remembered-at-the-feet-is-tried-again-after-a-while
+  ;; a real rods bot (5d894db lane 2, Clj_r10) stood caged its last hour with fifty digs to
+  ;; spare and a climb heading open: its feet were boxed long before, and every way out asked it
+  (let [w (-> (ps/standing {})
+              (assoc :time/now 1000)
+              (avoided/note :boxed-at [8 64 8])
+              (memory/remember-intention
+               {:intent/id 1 :intent/kind :stairs-up :intent/reason :boxed}
+               :failed))]
+    (is (pmove/boxed-here? w) "boxed a moment ago: not from here")
+    (is (not (pmove/boxed-here? (assoc w :time/now (+ 1000 pparams/boxed-memory-ms 1))))
+        "boxed-memory-ms later: tried again")
+    (is (not (pmove/boxed-here? (assoc w :player/pos [20.5 64.0 8.5]))) "other feet")
+    (is (pmove/boxed-here? (-> (ps/standing {})
+                               (assoc :time/now 9000000)
+                               (avoided/note :boxed-at [8 64 8])))
+        "a box with no staircase or tunnel failure in the story holds")))
