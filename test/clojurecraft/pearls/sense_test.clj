@@ -1121,15 +1121,13 @@
                  (assoc :player/dimension ps/nether
                         :player/inventory {0 (ps/item :iron_sword 1) 1 (ps/item :iron_pickaxe 1)}
                         :time/now 8000))
-        fireball (assoc (ps/mob :small_fireball [9.5 65.0 8.5]) :entity/health 1.0)
-        struck (-> base
-                   (assoc-in [:world/entities 50] fireball)
-                   (assoc :player/attacker 50 :player/struck-at 7900))]
-    (is (psense/struck-by-shot? struck) "a fireball's hit is a shot, its blaze unseen")
-    (is (not (psense/struck-by-shot? base)))
-    (is (not (psense/struck-by-shot?
-              (assoc-in struck [:world/entities 50] (ps/mob :zombie [9.5 64.0 8.5]))))
-        "a zombie's hit is no shot")
+        hit (fn [type at] {:at at :type type :hp 20.0 :by 50})
+        struck (assoc base :player/hits [(hit :mob_attack 7000) (hit :fireball 7900)])]
+    (is (= 7900 (psense/shot-hit-at struck)) "a fireball's hit is a shot, no entity needed")
+    (is (psense/recently-shot? struck) "so the bot was shot, its blaze unseen")
+    (is (nil? (psense/shot-hit-at (assoc base :player/hits [(hit :mob_attack 7900)])))
+        "a melee hit is no shot")
+    (is (not (psense/recently-shot? (assoc struck :time/now 20000))) "shot-hold-ms on: no longer")
     (is (= {:intent/kind :lookout :intent/for :pearls}
            (plan/next-intent (assoc base :pearls/shot-at-ms 5000) ps/row plan/goals))
         "shot three seconds ago and out of the line now: the cover is held, no walk")

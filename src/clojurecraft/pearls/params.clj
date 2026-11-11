@@ -195,11 +195,11 @@
 (def cover-place-max (:cover-place-max thresholds))
 
 ; blocks from the feet within which a monster counts toward a swarm
-(def shot-kinds
-  "Projectiles whose hit is a shot (combat/striker's kind): a blaze's small fireball, a ghast's
-   fireball, a skeleton's arrow. Struck by one, the bot was shot whether or not it sees the
-   shooter (struck-by-shot?)."
-  #{:small_fireball :fireball :arrow})
+(def shot-types
+  "The damage types (registry/damage-type, as :player/hits keeps each hit) of a shot: a blaze's
+   small fireball and a ghast's fireball (:fireball, :unattributed_fireball), a skeleton's arrow
+   (:arrow). Hit by one, the bot was shot whether or not it sees the shooter (shot-hit-at)."
+  #{:fireball :unattributed_fireball :arrow})
 
 (def ranged-kinds
   "Kinds that hurt from where they hover, not from the sword's reach: they count toward a swarm

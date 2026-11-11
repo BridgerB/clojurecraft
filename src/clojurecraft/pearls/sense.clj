@@ -500,24 +500,24 @@
                    (and (contains? pparams/ranged-kinds (entity/kind e)) (combat/seen? world e)))
                  (swarm world))))
 
-(defn struck-by-shot?
-  "Was the bot's last strike (combat/striker, fresher than its struck-ms) a shot (pparams/
-   shot-kinds)? A fireball from a blaze the bot does not see (out of its tracking, behind it) hurts
-   as much as one it does: real stage-18 bots were shot while their record named no blaze in sight."
+(defn shot-hit-at
+  "The ms of the newest hit on the bot (:player/hits, game/hit-of) whose damage type is a shot
+   (pparams/shot-types), or nil. The type, not the projectile's entity: a fireball is gone from the
+   tracked entities by the time its hit is read (no attacker kind is kept for it), and real stage-18 bots were shot while their record named no blaze in
+   sight."
   [world]
-  (boolean (some-> (combat/striker world)
-                   second
-                   entity/kind
-                   pparams/shot-kinds)))
+  (some (fn [h] (when (contains? pparams/shot-types (:type h)) (:at h)))
+        (rseq (vec (:player/hits world [])))))
 
 (defn recently-shot?
-  "Was a ghast or blaze in sight, or the bot struck by a shot (:pearls/shot-at-ms: shot-at?, or
-   struck-by-shot?), less than shot-hold-ms ago? Then no walk goes elsewhere, so a hide walk and a
+  "Was a ghast or blaze in sight (:pearls/shot-at-ms, shot-at?), or the bot hit by a shot
+   (shot-hit-at), less than shot-hold-ms ago? Then no walk goes elsewhere, so a hide walk and a
    travel walk do not undo each other, and a cover laid is held (the exit's heal, the hunt's
    :hunt/hold-cover) until shot-hold-ms pass with no shot."
   [world]
-  (let [t (:pearls/shot-at-ms world)]
-    (boolean (and t (< (- (:time/now world 0) t) pparams/shot-hold-ms)))))
+  (let [now (:time/now world 0)
+        recent? (fn [t] (and t (< (- now t) pparams/shot-hold-ms)))]
+    (boolean (or (recent? (:pearls/shot-at-ms world)) (recent? (shot-hit-at world))))))
 
 (defn weak?
   "Is entity e of a kind mob/kinds knows to hit for weak-melee or less on Normal (a zombie, a
