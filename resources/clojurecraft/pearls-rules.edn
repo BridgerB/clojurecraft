@@ -21,9 +21,10 @@
    :rule/phase :survive
    :rule/when [:pack-answer]
    :rule/then [:fact :pack-answer]}
+  ;; on a pillar over a pack the hold yields to the cover from a shooter that sees it
   {:rule/id :hunt/pack-hold
    :rule/phase :survive
-   :rule/when [:pack-hold]
+   :rule/when [[:not :shot-at?] :pack-hold]
    :rule/then [:fact :pack-hold]}
   ;; a hoglin at hand, adult or baby, is fought ahead of the refuge it follows into, at or over
   ;; danger-health; under it a baby is left by a sealed tunnel away (an adult falls to the cover rows)
@@ -93,6 +94,13 @@
    :rule/phase :survive
    :rule/when [:shot-at? [:not :in?] :cover-from]
    :rule/then [:fact :cover-from]}
+  ;; shot within shot-hold-ms and out of the shooter's line now: the cover is held, the heal taken
+  ;; behind it, and no walk (the hunt's search, a retreat) leaves it; real bots shot by blazes
+  ;; walked out of cover every few seconds, each walk undoing it, and burned to death
+  {:rule/id :hunt/hold-cover
+   :rule/phase :survive
+   :rule/when [:cover-hold? [:not :in?]]
+   :rule/then [:fact :meal-or-lookout]}
   {:rule/id :hunt/room-exit
    :rule/phase :leave-fortress
    :rule/when [[:not :in?] :room-exit]

@@ -188,6 +188,7 @@
                        (boolean (:player/on-fire? w))
                        (and (psense/recently-shot? w) (not (f :shot-at?)))))
    :leave-sight (fn [_ w] (pcover/leave-sight w))
+   :cover-hold? (fn [f w] (and (psense/recently-shot? w) (not (f :shot-at?))))
    :room-exit (fn [_ w] (fexit/room-exit w))
    :home-pressed? (fn [f w]
                     (or (f :ce)

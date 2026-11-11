@@ -1111,3 +1111,30 @@
     (is (= gone (psense/track-brutes gone)) "nothing tracked, nothing noted")
     (is (nil? (psense/brute-near (ps/standing {9 (ps/mob :piglin [14.5 64.0 8.5])})))
         "a piglin is no brute")))
+
+(deftest a-cover-is-held-while-shot-and-a-shot-unseen-counts
+  ;; real Clj_r45 (botlogs 2026-11-10-17, 42812154477-r1-b10): a blaze's fireballs while it stood
+  ;; on hunt/search lookouts, then leave-sight and retreat walks out of its cover every few seconds,
+  ;; 8 burn hits after 4 fireballs; real Clj_r17 (42812452604-r3-b4): its record named no blaze in
+  ;; sight while it was shot
+  (let [base (-> (ps/wide (ps/standing {}))
+                 (assoc :player/dimension ps/nether
+                        :player/inventory {0 (ps/item :iron_sword 1) 1 (ps/item :iron_pickaxe 1)}
+                        :time/now 8000))
+        fireball (assoc (ps/mob :small_fireball [9.5 65.0 8.5]) :entity/health 1.0)
+        struck (-> base
+                   (assoc-in [:world/entities 50] fireball)
+                   (assoc :player/attacker 50 :player/struck-at 7900))]
+    (is (psense/struck-by-shot? struck) "a fireball's hit is a shot, its blaze unseen")
+    (is (not (psense/struck-by-shot? base)))
+    (is (not (psense/struck-by-shot?
+              (assoc-in struck [:world/entities 50] (ps/mob :zombie [9.5 64.0 8.5]))))
+        "a zombie's hit is no shot")
+    (is (= {:intent/kind :lookout :intent/for :pearls}
+           (plan/next-intent (assoc base :pearls/shot-at-ms 5000) ps/row plan/goals))
+        "shot three seconds ago and out of the line now: the cover is held, no walk")
+    (is (not= :lookout
+              (:intent/kind (plan/next-intent (assoc base :pearls/shot-at-ms 5000 :time/now 16000)
+                                              ps/row
+                                              plan/goals)))
+        "shot-hold-ms on with no shot: the hunt goes on")))

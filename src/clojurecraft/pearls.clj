@@ -203,7 +203,8 @@
                                                                           (pmove/track-seen
                                                                            (psense/track-brutes
                                                                             world))))))))))))
-                (psense/shot-at? world) (assoc :pearls/shot-at-ms (:time/now world 0))
+                (or (psense/shot-at? world) (psense/struck-by-shot? world))
+                (assoc :pearls/shot-at-ms (:time/now world 0))
                 (fexit/sealed-full? world) (assoc :pearls/refuge-done true))]
     (cond (or (nil? look)
               (= :provoke (:intent/kind (:plan/intent world)))
