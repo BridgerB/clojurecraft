@@ -8,7 +8,9 @@
    slots and cursor); the server adopts it and then sends only what differs. We predict no
    changed slots, so every changed slot comes back; and an empty cursor, so the world drops
    :window/cursor on every click and the server corrects it only when it is not empty."
-  (:require [clojure.spec.alpha :as s]
+  (:require [clojure.edn :as edn]
+            [clojure.java.io :as io]
+            [clojure.spec.alpha :as s]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
@@ -125,18 +127,33 @@
   (some (fn [p] (when-not (get-in world [:player/inventory p]) (slot-of p)))
         inventory/main-then-hotbar))
 
+(def junk-table
+  "What a full inventory may throw away, as read (resources/clojurecraft/junk.edn): {:junk/always
+   :junk/late :junk/late-after :junk/filler-total :junk/filler-order}."
+  (edn/read-string (slurp (io/resource "clojurecraft/junk.edn"))))
+
 (def junk
-  "What a full inventory throws away to make room: what mining and walking pick up that no stage
-   asks for, no recipe the goals reach takes and no floor is laid from (filler/fillers). The Nether
-   adds what a tunnel to the fortress picks up. The fortress's own bricks and fences are junk too:
-   no floor is laid from them (filler/fillers) and no recipe the goals reach takes them, and a
-   fortress dug through fills slots with them by the hundred."
-  #{:sand :red_sand :sandstone :red_sandstone :clay_ball :raw_copper :lapis_lazuli :redstone
-    :calcite :tuff_bricks :dripstone_block :pointed_dripstone :amethyst_shard :leaf_litter
-    :moss_block :moss_carpet :big_dripleaf :small_dripleaf :wildflowers :wheat_seeds :oak_sapling
-    :birch_sapling :spruce_sapling :jungle_sapling :acacia_sapling :dark_oak_sapling :cherry_sapling
-    :mangrove_propagule :soul_sand :soul_soil :nether_wart_block :warped_wart_block :shroomlight
-    :lantern :gold_nugget :quartz :magma_block :nether_bricks :nether_brick_fence})
+  "What a full inventory throws away to make room at any stage (junk.edn :junk/always): what
+   mining, walking and the Nether's tunnels and forests pick up that no stage asks for, no recipe
+   the goals reach takes and no floor is laid from (filler/fillers)."
+  (:junk/always junk-table))
+
+(def late-junk
+  "What a full inventory throws away too once the run is past the stage junk.edn names
+   (:junk/late, late?): gravel and what kills drop that no later stage takes."
+  (:junk/late junk-table))
+
+(defn late?
+  "Is the run past the stage of junk.edn's :junk/late-after: reached (:plan/reached), or the run's
+   only goal the ender pearls (a stage-18 start)?"
+  [world]
+  (boolean (or (contains? (:plan/reached world #{}) (:junk/late-after junk-table))
+               (= #{:ender-pearls} (:plan/goals world)))))
+
+(defn junk?
+  "Is item (a name) junk for world now: junk, or late-junk once late?."
+  [world item]
+  (boolean (or (contains? junk item) (and (contains? late-junk item) (late? world)))))
 
 (def cobblestone-keep 128)            ; cobblestone a full inventory never throws below: a cast's walls, floors and seals
 
@@ -186,10 +203,26 @@
               p))
           held)))
 
+(defn filler-surplus-slot
+  "The player slot of a building-block stack of junk.edn's :junk/filler-order (its order first,
+   then main inventory first) whose loss still leaves :junk/filler-total building blocks
+   (filler-keep's kinds together), or nil. Kinds each at or under their own keep can still hold
+   hundreds together."
+  [world held]
+  (let [counts (recipe/counts (:player/inventory world))
+        total (reduce + 0 (vals (select-keys counts (keys filler-keep))))]
+    (some (fn [kind]
+            (some (fn [[p n c]]
+                    (when (and (= kind n) (>= (- total c) (:junk/filler-total junk-table))) p))
+                  held))
+          (:junk/filler-order junk-table))))
+
 (defn junk-slot
   "The player slot (main inventory first) of the stack a full inventory throws away: the first
-   holding junk, else a worn tool with a better one beside it (worn-spare-slot), else a building-block stack whose loss still leaves filler-keep of its kind; nil when
-   there is neither."
+   holding junk (junk?), else a worn tool with a better one beside it (worn-spare-slot), else a
+   building-block stack whose loss still leaves filler-keep of its kind, else one whose loss
+   still leaves junk.edn's total of building blocks (filler-surplus-slot); nil when there is
+   none."
   [world]
   (let [inv (:player/inventory world)
         counts (recipe/counts inv)
@@ -197,11 +230,12 @@
                    :let [s (get inv p)]
                    :when s]
                [p (recipe/item-name (:item s)) (:count s)])]
-    (or (some (fn [[p n]] (when (junk n) p)) held)
+    (or (some (fn [[p n]] (when (junk? world n) p)) held)
         (worn-spare-slot world)
         (some (fn [[p n c]]
                 (when-let [keep (filler-keep n)] (when (>= (- (get counts n 0) c) keep) p)))
-              held))))
+              held)
+        (filler-surplus-slot world held))))
 
 (defn tossable
   "The player slot to throw a stack from so that view v has a free slot: junk-slot when no slot

@@ -18,6 +18,10 @@ sourceRefs:
   - src/clojurecraft/window.clj#defn worn-spare-slot
   - test/clojurecraft/craft_test.clj#a-worn-tool-with-a-better-one-beside-it-is-thrown
   - src/clojurecraft/window.clj#def filler-keep
+  - src/clojurecraft/window.clj#defn filler-surplus-slot
+  - src/clojurecraft/window.clj#defn junk?
+  - src/clojurecraft/picks.clj#defn take-table-step
+  - test/clojurecraft/craft_test.clj#a-stage-18-bag-holds-junk-to-throw
   - src/clojurecraft/window.clj#defn tossable
   - src/clojurecraft/window.clj#defmethod intent/run :toss
   - src/clojurecraft/window.clj#Throw the whole stack at player slot p out of view v
@@ -64,6 +68,8 @@ A view is a plain map describing one window the way the click rules need it, so 
 - The namespace docstring records the 775 click semantics as verified live: the server adopts the click's prediction and sends only what differs ([[mc-state-ids-prediction]]).
 - `waiting` compares against the state id of the window the click was sent to; a click into a table window that was closed since has no state id to compare and is no longer "waiting".
 - `click` writes onto `:plan/intent`, so it is only for use inside an intent.
+
+- **Nether bags and kept building blocks (issue #263).** The 11 `inventory-full` endings of the real stage-18 lanes on 2026-11-09 all held the same bag: about 600 building blocks in nine slots, each kind at or under its own 128 keep, Nether forest plants (nylium, roots, fungi, vines), gravel and kill drops (leather, bone, string, wool), and nothing `junk-slot` would throw. `junk` now lives in `resources/clojurecraft/junk.edn` (`:junk/always`, with the forest plants added); `:junk/late` (gravel and the kill drops) is junk only past `:junk/late-after` (`late?`: the rods reached, or the run's only goal the pearls), so an earlier stage keeps its flint; and `filler-surplus-slot` throws a building-block stack of `:junk/filler-order` while `:junk/filler-total` (256) of all building blocks together stay, cobblestone never in the order. Nine of the 11 ended on the spare-picks row's take-along waiting `:inventory-full`, a planner wait that ends the plan; `picks/take-table-step` never returns that wait, so with nothing to throw the table stays and the plan goes on.
 
 ## See also
 - [[craft-intent]], [[place-intent]] - the two users.
