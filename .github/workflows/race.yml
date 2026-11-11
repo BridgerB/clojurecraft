@@ -191,9 +191,25 @@ jobs:
           done
           # the race JVM's flight recording, on a lane that keeps one: its last 10 minutes dumped at
           # minutes 30, 90 and 150 and summarised by part of the bot (bb jfr, bb/clojurecraft/jfr.clj),
-          # each as soon as it is dumped, so a cancelled lane keeps the ones it reached
+          # each as soon as it is dumped, so a cancelled lane keeps the ones it reached. Each summary,
+          # and its recording when under jfr_max bytes, goes at once to the run's prerelease
+          # jfr-<run id>: an artifact is uploaded only at the job's end, 5.5 hours on, and a step
+          # cannot upload one from a background shell
           if [ -n "$JFR" ]; then
             (
+              tag="jfr-$GITHUB_RUN_ID"
+              jfr_max=524288000
+              publish() {
+                gh release view "$tag" > /dev/null 2>&1 \
+                  || gh release create "$tag" --prerelease --latest=false --target "$GITHUB_SHA" \
+                       --title "race JFR, run $GITHUB_RUN_ID lane $RUNNER_N" \
+                       --notes "The race JVM's flight recording on lane $RUNNER_N at $GITHUB_SHA: the last 10 minutes at minutes 30, 90 and 150, each with its bb jfr summary." \
+                  || return 0
+                for a in "$@"; do
+                  if [ "$(stat -c %s "$a")" -lt "$jfr_max" ]; then gh release upload "$tag" "$a" --clobber || true
+                  else echo "jfr: $a over $jfr_max bytes, in the artifact only"; fi
+                done
+              }
               t0=$(date +%s)
               for m in 30 90 150; do
                 while [ $(( $(date +%s) - t0 )) -lt $(( m * 60 )) ]; do sleep 30; done
@@ -202,6 +218,8 @@ jobs:
                 f="$PWD/data/race/inspect/race-min$m.jfr"
                 jcmd "$pid" JFR.dump name=race begin=-10m "filename=$f" || continue
                 bb jfr summary "$f" "data/race/inspect/race-min$m.txt" || true
+                head -n 40 "data/race/inspect/race-min$m.txt" || true
+                publish "data/race/inspect/race-min$m.txt" "$f"
               done
             ) > data/race/inspect/jfr.log 2>&1 &
           fi
