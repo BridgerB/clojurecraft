@@ -25,6 +25,7 @@
 (set! *warn-on-reflection* true)
 
 (def max-fall 3)                     ; blocks a drop may fall; vanilla damage starts above 3
+(def lava-depth 3)                   ; cells under a new floor a dig looks down for lava (lava-under?)
 (def budgets
   "{name expansions}: how many nodes a route search may spend, by what it is for: :near (a local
    stand, a walk to a candidate close by), :reach (is one place reachable at all), :cover (a
@@ -177,6 +178,15 @@
   [world [x y z]]
   (let [at (cells world)]
     (boolean (some (fn [[dx dy dz]] (= :lava (at [(+ x dx) (+ y dy) (+ z dz)]))) lava-sides))))
+
+(defn lava-under?
+  "Is there lava in any of the lava-depth cells under floor [x y z]? A floor dug onto, or a stair
+   cut down to, with lava that near under it is one break or one dig from a fall into it: real
+   bots cutting a burrow's stairs fell through into lava (Clj_r08, Clj_r05). world is a world or
+   its cells."
+  [world [x y z]]
+  (let [at (cells world)]
+    (boolean (some #(= :lava (at [x (- y %) z])) (range 1 (inc lava-depth))))))
 
 (defn floor?
   "Can the feet stand on the block at pos: a full cube. world is a world or its cells."
