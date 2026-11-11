@@ -11,6 +11,7 @@
             [clojurecraft.make :as make]
             [clojurecraft.memory :as memory]
             [clojurecraft.pearls.params :as pparams]
+            [clojurecraft.pearls.upkeep :as pupkeep]
             [clojurecraft.picks :as picks]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
@@ -354,6 +355,38 @@
     (is (picks/spare-wood? (bag (item :stick 2) (item :warped_planks 1)))
         "a plank is two sticks: the spare takes the sticks, the plank stays")
     (is (picks/spare-wood? (bag (item :stick 2) (item :warped_stem 1))) "a stem is eight")
-    (is (= 8 (picks/wood-sticks (bag (item :crimson_stem 1)))))
+    (is (= 8 (pupkeep/wood-sticks (bag (item :crimson_stem 1)))))
     (is (picks/spare-wood? (update (bag (item :stick 2)) :player/inventory dissoc 5))
         "with no pickaxe held the next one is no spare: it takes what there is")))
+
+(deftest a-tunnel-to-a-forest-keeps-one-pickaxes-digs-for-the-hunt
+  ;; real Clj_r53 (botlogs 2026-11-10-17, 42812754059-r2-b10) and 15 more on 5d894db: every stick
+  ;; crafted into stone pickaxes and every pickaxe worn out on :tunnel-to legs toward forests never
+  ;; reached (1,146 digs in 34 minutes inside a hundred blocks), then 15 minutes of lookouts with no
+  ;; pickaxe and no wood
+  (let [bag (fn [& held] (standing-nether (into [(item :blaze_rod 7) (item :iron_sword 1)] held)))]
+    (is (= 131 pparams/travel-reserve-digs) "one stone pickaxe's digs")
+    (is (= 131 (picks/dig-budget (bag (item :stone_pickaxe 1)))) "a fresh stone pickaxe")
+    (is (= (* 3 131)
+           (picks/dig-budget (bag (item :stone_pickaxe 1)
+                                  (item :crafting_table 1)
+                                  (item :stick 4)
+                                  (item :cobblestone 64))))
+        "and two more the table, four sticks and the stone make")
+    (is (= 131
+           (picks/dig-budget (bag (item :stone_pickaxe 1) (item :stick 4) (item :cobblestone 64))))
+        "with no table the sticks make nothing")
+    (is (= 0 (picks/dig-budget (bag (item :crafting_table 1) (item :cobblestone 64))))
+        "no pickaxe and no wood: nothing to dig with")
+    (is (picks/tunnel-budget? (bag (item :stone_pickaxe 1)
+                                   (item :crafting_table 1)
+                                   (item :stick 2)
+                                   (item :cobblestone 64))))
+    (is (not (picks/tunnel-budget?
+              (bag (item :crafting_table 1) (item :stick 1) (item :cobblestone 64))))
+        "a last stick and no pickaxe: the travel walks")))
+
+(deftest wood-under-the-floor-sends-the-bot-to-a-stem-it-remembers
+  (is (= 8 pparams/stick-floor) "one stem's sticks")
+  (is (< (pupkeep/wood-sticks (standing-nether [(item :stick 6)])) pparams/stick-floor))
+  (is (>= (pupkeep/wood-sticks (standing-nether [(item :crimson_stem 1)])) pparams/stick-floor)))

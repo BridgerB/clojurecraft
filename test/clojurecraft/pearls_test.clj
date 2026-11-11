@@ -423,8 +423,13 @@
         "eleven digs left: the next pickaxe is made before this one breaks")
     (is (= :craft (:intent/kind (plan/next-intent stems ps/row plan/goals)))
         "stems held: crafted to planks, not another trunk walked to")
-    (is (= {:intent/kind :lookout :intent/for :pearls} (plan/next-intent fresh ps/row plan/goals))
-        "a fresh pickaxe held: the hunt, no remake")
+    (is (= :log (:intent/for (plan/next-intent fresh ps/row plan/goals)))
+        "a fresh pickaxe and no wood: the stem is cut for the sticks of the next one (stick-floor)")
+    (is (= {:intent/kind :lookout :intent/for :pearls}
+           (plan/next-intent (assoc-in fresh [:player/inventory 2] (ps/item :stick 8))
+                             ps/row
+                             plan/goals))
+        "a fresh pickaxe and the floor's sticks held: the hunt, no remake")
     (is (= {:intent/kind :lookout :intent/for :pearls}
            (plan/next-intent (assoc forest :player/health 6.0) ps/row plan/goals))
         "under danger-health the craft waits too: rest first")))
@@ -962,8 +967,10 @@
         "sixty digs left and no wood: a stem is cut")
     (is (= :lookout (:intent/kind (plan/next-intent (with 60 6) ps/row plan/goals)))
         "six stems held: the hunt goes on, the pickaxe made when it falls under spare-digs")
-    (is (= :lookout (:intent/kind (plan/next-intent (with 200 0) ps/row plan/goals)))
-        "digs to spare: no reserve is cut")))
+    (is (= :log (:intent/for (plan/next-intent (with 200 0) ps/row plan/goals)))
+        "digs to spare but no wood: a stem is cut for the sticks' floor")
+    (is (= :lookout (:intent/kind (plan/next-intent (with 200 1) ps/row plan/goals)))
+        "digs to spare and a stem held: no reserve is cut")))
 
 (deftest hunt-thresholds-table-is-loaded-and-complete
   ;; the hunt thresholds are loaded from resources/clojurecraft/pearls.edn

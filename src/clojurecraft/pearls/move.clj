@@ -17,6 +17,7 @@
             [clojurecraft.pearls.sense :as psense]
             [clojurecraft.pearls.upkeep :as pupkeep]
             [clojurecraft.physics :as physics]
+            [clojurecraft.picks :as picks]
             [clojurecraft.stairs :as stairs]))
 
 (set! *warn-on-reflection* true)
@@ -475,15 +476,16 @@
 
 (defn forest-way
   "The way to target, a cell over a warped forest's nylium: a walk when a route reaches it
-   (intent/routable?), else, with a pickaxe held, a sealed tunnel toward it (a :tunnel-to, sealing
-   behind as the fortress exit bores; it climbs and descends to the target's height), else the walk
+   (intent/routable?), else, with a pickaxe held and digs to spare past the hunt's
+   (picks/tunnel-budget?), a sealed tunnel toward it (a :tunnel-to, sealing behind as the fortress
+   exit bores; it climbs and descends to the target's height), else the walk
    (a walk with no route fails :no-path, and the hunt chooses again). routable? (world, intent) is
    the route test: intent/routable? unless a caller passes its own."
   ([world target] (forest-way world target intent/routable?))
   ([world target routable?]
    (let [walk {:intent/kind :walk :intent/target target :intent/for :pearls}]
      (cond (routable? world (assoc walk :intent/max-nodes pparams/vantage-nodes)) walk ; a capped test: travel is asked several times a tick (#766)
-           (pupkeep/pickaxe? world)
+           (and (pupkeep/pickaxe? world) (picks/tunnel-budget? world))
            {:intent/kind :tunnel-to
             :intent/target target
             :intent/reach 1.5
@@ -714,9 +716,10 @@
    (heading-target): a long leg, the same target at every act, for a bot in the Nether with no
    forest known that travel, relocate, wander and the cage-break cuts find nothing for (the hunt's
    :hunt/heading row comes after them: ahead of them it kept R4/1 from its forest, which they
-   reach in two minutes). Nil with no heading held."
+   reach in two minutes). Nil with no heading held, and nil with no digs to spare past the
+   hunt's (picks/tunnel-budget?)."
   [world]
-  (when-let [t (heading-target world)]
+  (when-let [t (when (picks/tunnel-budget? world) (heading-target world))]
     {:intent/kind :tunnel-to
      :intent/target t
      :intent/reach 1.5

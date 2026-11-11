@@ -128,18 +128,29 @@
           (keep (fn [[k n]] (when (blocks/log-name? k) n))
                 (recipe/counts (:player/inventory world)))))
 
+(defn wood-sticks
+  "The wood held, in sticks: sticks, two a plank, eight a log or stem (four planks of two
+   sticks each)."
+  [world]
+  (let [c (make/counts world)]
+    (+ (long (get c :stick 0))
+       (* 2 (long (recipe/have c (recipe/tags :planks))))
+       (* 8 (long (recipe/have c (recipe/tags :logs)))))))
+
 (defn reserve-gather
   "The next step of cutting stems (wood/continue-gather and wood/near-walk: the log chain to a
    remembered trunk, never a hunt for wood) while the best pickaxe held has under reserve-digs
-   digs left and fewer than reserve-stems logs are held, with no angry enderman near: a pickaxe
-   reserve before the last digs, so that the successor is made from stems (make-pickaxe, under
-   spare-digs) and the hunt never stands in a rock pocket with six digs and no wood. Nil when
-   none is held or the chain waits."
+   digs left and fewer than reserve-stems logs are held, or while the wood held (wood-sticks,
+   sticks counted with the planks and stems) is under stick-floor whatever the pickaxe, with no
+   angry enderman near: a pickaxe reserve before the last digs, so that the successor is made
+   from stems (make-pickaxe, under spare-digs) and the hunt never stands in a rock pocket with
+   six digs and no wood. Any stem the near band remembers (wood/near-walk: crimson or warped,
+   not only the forest's), so a bot travelling to a forest takes the wood it passes. Nil when
+   neither holds or the chain waits."
   [world]
   (let [d (digs-left world)]
-    (when (and d
-               (< d pparams/reserve-digs)
-               (< (log-count world) pparams/reserve-stems)
+    (when (and (or (and d (< d pparams/reserve-digs) (< (log-count world) pparams/reserve-stems))
+                   (< (long (wood-sticks world)) (long pparams/stick-floor)))
                (not (psense/menaced? world)))
       (or (wood/continue-gather world) (wood/near-walk world)))))
 

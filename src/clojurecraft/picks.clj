@@ -21,6 +21,7 @@
             [clojurecraft.memory :as memory]
             [clojurecraft.pearls.params :as pparams]
             [clojurecraft.pearls.sense :as psense]
+            [clojurecraft.pearls.upkeep :as pupkeep]
             [clojurecraft.plan :as plan]
             [clojurecraft.pocket :as pocket]
             [clojurecraft.recipe :as recipe]
@@ -57,15 +58,6 @@
 
 (def pickaxe-sticks 2) ; sticks a stone pickaxe's recipe takes
 
-(defn wood-sticks
-  "The wood held, in sticks: sticks, two a plank, eight a log or stem (four planks of two
-   sticks each)."
-  [world]
-  (let [c (make/counts world)]
-    (+ (long (get c :stick 0))
-       (* 2 (long (recipe/have c (recipe/tags :planks))))
-       (* 8 (long (recipe/have c (recipe/tags :logs)))))))
-
 (defn spare-wood?
   "May a spare pickaxe be crafted without the wood of the next one: with no serviceable pickaxe
    held it is no spare (the replacement takes what there is), else the wood held less
@@ -74,7 +66,43 @@
    had taken it all, and the last pickaxe wore out with none to replace it."
   [world]
   (or (zero? (long (serviceable-count world)))
-      (>= (- (long (wood-sticks world)) pickaxe-sticks) (long pparams/spare-wood-reserve))))
+      (>= (- (long (pupkeep/wood-sticks world)) pickaxe-sticks) (long pparams/spare-wood-reserve))))
+
+(def pickaxe-stone 3) ; stone a stone pickaxe's recipe takes (cobblestone, blackstone or cobbled deepslate)
+
+(defn dig-budget
+  "The digs the bot can still spend: what every held pickaxe has left (window/swings-left, a tier's
+   durability when unknown), and the stone pickaxes the held wood (pupkeep/wood-sticks, over
+   pickaxe-sticks) and stone (:stone_tool_materials, over pickaxe-stone) still make, at a stone
+   pickaxe's durability each, when a crafting table is held or near (the crafts need one)."
+  [world]
+  (let [c (make/counts world)
+        held (reduce +
+                     0
+                     (keep (fn [item]
+                             (when (= :pickaxe (:kind (blocks/tool (:item item))))
+                               (or (window/swings-left item)
+                                   (:durability (blocks/materials (:tier (blocks/tool (:item
+                                                                                       item))))))))
+                           (vals (:player/inventory world))))
+        table? (or (pos? (long (get c :crafting_table 0)))
+                   (some? (make/near world :crafting_table)))
+        makeable (if table?
+                   (min (quot (long (pupkeep/wood-sticks world)) pickaxe-sticks)
+                        (quot (long (recipe/have c (recipe/tags :stone_tool_materials)))
+                              pickaxe-stone))
+                   0)]
+    (+ (long held) (* makeable (long (:durability (blocks/materials :stone)))))))
+
+(defn tunnel-budget?
+  "May a tunnel to a forest or along the heading spend digs: is the dig-budget at
+   pparams/travel-reserve-digs or more? Under it the digs left are the hunt's (its burrows, its
+   way out of a pocket), and the way to a forest is walked or explored. Real stage-18 bots on
+   5d894db crafted every stick into stone pickaxes and wore them all out boring toward forests
+   they never reached (one 1,146 digs in 34 minutes inside a hundred blocks), then stood 15
+   minutes on lookouts with no pickaxe and no wood until the run ended."
+  [world]
+  (>= (long (dig-budget world)) (long pparams/travel-reserve-digs)))
 
 (defn rod-bot?
   "Has the bot collected the required blaze rods (rods-wanted) or reached stage 18?"
