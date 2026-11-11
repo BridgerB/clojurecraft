@@ -543,6 +543,20 @@
                    (and (contains? pparams/ranged-kinds (entity/kind e)) (combat/seen? world e)))
                  (swarm world))))
 
+(defn exposed?
+  "Has a known shooter (shooters: a blaze or a ghast in its range that the server ticks) a clear
+   line (combat/clear?) from where it shoots (mob/head) to the bot's eye, chest or feet? A fireball
+   flies at the body, so a line to the legs is a hit as surely as one to the eye: shot-at? asks the
+   eye alone. Nothing of the bot is hidden from a shooter that has any of the three."
+  [world]
+  (let [[x y z] (:player/pos world)
+        marks [[x (+ y pparams/eye-height) z] [x (+ y 0.9) z] [x (+ y 0.2) z]]]
+    (boolean (and x
+                  (some (fn [[_ e]]
+                          (let [from (mob/head (entity/kind e) (:entity/pos e))]
+                            (some #(combat/clear? world from %) marks)))
+                        (shooters world))))))
+
 (defn recently-shot?
   "Was a ghast in sight (:pearls/shot-at-ms, shot-at?) less than shot-hold-ms ago? Then no walk
    goes elsewhere, so a hide walk and a travel walk do not undo each other."

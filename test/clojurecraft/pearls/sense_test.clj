@@ -13,6 +13,7 @@
             [clojurecraft.mob :as mob]
             [clojurecraft.pearls-support :as ps]
             [clojurecraft.pearls.cover :as pcover]
+            [clojurecraft.pearls.facts :as pfacts]
             [clojurecraft.pearls.move :as pmove]
             [clojurecraft.pearls.params :as pparams]
             [clojurecraft.pearls.place :as pplace]
@@ -1111,3 +1112,20 @@
     (is (= gone (psense/track-brutes gone)) "nothing tracked, nothing noted")
     (is (nil? (psense/brute-near (ps/standing {9 (ps/mob :piglin [14.5 64.0 8.5])})))
         "a piglin is no brute")))
+
+(deftest the-escape-heals-only-where-no-shooter-has-a-line
+  ;; 13 of 20 fireball hits on sim rods bots landed during :hunt/escape-heal, which held in place
+  ;; while hurt, burning or lately shot whether a blaze could see the bot or not
+  (let [stone (blocks/default-state :stone)
+        wall (into {} (for [y (range 64 68) z (range 5 12)] [[11 y z] stone]))
+        at (fn [blocks]
+             (-> (ps/standing {9 (ps/mob :blaze [14.5 65.0 8.5])} blocks)
+                 (assoc :player/dimension ps/nether :player/health 8.0 :player/food 14)
+                 (assoc-in [:player/inventory 1] (ps/item :cooked_beef 12))))
+        open (at {})
+        walled (at wall)
+        hold? (fn [w] ((pfacts/context w) :escape-hold?))]
+    (is (psense/exposed? open) "a blaze six blocks off in the open has a line")
+    (is (not (psense/exposed? walled)) "behind a wall over its head it has none")
+    (is (not (hold? open)) "hurt with food, but in the line: no heal here")
+    (is (hold? walled) "hurt with food and covered: it heals")))

@@ -76,7 +76,8 @@
   ;; hurt with a way to heal, burning, or out of a shooter's sight only a moment: the bore waits,
   ;; eating when it can and standing still when it cannot (a real rod bot bored on at 1.7 health
   ;; with food held for 26 s until a fireball; another left its cover for the bore every few
-  ;; seconds under two blazes)
+  ;; seconds under two blazes). Never where a shooter has a line to the bot (sense/exposed?):
+  ;; there the cover from fire, else the bore into rock, goes first
   {:rule/id :hunt/escape-heal
    :rule/phase :leave-fortress
    :rule/when [:fortress-escaping? :escape-hold?]
