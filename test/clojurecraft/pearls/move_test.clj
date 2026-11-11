@@ -599,3 +599,26 @@
                   (pmove/far-ends after 0 #{}))
         "no end is left within roam-reach of a visited one")
     (is (< (count (pmove/far-ends after 0 #{})) (count ends)) "the ends walked to are gone")))
+
+(deftest relocations-to-and-fro-between-two-cells-are-stuck
+  ;; real rods timeout on 4170b7d (Clj_r01, lane r1, fold 42973619850): a relocate walked between
+  ;; [-46 64 156] and [-49 61 176] every ten minutes for forty, each walk resetting the lookouts
+  ;; stuck? counted, so nothing dug it out
+  (let [walked (fn [targets why]
+                 (reduce (fn [w [n t]]
+                           (memory/remember-intention
+                            (assoc w :time/now (* 1000 (inc n)))
+                            (with-meta {:intent/id (inc n) :intent/kind :walk :intent/target t}
+                                       {:intent/why why})
+                            :done))
+                         (ps/standing {})
+                         (map-indexed vector targets)))
+        two [[-46 64 156] [-49 61 176] [-46 64 156] [-49 61 176]]]
+    (is (pmove/ping-pong? (walked two :hunt/relocate)))
+    (is (pmove/stuck? (walked two :hunt/relocate)))
+    (is (pmove/loitering? (walked two :hunt/relocate)))
+    (is (not (pmove/ping-pong? (walked two :hunt/walk-to-mouth-to-provoke)))
+        "a burrow's walks between its mouth and its end are no relocation")
+    (is (not (pmove/ping-pong? (walked [[0 64 0] [20 64 0] [40 64 0] [60 64 0]] :hunt/relocate)))
+        "relocations that go on are not")
+    (is (not (pmove/ping-pong? (walked (take 3 two) :hunt/relocate))) "three walks are too few")))

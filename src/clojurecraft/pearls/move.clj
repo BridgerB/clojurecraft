@@ -278,13 +278,27 @@
                 (when (and (pos? n) (pplace/solid-cut? world :tunnel feet dir n))
                   {:intent/kind :tunnel :intent/dir dir :intent/length n :intent/for :pearls})))))))
 
+(defn ping-pong?
+  "Were the newest ping-pong-walks :walk intentions to end :done (memory/newest-dones) all
+   relocations (why :hunt/relocate) to at most two cells? A relocate walking to and fro between the
+   same two stands, ten minutes apart, never leaves the place: each walk resets the lookouts stuck?
+   counts, so it counts as stuck itself. A burrow's walks between its mouth and its end are no
+   relocation and never count."
+  [world]
+  (let [ds (memory/newest-dones world :walk pparams/ping-pong-walks)]
+    (and (= pparams/ping-pong-walks (count ds))
+         (every? #(= :hunt/relocate (:intention/why %)) ds)
+         (<= (count (set (map :intention/target ds))) 2))))
+
 (defn stuck?
   "Has the bot stood stale-lookouts or more :lookout intents since its last walk ended
    (memory/done-since), or since its burrow was cut when no walk has ended since? A minute
-   of lookouts with no walk taken, as stale? counts them in a burrow, out of one."
+   of lookouts with no walk taken, as stale? counts them in a burrow, out of one. Or have its
+   walks gone to and fro between two cells (ping-pong?)."
   [world]
-  (>= (or (memory/done-since world :lookout :walk) (memory/done-since world :lookout :burrow) 0)
-      pparams/stale-lookouts))
+  (or (>= (or (memory/done-since world :lookout :walk) (memory/done-since world :lookout :burrow) 0)
+          pparams/stale-lookouts)
+      (ping-pong? world)))
 
 (defn climb-heading
   "A heading from feet to cut stairs up into rock toward the surface: one that cuts solid
@@ -373,15 +387,17 @@
   "Did the newest loiter-walks :walk intentions to end :done all end within loiter-radius of the
    feet (memory/newest-dones, their targets)? Then the hunt has shuffled in one place however
    many lookouts it stood between the walks, each walk resetting the count of lookouts since the
-   last."
+   last. Relocations to and fro between two cells (ping-pong?) are loitering too, however far
+   apart."
   [world]
   (let [feet (intent/feet world)
         ds (memory/newest-dones world :walk pparams/loiter-walks)]
-    (and (= pparams/loiter-walks (count ds))
-         (every? (fn [d]
-                   (let [t (:intention/target d)]
-                     (and (vector? t) (<= (path/octile feet t) pparams/loiter-radius))))
-                 ds))))
+    (or (ping-pong? world)
+        (and (= pparams/loiter-walks (count ds))
+             (every? (fn [d]
+                       (let [t (:intention/target d)]
+                         (and (vector? t) (<= (path/octile feet t) pparams/loiter-radius))))
+                     ds)))))
 
 (defn wandering?
   "Has the hunt stood wander-lookouts or more :lookout intents with no walk ended since (stuck?

@@ -626,13 +626,17 @@
 
 (defn in-forest?
   "Is a warped forest chunk known (memory/warped-chunks) within forest-reach chunks of the feet's
-   chunk, in the Nether? The hunt's ground: its endermen spawn there and nowhere near a fortress."
+   chunk, its floor (:forest/pos) within forest-level blocks of the feet's height, in the Nether?
+   The hunt's ground: its endermen spawn there and nowhere near a fortress. A forest whose floor is
+   far over or under the feet is somewhere to travel to (nearest-forest): a bot in a cave under one
+   counted itself there, so no travel went, and stood its hour in the rock."
   [world]
-  (let [[fx _ fz] (intent/feet world)
+  (let [[fx fy fz] (intent/feet world)
         cx (math/floor-div (long fx) 16)
         cz (math/floor-div (long fz) 16)]
-    (boolean (some (fn [{[x z] :forest/chunk}]
-                     (<= (max (abs (- x cx)) (abs (- z cz))) pparams/forest-reach))
+    (boolean (some (fn [{[x z] :forest/chunk [_ py _] :forest/pos}]
+                     (and (<= (max (abs (- x cx)) (abs (- z cz))) pparams/forest-reach)
+                          (<= (abs (- (long py) (long fy))) pparams/forest-level)))
                    (memory/warped-chunks world)))))
 
 (defn nearest-forest

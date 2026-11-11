@@ -175,14 +175,20 @@
   ;; with 81 endermen in sight, the exit tunnel still ran at minute 47 (fortress-escaping? stayed true,
   ;; and the exit outranks the hunt). A forest known at the feet ends the escape.
   (let [w (-> (ps/standing {})
-              (assoc :player/dimension ps/nether :player/pos [-163.5 38.0 221.5])
+              (assoc :player/dimension ps/nether :player/pos [-163.5 65.0 221.5])
               (memory/observe [-176 70 219] blaze/spawner)
               (memory/observe [-164 40 221] (blocks/default-state :nether_bricks))
               (assoc-in [:player/inventory 1] (ps/item :iron_pickaxe 1)))
-        forest (with-forest w [-11 13])]
+        forest (with-forest w [-11 13])
+        under (assoc forest :player/pos [-163.5 38.0 221.5])]
     (is (fexit/fortress-escaping? w) "near the fortress, no forest: escaping")
-    (is (psense/in-forest? forest) "the feet are in a warped chunk")
-    (is (not (fexit/fortress-escaping? forest)) "in a forest: the escape is over")))
+    (is (psense/in-forest? forest) "the feet are in a warped chunk, at its floor")
+    (is (not (fexit/fortress-escaping? forest)) "in a forest: the escape is over")
+    (testing "the forest's floor 26 blocks over the feet in the rock is no forest to stand in"
+      ;; real rods timeouts on 4170b7d (Clj_r01, lane r1): a cave 12 under a remembered forest
+      ;; counted as in it, so no travel went, and the bot stood its hour in the rock
+      (is (not (psense/in-forest? under)))
+      (is (fexit/fortress-escaping? under)))))
 
 (deftest a-heading-turns-toward-ground-it-has-not-seen
   ;; The sim worlds hold a warped forest 170 to 485 blocks from the fortress start (probe
