@@ -173,3 +173,32 @@
         "evenly spread, not one corner")
     (let [few (vec (take 20 bricks))]
       (is (= few (vec (memory/thin-bricks few))) "a column with few is unchanged"))))
+
+(deftest a-remembered-question-answers-as-the-query-does
+  ;; last-done and warped-chunks are asked every tick and remembered by the facts' identity
+  ;; (memo/by): the answer must be the query's, and a new fact must be a new question
+  (let [walk
+        (fn [w id to ev]
+          (memory/remember-intention w {:intent/id id :intent/kind :walk :intent/target to} ev))
+        w0 (assoc (game/init fx/opts) :time/now 0)
+        w1 (walk w0 1 [0 64 0] :done)
+        w2 (walk w1 2 [16 64 0] :done)
+        w3 (walk w2 3 [32 64 0] :failed)
+        nylium (blocks/default-state :warped_nylium)
+        col (fn [n] (world/column (into {} (for [x (range n)] [[x 64 3] nylium]))))
+        n1 (-> w3
+               (assoc :player/dimension dimension/nether :time/now 5)
+               (memory/remember-column [2 -1] (col 12)))
+        n2 (memory/remember-column n1 [3 -1] (col 14))]
+    (doseq [w [w0 w1 w2 w3 n1 n2]
+            k [:walk :burrow]]
+      (is (= (memory/last-done-of (:world/facts w) k) (memory/last-done w k)))
+      (is (= (memory/last-done w k) (memory/last-done w k)) "asked again: the same answer"))
+    (is (= [0 64 0] (:intention/target (memory/last-done w1 :walk))))
+    (is (= [16 64 0] (:intention/target (memory/last-done w2 :walk))) "a new fact, a new answer")
+    (doseq [w [w3 n1 n2]
+            dim [dimension/nether dimension/overworld]]
+      (is (= (memory/warped-chunks-of (:world/facts w) dim)
+             (memory/warped-chunks-in (:world/facts w) dim))))
+    (is (= 1 (count (memory/warped-chunks n1))))
+    (is (= 2 (count (memory/warped-chunks n2))) "the second forest seen, not the first's answer")))
