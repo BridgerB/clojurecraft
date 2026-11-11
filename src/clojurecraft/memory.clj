@@ -256,17 +256,25 @@
                     dim)]
     (into {} (d/touch (d/entity db e)))))
 
+(defn warped-chunks-of
+  "The newest forest fact of each chunk known in dimension dim of facts db, as a vector of maps."
+  [db dim]
+  (mapv #(latest-forest db dim %)
+        (d/q '[:find [?c ...] :in $ ?dim :where [?e :forest/chunk ?c] [?e :forest/dimension ?dim]]
+             db
+             dim)))
+
+(def warped-chunks-in
+  "[facts dimension] → warped-chunks-of, remembered by the facts' identity (memo/by): facts change only when one is added, and the
+   pearl hunt asked this several times a tick, a query a chunk (latest-forest) each time: 47% of a
+   stage-18 bot's CPU (Clj_r02 of race 42922583203 replayed under JFR, probe 42981360374)."
+  (memo/by [:identical :equal] 256 warped-chunks-of))
+
 (defn warped-chunks
   "The newest forest fact of each chunk known in the dimension the bot is in now, as maps: the warped
-   forests it has seen, which stay known after their chunks unload."
+   forests it has seen, which stay known after their chunks unload (warped-chunks-in)."
   [world]
-  (let [db (:world/facts world)
-        dim (dimension/of world)]
-    (for [c (d/q '[:find [?c ...] :in $ ?dim :where [?e :forest/chunk ?c]
-                   [?e :forest/dimension ?dim]]
-                 db
-                 dim)]
-      (latest-forest db dim c))))
+  (warped-chunks-in (:world/facts world) (dimension/of world)))
 
 (def brick-names #{:nether_bricks :nether_brick_fence :nether_brick_stairs})
 
@@ -495,17 +503,28 @@
                 k
                 t)))
 
+(defn last-done-of
+  "The newest :done fact of an intention of kind k in facts db, as a map, or nil."
+  [db k]
+  (when-let [e (d/q '[:find (max ?e) . :in $ ?k :where [?e :intention/kind ?k]
+                      [?e :intention/event :done]]
+                    db
+                    k)]
+    (into {} (d/touch (d/entity db e)))))
+
+(def last-done-in
+  "[facts kind] → last-done-of, remembered
+   by the facts' identity (memo/by): the spawner's tunnel (blaze/tunnelled-spawner) asked it every
+   tick, a join over every :done fact: 22% of a stage-18 bot's CPU (Clj_r40 of race 42922583203
+   replayed under JFR, probe 42981360374)."
+  (memo/by [:identical :equal] 256 last-done-of))
+
 (defn last-done
   "The newest :done fact of an intention of kind k (:walk), as a map of :intention/* keys; nil
-   when none is. A Datalog over the facts: where the last walk that arrived ended is ground the
-   bot stood on."
+   when none is. A Datalog over the facts (last-done-in): where the last walk that arrived ended
+   is ground the bot stood on."
   [world k]
-  (let [db (:world/facts world)
-        e (d/q '[:find (max ?e) . :in $ ?k :where [?e :intention/kind ?k]
-                 [?e :intention/event :done]]
-               db
-               k)]
-    (when e (into {} (d/touch (d/entity db e))))))
+  (last-done-in (:world/facts world) k))
 
 (defn done-count
   "How many intentions of kind k (:fight) ended :done: a Datalog count over the facts."
