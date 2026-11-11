@@ -265,9 +265,9 @@
              dim)))
 
 (def warped-chunks-in
-  "[facts dimension] → warped-chunks-of, remembered by the facts' identity (memo/by): facts change only when one is added, and the
-   pearl hunt asked this several times a tick, a query a chunk (latest-forest) each time: 47% of a
-   stage-18 bot's CPU (Clj_r02 of race 42922583203 replayed under JFR, probe 42981360374)."
+  "[facts dimension] → warped-chunks-of, remembered by the facts' identity (memo/by): facts
+   change only when one is added, and the pearl hunt asks this several times a tick, a query a
+   chunk (latest-forest) each time: about half a stage-18 bot's step, replayed under a profiler."
   (memo/by [:identical :equal] 256 warped-chunks-of))
 
 (defn warped-chunks
@@ -513,10 +513,9 @@
     (into {} (d/touch (d/entity db e)))))
 
 (def last-done-in
-  "[facts kind] → last-done-of, remembered
-   by the facts' identity (memo/by): the spawner's tunnel (blaze/tunnelled-spawner) asked it every
-   tick, a join over every :done fact: 22% of a stage-18 bot's CPU (Clj_r40 of race 42922583203
-   replayed under JFR, probe 42981360374)."
+  "[facts kind] → last-done-of, remembered by the facts' identity (memo/by): the spawner's
+   tunnel (blaze/tunnelled-spawner) asks it every tick, a join over every :done fact: about a
+   fifth of a stage-18 bot's step, replayed under a profiler."
   (memo/by [:identical :equal] 256 last-done-of))
 
 (defn last-done
