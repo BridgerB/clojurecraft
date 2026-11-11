@@ -102,3 +102,39 @@
 (deftest no-new-with-redefs-in-tests
   (is (= [] (vec (grown ["test/clojurecraft"] redefs-pattern (:redefs baseline))))
       "pass the dependency as an argument, or give the test a row of its own plan key"))
+
+(defn top-level-chunks
+  "The text of file cut at every line that opens a top-level form (a line beginning with \"(\"),
+   comment lines left out: [text ...]."
+  [file]
+  (let [lines (remove #(re-find #"^\s*;" %) (str/split-lines (slurp file)))]
+    (->> (reduce
+          (fn [acc l]
+            (if (str/starts-with? l "(") (conj acc [l]) (update acc (dec (count acc)) conj l)))
+          [[]]
+          lines)
+         (map #(str/join "\n" %)))))
+
+(defn unsynchronized-redefs
+  "[file test-name] for each deftest under dir not marked ^:eftest/synchronized that calls
+   with-redefs, itself or through a function of its own file that does. with-redefs rebinds a var
+   for the whole JVM, and the suite runs every var in parallel: one test's redefinition reached a
+   recorded sim run's live run and not its replay, and the replay test failed now and then."
+  [dir]
+  (for [f (map str (filter #(str/ends-with? (str %) "_test.clj") (file-seq (io/file dir))))
+        :let [chunks (top-level-chunks f)
+              helpers (keep #(when (str/includes? % "(with-redefs")
+                               (second (re-find #"^\(defn-? (\S+)" %)))
+                            chunks)
+              redefs? (fn [c]
+                        (or (str/includes? c "(with-redefs")
+                            (some #(str/includes? c (str "(" % " ")) helpers)))]
+        c chunks
+        :when (and (str/starts-with? c "(deftest ")
+                   (not (str/starts-with? c "(deftest ^:eftest/synchronized"))
+                   (redefs? c))]
+    [f (second (re-find #"^\(deftest (\S+)" c))]))
+
+(deftest every-test-that-redefines-a-var-runs-alone
+  (is (= [] (vec (unsynchronized-redefs "test/clojurecraft")))
+      "mark it ^:eftest/synchronized (runner.clj runs those alone), or pass the dependency in"))
