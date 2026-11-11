@@ -882,12 +882,13 @@
 (s/def :sim.mob/route (s/coll-of (s/tuple int? int? int?) :kind vector? :min-count 1)) ; the cells it walks round a wall (sim-mobs/trail, issue #263)
 (s/def :sim.mob/route-at int?)                 ; when it last searched a route
 (s/def :sim.mob/far-ticks nat-int?)            ; ticks an angry enderman has stood far from its target (sim-mobs/blink)
+(s/def :sim.mob/knocked-until int?)            ; when its knockback's flight ends: it neither walks nor strikes before (sim-mobs/knock-back)
 (s/def ::sim-mob
   (s/keys :req-un [:sim.mob/type :sim.mob/pos :sim.mob/health]
           :opt-un
           [:sim.mob/hit-at :sim.mob/last-hit :sim.mob/attack-at :sim.mob/fuse-at :sim.mob/dead-at
            :sim.mob/angry? :sim.mob/persistent? :sim.mob/yaw :sim.mob/route :sim.mob/route-at
-           :sim.mob/far-ticks]))
+           :sim.mob/far-ticks :sim.mob/knocked-until]))
 (s/def :sim/mobs (s/map-of int? ::sim-mob))
 (s/def :sim/fixture-mobs (s/coll-of (s/keys :req-un [:sim.mob/type :sim.mob/pos]) :kind vector?))
 (s/def :sim/mob-rng int?)                      ; the mobs' own roll stream (sim-mobs/mob-roll)
