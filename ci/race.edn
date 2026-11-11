@@ -18,7 +18,10 @@
  ;; rods 1-4, forest 5-8) and each landing set (lane r on set (r-1) mod 4) has both arms, and the
  ;; bigger arm sits on the other sets from the last A/B's. Lanes on a set are landing-stride
  ;; apart, the most landings any lane takes, so none overlap
- :race/lane-overrides {2 {:race/bots 18 :race/bot-heap-mb 4096}
+ ;; lane 1 also records its race JVM in flight (:race/jfr, servers/jfr-of): where the bots' CPU goes,
+ ;; summarised by bb jfr; the recording's disk bounded, no other lane records
+ :race/lane-overrides {1 {:race/jfr {:settings "default" :max-size-mb 256}}
+                       2 {:race/bots 18 :race/bot-heap-mb 4096}
                        4 {:race/bots 18 :race/bot-heap-mb 4096}
                        5 {:race/bots 18 :race/bot-heap-mb 4096}
                        7 {:race/bots 18 :race/bot-heap-mb 4096}}}

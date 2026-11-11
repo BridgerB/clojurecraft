@@ -49,16 +49,27 @@
           (bots-of config)
           (map #(bots-of (for-lane config %)) (keys (:race/lane-overrides config)))))
 
+(defn jfr-of
+  "The race JVM's flight recording under config (for-lane's value), as StartFlightRecording's
+   settings: :race/jfr {:settings \"default\" :max-size-mb n} gives
+   \"settings=default,maxsize=<n>m\" (the recording's disk bounded to n MB, oldest dropped); none
+   gives \"\", no recording."
+  [config]
+  (if-let [{:keys [settings max-size-mb]} (:race/jfr config)]
+    (str "settings=" (or settings "default") ",maxsize=" (or max-size-mb 256) "m")
+    ""))
+
 (defn outputs
   "The race's sizes for lane n under config, as the lines race.yml's plan job appends to
    $GITHUB_OUTPUT: servers= sets= bots= server-heap= bot-heap= (sets as a JSON array of strings)
-   and landing-stride= (landing-stride)."
+   landing-stride= (landing-stride) and jfr= (jfr-of: empty for a lane with no recording)."
   [config n]
   (let [c (for-lane config n)]
     [(str "servers=" (servers-of c))
      (str "sets=[" (str/join "," (map pr-str (:race/landing-sets c))) "]")
      (str "bots=" (:race/bots c)) (str "server-heap=" (:race/server-heap-mb c))
-     (str "bot-heap=" (:race/bot-heap-mb c)) (str "landing-stride=" (landing-stride config))]))
+     (str "bot-heap=" (:race/bot-heap-mb c)) (str "landing-stride=" (landing-stride config))
+     (str "jfr=" (jfr-of c))]))
 
 ;;;; I/O: the file and the command line ;;;;
 

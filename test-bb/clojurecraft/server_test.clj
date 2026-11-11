@@ -55,10 +55,10 @@
 
 (deftest the-outputs-are-the-lines-race-yml-appends
   (is (= ["servers=1" "sets=[\"R1\",\"R2\"]" "bots=10" "server-heap=6144" "bot-heap=2048"
-          "landing-stride=20"]
+          "landing-stride=20" "jfr="]
          (servers/outputs race 1)))
   (is (= ["servers=2" "sets=[\"R1\",\"R2\"]" "bots=10" "server-heap=3072" "bot-heap=2048"
-          "landing-stride=20"]
+          "landing-stride=20" "jfr="]
          (servers/outputs race 2))
       "the stride is the most bots any lane takes, whatever the lane's arm"))
 
@@ -88,3 +88,13 @@
     (doseq [[s ns] (group-by set-of real)]
       (is (<= (* (count ns) (servers/landing-stride shipped)) (get-in gym [:landing-sets s :n]))
           (str "set " s " has a landing for every bot of its lanes, none shared")))))
+
+(deftest a-lane-records-its-race-jvm-only-when-its-entry-says
+  (is (= "settings=default,maxsize=256m"
+         (servers/jfr-of {:race/jfr {:settings "default" :max-size-mb 256}})))
+  (is (= "settings=profile,maxsize=64m"
+         (servers/jfr-of {:race/jfr {:settings "profile" :max-size-mb 64}})))
+  (is (= "" (servers/jfr-of {})) "no entry: no recording")
+  (is (= ["settings=default,maxsize=256m" "" "" "" "" "" "" ""]
+         (map #(servers/jfr-of (servers/for-lane shipped %)) (range 1 9)))
+      "the shipped file records lane 1 alone"))
