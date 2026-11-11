@@ -399,6 +399,7 @@
    "Clj_r01 was slain by Piglin Brute" :piglin
    "Clj_r01 was shot by Piglin" :piglin
    "Clj_r01 was fireballed by Ghast" :ghast
+   "Clj_r19 was slain by Magma Cube" :magma
    "Clj_r01 tried to swim in lava" :lava
    "Clj_r01 burned to death" :fire
    "Clj_r01 walked into fire" :fire

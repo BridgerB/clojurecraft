@@ -66,6 +66,9 @@
       (is (entity/baby? (entity/metadata-facts (blocks/entity-types :hoglin) {16 true})))
       (is (not (entity/baby? (entity/metadata-facts (blocks/entity-types :hoglin) {16 false}))))
       (is (= {} (entity/metadata-facts pig {16 true}))))
+    (testing "a magma cube says its size at Slime's index, and a pig is not read"
+      (is (= {:entity/size 4} (entity/metadata-facts (blocks/entity-types :magma_cube) {16 4})))
+      (is (= {} (entity/metadata-facts pig {16 4}))))
     (testing "a blaze's flags say it burns"
       (is (entity/on-fire? (merge (mob :blaze [0.0 0.0 0.0])
                                   (entity/metadata-facts (blocks/entity-types :blaze) {0 1})))))))

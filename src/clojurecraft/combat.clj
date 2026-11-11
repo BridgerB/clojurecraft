@@ -1068,11 +1068,13 @@
   (when nook (intent/why :cover/nook {:intent/kind :dig :intent/target nook})))
 
 (defn teleport-cover
-  "The cover against e when it is one of teleporters, which no back-off gets away from, and a
-   cover is to be had: nil for any other kind, and nil with nothing held to make one (cover's
-   wait :cornered ends the plan; the back-off, the older answer, at least moves)."
+  "The cover against e when it is one of teleporters or jumpers, which no back-off gets away from
+   (one teleports to the bot, the other hops faster than it walks), and a cover is to be had: nil
+   for any other kind, and nil with nothing held to make one (cover's wait :cornered ends the
+   plan; the back-off, the older answer, at least moves). Real stage-18 bots backed away from magma
+   cubes under the danger line, the roofed pocket never chosen, and died under their hops."
   [world e]
-  (when (contains? teleporters (entity/kind e))
+  (when (or (contains? teleporters (entity/kind e)) (contains? jumpers (entity/kind e)))
     (let [c (cover world e)] (when-not (= {:plan/wait :cornered} c) c))))
 
 (defn defend-target

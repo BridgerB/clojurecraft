@@ -260,7 +260,7 @@
 
 (defn death-class
   "The class of a server death line, a keyword: :blaze, :enderman, :piglin (a piglin, zombified or
-   brute), :hoglin, :wither (a wither skeleton), :ghast, :lava, :fire, :fall, else :other (also a
+   brute), :hoglin, :wither (a wither skeleton), :ghast, :magma (a magma cube), :lava, :fire, :fall, else :other (also a
    nil line). The mob is asked first: \"burned to a crisp while fighting Blaze\" is a blaze's, not
    fire's. A death at a stage is filed by its class, so a blaze's and a lava's get different issues
    and owners."
@@ -273,6 +273,7 @@
       #"Hoglin" :hoglin
       #"Wither Skeleton" :wither
       #"Ghast" :ghast
+      #"Magma Cube" :magma
       #"lava" :lava
       #"burned|fire|flames" :fire
       #"fell from|hit the ground" :fall

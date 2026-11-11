@@ -777,6 +777,21 @@
     (is (not= :fight (:intent/kind i)) "no fight under the line")
     (is (contains? #{:place :pillar :dig :eat} (:intent/kind i)) "a cover")))
 
+(deftest under-the-line-a-magma-cube-is-covered-against-not-backed-off-from
+  ;; real Clj_r48 (botlogs 2026-11-10-17, 42812754059-r2-b8), Clj_r46, Clj_r60 and more on 5d894db:
+  ;; under the danger line :defend backed away from magma cubes (defend/or-pack-neutral ...), which
+  ;; hop faster than the bot walks, and the roofed pocket of the :jumper-ladder was never chosen
+  (let [kit {0 (item :iron_pickaxe 1) 1 (item :cobblestone 64) 2 (item :cooked_beef 16)}
+        hurt (assoc (standing {106 (assoc (mob :magma_cube [10.5 64.0 8.5] 4.0) :entity/size 2)})
+                    :player/health 9.0
+                    :player/food 20
+                    :player/inventory kit)
+        i (plan/next-intent hurt (row :defend) plan/goals)]
+    (is (some? (combat/teleport-cover hurt (get-in hurt [:world/entities 106])))
+        "a jumper: a back-off gets nowhere, a cover is held")
+    (is (not= :back-off (:intent/kind i)) "no back-off")
+    (is (not= :fight (:intent/kind i)) "no fight under the line")))
+
 (deftest a-pack-that-lands-retreat-health-in-a-round-is-not-fought
   ;; pearl-fight-a job 6 (run 41143668588): at 18.6 health, :fight 93 against piglins 87 and 93,
   ;; two attackers, 6.7 a hit, 18.6 to 5.2 in 2.4 s and dead at 2m56s. A piglin had no hit on

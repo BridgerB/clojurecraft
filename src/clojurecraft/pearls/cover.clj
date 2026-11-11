@@ -274,12 +274,19 @@
         (when (and (:intent/kind c) (or (placing? world) (not= :place (:intent/kind c))))
           (assoc c :intent/for :pearls))))))
 
+(def magma-sizes
+  "A magma cube's at-hand key by its size (entity :entity/size), as mob-kinds names the model's
+   three: small 1, medium 2, big 4."
+  {1 :magma_cube_small 2 :magma_cube 4 :magma_cube_big})
+
 (defn foe-kind
-  "The at-hand table's key for entity e: its kind, or baby_<kind> for a baby (entity/baby?), whose
-   hit and size are not its kind's (a baby hoglin hits for 0.5 and fits a cell one high)."
+  "The at-hand table's key for entity e: its kind, baby_<kind> for a baby (entity/baby?), whose
+   hit and size are not its kind's (a baby hoglin hits for 0.5 and fits a cell one high), and a
+   magma cube's by its size (magma-sizes; :magma_cube when the size is not known)."
   [e]
   (let [k (entity/kind e)]
     (cond (and k (entity/baby? e)) (keyword (str "baby_" (name k)))
+          (and (= :magma_cube k) (magma-sizes (:entity/size e))) (magma-sizes (:entity/size e))
           :else k)))
 
 (defn kind-within
@@ -298,7 +305,8 @@
 (defn lone-fight
   "The :fight on a lone melee foe at hand, or nil: for a kind of pparams/at-hand, the nearest of
    it within :radius of the feet that the bot can fight from where it walks (combat/hittable? and
-   combat/approachable?), no other of its kind within :alone, and the health at :min-health and
+   combat/approachable?), no other of its kind within :alone (a row with no :alone fights one of a
+   group: a small or medium magma cube dies at one swing), and the health at :min-health and
    danger-health or more (#577: never a fight begun under it). To its end; held where the bot
    stands with the row's :hold?, and breaking off under retreat-health with its :yield?. Covered from, a blaze at hand follows the bot into each cover and touches it
    there, and a wither skeleton hits through the blocks a tunnel lays: real bots dug and laid
@@ -314,7 +322,7 @@
      (some (fn [[kind {:keys [radius alone min-health hold? yield?]}]]
              (when (and (>= hp pparams/danger-health)
                         (>= hp min-health)
-                        (= 1 (count (kind-within world kind alone))))
+                        (or (nil? alone) (= 1 (count (kind-within world kind alone)))))
                (when-let [[eid e] (entity/nearest (kind-within world kind radius) pos)]
                  (when (and (combat/hittable? world e) (combat/approachable? world e))
                    (cond-> {:intent/kind :fight
