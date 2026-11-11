@@ -21,6 +21,7 @@
             [clojurecraft.pearls.place :as pplace]
             [clojurecraft.pearls.sense :as psense]
             [clojurecraft.pearls.upkeep :as pupkeep]
+            [clojurecraft.picks :as picks]
             [clojurecraft.plan :as plan]
             [clojurecraft.record :as record]
             [clojurecraft.senses :as senses]
@@ -93,6 +94,19 @@
                   :exit/dir #(fexit/fortress-exit-dir w)
                   :exit/spawner #(blaze/nearest-spawner w)
                   :exit/points #(count (fexit/fortress-points w))
+                  :heading/held #(:pearls/heading w)
+                  :heading/target #(pmove/heading-target w)
+                  :heading/tunnel-budget? #(picks/tunnel-budget? w)
+                  :heading/reach-heading #(pmove/reach-heading w)
+                  :heading/seen-chunks #(count (:pearls/seen w))
+                  :search/far #(count (psense/endermen w pparams/seek-radius))
+                  :search/descend-128 #(mapv (fn [[_ e]] (mapv long (:entity/pos e)))
+                                             (take 5 (psense/endermen w pparams/descend-radius)))
+                  :search/descend #(pmove/descend w (psense/endermen w pparams/descend-radius))
+                  :search/ascend #(pmove/ascend w (psense/endermen w pparams/descend-radius))
+                  :search/toward #(pmove/toward w (psense/endermen w pparams/seek-radius))
+                  :search/bore #(pmove/bore w (psense/endermen w pparams/descend-radius))
+                  :search/roam #(pmove/roam w)
                   :relocate/walk #(pmove/relocate-walk w)
                   :relocate/state #(:pearls/relocate w)
                   :relocate/walk-dones #(mapv (juxt :intention/at :intention/target)
