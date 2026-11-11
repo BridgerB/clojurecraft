@@ -22,8 +22,8 @@
    toward-aim and away-aim), spiders climbing, mobs swimming, armour wearing out, a magma cube's
    hop as a flight through the air (its three sizes are kinds with their health, box, armour and
    hit; the hop lifts it onto a ledge as high as its whole blocks, climb, and reaches a player
-   over it, hop-reach?, but it never sails over a gap) and a hoglin's
-   swing landing anywhere from 3 to 8 (the row uses 6). The armour the player wears takes its share of a mob's
+   over it, hop-reach?, but it never sails over a gap) and a baby hoglin (an adult's hit is rolled,
+   melee-hit). The armour the player wears takes its share of a mob's
    hit. A wither skeleton's wither does not (wither-tick)."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
@@ -170,6 +170,16 @@
     (cond (= kind :axe) (axe-damage tier)
           (kind-damage kind) (+ hand-damage (kind-damage kind) (material-bonus tier))
           :else hand-damage)))
+
+(defn melee-hit
+  "One melee hit of a mob of kind before the difficulty, given r a roll in [0, 1): its :melee, or
+   for a kind that :roll s its hit as a hoglin does (HoglinBase.hurtAndThrowTarget: f / 2 +
+   nextInt(f) for an attack damage f over zero) half of it plus the whole number r picks under it,
+   3 to 8 for a hoglin's 6."
+  [kind r]
+  (let [{:keys [melee roll]} (kinds kind)]
+    (cond (and roll melee (pos? (long melee))) (+ (/ melee 2.0) (math/floor (* r (long melee))))
+          :else melee)))
 
 (defn scaled
   "A mob's damage to a player at difficulty (Player.hurt's scalesWithDifficulty): easy halves it

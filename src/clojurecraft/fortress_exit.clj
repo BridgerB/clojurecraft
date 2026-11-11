@@ -480,7 +480,10 @@
    or hold (:pocket-hold) until full; hurt outside a pocket after a hit while boring, get
    into the blaze row's refuge (blaze/pocket-go, else blaze/here-intent sealed in place)
    before going on. A seal the server rejected (:rejected) leaves the pocket open and unsealed:
-   then a hurt bot eats or holds in it instead of boring out exposed. Sealed at full health, or in
+   then a hurt bot eats or holds in it instead of boring out exposed. The :seal names the pocket's
+   cell as its target, so a seal that fails (the planner's :instant-churn guard: it ends in its
+   first tick, three in a row) blacklists the cell (plan/fail-intent) and is not chosen there
+   again: the next branch, a meal or a hold when hurt, else the bore, takes over. Sealed at full health, or in
    no pocket at full health, nil: fortress-tunnel-out bores from where the bot stands along the
    fixed heading (pocket-bore-heading)."
   [world]
@@ -500,9 +503,12 @@
                          :intent/target (first (blaze/fightable-blaze world))
                          :intent/to-the-end? true
                          :intent/yield? true})
-            (and in? (not sealed?) (pocket/can-seal? world site))
+            (and in?
+                 (not sealed?)
+                 (pocket/can-seal? world site)
+                 (not (avoided/noted? world :blacklist (:pocket/cell site))))
             (intent/why :pocket-bore/and-in?-not-sealed?-pocket-can-seal?-world-site
-                        {:intent/kind :seal})
+                        {:intent/kind :seal :intent/target (:pocket/cell site)})
             (and in? (< hp 20.0))
             (intent/why :pocket-bore/and-in?-hp-20-0
                         (or (blaze/meal world) {:intent/kind :pocket-hold :intent/heal-to 20.0}))

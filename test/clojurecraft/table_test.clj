@@ -7,6 +7,7 @@
             [clojurecraft.game :as game]
             [clojurecraft.make :as make]
             [clojurecraft.memory :as memory]
+            [clojurecraft.picks :as picks]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.table :as table]
@@ -120,3 +121,15 @@
         "and the pick-up of its drop")
     (is (not (plan/held? plan/goals (assoc dig :intent/goal :keep-table) hunt))
         "the old row's dig was cut, as on 4170b7d")))
+
+(deftest a-full-bag-leaves-the-table-and-never-ends-the-plan
+  ;; issue #263: nine of the 11 inventory-full endings of the real stage-18 lanes on 2026-11-09
+  ;; were the spare-picks row's take-along, every slot full and nothing to throw: its
+  ;; :inventory-full wait ended the plan 20 s after the third pickaxe was crafted
+  (let [full (into {} (for [p (concat (range 9 36) (range 0 9))] [p (item :iron_sword 1)]))
+        w (beside-table full)]
+    (is (= {:plan/wait :inventory-full} (make/take-table-along w)) "the take-along can only wait")
+    (is (nil? (picks/take-table-step w))
+        "the row's step is none: the table stays, the plan goes on")
+    (is (= :dig (:intent/kind (picks/take-table-step (beside-table crafted))))
+        "with a slot free, the dig")))
