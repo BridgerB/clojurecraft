@@ -333,7 +333,7 @@
                            (get (:player/inventory w))
                            :item
                            recipe/item-name))]
-    (is (= 35 (count inv)) "35 stacks from the RESULT's counts")
+    (is (= 36 (count inv)) "every slot full")
     (is (= :warped_nylium (name-at {:player/inventory inv}))
         "at any stage the forest's floor and plants are junk; gravel is not")
     (is (= :gravel (name-at late))
