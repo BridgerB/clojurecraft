@@ -5,9 +5,13 @@
             [clojurecraft.blocks :as blocks]
             [clojurecraft.combat :as combat]
             [clojurecraft.fixtures :as fx]
+            [clojurecraft.game :as game]
+            [clojurecraft.intent :as intent]
             [clojurecraft.pearls-support :as ps]
             [clojurecraft.pearls.pit :as ppit]
-            [clojurecraft.plan :as plan]))
+            [clojurecraft.plan :as plan]
+            [clojurecraft.sim :as sim]
+            [clojurecraft.world :as world]))
 
 (use-fixtures :once fx/instrumented)
 
@@ -58,4 +62,57 @@
   ;; a :defend fight on it took turns with the hunt's burrow cut every second and neither finished
   (let [w (-> (bot 20.0 {})
               (assoc :player/attacker 7 :player/struck-at 900 :time/now 1000))]
-    (is (combat/claims-attacker? w ps/row angry))))
+    (is (combat/claims-attacker? w :pearls angry))))
+
+(defn intent-run
+  "Run intent it alone against the server model from a spawn at [8.5 spawn-y 8.5] over column
+   blocks, holding inventory, until it ends or max-ms. Returns [world sim]."
+  [it blocks spawn-y inventory max-ms]
+  (let [step
+        (fn [w e]
+          (let [w (game/step w e)
+                i (:plan/intent w)]
+            (cond (= :go (:event/kind e)) (assoc w :plan/intent (assoc it :intent/status :active))
+                  (and (= :tick (:event/kind e)) (= :active (:intent/status i)) (:player/loaded? w))
+                  (intent/run w i e)
+                  :else w)))]
+    (sim/run step
+             (game/init fx/opts)
+             (sim/init {:column (world/column-bytes blocks)
+                        :spawn [8.5 (double spawn-y) 8.5]
+                        :inventory inventory})
+             #(contains? #{:done :failed} (:intent/status (:plan/intent %)))
+             max-ms)))
+
+(def dug
+  "The pit, two cells dug under [8 64 8]: everything else under y 64 is stone."
+  {[8 63 8] ps/air [8 62 8] ps/air})
+
+(deftest the-pit-is-left-to-the-ground-once-nobody-presses
+  (let [w (-> (bot 18.0 dug)
+              (assoc :player/pos [8.5 62.0 8.5] :world/entities {}))
+        with-cobble
+        (assoc w
+               :player/inventory
+               {0 (ps/item :iron_sword 1) 1 (ps/item :iron_pickaxe 1) 2 (ps/item :cobblestone 32)})]
+    (is (= {:intent/kind :pillar :intent/item :cobblestone :intent/top 64 :intent/for :pearls}
+           (ppit/leave with-cobble))
+        "two blocks under the feet, back to the ground")
+    (is (= :stairs-up (:intent/kind (ppit/leave w))) "with no filler, a stair dug up")
+    (is (nil? (ppit/leave (assoc with-cobble :world/entities {7 angry}))) "not while one presses")
+    (testing "on the server model the pillar stands the feet on the ground"
+      (let [[pw _] (intent-run (ppit/leave with-cobble)
+                               dug
+                               62
+                               {[:hotbar 0] {:item (get blocks/items :cobblestone) :count 32}}
+                               20000)]
+        (is (= :done (:intent/status (:plan/intent pw))) (pr-str (:plan/intent pw)))
+        (is (>= (second (:player/pos pw)) 64.0) (pr-str (:player/pos pw)))))
+    (testing "on the server model the stair up stands the feet on the ground"
+      (let [[sw _] (intent-run (ppit/leave w)
+                               dug
+                               62
+                               {[:hotbar 0] {:item (get blocks/items :iron_pickaxe) :count 1}}
+                               60000)]
+        (is (= :done (:intent/status (:plan/intent sw))) (pr-str (:plan/intent sw)))
+        (is (>= (second (:player/pos sw)) 64.0) (pr-str (:player/pos sw)))))))

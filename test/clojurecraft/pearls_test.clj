@@ -483,7 +483,8 @@
                  :player/inventory {0 (ps/item :iron_sword 1) 1 (ps/item :diamond_pickaxe 1)})
         next (plan/next-intent w ps/row plan/goals)]
     (is (not= :fight (:intent/kind next)) "never starts a fight under danger-health")
-    (is (= :back-off (:intent/kind next)) "backs off from angry enderman when hurt")))
+    (is (= :dig (:intent/kind next))
+        "digs the pit out of its reach: no meal, wall or back-off beside a teleporter")))
 
 (deftest after-the-sword-is-remade-the-pickaxe-fetches-its-own-log
   ;; gym batch pearls-r3-w2 (plan run 40475390313) run 3: slain an hour and a half in
@@ -624,9 +625,9 @@
     (is (not= :defend
               (:goal/id (plan/choose (assoc at-mouth :plan/goals #{:ender-pearls}) plan/goals)))
         "the :defend row is done, so the hunt's walk home is not cut")
-    (is (= :defend
-           (:goal/id (plan/choose (assoc no-burrow :plan/goals #{:ender-pearls}) plan/goals)))
-        "and with no burrow it is :defend's turn as before")
+    (is (not= :defend
+              (:goal/id (plan/choose (assoc no-burrow :plan/goals #{:ender-pearls}) plan/goals)))
+        "and with no burrow too, in the pearl stage: :defend's fight took turns with the hunt's")
     (is (= {:intent/kind :walk :intent/target [8 61 8] :intent/for :shelter}
            (plan/next-intent at-mouth ps/row plan/goals))
         "and it walks home")

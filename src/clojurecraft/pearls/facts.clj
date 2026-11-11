@@ -72,6 +72,7 @@
    :home-sid (fn [_ w] (first (psense/home-striker w)))
    :pit-dig (fn [_ w] (ppit/dig w))
    :pit-hold (fn [_ w] (ppit/hold w))
+   :pit-leave (fn [_ w] (ppit/leave w))
    :swarmed? (fn [_ w] (psense/swarmed? w))
    :cornered? (fn [f w] (and (f :near?) (f :eid) (avoided/noted? w :cornered (f :eid))))
    :blocking (fn [f w] (when (f :at-end?) (psense/blocking w)))

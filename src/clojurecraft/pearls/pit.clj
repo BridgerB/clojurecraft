@@ -13,6 +13,7 @@
             [clojurecraft.blaze :as blaze]
             [clojurecraft.combat :as combat]
             [clojurecraft.entity :as entity]
+            [clojurecraft.filler :as filler]
             [clojurecraft.intent :as intent]
             [clojurecraft.path :as path]
             [clojurecraft.pearls.params :as pparams]
@@ -120,3 +121,27 @@
           (some-> (blaze/meal world)
                   (assoc :intent/for :pearls))
           {:intent/kind :lookout :intent/for :pearls}))))
+
+(defn open-above?
+  "Are the two cells over the head of the feet [x y z] clear (path/classify): the pit's mouth and
+   the cell over it, where the bot stands once out?"
+  [world [x y z]]
+  (every? #(= :clear (path/classify world [x % z])) [(+ y 2) (+ y 3)]))
+
+(defn leave
+  "The way out of a pit nobody presses any more (in-pit?, open above, not pressed?, not the
+   burrow's end): a pillar of two of the filler held (filler/pick), a block under the feet at the
+   top of each jump, back to the ground; with no filler, a stair dug up to that height
+   (:stairs-up). Nil otherwise. The next walk never routes out of a hole one wide and two deep."
+  [world]
+  (let [[_ y _ :as feet] (intent/feet world)]
+    (when (and (in-pit? world)
+               (open-above? world feet)
+               (not= feet (:pearls/shelter world))
+               (not (pressed? world)))
+      (if-let [item (filler/pick world 2)]
+        {:intent/kind :pillar :intent/item item :intent/top (+ y 2) :intent/for :pearls}
+        {:intent/kind :stairs-up
+         :intent/to-y (+ y 2)
+         :intent/to-height? true
+         :intent/for :pearls}))))

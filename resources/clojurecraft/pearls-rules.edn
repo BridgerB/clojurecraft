@@ -100,6 +100,11 @@
   ;; in the pit with an enderman pressing: heal there, and fight its legs from there only at
   ;; resume-hp (pearls/pit)
   {:rule/id :hunt/pit-hold :rule/phase :survive :rule/when [:pit-hold] :rule/then [:fact :pit-hold]}
+  ;; out of the pit once nobody presses it: two blocks under the feet, or a stair up (pearls/pit)
+  {:rule/id :hunt/pit-leave
+   :rule/phase :survive
+   :rule/when [:pit-leave]
+   :rule/then [:fact :pit-leave]}
   ;; struck by an enderman (on the way home too), the bot fights back where it stands, never walking on
   ;; under its hits; hurt, the walk home goes on (the burrow is the answer under danger-health)
   {:rule/id :hunt/fight-back-struck
