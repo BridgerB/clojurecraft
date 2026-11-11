@@ -243,6 +243,7 @@
 (def brute-grid (:brute-grid thresholds))
 
 (def forest-reach (:forest-reach thresholds))
+(def boxed-memory-ms (:boxed-memory-ms thresholds))
 
 (def fortress-escape-reach
   "Blocks from every known spawner and fortress brick beyond which the bot is clear

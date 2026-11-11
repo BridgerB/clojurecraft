@@ -182,6 +182,9 @@
  :explore-memory 6
  ;; chunks round the feet's own within which the bot is in a warped forest
  :forest-reach 2
+ ;; ms a staircase or tunnel boxed from the feet keeps the hunt's ways out (climb-out, tunnel-out,
+ ;; dig-out, descend, ascend, bore, cut-out) from trying there again (move/boxed-here?)
+ :boxed-memory-ms 300000
  ;; blocks ahead along the heading a bore targets: past the tunnel's reach (1.5), one step at a time replanned
  :bore-reach 4
  ;; blocks from the feet within which a held exit target is reached
