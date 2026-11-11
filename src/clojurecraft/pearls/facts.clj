@@ -216,7 +216,9 @@
    :hurt-or-blocked (fn [f _] (or (f :hurt?) (and (f :in?) (f :bid))))
    :lured-out? (fn [_ w] (psense/lured-out? w))
    :lure? (fn [_ w] (psense/lure? w))
-   :aid-or-angry-within? (fn [f w] (or (f :aid) (psense/angry-within? w pparams/hold-radius)))
+   :aid-or-angry-within? (fn [f w]
+                           (and (not (psense/angry-wait-over? w))
+                                (or (f :aid) (psense/angry-within? w pparams/hold-radius))))
    :crowded? (fn [_ w] (psense/crowded? w))
    :vantage-or-lookout (fn [f w] (or (pplace/vantage w (f :far)) lookout))
    :unseal (fn [f w] (pcover/unseal w (f :mouth)))

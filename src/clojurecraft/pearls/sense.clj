@@ -122,6 +122,14 @@
                                                             pparams/fight-giveup-ms))
                               pparams/fight-giveups)))))))
 
+(defn angry-wait-over?
+  "Has the bot stood angry-wait-lookouts lookouts or more since its last fight ended (or, with
+   none, since its burrow was cut: memory/done-since)? Then an angry enderman near that never came
+   holds it looking out no more, and the hunt goes on from the burrow."
+  [world]
+  (>= (or (memory/done-since world :lookout :fight) (memory/done-since world :lookout :burrow) 0)
+      pparams/angry-wait-lookouts))
+
 (defn lured-out?
   "Has the bot walked lure-tries times out to its burrow's mouth and back since the burrow was cut
    (memory/done-since: two :walk intentions done a lure, every walk since the burrow counted), so

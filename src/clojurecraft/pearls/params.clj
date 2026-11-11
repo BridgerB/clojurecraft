@@ -170,6 +170,11 @@
 
 (def hold-patience-ms (:hold-patience-ms thresholds))
 
+(def angry-wait-lookouts
+  "Lookouts since the last fight after which an angry one that never came holds no more
+   (pearls.edn :angry-wait-lookouts)."
+  (:angry-wait-lookouts thresholds))
+
 (def struck-health (:struck-health thresholds))
 
 (def swarm-radius (:swarm-radius thresholds))
