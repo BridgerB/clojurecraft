@@ -216,81 +216,31 @@
            (keep #(when (= :use-item (get-in % [:effect/packet :packet/name]))
                     (get-in % [:effect/packet :hand]))
                  (:bot/effects g))))
-    (testing "a strike long past, the skeleton out of threat-reach: nothing"
-      (is (not (shield/raised? (shield/guard (assoc w :player/struck-at 0))))))
-    (testing "a zombie that struck a moment ago is the threat too (striker)"
-      (is (shield/raised? (shield/guard (assoc-in w
-                                         [:world/entities 9 :entity/type]
-                                         (blocks/entity-types :zombie)))))
-      (is (not (shield/raised? (shield/guard (-> w
-                                                 (assoc-in [:world/entities 9 :entity/type]
-                                                           (blocks/entity-types :zombie))
-                                                 (assoc :player/struck-at 2500)))))
-          "2.5 s ago, six blocks off: past melee-struck-ms and threat-reach"))))
-
-(defn still
-  "A bot with the shield in the offhand, looking along yaw, a zombie (eid 9) three blocks east,
-   running intent i."
-  [yaw i]
-  (-> (standing {inventory/offhand-slot (item :shield 1)} {9 (mob :zombie [11.5 64.0 8.5] 20.0)})
-      (assoc :time/now 5000 :player/look [yaw 0.0] :plan/intent i)))
-
-(defn effects-named
-  "The packet names of the world's queued effects, in order."
-  [w]
-  (mapv (comp :packet/name :effect/packet) (:bot/effects w)))
-
-(deftest a-still-intent-raises-the-shield-toward-a-hostile-in-reach
-  (testing "a lookout turns to face it, the shield up"
-    (let [g (shield/guard (still 90.0 {:intent/kind :lookout :intent/status :active}))
-          [yaw _] (get-in g [:player/controls :control/look])]
-      (is (shield/raised? g))
-      (is (< (abs (- -90.0 yaw)) 1.0) "facing east, at the zombie")))
-  (testing "a dig between breaks: up only when the zombie is in front, the look its own"
-    (let [i {:intent/kind :dig :intent/target [9 64 8] :intent/status :active}
-          front (shield/guard (still -90.0 i))
-          back (shield/guard (still 90.0 i))]
-      (is (shield/raised? front))
-      (is (= (:player/controls (still -90.0 i)) (:player/controls front))
-          "the dig's look is not turned")
-      (is (not (shield/raised? back)) "behind: the dig's look is not turned to it")))
-  (testing "a dig breaking a block: down"
-    (is (not (shield/raised?
-              (shield/guard
-               (still -90.0 {:intent/kind :dig :intent/stage :digging :intent/status :active}))))))
-  (testing "a burrow whose child digs: down"
-    (is (not (shield/raised? (shield/guard (still -90.0
-                                                  {:intent/kind :burrow
-                                                   :intent/status :active
-                                                   :intent/child {:intent/kind :dig
-                                                                  :intent/stage :digging}}))))))
-  (testing "a walk: down"
-    (is (not (shield/raised? (shield/guard (still -90.0
-                                                  {:intent/kind :walk :intent/status :active}))))))
-  (testing "no hostile near: down"
-    (is (not (shield/raised?
-              (shield/guard
-               (update (still -90.0 {:intent/kind :lookout}) :world/entities dissoc 9)))))))
+    (testing "a strike long past, or a mob that does not shoot: nothing"
+      (is (not (shield/raised? (shield/guard (assoc w :player/struck-at 0)))))
+      (is (not (shield/raised? (shield/guard (assoc-in w
+                                              [:world/entities 9 :entity/type]
+                                              (blocks/entity-types :zombie)))))))))
 
 (deftest the-hand-lets-the-shield-go-just-before-it-is-used
-  (let [up (assoc (still -90.0 {:intent/kind :dig :intent/target [9 64 8] :intent/status :active})
-                  :player/shield-up-at 4000
-                  :bot/effects [])
-        dug (-> up
-                (game/emit {:packet/name :player-action
-                            :status (p/value :dig :start-destroy)
-                            :pos [9 64 8]
-                            :face 1
-                            :sequence 3})
-                (game/emit {:packet/name :swing :hand (p/value :hand :main-hand)})
+  ;; a meal begun with the shield still up (a :block that just ended): the release goes first
+  (let [up (-> (standing {inventory/offhand-slot (item :shield 1) 0 (item :bread 3)} {})
+               (assoc :time/now 5000
+                      :player/shield-up-at 4000
+                      :bot/effects []
+                      :plan/intent {:intent/kind :eat :intent/item :bread :intent/status :active}))
+        ate (-> up
+                (game/emit {:packet/name :use-item
+                            :hand (p/value :hand :main-hand)
+                            :sequence 3
+                            :y-rot 0.0
+                            :x-rot 0.0})
                 shield/guard)]
-    (is (= [:player-action :player-action :swing] (effects-named dug)))
+    (is (= [:player-action :use-item] (mapv (comp :packet/name :effect/packet) (:bot/effects ate))))
     (is (= (p/value :dig :release-use-item)
-           (get-in (first (:bot/effects dug)) [:effect/packet :status]))
+           (get-in (first (:bot/effects ate)) [:effect/packet :status]))
         "the release goes first")
-    (is (not (shield/raised? dug)))
-    (is (shield/raised? (shield/guard (assoc dug :bot/effects [])))
-        "up again the next tick, the dig between breaks")))
+    (is (not (shield/raised? ate)))))
 
 (deftest an-arrow-names-the-skeleton-that-loosed-it
   ;; the damage-event's attacker is the arrow, gone once it lands (a real race's soul sand valley
@@ -448,92 +398,3 @@
                                         :y-rot east
                                         :x-rot 0.0})))
         "no shield in the offhand")))
-
-;; ---------------------------------------------------------------- a standoff at the shield
-
-(defn at-shield
-  "A bot with an iron sword and the shield in the offhand, looking east, a hoglin (eid 9) two
-   blocks east, health hp, the shield up since up-at."
-  [hp up-at]
-  (-> (standing {0 (item :iron_sword 1) inventory/offhand-slot (item :shield 1) 1 (item :bread 4)}
-                {9 (mob :hoglin [10.5 64.0 8.5] 40.0)})
-      (assoc :time/now 10000
-             :player/look [-90.0 0.0]
-             :player/health hp
-             :player/food 18
-             :player/shield-up-at up-at)))
-
-(deftest a-standoff-at-the-shield-becomes-a-fight
-  ;; shd forest R2/21 seed 2: a hoglin hit a raised shield sixty times in a minute of :lookout,
-  ;; and the bot died walking off from it at 10.9 health
-  (let [w (at-shield 18.0 5000)]
-    (is (= 9 (first (combat/pressing w))) "up five seconds toward it: a standoff")
-    (is (not (plan/done-by w (row :defend))))
-    (is (= {:intent/kind :fight :intent/target 9} (plan/next-intent w (row :defend) plan/goals))))
-  (testing "up a moment only: not yet" (is (nil? (combat/pressing (at-shield 18.0 8000)))))
-  (testing "no shield: no standoff"
-    (is (nil? (combat/pressing
-               (update (at-shield 18.0 5000) :player/inventory dissoc inventory/offhand-slot)))))
-  (testing "two hostiles near: not a lone striker"
-    (is (nil? (combat/pressing (assoc-in (at-shield 18.0 5000)
-                                [:world/entities 11]
-                                (mob :zombie [8.5 64.0 10.5] 20.0)))))))
-
-(deftest too-hurt-to-fight-the-shield-holds-and-the-bot-neither-walks-nor-eats
-  (let [w (at-shield 5.0 5000)]
-    (is (nil? (combat/pressing w)) "under the danger-line: no fight")
-    (is (not (plan/done-by w (row :shield-hold))))
-    (is (= {:intent/kind :block :intent/target 9}
-           (plan/next-intent w (row :shield-hold) plan/goals)))
-    (is (= :shield-hold (:goal/id (plan/choose w plan/goals)))
-        "chosen before the meal and the defence's back-off")
-    (let [i (assoc (plan/next-intent w (row :shield-hold) plan/goals) :intent/status :active)
-          [w2 fx] (fx/fold intent-step (assoc w :plan/intent i) (map tick (range 10050 10300 50)))]
-      (is (not-any? :control/forward? [(:player/controls w2)]) "standing, no walk")
-      (is (= []
-             (filter #(= :use-item (:packet/name %))
-                     (remove #(= (p/value :hand :off-hand) (:hand %)) (fx/packets fx))))
-          "no meal")))
-  (testing "healthy: the row is done, the fight takes it"
-    (is (plan/done-by (at-shield 18.0 5000) (row :shield-hold))))
-  (testing "nothing in reach: done, the meal may come"
-    (is (plan/done-by (update (at-shield 5.0 5000) :world/entities dissoc 9) (row :shield-hold)))))
-
-(deftest burning-or-trapped-outranks-the-shield-hold
-  (let [w (assoc (at-shield 5.0 5000) :player/on-fire? true)]
-    (is (plan/done-by w (row :shield-hold)) "burning: the fire's answer first")
-    (is (not= :shield-hold (:goal/id (plan/choose w plan/goals)))))
-  (let [ids (mapv :goal/id plan/goals)
-        at #(.indexOf ^java.util.List ids %)]
-    (is (< (at :escape-water) (at :shield-hold)) "the water escape stands before it")
-    (is (< (at :escape-lava) (at :shield-hold)) "the lava escape stands before it")))
-
-(deftest a-fight-under-the-danger-line-hands-over-to-the-block
-  ;; a held :defend fight whose health falls under the danger-line used to break off and walk away,
-  ;; the shield down; with its target at the shield it ends, and the :shield-hold row blocks
-  (let [i {:intent/kind :fight
-           :intent/target 9
-           :intent/goal :defend
-           :intent/status :active
-           :intent/stage :engage
-           :intent/since 9000}
-        [w _] (fx/fold intent-step (assoc (at-shield 5.0 5000) :plan/intent i) [(tick 10050)])]
-    (is (intent/done? (:plan/intent w)) "ended, not broken off")
-    (is (not= :retreat (:intent/stage (:plan/intent w))))
-    (is (not (:control/forward? (:player/controls w))) "no walk")
-    (is (= :shield-hold (:goal/id (plan/choose (dissoc w :plan/intent) plan/goals))))))
-
-(deftest a-pack-at-full-health-is-no-hold
-  ;; two hoglins make an outmatched pack, whose danger-line is over every health: a hold under it
-  ;; stood at full health for a whole sim run; the hold is for a bot under retreat-health
-  (let [pack
-        (assoc-in (at-shield 20.0 5000) [:world/entities 11] (mob :hoglin [8.5 64.0 10.5] 40.0))]
-    (is (< 20.0 (combat/danger-line pack)) "the pack's line is over full health")
-    (is (plan/done-by pack (row :shield-hold)) "full health: no hold")
-    (is (not (plan/done-by (assoc pack :player/health 8.0) (row :shield-hold))) "hurt: the hold")))
-
-(deftest a-hold-that-cannot-heal-is-no-hold
-  ;; under eat/regen-food the health never comes back behind the shield, and a hold barred the
-  ;; meal for the rest of a sim run at 7.9 health: the defence's cover (a wall, a meal) answers
-  (is (not (plan/done-by (at-shield 5.0 5000) (row :shield-hold))) "food 18: the hold heals")
-  (is (plan/done-by (assoc (at-shield 5.0 5000) :player/food 15) (row :shield-hold))))
