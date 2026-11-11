@@ -387,10 +387,20 @@
          (not (and (= tx fx) (= tz fz)))
          (<= 0 (- (long ty) (long fy)) intent/pickup-rise))))
 
+(defn beside-walk
+  "The walk to a stand beside the table at pos, where its drop lands in the pickup box (path's
+   :pickup goal), for :take-table: chain-next digs and collects after it."
+  [pos]
+  {:intent/kind :walk :intent/target pos :intent/for :take-table :intent/pickup? true})
+
 (defn take-table-along
   "A dig of the bot's placed crafting table, to carry it on, when no table is held and the
-   remembered one is within reach; nil otherwise. From a stand beside it (beside?) only: else first
-   the walk there by a route (:intent/pickup?, chain-next digs and collects after it). With every
+   remembered one is within reach; nil otherwise. From a stand beside it (beside?) when there is a
+   route to one: else first the walk there (:intent/pickup?, chain-next digs and collects after
+   it). With no route to a stand beside it, dug from where the bot stands, as before: a walk with
+   no route fails :no-path at once, and its failure blacklists the table, which near then forgets
+   (real stage-18 Clj_r44 on 702221d, in its own stair 3 cells from the table: the walk failed in
+   55 ms and the table was left with 8 sticks and no pickaxe to come). With every
    slot full the dig waits for a :toss of junk (window/tossable), or for :inventory-full when none
    can go, the table left standing: the table's drop needs an empty slot, and the pickaxe crafted
    at it took the one the table left."
@@ -400,8 +410,10 @@
                (zero? (get (counts world) :crafting_table 0))
                (<= (physics/distance (game/eye world) (physics/centre pos)) intent/reach))
       (let [v (window/view world :inventory)]
-        (cond (and (window/free-slot world v) (not (beside? world pos)))
-              {:intent/kind :walk :intent/target pos :intent/for :take-table :intent/pickup? true}
+        (cond (and (window/free-slot world v)
+                   (not (beside? world pos))
+                   (intent/routable? world (beside-walk pos)))
+              (beside-walk pos)
               (window/free-slot world v)
               {:intent/kind :dig :intent/target pos :intent/for :take-table}
               (window/tossable world v) {:intent/kind :toss}
