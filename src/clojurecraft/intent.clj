@@ -869,14 +869,21 @@
    :intent/for :collect
    :intent/status :active})
 
+(def route-fors
+  "The purposes (:intent/for) of the collects that walk a route to a stuck drop (route-stalled):
+   the table taken along. Other collects steer straight as they did, so a recorded run replays to
+   the RESULT it printed (recordings_test: the wood gym's log collects stall and then pick up)."
+  #{:take-table})
+
 (defn route-stalled
   "One tick of a collect's pickup-route, or nil when there is none to run: the world with the
    child walked (run-child); with it arrived, the child gone and the collect's clock and progress
    started again from here (:intent/routed? stays, so a second stall fails); with it failed, the
-   collect failed :not-picked-up. Starts the route when the collect has made no progress for
+   collect failed :not-picked-up. Starts the route, for a collect of route-fors only, when the
+   collect has made no progress for
    collect-stall-ticks, has not routed before, and the drop is still out of the pickup box: more
    than 0.4 off on the plane, or more than leaf-drop under the feet."
-  [world {:intent/keys [child routed? best-tick]} goal d event]
+  [world {:intent/keys [child routed? best-tick] purpose :intent/for} goal d event]
   (let [tick (:time/tick world)
         now (:time/now world)]
     (cond (and child (done? child))
@@ -887,6 +894,7 @@
           (and child (failed? child)) (fail (assoc world :player/controls {}) :not-picked-up)
           child (run-child world event)
           (and (not routed?)
+               (contains? route-fors purpose)
                best-tick
                (> (- tick best-tick) collect-stall-ticks)
                (or (> d 0.4) (< leaf-drop (- (physics/y-of (:player/pos world)) (nth goal 1)))))

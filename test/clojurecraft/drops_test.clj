@@ -101,16 +101,20 @@
 (deftest a-drop-behind-a-wall-is-reached-by-a-route
   ;; Issue #263, real stage-18 Clj_r40 on 5d894db: its table's drop lay 3 blocks off behind two
   ;; netherrack cells, the collect steered straight at it, and failed :not-picked-up four times.
-  ;; Stalled out of straight reach, the collect walks a route to the drop's cell once (here round
-  ;; the end of a wall two high), then collects again
+  ;; Stalled out of straight reach, a collect of the table walks a route to the drop's cell once
+  ;; (here round the end of a wall two high), then collects again
   (let [stone (blocks/default-state :stone)
         wall (into {} (for [z (range 0 13) y [64 65]] [[10 y z] stone]))
-        w (assoc (standing {40 (drop-of [12.5 64.0 8.5] :blaze_rod)})
-                 :world/chunks
-                 {[0 0] (world/column wall)})
+        w (-> (standing {40 (drop-of [12.5 64.0 8.5] :blaze_rod)})
+              (assoc :world/chunks {[0 0] (world/column wall)})
+              (assoc-in [:plan/intent :intent/for] :take-table))
+        straight (assoc-in w [:plan/intent :intent/for] :pearls)
         [routed _] (fx/fold intent-step w (map tick (range 50 2600 50)))]
     (is (= :active (:intent/status (:plan/intent routed))))
     (is (true? (:intent/routed? (:plan/intent routed))) "stalled at the wall: a route is walked")
     (is (= :walk (get-in routed [:plan/intent :intent/child :intent/kind]))
         "a walk by a route to the drop's cell")
-    (is (true? (get-in routed [:plan/intent :intent/child :intent/pickup?])))))
+    (is (true? (get-in routed [:plan/intent :intent/child :intent/pickup?])))
+    (is (nil? (:intent/routed?
+               (:plan/intent (first (fx/fold intent-step straight (map tick (range 50 2600 50)))))))
+        "a collect for another purpose steers straight as before (intent/route-fors)")))
