@@ -11,6 +11,7 @@
             [clojurecraft.make :as make]
             [clojurecraft.memory :as memory]
             [clojurecraft.pearls.params :as pparams]
+            [clojurecraft.pearls.upkeep :as pupkeep]
             [clojurecraft.picks :as picks]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
@@ -306,6 +307,34 @@
     (is (plan/done-by (assoc stocked :plan/ended (assoc ended :ended/at 99000)) row)
         "a pickup just ended with nothing lying and nothing to start: done, the hunt goes on")))
 
+(deftest a-table-placed-for-a-craft-is-not-taken-before-it
+  ;; Issue #263, real stage-18 lane 1 batch 4 on 5d894db, Clj_r10: no stone, 8 sticks, 6 planks and
+  ;; 3 stems held; the pearl hunt placed its table to make a pickaxe, this row (pending for any
+  ;; table placed and not held) preempted it and dug the table up before the craft, and the hunt
+  ;; placed it again: every 8 s for 25 minutes, 406 make-pickaxe intents and no pickaxe
+  (let [table-id (blocks/default-state :crafting_table)
+        at [9 64 8]
+        base (-> (sealed-pocket-world [(item :blaze_rod 7) (item :stick 8) (item :crimson_planks 4)
+                                       (item :crimson_stem 3) (item :netherrack 281)])
+                 (assoc-in [:world/chunks [0 0]] (world/column (assoc pocket-walls at table-id)))
+                 (memory/observe at table-id)
+                 (assoc :time/now 1000)
+                 (memory/remember-intention {:intent/id 1 :intent/kind :craft} :done)
+                 (assoc :time/now 2000)
+                 (memory/remember-intention {:intent/id 2 :intent/kind :place :intent/target at}
+                                            :done)
+                 (assoc :time/now 2500))
+        crafted (-> base
+                    (assoc :time/now 3000)
+                    (memory/remember-intention {:intent/id 3 :intent/kind :craft} :done))
+        row (first (filter #(= :spare-picks (:goal/id %)) plan/goals))]
+    (is (picks/craft-owed? base at) "placed after the last craft: a craft is owed there")
+    (is (not (picks/placed-table? base)) "so it is no table to take along")
+    (is (not (picks/table-needed? base)))
+    (is (plan/done-by base row) "and this row leaves it to the craft")
+    (is (not (picks/craft-owed? crafted at)) "once a craft ended after the place")
+    (is (picks/placed-table? crafted) "the table is taken along as before")))
+
 (deftest a-spare-never-takes-the-last-pickaxes-sticks
   ;; Issue #263: 21 of the 43 no-pickaxe endings of the real stage-18 lanes on 5d894db held a
   ;; crafting table and 99 to 209 cobblestone and no stick, plank or stem (r4-b8 Clj_r39: table 1,
@@ -326,6 +355,38 @@
     (is (picks/spare-wood? (bag (item :stick 2) (item :warped_planks 1)))
         "a plank is two sticks: the spare takes the sticks, the plank stays")
     (is (picks/spare-wood? (bag (item :stick 2) (item :warped_stem 1))) "a stem is eight")
-    (is (= 8 (picks/wood-sticks (bag (item :crimson_stem 1)))))
+    (is (= 8 (pupkeep/wood-sticks (bag (item :crimson_stem 1)))))
     (is (picks/spare-wood? (update (bag (item :stick 2)) :player/inventory dissoc 5))
         "with no pickaxe held the next one is no spare: it takes what there is")))
+
+(deftest a-tunnel-to-a-forest-keeps-one-pickaxes-digs-for-the-hunt
+  ;; real Clj_r53 (botlogs 2026-11-10-17, 42812754059-r2-b10) and 15 more on 5d894db: every stick
+  ;; crafted into stone pickaxes and every pickaxe worn out on :tunnel-to legs toward forests never
+  ;; reached (1,146 digs in 34 minutes inside a hundred blocks), then 15 minutes of lookouts with no
+  ;; pickaxe and no wood
+  (let [bag (fn [& held] (standing-nether (into [(item :blaze_rod 7) (item :iron_sword 1)] held)))]
+    (is (= 131 pparams/travel-reserve-digs) "one stone pickaxe's digs")
+    (is (= 131 (picks/dig-budget (bag (item :stone_pickaxe 1)))) "a fresh stone pickaxe")
+    (is (= (* 3 131)
+           (picks/dig-budget (bag (item :stone_pickaxe 1)
+                                  (item :crafting_table 1)
+                                  (item :stick 4)
+                                  (item :cobblestone 64))))
+        "and two more the table, four sticks and the stone make")
+    (is (= 131
+           (picks/dig-budget (bag (item :stone_pickaxe 1) (item :stick 4) (item :cobblestone 64))))
+        "with no table the sticks make nothing")
+    (is (= 0 (picks/dig-budget (bag (item :crafting_table 1) (item :cobblestone 64))))
+        "no pickaxe and no wood: nothing to dig with")
+    (is (picks/tunnel-budget? (bag (item :stone_pickaxe 1)
+                                   (item :crafting_table 1)
+                                   (item :stick 2)
+                                   (item :cobblestone 64))))
+    (is (not (picks/tunnel-budget?
+              (bag (item :crafting_table 1) (item :stick 1) (item :cobblestone 64))))
+        "a last stick and no pickaxe: the travel walks")))
+
+(deftest wood-under-the-floor-sends-the-bot-to-a-stem-it-remembers
+  (is (= 8 pparams/stick-floor) "one stem's sticks")
+  (is (< (pupkeep/wood-sticks (standing-nether [(item :stick 6)])) pparams/stick-floor))
+  (is (>= (pupkeep/wood-sticks (standing-nether [(item :crimson_stem 1)])) pparams/stick-floor)))

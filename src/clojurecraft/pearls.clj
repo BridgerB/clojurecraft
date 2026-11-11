@@ -42,6 +42,7 @@
             [clojurecraft.pearls.rules :as rules]
             [clojurecraft.pearls.sense :as psense]
             [clojurecraft.physics :as physics]
+            [clojurecraft.picks :as picks]
             [clojurecraft.plan :as plan]))
 
 (set! *warn-on-reflection* true)
@@ -265,9 +266,19 @@
 
 (defmethod intent/still-wanted? :hunt/escape-tunnel-out [world i] (not (target-avoided? world i)))
 
-(defmethod intent/still-wanted? :hunt/travel [world i] (not (target-avoided? world i)))
+(defn budget-kept?
+  "Is intent i no tunnel, or a tunnel with digs to spare past the hunt's (picks/tunnel-budget?)?
+   A running leg toward a forest or along the heading is cut when the budget crosses the reserve."
+  [world i]
+  (or (not= :tunnel-to (:intent/kind i)) (picks/tunnel-budget? world)))
 
-(defmethod intent/still-wanted? :hunt/heading [world i] (not (target-avoided? world i)))
+(defmethod intent/still-wanted? :hunt/travel
+  [world i]
+  (and (not (target-avoided? world i)) (budget-kept? world i)))
+
+(defmethod intent/still-wanted? :hunt/heading
+  [world i]
+  (and (not (target-avoided? world i)) (budget-kept? world i)))
 
 (defmethod plan/held-goal? :pearls
   ;; with an angry enderman within hold-radius and a burrow held, the hunt waits inside: the stuck

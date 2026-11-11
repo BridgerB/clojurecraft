@@ -18,6 +18,7 @@
               [clojurecraft.evidence-test]
               [clojurecraft.fleet-test]
               [clojurecraft.inspect-test]
+              [clojurecraft.jfr-test]
               [clojurecraft.lanes-test]
               [clojurecraft.server-test]
               [clojurecraft.page-test]
@@ -28,6 +29,7 @@
                                                   'clojurecraft.evidence-test
                                                   'clojurecraft.fleet-test
                                                   'clojurecraft.inspect-test
+                                                  'clojurecraft.jfr-test
                                                   'clojurecraft.lanes-test
                                                   'clojurecraft.server-test
                                                   'clojurecraft.page-test
@@ -83,6 +85,11 @@
    "Where a race runner's CPU goes: bb inspect sample <out-dir> | profile <k> <rcon-port> <pass> <world> <out-dir> <minute>..."
    :requires ([clojurecraft.inspect :as inspect])
    :task (apply inspect/-main *command-line-args*)}
+  jfr
+  {:doc
+   "Where a race JVM's CPU goes, from its flight recording: bb jfr summary <recording.jfr> <out.txt>"
+   :requires ([clojurecraft.jfr :as jfr])
+   :task (apply jfr/-main *command-line-args*)}
   page
   {:doc
    "The results' data (issue #116): round <dir> <kind> <run> <commit> <at> | wall <dir> | publish <round.edn>"

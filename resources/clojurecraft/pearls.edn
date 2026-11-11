@@ -162,6 +162,10 @@
  ;; sticks of the last pickaxe's replacement. 21 of the 43 no-pickaxe endings of the real
  ;; stage-18 lanes on 5d894db held a table, stone and no wood at all, every stick crafted into spares
  :spare-wood-reserve 2
+ ;; the dig-budget (picks/dig-budget: digs left in the held pickaxes and in the stone pickaxes the held wood and stone make) a tunnel to a forest or along the heading leaves: one stone pickaxe's digs, kept for the hunt's burrows and its ways out. Real stage-18 bots bored every pickaxe out toward forests they never reached, then stood 15 minutes with no pickaxe and no wood
+ :travel-reserve-digs 131
+ ;; wood, in sticks (a plank two, a log or stem eight), under which any stem the near band remembers is cut on the way (upkeep/reserve-gather): one stem's eight, two pickaxes' sticks
+ :stick-floor 8
  ;; ms after a walk into cover from a shooter in which no other such walk is begun: the cover is held
  :hide-hold-ms 5000
  ;; the hit (mob/kinds :melee) at or under which a mob is fought at hand with no burrow: a zombie's 3, a spider's 2

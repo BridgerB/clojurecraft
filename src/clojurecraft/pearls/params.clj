@@ -179,6 +179,12 @@
 
 (def swarm-radius (:swarm-radius thresholds))
 
+; the dig-budget a tunnel to a forest or along the heading leaves (pearls.edn)
+(def travel-reserve-digs (:travel-reserve-digs thresholds))
+
+; wood, in sticks, under which any stem the near band remembers is cut on the way (pearls.edn)
+(def stick-floor (:stick-floor thresholds))
+
 (def at-hand
   "{kind {:radius :alone :min-health :hold? :yield?}}: the lone melee foes the hunt fights rather than covers from
    (pearls.edn :at-hand, cover/lone-fight)."

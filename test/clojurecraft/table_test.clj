@@ -5,6 +5,7 @@
             [clojurecraft.blocks :as blocks]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
+            [clojurecraft.intent :as intent]
             [clojurecraft.make :as make]
             [clojurecraft.memory :as memory]
             [clojurecraft.picks :as picks]
@@ -133,3 +134,22 @@
         "the row's step is none: the table stays, the plan goes on")
     (is (= :dig (:intent/kind (picks/take-table-step (beside-table crafted))))
         "with a slot free, the dig")))
+
+(deftest the-table-is-dug-only-from-beside-it
+  ;; Issue #263: 17 of the 20 tableless no-pickaxe endings of the real stage-18 lanes on 5d894db
+  ;; dug their table from anywhere in reach, and its drop lay where no straight collect reached:
+  ;; Clj_r40 3 blocks off at its height through rock, Clj_r30 3 off and a block up on a shelf,
+  ;; Clj_r46 2 under its feet down a pit. The take-along walks a route to a stand beside it first
+  (let [from (fn [pos] (assoc (beside-table crafted) :player/pos pos))
+        walk {:intent/kind :walk :intent/target at :intent/for :take-table :intent/pickup? true}]
+    (is (= :dig (:intent/kind (make/take-table-along (from [8.5 64.0 8.5]))))
+        "beside it at its height: dug where the drop lands in reach")
+    (is (= :dig (:intent/kind (make/take-table-along (from [8.5 63.0 7.5]))))
+        "a block under it, diagonally: still in reach of its drop")
+    (is (= walk (make/take-table-along (from [6.5 64.0 7.5]))) "3 off at its height, as Clj_r40")
+    (is (= walk (make/take-table-along (from [6.5 63.0 9.5])))
+        "a block under it and 3 off, as Clj_r30")
+    (is (= walk (make/take-table-along (from [9.5 66.0 9.5]))) "2 over it, as Clj_r46")
+    (is (= {:intent/kind :dig :intent/target at :intent/for :take-table}
+           (intent/chain-next walk :take-table make/table-drops {}))
+        "after the walk the chain digs it")))
