@@ -55,6 +55,7 @@ jobs:
       server-heap: ${{ steps.read.outputs.server-heap }}
       bot-heap: ${{ steps.read.outputs.bot-heap }}
       landing-stride: ${{ steps.read.outputs.landing-stride }}
+      jfr: ${{ steps.read.outputs.jfr }}
       start: ${{ steps.read.outputs.start }}
       kind: ${{ steps.read.outputs.kind }}
     steps:
@@ -154,6 +155,7 @@ jobs:
           RUNNER_N: ${{ matrix.runner }}
           START: ${{ inputs.start || needs.plan.outputs.start }}  # the lane's start (ci/lanes.edn), else '' keeps the default start
           KIND: ${{ needs.plan.outputs.kind }}  # the lane's page kind (ci/lanes.edn)
+          JFR: ${{ needs.plan.outputs.jfr }}    # the race JVM's flight recording settings, empty for none
         run: |
           races=""
           for k in $(seq 1 "$SERVERS"); do mkdir -p "data/race/s$k"; touch "data/race/s$k/race.log"; done
@@ -164,8 +166,11 @@ jobs:
             if [ "$SERVERS" -gt 1 ]; then server="--server $k"; fi
             start=""
             if [ -n "$START" ]; then start="--start $START"; fi
-            # shellcheck disable=SC2086 # $server and $start are two words or none
-            clojure -J-Xmx${{ needs.plan.outputs.bot-heap }}m "-J-Xlog:gc:file=$dir/gc.log:time,uptime" -M:race --config ci/race.edn --port $((25564 + k)) \
+            # a lane whose ci/race.edn entry has :race/jfr records its race JVM in flight (servers/jfr-of)
+            jfr=""
+            if [ -n "$JFR" ]; then jfr="-J-XX:StartFlightRecording=name=race,$JFR"; fi
+            # shellcheck disable=SC2086 # $server, $start and $jfr are words or none
+            clojure -J-Xmx${{ needs.plan.outputs.bot-heap }}m "-J-Xlog:gc:file=$dir/gc.log:time,uptime" $jfr -M:race --config ci/race.edn --port $((25564 + k)) \
               --rcon-port $((25574 + k)) --rcon-pass "$RCON_PASS" --record-dir "$dir" --commit "$GITHUB_SHA" \
               --seed "${{ steps.set.outputs.set }}" --runner ${{ matrix.runner }} $server $start \
               --landings "cache/worlds/${{ steps.set.outputs.set }}/landings.edn" \
@@ -184,6 +189,22 @@ jobs:
             bb inspect profile "$k" $((25574 + k)) "$RCON_PASS" "$PWD/work/world-$k" data/race/inspect \
               $((5 + 2 * (k - 1))) $((30 + 2 * (k - 1))) > "data/race/inspect/profile-$k.log" 2>&1 &
           done
+          # the race JVM's flight recording, on a lane that keeps one: its last 10 minutes dumped at
+          # minutes 30, 90 and 150 and summarised by part of the bot (bb jfr, bb/clojurecraft/jfr.clj),
+          # each as soon as it is dumped, so a cancelled lane keeps the ones it reached
+          if [ -n "$JFR" ]; then
+            (
+              t0=$(date +%s)
+              for m in 30 90 150; do
+                while [ $(( $(date +%s) - t0 )) -lt $(( m * 60 )) ]; do sleep 30; done
+                pid=$(jcmd | awk '/clojurecraft.race/ {print $1; exit}')
+                [ -n "$pid" ] || break
+                f="$PWD/data/race/inspect/race-min$m.jfr"
+                jcmd "$pid" JFR.dump name=race begin=-10m "filename=$f" || continue
+                bb jfr summary "$f" "data/race/inspect/race-min$m.txt" || true
+              done
+            ) > data/race/inspect/jfr.log 2>&1 &
+          fi
           code_at=$(git show -s --format=%cI "$GITHUB_SHA")
           report() {
             bb churn batch "$KIND" data/race "race-$GITHUB_SHA-$RUNNER_N" "$GITHUB_RUN_ID" "$GITHUB_SHA" "$code_at" "$RUNNER_N" \

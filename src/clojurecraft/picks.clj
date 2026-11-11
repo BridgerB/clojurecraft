@@ -135,11 +135,27 @@
                 (not (psense/menaced? world))
                 (or (not (fexit/near-fortress? world)) (sealed-in-fortress? world)))))
 
-(defn placed-table?
-  "Is the crafting table placed near but not held in the bag?"
+(defn craft-owed?
+  "Is a craft still owed at the table at pos: the bot's own :place of it ended :done after the
+   last craft that did (or with none done since)? Then the row that placed it crafts there next,
+   and the table is not taken along. On 5d894db Clj_r10 (real stage-18 lane 1, batch 4) had the
+   pearl hunt place its table to make a pickaxe, and this row, pending for any table placed and
+   not held, preempted it and dug the table up before the craft, every 8 s for 25 minutes."
+  [world pos]
+  (let [placed (memory/last-done-at world :place pos)
+        crafted (:intention/at (memory/last-done world :craft))]
+    (boolean (and placed (or (nil? crafted) (> (long placed) (long crafted)))))))
+
+(defn free-table
+  "The placed crafting table near the bot that no craft is owed at (craft-owed?), or nil."
   [world]
-  (boolean (and (zero? (long (get (make/counts world) :crafting_table 0)))
-                (make/near world :crafting_table))))
+  (when-let [pos (make/near world :crafting_table)] (when-not (craft-owed? world pos) pos)))
+
+(defn placed-table?
+  "Is a crafting table placed near, with no craft owed at it (free-table), and none held in the
+   bag?"
+  [world]
+  (boolean (and (zero? (long (get (make/counts world) :crafting_table 0))) (free-table world))))
 
 (defn table-room?
   "Is there room in the bag for the table to come back: a slot free, or a junk stack to throw
@@ -218,7 +234,7 @@
   (boolean (and (zero? (long (get (make/counts world) :crafting_table 0)))
                 (table-room? world)
                 (or (placing-table? world)
-                    (make/near world :crafting_table)
+                    (free-table world)
                     (= :take-table (:intent/for (:plan/intent world)))
                     (take-table-just-ended? world)
                     (seq (table-drops-near world))))))
