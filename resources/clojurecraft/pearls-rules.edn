@@ -207,6 +207,13 @@
    :rule/phase :upkeep
    :rule/when [[:not :hurt?] :worn-out-homeless?]
    :rule/then [:intent {:plan/wait :no-pickaxe}]}
+  ;; no pickaxe, caged in rock or stuck, and none made (the make-pickaxe row above holds the makings):
+  ;; every way out (dig-out, tunnel-out, climb-out, uncage) needs one, so the run ends :no-pickaxe
+  ;; now rather than standing its hour in lookouts
+  {:rule/id :pearls/no-pickaxe-caged
+   :rule/phase :upkeep
+   :rule/when [[:not :hurt?] :pickless-caged?]
+   :rule/then [:intent {:plan/wait :no-pickaxe}]}
   {:rule/id :pearls/toss-for-room
    :rule/phase :upkeep
    :rule/when [[:not :hurt?] :reserve-toss]
