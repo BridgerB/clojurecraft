@@ -70,7 +70,7 @@
     (is (= 10 (servers/landing-stride (dissoc bots-ab :race/lane-overrides))) "no lanes: its own")
     (is (= [14 10] (map #(servers/bots-of (servers/for-lane bots-ab %)) [1 2])))))
 
-(deftest the-shipped-lanes-split-each-start-and-set-into-both-arms
+(deftest every-shipped-lane-carries-one-server-and-fourteen-bots
   (let [lanes-cfg (edn/read-string (slurp "ci/lanes.edn"))
         gym (edn/read-string (slurp "ci/gym.edn"))
         sets (:race/landing-sets shipped)
@@ -78,9 +78,9 @@
         arm (fn [n] (servers/bots-of (servers/for-lane shipped n)))
         start (fn [n] (:lane/start (lanes/lane-of lanes-cfg :real n)))
         set-of (fn [n] (nth sets (mod (dec n) (count sets))))]
-    (is (= #{14 18} (set (map arm real))) "fourteen-bot and eighteen-bot lanes")
-    (doseq [[s ns] (group-by start real)] (is (= #{14 18} (set (map arm ns))) (str "start " s)))
-    (doseq [[s ns] (group-by set-of real)] (is (= #{14 18} (set (map arm ns))) (str "set " s)))
+    (is (= #{14} (set (map arm real))) "one arm: fourteen bots")
+    (is (= #{:rods :forest} (set (map start real))) "both starts still play")
+    (is (= 14 (servers/landing-stride shipped)))
     (doseq [n real
             :let [c (servers/for-lane shipped n)]]
       (is (= 1 (servers/servers-of c)) "every lane carries one server")

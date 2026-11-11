@@ -13,15 +13,11 @@
  :race/bot-heap-mb 3072 ; each race process's JVM
  ;; per server (by --server k): settings over clojurecraft.servers/defaults (simulation distance 3)
  :race/server-overrides {}
- ;; per lane (race.yml's runner): race keys over this file's own. An A/B of bots a server: lanes
- ;; 2 4 5 7 carry 18 bots (with a bigger race heap), the others 14, so each start (ci/lanes.edn:
- ;; rods 1-4, forest 5-8) and each landing set (lane r on set (r-1) mod 4) has both arms, and the
- ;; bigger arm sits on the other sets from the last A/B's. Lanes on a set are landing-stride
- ;; apart, the most landings any lane takes, so none overlap
+ ;; per lane (race.yml's runner): race keys over this file's own, for an A/B between lanes (both
+ ;; arms on lanes 1-6: the fleet gives lanes 7 and 8, above the real floor, back to waiting jobs).
+ ;; Lanes on a set are landing-stride apart, the most landings any lane takes, so none overlap.
+ ;; No bot-count A/B runs now: 18 bots ticked at a p50 of about 330 ms, too slow to reach 12 pearls
+ ;; in a lane, so every lane carries the file's 14
  ;; lane 1 also records its race JVM in flight (:race/jfr, servers/jfr-of): where the bots' CPU goes,
  ;; summarised by bb jfr; the recording's disk bounded, no other lane records
- :race/lane-overrides {1 {:race/jfr {:settings "default" :max-size-mb 256}}
-                       2 {:race/bots 18 :race/bot-heap-mb 4096}
-                       4 {:race/bots 18 :race/bot-heap-mb 4096}
-                       5 {:race/bots 18 :race/bot-heap-mb 4096}
-                       7 {:race/bots 18 :race/bot-heap-mb 4096}}}
+ :race/lane-overrides {1 {:race/jfr {:settings "default" :max-size-mb 256}}}}
