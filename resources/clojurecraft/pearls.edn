@@ -156,6 +156,10 @@
  ;; nearer before it holds the bot looking out, and its burrow from going stale, no more
  ;; (sense/waited-out?): one stood 15.8 blocks off, unhurt and unseen, for 546 lookouts
  :angry-wait-lookouts 24
+ ;; the burrow lengthened from its end until every parked-out angry enderman near is more than
+ ;; :beyond blocks off (place/draw-out), at most :max cells: past 16 an angry one's target goal
+ ;; teleports it toward the bot, so it comes in at the burrow
+ :draw {:beyond 16.5 :max 8}
  ;; health under which an enderman at hand has landed a hit (7 on Normal off 20): fought back, fought out or not
  :struck-health 14.0
  ;; blocks round the feet within which a standable cell out of a shooter's sight is looked for
