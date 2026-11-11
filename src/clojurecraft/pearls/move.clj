@@ -697,12 +697,25 @@
 
 ;;;; The heading: one long way when no forest is known and every other mover finds nothing
 
+(defn heading-floor
+  "The lowest y a heading leg may hold: heading-min-y and the lava floor, and while a fortress is
+   known (fexit/fortress-points) the fortress exit's surface (fexit/fortress-surface-y), never over
+   heading-max-y. Under the surface the fortress exit holds (fexit/fortress-escaping?: a bot below
+   it surfaces), so a leg held under it undid the exit: real Clj_r51 picked its heading at the
+   fortress, [1439 51 1344] at y 51, the exit climbed it to y 70, the leg tunnelled it back down,
+   the exit climbed it again, for most of an hour of :tunnel-to and no forest."
+  [world]
+  (min pparams/heading-max-y
+       (max pparams/heading-min-y
+            (pplace/lava-floor world)
+            (if (seq (fexit/fortress-points world)) (long (fexit/fortress-surface-y world)) 0))))
+
 (defn leg-from
   "The [x y z] cell heading-leg blocks ahead of feet along dir [dx dz], at the feet's own y held to
-   heading-min-y to heading-max-y (and over lava-floor)."
+   heading-floor to heading-max-y."
   [world [fx fy fz] [dx dz]]
   [(+ fx (* pparams/heading-leg dx))
-   (long (max (max pparams/heading-min-y (pplace/lava-floor world)) (min pparams/heading-max-y fy)))
+   (long (max (heading-floor world) (min pparams/heading-max-y fy)))
    (+ fz (* pparams/heading-leg dz))])
 
 (defn heading-target
@@ -766,8 +779,9 @@
    unseen ground ahead (most-unseen-dir; a tie goes to away from the fortress, fexit/fortress-exit-dir
    rounded to the nearer axis), its leg target kept at every act. A new leg target (leg-from, from
    the feet) only when the feet are within heading-arrived of it; when it is avoided (a leg
-   blocked) the heading turns a quarter, to the less-seen side, first; and after heading-span
-   blocks along the heading it is picked again. Dropped once a forest is known or off the Nether.
+   blocked) the heading turns a quarter, to the less-seen side, first; a target under the
+   heading-floor (a fortress exit surfaced the bot over it) is taken again from the feet; and after
+   heading-span blocks along the heading it is picked again. Dropped once a forest is known or off the Nether.
    The world as it was otherwise."
   [world]
   (let [nether? (= dimension/nether (dimension/of world))
@@ -794,7 +808,8 @@
             (assoc world
                    :pearls/heading
                    (assoc h :dir dir :target (leg-from world feet dir) :turns (inc (:turns h)))))
-          (<= (physics/horizontal-distance feet t) pparams/heading-arrived)
+          (or (< (second t) (heading-floor world))
+              (<= (physics/horizontal-distance feet t) pparams/heading-arrived))
           (assoc-in world [:pearls/heading :target] (leg-from world feet (:dir h)))
           :else world)))
 

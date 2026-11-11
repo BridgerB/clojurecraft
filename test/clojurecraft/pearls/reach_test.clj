@@ -13,6 +13,7 @@
             [clojurecraft.pearls-support :as ps]
             [clojurecraft.pearls.move :as pmove]
             [clojurecraft.pearls.params :as pparams]
+            [clojurecraft.pearls.place :as pplace]
             [clojurecraft.pearls.sense :as psense]
             [clojurecraft.world :as world]))
 
@@ -64,6 +65,32 @@
     (testing "dropped once a forest is known, and at a death"
       (is (not (contains? (pmove/reach-heading-hold (with-forest held [60 60])) :pearls/heading)))
       (is (not (contains? (game/die held) :pearls/heading))))))
+
+(deftest a-heading-leg-never-holds-the-bot-under-the-fortress-exits-surface
+  ;; Real Clj_r51 (issue #263): landed at a fortress, it picked its heading at y 51; the fortress
+  ;; exit surfaces a bot under fortress-surface-y (70: the spawner's height), so the exit climbed
+  ;; it to 70, the leg tunnelled it back down to 51, and the two took turns for most of an hour
+  (let [netherrack (blocks/default-state :netherrack)
+        rock (into {} (for [x (range 0 16) y (range 40 80) z (range 0 16)] [[x y z] netherrack]))
+        w (-> (ps/standing {} rock)
+              (assoc :player/dimension ps/nether :player/pos [8.5 51.0 8.5])
+              (assoc-in [:player/inventory 1] (ps/item :iron_pickaxe 1))
+              (memory/observe [2 70 2] blaze/spawner))
+        surface (long (fexit/fortress-surface-y w))
+        picked (:pearls/heading (pmove/reach-heading-hold w))
+        low (assoc-in (pmove/reach-heading-hold w) [:pearls/heading :target] [72 51 8])
+        surfaced (pmove/reach-heading-hold (assoc low :player/pos [8.5 70.0 30.5]))]
+    (is (= 70 surface) "the spawner's height")
+    (is (= surface (pmove/heading-floor w)))
+    (is (= surface (second (:target picked)))
+        "picked at y 51 under the surface: the leg holds y 70")
+    (is (= surface (second (:target (:pearls/heading surfaced))))
+        "a held leg under the surface is taken again from the surfaced feet")
+    (is (= 30 (nth (:target (:pearls/heading surfaced)) 2)) "from the feet, along the same heading")
+    (is (= (:dir (:pearls/heading low)) (:dir (:pearls/heading surfaced))))
+    (testing "no fortress known: the floor is the heading's own"
+      (is (= (max pparams/heading-min-y (pplace/lava-floor (ps/standing {} rock)))
+             (pmove/heading-floor (assoc (ps/standing {} rock) :player/dimension ps/nether)))))))
 
 (deftest a-bot-above-the-climb-ceiling-with-no-mover-tunnels-down-along-its-heading
   ;; Logged state, sim R1/17 seed 1 (probe p2facts 42402292588, issue #263): at [961 104 -144] in the
