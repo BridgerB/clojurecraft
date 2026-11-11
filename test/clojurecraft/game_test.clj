@@ -478,3 +478,11 @@
                               :flags 0})])]
     (is (= {:vel [0.5 0.25 0.0] :at 500} (:player/knock w2)) "its own motion, not an entity's")
     (is (= {:d 5.0 :at 500} (:player/corrected w2)) "3-4-5 from where it stood")))
+
+(deftest login-keeps-the-servers-simulation-distance
+  (let [[w _] (run (game/init fx/opts)
+                   [{:event/kind :start} (packet fx/login-finished)
+                    (packet {:packet/name :finish-configuration})
+                    (packet {:packet/name :login :entity-id 7 :simulation-distance 3})])]
+    (is (= 3 (:server/simulation-distance w))))
+  (is (not (contains? (in-play) :server/simulation-distance)) "a login that carries none"))
