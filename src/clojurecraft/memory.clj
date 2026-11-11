@@ -507,6 +507,16 @@
                k)]
     (when e (into {} (d/touch (d/entity db e))))))
 
+(defn last-done-at
+  "When the newest intention of kind k on target t ended :done (:intention/at), or nil when none
+   did: the time the bot's own :place of a block at cell t stood."
+  [world k t]
+  (d/q '[:find (max ?at) . :in $ ?k ?t :where [?e :intention/kind ?k] [?e :intention/event :done]
+         [?e :intention/target ?t] [?e :intention/at ?at]]
+       (:world/facts world)
+       k
+       t))
+
 (defn done-count
   "How many intentions of kind k (:fight) ended :done: a Datalog count over the facts."
   [world k]
