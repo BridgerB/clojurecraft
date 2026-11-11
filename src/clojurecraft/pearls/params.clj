@@ -171,7 +171,8 @@
 (def hold-patience-ms (:hold-patience-ms thresholds))
 
 (def draw
-  "{:beyond :max}: how far place/draw-out lengthens the burrow (pearls.edn :draw)."
+  "{:beyond :max :near}: how far place/draw-out lengthens the burrow, and how near a teleport must
+   land (pearls.edn :draw)."
   (:draw thresholds))
 
 (def angry-wait-lookouts

@@ -197,11 +197,25 @@
        (= :clear (path/classify world [x (inc y) z]))
        (= :solid (path/classify world [x (dec y) z]))))
 
+(defn near-parked?
+  "Is cell c within hold-radius of an angry enderman that is parked out (psense/parked-out?)? No
+   burrow is cut there: its anger never ends, it never came to the last burrow, and a new one
+   beside it held a sim bot for the rest of the hour three times. Past 16 blocks of it, with a
+   landing near, it teleports in to the bot where the bot fights it."
+  [world c]
+  (boolean (some (fn [[eid e]]
+                   (and (entity/creepy? e)
+                        (psense/parked-out? world eid)
+                        (<= (physics/distance (physics/centre c) (:entity/pos e))
+                            pparams/hold-radius)))
+                 (psense/endermen (avoided/forget world :blacklist) pparams/stare-range))))
+
 (defn burrow-site
   "The cell nearest the feet, within site-reach on the plane and a block up or down at most,
    not the feet, that the bot could stand in (standable?), cut a burrow along dir from
-   (burrowable?), and walk to (intent/routable?), and that a walk has not failed toward
-   (:plan/blacklist); nil when there is none. The route is asked last and one cell at a time
+   (burrowable?), and walk to (intent/routable?), that a walk has not failed toward
+   (:plan/blacklist) and that is not near a parked-out angry one (near-parked?); nil when there
+   is none. The route is asked last and one cell at a time
    (some, not a chunked filter): it is the costly test."
   [world dir]
   (let [[x y z :as feet] (intent/feet world)
@@ -214,6 +228,7 @@
          (sort-by #(physics/distance feet %))
          (some (fn [c]
                  (when (and (not (contains? bl c))
+                            (not (near-parked? world c))
                             (standable? world c)
                             (burrowable? world c dir)
                             (intent/routable?
@@ -329,11 +344,13 @@
 
 (defn crowd-site
   "The stare-site of the calm enderman crowding the burrow's mouth (crowder), where a new burrow
-   is cut when the old one is given up (stale?) over it; nil when there is none, or no crowder.
+   is cut when the old one is given up (stale?) over it; nil when there is none, no crowder, or
+   the site is near a parked-out angry one (near-parked?).
    Beside the crowder the old burrow would be cut again, its end and mouth the cells they had
    been."
   [world]
-  (when-let [[_ e] (crowder world)] (stare-site world e)))
+  (when-let [[_ e] (crowder world)]
+    (let [s (stare-site world e)] (when-not (and s (near-parked? world s)) s))))
 
 (defn floored-length
   "How many of the first n level steps from feet along dir stand on a floor once the steps
@@ -440,12 +457,31 @@
                        near))
       near)))
 
+(def landing-rolls
+  "The rolls each of an enderman's teleport aims is tried at (mob/toward-aim's r1 r2 r3): five
+   across the unit, so the spread on x and z and the rise on y are covered at five points each."
+  [0.1 0.3 0.5 0.7 0.9])
+
+(defn lands-near?
+  "Would an enderman at pos teleporting toward a bot at end (its eye, mob/toward-aim) land within
+   (:near pparams/draw) of end for one of the landing-rolls aims (mob/landing over the bot's
+   terrain)? A bot in a two-high tunnel in rock has none: every aim lands nowhere and the
+   enderman stays where it is (sim forest R2/21 seed 1, the parked one never came in)."
+  [world pos end]
+  (let [eye (update (physics/centre end) 1 + pparams/eye-height)
+        at #(terrain/block-at world %)]
+    (boolean (some (fn [[r1 r2 r3]]
+                     (when-let [l (mob/landing at (mob/toward-aim pos eye r1 r2 r3) 0)]
+                       (<= (physics/distance l (physics/centre end)) (:near pparams/draw))))
+                   (for [r1 landing-rolls r2 landing-rolls r3 landing-rolls] [r1 r2 r3])))))
+
 (defn draw-out
   "The :extend-burrow that draws the parked-out angry endermen near (parked-near) in, from the
    burrow's end (:pearls/shelter at the feet), or nil: the tunnel lengthened one of the four
    headings whose next cell is rock (feet and head solid) by the fewest cells, at most
    (:max pparams/draw), that leave every one of them more than (:beyond pparams/draw) blocks off,
-   while one is within that of the feet.
+   while one is within that of the feet, and only to an end each of them can teleport in near
+   (lands-near?).
    Anger never ends while an enderman has the bot as its target (NeutralMob.updatePersistentAnger
    restarts its timer every tick it has one; its target goal keeps the bot unseen), and past 16
    blocks its target goal teleports it toward the bot (EndermanLookForPlayerGoal.tick:
@@ -466,7 +502,8 @@
                             (= :solid (path/classify world [(+ fx dx) (inc fy) (+ fz dz)])))
                  n (range 1 (inc max))
                  :let [end [(+ fx (* n dx)) fy (+ fz (* n dz))]]
-                 :when (every? #(> (physics/distance (physics/centre end) %) beyond) ps)]
+                 :when (and (every? #(> (physics/distance (physics/centre end) %) beyond) ps)
+                            (every? #(lands-near? world % end) ps))]
              [n [dx dz]])
            (sort-by first)
            first

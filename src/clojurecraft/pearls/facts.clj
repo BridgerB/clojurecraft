@@ -92,7 +92,10 @@
                          (and (f :near?) (not (f :ghost?)))
                          (and (f :e) (psense/at-site? w))))
             (pplace/away w (or (f :q) (f :ce) (f :m) (f :e)))))
-   :digs? (fn [f w] (and (f :dir) (pplace/burrowable? w (intent/feet w) (f :dir))))
+   :digs? (fn [f w]
+            (and (f :dir)
+                 (not (pplace/near-parked? w (intent/feet w)))
+                 (pplace/burrowable? w (intent/feet w) (f :dir))))
    :site (fn [f w] (when (and (f :dir) (not (f :digs?))) (pplace/burrow-site w (f :dir))))
    :csite (fn [f w]
             (when (and (nil? (f :home))
