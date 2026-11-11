@@ -1111,3 +1111,25 @@
     (is (= gone (psense/track-brutes gone)) "nothing tracked, nothing noted")
     (is (nil? (psense/brute-near (ps/standing {9 (ps/mob :piglin [14.5 64.0 8.5])})))
         "a piglin is no brute")))
+
+(deftest one-hit-through-iron-is-seen-as-a-strike
+  ;; closed PR #750's case (sim R1-2-1, rods start): an enderman struck from 20 to 0 in five
+  ;; seconds while the bot ran :seal and :eat, no swing: through the kit's iron a hit is about 4,
+  ;; 20 to ~16, under the old struck-health of 14 never seen
+  (let [angry (assoc (ps/enderman [9.5 64.0 8.5]) :entity/creepy? true)
+        iron {0 (ps/item :iron_sword 1)
+              36 (ps/item :iron_boots 1)
+              37 (ps/item :iron_leggings 1)
+              38 (ps/item :iron_chestplate 1)
+              39 (ps/item :iron_helmet 1)}
+        at (fn [hp] (assoc (ps/standing {7 angry}) :player/inventory iron :player/health hp))]
+    (is (= 18.0 pparams/struck-health))
+    (is (= 7 (first (psense/struck-by (at 16.0)))) "16 after one hit: struck")
+    (is (nil? (psense/struck-by (at 19.0))) "19: no hit landed")
+    (testing "two angry ones within strike-range are a group: never fought"
+      (is (nil? (psense/struck-by (assoc-in (at 16.0)
+                                   [:world/entities 8]
+                                   (assoc (ps/enderman [8.5 64.0 10.5]) :entity/creepy? true))))))
+    (testing "under danger-health the fight-striker row does not fight (#577)"
+      (is (not= {:intent/kind :fight :intent/target 7 :intent/for :pearls}
+                (plan/next-intent (at 8.0) ps/row plan/goals))))))

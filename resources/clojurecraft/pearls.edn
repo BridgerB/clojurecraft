@@ -161,8 +161,8 @@
  ;; teleports it toward the bot, so it comes in at the burrow
  ;; :near how close to the new end one of its teleport aims must land (place/lands-near?)
  :draw {:beyond 16.5 :max 8 :near 8.0}
- ;; health under which an enderman at hand has landed a hit (7 on Normal off 20): fought back, fought out or not
- :struck-health 14.0
+ ;; health under which an enderman at hand has landed a hit: fought back, fought out or not. Its 7 on Normal is about 4 through the kit's iron (20 to ~16), so under 14 one hit was never seen and the bot sealed or ate while an enderman beat it; 18 sees the first hit
+ :struck-health 18.0
  ;; blocks round the feet within which a standable cell out of a shooter's sight is looked for
  :cover-reach 5
  ;; ms after a ghast was last in sight that no walk goes elsewhere
