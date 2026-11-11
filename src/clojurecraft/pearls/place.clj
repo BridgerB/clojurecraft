@@ -440,12 +440,31 @@
                        near))
       near)))
 
+(def landing-rolls
+  "The rolls each of an enderman's teleport aims is tried at (mob/toward-aim's r1 r2 r3): five
+   across the unit, so the spread on x and z and the rise on y are covered at five points each."
+  [0.1 0.3 0.5 0.7 0.9])
+
+(defn lands-near?
+  "Would an enderman at pos teleporting toward a bot at end (its eye, mob/toward-aim) land within
+   (:near pparams/draw) of end for one of the landing-rolls aims (mob/landing over the bot's
+   terrain)? A bot in a two-high tunnel in rock has none: every aim lands nowhere and the
+   enderman stays where it is (sim forest R2/21 seed 1, the parked one never came in)."
+  [world pos end]
+  (let [eye (update (physics/centre end) 1 + pparams/eye-height)
+        at #(terrain/block-at world %)]
+    (boolean (some (fn [[r1 r2 r3]]
+                     (when-let [l (mob/landing at (mob/toward-aim pos eye r1 r2 r3) 0)]
+                       (<= (physics/distance l (physics/centre end)) (:near pparams/draw))))
+                   (for [r1 landing-rolls r2 landing-rolls r3 landing-rolls] [r1 r2 r3])))))
+
 (defn draw-out
   "The :extend-burrow that draws the parked-out angry endermen near (parked-near) in, from the
    burrow's end (:pearls/shelter at the feet), or nil: the tunnel lengthened one of the four
    headings whose next cell is rock (feet and head solid) by the fewest cells, at most
    (:max pparams/draw), that leave every one of them more than (:beyond pparams/draw) blocks off,
-   while one is within that of the feet.
+   while one is within that of the feet, and only to an end each of them can teleport in near
+   (lands-near?).
    Anger never ends while an enderman has the bot as its target (NeutralMob.updatePersistentAnger
    restarts its timer every tick it has one; its target goal keeps the bot unseen), and past 16
    blocks its target goal teleports it toward the bot (EndermanLookForPlayerGoal.tick:
@@ -466,7 +485,8 @@
                             (= :solid (path/classify world [(+ fx dx) (inc fy) (+ fz dz)])))
                  n (range 1 (inc max))
                  :let [end [(+ fx (* n dx)) fy (+ fz (* n dz))]]
-                 :when (every? #(> (physics/distance (physics/centre end) %) beyond) ps)]
+                 :when (and (every? #(> (physics/distance (physics/centre end) %) beyond) ps)
+                            (every? #(lands-near? world % end) ps))]
              [n [dx dz]])
            (sort-by first)
            first
