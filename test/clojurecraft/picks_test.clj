@@ -306,6 +306,34 @@
     (is (plan/done-by (assoc stocked :plan/ended (assoc ended :ended/at 99000)) row)
         "a pickup just ended with nothing lying and nothing to start: done, the hunt goes on")))
 
+(deftest a-table-placed-for-a-craft-is-not-taken-before-it
+  ;; Issue #263, real stage-18 lane 1 batch 4 on 5d894db, Clj_r10: no stone, 8 sticks, 6 planks and
+  ;; 3 stems held; the pearl hunt placed its table to make a pickaxe, this row (pending for any
+  ;; table placed and not held) preempted it and dug the table up before the craft, and the hunt
+  ;; placed it again: every 8 s for 25 minutes, 406 make-pickaxe intents and no pickaxe
+  (let [table-id (blocks/default-state :crafting_table)
+        at [9 64 8]
+        base (-> (sealed-pocket-world [(item :blaze_rod 7) (item :stick 8) (item :crimson_planks 4)
+                                       (item :crimson_stem 3) (item :netherrack 281)])
+                 (assoc-in [:world/chunks [0 0]] (world/column (assoc pocket-walls at table-id)))
+                 (memory/observe at table-id)
+                 (assoc :time/now 1000)
+                 (memory/remember-intention {:intent/id 1 :intent/kind :craft} :done)
+                 (assoc :time/now 2000)
+                 (memory/remember-intention {:intent/id 2 :intent/kind :place :intent/target at}
+                                            :done)
+                 (assoc :time/now 2500))
+        crafted (-> base
+                    (assoc :time/now 3000)
+                    (memory/remember-intention {:intent/id 3 :intent/kind :craft} :done))
+        row (first (filter #(= :spare-picks (:goal/id %)) plan/goals))]
+    (is (picks/craft-owed? base at) "placed after the last craft: a craft is owed there")
+    (is (not (picks/placed-table? base)) "so it is no table to take along")
+    (is (not (picks/table-needed? base)))
+    (is (plan/done-by base row) "and this row leaves it to the craft")
+    (is (not (picks/craft-owed? crafted at)) "once a craft ended after the place")
+    (is (picks/placed-table? crafted) "the table is taken along as before")))
+
 (deftest a-spare-never-takes-the-last-pickaxes-sticks
   ;; Issue #263: 21 of the 43 no-pickaxe endings of the real stage-18 lanes on 5d894db held a
   ;; crafting table and 99 to 209 cobblestone and no stick, plank or stem (r4-b8 Clj_r39: table 1,
