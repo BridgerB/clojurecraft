@@ -202,6 +202,9 @@
    [:entity/baby?
     "a hoglin's or zoglin's baby flag, from its metadata (index 16, AgeableMob.DATA_BABY_ID): a baby hoglin hits for 0.5 and fits a cell one high (issue #263)"
     "inside :world/entities, a hoglin or zoglin, once its metadata said"]
+   [:entity/size
+    "a slime's or magma cube's size, from its metadata (index 16, Slime.ID_SIZE): 1, 2 or 4; a big magma cube (4) has 16 health and hits for 6, a small one (1) has 1 and hits for 3 (issue #263)"
+    "inside :world/entities, a slime or magma cube, once its metadata said"]
    [:entity/phase
     "the ender dragon's phase, from its metadata (index 16): 0 circling, 3 landing, 4 taking off, 5 to 7 sitting on its perch, 9 dying (issue #267)"
     "inside :world/entities, the dragon, once its metadata said"]

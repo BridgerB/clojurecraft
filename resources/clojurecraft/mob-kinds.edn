@@ -18,7 +18,8 @@
 ;; magma cube's sizes are kinds of their own); :armour the armour points that take their share of
 ;; the player's hit (mob/absorbed); :hop how high its jump lifts its feet, so it strikes a player
 ;; that far over it, the line from its head to the eye clear; :split [kind lo hi], lo to hi of
-;; kind where it died. :roll its hit rolled as a hoglin's is (HoglinBase.hurtAndThrowTarget: half
+;; kind where it died. :size a slime's size (Slime.ID_SIZE, its metadata index 16), told the client
+;; with its health, as the server does: a magma cube's three sizes are 1, 2 and 4. :roll its hit rolled as a hoglin's is (HoglinBase.hurtAndThrowTarget: half
 ;; of :melee plus a whole number under :melee, 3 to 8 for its 6; mob/melee-hit), from the mobs'
 ;; stream. A baby hoglin (0.5 a hit, every 15 ticks) is not modelled: none spawns.
 {:mob/kinds
@@ -115,6 +116,7 @@
                     :hostile true
                     :loot [[:bone 0 2] [:coal 0 1]]}
   :magma_cube_small {:entity :magma_cube
+                     :size 1
                      :health 1.0
                      :box [0.52 0.52]
                      :speed 0.0825
@@ -125,7 +127,8 @@
                      :armour 3
                      :hop 1.84
                      :hostile true}
-  :magma_cube {:health 4.0
+  :magma_cube {:size 2
+               :health 4.0
                :box [1.04 1.04]
                :speed 0.11
                :follow 16.0
@@ -138,6 +141,7 @@
                :hostile true
                :loot [[:magma_cream 0 1]]}
   :magma_cube_big {:entity :magma_cube
+                   :size 4
                    :health 16.0
                    :box [2.08 2.08]
                    :speed 0.165

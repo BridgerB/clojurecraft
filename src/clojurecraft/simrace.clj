@@ -247,6 +247,9 @@
    :hoglin :hoglin
    :wither_skeleton :wither
    :ghast :ghast
+   :magma_cube :magma
+   :magma_cube_small :magma
+   :magma_cube_big :magma
    :on_fire :fire
    :lava :lava})
 
