@@ -1183,13 +1183,14 @@
 (deftest a-mob-beyond-the-simulation-distance-is-frozen
   ;; as a server holds an entity in a chunk past its simulation distance: loaded, sent, not ticked
   (let [sim (-> (arena {} {} nil night [{:type :zombie :pos [8.5 64.0 0.5]}])
-                (assoc :sim/player-pos [-15.5 64.0 0.5]))
+                (assoc :sim/player-pos [-55.5 64.0 0.5]))
         [eid z] (the-mob sim :zombie)
         pos-after
         (fn [d] (get-in (ticks (assoc sim :sim/simulation-distance d) 40) [:sim/mobs eid :pos]))]
-    (is (= (:pos z) (pos-after 0)) "one chunk off under distance 0: it stands where it was")
-    (is (not= (:pos z) (pos-after 1)) "under distance 1 it walks at the player"))
-  (let [far (-> (arena {} {} nil night [{:type :zombie :pos [8.5 64.0 0.5]}])
+    (is (= (:pos z) (pos-after 3)) "four chunks off under distance 3: it stands where it was")
+    (is (not= (:pos z) (pos-after 4)) "under distance 4 it walks at the player"))
+  (let [far (-> (arena {} {} nil night [])
+                (sim-mobs/add-mob :zombie [8.5 64.0 0.5] {})
                 (assoc :sim/player-pos [-200.5 64.0 0.5]))]
     (is (nil? (the-mob (ticks far 1) :zombie)) "past despawn-far a ticking hostile is removed")
     (is (some? (the-mob (ticks (assoc far :sim/simulation-distance 3) 1) :zombie))
