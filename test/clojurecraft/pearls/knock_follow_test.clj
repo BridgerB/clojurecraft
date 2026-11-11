@@ -6,6 +6,7 @@
             [clojurecraft.pearls :as pearls]
             [clojurecraft.pearls-support :as ps]
             [clojurecraft.pearls.params :as pparams]
+            [clojurecraft.pearls.place :as pplace]
             [clojurecraft.pearls.sense :as psense]))
 
 (use-fixtures :once fx/instrumented)
@@ -33,3 +34,17 @@
     (is (not (psense/waited-out? (assoc (at 0 span) :pearls/angry {}))) "untracked: no verdict")
     (is (psense/stale? (assoc (ps/looked (at 0 span) pparams/stale-lookouts) :time/now span))
         "waited out, the burrow can go stale as with none near")))
+
+(deftest a-parked-out-angry-one-blocks-no-provoke-and-keeps-no-burrow
+  ;; sim forest R1/17 seed 3 and R2/21 seed 2 (knockback): the last provoke angered one 10.3 blocks
+  ;; off that never came, and nothing was provoked again for 54 and 52 minutes: one at a time held
+  ;; every provoke off, and the angry hold kept the burrow from going stale
+  (let [angry (assoc (ps/enderman [18.8 61.0 8.5]) :entity/creepy? true)
+        span (* pparams/angry-wait-lookouts pparams/lookout-ms)
+        at (fn [now]
+             (-> (ps/looked (ps/burrowed [8.5 61.0 8.5] {7 angry}) pparams/stale-lookouts)
+                 (assoc :time/now now :pearls/angry {7 {:since 0 :best 10.3 :closed-at 0}})))]
+    (is (psense/coming? (at (dec span))) "within the span it is still the one the hunt waits for")
+    (is (not (psense/coming? (at span))) "parked out: the next one may be provoked")
+    (is (some? (pplace/shelter (at (dec span)))) "within the span the burrow is held")
+    (is (nil? (pplace/shelter (at span))) "parked out: the stale burrow is let go")))

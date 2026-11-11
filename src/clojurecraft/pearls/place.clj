@@ -114,7 +114,7 @@
                (<= (physics/distance (intent/feet world) s) pparams/shelter-reach)
                (shelter? world s)
                ;; with an angry one within hold-radius the bot waits inside
-               (or (not (psense/stale? world)) (psense/angry-within? world pparams/hold-radius)))
+               (or (not (psense/stale? world)) (psense/angry-holding? world pparams/hold-radius)))
       s)))
 
 (defn away
