@@ -451,6 +451,29 @@
       (is (not (sim-mobs/frozen? (update-in (look yaw pitch) [:sim/mobs eid] dissoc :angry?)
                                  eid))))))
 
+(deftest a-hit-knocks-a-mob-three-blocks-back
+  ;; LivingEntity.hurtServer (26.1.2, javap): knockback(0.4, source - target on the plane); its
+  ;; flight, as LivingEntity.travel moves a body, is 11 ticks in the air and about three blocks
+  (let [{:keys [ticks distance]} mob/knock
+        free? (fn [[_ y _]] (>= y 64))]
+    (is (= 11 ticks))
+    (is (< 2.9 distance 3.2) (str distance))
+    (is (< 3.4 (first (mob/knocked free? :enderman [0.5 64.0 0.5] [-1.5 64.0 0.5] distance)) 3.7)
+        "straight away from the hitter on the plane")
+    (is (= [0.5 64.0 0.5] (mob/knocked free? :enderman [0.5 64.0 0.5] [0.5 64.0 0.5] distance))
+        "a hitter straight over it pushes nowhere")
+    (testing "a wall stops it"
+      (let [walled (fn [[x y _]] (and (>= y 64) (< x 2)))]
+        (is (< (first (mob/knocked walled :enderman [0.5 64.0 0.5] [-1.5 64.0 0.5] distance))
+               2.0)))))
+  (testing "on the model: a hit enderman flies back and neither walks nor strikes in the flight"
+    (let [[sim eid] (angry-enderman {} [2.0 64.0 0.5])
+          hit (sends sim {:packet/name :attack :entity-id eid})
+          x (first (get-in hit [:sim/mobs eid :pos]))]
+      (is (> x 4.5) (str x))
+      (is (sim-mobs/knocked? hit eid))
+      (is (not (sim-mobs/knocked? (ticks hit 12) eid)) "its flight is over in 11 ticks"))))
+
 (deftest an-angry-enderman-walks-round-a-wall-to-the-player
   ;; vanilla's enderman paths round a wall; the model's searches a route once its straight walk
   ;; stops (sim-mobs/trail, mob/route). A wall three high from z -3 to 3 at x 4 (every chunk's)
