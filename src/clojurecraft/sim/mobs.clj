@@ -309,11 +309,13 @@
   "The model after mob eid, hit by the player, is knocked back (mob/knock, LivingEntity.knockback):
    moved mob/knocked away from the player's feet by the flight's distance, the client told, and
    in the air for the flight's ticks (:knocked-until), when it neither walks nor strikes (chase).
-   A dead one, a flier (a blaze hovers its own way) or one with no position stays."
+   A dead one, a flier (a blaze hovers its own way), the dragon (EnderDragon takes its hits through
+   its parts, never knocked) and a crystal (no living body), or one with no position, stays."
   [sim eid]
   (let [{:keys [type pos dead-at]} (get-in sim [:sim/mobs eid])
+        k (mob/kinds type)
         player (:sim/player-pos sim)]
-    (cond (or (nil? pos) (nil? player) dead-at (:flies (mob/kinds type))) sim
+    (cond (or (nil? pos) (nil? player) dead-at (:flies k) (:perched k) (:crystal k)) sim
           :else
           (-> sim
               (move-mob eid (mob/knocked (free-fn sim) type pos player (:distance mob/knock)))

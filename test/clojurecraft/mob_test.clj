@@ -283,10 +283,26 @@
 
 (defn attack [sim eid] (sends sim {:packet/name :attack :entity-id eid}))
 
+(defn swing
+  "sim after a swing at mob eid, then 650 ms, then the ticks until a hit knocks it back into reach
+   again (mob/box-distance of the eye within mob/attack-reach), at most 200."
+  [sim eid]
+  (let [in? #(<= (mob/box-distance (physics/eye (:sim/player-pos %))
+                                   (get-in % [:sim/mobs eid :type])
+                                   (get-in % [:sim/mobs eid :pos]))
+                 mob/attack-reach)]
+    (reduce
+     (fn [s _]
+       (cond (or (nil? (get-in s [:sim/mobs eid])) (:dead-at (get-in s [:sim/mobs eid])) (in? s))
+             (reduced s)
+             :else (ticks s 1)))
+     (ticks (attack sim eid) 13)
+     (range 200))))
+
 (deftest an-iron-sword-kills-a-zombie-in-four-hits-and-it-drops-and-goes
   (let [sim (arena {} iron-sword nil night [{:type :zombie :pos [2.5 64.0 0.5]}])
         [eid] (the-mob sim :zombie)
-        hit (fn [sim] (ticks (attack sim eid) 13)) ; 650 ms between swings
+        hit #(swing % eid) ; 650 ms between swings, and the walk back from each knockback
         dead (nth (iterate hit sim) 4)]
     (is (= 14.0 (:health (get-in (attack sim eid) [:sim/mobs eid]))))
     (is (= 14.0 (:health (get-in (attack (attack sim eid) eid) [:sim/mobs eid])))
@@ -317,7 +333,7 @@
                            :sim/mob-rng
                            seed)
                       [eid] (the-mob sim :enderman)]
-                  (nth (iterate #(ticks (attack % eid) 13) sim) 7)))
+                  (nth (iterate #(swing % eid) sim) 7)))
         pearl? #(= (recipe/item-id :ender_pearl) (:item %))
         ;; lying where it fell, or picked up already (the swings go on 650 ms past the kill)
         pearls (map (fn [s]
@@ -538,7 +554,8 @@
     (is (every? #(= 64.0 (second (:pos (val %)))) animals) "standing on the grass")))
 
 (deftest the-bot-killed-by-a-zombie-respawns
-  ;; the sim lanes' deaths: a bot with nothing to do (no tree) beside a zombie at night dies, its
+  ;; the sim lanes' deaths: a bot with nothing to do (no tree) among three zombies at night (one
+  ;; knocked back by its fist comes again, so one alone no longer outlasts it) dies, its
   ;; client-command answered with a new life, as a real Normal server does
   (let [step (game/compose game/step plan/step)
         [w sim] (sim/run step
@@ -547,9 +564,11 @@
                                     :spawn [0.5 64.0 0.5]
                                     :difficulty :normal
                                     :day-time night
-                                    :mobs [{:type :zombie :pos [3.5 64.0 0.5]}]})
+                                    :mobs [{:type :zombie :pos [3.5 64.0 0.5]}
+                                           {:type :zombie :pos [-2.5 64.0 0.5]}
+                                           {:type :zombie :pos [0.5 64.0 3.5]}]})
                          #(or (pos? (:stats/deaths % 0)) (plan/failed? %))
-                         60000
+                         120000
                          {:event/kind :go :go/goals [:wood]})]
     (is (= 1 (:stats/deaths w)) (pr-str (plan/summary w)))
     (is (:player/dead? w) "the zombie killed it")
