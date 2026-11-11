@@ -23,14 +23,17 @@
 (set! *warn-on-reflection* true)
 
 (defn boxed-here?
-  "Is the feet's cell one a staircase or tunnel was boxed from (:plan/boxed-at), and did a
-   staircase or tunnel fail, for any reason, within boxed-memory-ms (memory/failed-within?)? A box
-   remembered for ever kept a caged bot with digs to spare and a climb heading open from every
-   way out of the hunt; an old one is tried again."
+  "Is the feet's cell one a staircase or tunnel was boxed from (:plan/boxed-at), unless the
+   newest staircase or tunnel failure (memory/failed-within?, any reason) is boxed-memory-ms or
+   more old? A box remembered for ever kept a caged bot with digs to spare and a climb heading
+   open from every way out of the hunt; an old one is tried again. A box noted with no such
+   failure in the story (a retreat's, a dead end's) holds as before."
   [world]
-  (boolean (and (contains? (avoided/all-of world :boxed-at) (intent/feet world))
-                (some #(memory/failed-within? world % pparams/boxed-memory-ms)
-                      [:stairs-up :stairs-down :tunnel]))))
+  (let [kinds [:stairs-up :stairs-down :tunnel]
+        ever? (some #(memory/failed-within? world % (inc (:time/now world 0))) kinds)
+        recent? (some #(memory/failed-within? world % pparams/boxed-memory-ms) kinds)]
+    (boolean (and (contains? (avoided/all-of world :boxed-at) (intent/feet world))
+                  (or (not ever?) recent?)))))
 
 ; how far a roam looks for an end not yet walked to, nearest first: sixteen, thirty-two, forty-eight, sixty-four blocks
 (defn roam-goal
