@@ -36,6 +36,14 @@
   :goal/done? :not-trapped-in
   :goal/plan :escape
   :goal/act :flee}
+ {:goal/id :escape-fire
+  :goal/priority 0
+  :goal/target? true
+  :goal/always? true
+  :goal/doc "out of a fire block the body touches, before anything else"
+  :goal/trap :fire
+  :goal/done? :not-in-fire?
+  :goal/plan :escape-fire}
  {:goal/id :defend
   :goal/priority 0
   :goal/target? true
