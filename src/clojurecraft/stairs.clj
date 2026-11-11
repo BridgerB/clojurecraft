@@ -185,11 +185,15 @@
          (every? #(not= :lava (kind %)) (exposed cells)))))
 
 (defn safe?
-  "May a stair (or a level step) be cut: its cells may be opened (clear-way?) and a floor lies
-   under the new feet, the last cell (the step is one block, not a drop)."
+  "May a stair (or a level step) be cut: its cells may be opened (clear-way?: the sides of the
+   opened cells included) and a floor lies under the new feet, the last cell (the step is one
+   block, not a drop), with no lava within path/lava-depth under that floor (path/lava-under?)."
   [world cells]
-  (let [[fx fy fz] (last cells)]
-    (and (clear-way? world cells) (= :solid (path/classify world [fx (dec fy) fz])))))
+  (let [[fx fy fz] (last cells)
+        floor [fx (dec fy) fz]]
+    (and (clear-way? world cells)
+         (= :solid (path/classify world floor))
+         (not (path/lava-under? world floor)))))
 
 (def lay-reserve 8)                    ; filler a staircase down never lays into floors: what the climb back seals and steps with
 
