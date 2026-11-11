@@ -425,6 +425,32 @@
     (is (pos? (jumps (look yaw pitch) eid 20)) "looked in the face within 4, it teleports")
     (is (zero? (jumps (look (+ yaw 90.0) 0.0) eid 20)) "looked away from, it comes on")))
 
+(deftest an-angry-enderman-stared-at-within-sixteen-stands-still
+  ;; EnderMan$EndermanFreezeWhenLookedAt (26.1.2, javap): priority 1, flags JUMP and MOVE, canUse
+  ;; when its target is a player within distanceToSqr 256 and isBeingStaredBy; the priority-2
+  ;; MeleeAttackGoal needs MOVE, so it neither walks nor strikes while the stare lasts. Real bots
+  ;; that held the stare from their burrows saw angry ones stand 10 to 15 blocks off for minutes
+  (let [[sim eid] (angry-enderman {} [8.5 64.0 0.5])
+        [yaw pitch] (physics/look-at (physics/eye [0.5 64.0 0.5])
+                                     (mob/head :enderman [8.5 64.0 0.5]))
+        look #(sends sim {:packet/name :move-player-rot :yaw %1 :pitch %2 :flags 1})
+        stared (ticks (look yaw pitch) 200)
+        away (ticks (look (+ yaw 90.0) 0.0) 200)]
+    (is (sim-mobs/frozen? (look yaw pitch) eid))
+    (is (= 20.0 (:sim/health stared)) "stared at, it never comes")
+    (is (= [8.5 64.0 0.5] (get-in stared [:sim/mobs eid :pos])) "and stands where it was")
+    (is (< (:sim/health away) 20.0) "looked away from, it comes and hits")
+    (testing "past sixteen the stare holds nothing: it teleports toward the player"
+      (let [[far feid] (angry-enderman {} [30.5 64.0 0.5])
+            [fy fp] (physics/look-at (physics/eye [0.5 64.0 0.5])
+                                     (mob/head :enderman [30.5 64.0 0.5]))]
+        (is (not (sim-mobs/frozen?
+                  (sends far {:packet/name :move-player-rot :yaw fy :pitch fp :flags 1})
+                  feid)))))
+    (testing "one not angry is never frozen"
+      (is (not (sim-mobs/frozen? (update-in (look yaw pitch) [:sim/mobs eid] dissoc :angry?)
+                                 eid))))))
+
 (deftest an-angry-enderman-walks-round-a-wall-to-the-player
   ;; vanilla's enderman paths round a wall; the model's searches a route once its straight walk
   ;; stops (sim-mobs/trail, mob/route). A wall three high from z -3 to 3 at x 4 (every chunk's)

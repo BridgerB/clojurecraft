@@ -52,7 +52,8 @@
    stared at; :passive never attacks; :hostile spawns by the night rule, :weight how often among
    them; :loot [[item lo hi]], each item lo to hi when killed by the player; :paths finds a
    route round what stops its straight walk (route); :teleports teleports at its target as an
-   enderman does (toward-aim, away-aim). :entity the entity type told when it is not the kind's
+   enderman does (toward-aim, away-aim); :freeze how near an angry one stared at stands still
+   (sim.mobs/frozen?). :entity the entity type told when it is not the kind's
    own name (a magma cube's sizes); :armour points that take their share of the player's hit
    (mob-hit); :hop how high its jump lifts its feet (hop-reach?, climb); :split [kind lo hi] what it
    leaves where it dies."
