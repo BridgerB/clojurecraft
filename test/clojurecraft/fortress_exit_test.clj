@@ -876,3 +876,42 @@
           none (assoc w :plan/blacklist all)]
       (is (nil? (fexit/fortress-tunnel-target none)) "every exit given up: none")
       (is (not (fexit/fortress-escaping? none)) "and the hunt's other ways out take over"))))
+
+(defn scan-near?
+  "The full scan near-fortress? and escape-near? were: some point of pts within reach of feet, in
+   space or on the plane."
+  [feet pts]
+  (boolean (some #(or (<= (physics/distance feet %) pparams/fortress-escape-reach)
+                      (<= (physics/horizontal-distance feet %) pparams/fortress-escape-reach))
+                 pts)))
+
+(deftest reading-by-chunk-column-answers-as-the-full-scan
+  ;; near-fortress? read every fortress point several times a tick (5,675 for real Clj_r51): it now
+  ;; reads the chunk columns within reach of the feet (fexit/columns, within-columns?), and must
+  ;; answer as the scan did, at every feet cell, at the reach's edge and across chunk borders
+  (let [brick (blocks/default-state :nether_bricks)
+        cells (concat (for [x (range -40 41 9) z (range 100 141 13)] [x 70 z])
+                      [[47 33 -5] [-17 31 60] [200 64 -200] [15 90 15] [16 90 16]])
+        base (-> (ps/standing {})
+                 (assoc :player/dimension "minecraft:the_nether"))
+        bricks (reduce #(memory/observe %1 %2 brick) base cells)
+        spawned (memory/observe bricks [3 64 260] blaze/spawner)
+        feet (for [x (range -130 131 11) z (range -110 330 11)] [x 64 z])
+        edges [[95 64 15] [96 64 15] [64 64 15] [63 64 15] [-33 64 15] [-32 64 15] [16 64 -33]
+               [16 64 -32] [3 64 308] [3 64 309] [51 64 260] [52 64 260]]]
+    (doseq [w [base bricks spawned]
+            f (concat feet edges)
+            :let [at (assoc w :player/pos [(+ 0.5 (first f)) (double (second f)) (+ 0.5 (nth f 2))])
+                  feet (intent/feet at)]]
+      (is (= (scan-near? feet (fexit/fortress-points at)) (fexit/near-fortress? at))
+          (str "near " f))
+      (is (= (scan-near? feet (fexit/exit-anchors at)) (fexit/escape-near? at)) (str "escape " f)))
+    (is (some fexit/near-fortress?
+              (map #(assoc bricks :player/pos [(+ 0.5 (first %)) 64.0 (+ 0.5 (nth % 2))]) feet))
+        "some feet are near")
+    (is (not-every? fexit/near-fortress?
+                    (map #(assoc bricks :player/pos [(+ 0.5 (first %)) 64.0 (+ 0.5 (nth % 2))])
+                         feet))
+        "and some are not")
+    (is (identical? (fexit/brick-columns spawned) (fexit/brick-columns spawned))
+        "the columns are remembered while the sightings stand")))
