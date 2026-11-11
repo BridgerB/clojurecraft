@@ -856,10 +856,49 @@
   (cond (unsafe-ahead? world point) {:control/look (physics/look-at (game/eye world) point)}
         :else (toward world point yaw-offset)))
 
+(defn pickup-route
+  "The child :walk to a drop at point p by a route (path's :pickup goal: a cell whose feet are in
+   pickup reach of p's cell): the fallback of a collect that stalled with the drop out of straight
+   reach, behind a block, on a shelf or down a pit. Three real stage-18 bots on 5d894db (Clj_r30,
+   Clj_r40, Clj_r46) steered straight at their table's drop, 3 blocks off through rock, a block
+   up on a shelf, and 2 down a pit, and failed :not-picked-up four times each, the table left."
+  [p]
+  {:intent/kind :walk
+   :intent/target (mapv #(long (math/floor %)) p)
+   :intent/pickup? true
+   :intent/for :collect
+   :intent/status :active})
+
+(defn route-stalled
+  "One tick of a collect's pickup-route, or nil when there is none to run: the world with the
+   child walked (run-child); with it arrived, the child gone and the collect's clock and progress
+   started again from here (:intent/routed? stays, so a second stall fails); with it failed, the
+   collect failed :not-picked-up. Starts the route when the collect has made no progress for
+   collect-stall-ticks, has not routed before, and the drop is still out of the pickup box: more
+   than 0.4 off on the plane, or more than leaf-drop under the feet."
+  [world {:intent/keys [child routed? best-tick]} goal d event]
+  (let [tick (:time/tick world)
+        now (:time/now world)]
+    (cond (and child (done? child))
+          (-> world
+              (assoc :player/controls {})
+              (dissoc-intent :intent/child :intent/best-dist)
+              (assoc-intent :intent/since now :intent/best-tick tick))
+          (and child (failed? child)) (fail (assoc world :player/controls {}) :not-picked-up)
+          child (run-child world event)
+          (and (not routed?)
+               best-tick
+               (> (- tick best-tick) collect-stall-ticks)
+               (or (> d 0.4) (< leaf-drop (- (physics/y-of (:player/pos world)) (nth goal 1)))))
+          (assoc-intent (assoc world :player/controls {})
+                        :intent/routed? true
+                        :intent/child (pickup-route goal))
+          :else nil)))
+
 (defmethod run :collect
   [world
    {:intent/keys [target since best-dist best-tick drops drops-before]
-    :or {best-dist Double/MAX_VALUE drops blocks/log-items}} _] ; a collect made before :intent/drops collected a log
+    :or {best-dist Double/MAX_VALUE drops blocks/log-items}} event] ; a collect made before :intent/drops collected a log
   (let [now (:time/now world)
         tick (:time/tick world)
         since (or since now)
@@ -874,11 +913,17 @@
                             :intent/drops-before drops-before
                             :intent/best-dist (if progressed? d best-dist))
         stalled? (and (:player/horizontal-collision? world)
-                      (> (- tick best-tick) collect-stall-ticks))]
+                      (> (- tick best-tick) collect-stall-ticks))
+        routed (when-not (or (> (inventory/held world drops) drops-before)
+                             (and stalled? (blocker world goal))
+                             (and (> (- tick best-tick) collect-stall-ticks)
+                                  (leaf-under world goal)))
+                 (route-stalled world (:plan/intent world) goal d event))]
     (cond (> (inventory/held world drops) drops-before) ; one more of its drop than when it began
           (-> world
               (assoc :player/controls {})
               done)
+          routed routed
           (and stalled? (blocker world goal))
           (-> world
               (assoc :player/controls {})

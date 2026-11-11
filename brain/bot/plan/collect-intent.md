@@ -16,6 +16,11 @@ sourceRefs:
   - test/clojurecraft/sim_test.clj#a-collect-stops-at-a-ledge
   - src/clojurecraft/intent.clj#defmethod run :collect
   - src/clojurecraft/intent.clj#defn blocker
+  - src/clojurecraft/intent.clj#defn route-stalled
+  - src/clojurecraft/intent.clj#defn pickup-route
+  - src/clojurecraft/make.clj#defn beside?
+  - test/clojurecraft/drops_test.clj#a-drop-behind-a-wall-is-reached-by-a-route
+  - test/clojurecraft/table_test.clj#the-table-is-dug-only-from-beside-it
   - src/clojurecraft/intent.clj#def collect-stall-ticks 20
   - src/clojurecraft/intent.clj#defn nearest-item
   - src/clojurecraft/game.clj#defmethod on-packet [:play :add-entity]
@@ -58,6 +63,10 @@ related:
 
 ## :collect-drops (drops.clj, issue #262)
 `{:intent/kind :collect-drops :intent/item :blaze_rod :intent/target [x y z]}` is `:collect` made general, for loot that may not come: a blaze drops a rod one time in two, so a collect that waited for one more would fail every other kill. Each tick it takes the nearest drop that `holds?` the item (alive, and its `:entity/item` the item or not said yet: the server model sends no item metadata) within `drop-radius` 8 of the target cell's centre, none blacklisted (`lying`), and walks at it (`intent/toward`) until within 0.4 on the plane. Done when `inventory/item-count` of the item is above `:intent/before` (the count on its first tick), or when no such drop lies there: nothing to pick up is not a failure. `:not-picked-up` after `intent/collect-timeout` (10 s); a step over a ledge (`intent/ledge-ahead?`) leaves the drop, done, as `:collect` does. A drop knows what it holds from its metadata, the item stack at index 8 ([[entities]]), so cobblestone beside a rod is passed over.
+
+## A route to a drop out of straight reach (issue #263)
+
+Both executors steer straight at the drop (`toward`), so a drop behind a block, on a shelf or down a pit was never reached: on 5d894db 17 of the 20 tableless `no-pickaxe` real stage-18 endings had dug their table from anywhere in reach (Clj_r40 3 blocks off through rock, Clj_r30 on a shelf a block up, Clj_r46 2 under the feet) and failed `:not-picked-up` four times each. Now a collect that has made no progress for `collect-stall-ticks` with the drop still out of the pickup box (more than 0.4 off on the plane, or more than `leaf-drop` under the feet) walks a route to the drop's cell once (`route-stalled`, a child `pickup-route`: a `:walk` with `:intent/pickup?`), then collects again with its clock started over; `:intent/routed?` makes a second stall fail as before, and a route that fails fails the collect `:not-picked-up`. And the take-along digs the placed table only from a stand beside it (`make/beside?`), walking a route there first, so its drop lands in the pickup box.
 
 ## See also
 - [[walk-intent]] - the same steering, with detours.

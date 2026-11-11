@@ -646,6 +646,9 @@
     "stairs-down, while digging; redig; place, while digging a niche"]
    [:intent/best-dist "closest it has come to the target" "walk, collect, a :fight's approach"]
    [:intent/best-tick "tick of the last progress" "walk, collect, a :fight's approach"]
+   [:intent/routed?
+    "a collect has walked a route to its drop's cell (pickup-route) once: a second stall fails it"
+    "a :collect or :collect-drops that stalled out of straight reach"]
    [:intent/waypoints "the route's feet cells still to walk, from clojurecraft.path"
     "walk, once planned"]
    [:intent/route "how the route ended: :found, :partial (budget spent) or :none (no way on)"

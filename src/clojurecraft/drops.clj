@@ -71,17 +71,30 @@
   ;; drop-radius of the target cell; :not-picked-up past intent/collect-timeout; a step over a
   ;; drop with no landing or into or beside lava (intent/unsafe-ahead?) leaves the drop, as :collect
   ;; leaves one over a ledge, and so does a
-  ;; drop hanging over one (over-void?): never walked toward at all
-  [world {:intent/keys [item target since before]} _]
+  ;; drop hanging over one (over-void?): never walked toward at all. Stalled out of straight
+  ;; reach, it walks a route to the drop's cell once first (intent/route-stalled), as :collect does
+  [world
+   {:intent/keys [item target since before best-dist best-tick] :or {best-dist Double/MAX_VALUE}}
+   event]
   (let [now (:time/now world)
+        tick (:time/tick world)
         held (inventory/item-count world (recipe/item-id item))
         before (or before held)
         since (or since now)
-        world (intent/assoc-intent world :intent/since since :intent/before before)
         [_ e] (nearest world item (physics/centre target))
         p (:entity/pos e)
-        d (when p (physics/horizontal-distance (:player/pos world) p))]
+        d (when p (physics/horizontal-distance (:player/pos world) p))
+        progressed? (boolean (and d (< d (- best-dist 0.1))))
+        world (intent/assoc-intent world
+                                   :intent/since since
+                                   :intent/before before
+                                   :intent/best-tick
+                                   (if (or progressed? (nil? best-tick)) tick best-tick)
+                                   :intent/best-dist (if progressed? d best-dist))
+        routed (when (and p (<= held before) (not (over-void? world e)))
+                 (intent/route-stalled world (:plan/intent world) p d event))]
     (cond (or (> held before) (nil? e) (over-void? world e)) (intent/done (stop world))
+          routed routed
           (> (- now since) intent/collect-timeout) (intent/fail (stop world) :not-picked-up)
           (<= d underfoot) (stop world)
           (intent/unsafe-ahead? world p) (intent/done (stop world))
