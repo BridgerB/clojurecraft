@@ -3,7 +3,8 @@
 
    Requiring this namespace registers the escape goals' rules: a goal is done when the planner's
    trap (trap/trapped-tick) is not of its kind, its next intent is :swim-out or :flee, and the
-   two executors are defmethods of intent/run.
+   two executors are defmethods of intent/run. The fire row (:escape-fire) is done when no fire
+   block touches the body, and its next intent digs the fire or walks out of it (fire-out).
 
 :swim-out picks one bank and keeps it (the siblings re-picked every tick and swam in circles): the
 nearest cell the feet could stand in, within bank-radius on the plane and from bank-drop below the
@@ -23,6 +24,7 @@ water, it carves one: a notch two high in the nearest wall just over the float l
   (:require [clojure.math :as math]
             [clojure.spec.alpha :as s]
             [clojurecraft.avoided :as avoided]
+            [clojurecraft.blaze :as blaze]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.chunk :as chunk]
             [clojurecraft.filler :as filler]
@@ -767,6 +769,23 @@ water, it carves one: a notch two high in the nearest wall just over the float l
   [world goal _]
   ;; nothing to plan unless the bot is in the row's trap, like a needs row with nothing needed
   (when (= (:goal/trap goal) (:plan/trap world)) {:intent/kind (:goal/act goal)}))
+
+(defmethod plan/done-by :not-in-fire? [world _] (not (blaze/burning-here? world)))
+
+(defn fire-out
+  "The way out of a fire block the body touches (blaze/burning-here?), or nil when none does: the
+   dig of that fire (blaze/punch-fire-here: a fire goes out at one hit, from where the bot stands),
+   else the walk to the nearest cell with no fire (blaze/leave-fire). Every goal's, not only the
+   blaze and pearl rows': real fortress-start bots stood in a fire beside a crafting table they
+   were collecting for :keep-table, 24 to 54 in_fire hits from 20 health to none, never digging
+   it, with the fire rows of those plans not in charge."
+  [world]
+  (when (blaze/burning-here? world) (or (blaze/punch-fire-here world) (blaze/leave-fire world))))
+
+(defmethod plan/next-intent :escape-fire
+  [world _ _]
+  ;; nothing to plan out of a fire, like a needs row with nothing needed
+  (fire-out world))
 
 ;; ---------------------------------------------------------------- walking in on purpose (the gym's :shore)
 

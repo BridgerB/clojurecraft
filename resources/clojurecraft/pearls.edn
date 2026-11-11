@@ -154,6 +154,10 @@
  :cover-reach 5
  ;; ms after a ghast was last in sight that no walk goes elsewhere
  :shot-hold-ms 10000
+ ;; wood, in sticks (a plank two, a log or stem eight), a spare pickaxe's craft leaves held: the
+ ;; sticks of the last pickaxe's replacement. 21 of the 43 no-pickaxe endings of the real
+ ;; stage-18 lanes on 5d894db held a table, stone and no wood at all, every stick crafted into spares
+ :spare-wood-reserve 2
  ;; ms after a walk into cover from a shooter in which no other such walk is begun: the cover is held
  :hide-hold-ms 5000
  ;; the hit (mob/kinds :melee) at or under which a mob is fought at hand with no burrow: a zombie's 3, a spider's 2

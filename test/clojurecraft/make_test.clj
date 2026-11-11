@@ -122,7 +122,7 @@
     (is (= plan/goals (clojure.edn/read-string (pr-str plan/goals)))))
   (testing
     "no item target needs a per-goal method: wood, kit and pickaxe all plan through the same registries;
-            the escapes and the shore trial (issue #5) are the other rules, done by the planner's trap and its escapes,
+            the escapes and the shore trial (issue #5) are the other rules, done by the planner's trap and its escapes (the fire's by no fire touching the body),
             the meal, the armour and the fights (issue #259), done by the server's food, slots and mobs, and the
             entities trial (issue #258), done by a living entity's health the server sent; the pearls (issue #263)
             are an item target, done by :provided?, planned by the hunt rather than the needs planner; the
@@ -138,13 +138,13 @@
                               :provisioned? :armed? :geared? :regeared? :cooked? :rods-held?
                               :thrown? :frames-seen? :in-portal-room? :portal-lit? :in-end?
                               :crystals-gone? :dragon-dead? :healed? :spare-picks-stocked?
-                              :table-kept?}
+                              :table-kept? :not-in-fire?}
                             (:goal/done? %))
                 (remove :goal/provides plan/targets)))
     (is (= #{:needs :escape :wade :build :return-nether :fortress :eat :wear :armour :watch :defend
              :attack :hunt :sword :keep-table :gear :regear :cook :pearls :blaze-rods :eyes :throw
              :stronghold :portal-room :end-portal :enter-end :eye-frame :crystals :dragon :heal
-             :spare-picks}
+             :spare-picks :escape-fire}
            ;; test rows (:test/...) register their own methods
            (set (remove #(= "test" (namespace %))
                         (keys (dissoc (methods plan/next-intent) :default))))))))

@@ -244,7 +244,7 @@
                       (assoc :player/controls {})
                       (intent/assoc-intent :intent/child (assoc w :intent/status :active)))
                   :else (intent/fail world :unreachable)))
-          :else (assoc world :player/controls (intent/toward world (aim e) 0.0)))))
+          :else (assoc world :player/controls (intent/toward-safe world (aim e) 0.0)))))
 
 (defn walk-on
   "One tick of an approach's route walk (the :fight's :intent/child) toward entity e: run, then
@@ -389,7 +389,7 @@
         world (assoc world
                      :player/controls
                      (if (and (not hold?) (pressing? world e))
-                       (intent/toward world (aim e) 0.0)
+                       (intent/toward-safe world (aim e) 0.0)
                        {:control/look look}))]
     (cond (> (horizontal world e) (inc approach-range))
           (intent/assoc-intent world :intent/stage :approach :intent/since now)
@@ -430,7 +430,7 @@
         (-> world
             (assoc :player/controls {})
             intent/done)
-        :else (assoc world :player/controls (intent/toward world (away-point world e) 0.0))))
+        :else (assoc world :player/controls (intent/toward-safe world (away-point world e) 0.0))))
 
 (def defend-radius 4.0)               ; a hostile this near preempts any plan
 
@@ -657,7 +657,8 @@
               (assoc :player/controls {})
               (cornered (:intent/target i))
               intent/done)
-          :else (assoc world :player/controls (intent/toward world (away-point world e) 0.0)))))
+          :else
+          (assoc world :player/controls (intent/toward-safe world (away-point world e) 0.0)))))
 
 ;; ---------------------------------------------------------------- the rows
 

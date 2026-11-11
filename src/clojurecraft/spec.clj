@@ -363,7 +363,7 @@
 (s/def :goal/until string?)                ; the --until name that selects a target row
 (s/def :goal/always? boolean?)
 (s/def :goal/aside? boolean?)              ; a trial of its own, never a step of a run (plan/aside?)
-(s/def :goal/trap #{:water :lava})
+(s/def :goal/trap #{:water :lava :fire})
 (s/def :goal/plan keyword?)                ; which next-intent planner the row uses (default :needs)
 (s/def :goal/superseded-by keyword?)       ; the row that replaced this one; this one is kept, not chosen
 (s/def :goal/blocks (s/coll-of keyword? :kind vector? :min-count 1)) ; what a :mine row digs
@@ -838,6 +838,11 @@
 (s/def :sim/sent-health (s/tuple number? int? boolean?)) ; health, food, saturation zero? last told
 (s/def :sim/on-ground? boolean?)                         ; the last movement packet's flag
 (s/def :sim/eaten nat-int?)                              ; foods the player finished eating
+(s/def :sim/blocking-at int?)                       ; when the player raised its shield (a use-item with the offhand); absent once let go
+(s/def :sim/blocked nat-int?)                           ; blows the raised shield took
+(s/def :sim/blocked-by (s/map-of vector? nat-int?))      ; blows the shield took, by [kind how]
+(s/def :sim/struck-by (s/map-of vector? nat-int?))       ; blows that landed, by [cause how]
+(s/def :sim/struck nat-int?)                            ; blows that landed on the player from a mob, a shot or a blast
 (s/def :sim.eating/slot int?)
 (s/def :sim.eating/item int?)
 (s/def :sim.eating/at int?)

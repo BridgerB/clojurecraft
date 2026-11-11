@@ -226,12 +226,13 @@
 
 (defn go-of
   "The :go a run of w to until is given once its bot is loaded: the chain to until (from the blaze
-   rods when the run starts at a fortress, start/goals-from) and the start (:go/at)."
+   rods when the run starts at a fortress, start/goals-from; from an overworld start's goal,
+   :capture/goal, when it names one) and the start (:go/at)."
   [w until]
   {:event/kind :go
    :go/goals (if-let [f (:capture/fortress w)]
                (start/goals-from (:checkpoint/goal f :blaze-rods) until)
-               (plan/through until))
+               (start/goals-from (:capture/goal w) until))
    :go/chain? true
    :go/at (spawn-of w)})
 
@@ -459,7 +460,7 @@
    the model, at most max-ms of simulated time, rolling from seed. Returns its RESULT (main/result)
    with :run/world (its set and landing), :run/seed, :run/ms (simulated time), :run/violations (what
    a real server would have punished), :run/respawns and :run/eaten (the lives the model gave after
-   deaths and the foods it let the player eat), :run/backoff-ms (how long the intent was :back-off),
+   deaths and the foods it let the player eat), :run/blocked and :run/struck (the blows a raised shield took, and those that landed from a mob, a shot or a blast; :run/blocked-by and :run/struck-by the same by [kind how]), :run/backoff-ms (how long the intent was :back-off),
    :run/death-causes (the cause of each death: a mob's kind, :starve, :drown, :scheduled or
    :ender_dragon), :run/end (the world it stopped in), :run/last (the moment of the stopping tick)
    and :run/moments (the moments sim/play-from kept, every half minute, the last six minutes), from
@@ -554,6 +555,8 @@
                     :inventory (:inventory fortress)
                     :respawn-in dimension/nether)
              (and (:capture/nether w) (not fortress)) (assoc :nether (:capture/nether w))
+             (and (not fortress) (seq (:capture/kit w)))
+             (assoc :inventory (kit->inventory (:capture/kit w)))
              food (assoc :food food)))
           #(stopped? % (boolean fortress))
           max-ms
@@ -577,6 +580,10 @@
             :run/violations (:sim/violations sim)
             :run/respawns (:sim/respawns sim 0)
             :run/eaten (:sim/eaten sim 0)
+            :run/blocked (:sim/blocked sim 0)
+            :run/struck (:sim/struck sim 0)
+            :run/blocked-by (:sim/blocked-by sim {})
+            :run/struck-by (:sim/struck-by sim {})
             :run/backoff-ms @backoff
             :run/death-causes (:sim/death-causes sim [])
             :run/end world
@@ -1101,6 +1108,9 @@
                          path (nether-file f)
                          nether (nether-of path)]
                      (cond-> w
+                       (and (not (start/nether? begin)) (seq kit)) (assoc :capture/kit kit)
+                       (and (not (start/nether? begin)) (:start/goal begin))
+                       (assoc :capture/goal (:start/goal begin))
                        nether (with-nether nether path)
                        (and nether (start/nether? begin))
                        (-> (with-fortress kit (when (start/forest? begin) :forest))

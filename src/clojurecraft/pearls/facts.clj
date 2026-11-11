@@ -259,6 +259,11 @@
    :reserve-gather (fn [_ w] (pupkeep/reserve-gather w))
    :worn-out-homeless? (fn [f w]
                          (and (pupkeep/worn-out? w) (nil? (pplace/shelter w)) (not (f :menaced?))))
+   :pickless-caged? (fn [f w]
+                      (and (not (pupkeep/pickaxe? w))
+                           (= dimension/nether (dimension/of w))
+                           (not (f :menaced?))
+                           (or (pmove/stuck? w) (pmove/travel-caged? w))))
    :reserve-toss (fn [f w] (and (not (f :menaced?)) (window/reserve-toss w)))
    :angry-tracked-hold? (fn [_ w] (psense/angry-tracked? w pparams/hold-radius))
    :search

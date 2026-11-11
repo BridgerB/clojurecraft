@@ -78,9 +78,9 @@
         arm (fn [n] (servers/bots-of (servers/for-lane shipped n)))
         start (fn [n] (:lane/start (lanes/lane-of lanes-cfg :real n)))
         set-of (fn [n] (nth sets (mod (dec n) (count sets))))]
-    (is (= #{10 14} (set (map arm real))) "ten-bot and fourteen-bot lanes")
-    (doseq [[s ns] (group-by start real)] (is (= #{10 14} (set (map arm ns))) (str "start " s)))
-    (doseq [[s ns] (group-by set-of real)] (is (= #{10 14} (set (map arm ns))) (str "set " s)))
+    (is (= #{14 18} (set (map arm real))) "fourteen-bot and eighteen-bot lanes")
+    (doseq [[s ns] (group-by start real)] (is (= #{14 18} (set (map arm ns))) (str "start " s)))
+    (doseq [[s ns] (group-by set-of real)] (is (= #{14 18} (set (map arm ns))) (str "set " s)))
     (doseq [n real
             :let [c (servers/for-lane shipped n)]]
       (is (= 1 (servers/servers-of c)) "every lane carries one server")

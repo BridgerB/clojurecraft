@@ -3,11 +3,13 @@ title: Water escape
 description: How the bot gets out of water and away from lava (issue #5) - the planner's trap with hysteresis, the two always-on priority-zero goals that preempt whatever runs, the :swim-out executor (one bank kept, forward and jump, dig what is in the way from the floor), :flee for lava, the :wade intent the gym uses to walk in on purpose, the trap facts routes keep away from, and the dig refusals beside water and lava.
 type: reference
 tags: [bot, plan, water, lava, survival, intents, goals]
-aliases: [:escape-water, :escape-lava, :swim-out, :flee, :wade, :shore, trapped-tick, dry-land?, :plan/trap, :world/traps, :goal/always?, bank, roofed pool, capped well, exposes-fluid?, never-dug]
+aliases: [:escape-water, :escape-lava, :escape-fire, :swim-out, :flee, :wade, :shore, trapped-tick, dry-land?, :plan/trap, :world/traps, :goal/always?, bank, roofed pool, capped well, exposes-fluid?, never-dug]
 status: verified
 lastUpdated: 2026-10-18
 verifiedAgainst: HEAD
 sourceRefs:
+  - src/clojurecraft/swim.clj#defn fire-out
+  - test/clojurecraft/escape_fire_test.clj#a-fire-at-the-feet-is-dug-out-before-the-table-is-collected
   - src/clojurecraft/trap.clj#defn dry-land?
   - src/clojurecraft/trap.clj#defn afloat?
   - src/clojurecraft/trap.clj#defn trapped-tick
@@ -104,6 +106,8 @@ Survival is two goal rows, a trap rule the planner applies every tick, and the e
 
 ## The goals (goals.edn)
 `:escape-water` and `:escape-lava` are targets at priority 0 with `:goal/always? true`: `plan/choose` puts them in play whatever `--until` asked for. Each is done by `:not-trapped-in` (the trap is not its kind) and planned by `:escape` into `:swim-out` or `:flee`, only while the trap is its kind. Preemption is the planner's existing rule ([[goals-and-intents]]): the running intent's `:intent/goal` is not the goal chosen now, so it is abandoned `:preempted`, controls cleared, `:plan/last` dropped (a chain must not continue from it), and the escape starts in the same tick. The property `water-over-the-eye-preempts-whatever-runs` holds it for any running walk or dig.
+
+`:escape-fire` is the third such row (`:goal/trap :fire`, so no row's commitment holds against it): done by `:not-in-fire?` (no fire block the body touches, `blaze/burning-here?`) and planned by `:escape-fire` into `swim/fire-out`, the dig of that fire (`blaze/punch-fire-here`) else the walk out (`blaze/leave-fire`). The blaze and pearl rows had their own fire answers, but a fortress-start bot collecting its crafting table for `:keep-table` stood in a fire for 30 s, 24 to 54 in_fire hits to death, with neither in charge (issue #263); `escape_fire_test` holds it from those states.
 
 ## :swim-out (swim.clj)
 1. **One bank, kept.** `banks` lists cells the feet could stand in (`bank?`: `path/standable?`, or a clear cell over a lake's ice, `stairs/lake-ice`, which a route never stands on but the impulse lifts onto and dry land accepts; sim race 38806318231 world R2/43, issue #177, 83 runs: come up under a frozen sea, the bot dug the ice over its head and floated in the hole with the ice the only bank, and pressed toward a far shore under the ice until it timed out, three times, `under-a-frozen-sea-the-bot-digs-out-through-the-ice-and-stands-on-it`) within `bank-radius` 16 on the plane (12 found nothing from a mid-sea pool cell in gym batch shore-w1), between `bank-drop` 3 under the `float-top` and `bank-rise` 1 over it, nearest first; the first not blacklisted is `:intent/bank` and `:intent/target`, and it is never re-picked (re-picking every tick swam the siblings in circles). `float-top` is the highest feet level the body reaches in the column: `float-depth` 1.03 under an open surface, the body's height under a roof, rounded; a ledge higher than that is beyond the impulse's lift.

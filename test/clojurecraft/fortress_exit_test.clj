@@ -444,7 +444,20 @@
                           :pocket/dig []
                           :pocket/placed [[8 64 9] [8 65 9]]})]
     (testing "in its open pocket, the rod bot seals it before boring"
-      (is (= :seal (:intent/kind (fexit/pocket-bore open-w)))))
+      (is (= :seal (:intent/kind (fexit/pocket-bore open-w))))
+      (is (= [8 64 8] (:intent/target (fexit/pocket-bore open-w))) "naming the pocket's cell"))
+    (testing "a seal the churn guard failed in this cell is not chosen there again"
+      ;; real lanes on 4170b7d: three rod bots stood their whole hour in an open pocket choosing a
+      ;; :seal that ended in its first tick, 7,493 :instant-churn failures for one of them
+      (let [churned (plan/fail-intent open-w
+                                      (assoc (fexit/pocket-bore open-w)
+                                             :intent/status :failed
+                                             :intent/reason :instant-churn))]
+        (is (not= :seal (:intent/kind (fexit/pocket-bore churned))) "full health: the bore")
+        (is (contains? #{:eat :pocket-hold}
+                       (:intent/kind (fexit/pocket-bore
+                                      (assoc churned :player/health 12.0 :player/food 14))))
+            "hurt: a meal or a hold, not the seal")))
     (testing "sealed and hurt (Clj_r36 at hp 8), it heals in the pocket, never tunnels"
       (let [hurt (assoc sealed-w :player/health 8.0 :player/food 14)
             i (plan/next-intent hurt ps/row plan/goals)]

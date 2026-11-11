@@ -69,7 +69,8 @@
 (defmethod intent/run :collect-drops
   ;; done when one more of the item is held than at the start, or no drop of it lies within
   ;; drop-radius of the target cell; :not-picked-up past intent/collect-timeout; a step over a
-  ;; drop with no landing (intent/ledge-ahead?) leaves the drop, as :collect does, and so does a
+  ;; drop with no landing or into or beside lava (intent/unsafe-ahead?) leaves the drop, as :collect
+  ;; leaves one over a ledge, and so does a
   ;; drop hanging over one (over-void?): never walked toward at all
   [world {:intent/keys [item target since before]} _]
   (let [now (:time/now world)
@@ -83,5 +84,5 @@
     (cond (or (> held before) (nil? e) (over-void? world e)) (intent/done (stop world))
           (> (- now since) intent/collect-timeout) (intent/fail (stop world) :not-picked-up)
           (<= d underfoot) (stop world)
-          (intent/ledge-ahead? world p) (intent/done (stop world))
+          (intent/unsafe-ahead? world p) (intent/done (stop world))
           :else (assoc world :player/controls (intent/toward world p 0.0)))))

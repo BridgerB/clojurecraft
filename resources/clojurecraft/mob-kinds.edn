@@ -15,7 +15,9 @@
 ;; magma cube's sizes are kinds of their own); :armour the armour points that take their share of
 ;; the player's hit (mob/absorbed); :hop how high its jump lifts its feet, so it strikes a player
 ;; that far over it, the line from its head to the eye clear; :split [kind lo hi], lo to hi of
-;; kind where it died.
+;; kind where it died. :roll its hit rolled as a hoglin's is (HoglinBase.hurtAndThrowTarget: half
+;; of :melee plus a whole number under :melee, 3 to 8 for its 6; mob/melee-hit), from the mobs'
+;; stream. A baby hoglin (0.5 a hit, every 15 ticks) is not modelled: none spawns.
 {:mob/kinds
  {:zombie {:health 20.0
            :box [0.6 1.95]
@@ -149,7 +151,8 @@
            :speed 0.15
            :follow 16.0
            :melee 6.0
-           :every 20
+           :roll true
+           :every 40
            :reach 2.0
            :hostile true
            :loot [[:porkchop 2 4]]}
