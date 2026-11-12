@@ -491,18 +491,20 @@
   "[eid e] of the nearest angry enderman (entity/creepy?) within the sword's reach (combat/in-reach?)
    and strike-range of the feet while health is under struck-health, fought out or not, or nil.
    One that has hit the bot and stands where the sword reaches it is fought back, never walked
-   away from."
+   away from. Nil when two or more angry ones are within strike-range: a group is never fought
+   (its hits come two at a time), only the one. struck-health is 18: through the kit's iron an
+   enderman's hit is about 4, so at the old 14 one hit was never seen."
   [world]
   (when (< (:player/health world 20.0) pparams/struck-health)
-    (let [pos (:player/pos world)]
-      (entity/nearest (into {}
-                            (filter (fn [[_ e]]
-                                      (and (entity/creepy? e)
-                                           (<= (physics/distance pos (:entity/pos e))
-                                               pparams/strike-range)
-                                           (combat/in-reach? world e))))
-                            (endermen (avoided/forget world :blacklist) pparams/strike-range))
-                      pos))))
+    (let [pos (:player/pos world)
+          angry (into {}
+                      (filter (fn [[_ e]]
+                                (and (entity/creepy? e)
+                                     (<= (physics/distance pos (:entity/pos e))
+                                         pparams/strike-range))))
+                      (endermen (avoided/forget world :blacklist) pparams/strike-range))]
+      (when (< (count angry) 2)
+        (entity/nearest (into {} (filter (fn [[_ e]] (combat/in-reach? world e))) angry) pos)))))
 
 (defn shooter-kind?
   "Does a mob of kind hurt from range: one of ranged-kinds (a blaze, a ghast), or one mob/kinds
