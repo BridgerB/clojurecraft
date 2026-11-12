@@ -372,6 +372,9 @@
    [:plan/exit-columns
     "columns [x z] the fortress exit's held target was given up at for want of progress (avoided :exit-columns): the exit is over there, the heading takes over; dropped at a death"
     "pearls.move/watch-progress"]
+   [:pearls/cage-dir
+    "the heading [dx dz] the last cage-break tunnel of the hunt cut along, kept so the next goes on the same way and turns only where that way is blocked (lava, water, a drop, or ground already walked to): dropped off the Nether or at a death"
+    "pearls.move/cage-dir-hold"]
    [:pearls/exit-target
     "the fortress tunnel-out target held until reached or failed, so the bore does not flip between targets as the feet move: [x y z], dropped once clear"
     "pearls/fortress-exit-hold"]

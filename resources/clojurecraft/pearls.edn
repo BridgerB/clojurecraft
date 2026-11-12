@@ -94,6 +94,8 @@
  :descend-radius 128.0
  ;; level steps a tunnel toward an enderman no route reaches cuts before the hunt looks again
  :bore-length 8
+ ;; blocks on the plane round the feet within which a cage-break tunnel counts the ground already walked to on each side, to turn toward the less walked
+ :cage-look 32
  ;; cells on the plane round the feet a burrow site is looked for within, when none can be cut from the feet
  :site-reach 6
  ;; nearest endermen asked for a route, as the other acts ask

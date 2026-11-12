@@ -339,22 +339,77 @@
          :intent/to-height? true
          :intent/for :pearls}))))
 
-(defn tunnel-out
-  "A :tunnel of up to bore-length steps along the heading of stairs/directions the clock picks (a
-   new one every thirty seconds, so a refused heading is followed by another), in the Nether, with
-   digs to spare (spare?), a staircase not boxed from these feet, a floor under the steps
-   (floored-length) and rock to cut (solid-cut?); nil otherwise. The Nether has no open sky to
-   climb to."
+(defn arrived-along?
+  "Does a level cut of n steps (at least one) from feet [x y z] along dir [dx dz] reach ground
+   already walked to: a step's column holding a cell of arrived (memory/arrived, a set of
+   [x y z]) within two of the feet's height? A tunnel into it opens nothing new."
+  [arrived [x y z] [dx dz] n]
+  (let [cols (set (for [k (range 1 (inc (max 1 n)))] [(+ x (* k dx)) (+ z (* k dz))]))]
+    (boolean (some (fn [[ax ay az]] (and (contains? cols [ax az]) (<= (abs (- ay y)) 2)))
+                   arrived))))
+
+(defn arrived-beside
+  "How many cells of arrived (a set of [x y z]) lie within cage-look of feet on the plane on the
+   side dir [dx dz] points to (ahead of the feet along it): the ground already walked to that
+   way."
+  [arrived [x _ z] [dx dz]]
+  (count (filter (fn [[ax _ az]]
+                   (let [ox (- ax x)
+                         oz (- az z)]
+                     (and (pos? (+ (* ox dx) (* oz dz)))
+                          (<= (+ (* ox ox) (* oz oz)) (* pparams/cage-look pparams/cage-look)))))
+                 arrived)))
+
+(defn cage-way
+  "The length of a cage-break tunnel from feet along dir, or nil when that way is blocked: no
+   floored step (lava or water beside a step, or a drop under one: floored-length 0), no rock to
+   cut (solid-cut?), or ground already walked to along it (arrived-along?)."
+  [world arrived feet dir]
+  (let [n (pplace/floored-length world feet dir pparams/bore-length)]
+    (when (and (pos? n)
+               (pplace/solid-cut? world :tunnel feet dir n)
+               (not (arrived-along? arrived feet dir n)))
+      n)))
+
+(defn cage-dir
+  "The [dir n] of the next cage-break tunnel from the feet, or nil: the way kept (the held
+   heading's :dir, else :pearls/cage-dir) while it is open (cage-way); where it is blocked, a
+   quarter turn to the side with less ground walked to (arrived-beside), the other side next,
+   never back the way it came. With neither held, the heading of stairs/directions with least
+   ground walked to. A heading picked by the clock turned a quarter every tunnel and closed a
+   square of eight-long tunnels, each end ground walked to, so the bot stood caged again in its
+   own digging."
   [world]
   (let [feet (intent/feet world)
-        dir (nth stairs/directions (mod (quot (:time/now world 0) 30000) (count stairs/directions)))
-        n (pplace/floored-length world feet dir pparams/bore-length)]
-    (when (and (= dimension/nether (dimension/of world))
-               (pupkeep/spare? world)
-               (not (boxed-here? world))
-               (pos? n)
-               (pplace/solid-cut? world :tunnel feet dir n))
+        arrived (memory/arrived world)
+        kept (or (:dir (:pearls/heading world)) (:pearls/cage-dir world))
+        by-less (fn [dirs] (sort-by #(arrived-beside arrived feet %) dirs))
+        ways (if-let [[dx dz] kept]
+               (cons kept (by-less [[(- dz) dx] [dz (- dx)]]))
+               (by-less stairs/directions))]
+    (some (fn [d] (when-let [n (cage-way world arrived feet d)] [d n])) ways)))
+
+(defn tunnel-out
+  "A :tunnel of up to bore-length steps along the cage-break way (cage-dir), in the Nether,
+   with digs to spare (spare?) and a staircase not boxed from these feet; nil otherwise. The
+   Nether has no open sky to climb to."
+  [world]
+  (when (and (= dimension/nether (dimension/of world))
+             (pupkeep/spare? world)
+             (not (boxed-here? world)))
+    (when-let [[dir n] (cage-dir world)]
       {:intent/kind :tunnel :intent/dir dir :intent/length n :intent/for :pearls})))
+
+(defn cage-dir-hold
+  "The world with :pearls/cage-dir set to the heading of the running cage-break tunnel (a
+   :tunnel for :pearls), kept after it ends so tunnel-out goes on that way; dropped off the
+   Nether. The world as it was otherwise."
+  [world]
+  (let [i (:plan/intent world)]
+    (cond (not= dimension/nether (dimension/of world)) (dissoc world :pearls/cage-dir)
+          (and (= :tunnel (:intent/kind i)) (= :pearls (:intent/for i)) (:intent/dir i))
+          (assoc world :pearls/cage-dir (:intent/dir i))
+          :else world)))
 
 (defn cut-out
   "Stairs up out of the burrow's end, the other way from its mouth, for when the burrow is

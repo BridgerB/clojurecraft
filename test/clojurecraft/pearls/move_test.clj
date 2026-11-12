@@ -618,3 +618,62 @@
                                (assoc :time/now 9000000)
                                (avoided/note :boxed-at [8 64 8])))
         "a box with no staircase or tunnel failure in the story holds")))
+
+(defn cage
+  "A bot walled in the rock round [8 64 8] in the Nether, no enderman about, at time now, with
+   the walks to arrived (cells) done: the cage-break's case."
+  ([now] (cage now [] #{}))
+  ([now arrived open]
+   (-> (ps/walled-in (into ps/feet-cells open) [8.5 64.0 8.5])
+       (assoc :world/entities {} :player/dimension ps/nether :time/now now)
+       (ps/walked arrived))))
+
+(deftest a-cage-break-goes-on-the-way-it-cut-and-turns-only-where-that-way-is-blocked
+  ;; real race R1/17 at 7f4d162, bot r20: 877 of its 1,244 digs went to :hunt/cage-break over 65
+  ;; starts, each tunnel eight long on a heading the clock turned a quarter every thirty seconds:
+  ;; [-651 63 428] to [-651 63 420] to [-643 63 420] to [-635 63 420] to [-635 63 428] to
+  ;; [-643 63 428] to [-643 63 420], squares of its own tunnels it stood caged in again
+  (let [dir (fn [w] (:intent/dir (pmove/tunnel-out w)))]
+    (testing "no heading held"
+      (is (= {:intent/kind :tunnel
+              :intent/dir [1 0]
+              :intent/length pparams/bore-length
+              :intent/for :pearls}
+             (pmove/tunnel-out (cage 0)))
+          "nothing kept: the way with least ground walked to, the first on a tie")
+      (is (= #{[0 1]}
+             (set (map #(dir (assoc (cage %) :pearls/cage-dir [0 1])) [0 30000 60000 90000])))
+          "the kept way at every clock: the clock turns nothing")
+      (is (= [-1 0] (dir (assoc (cage 0 [[8 64 12] [14 64 6]] #{}) :pearls/cage-dir [0 1])))
+          "walked-to ground ahead: a quarter turn, to the side less walked (east has one)")
+      (is (= [1 0] (dir (assoc (cage 0 [[8 64 12] [2 64 6]] #{}) :pearls/cage-dir [0 1])))
+          "and the other side when the west is the more walked")
+      (is (= [-1 0]
+             (dir
+              (assoc (cage 0 [[14 64 6]] #{[8 63 9] [8 62 9] [8 61 9]}) :pearls/cage-dir [0 1])))
+          "a drop under the first step ahead: turned the same way")
+      (is (nil? (dir (assoc (cage 0 [[8 64 12] [10 64 8] [6 64 8]] #{}) :pearls/cage-dir [0 1])))
+          "ahead and both sides walked to: never back the way it came")
+      (is (= [0 1]
+             (:pearls/cage-dir (pmove/cage-dir-hold (assoc (cage 0)
+                                                           :plan/intent
+                                                           {:intent/kind :tunnel
+                                                            :intent/dir [0 1]
+                                                            :intent/for :pearls}))))
+          "held from the running cage-break tunnel")
+      (is (= [0 1] (:pearls/cage-dir (pmove/cage-dir-hold (assoc (cage 0) :pearls/cage-dir [0 1]))))
+          "and kept after it ends")
+      (is (nil? (:pearls/cage-dir
+                 (pmove/cage-dir-hold
+                  (assoc (cage 0) :pearls/cage-dir [0 1] :player/dimension "minecraft:overworld"))))
+          "dropped off the Nether"))
+    (testing "a heading held"
+      (let [h {:dir [-1 0] :from [8 64 8] :target [-56 64 8] :turns 0}]
+        (is (= #{[-1 0]}
+               (set (map #(dir (assoc (cage %) :pearls/heading h :pearls/cage-dir [0 1]))
+                         [0 30000 60000 90000])))
+            "the heading's way, before the kept one, at every clock")
+        (is (= [0 -1] (dir (assoc (cage 0 [[4 64 8] [12 64 12]] #{}) :pearls/heading h)))
+            "walked-to ground along it: a quarter turn to the side less walked")
+        (is (nil? (dir (assoc (cage 0 [[4 64 8] [8 64 4] [8 64 12]] #{}) :pearls/heading h)))
+            "never back against the heading")))))

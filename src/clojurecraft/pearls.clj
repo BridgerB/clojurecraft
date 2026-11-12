@@ -201,8 +201,9 @@
                                                                         (pmove/watch-progress
                                                                          (pmove/reach-heading-hold
                                                                           (pmove/track-seen
-                                                                           (psense/track-brutes
-                                                                            world))))))))))))
+                                                                           (pmove/cage-dir-hold
+                                                                            (psense/track-brutes
+                                                                             world)))))))))))))
                 (psense/shot-at? world) (assoc :pearls/shot-at-ms (:time/now world 0))
                 (fexit/sealed-full? world) (assoc :pearls/refuge-done true))]
     (cond (or (nil? look)

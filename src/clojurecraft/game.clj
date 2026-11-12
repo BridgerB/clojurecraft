@@ -330,6 +330,7 @@
               :plan/trail
               :pearls/exit-target
               :pearls/heading
+              :pearls/cage-dir
               :pearls/watch
               :plan/exit-columns)
       (emit {:packet/name :client-command :action (p/value :client-command :perform-respawn)})))

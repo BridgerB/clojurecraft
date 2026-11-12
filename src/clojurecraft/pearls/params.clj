@@ -74,6 +74,8 @@
 
 (def bore-length (:bore-length thresholds))
 
+(def cage-look (:cage-look thresholds))
+
 (def site-reach (:site-reach thresholds))
 
 (def candidates (:candidates thresholds))

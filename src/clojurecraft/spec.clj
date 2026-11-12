@@ -198,6 +198,7 @@
 (s/def :pearls/seen (s/coll-of (s/tuple int? int?) :kind set?))
 (s/def :plan/exit-columns (s/coll-of (s/tuple int? int?) :kind set?))
 (s/def :pearls/exit-target (s/tuple int? int? int?))
+(s/def :pearls/cage-dir (s/tuple int? int?))
 (s/def :angry/since int?)
 (s/def :angry/best number?)
 (s/def :angry/closed-at int?)
