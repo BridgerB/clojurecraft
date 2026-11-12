@@ -63,7 +63,9 @@
                              (cond (empty? ts) (reduced [w ts])
                                    (not (:event/kind e)) [w ts]
                                    (> (:time/now w 0) (first ts))
-                                   (do (println (line w (first ts))) [w (rest ts)])
+                                   (do (cond (:player/pos w) (println (line w (first ts)))
+                                             :else (println "AT" (first ts) "not in the world yet"))
+                                       [w (rest ts)])
                                    :else [(assoc (main/step w e) :bot/effects []) ts]))
                            [(game/init {:host "replay" :port 0 :name "Clj_why"}) ts]
                            path)
