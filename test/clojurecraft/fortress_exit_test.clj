@@ -623,6 +623,24 @@
         (is (nil? (fexit/fortress-retrace-target w2))
             "the far fallback in fortress-tunnel-target takes over instead")))))
 
+(deftest a-retrace-goes-on-out-and-never-back-to-the-cell-just-left
+  ;; real-18 lane 3 run 43003539322 Clj_r67 (7f4d162): the retrace's target flipped between
+  ;; [824 74 -223] and [820 74 -223] every few seconds for 43 minutes, the bot digging out the
+  ;; seal behind it at each turn. The trail (newest first) held its own escape steps ahead of
+  ;; the inbound walk, and the next cell after its own newest one was the one it had just left.
+  ;; In miniature: the inbound walk came in along z 8 from x 2 to x 10 (oldest x 2); the escape
+  ;; has stepped back from x 10 to x 6, newest last.
+  (let [inbound (mapv (fn [x] [x 64 8]) (range 2 11))
+        escape (mapv (fn [x] [x 64 8]) [9 8 7 6])
+        w (-> (ps/standing {})
+              (assoc :player/dimension "minecraft:the_nether" :player/pos [6.5 64.0 8.5])
+              (assoc :plan/trail (into inbound escape)))
+        t (fexit/fortress-retrace-target w)]
+    (is (= 2 (fexit/nearest-trail-index [6 64 8] [[7 64 8] [6 64 8] [5 64 8] [4 64 8]]))
+        "of the cells near the feet, the oldest")
+    (is (some? t))
+    (is (< (first t) 6) (str "on out toward the entrance, not back to x 8: " t))))
+
 (deftest the-refuge-hands-the-exit-over-after-minutes-at-full-health
   ;; race-read 1105b Q2: 22 of 52 sim rod bots timed out at the spawner pocket, fighting
   ;; and collecting for hours (TRACE :fight 21480, :collect-drops 21696), because #723's

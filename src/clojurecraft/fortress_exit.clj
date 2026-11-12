@@ -226,11 +226,17 @@
            first))))
 
 (defn nearest-trail-index
-  "The index in trail of the cell closest to feet, or nil."
+  "The index in trail (newest first) of the oldest cell within a block of the cell closest to
+   feet, or nil. Taking the newest, the bot's own cell just recorded, put the retrace's next cell
+   at the cell it had just left, and every escape step turned it round: a real rod bot paced
+   between x 820 and 824 for 43 minutes of :tunnel-to, digging out the seal behind it each time.
+   The oldest near is where the inbound walk passed, and the cells after it lead on out."
   [feet trail]
   (when (seq trail)
-    (let [indexed (map-indexed vector trail)]
-      (first (apply min-key (fn [[_ c]] (physics/distance feet c)) indexed)))))
+    (let [indexed (map-indexed vector trail)
+          d (fn [[_ c]] (physics/distance feet c))
+          best (d (apply min-key d indexed))]
+      (first (last (filter #(<= (d %) (+ best 1.0)) indexed))))))
 
 (defn pocket-bore-heading
   "The fixed cardinal exit heading [dx dz] for the pocket bore, or nil with no spawner known:
@@ -308,7 +314,8 @@
   [world]
   (let [feet (intent/feet world)
         [_ fy _] feet
-        trail (distinct (pcover/trail-cells world))]
+        ;; each cell at its oldest visit: the inbound walk's order, not the escape's pacing
+        trail (reverse (distinct (reverse (pcover/trail-cells world))))]
     (when (seq trail)
       (let [idx (nearest-trail-index feet trail)
             remaining (when idx (drop (inc idx) trail))
