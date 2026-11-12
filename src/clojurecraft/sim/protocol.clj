@@ -599,13 +599,17 @@
   "The model with a death by cause (a mob's kind, :on_fire, :lava, :starve, :drown, :scheduled)
    noted in :sim/death-causes and told to the client as player-combat-kill, the player's id and the
    death message component the server sends for it (text/cause-component; how is the blow's own
-   kind, :fireball, :arrow or :wither, or nil)."
+   kind, :fireball, :arrow or :wither, or nil). The message names a mob by its entity type
+   (mob/kinds :entity): a big magma cube is \"entity.minecraft.magma_cube\", as the server says,
+   while :sim/death-causes keeps the model's own kind."
   [sim cause how]
   (-> sim
       (update :sim/death-causes (fnil conj []) cause)
       (send {:packet/name :player-combat-kill
              :player-id (player-eid-of sim)
-             :message (text/cause-component (:sim/username sim "Player") cause how)})))
+             :message (text/cause-component (:sim/username sim "Player")
+                                            (:entity (mob/kinds cause) cause)
+                                            how)})))
 
 (defn hurt
   "The model after the player takes amount of damage, exhausting? (a mob's hit, an arrow, a blast:
