@@ -12,6 +12,7 @@
             [clojure.java.io :as io]
             [clojure.spec.alpha :as s]
             [clojurecraft.blocks :as blocks]
+            [clojurecraft.food :as food]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
@@ -217,12 +218,25 @@
                   held))
           (:junk/filler-order junk-table))))
 
+(defn food-surplus-slot
+  "The player slot of a food stack (food/nutrition) whose loss still leaves junk.edn's
+   :junk/food-keep of food held, or nil."
+  [world held]
+  (let [counts (recipe/counts (:player/inventory world))
+        total (reduce + 0 (vals (select-keys counts (keys food/nutrition))))]
+    (some (fn [[p n c]]
+            (when (and (contains? food/nutrition n) (>= (- total c) (:junk/food-keep junk-table)))
+              p))
+          held)))
+
 (defn junk-slot
   "The player slot (main inventory first) of the stack a full inventory throws away: the first
-   holding junk (junk?), else a worn tool with a better one beside it (worn-spare-slot), else a
-   building-block stack whose loss still leaves filler-keep of its kind, else one whose loss
-   still leaves junk.edn's total of building blocks (filler-surplus-slot); nil when there is
-   none."
+   holding junk (junk?), else a building-block stack whose loss still leaves filler-keep of its
+   kind, else one whose loss still leaves junk.edn's total of building blocks
+   (filler-surplus-slot), else food past junk.edn's :junk/food-keep (food-surplus-slot), and
+   only last a worn tool with a better one beside it (worn-spare-slot); nil when there is none.
+   A tool goes last: a toss for room that threw a pickaxe while stone or food could go left real
+   stage-18 bots walking back over it, up to 18 times a run."
   [world]
   (let [inv (:player/inventory world)
         counts (recipe/counts inv)
@@ -231,11 +245,12 @@
                    :when s]
                [p (recipe/item-name (:item s)) (:count s)])]
     (or (some (fn [[p n]] (when (junk? world n) p)) held)
-        (worn-spare-slot world)
         (some (fn [[p n c]]
                 (when-let [keep (filler-keep n)] (when (>= (- (get counts n 0) c) keep) p)))
               held)
-        (filler-surplus-slot world held))))
+        (filler-surplus-slot world held)
+        (food-surplus-slot world held)
+        (worn-spare-slot world))))
 
 (defn tossable
   "The player slot to throw a stack from so that view v has a free slot: junk-slot when no slot
@@ -258,8 +273,9 @@
 
 (defn reserve-toss
   "A :toss of junk until n slots are free (free-reserve by default), or nil: fewer are free, a
-   stack is junk (junk-slot: the junk kinds, a worn spare, building blocks beyond filler-keep;
-   never food, a tool in use, armour, rods, pearls, the table, sticks or the portal kit) and no
+   stack is junk (junk-slot: the junk kinds, building blocks beyond filler-keep, food past a
+   stack, and last a worn spare; never a tool in use, armour, rods, pearls, the table, sticks or
+   the portal kit) and no
    container is open."
   ([world] (reserve-toss world free-reserve))
   ([world n]

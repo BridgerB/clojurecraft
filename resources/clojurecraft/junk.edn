@@ -27,4 +27,9 @@
  ;; goes only above its own keep (window/filler-keep).
  :junk/filler-total 256
  :junk/filler-order [:granite :andesite :diorite :dirt :tuff :cobbled_deepslate :netherrack :basalt
-                     :blackstone]}
+                     :blackstone]
+ ;; Food held past :junk/food-keep (a stack) together may go a stack at a time, after the building
+ ;; blocks and before any tool: a toss for room never throws what keeps the bot alive while extra
+ ;; food or stone could go (real stage-18 bots threw a pickaxe for room up to 18 times a run and
+ ;; walked back over it)
+ :junk/food-keep 64}

@@ -257,6 +257,29 @@
                                                         :count 1}}}))
         "a better tool of another item is no reason")))
 
+(deftest stone-or-food-goes-before-a-worn-pickaxe
+  ;; real Clj_r16 (botlogs 2026-11-12, 43125664730-r2-b2): 18 pickaxe tosses for room in a run,
+  ;; each picked up again seconds later, with stone and food to spare beside them
+  (let [pick (fn [damage]
+               {:item (recipe/item-id :stone_pickaxe) :count 1 :components {:damage damage}})
+        stack (fn [k n] {:item (recipe/item-id k) :count n})
+        worn {9 (pick 110) 10 (pick 20)}]
+    (is (= 11
+           (window/junk-slot {:player/inventory (assoc worn
+                                                       11 (stack :cobblestone 64)
+                                                       12 (stack :cobblestone 64)
+                                                       13 (stack :cobblestone 64))}))
+        "a cobblestone stack past its keep goes, not the worn pickaxe")
+    (is (= 11
+           (window/junk-slot {:player/inventory
+                              (assoc worn 11 (stack :cooked_beef 64) 12 (stack :cooked_beef 64))}))
+        "food past a stack goes, not the worn pickaxe")
+    (is (nil? (window/food-surplus-slot {:player/inventory {11 (stack :cooked_beef 64)}}
+                                        [[11 :cooked_beef 64]]))
+        "a stack of food alone stays")
+    (is (= 9 (window/junk-slot {:player/inventory worn}))
+        "with nothing else to go, the worn pickaxe beside a better one, last")))
+
 (deftest four-free-slots-are-kept-in-the-nether-from-junk-only
   ;; race 41181938317 (c996f54): all four bots that reached a fortress held 36 of 36 slots (877
   ;; cobblestone, 128 diorite, 64 cobbled deepslate, 64 netherrack ...), so a rod or a pearl dropped
