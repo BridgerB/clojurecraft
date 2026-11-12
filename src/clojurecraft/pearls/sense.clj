@@ -504,11 +504,19 @@
                             (endermen (avoided/forget world :blacklist) pparams/strike-range))
                       pos))))
 
+(defn shooter-kind?
+  "Does a mob of kind hurt from range: one of ranged-kinds (a blaze, a ghast), or one mob/kinds
+   gives a :shoot (a skeleton's arrow)? Such a one counts toward a swarm only with a clear line
+   to the eye (swarm)."
+  [kind]
+  (boolean (or (contains? pparams/ranged-kinds kind) (:shoot (mob/kinds kind)))))
+
 (defn swarm
   "{eid entity} of the monsters (blocks/mobs category) alive within swarm-radius of pos (the feet when
    not given) that are no enderman (the quarry, met its own way from the burrow): a zombified
-   piglin counts, hostile on sight or not, as it comes in packs and one hit angers them all. One the
-   server does not tick (entity/ticking?, beyond its simulation distance) is frozen and no threat."
+   piglin counts, hostile on sight or not, as it comes in packs and one hit angers them all; a
+   shooter (shooter-kind?) only with a clear line to the eye. One the server does not tick
+   (entity/ticking?, beyond its simulation distance) is frozen and no threat."
   ([world] (swarm world (:player/pos world)))
   ([world pos]
    (into {}
@@ -519,8 +527,10 @@
                         (entity/ticking? (:player/pos world) (:server/simulation-distance world) e)
                         (<= (physics/distance pos (:entity/pos e))
                             (or (:range (mob/kinds (entity/kind e))) pparams/swarm-radius))
-                        ;; a blaze behind a wall hits nobody, and travel is gated on swarmed?
-                        (or (not (contains? pparams/ranged-kinds (entity/kind e)))
+                        ;; a blaze, or a skeleton, behind a wall hits nobody, and every mover is
+                        ;; gated on swarmed?: one unseen skeleton 12 blocks off held a real bot
+                        ;; looking out on one spot for 148 minutes
+                        (or (not (shooter-kind? (entity/kind e)))
                             (not= pos (:player/pos world))
                             (combat/seen? world e)))))
          (:world/entities world))))
