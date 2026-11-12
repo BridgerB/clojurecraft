@@ -376,7 +376,8 @@
    heading's :dir, else :pearls/cage-dir) while it is open (cage-way); where it is blocked, a
    quarter turn to the side with less ground walked to (arrived-beside), the other side next,
    never back the way it came. With neither held, the heading of stairs/directions with least
-   ground walked to. A heading picked by the clock turned a quarter every tunnel and closed a
+   ground walked to. A way in the held heading's :blocked (its legs given up that way) is never
+   taken. A heading picked by the clock turned a quarter every tunnel and closed a
    square of eight-long tunnels, each end ground walked to, so the bot stood caged again in its
    own digging."
   [world]
@@ -386,8 +387,11 @@
         by-less (fn [dirs] (sort-by #(arrived-beside arrived feet %) dirs))
         ways (if-let [[dx dz] kept]
                (cons kept (by-less [[(- dz) dx] [dz (- dx)]]))
-               (by-less stairs/directions))]
-    (some (fn [d] (when-let [n (cage-way world arrived feet d)] [d n])) ways)))
+               (by-less stairs/directions))
+        blocked (:blocked (:pearls/heading world) #{})]
+    (some (fn [d]
+            (when-let [n (when-not (contains? blocked d) (cage-way world arrived feet d))] [d n]))
+          ways)))
 
 (defn tunnel-out
   "A :tunnel of up to bore-length steps along the cage-break way (cage-dir), in the Nether,

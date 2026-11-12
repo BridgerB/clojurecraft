@@ -676,4 +676,7 @@
         (is (= [0 -1] (dir (assoc (cage 0 [[4 64 8] [12 64 12]] #{}) :pearls/heading h)))
             "walked-to ground along it: a quarter turn to the side less walked")
         (is (nil? (dir (assoc (cage 0 [[4 64 8] [8 64 4] [8 64 12]] #{}) :pearls/heading h)))
-            "never back against the heading")))))
+            "never back against the heading")
+        (is
+         (= [0 1] (dir (assoc (cage 0) :pearls/heading (assoc h :blocked #{[-1 0] [0 -1]}))))
+         "a way the heading's legs were given up along (:blocked) is never cut: the next one")))))
