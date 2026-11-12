@@ -115,6 +115,15 @@
   [world]
   (reduce + 0 (vals (select-keys (recipe/counts (:player/inventory world)) fillers))))
 
+(defn kept
+  "How many of the fillers the tunnel-keep counts the inventory holds, together: carried without
+   soul soil, which a toss for room throws first (junk.edn :junk/always), so it is never a keep."
+  [world]
+  (reduce +
+          0
+          (vals (select-keys (recipe/counts (:player/inventory world))
+                             (remove #{:soul_soil} fillers)))))
+
 (defn walkable
   "The filler a step's floor at cell is laid from: building's item when a block of it laid at cell
    stands as a floor (path/floor?), else nil. Soul sand, the last resort a hand-dug tunnel

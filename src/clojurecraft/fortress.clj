@@ -141,7 +141,7 @@
   (let [seal-cell (plus from [0 1 0])]
     (if (and seal-behind?
              world
-             (> (filler/carried world) filler/tunnel-keep)
+             (> (filler/kept world) filler/tunnel-keep)
              (filler/building world 1)
              (build/foundation world seal-cell))
       [(build/place-op seal-cell to nil :seal-behind)]

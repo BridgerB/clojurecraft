@@ -737,7 +737,7 @@
    max-candidates nearest). Netherrack is most of the Nether and a dig of it takes a moment."
   [world]
   (or (intent/chain-next (:plan/last world) :restock netherrack-drops {})
-      (when (< (filler/carried world) filler/tunnel-keep)
+      (when (< (filler/kept world) filler/tunnel-keep)
         (->> (stone/exposed-of-states world netherrack-states)
              (take stone/max-candidates)
              (map #(stone/walk-to world % :restock))

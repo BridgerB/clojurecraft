@@ -76,7 +76,9 @@
               (assoc-in [:player/inventory 1] (ps/item :iron_pickaxe 1)))
         stocked (assoc-in w [:player/inventory 2] (ps/item :netherrack 40))
         cell (fn [k] {:intent/kind k :intent/for :restock :intent/target [11 64 8]})]
-    (is (< (filler/carried w) filler/tunnel-keep))
+    (is (< (filler/kept w) filler/tunnel-keep))
+    (is (some? (pmove/restock (assoc-in w [:player/inventory 2] (ps/item :soul_soil 64))))
+        "soul soil is no keep: a toss for room throws it first")
     (let [i (pmove/restock w)]
       (is (= [:walk :restock true] [(:intent/kind i) (:intent/for i) (:intent/pickup? i)]))
       (is (#{[11 64 8] [11 65 8]} (:intent/target i)) "the netherrack in sight"))
