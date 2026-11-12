@@ -10,6 +10,7 @@
             [clojurecraft.fortress :as fortress]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
+            [clojurecraft.memo :as memo]
             [clojurecraft.memory :as memory]
             [clojurecraft.pearls.cover :as pcover]
             [clojurecraft.pearls.params :as pparams]
@@ -82,22 +83,60 @@
   (let [spawners (memory/positions-now world [blaze/spawner])]
     (if (seq spawners) spawners (fortress-points world))))
 
-(defn escape-near?
-  "Is the bot within fortress-escape-reach of any exit-anchors position (the spawner, else any fortress point)?"
-  [world]
-  (let [feet (intent/feet world)]
-    (boolean (some #(or (<= (physics/distance feet %) pparams/fortress-escape-reach)
-                        (<= (physics/horizontal-distance feet %) pparams/fortress-escape-reach))
-                   (exit-anchors world)))))
+(defn column-of
+  "The chunk column [cx cz] of a cell [x y z]."
+  [[x _ z]]
+  [(math/floor-div (long x) 16) (math/floor-div (long z) 16)])
 
-(defn near-fortress?
-  "Is the bot within fortress-escape-reach of any known spawner or fortress brick?"
+(def columns
+  "[points min-y] → the points at or above min-y grouped by chunk column, {[cx cz] [p ...]}.
+   Remembered by the points' identity (memo/by): the points are a positions-now answer, the same
+   object until a sighting changes them. A fortress holds thousands of points (real Clj_r51 knew
+   5,675), and near-fortress? read every one of them, several times a tick, from the spare-picks
+   row's safety check: a third of a 14-bot race JVM's samples on lane 1, five bots a core each."
+  (memo/by [:identical :equal]
+           64
+           (fn [ps min-y] (group-by column-of (filter #(>= (long (second %)) (long min-y)) ps)))))
+
+(defn within-columns?
+  "Is a point of cols (columns' value) within r blocks of feet on the plane? Only the columns
+   within r of the feet's are read: a point r away on the plane is at most (ceil r/16) columns off."
+  [cols feet r]
+  (let [[cx cz] (column-of feet)
+        n (inc (long (math/ceil (/ (double r) 16.0))))]
+    (boolean (some (fn [k] (some #(<= (physics/horizontal-distance feet %) r) (get cols k)))
+                   (for [dx (range (- n) (inc n))
+                         dz (range (- n) (inc n))]
+                     [(+ (long cx) dx) (+ (long cz) dz)])))))
+
+(defn spawner-columns
+  "The known spawners in the bot's dimension by chunk column (columns)."
+  [world]
+  (columns (memory/positions-now world [blaze/spawner]) Long/MIN_VALUE))
+
+(defn brick-columns
+  "The fortress bricks fortress/bricks keeps (at or above fortress/brick-min-y), by chunk column (columns)."
+  [world]
+  (columns (memory/positions-now world fortress/brick-states) fortress/brick-min-y))
+
+(defn escape-near?
+  "Is the bot within fortress-escape-reach of any exit-anchors position (the spawner, else any
+   fortress point)? On the plane: a point within the reach in space is within it on the plane, so
+   the plane alone answers, read by chunk column (within-columns?)."
   [world]
   (let [feet (intent/feet world)
-        pts (fortress-points world)]
-    (boolean (some #(or (<= (physics/distance feet %) pparams/fortress-escape-reach)
-                        (<= (physics/horizontal-distance feet %) pparams/fortress-escape-reach))
-                   pts))))
+        r pparams/fortress-escape-reach
+        sp (spawner-columns world)]
+    (if (seq sp) (within-columns? sp feet r) (within-columns? (brick-columns world) feet r))))
+
+(defn near-fortress?
+  "Is the bot within fortress-escape-reach of any known spawner or fortress brick? On the plane,
+   by chunk column, as escape-near?."
+  [world]
+  (let [feet (intent/feet world)
+        r pparams/fortress-escape-reach]
+    (or (within-columns? (spawner-columns world) feet r)
+        (within-columns? (brick-columns world) feet r))))
 
 (defn surrounded-by-lava?
   "Is the bot surrounded by lava on every side: every lateral heading from feet has lava

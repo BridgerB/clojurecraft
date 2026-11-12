@@ -2556,7 +2556,11 @@
 
 (defn choice-over
   "The world after one plan-tick (chosen-over) and chose, with row goal chosen over a running intent
-   i serving :blaze-rods, and next-intent answering next."
+   i serving :blaze-rods, and next-intent answering next. It redefines plan/choose, plan/next-intent
+   and intent/run for the whole JVM (with-redefs), so a test that calls it is ^:eftest/synchronized:
+   run beside the sim's recorded runs, the redefinition reached their live run and not their replay
+   (intent/run answering the world unchanged for a tick), and the-portal-from-a-kit-and-its-recording-
+   replays failed, its replay a :swing short at the dig of the frame."
   [i goal next]
   (let [w (-> (walking #{} (:intent/goal i))
               (assoc :plan/intent (merge {:intent/status :active :intent/id 1} i))
@@ -2570,7 +2574,7 @@
        (plan/plan-tick w {:event/kind :tick :event/now 50 :event/rand 0.5} (table-with goal))
        (table-with goal)))))
 
-(deftest a-row-that-preempts-is-recorded-with-the-row-it-was-over
+(deftest ^:eftest/synchronized a-row-that-preempts-is-recorded-with-the-row-it-was-over
   (let [w (choice-over {:intent/kind :walk :intent/target [1 64 1] :intent/goal :blaze-rods}
                        defend-row
                        {:intent/kind :fight :intent/target 8})]
