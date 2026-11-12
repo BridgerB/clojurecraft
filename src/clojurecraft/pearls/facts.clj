@@ -158,6 +158,7 @@
    :overworld-death? (fn [_ w]
                        (and (pos? (:stats/deaths w 0)) (= dimension/overworld (dimension/of w))))
    :far (fn [_ w] (psense/endermen w pparams/seek-radius))
+   :far-seen (fn [_ w] (psense/seen-endermen w pparams/seek-radius))
    :fight-id (fn [f w]
                (cond (and (f :ce) (not (psense/unfightable? w (f :ceid) (f :ce)))) (f :ceid)
                      (and (or (f :angry?) (f :in-reach?))
@@ -281,12 +282,14 @@
                    (sort-by (fn [[_ e]] (physics/distance (:player/pos w) (:entity/pos e))))
                    (take pparams/candidates)))
         (when-not (pupkeep/worn-out? w)
-          (when-let [[_ e] (pmove/routable w (f :far))]
+          (when-let [[_ e] (pmove/routable w (f :far-seen))]
             {:intent/kind :walk :intent/target (combat/cell (:entity/pos e)) :intent/for :pearls})))
-      (when-not (f :overworld-death?) (pmove/descend w (psense/endermen w pparams/descend-radius)))
-      (pmove/ascend w (psense/endermen w pparams/descend-radius))
-      (pmove/toward w (f :far))
-      (when-not (f :overworld-death?) (pmove/bore w (psense/endermen w pparams/descend-radius)))
+      (when-not (f :overworld-death?)
+        (pmove/descend w (psense/seen-endermen w pparams/descend-radius)))
+      (pmove/ascend w (psense/seen-endermen w pparams/descend-radius))
+      (pmove/toward w (f :far-seen))
+      (when-not (f :overworld-death?)
+        (pmove/bore w (psense/seen-endermen w pparams/descend-radius)))
       (when (= :lookout (:intent/kind (:plan/last w)))
         (or (pmove/roam w)
             (when (pmove/stuck? w) (pmove/climb-out w))
