@@ -190,7 +190,10 @@
 (s/def :heading/from ::block-pos)
 (s/def :heading/turns int?)
 (s/def :heading/target ::block-pos)
-(s/def :pearls/heading (s/keys :req-un [:heading/dir :heading/from :heading/target :heading/turns]))
+(s/def :heading/blocked (s/coll-of (s/tuple int? int?) :kind set?))
+(s/def :pearls/heading
+  (s/keys :req-un [:heading/dir :heading/from :heading/target :heading/turns]
+          :opt-un [:heading/blocked]))
 (s/def :watch/target ::block-pos)
 (s/def :watch/best number?)
 (s/def :watch/at int?)

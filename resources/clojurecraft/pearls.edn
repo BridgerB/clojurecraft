@@ -203,6 +203,8 @@
  ;; the heading's tunnels stay in y 40 to 90: over the lava sea, under the roof
  :heading-min-y 40
  :heading-max-y 90
+ ;; blocks a heading leg climbs over the feet when the way on and both ways round are blocked: the sea's shore at y 40 blocked them all (real Clj_r51)
+ :heading-climb 16
  ;; blocks from a leg's target within which the leg is over and the next is picked
  :heading-arrived 3.0
  ;; chunks a heading's unexplored ground is counted in, along an axis from the feet's chunk: :near to :far out, :width either side (past the view distance of 6, where the next forest is)

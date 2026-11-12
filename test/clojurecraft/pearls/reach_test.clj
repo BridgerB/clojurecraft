@@ -65,6 +65,45 @@
       (is (not (contains? (pmove/reach-heading-hold (with-forest held [60 60])) :pearls/heading)))
       (is (not (contains? (game/die held) :pearls/heading))))))
 
+(deftest a-blocked-heading-remembers-its-blocked-ways-and-climbs-when-all-are
+  ;; Real Clj_r51 (issue #263), its last hour at the lava sea's shore (feet y 32, legs at y 40): each
+  ;; leg blocked after four tunnels, and the turn chose from the ways round the current way alone, so
+  ;; south blocked turned east, east blocked turned south again, for an hour
+  (let [netherrack (blocks/default-state :netherrack)
+        rock (into {} (for [x (range 0 16) y (range 30 60) z (range 0 16)] [[x y z] netherrack]))
+        w (-> (ps/standing {} rock)
+              (assoc :player/dimension ps/nether :player/pos [8.5 41.0 8.5])
+              (assoc-in [:player/inventory 1] (ps/item :iron_pickaxe 1)))
+        feet [8 41 8]
+        held
+        (fn [h]
+          (assoc w :pearls/heading (merge {:from feet :turns 0} h) :plan/blacklist #{(:target h)}))
+        south (pmove/reach-heading-hold (held {:dir [0 1] :target [8 41 72]}))
+        east (pmove/reach-heading-hold
+              (held (assoc (:pearls/heading south) :dir [1 0] :target [72 41 8])))]
+    (is (#{[1 0] [-1 0]} (:dir (:pearls/heading south))) "south blocked: a quarter round")
+    (is (= #{[0 1]} (:blocked (:pearls/heading south))))
+    (testing "east blocked after south: the way round that is not blocked, never south again"
+      (is (= [0 -1] (:dir (pmove/heading-turn w {:dir [1 0] :blocked #{[0 1]}}))))
+      (is (= #{[0 1] [1 0]} (:blocked (pmove/heading-turn w {:dir [1 0] :blocked #{[0 1]}}))))
+      (is (not= [0 1] (:dir (:pearls/heading east)))))
+    (testing "the way on and both ways round blocked: back, climbing, the blocked ways forgotten"
+      (let [t (pmove/heading-turn w {:dir [0 1] :blocked #{[1 0] [-1 0]}})
+            climbed (pmove/reach-heading-hold
+                     (held {:dir [0 1] :target [8 41 72] :blocked #{[1 0] [-1 0]}}))]
+        (is (= {:dir [0 -1] :blocked #{} :climb? true} t))
+        (is (= [0 -1] (:dir (:pearls/heading climbed))))
+        (is (= (+ 41 pparams/heading-climb) (second (:target (:pearls/heading climbed)))))
+        (is (not (contains? (:pearls/heading climbed) :blocked)))))
+    (testing "a leg that arrives forgets the blocked ways"
+      (let [arrived (pmove/reach-heading-hold
+                     (assoc
+                      w
+                      :pearls/heading
+                      {:dir [-1 0] :from feet :turns 2 :target [9 41 8] :blocked #{[0 1] [1 0]}}))]
+        (is (not (contains? (:pearls/heading arrived) :blocked)))
+        (is (= [(- 8 pparams/heading-leg) 41 8] (:target (:pearls/heading arrived))))))))
+
 (deftest a-bot-above-the-climb-ceiling-with-no-mover-tunnels-down-along-its-heading
   ;; Logged state, sim R1/17 seed 1 (probe p2facts 42402292588, issue #263): at [961 104 -144] in the
   ;; Nether, health 20, fortress exit done, no forest known, can-tunnel-out? true, 5 hoglins 25 to 30

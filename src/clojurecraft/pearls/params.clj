@@ -293,6 +293,8 @@
 
 (def heading-max-y (:heading-max-y thresholds))
 
+(def heading-climb (:heading-climb thresholds))
+
 (def heading-arrived (:heading-arrived thresholds))
 
 (def seen-corridor (:seen-corridor thresholds))

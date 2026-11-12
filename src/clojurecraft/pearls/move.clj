@@ -771,13 +771,31 @@
           (first dirs)
           (rest dirs)))
 
+(defn heading-turn
+  "Where heading h goes when its leg target is avoided (a leg blocked): {:dir :blocked :climb?}.
+   Its way joins :blocked, and it turns a quarter to the less-seen of the ways round not blocked
+   (most-unseen-dir). With both ways round blocked as well it climbs (:climb?, heading-climb over
+   the feet) along the reverse, else on, and forgets what was blocked: at another height they may
+   be open. Without the memory the turn chose from the ways round the current way alone, so real
+   Clj_r51 at the lava sea's shore turned south, east, south, east for an hour, every leg blocked
+   after four tunnels."
+  [world h]
+  (let [[dx dz :as d] (:dir h)
+        blocked (conj (:blocked h #{}) d)
+        round (remove blocked [[(- dz) dx] [dz (- dx)]])
+        back [(- dx) (- dz)]]
+    (if (seq round)
+      {:dir (most-unseen-dir world round) :blocked blocked :climb? false}
+      {:dir (if (contains? blocked back) d back) :blocked #{} :climb? true})))
+
 (defn reach-heading-hold
   "The world with :pearls/heading {:dir [dx dz] :from feet :target leg-target :turns n} held while
    the bot is in the Nether with no warped forest known: picked once, the axis with the most
    unseen ground ahead (most-unseen-dir; a tie goes to away from the fortress, fexit/fortress-exit-dir
    rounded to the nearer axis), its leg target kept at every act. A new leg target (leg-from, from
-   the feet) only when the feet are within heading-arrived of it; when it is avoided (a leg
-   blocked) the heading turns a quarter, to the less-seen side, first; and after heading-span
+   the feet) only when the feet are within heading-arrived of it, the ways blocked forgotten; when
+   it is avoided (a leg blocked) the heading turns (heading-turn: a quarter to a way not blocked
+   here, else a climb); and after heading-span
    blocks along the heading it is picked again. Dropped once a forest is known or off the Nether.
    The world as it was otherwise."
   [world]
@@ -800,13 +818,21 @@
                  pparams/heading-span))
           (assoc world :pearls/heading (pick))
           (avoided/noted? world :blacklist t)
-          (let [[dx dz] (:dir h)
-                dir (most-unseen-dir world [[(- dz) dx] [dz (- dx)]])]
-            (assoc world
-                   :pearls/heading
-                   (assoc h :dir dir :target (leg-from world feet dir) :turns (inc (:turns h)))))
+          (let [{:keys [dir blocked climb?]} (heading-turn world h)
+                from (if climb? (update feet 1 + pparams/heading-climb) feet)]
+            (assoc
+             world
+             :pearls/heading
+             (cond-> (-> h
+                         (assoc :dir dir :target (leg-from world from dir) :turns (inc (:turns h)))
+                         (dissoc :blocked))
+               (seq blocked) (assoc :blocked blocked))))
           (<= (physics/horizontal-distance feet t) pparams/heading-arrived)
-          (assoc-in world [:pearls/heading :target] (leg-from world feet (:dir h)))
+          (assoc world
+                 :pearls/heading
+                 (-> h
+                     (assoc :target (leg-from world feet (:dir h)))
+                     (dissoc :blocked)))
           :else world)))
 
 (defn held-class
