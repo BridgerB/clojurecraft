@@ -39,13 +39,17 @@
 
 (defn endermen
   "{eid entity} of the endermen the hunt may go after: seen-endermen the server ticks
-   (entity/ticking?). One beyond its simulation distance is frozen: it never comes to a lookout,
-   is never provoked by a stare and never needs fleeing, so it is not there for the hunt."
+   (entity/ticking?), and every angry one (entity/creepy?), frozen or not. A calm one beyond the
+   simulation distance never comes to a lookout and is never provoked by a stare, so it is not
+   there for the hunt; an angry one is: the bot that walks out comes within the distance, the
+   enderman wakes still angry and strikes it in the open."
   ([world] (endermen world pparams/hunt-radius))
   ([world radius]
    (let [pos (:player/pos world)
          d (:server/simulation-distance world)]
-     (into {} (filter (fn [[_ e]] (entity/ticking? pos d e))) (seen-endermen world radius)))))
+     (into {}
+           (filter (fn [[_ e]] (or (entity/creepy? e) (entity/ticking? pos d e))))
+           (seen-endermen world radius)))))
 
 (defn at-hand
   "[eid entity] of the enderman the hunt reckons with where the bot stands: the nearest not

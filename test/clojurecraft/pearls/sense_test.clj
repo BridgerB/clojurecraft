@@ -1147,3 +1147,14 @@
     (is (= #{5} (set (keys (psense/seen-endermen frozen pparams/seek-radius)))) "but seen")
     (is (= 5 (first (pmove/distant-sighting frozen))) "and a sighting to go toward")
     (is (= #{5} (set (keys (psense/endermen w pparams/seek-radius)))) "no distance known: there")))
+
+(deftest an-angry-enderman-counts-frozen-or-not
+  ;; a frozen angry enderman wakes still angry when the bot walks out within the simulation
+  ;; distance, so the guards that hold the bot in cover reckon with it; only a calm one is left out
+  (let [angry (assoc (ps/mob :enderman [8.5 64.0 60.5]) :entity/creepy? true)
+        w (assoc (ps/standing {5 angry}) :server/simulation-distance 2)]
+    (is (= #{5} (set (keys (psense/endermen w pparams/seek-radius))))
+        "chunk 3 under 2, angry: there")
+    (is (empty? (psense/endermen (assoc-in w [:world/entities 5 :entity/creepy?] false)
+                                 pparams/seek-radius))
+        "the same enderman calm: frozen, not there")))
