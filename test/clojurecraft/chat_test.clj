@@ -292,7 +292,12 @@
     (is (= "death.attack.mob" (get (first (map :message (hit :zombie nil))) "translate")))
     (is (= "death.attack.fireball" (get (first (map :message (hit :blaze :fireball))) "translate")))
     (is (= "death.attack.wither"
-           (get (first (map :message (hit :wither_skeleton :wither))) "translate")))))
+           (get (first (map :message (hit :wither_skeleton :wither))) "translate")))
+    (testing "a magma cube of any size is named as the server names it, the model's kind kept"
+      (let [big (sim-protocol/hurt (arena {}) 5.0 true :magma_cube_big nil)]
+        (is (= [(text/cause-component "Clj_r05" :magma_cube nil)]
+               (map :message (m/said big :player-combat-kill))))
+        (is (= [:magma_cube_big] (:sim/death-causes big)))))))
 
 (deftest a-blow-that-leaves-the-player-alive-tells-no-death
   (is (empty? (m/said (sim-protocol/hurt (assoc (arena {}) :sim/health 20.0) 5.0 true :zombie)

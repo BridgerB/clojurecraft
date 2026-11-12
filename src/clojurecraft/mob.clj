@@ -521,16 +521,22 @@
 
 (defn hop-reach?
   "May a jumper of kind (:hop) at pos meet a player with feet at target: on the plane within its
-   :reach, the player's box between its feet and the top of its box at the top of the hop, and the
-   line clear (sight?) from its head lifted to the player's height (at most :hop) to the eye. A
-   pillar under the player is under the hop; a cell walled two high and roofed is not reached."
+   :reach, the player's box between its feet and the top of its box at the top of the hop, the
+   jump itself clear (the cells over its box up to the lift free: a cube under a ceiling rises no
+   higher than the ceiling), and the line clear (sight?) from its head lifted to the player's
+   height (at most :hop) to the eye. A pillar under the player is under the hop; a cell walled two
+   high and roofed is not reached, and neither is a bot over the roof of the cube's cave."
   [solid? kind pos target]
   (let [k (kinds kind)
         [x y z] pos
+        h (second (:box k))
         dy (- (second target) y)
-        lift (min (:hop k 0.0) (max 0.0 dy))]
+        lift (min (:hop k 0.0) (max 0.0 dy))
+        [cx cy cz] (cell-of [x (+ y h -0.01) z])
+        top (long (math/floor (+ y h lift -0.01)))]
     (and (<= (flat-distance pos target) (:reach k 0.0))
-         (< (- physics/height) dy (+ (:hop k 0.0) (second (:box k))))
+         (< (- physics/height) dy (+ (:hop k 0.0) h))
+         (not-any? #(solid? [cx % cz]) (range cy (inc top)))
          (sight? solid? (head kind [x (+ y lift) z]) (physics/eye target)))))
 
 (defn touches?
