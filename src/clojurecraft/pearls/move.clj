@@ -736,6 +736,7 @@
      :intent/reach 1.5
      :intent/steps fortress/steps-per-tunnel
      :intent/seal-behind? true
+     :intent/no-pace? true
      :intent/for :pearls}))
 
 (defn track-seen

@@ -796,6 +796,42 @@
         (is (= [1 0 0] (:intent/move out)))
         (is (= 0 (:intent/retreats out)))))))
 
+(deftest a-heading-leg-that-only-paces-an-open-corridor-is-blocked
+  ;; Real Clj_r51 (issue #263): its heading legs never dug, each leg thirty-two steps four times
+  ;; over up and down a corridor earlier legs had dug at the lava sea's shore, every cell new to
+  ;; that leg. Here a corridor runs north-south at [0 64 z], lava two blocks east of it bars every
+  ;; dig toward the target east, and only the corridor's own cells are left: open, and no nearer.
+  (let [corridor (into {} (for [z (range -4 5) y [64 65]] [[0 y z] air]))
+        lava (into {} (for [z (range -4 5) y [63 64 65 66]] [[2 y z] blocks/lava-base]))
+        w (assoc (rock (merge corridor lava))
+                 :bot/phase :play
+                 :bot/effects []
+                 :time/now 0
+                 :time/tick 0
+                 :player/on-ground? true
+                 :player/vel [0.0 0.0 0.0])
+        tick {:event/kind :tick :event/now 0}
+        target [20 64 0]
+        i {:intent/kind :tunnel-to
+           :intent/target target
+           :intent/steps 32
+           :intent/status :active
+           :intent/tunnel-visited #{[0 64 0]}}
+        run (fn [i] (:plan/intent (intent/run (assoc w :plan/intent i) i tick)))]
+    (is (fortress/idle-step? w [0 64 0] [0 0 1] target) "the corridor's next cell: open, no nearer")
+    (is (not (fortress/idle-step? w [0 64 0] [0 0 1] [0 64 20])) "nearer a target up the corridor")
+    (is (not (fortress/idle-step? (rock {}) [0 64 0] [1 0 0] target)) "a dig is no idle step")
+    (testing "a leg without the flag takes the corridor's cells as fresh, as every tunnel did"
+      (is (= 0 (:intent/retreats (run i)))))
+    (testing "a heading leg (:intent/no-pace?) counts them as retreats"
+      (let [out (run (assoc i :intent/no-pace? true))]
+        (is (= [0 0 1] (:intent/move out)))
+        (is (= 1 (:intent/retreats out))))
+      (let [out (run (assoc i :intent/no-pace? true :intent/retreats 1))]
+        (is (= :failed (:intent/status out))
+            "the second in a row: blocked at once, not a minute on")
+        (is (= :blocked (:intent/reason out)))))))
+
 (deftest a-tunnel-steps-back-along-its-trail-from-a-cell-no-fresh-step-leaves
   ;; issue #502's R3-5-2 and R4-11-1: pockets whose every fresh step was refused, one retreat,
   ;; a pace and :blocked, with the branch a few cells back never tried

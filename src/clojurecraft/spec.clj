@@ -612,6 +612,7 @@
 (s/def :intent/bridge? boolean?)
 (s/def :intent/seal-behind? boolean?)
 (s/def :intent/no-down? boolean?)
+(s/def :intent/no-pace? boolean?)
 (s/def :intent/trunk ::block-pos)
 (s/def :intent/stage keyword?)
 (s/def :intent/since int?)

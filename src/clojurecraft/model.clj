@@ -553,6 +553,9 @@
    [:intent/no-down?
     "a :tunnel-to that forbids downward steps (dy < 0): leaving the fortress without digging through floors into lava"
     ":tunnel-to"]
+   [:intent/no-pace?
+    "a :tunnel-to whose steps that open nothing and bring the feet no nearer the target are retreats (fortress/idle-step?): the hunt's heading legs, which paced old corridors for minutes without a dig"
+    "a :tunnel-to along the hunt's heading"]
    [:intent/search
     "the fortress search leg an exploring :tunnel-to works for (fortress/exploring): the executor keeps it as :fortress/search"
     "a :tunnel-to with no brick on record to go to"]

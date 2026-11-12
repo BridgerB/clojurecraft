@@ -583,6 +583,19 @@
                 (or (and (gaining? feet ahead target) (not (contains? dead (plus feet ahead))))
                     (not (retreat? feet ahead visited))))))
 
+(defn idle-step?
+  "Is move from feet a step that opens nothing (every cell it would open already passable) and
+   brings the feet no nearer target? For a :tunnel-to with :intent/no-pace? such a step is a
+   retreat, however new its cell: real Clj_r51's heading legs (issue #263) never dug, each leg
+   thirty-two such steps four times over up and down a corridor earlier legs had dug at the lava
+   sea's shore, every cell new to that leg, for a minute before a pace back failed it :blocked, and
+   the next leg the same, for an hour."
+  [world feet move target]
+  (boolean (and move
+                target
+                (not-any? #(blocks/solid? (terrain/block-at world %)) (opens feet move))
+                (>= (physics/distance (plus feet move) target) (physics/distance feet target)))))
+
 (defn trail-of
   "The way back the world keeps for a tunnel to target: {:trail/target target :trail/cells the
    feet cells steps began from, oldest first :trail/dead the cells found to lead nowhere toward
@@ -814,7 +827,8 @@
                                seen
                                (boolean (:intent/bridge? i))
                                (boolean no-down?)))
-            fresh? (fresh-move? feet ahead target seen (:trail/dead trail))
+            fresh? (and (fresh-move? feet ahead target seen (:trail/dead trail))
+                        (not (and (:intent/no-pace? i) (idle-step? world feet ahead target))))
             undo (when-not (or back fresh?)
                    (step-back world feet trail (boolean dry-only?) (boolean no-down?)))
             m (or back undo ahead)
