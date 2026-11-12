@@ -743,6 +743,16 @@
       (is (< (on-top :magma_cube) 20.0) "a middle one's 2.52 and its box reach the feet at 3")
       (is (= 20.0 (on-top :magma_cube_small)) "a small one's 1.84 does not")
       (is (= 20.0
+             (-> (arena (assoc pillar [1 66 0] stone)
+                        {}
+                        :normal
+                        night
+                        [{:type :magma_cube :pos [1.6 64.0 0.5]}])
+                 (assoc :sim/player-pos [0.5 67.0 0.5])
+                 (ticks 2)
+                 :sim/health))
+          "a ceiling over the cube stops its hop: nothing through the roof of its cave")
+      (is (= 20.0
              (:sim/health
               (ticks (assoc
                       (arena pocket {} :normal night [{:type :magma_cube_big :pos [4.0 64.0 2.5]}])
