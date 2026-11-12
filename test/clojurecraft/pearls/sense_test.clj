@@ -1111,3 +1111,16 @@
     (is (= gone (psense/track-brutes gone)) "nothing tracked, nothing noted")
     (is (nil? (psense/brute-near (ps/standing {9 (ps/mob :piglin [14.5 64.0 8.5])})))
         "a piglin is no brute")))
+
+(deftest a-frozen-enderman-is-not-there-for-the-hunt-but-is-gone-toward
+  ;; an enderman past the server's simulation distance is frozen: it never comes to a lookout,
+  ;; so it does not hold the bot at one, but a walk toward it wakes it
+  (let [w (ps/standing {5 (ps/mob :enderman [8.5 64.0 60.5])})
+        frozen (assoc w :server/simulation-distance 2)
+        ticking (assoc w :server/simulation-distance 3)]
+    (is (= #{5} (set (keys (psense/endermen ticking pparams/seek-radius))))
+        "chunk 3 under 3: there")
+    (is (empty? (psense/endermen frozen pparams/seek-radius)) "chunk 3 under 2: frozen, not there")
+    (is (= #{5} (set (keys (psense/seen-endermen frozen pparams/seek-radius)))) "but seen")
+    (is (= 5 (first (pmove/distant-sighting frozen))) "and a sighting to go toward")
+    (is (= #{5} (set (keys (psense/endermen w pparams/seek-radius)))) "no distance known: there")))
