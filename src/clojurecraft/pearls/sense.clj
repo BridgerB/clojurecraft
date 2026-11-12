@@ -20,11 +20,12 @@
 (set! *warn-on-reflection* true)
 
 ;; ---------------------------------------------------------------- the quarry
-(defn endermen
-  "{eid entity} of the endermen the hunt may go after: alive (not dead by the server's word), not
+(defn seen-endermen
+  "{eid entity} of the endermen the server shows: alive (not dead by the server's word), not
    blacklisted (a ghost, an enderman that would not come), within radius (hunt-radius when not
-   given) of the feet."
-  ([world] (endermen world pparams/hunt-radius))
+   given) of the feet, frozen or not. Only for a walk that goes toward them: a frozen one wakes as
+   the bot comes within the server's simulation distance."
+  ([world] (seen-endermen world pparams/hunt-radius))
   ([world radius]
    (let [pos (:player/pos world)
          bl (avoided/all-of world :blacklist)]
@@ -35,6 +36,16 @@
                           (not (contains? bl eid))
                           (<= (physics/distance pos (:entity/pos e)) radius))))
            (:world/entities world)))))
+
+(defn endermen
+  "{eid entity} of the endermen the hunt may go after: seen-endermen the server ticks
+   (entity/ticking?). One beyond its simulation distance is frozen: it never comes to a lookout,
+   is never provoked by a stare and never needs fleeing, so it is not there for the hunt."
+  ([world] (endermen world pparams/hunt-radius))
+  ([world radius]
+   (let [pos (:player/pos world)
+         d (:server/simulation-distance world)]
+     (into {} (filter (fn [[_ e]] (entity/ticking? pos d e))) (seen-endermen world radius)))))
 
 (defn at-hand
   "[eid entity] of the enderman the hunt reckons with where the bot stands: the nearest not
@@ -493,11 +504,19 @@
                             (endermen (avoided/forget world :blacklist) pparams/strike-range))
                       pos))))
 
+(defn shooter-kind?
+  "Does a mob of kind hurt from range: one of ranged-kinds (a blaze, a ghast), or one mob/kinds
+   gives a :shoot (a skeleton's arrow)? Such a one counts toward a swarm only with a clear line
+   to the eye (swarm)."
+  [kind]
+  (boolean (or (contains? pparams/ranged-kinds kind) (:shoot (mob/kinds kind)))))
+
 (defn swarm
   "{eid entity} of the monsters (blocks/mobs category) alive within swarm-radius of pos (the feet when
    not given) that are no enderman (the quarry, met its own way from the burrow): a zombified
-   piglin counts, hostile on sight or not, as it comes in packs and one hit angers them all. One the
-   server does not tick (entity/ticking?, beyond its simulation distance) is frozen and no threat."
+   piglin counts, hostile on sight or not, as it comes in packs and one hit angers them all; a
+   shooter (shooter-kind?) only with a clear line to the eye. One the server does not tick
+   (entity/ticking?, beyond its simulation distance) is frozen and no threat."
   ([world] (swarm world (:player/pos world)))
   ([world pos]
    (into {}
@@ -508,8 +527,10 @@
                         (entity/ticking? (:player/pos world) (:server/simulation-distance world) e)
                         (<= (physics/distance pos (:entity/pos e))
                             (or (:range (mob/kinds (entity/kind e))) pparams/swarm-radius))
-                        ;; a blaze behind a wall hits nobody, and travel is gated on swarmed?
-                        (or (not (contains? pparams/ranged-kinds (entity/kind e)))
+                        ;; a blaze, or a skeleton, behind a wall hits nobody, and every mover is
+                        ;; gated on swarmed?: one unseen skeleton 12 blocks off held a real bot
+                        ;; looking out on one spot for 148 minutes
+                        (or (not (shooter-kind? (entity/kind e)))
                             (not= pos (:player/pos world))
                             (combat/seen? world e)))))
          (:world/entities world))))

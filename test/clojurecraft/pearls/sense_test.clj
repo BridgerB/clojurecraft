@@ -723,10 +723,11 @@
                                             9 (ps/mob :zombified_piglin [40.5 64.0 9.5])})))
         "the second is past swarm-radius")
     (testing "gym plan run 40839050567 job 5: two piglins shooting from past eight blocks"
-      (is (psense/swarmed? (ps/standing {8 (ps/mob :piglin [20.5 64.0 9.5])
-                                         9 (ps/mob :piglin [8.5 64.0 22.5])})))
-      (is (not (psense/swarmed? (ps/standing {8 (ps/mob :zombified_piglin [20.5 64.0 9.5])
-                                              9 (ps/mob :zombified_piglin [8.5 64.0 22.5])})))
+      ;; in the fixture's one loaded column, so in sight: a shooter counts only with a clear line
+      (is (psense/swarmed? (ps/standing {8 (ps/mob :piglin [0.5 64.0 0.5])
+                                         9 (ps/mob :piglin [15.5 64.0 15.5])})))
+      (is (not (psense/swarmed? (ps/standing {8 (ps/mob :zombified_piglin [0.5 64.0 0.5])
+                                              9 (ps/mob :zombified_piglin [15.5 64.0 15.5])})))
           "a zombified piglin has no bow"))))
 
 (deftest a-ghast-in-sight-is-covered-from-never-dug-under
@@ -1129,3 +1130,16 @@
     (is (not (psense/exposed? walled)) "behind a wall over its head it has none")
     (is (not (hold? open)) "hurt with food, but in the line: no heal here")
     (is (hold? walled) "hurt with food and covered: it heals")))
+
+(deftest a-frozen-enderman-is-not-there-for-the-hunt-but-is-gone-toward
+  ;; an enderman past the server's simulation distance is frozen: it never comes to a lookout,
+  ;; so it does not hold the bot at one, but a walk toward it wakes it
+  (let [w (ps/standing {5 (ps/mob :enderman [8.5 64.0 60.5])})
+        frozen (assoc w :server/simulation-distance 2)
+        ticking (assoc w :server/simulation-distance 3)]
+    (is (= #{5} (set (keys (psense/endermen ticking pparams/seek-radius))))
+        "chunk 3 under 3: there")
+    (is (empty? (psense/endermen frozen pparams/seek-radius)) "chunk 3 under 2: frozen, not there")
+    (is (= #{5} (set (keys (psense/seen-endermen frozen pparams/seek-radius)))) "but seen")
+    (is (= 5 (first (pmove/distant-sighting frozen))) "and a sighting to go toward")
+    (is (= #{5} (set (keys (psense/endermen w pparams/seek-radius)))) "no distance known: there")))
