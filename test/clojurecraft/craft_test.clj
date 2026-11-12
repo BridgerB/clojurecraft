@@ -3,6 +3,7 @@
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.craft]
+            [clojurecraft.filler :as filler]
             [clojurecraft.fixtures :as fx :refer [packet]]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
@@ -279,6 +280,27 @@
         "a stack of food alone stays")
     (is (= 9 (window/junk-slot {:player/inventory worn}))
         "with nothing else to go, the worn pickaxe beside a better one, last")))
+
+(deftest tosses-for-room-never-leave-a-bridge-without-filler
+  ;; a real stage-18 bot stood on a causeway over the lava sea with nothing to lay. Throwing for
+  ;; room until junk-slot finds nothing leaves at least cobblestone-keep of building blocks a
+  ;; floor is laid from (filler/fillers), whatever mix of kinds the bag holds
+  (let [stack (fn [k n] {:item (recipe/item-id k) :count n})
+        kept (fn [inv] (reduce + 0 (vals (select-keys (recipe/counts inv) filler/fillers))))
+        drain (fn [inv]
+                (reduce (fn [inv _]
+                          (let [p (window/junk-slot {:player/inventory inv})]
+                            (cond (nil? p) (reduced inv)
+                                  :else (dissoc inv p))))
+                        inv
+                        (range 64)))
+        bags [(zipmap (range 9 17) (repeat (stack :netherrack 64)))
+              (zipmap (range 9 13) (repeat (stack :cobblestone 64)))
+              (merge (zipmap (range 9 15) (repeat (stack :netherrack 64)))
+                     (zipmap (range 15 17) (repeat (stack :granite 64)))
+                     (zipmap (range 17 19) (repeat (stack :diorite 64)))
+                     {19 (stack :cobblestone 64) 20 (stack :andesite 64) 21 (stack :dirt 64)})]]
+    (doseq [bag bags] (is (>= (kept (drain bag)) window/cobblestone-keep)))))
 
 (deftest four-free-slots-are-kept-in-the-nether-from-junk-only
   ;; race 41181938317 (c996f54): all four bots that reached a fortress held 36 of 36 slots (877
