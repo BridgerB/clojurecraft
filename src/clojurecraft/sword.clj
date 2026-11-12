@@ -121,13 +121,24 @@
    (fn [inv]
      (into {} (map (fn [[p item]] [p (if (worn-sword? p item) (dissoc item :item) item)])) inv))))
 
+(defn table-laid
+  "The items laid in an open crafting table's grid (its slots 1..9, never the result), or none
+   when no crafting window is open."
+  [world]
+  (let [open (:window/open world)
+        layout (inventory/layout-of-menu (:window/menu-type open))]
+    (cond (and layout (inventory/crafting? layout))
+          (keep #(get-in open [:window/slots %]) (inventory/grid-slots layout))
+          :else ())))
+
 (defn with-laid
-  "A world whose empty inventory slots also hold the crafting grid and the cursor (never the
-   result), so make/counts sees a log laid down mid-craft. The intent decided from it names a
-   recipe, not a slot."
+  "A world whose empty inventory slots also hold the crafting grid, an open table's grid
+   (table-laid) and the cursor (never a result), so make/counts sees what is laid down
+   mid-craft. The intent decided from it names a recipe, not a slot."
   [world]
   (let [inv (:player/inventory world)
         extra (->> (concat (vals (dissoc (:window/grid world) inventory/result-slot))
+                           (table-laid world)
                            (some-> (:window/cursor world)
                                    vector))
                    (filter :item))

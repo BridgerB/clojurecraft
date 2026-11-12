@@ -390,3 +390,37 @@
   (is (= 8 pparams/stick-floor) "one stem's sticks")
   (is (< (pupkeep/wood-sticks (standing-nether [(item :stick 6)])) pparams/stick-floor))
   (is (>= (pupkeep/wood-sticks (standing-nether [(item :crimson_stem 1)])) pparams/stick-floor)))
+
+(deftest what-is-laid-in-the-tables-grid-still-counts
+  ;; Issue #263, Clj_r04 (real stage-18 lane 4, batch 2, on 3061b50), folded at its own commit: two
+  ;; pickaxes held, a table placed, 2 sticks and 192 cobblestone; once the craft laid 3 cobblestone
+  ;; and both sticks in the open table's grid, no stick was held, materials? turned false, the row
+  ;; was done and the pearl hunt preempted the craft; the grid came back and the row began again,
+  ;; 410 times with no pickaxe made. The table's grid counts as held while it is open
+  (let [table-id (blocks/default-state :crafting_table)
+        at [9 64 8]
+        base (-> (standing-nether [(item :blaze_rod 7) (item :stone_pickaxe 1)
+                                   (item :stone_pickaxe 1) (item :cobblestone 61)
+                                   (item :oak_planks 1) (item :spruce_planks 1)
+                                   (item :cooked_beef 16) (item :iron_sword 1)])
+                 (assoc :plan/chain? true)
+                 (assoc-in [:world/chunks [0 0]] (world/column {at table-id}))
+                 (memory/observe at table-id))
+        laid (assoc base
+                    :window/open
+                    {:window/id 3
+                     :window/menu-type (blocks/menus :crafting)
+                     :window/slots {1 (item :cobblestone 1)
+                                    2 (item :cobblestone 1)
+                                    3 (item :cobblestone 1)
+                                    5 (item :stick 1)
+                                    8 (item :stick 1)}})
+        before (-> base
+                   (assoc-in [:player/inventory 3] (item :cobblestone 64))
+                   (assoc-in [:player/inventory 8] (item :stick 2)))
+        row (first (filter #(= :spare-picks (:goal/id %)) plan/goals))]
+    (is (= 2 (picks/serviceable-count laid)))
+    (is (not (plan/done-by before row)) "two sticks held: the spare is made")
+    (is (picks/pending? laid) "the sticks in the grid are still the bot's")
+    (is (not (plan/done-by laid row)) "so the craft is not given up to the hunt")
+    (is (= (plan/done-by before row) (plan/done-by laid row)))))

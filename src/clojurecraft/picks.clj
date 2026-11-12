@@ -49,9 +49,10 @@
 
 (defn materials?
   "Can at least one more stone pickaxe be crafted from held supplies: a table (held or near),
-   sticks and cobblestone?"
+   sticks and cobblestone? What a craft has laid in a grid counts as held (sword/with-laid), so
+   the row stays pending through its own craft."
   [world]
-  (let [c (make/counts world)]
+  (let [c (make/counts (sword/with-laid world))]
     (and (or (pos? (long (get c :crafting_table 0))) (some? (make/near world :crafting_table)))
          (>= (long (get c :stick 0)) 2)
          (>= (long (get c :cobblestone 0)) 3))))
@@ -63,10 +64,12 @@
    held it is no spare (the replacement takes what there is), else the wood held less
    pickaxe-sticks is pparams/spare-wood-reserve or more. 21 of the 43 no-pickaxe endings of the
    real stage-18 lanes on 5d894db held a table and stone and no stick, plank or stem: the spares
-   had taken it all, and the last pickaxe wore out with none to replace it."
+   had taken it all, and the last pickaxe wore out with none to replace it. Wood laid in a grid
+   counts as held (sword/with-laid)."
   [world]
   (or (zero? (long (serviceable-count world)))
-      (>= (- (long (pupkeep/wood-sticks world)) pickaxe-sticks) (long pparams/spare-wood-reserve))))
+      (>= (- (long (pupkeep/wood-sticks (sword/with-laid world))) pickaxe-sticks)
+          (long pparams/spare-wood-reserve))))
 
 (def pickaxe-stone 3) ; stone a stone pickaxe's recipe takes (cobblestone, blackstone or cobbled deepslate)
 
