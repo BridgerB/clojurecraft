@@ -3,9 +3,11 @@
   (:require [clojure.math :as math]
             [clojurecraft.avoided :as avoided]
             [clojurecraft.blaze :as blaze]
+            [clojurecraft.blocks :as blocks]
             [clojurecraft.combat :as combat]
             [clojurecraft.dimension :as dimension]
             [clojurecraft.entity :as entity]
+            [clojurecraft.filler :as filler]
             [clojurecraft.fortress :as fortress]
             [clojurecraft.fortress-exit :as fexit]
             [clojurecraft.game :as game]
@@ -18,7 +20,8 @@
             [clojurecraft.pearls.upkeep :as pupkeep]
             [clojurecraft.physics :as physics]
             [clojurecraft.picks :as picks]
-            [clojurecraft.stairs :as stairs]))
+            [clojurecraft.stairs :as stairs]
+            [clojurecraft.stone :as stone]))
 
 (set! *warn-on-reflection* true)
 
@@ -722,21 +725,42 @@
   [world]
   (:target (:pearls/heading world)))
 
+(def netherrack-states "Every state of netherrack." (set (blocks/states-of :netherrack)))
+
+(def netherrack-drops "What digging netherrack gives." #{(blocks/items :netherrack)})
+
+(defn restock
+  "The next link of a re-stock of filler before a heading leg, or nil: the walk → dig → collect
+   chain toward one block of netherrack (intent/chain-next, :for :restock) while it runs, else,
+   with less than filler/tunnel-keep filler carried, a walk to the nearest exposed netherrack a
+   route reaches whose dig exposes no fluid (stone/exposed-of-states, stone/walk-to, the
+   max-candidates nearest). Netherrack is most of the Nether and a dig of it takes a moment."
+  [world]
+  (or (intent/chain-next (:plan/last world) :restock netherrack-drops {})
+      (when (< (filler/carried world) filler/tunnel-keep)
+        (->> (stone/exposed-of-states world netherrack-states)
+             (take stone/max-candidates)
+             (map #(stone/walk-to world % :restock))
+             (filter #(intent/routable? world %))
+             first))))
+
 (defn reach-heading
   "The sealed :tunnel-to along the held heading (:pearls/heading) toward its held leg target
    (heading-target): a long leg, the same target at every act, for a bot in the Nether with no
    forest known that travel, relocate, wander and the cage-break cuts find nothing for (the hunt's
    :hunt/heading row comes after them: ahead of them it kept R4/1 from its forest, which they
    reach in two minutes). Nil with no heading held, and nil with no digs to spare past the
-   hunt's (picks/tunnel-budget?)."
+   hunt's (picks/tunnel-budget?). With less than filler/tunnel-keep filler carried it re-stocks
+   first (restock): a leg over the lava sea lays its floors from what is carried."
   [world]
   (when-let [t (when (picks/tunnel-budget? world) (heading-target world))]
-    {:intent/kind :tunnel-to
-     :intent/target t
-     :intent/reach 1.5
-     :intent/steps fortress/steps-per-tunnel
-     :intent/seal-behind? true
-     :intent/for :pearls}))
+    (or (restock world)
+        {:intent/kind :tunnel-to
+         :intent/target t
+         :intent/reach 1.5
+         :intent/steps fortress/steps-per-tunnel
+         :intent/seal-behind? true
+         :intent/for :pearls})))
 
 (defn track-seen
   "The world with :pearls/seen, the chunk keys that have been loaded in the Nether, grown by the

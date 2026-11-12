@@ -134,11 +134,16 @@
   (map #(plus c %) (vals physics/face-offsets)))
 
 (defn seal-behind-ops
-  "The build op that seals the cell behind (at from + [0 1 0]) from to,
-   when seal-behind? is true, filler is carried, and a solid foundation exists."
+  "The build op that seals the cell behind (at from + [0 1 0]) from to, when seal-behind? is true,
+   more than filler/tunnel-keep filler is carried, and a solid foundation exists. A seal is never
+   what a step needs: the keep is for the floors over lava the next legs lay."
   [world from to seal-behind?]
   (let [seal-cell (plus from [0 1 0])]
-    (if (and seal-behind? world (filler/building world 1) (build/foundation world seal-cell))
+    (if (and seal-behind?
+             world
+             (> (filler/carried world) filler/tunnel-keep)
+             (filler/building world 1)
+             (build/foundation world seal-cell))
       [(build/place-op seal-cell to nil :seal-behind)]
       [])))
 

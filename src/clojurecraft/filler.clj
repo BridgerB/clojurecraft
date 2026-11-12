@@ -102,6 +102,14 @@
         (planks-of held n)
         (first (filter #(>= (get held % 0) n) last-resorts)))))
 
+(def tunnel-keep
+  "Filler a tunnel's seal behind it never spends (fortress/seal-behind-ops), and under which the
+   hunt re-stocks before a heading leg (pearls.move/restock): the last of it lays the floors over
+   lava a leg needs. Real Clj_r51 (issue #263) spent its kit's 600 blocks on seals it dug again on
+   the way back, had none from minute 40, and stood its last 37 minutes on a causeway over the lava
+   sea with nothing to lay a step from."
+  32)
+
 (defn carried
   "How many of every filler the inventory holds, together."
   [world]

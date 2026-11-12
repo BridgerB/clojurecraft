@@ -6,6 +6,7 @@
             [clojurecraft.avoided :as avoided]
             [clojurecraft.blaze :as blaze]
             [clojurecraft.blocks :as blocks]
+            [clojurecraft.filler :as filler]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.fortress-exit :as fexit]
             [clojurecraft.game :as game]
@@ -64,6 +65,31 @@
     (testing "dropped once a forest is known, and at a death"
       (is (not (contains? (pmove/reach-heading-hold (with-forest held [60 60])) :pearls/heading)))
       (is (not (contains? (game/die held) :pearls/heading))))))
+
+(deftest a-bot-short-of-filler-restocks-netherrack-before-a-heading-leg
+  ;; Real Clj_r51 (issue #263): no filler from minute 40, its heading legs stood on a causeway over
+  ;; the lava sea with nothing to lay a floor from. Under filler/tunnel-keep a leg waits for a
+  ;; re-stock: walk to netherrack, dig it, collect it.
+  (let [rack (blocks/default-state :netherrack)
+        w (-> (ps/standing {} {[11 64 8] rack [11 65 8] rack})
+              (assoc :player/dimension ps/nether)
+              (assoc-in [:player/inventory 1] (ps/item :iron_pickaxe 1)))
+        stocked (assoc-in w [:player/inventory 2] (ps/item :netherrack 40))
+        cell (fn [k] {:intent/kind k :intent/for :restock :intent/target [11 64 8]})]
+    (is (< (filler/carried w) filler/tunnel-keep))
+    (let [i (pmove/restock w)]
+      (is (= [:walk :restock true] [(:intent/kind i) (:intent/for i) (:intent/pickup? i)]))
+      (is (#{[11 64 8] [11 65 8]} (:intent/target i)) "the netherrack in sight"))
+    (is (nil? (pmove/restock stocked)) "with the keep carried: no re-stock")
+    (testing "the chain: after its walk the dig, after the dig the collect"
+      (is (= (cell :dig) (pmove/restock (assoc stocked :plan/last (cell :walk)))))
+      (is (= :collect (:intent/kind (pmove/restock (assoc stocked :plan/last (cell :dig)))))))
+    (testing "a heading leg re-stocks first when short, and tunnels when not"
+      (let [held (assoc w :pearls/heading {:dir [1 0] :from [8 64 8] :target [72 64 8] :turns 0})]
+        (is (= :restock (:intent/for (pmove/reach-heading held))))
+        (is (= :tunnel-to
+               (:intent/kind (pmove/reach-heading
+                              (assoc-in held [:player/inventory 2] (ps/item :netherrack 40))))))))))
 
 (deftest a-bot-above-the-climb-ceiling-with-no-mover-tunnels-down-along-its-heading
   ;; Logged state, sim R1/17 seed 1 (probe p2facts 42402292588, issue #263): at [961 104 -144] in the

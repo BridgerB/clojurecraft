@@ -796,6 +796,17 @@
         (is (= [1 0 0] (:intent/move out)))
         (is (= 0 (:intent/retreats out)))))))
 
+(deftest a-seal-behind-never-spends-the-tunnel-keep
+  ;; Real Clj_r51 (issue #263) laid its kit's 600 blocks as seals behind its legs, dug them again on
+  ;; the way back, and had none left for a floor over the lava sea
+  (let [w (assoc (rock {})
+                 :player/inventory
+                 {0 {:item (recipe/item-id :netherrack) :count filler/tunnel-keep}})
+        more (assoc-in w [:player/inventory 0 :count] (inc filler/tunnel-keep))]
+    (is (= [] (fortress/seal-behind-ops w [0 64 0] [1 64 0] true)) "the keep: no seal")
+    (is (= 1 (count (fortress/seal-behind-ops more [0 64 0] [1 64 0] true))) "above it: the seal")
+    (is (= [] (fortress/seal-behind-ops more [0 64 0] [1 64 0] false)))))
+
 (deftest a-tunnel-steps-back-along-its-trail-from-a-cell-no-fresh-step-leaves
   ;; issue #502's R3-5-2 and R4-11-1: pockets whose every fresh step was refused, one retreat,
   ;; a pace and :blocked, with the branch a few cells back never tried
