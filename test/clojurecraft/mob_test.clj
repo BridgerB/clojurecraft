@@ -1189,3 +1189,31 @@
     (is (= [{:packet/name :rotate-head :entity-id eid :head-yaw 64}]
            (filter #(= eid (:entity-id %)) (said later :rotate-head)))
         "it looks along -x at the player, told once while the look holds")))
+
+(deftest a-mob-beyond-the-simulation-distance-is-frozen
+  ;; as a server holds an entity in a chunk past its simulation distance: loaded, sent, not ticked
+  (let [sim (-> (arena {} {} nil night [{:type :zombie :pos [8.5 64.0 0.5]}])
+                (assoc :sim/player-pos [-24.5 64.0 0.5]))
+        [eid z] (the-mob sim :zombie)
+        pos-after
+        (fn [d] (get-in (ticks (assoc sim :sim/simulation-distance d) 40) [:sim/mobs eid :pos]))]
+    (is (= (:pos z) (pos-after 1)) "two chunks off under distance 1: it stands where it was")
+    (is (not= (:pos z) (pos-after 2))
+        "under distance 2, 33 blocks off and in follow range, it walks at the player"))
+  (let [far (-> (arena {} {} nil night [])
+                (sim-mobs/add-mob :zombie [8.5 64.0 0.5] {})
+                (assoc :sim/player-pos [-200.5 64.0 0.5]))]
+    (is (nil? (the-mob (ticks far 1) :zombie)) "past despawn-far a ticking hostile is removed")
+    (is (some? (the-mob (ticks (assoc far :sim/simulation-distance 3) 1) :zombie))
+        "a frozen one stays")))
+
+(deftest login-tells-the-models-simulation-distance
+  (let [joined (fn [opts]
+                 (-> (sim/init (merge {:column (world/column-bytes {}) :spawn [0.5 64.0 0.5]} opts))
+                     (assoc :sim/phase :configuration)
+                     (sends {:packet/name :finish-configuration})
+                     (said :login)
+                     first
+                     :simulation-distance))]
+    (is (= 3 (joined {:simulation-distance 3})))
+    (is (= 6 (joined {})) "none set: every mob ticks, and the login says 6")))

@@ -44,6 +44,7 @@
             [clojurecraft.recipe :as recipe]
             [clojurecraft.scene :as scene]
             [clojurecraft.senses :as senses]
+            [clojurecraft.servers :as servers]
             [clojurecraft.sim :as sim]
             [clojurecraft.sim.mobs :as sim-mobs]
             [clojurecraft.sim.protocol :as sim-protocol]
@@ -551,7 +552,8 @@
                     :seed seed
                     :tick-seed seed
                     :difficulty difficulty
-                    :day-time (day-time-of seed)}
+                    :day-time (day-time-of seed)
+                    :simulation-distance (:simulation-distance servers/defaults)}
              fortress
              (assoc :dimension dimension/nether
                     :view-distance nether-view

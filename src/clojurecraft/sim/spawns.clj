@@ -4,6 +4,7 @@
             [clojurecraft.blocks :as blocks]
             [clojurecraft.chunk :as chunk]
             [clojurecraft.dimension :as dimension]
+            [clojurecraft.entity :as entity]
             [clojurecraft.mob :as mob]
             [clojurecraft.physics :as physics]
             [clojurecraft.sim.mobs :as sim-mobs :refer
@@ -67,22 +68,32 @@
                              [(+ sx 0.5) (double sy) (+ sz 0.5)]
                              {})))))))
 
+(defn ticking?
+  "Does the model tick mob eid: in a chunk within :sim/simulation-distance of the player's
+   (entity/ticking?), as a server ticks entities; every mob when the model has no distance set."
+  [sim eid]
+  (entity/ticking? (:sim/player-pos sim)
+                   (:sim/simulation-distance sim)
+                   {:entity/pos (get-in sim [:sim/mobs eid :pos])}))
+
 (defn despawn
-  "Hostiles not persistent: removed at once beyond mob/despawn-far of the player, and beyond
-   mob/despawn-near by a roll of mob/despawn-chance each tick (Mob.checkDespawn)."
+  "Hostiles not persistent and ticking (ticking?: a frozen one stays): removed at once beyond
+   mob/despawn-far of the player, and beyond mob/despawn-near by a roll of mob/despawn-chance each
+   tick (Mob.checkDespawn)."
   [sim]
   (let [player (:sim/player-pos sim)]
-    (reduce (fn [sim eid]
-              (let [{:keys [type pos persistent? dead-at]} (get-in sim [:sim/mobs eid])
-                    d (physics/distance pos player)]
-                (cond (or persistent? dead-at (not (:hostile (mob/kinds type)))) sim
-                      (> d mob/despawn-far) (remove-mob sim eid)
-                      (> d mob/despawn-near)
-                      (let [[sim r] (mob-roll sim)]
-                        (cond-> sim (< r mob/despawn-chance) (remove-mob eid)))
-                      :else sim)))
-            sim
-            (if player (sort (keys (:sim/mobs sim))) []))))
+    (reduce
+     (fn [sim eid]
+       (let [{:keys [type pos persistent? dead-at]} (get-in sim [:sim/mobs eid])
+             d (physics/distance pos player)]
+         (cond (or persistent? dead-at (not (:hostile (mob/kinds type))) (not (ticking? sim eid)))
+               sim
+               (> d mob/despawn-far) (remove-mob sim eid)
+               (> d mob/despawn-near)
+               (let [[sim r] (mob-roll sim)] (cond-> sim (< r mob/despawn-chance) (remove-mob eid)))
+               :else sim)))
+     sim
+     (if player (sort (keys (:sim/mobs sim))) []))))
 
 (defn in-nether?
   "Is the player in the Nether, where a fortress's spawners run?"
@@ -367,8 +378,9 @@
    their endermen (try-nether-spawn), its fortresses a wither skeleton or a magma cube
    (try-fortress-spawn), its crimson forests a hoglin (try-crimson-spawn), its basalt deltas magma
    cubes (try-deltas-spawn), and its spawners run
-   (tick-spawners), every mob acts in id order (act-mob), and far hostiles despawn (despawn). A
-   model with no difficulty and no mobs only keeps its day."
+   (tick-spawners), every mob the server ticks (ticking?) acts in id order (act-mob), and far
+   hostiles despawn (despawn). One beyond the simulation distance is frozen: it neither moves,
+   strikes, shoots, blinks nor despawns. A model with no difficulty and no mobs only keeps its day."
   [sim]
   (let [sim (cond-> sim (:sim/day-time sim) (update :sim/day-time inc))]
     (cond (not (or (:sim/difficulty sim) (seq (:sim/mobs sim)))) sim
@@ -383,4 +395,4 @@
                         tick-spawners)]
             (despawn (reduce (fn [sim eid] (face-player (act-mob sim eid) eid))
                              sim
-                             (sort (keys (:sim/mobs sim)))))))))
+                             (filter #(ticking? sim %) (sort (keys (:sim/mobs sim))))))))))

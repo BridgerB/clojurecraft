@@ -108,27 +108,34 @@
   [sim _]
   (send sim {:packet/name :finish-configuration}))
 
+(def simulation-distance
+  "The simulation distance a model with none set tells the bot, in chunks: the model then ticks
+   every mob it holds, however far."
+  6)
+
 (defn login
   "The login packet for a player joining in the dimension named dim: the settings a vanilla
-   server sends, then the spawn info (the dimension type's registry id and the dimension's name)."
-  [dim]
-  {:packet/name :login
-   :entity-id 1
-   :hardcore? false
-   :levels [dimension/overworld dimension/nether dimension/end]
-   :max-players 20
-   :view-distance 6
-   :simulation-distance 6
-   :reduced-debug? false
-   :death-screen? true
-   :limited-crafting? false
-   :dimension-type (:dimension/id (dimension/by-name dim))
-   :dimension dim
-   :seed 0
-   :game-type (packet/value :game-type :survival)
-   :previous-game-type (packet/value :game-type :none)
-   :debug? false
-   :flat? false})
+   server sends, simulation distance d (chunks; simulation-distance when nil), then the spawn
+   info (the dimension type's registry id and the dimension's name)."
+  ([dim] (login dim nil))
+  ([dim d]
+   {:packet/name :login
+    :entity-id 1
+    :hardcore? false
+    :levels [dimension/overworld dimension/nether dimension/end]
+    :max-players 20
+    :view-distance 6
+    :simulation-distance (or d simulation-distance)
+    :reduced-debug? false
+    :death-screen? true
+    :limited-crafting? false
+    :dimension-type (:dimension/id (dimension/by-name dim))
+    :dimension dim
+    :seed 0
+    :game-type (packet/value :game-type :survival)
+    :previous-game-type (packet/value :game-type :none)
+    :debug? false
+    :flat? false}))
 
 (defn on-ground-flag?
   "Does a movement packet's flags byte say the player stands on the ground (bit 1)?"
